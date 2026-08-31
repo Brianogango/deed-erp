@@ -15,6 +15,10 @@ export type TelerivetWebhookPayload = {
   id?: string
   status?: string
   error_message?: string
+  from_number?: string
+  to_number?: string
+  content?: string
+  direction?: string
   [key: string]: unknown
 }
 
@@ -43,6 +47,10 @@ export function parseTelerivetWebhook(input: Record<string, unknown>): Telerivet
     id: asString(input.id || input.message_id),
     status: asString(input.status),
     error_message: asString(input.error_message || input.error),
+    from_number: asString(input.from_number || input.from),
+    to_number: asString(input.to_number || input.to),
+    content: asString(input.content || input.message || input.body),
+    direction: asString(input.direction),
   }
 }
 

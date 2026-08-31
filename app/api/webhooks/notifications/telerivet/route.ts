@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { applyProviderDeliveryStatus } from '@/lib/notifications/provider-status'
+import { recordInboundSms } from '@/lib/notifications/sms-conversations'
 import {
   mapTelerivetStatus,
   parseTelerivetWebhook,
@@ -33,8 +34,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid Telerivet webhook secret' }, { status: 401 })
   }
 
+  const inbound = Boolean(
+    payload.id
+    && payload.from_number
+    && payload.content
+    && (
+      String(payload.event || '').toLowerCase().includes('received')
+      || String(payload.direction || '').toLowerCase() === 'incoming'
+      || String(payload.status || '').toLowerCase() === 'received'
+    )
+  )
+  if (inbound) {
+    const { secret: _secret, ...safePayload } = payload
+    await recordInboundSms({
+      provider: 'telerivet',
+      providerMessageId: String(payload.id),
+      from: String(payload.from_number),
+      to: payload.to_number || null,
+      body: String(payload.content),
+      metadata: safePayload,
+    })
+  }
+
   const status = mapTelerivetStatus(payload.status)
-  if (payload.id && status) {
+  if (!inbound && payload.id && status) {
     await applyProviderDeliveryStatus({
       provider: 'telerivet',
       messageId: payload.id,

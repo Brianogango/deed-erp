@@ -84,11 +84,11 @@ export async function publishLeaveBooked(row: LeaveRow, actorUserId?: string | n
     entityId: row.id,
     actorUserId,
     userIds: [employee?.user?.id],
-    externalRecipients: employee?.email || employee?.user?.email ? [{
+    externalRecipients: employee?.email || employee?.user?.email || employee?.phone || employee?.user?.phone ? [{
       name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '),
       email: employee?.email || employee?.user?.email,
       phone: employee?.phone || employee?.user?.phone,
-      channels: ['email'],
+      channels: ['email', 'sms'],
     }] : [],
     title: `Leave booked — ${row.reference || row.id}`,
     body: leaveBody(row),
@@ -111,11 +111,11 @@ export async function publishLeaveDecision(
     entityId: row.id,
     actorUserId,
     userIds: [employee?.user?.id],
-    externalRecipients: employee?.email || employee?.user?.email ? [{
+    externalRecipients: employee?.email || employee?.user?.email || employee?.phone || employee?.user?.phone ? [{
       name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '),
       email: employee?.email || employee?.user?.email,
       phone: employee?.phone || employee?.user?.phone,
-      channels: ['email'],
+      channels: ['email', 'sms'],
     }] : [],
     title: `Leave ${row.reference || row.id} ${verb}`,
     body: `${leaveBody(row)}\nDecision: ${verb}${row.reviewedByName ? ` by ${row.reviewedByName}` : ''}`,
@@ -165,11 +165,11 @@ export async function publishSalaryAdvanceDecision(
     entityId: row.id,
     actorUserId,
     userIds: [employee?.user?.id],
-    externalRecipients: employee?.email || employee?.user?.email ? [{
+    externalRecipients: employee?.email || employee?.user?.email || employee?.phone || employee?.user?.phone ? [{
       name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '),
       email: employee?.email || employee?.user?.email,
       phone: employee?.phone || employee?.user?.phone,
-      channels: ['email'],
+      channels: ['email', 'sms'],
     }] : [],
     title: `Salary advance ${row.reference || row.id} ${decision}`,
     body: `Your salary advance of KES ${Math.round(Number(row.amount || 0)).toLocaleString('en-KE')} was ${decision}.${row.decisionNote ? ` Note: ${row.decisionNote}` : ''}`,
@@ -186,11 +186,11 @@ export async function publishSalaryAdvanceDisbursed(row: SalaryAdvanceRow, actor
     entityId: row.id,
     actorUserId,
     userIds: [employee?.user?.id],
-    externalRecipients: employee?.email || employee?.user?.email ? [{
+    externalRecipients: employee?.email || employee?.user?.email || employee?.phone || employee?.user?.phone ? [{
       name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '),
       email: employee?.email || employee?.user?.email,
       phone: employee?.phone || employee?.user?.phone,
-      channels: ['email'],
+      channels: ['email', 'sms'],
     }] : [],
     title: `Salary advance disbursed — ${row.reference || row.id}`,
     body: `KES ${Math.round(Number(row.amount || 0)).toLocaleString('en-KE')} has been disbursed.${row.paidDate ? ` Date: ${date(row.paidDate)}.` : ''}`,

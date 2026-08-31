@@ -21,6 +21,8 @@ export type NotificationPolicy = {
   escalationRoles?: string[]
   fallbackSms?: boolean
   mandatory?: boolean
+  /** Channels that must deliver for this event even when the user's optional channel preference is off. */
+  mandatoryChannels?: NotificationChannel[]
 }
 
 export type PublishNotificationInput = {

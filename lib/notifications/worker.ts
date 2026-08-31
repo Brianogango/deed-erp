@@ -13,6 +13,7 @@ import {
 } from './preferences'
 import { sendProviderDelivery } from './providers'
 import { resolveSmsProvider } from './sms-provider'
+import { isSmsPhoneOptedOut, recordOutboundSms } from './sms-conversations'
 import { publishNotificationEvent } from './service'
 import { renderNotificationTemplate } from './templates'
 import type {
@@ -104,12 +105,14 @@ async function routeUserRecipient(event: any, recipient: any, channels: Notifica
 
   const severity = event.severity as NotificationSeverity
   const preference = await getEffectiveNotificationPreference(user.id, event.eventType)
+  const policy = defaultNotificationPolicy(event.eventType)
   const bypass = bypassPreference(event.eventType, severity)
 
   if (!bypass && !severityAllowed(preference, severity)) return
 
   for (const channel of channels) {
-    if (!bypass && !channelEnabled(preference, channel)) continue
+    const mandatoryChannel = Boolean(policy.mandatoryChannels?.includes(channel))
+    if (!bypass && !mandatoryChannel && !channelEnabled(preference, channel)) continue
 
     if (channel === 'push') {
       const endpoints = await prisma.notificationEndpoint.findMany({
@@ -320,8 +323,25 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
     })
     if (!delivery) continue
 
+    if (delivery.channel === 'sms' && delivery.destination) {
+      const optedOut = await isSmsPhoneOptedOut(delivery.destination).catch(() => false)
+      if (optedOut) {
+        await prisma.notificationDelivery.update({
+          where: { id: delivery.id },
+          data: {
+            status: 'suppressed',
+            failedAt: null,
+            lastError: 'recipient_opted_out',
+          },
+        })
+        continue
+      }
+    }
+
     const severity = delivery.event.severity as NotificationSeverity
-    if (delivery.userId && delivery.channel !== 'in_app' && !bypassPreference(delivery.event.eventType, severity)) {
+    const deliveryPolicy = defaultNotificationPolicy(delivery.event.eventType)
+    const mandatoryChannel = Boolean(deliveryPolicy.mandatoryChannels?.includes(delivery.channel as NotificationChannel))
+    if (delivery.userId && delivery.channel !== 'in_app' && !mandatoryChannel && !bypassPreference(delivery.event.eventType, severity)) {
       const pref = await getEffectiveNotificationPreference(delivery.userId, delivery.event.eventType)
       if (isQuietNow(pref)) {
         await prisma.notificationDelivery.update({
@@ -399,8 +419,22 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
       metadata: effectiveMetadata,
     })
 
+    const smsBody = channel === 'sms'
+      ? String(effectiveMetadata.smsText ?? rendered.text).slice(0, 480)
+      : ''
+    const routing = asRecord(delivery.event.routing)
+    const externalRecipients = Array.isArray(routing.externalRecipients)
+      ? routing.externalRecipients as Array<Record<string, unknown>>
+      : []
+    const participantName = externalRecipients.find(row => String(row.phone || '') === String(delivery.destination || ''))?.name
+      || externalRecipients[0]?.name
+      || null
+    const preferredThreadId = String(metadata.communicationThreadId || '').trim() || null
+    const createdByUserId = String(metadata.createdByUserId || delivery.event.actorUserId || '').trim() || null
+
     if (result.success) {
       const delivered = Boolean(result.acceptedAsDelivered || delivery.channel === 'in_app')
+      const sentAt = new Date()
       await prisma.$transaction([
         prisma.notificationAttempt.update({
           where: { id: attempt.id },
@@ -408,7 +442,7 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
             status: delivered ? 'delivered' : 'sent',
             provider: result.provider,
             providerResponse: (result.response || {}) as Prisma.InputJsonValue,
-            finishedAt: new Date(),
+            finishedAt: sentAt,
           },
         }),
         prisma.notificationDelivery.update({
@@ -417,12 +451,35 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
             status: delivered ? 'delivered' : 'sent',
             provider: result.provider,
             providerMessageId: result.messageId || null,
-            sentAt: new Date(),
-            deliveredAt: delivered ? new Date() : null,
+            sentAt,
+            deliveredAt: delivered ? sentAt : null,
             lastError: null,
           },
         }),
       ])
+      if (channel === 'sms' && delivery.destination) {
+        await recordOutboundSms({
+          notificationDeliveryId: delivery.id,
+          destination: delivery.destination,
+          body: smsBody,
+          provider: result.provider,
+          providerMessageId: result.messageId || null,
+          status: delivered ? 'delivered' : 'sent',
+          sentAt,
+          deliveredAt: delivered ? sentAt : null,
+          eventType: delivery.event.eventType,
+          entityType: delivery.event.entityType,
+          entityId: delivery.event.entityId,
+          participantName: participantName ? String(participantName) : null,
+          createdByUserId,
+          preferredThreadId,
+          metadata: {
+            eventId: delivery.eventId,
+            title: rendered.subject,
+            actionUrl: delivery.event.actionUrl,
+          },
+        }).catch(error => console.error('[notifications] could not write SMS conversation ledger', error))
+      }
       sent += 1
       continue
     }
@@ -449,6 +506,23 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
 
     if (attemptNo >= MAX_ATTEMPTS) {
       await deadLetter({ ...delivery, event: delivery.event }, error)
+      if (channel === 'sms' && delivery.destination) {
+        await recordOutboundSms({
+          notificationDeliveryId: delivery.id,
+          destination: delivery.destination,
+          body: smsBody,
+          provider: result.provider,
+          providerMessageId: result.messageId || null,
+          status: 'dead_letter',
+          eventType: delivery.event.eventType,
+          entityType: delivery.event.entityType,
+          entityId: delivery.event.entityId,
+          participantName: participantName ? String(participantName) : null,
+          createdByUserId,
+          preferredThreadId,
+          metadata: { eventId: delivery.eventId, error },
+        }).catch(logError => console.error('[notifications] could not write failed SMS ledger row', logError))
+      }
       dead += 1
     } else {
       await prisma.notificationDelivery.update({
@@ -459,6 +533,23 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
           lastError: error,
         },
       })
+      if (channel === 'sms' && delivery.destination) {
+        await recordOutboundSms({
+          notificationDeliveryId: delivery.id,
+          destination: delivery.destination,
+          body: smsBody,
+          provider: result.provider,
+          providerMessageId: result.messageId || null,
+          status: 'retrying',
+          eventType: delivery.event.eventType,
+          entityType: delivery.event.entityType,
+          entityId: delivery.event.entityId,
+          participantName: participantName ? String(participantName) : null,
+          createdByUserId,
+          preferredThreadId,
+          metadata: { eventId: delivery.eventId, error },
+        }).catch(logError => console.error('[notifications] could not write retrying SMS ledger row', logError))
+      }
       retried += 1
     }
   }

@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       const record = await loadRepairRecipient(repairRef)
       if (!record) return NextResponse.json({ error: 'Repair record not found' }, { status: 404 })
 
-      const channels = requestedChannels(params, type === 'quote' ? ['email', 'whatsapp'] : ['whatsapp'])
+      const channels = requestedChannels(params, type === 'quote' ? ['email', 'whatsapp', 'sms'] : ['whatsapp', 'sms'])
       const deviceName = [record.repair.deviceBrand, record.repair.deviceModel || record.repair.deviceType].filter(Boolean).join(' ')
       const quoteTotal = Number(params.quoteTotal || record.repair.estimatedCost || 0)
       const title = type === 'quote'

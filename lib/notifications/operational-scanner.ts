@@ -215,7 +215,7 @@ async function scanRepairs() {
           name: repair.client.name,
           email: repair.client.email,
           phone: repair.client.phone || repair.client.phoneAlt,
-          channels: ['email', 'whatsapp'],
+          channels: ['email', 'whatsapp', 'sms'],
         }],
         title: `Your repair ${ref} is ready`,
         body: `Hello ${repair.client.name}, your ${repair.deviceBrand || ''} ${repair.deviceModel || repair.deviceType} is ready. Please contact Deed Technologies to arrange collection.`.trim(),
@@ -235,7 +235,7 @@ async function scanRepairs() {
             name: repair.client.name,
             email: repair.client.email,
             phone: repair.client.phone || repair.client.phoneAlt,
-            channels: ['email', 'whatsapp'],
+            channels: ['email', 'whatsapp', 'sms'],
           }],
           title: `Repair awaiting collection — ${ref}`,
           body: `Your device has been ready for collection for more than 3 days. Please contact Deed Technologies to arrange collection.`,
@@ -437,7 +437,7 @@ async function scanDelivery() {
       name: row.customerName || row.client?.name || 'Customer',
       email: row.client?.email || null,
       phone: row.recipientPhone || row.client?.phone || row.client?.phoneAlt || null,
-      channels: ['email', 'whatsapp'] as const,
+      channels: ['email', 'whatsapp', 'sms'] as const,
     }
     if (status === 'dispatched') {
       dispatchedIds.push(row.id)
@@ -731,7 +731,7 @@ async function scanAftersales() {
         name: asset.customer.name,
         email: asset.customer.email,
         phone: asset.customer.phone || asset.customer.phoneAlt,
-        channels: ['email', 'whatsapp'],
+        channels: ['email', 'whatsapp', 'sms'],
       }],
       title: `Warranty expiring — ${asset.product.name}`,
       body: `The warranty for ${asset.product.name}${asset.serialNumber ? ` (S/N ${asset.serialNumber})` : ''} expires on ${asset.warrantyEnd ? dateOnly(asset.warrantyEnd) : 'soon'}.`,

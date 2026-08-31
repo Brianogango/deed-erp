@@ -70,6 +70,18 @@ curl --fail --silent --show-error \
 
 Do not configure a cadence faster than the infrastructure can sustain. The database uses `FOR UPDATE SKIP LOCKED`, so overlapping workers do not process the same due row concurrently.
 
+## 3.1 SMS conversation ledger
+
+Apply the additive SMS conversation migration before enabling inbound replies:
+
+```bash
+cd /var/www/deed-erp
+bash scripts/apply-sql-as-postgres.sh database/migrations/20260831_sms_conversations.sql
+npx prisma generate
+```
+
+The first visit to **Settings → Notifications → SMS Message Center** backfills up to 250 recent outbound SMS deliveries into the conversation ledger. New outbound SMS messages are written to the ledger automatically.
+
 ## 4. Provider callbacks
 
 Configure provider callbacks to the public HTTPS ERP domain.
@@ -93,23 +105,23 @@ The POST route verifies `X-Hub-Signature-256` before accepting delivery/read sta
 
 ### Telerivet SMS
 
-Status webhook URL (not the site root):
+Use the same secured ERP endpoint for both delivery-status callbacks and incoming SMS:
 
 ```text
 https://erp.deed.co.ke/api/webhooks/notifications/telerivet
 ```
 
-Enable **Message status notifications**. The route checks `TELERIVET_WEBHOOK_SECRET` against the `secret` field Telerivet posts. Sending requires `TELERIVET_API_KEY`, `TELERIVET_PROJECT_ID`, and optionally `TELERIVET_PHONE_ID`. Set `SMS_PROVIDER=telerivet` to force this transport.
+Enable **Message status notifications** and **incoming message notifications** for the Telerivet phone/project. The route checks `TELERIVET_WEBHOOK_SECRET` against the `secret` field Telerivet posts, records inbound replies in the SMS Message Center, and never persists the webhook secret. Sending requires `TELERIVET_API_KEY`, `TELERIVET_PROJECT_ID`, and optionally `TELERIVET_PHONE_ID`. Set `SMS_PROVIDER=telerivet` to force this transport.
 
 ### Twilio SMS
 
-Status callback URL:
+Use this endpoint for both the Twilio **Incoming Message webhook** and **Status Callback**:
 
 ```text
 https://erp.deed.co.ke/api/webhooks/notifications/twilio
 ```
 
-The route validates `X-Twilio-Signature` with `TWILIO_AUTH_TOKEN`.
+The route validates `X-Twilio-Signature` with `TWILIO_AUTH_TOKEN`. Incoming `Body/From/To` messages are stored as replies; delivery callbacks continue updating the outbound delivery state.
 
 ### SendGrid
 
@@ -172,6 +184,8 @@ Administrators can inspect the platform at:
 **Settings → Notifications**
 
 The panel exposes delivery counts, channel volume, pending outbox/delivery counts, current dead letters and recent failures. Dead-letter deliveries can be requeued from the panel.
+
+The same screen now includes **SMS Message Center** with **All / Inbox / Sent / Failed** views, full message threads, delivery state, inbound replies and direct SMS reply. Replies of `STOP`, `UNSUBSCRIBE`, `CANCEL`, `END` or `QUIT` mark the phone as opted out; the worker suppresses subsequent SMS deliveries to that number and the Message Center blocks manual replies.
 
 User-level delivery preferences are under:
 
