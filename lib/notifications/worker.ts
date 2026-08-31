@@ -11,7 +11,8 @@ import {
   isQuietNow,
   severityAllowed,
 } from './preferences'
-import { sendProviderDelivery } from './providers'
+import { mailboxForEvent, sendProviderDelivery } from './providers'
+import { recordOutboundEmail } from './email-conversations'
 import { isPausedOutboundChannel } from './outbound-pause'
 import { resolveSmsProvider } from './sms-provider'
 import { isSmsPhoneOptedOut, recordOutboundSms } from './sms-conversations'
@@ -177,9 +178,14 @@ async function routeEvent(eventId: string) {
 
   const policy = defaultNotificationPolicy(event.eventType)
   const routing = asRecord(event.routing) as NotificationRouting
-  const channels = Array.isArray(routing.channels) && routing.channels.length
+  const requestedChannels = Array.isArray(routing.channels) && routing.channels.length
     ? routing.channels
     : policy.channels
+  const eventMetadata = asRecord(event.metadata)
+  const emailTriggered = eventMetadata.emailTriggered === true
+  const channels = policy.emailMode === 'manual' && !emailTriggered
+    ? requestedChannels.filter(channel => channel !== 'email')
+    : requestedChannels
 
   for (const recipient of event.recipients) {
     await routeUserRecipient(event, recipient, channels)
@@ -442,7 +448,13 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
     const externalRecipients = Array.isArray(routing.externalRecipients)
       ? routing.externalRecipients as Array<Record<string, unknown>>
       : []
-    const participantName = externalRecipients.find(row => String(row.phone || '') === String(delivery.destination || ''))?.name
+    const matchedExternalRecipient = externalRecipients.find(row => {
+      if (channel === 'email') {
+        return String(row.email || '').trim().toLowerCase() === String(delivery.destination || '').trim().toLowerCase()
+      }
+      return String(row.phone || '') === String(delivery.destination || '')
+    })
+    const participantName = matchedExternalRecipient?.name
       || externalRecipients[0]?.name
       || null
     const preferredThreadId = String(metadata.communicationThreadId || '').trim() || null
@@ -496,6 +508,30 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
           },
         }).catch(error => console.error('[notifications] could not write SMS conversation ledger', error))
       }
+      if (channel === 'email' && delivery.destination) {
+        await recordOutboundEmail({
+          notificationDeliveryId: delivery.id,
+          destination: delivery.destination,
+          subject: String(effectiveMetadata.emailSubject || rendered.subject),
+          body: String(effectiveMetadata.emailText || rendered.text),
+          provider: result.provider,
+          providerMessageId: result.messageId || null,
+          status: delivered ? 'delivered' : 'sent',
+          sentAt,
+          deliveredAt: delivered ? sentAt : null,
+          eventType: delivery.event.eventType,
+          entityType: delivery.event.entityType,
+          entityId: delivery.event.entityId,
+          participantName: participantName ? String(participantName) : null,
+          mailbox: mailboxForEvent(delivery.event.eventType),
+          createdByUserId,
+          preferredThreadId,
+          metadata: {
+            eventId: delivery.eventId,
+            actionUrl: delivery.event.actionUrl,
+          },
+        }).catch(error => console.error('[notifications] could not write email conversation ledger', error))
+      }
       sent += 1
       continue
     }
@@ -539,6 +575,25 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
           metadata: { eventId: delivery.eventId, error },
         }).catch(logError => console.error('[notifications] could not write failed SMS ledger row', logError))
       }
+      if (channel === 'email' && delivery.destination) {
+        await recordOutboundEmail({
+          notificationDeliveryId: delivery.id,
+          destination: delivery.destination,
+          subject: String(effectiveMetadata.emailSubject || rendered.subject),
+          body: String(effectiveMetadata.emailText || rendered.text),
+          provider: result.provider,
+          providerMessageId: result.messageId || null,
+          status: 'dead_letter',
+          eventType: delivery.event.eventType,
+          entityType: delivery.event.entityType,
+          entityId: delivery.event.entityId,
+          participantName: participantName ? String(participantName) : null,
+          mailbox: mailboxForEvent(delivery.event.eventType),
+          createdByUserId,
+          preferredThreadId,
+          metadata: { eventId: delivery.eventId, error },
+        }).catch(logError => console.error('[notifications] could not write failed email ledger row', logError))
+      }
       dead += 1
     } else {
       await prisma.notificationDelivery.update({
@@ -565,6 +620,25 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
           preferredThreadId,
           metadata: { eventId: delivery.eventId, error },
         }).catch(logError => console.error('[notifications] could not write retrying SMS ledger row', logError))
+      }
+      if (channel === 'email' && delivery.destination) {
+        await recordOutboundEmail({
+          notificationDeliveryId: delivery.id,
+          destination: delivery.destination,
+          subject: String(effectiveMetadata.emailSubject || rendered.subject),
+          body: String(effectiveMetadata.emailText || rendered.text),
+          provider: result.provider,
+          providerMessageId: result.messageId || null,
+          status: 'retrying',
+          eventType: delivery.event.eventType,
+          entityType: delivery.event.entityType,
+          entityId: delivery.event.entityId,
+          participantName: participantName ? String(participantName) : null,
+          mailbox: mailboxForEvent(delivery.event.eventType),
+          createdByUserId,
+          preferredThreadId,
+          metadata: { eventId: delivery.eventId, error },
+        }).catch(logError => console.error('[notifications] could not write retrying email ledger row', logError))
       }
       retried += 1
     }
