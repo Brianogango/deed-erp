@@ -544,7 +544,7 @@ export default function Settings() {
         <main className="settings-main flex-1 min-w-0">
 
           {/* Section heading — Security renders its approved dashboard heading internally. */}
-          {section !== 'security' && (
+          {section !== 'security' && section !== 'notifications' && (
             <div className="settings-section-heading flex items-center gap-2 mb-4">
               {activeNav && (
                 <div className="flex items-center gap-2">
@@ -1211,7 +1211,7 @@ export default function Settings() {
 
           {/* ════ NOTIFICATION OPERATIONS ════ */}
           {section === 'notifications' && canManageNotifications && (
-            <NotificationOperationsPanel showToast={showToast} />
+            <NotificationOperationsPanel showToast={showToast} onOpenEmailSettings={() => setSection('email')} />
           )}
 
           {/* ════ SECURITY ════ */}
