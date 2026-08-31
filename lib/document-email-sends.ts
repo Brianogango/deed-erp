@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
+import { recordOutboundEmail } from '@/lib/notifications/email-conversations'
 
 /**
  * Compatibility facade for document-send history.
@@ -23,6 +24,7 @@ export interface DocumentEmailSend {
   to: string
   cc: string[]
   subject?: string
+  body?: string
   status: DocumentEmailSendStatus
   error?: string
   messageId?: string
@@ -67,6 +69,12 @@ function providerForChannel(channel: 'email' | 'whatsapp') {
   if (configured === 'sendgrid') return 'sendgrid'
   if (configured === 'ses') return 'ses'
   return 'smtp'
+}
+
+function mailboxForDocument(type: DocumentEmailDocumentType) {
+  if (type === 'quote') return 'sales'
+  if (type === 'invoice' || type === 'bill' || type === 'payment_receipt') return 'accounts'
+  return 'default'
 }
 
 export async function listDocumentEmailSends(filters?: {
@@ -155,6 +163,7 @@ export async function appendDocumentEmailSend(
           documentId: input.documentId,
           documentRef: input.documentRef,
           subject: input.subject || null,
+          body: input.body || null,
           sentByName: input.sentByName || null,
         },
         routing: {},
@@ -188,6 +197,29 @@ export async function appendDocumentEmailSend(
       },
     })
   })
+
+  if (channel === 'email' && input.to) {
+    await recordOutboundEmail({
+      notificationDeliveryId: deliveryId,
+      destination: input.to,
+      subject: input.subject || `${input.documentRef} from Deed Technologies`,
+      body: input.body || `${input.documentRef} sent via email.`,
+      provider: providerForChannel('email'),
+      providerMessageId: input.messageId || null,
+      status: successful ? 'sent' : 'failed',
+      sentAt: successful ? normalizedSentAt : null,
+      eventType: 'document.send',
+      entityType: input.documentType,
+      entityId: input.documentId,
+      mailbox: mailboxForDocument(input.documentType),
+      createdByUserId: input.sentById || null,
+      metadata: {
+        documentRef: input.documentRef,
+        cc: input.cc ?? [],
+        kind: input.kind || null,
+      },
+    }).catch(error => console.error('[document-email-sends] could not write email conversation ledger', error))
+  }
 
   return {
     id: deliveryId,
