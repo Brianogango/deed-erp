@@ -10,7 +10,7 @@ import type { NotificationChannel, ProviderSendResult } from './types'
 const escapeHtml = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-function mailboxForEvent(eventType: string): MailboxProfile {
+export function mailboxForEvent(eventType: string): MailboxProfile {
   if (eventType.startsWith('hr.')) return 'hr'
   if (eventType.startsWith('finance.')) return 'accounts'
   if (eventType.startsWith('sales.') || eventType.startsWith('crm.')) return 'sales'
@@ -19,13 +19,21 @@ function mailboxForEvent(eventType: string): MailboxProfile {
 
 function genericHtml(title: string, body: string, actionUrl?: string | null) {
   const brand = process.env.PDF_COMPANY_NAME || 'Deed Technologies'
+  const baseUrl = String(process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
+  const absoluteActionUrl = actionUrl
+    ? actionUrl.startsWith('http://') || actionUrl.startsWith('https://')
+      ? actionUrl
+      : baseUrl
+        ? `${baseUrl}${actionUrl.startsWith('/') ? '' : '/'}${actionUrl}`
+        : null
+    : null
   return `<!doctype html><html><body style="margin:0;background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a">
     <div style="max-width:640px;margin:24px auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
       <div style="background:#1B2762;color:#fff;padding:22px 26px"><strong style="font-size:20px">${escapeHtml(brand)}</strong></div>
       <div style="padding:26px">
         <h2 style="margin:0 0 12px;font-size:20px">${escapeHtml(title)}</h2>
         <p style="white-space:pre-wrap;line-height:1.6">${escapeHtml(body)}</p>
-        ${actionUrl ? `<p style="margin-top:20px"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:#00AEEF;color:#fff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:700">Open in Deed ERP</a></p>` : ''}
+        ${absoluteActionUrl ? `<p style="margin-top:20px"><a href="${escapeHtml(absoluteActionUrl)}" style="display:inline-block;background:#00AEEF;color:#fff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:700">Open in Deed ERP</a></p>` : ''}
       </div>
     </div>
   </body></html>`
