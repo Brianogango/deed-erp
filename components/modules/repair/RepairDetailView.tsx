@@ -62,7 +62,7 @@ function SectionCard({ children, className = '', delay = 0, id }: { children: Re
     <section
       id={id}
       className={`repair-section-card bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden ${className}`}
-      style={{ animation: 'cardUp 0.5s ease both', animationDelay: `${delay}ms` }}
+      style={{ animation: 'cardUp 0.5s ease both', animationDelay: `${delay}ms`, scrollMarginTop: '9.5rem' }}
     >
       {children}
     </section>
@@ -276,6 +276,7 @@ export default function RepairDetailView() {
     && !pendingOutsourceJob
   const failedQcItems = (r.qcItems ?? []).filter(item => item.testedDate && !item.passed)
   const showQcFailPanel = !!(r.qcFailReason || failedQcItems.length) && ['in_repair', 'qc'].includes(r.status)
+  const hasQcReport = !!(r.qcReportUrl || r.qcReportData || r.qcReportName)
   const canUpdateProgress = !TERMINAL.includes(r.status)
     && (
       ['approved', 'awaiting_parts', 'in_repair', 'ready'].includes(r.status)
@@ -949,12 +950,11 @@ export default function RepairDetailView() {
 
             {/* ── Diagnosis & Technical Assessment ── */}
             {hasDiagnosis && (
-              <SectionCard delay={200}>
+              <SectionCard delay={200} id="repair-diagnosis">
                 <SectionHeader
                   icon={faStethoscope}
                   iconBg="bg-blue-600"
-                  id="repair-diagnosis"
-              title="Diagnosis & Technical Assessment"
+                  title="Diagnosis & Technical Assessment"
                   subtitle={
                     r.diagnosis?.diagnosedDate
                       ? `${new Date(r.diagnosis.diagnosedDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })} · ${r.diagnosis.diagnosedBy}`
@@ -1168,7 +1168,7 @@ export default function RepairDetailView() {
 
             {/* ── QC Fail Results (visible to tech after rework) ── */}
             {showQcFailPanel && (
-              <SectionCard delay={70}>
+              <SectionCard delay={70} id="repair-qc">
                 <SectionHeader
                   icon={faExclamationTriangle}
                   iconBg="bg-amber-600"
@@ -1201,13 +1201,12 @@ export default function RepairDetailView() {
             )}
 
             {/* ── QC Report Attachment ── */}
-            {(r.qcReportUrl || r.qcReportData || r.qcReportName) && (
-              <SectionCard delay={270}>
+            {hasQcReport && (
+              <SectionCard delay={270} id={!showQcFailPanel ? 'repair-qc' : undefined}>
                 <SectionHeader
                   icon={faShieldAlt}
                   iconBg="bg-emerald-500"
-                  id="repair-qc"
-              title="QC Report File"
+                  title="QC Report File"
                   subtitle="Lightweight attachment visible to the customer portal"
                   action={
                     <button onClick={() => qcReportInputRef.current?.click()} className="btn-outline text-[10px]" disabled={uploadingQcReport}>
@@ -1238,9 +1237,32 @@ export default function RepairDetailView() {
               </SectionCard>
             )}
 
+            {!showQcFailPanel && !hasQcReport && (
+              <SectionCard delay={270} id="repair-qc">
+                <SectionHeader
+                  icon={faShieldAlt}
+                  iconBg="bg-slate-500"
+                  title="Quality Check"
+                  subtitle={r.status === 'qc' ? 'Ready for testing' : 'No QC result recorded yet'}
+                  action={canPerformQA ? (
+                    <button onClick={() => setShowQAModal(true)} className="btn-primary text-[10px]">
+                      Start QC
+                    </button>
+                  ) : null}
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5">
+                  <p className="text-[11px] font-semibold text-[var(--text-3)]">
+                    {r.status === 'qc'
+                      ? 'This repair is waiting for an independent quality check.'
+                      : 'QC becomes available after the repair work is completed.'}
+                  </p>
+                </div>
+              </SectionCard>
+            )}
+
             {/* ── Parts Used in Repair ── */}
             {hasPartsUsed && (
-              <SectionCard delay={260}>
+              <SectionCard delay={260} id="repair-parts">
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
@@ -1340,7 +1362,61 @@ export default function RepairDetailView() {
 
           {/* ═══ Right Column ═══ */}
           <aside className="repair-detail__aside lg:col-span-4">
-            <span id="repair-delivery" className="sr-only" aria-hidden="true" />
+            <SectionCard delay={80} id="repair-delivery">
+              <SectionHeader
+                icon={faTruck}
+                iconBg="bg-teal-600"
+                title="Delivery & Handover"
+                subtitle={
+                  r.status === 'delivered'
+                    ? 'Device handed over'
+                    : r.deliveryJobId
+                      ? 'Delivery scheduled'
+                      : 'Collection / delivery status'
+                }
+                action={
+                  canScheduleDelivery ? (
+                    <button onClick={() => setShowDeliveryModal(true)} className="btn-primary text-[10px]">Schedule</button>
+                  ) : canMarkCollected ? (
+                    <button onClick={() => setShowMarkDeliveredConfirm(true)} className="btn-primary text-[10px]">Mark collected</button>
+                  ) : repairOrc ? (
+                    <button onClick={() => setShowOrcPanel(true)} className="btn-secondary text-[10px]">Release record</button>
+                  ) : null
+                }
+              />
+              <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-2.5">
+                {r.status === 'delivered' && r.deliveryRecipient ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Collected / delivered</p>
+                    <p className="mt-1 text-[11px] font-semibold text-emerald-900">
+                      {r.deliveryRecipient}
+                      {r.deliveryActualDate ? ` · ${new Date(r.deliveryActualDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                    </p>
+                  </div>
+                ) : r.deliveryJobId ? (
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 p-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-teal-700">Scheduled delivery</p>
+                    <p className="mt-1 text-[11px] font-semibold text-teal-900">
+                      {r.deliveryRiderName || 'Rider not assigned'}
+                      {r.deliveryScheduledDate ? ` · ${new Date(r.deliveryScheduledDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] font-semibold text-[var(--text-3)]">
+                    No delivery or collection handover has been recorded yet.
+                  </p>
+                )}
+                {canPrepareRelease && !repairOrc && (
+                  <button
+                    type="button"
+                    onClick={openPrepareRelease}
+                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-[10px] font-black uppercase tracking-wider text-[var(--text-2)] hover:bg-[var(--bg-muted)]"
+                  >
+                    Prepare release
+                  </button>
+                )}
+              </div>
+            </SectionCard>
 
             {/* Follow-up Portal */}
             <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-sm border" style={{ borderColor: 'var(--border)', background: 'var(--navy)' }}>
@@ -1380,7 +1456,7 @@ export default function RepairDetailView() {
             </div>
 
             {/* Financials */}
-            <SectionCard delay={100}>
+            <SectionCard delay={100} id={!hasDiagnosis ? 'repair-diagnosis' : undefined}>
               <SectionHeader id="repair-diagnosis-financials" icon={faQuoteRight} iconBg="bg-emerald-600" title="Financials" subtitle="Quote & charges" />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 {r.quote ? (
@@ -1567,12 +1643,11 @@ export default function RepairDetailView() {
 
             {/* Parts & Procurement */}
             {hasProc ? (
-              <SectionCard delay={180}>
+              <SectionCard delay={180} id={!hasPartsUsed ? 'repair-parts' : undefined}>
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
-                  id="repair-parts"
-              title="Parts & Procurement"
+                  title="Parts & Procurement"
                   subtitle={`${r.procurementRequests.length} request${r.procurementRequests.length !== 1 ? 's' : ''}`}
                   action={
                     canProcure
@@ -1625,7 +1700,7 @@ export default function RepairDetailView() {
                 </div>
               </SectionCard>
             ) : canProcure ? (
-              <SectionCard delay={180}>
+              <SectionCard delay={180} id={!hasPartsUsed ? 'repair-parts' : undefined}>
                 <div className="px-4 sm:px-6 py-5 flex flex-col items-center gap-3">
                   <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center">
                     <Fa icon={faBoxOpen} className="text-orange-400 text-base" />
@@ -1641,12 +1716,24 @@ export default function RepairDetailView() {
                   </button>
                 </div>
               </SectionCard>
+            ) : !hasPartsUsed ? (
+              <SectionCard delay={180} id="repair-parts">
+                <SectionHeader
+                  icon={faBoxOpen}
+                  iconBg="bg-slate-500"
+                  title="Parts & Procurement"
+                  subtitle="No parts activity"
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5">
+                  <p className="text-[11px] font-semibold text-[var(--text-3)]">
+                    No parts have been used or requested for this repair.
+                  </p>
+                </div>
+              </SectionCard>
             ) : null}
 
-            <span id="repair-history" className="sr-only" aria-hidden="true" />
-
             {/* Work Notes */}
-            <SectionCard delay={160}>
+            <SectionCard delay={160} id="repair-history">
               <SectionHeader
                 icon={faStickyNote}
                 iconBg="bg-navy-500"
