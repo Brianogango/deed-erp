@@ -103,8 +103,10 @@ import { SalespersonCloserField } from '@/components/sales/SalespersonCloserFiel
 import { allocateDeliveredQtyToOrderLines, pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
+import { PartialDeliveryDialog } from '@/components/modules/sales/PartialDeliveryDialog'
 import { SameDocumentIdentity } from '@/components/modules/sales/SameDocumentIdentity'
 import {
+  applyConfirmLineSelection,
   canConfirmQuotation,
   canConfirmAndReserve,
   canConfirmWithoutReservation,
@@ -1238,7 +1240,7 @@ function SalesContent() {
     setShowConfirmQuoteDialog(true)
   }
 
-  const runConfirmQuotation = async (mode: ConfirmQuotationMode) => {
+  const runConfirmQuotation = async (mode: ConfirmQuotationMode, qtyByLineId: Record<string, number>) => {
     if (!activeOrder) return
     if (confirmingSO) return
     setConfirmingSO(true)
@@ -1246,12 +1248,16 @@ function SalesContent() {
       // reserveStock drives server-side At Confirmation reservation.
       // Prepare (pick) only when Confirm and Reserve — Manual mode leaves
       // warehouse to prepare later.
-      await Promise.resolve(confirmSO(activeOrder.id, { reserveStock: mode === 'reserve' }))
+      await Promise.resolve(confirmSO(activeOrder.id, {
+        reserveStock: mode === 'reserve',
+        qtyByLineId,
+      }))
       if (mode === 'reserve' && canReserveOnConfirm) {
         const del = await ensureWaitingDeliveryForSO(activeOrder.id)
         if (del) {
+          const kept = applyConfirmLineSelection(activeOrder.lines as any, qtyByLineId).lines
           const qtys: Record<string, number> = {}
-          for (const line of activeOrder.lines) {
+          for (const line of kept) {
             if ((line as any).lineType === 'section' || !line.productId) continue
             if (isNonStockSaleLine(line, products.find(p => p.id === line.productId) ?? null)) continue
             qtys[line.productId] = (qtys[line.productId] ?? 0) + (Number(line.qty) || 0)
@@ -3628,8 +3634,13 @@ function SalesContent() {
           total={activeOrder.total}
           validUntil={activeOrder.validUntil}
           deliveryDate={activeOrder.deliveryDate}
-          lineCount={activeOrder.lines.filter((l: any) => l.lineType !== 'section').length}
-          shortages={quotationStockShortages}
+          lines={activeOrder.lines as any}
+          headerDiscount={Number(activeOrder.discountAmount) || 0}
+          stockAvailable={productId => {
+            const byLoc = getStockByLocation(productId)
+            return (byLoc.warehouse ?? 0) + (byLoc.shop ?? 0)
+          }}
+          isNonStockLine={line => isNonStockSaleLine(line, products.find(p => p.id === line.productId) ?? null)}
           approvalBlockers={(approvalRequests ?? [])
             .filter(r =>
               r.documentId === activeOrder.id
@@ -3645,7 +3656,7 @@ function SalesContent() {
           canSkipReserve={canSkipReserveOnConfirm && canReserveOnConfirm}
           confirming={confirmingSO}
           onClose={() => setShowConfirmQuoteDialog(false)}
-          onConfirm={mode => void runConfirmQuotation(mode)}
+          onConfirm={(mode, qtyByLineId) => void runConfirmQuotation(mode, qtyByLineId)}
         />
       )}
 
@@ -4231,7 +4242,7 @@ function DeliveryNoteView({
   deliveryQtys: Record<string, number>; setDeliveryQtys: (v: Record<string, number>) => void
   savingDelivery: boolean; setSavingDelivery: (v: boolean) => void
   prepareDelivery: (id: string, qtysDone?: Record<string, number>) => boolean
-  validateDelivery: (id: string, qtysDone?: Record<string, number>) => void
+  validateDelivery: (id: string, qtysDone?: Record<string, number>, opts?: { cancelRemaining?: boolean }) => void
   markDeliveryNoteGenerated: (id: string) => Promise<boolean>
   assignSerialsToSOLine: (orderId: string, lineId: string, serialIds: string[]) => void
   unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
@@ -4247,6 +4258,7 @@ function DeliveryNoteView({
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(
     focusDeliveryId ?? null,
   )
+  const [showPartialDialog, setShowPartialDialog] = useState(false)
   useEffect(() => {
     if (focusDeliveryId) setSelectedDeliveryId(focusDeliveryId)
   }, [focusDeliveryId])
@@ -4373,12 +4385,32 @@ function DeliveryNoteView({
     prepareDelivery(existingDelivery.id, requestedByProduct())
   }
 
-  const handleValidate = async () => {
+  const handleValidate = async (opts?: { cancelRemaining?: boolean }) => {
     if (!order.lines.length) { showToast('No line items on this order', 'error'); return }
     if (!existingDelivery || existingDelivery.status !== 'ready') {
       showToast('No pending delivery to validate', 'error'); return
     }
-    const lines = pairOrderLinesWithDeliveryLines(order.lines, existingDelivery.lines).map(({ orderLine: l, deliveryLine: delLine }) => {
+    const pairs = pairOrderLinesWithDeliveryLines(order.lines, existingDelivery.lines)
+    const remainders = pairs
+      .filter(({ orderLine: l }) => (l as any).lineType !== 'section')
+      .map(({ orderLine: l, deliveryLine: delLine }) => {
+        const preparedQty = effectiveDeliveryLineQty({
+          qty: Number(delLine?.qty) || Number(l.qty) || 0,
+          qtyDone: delLine?.qtyDone,
+          serialIds: (delLine?.serialIds?.length ? delLine.serialIds : l.serialIds) ?? [],
+        })
+        return {
+          productName: String(l.productName ?? l.description ?? 'Item'),
+          ordered: Number(l.qty) || 0,
+          done: preparedQty,
+        }
+      })
+      .filter(row => row.done < row.ordered)
+    if (remainders.length > 0 && opts?.cancelRemaining === undefined) {
+      setShowPartialDialog(true)
+      return
+    }
+    const lines = pairs.map(({ orderLine: l, deliveryLine: delLine }) => {
       const preparedQty = effectiveDeliveryLineQty({
         qty: Number(delLine?.qty) || Number(l.qty) || 0,
         qtyDone: delLine?.qtyDone,
@@ -4430,7 +4462,10 @@ function DeliveryNoteView({
         if (!line.productId || qty <= 0) continue
         qtysByProduct[line.productId] = (qtysByProduct[line.productId] ?? 0) + qty
       }
-      validateDelivery(existingDelivery.id, qtysByProduct)
+      await Promise.resolve(validateDelivery(existingDelivery.id, qtysByProduct, {
+        cancelRemaining: opts?.cancelRemaining === true,
+      }))
+      setShowPartialDialog(false)
       onBack()
     } catch { showToast('Network error saving delivery', 'error') }
     finally { setSavingDelivery(false) }
@@ -4504,7 +4539,7 @@ function DeliveryNoteView({
             </button>
           )}
           {canValidate && (
-            <button type="button" className="sp-btn sp-btn-primary" onClick={handleValidate} disabled={savingDelivery}>
+            <button type="button" className="sp-btn sp-btn-primary" onClick={() => void handleValidate()} disabled={savingDelivery}>
               {savingDelivery ? 'Saving…' : 'Mark as delivered'}
             </button>
           )}
@@ -4778,7 +4813,7 @@ function DeliveryNoteView({
               </button>
             )}
             {canValidate && (
-              <button type="button" className="sp-btn sp-btn-success" onClick={handleValidate} disabled={savingDelivery}>
+              <button type="button" className="sp-btn sp-btn-success" onClick={() => void handleValidate()} disabled={savingDelivery}>
                 {savingDelivery ? 'Saving…' : 'Mark as delivered'}
               </button>
             )}
@@ -4786,6 +4821,30 @@ function DeliveryNoteView({
         </div>
         </div>
       </div>
+      {showPartialDialog && existingDelivery && (
+        <PartialDeliveryDialog
+          deliveryRef={existingDelivery.ref}
+          remainders={pairOrderLinesWithDeliveryLines(order.lines, existingDelivery.lines)
+            .filter(({ orderLine: l }) => (l as any).lineType !== 'section')
+            .map(({ orderLine: l, deliveryLine: delLine }) => {
+              const done = effectiveDeliveryLineQty({
+                qty: Number(delLine?.qty) || Number(l.qty) || 0,
+                qtyDone: delLine?.qtyDone,
+                serialIds: (delLine?.serialIds?.length ? delLine.serialIds : l.serialIds) ?? [],
+              })
+              return {
+                productName: String(l.productName ?? l.description ?? 'Item'),
+                ordered: Number(l.qty) || 0,
+                done,
+              }
+            })
+            .filter(row => row.done < row.ordered)}
+          confirming={savingDelivery}
+          onClose={() => setShowPartialDialog(false)}
+          onCreateBackorder={() => void handleValidate({ cancelRemaining: false })}
+          onCancelRemaining={() => void handleValidate({ cancelRemaining: true })}
+        />
+      )}
     </div>
   )
 }

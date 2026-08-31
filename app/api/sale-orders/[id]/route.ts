@@ -23,6 +23,7 @@ import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
 import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
 import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
+import { canTrimFulfillmentQty, isFulfillmentQtyTrim } from '@/lib/sales/fulfillment-trim'
 
 /** Serialize blob rewrites so a slower soft/findMany cannot overwrite a newer Save. */
 let broadcastSaleOrdersChain: Promise<void> = Promise.resolve()
@@ -359,8 +360,13 @@ async function enforceSaleWorkflow(
   }
   // Phase C: confirmed sales orders freeze commercial fields for everyone
   // except directors (even when salesLockConfirmed did not set locked=true).
+  // Inventory may still fold ordered qty down to delivered ("No Backorder").
   const confirmedFreeze = from === 'sale' && to === 'sale'
-  if ((existing.locked || confirmedFreeze) && !isDirector && to !== 'quotation' && hasCommercialChange(existing, body)) {
+  const fulfillmentTrim =
+    confirmedFreeze
+    && isFulfillmentQtyTrim(existing, body)
+    && canTrimFulfillmentQty(session.user.role)
+  if ((existing.locked || confirmedFreeze) && !isDirector && to !== 'quotation' && hasCommercialChange(existing, body) && !fulfillmentTrim) {
     return NextResponse.json(
       { error: existing.locked
         ? 'This order is locked. Ask a director to unlock it before changing commercial fields.'
@@ -416,7 +422,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const body = await request.json()
-    const allowed = isRepairLinked(body) ? REPAIR_WRITE_ROLES.includes(session.user.role) : canWrite(session.user.role)
+    const trimRole = canTrimFulfillmentQty(session.user.role) && (body.fulfillmentTrim === true || body.fulfillmentTrim === 'true')
+    const allowed = isRepairLinked(body)
+      ? REPAIR_WRITE_ROLES.includes(session.user.role)
+      : canWrite(session.user.role) || trimRole
     if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const existing = await prisma.saleOrder.findUnique({
@@ -424,10 +433,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       include: { items: true },
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const validTrim = isFulfillmentQtyTrim(existing, body)
+    if (trimRole && !canWrite(session.user.role) && !validTrim) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     if (!canAccessRecord(session.user.role, 'sale_order', {
       createdByUserId: existing.createdById,
       salespersonId: existing.salespersonId,
-    }, session.user.id)) {
+    }, session.user.id) && !(trimRole && validTrim)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

@@ -228,6 +228,64 @@ describe('sale-order workflow enforcement (server-side)', () => {
     expect(res.status).toBe(200)
   })
 
+  it('confirms a sent quotation with fewer lines in the same request', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('sales_rep'))
+    mockPrismaSO.findUnique.mockResolvedValue({
+      ...baseOrder,
+      status: 'quotation_sent',
+      items: [
+        { id: 'item-1', productId: 'p1', description: 'Laptop', qty: 1, unitPrice: 8400, taxRate: 16, lineTotal: 8400 },
+        { id: 'item-2', productId: 'p2', description: 'Mouse', qty: 1, unitPrice: 500, taxRate: 16, lineTotal: 500 },
+      ],
+    })
+    const res = await PUT(putReq({
+      status: 'sale',
+      lines: [
+        { id: 'item-1', productId: 'p1', description: 'Laptop', qty: 1, unitPrice: 8400, taxRate: 16, lineTotal: 8400 },
+      ],
+    }), params)
+    expect(res.status).toBe(200)
+    const data = mockPrismaSO.update.mock.calls[0][0].data
+    expect(data.status).toBe('sale')
+  })
+
+  it('lets inventory drop remaining qty on a locked confirmed order (no backorder)', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('inventory_officer'))
+    mockPrismaSO.findUnique.mockResolvedValue({
+      ...baseOrder,
+      status: 'sale',
+      locked: true,
+      items: [
+        { id: 'item-1', productId: 'p1', description: 'Laptop', qty: 2, unitPrice: 8400, taxRate: 16, lineTotal: 16800, qtyDelivered: 1, qtyInvoiced: 0 },
+      ],
+    })
+    const res = await PUT(putReq({
+      status: 'sale',
+      locked: true,
+      fulfillmentTrim: true,
+      lines: [
+        { id: 'item-1', productId: 'p1', description: 'Laptop', qty: 1, unitPrice: 8400, taxRate: 16, lineTotal: 8400, qtyDelivered: 1, qtyInvoiced: 0 },
+      ],
+    }), params)
+    expect(res.status).toBe(200)
+  })
+
+  it('rejects an inventory trim that changes price', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('inventory_officer'))
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', locked: true })
+    const res = await PUT(putReq({
+      status: 'sale',
+      locked: true,
+      fulfillmentTrim: true,
+      total: 1,
+      lines: [
+        { id: 'item-1', productId: null, description: 'Laptop', qty: 1, unitPrice: 1, taxRate: 16, lineTotal: 1 },
+      ],
+    }), params)
+    expect(res.status).toBe(403)
+    expect(mockPrismaSO.update).not.toHaveBeenCalled()
+  })
+
   it('stamps sent metadata when marking Quotation Sent', async () => {
     mockPrismaSO.findUnique.mockResolvedValue(baseOrder)
     const res = await PUT(putReq({ status: 'quotation_sent' }), params)
