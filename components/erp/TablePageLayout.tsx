@@ -3,8 +3,8 @@
 import { useId, type ReactNode } from 'react'
 
 /**
- * Standard operational list page body (below ModuleHeader + TabBar):
- * title/summary → optional notice → table surface (toolbar + records + pagination).
+ * Standard operational list page body. The surface stays width-contained but
+ * does not clip descendants; DataTable/local scrollers own horizontal overflow.
  */
 export function TablePageLayout({
   title,
@@ -37,7 +37,7 @@ export function TablePageLayout({
         </div>
       )}
       {notice}
-      <div className="erp-table-page-surface min-w-0 max-w-full overflow-x-hidden">
+      <div className="erp-table-page-surface min-w-0 max-w-full">
         {children}
       </div>
     </section>
