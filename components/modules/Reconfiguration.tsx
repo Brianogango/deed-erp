@@ -26,7 +26,7 @@ import { partCapacityGb } from '@/lib/reconfiguration/product-effect'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { compactSpecsString, UNIT_CONFIG_SOURCE_LABEL, type UnitConfigSource } from '@/lib/reconfiguration/unit-config'
 import SearchablePick from '@/components/reconfiguration/SearchablePick'
-import { useUrlQueryState } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 
 type WorkOrderListItem = {
   id: string
@@ -101,6 +101,7 @@ export default function Reconfiguration() {
   const role = currentUser?.role ?? ''
 
   const [tabValue, setTabValue] = useUrlQueryState('tab', 'orders')
+  const [recordId, setRecordId] = useUrlRecordId()
   const [orders, setOrders] = useState<WorkOrderListItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -108,11 +109,16 @@ export default function Reconfiguration() {
   const tab: 'orders' | 'new' | 'detail' =
     tabValue === 'new' ? 'new' : tabValue === 'detail' && detail ? 'detail' : 'orders'
   const setTab = useCallback((next: 'orders' | 'new' | 'detail') => {
+    if (next !== 'detail' && recordId) {
+      setRecordId(null, { queryPatch: { tab: next } })
+      if (next === 'orders') setDetail(null)
+      return
+    }
     setTabValue(next)
-  }, [setTabValue])
+  }, [recordId, setRecordId, setTabValue])
 
-  const [statusFilter, setStatusFilter] = useState('')
-  const [q, setQ] = useState('')
+  const [statusFilter, setStatusFilter] = useUrlUiState('status', '')
+  const [q, setQ] = useUrlUiState('q', '')
 
   const [wizSerialId, setWizSerialId] = useState('')
   const [deviceConfig, setDeviceConfig] = useState<any>(null)
@@ -205,23 +211,37 @@ export default function Reconfiguration() {
     }
   }, [statusFilter, q])
 
-  const loadDetail = useCallback(async (id: string) => {
+  const loadDetail = useCallback(async (id: string, opts?: { fromUrl?: boolean }) => {
     setLoading(true)
     setError(null)
     try {
       const data = await api<any>(`/api/reconfiguration/${id}`)
       setDetail(data)
-      setTab('detail')
+      if (opts?.fromUrl) {
+        setRecordId(id, { localOnly: true })
+        if (tabValue !== 'detail') setTabValue('detail', { history: 'replace' })
+      } else {
+        setRecordId(id, { queryPatch: { tab: 'detail' } })
+      }
     } catch (e: any) {
       setError(e.message || 'Failed to load work order')
+      if (opts?.fromUrl) {
+        setRecordId(null, { queryPatch: { tab: 'orders' }, history: 'replace' })
+      }
     } finally {
       setLoading(false)
     }
-  }, [setTab])
+  }, [setRecordId, setTabValue, tabValue])
 
   useEffect(() => {
-    if (enabled && tab === 'orders') void loadOrders()
-  }, [enabled, tab, loadOrders])
+    if (!enabled || !recordId) return
+    if (detail?.id === recordId) return
+    void loadDetail(recordId, { fromUrl: true })
+  }, [enabled, recordId, detail?.id, loadDetail])
+
+  useEffect(() => {
+    if (enabled && !recordId && tab === 'orders') void loadOrders()
+  }, [enabled, recordId, tab, loadOrders])
 
   async function loadDevice(serialId: string) {
     setWizSerialId(serialId)
