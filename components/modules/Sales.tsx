@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Fragment, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 import {
   faClipboardCheck,
   faCircleCheck,
@@ -389,15 +390,17 @@ function SalesContent() {
   const canSkipReserveOnConfirm = canConfirmWithoutReservation(currentUser?.role)
 
   // ── View state ──────────────────────────────────────────────────────────
-  const [view, setView] = useState<SalesView>('list')
+  const [view, setView] = useState<SalesView>(() => searchParams.get('view') === 'new' ? 'new' : 'list')
   const [activeId, setActiveId] = useState<string | null>(() => searchParams.get('id'))
   // Odoo-style menus: Quotations (unconfirmed) vs Orders (confirmed sales).
-  const [listTab, setListTab] = useState<'quotations' | 'orders'>('quotations')
+  // Keep the selected list in the URL so Back/Forward restores the exact queue.
+  const [listTabValue, setListTabValue] = useUrlQueryState('tab', 'quotations')
+  const listTab: 'quotations' | 'orders' = listTabValue === 'orders' ? 'orders' : 'quotations'
   const [filter, setFilter] = useState<SalesListFilter>('all')
   const [search, setSearch] = useState('')
   const setFilterAndReset = (v: SalesListFilter) => { setFilter(v) }
   const setSearchAndReset = (v: string) => { setSearch(v) }
-  const setListTabAndReset = (t: 'quotations' | 'orders') => { setListTab(t); setFilter('all') }
+  const setListTabAndReset = (t: 'quotations' | 'orders') => { setListTabValue(t); setFilter('all') }
   const [listViewMode, setListViewMode] = useState<'table' | 'kanban'>('table')
 
   // ── New Quotation form state ────────────────────────────────────────────
@@ -910,10 +913,10 @@ function SalesContent() {
   const canSeeFinanceRecords = hasModuleAccess(currentUser, 'accounting')
   const canSeeReturns = hasModuleAccess(currentUser, 'after_sales')
 
-  // Persist the open quotation/order in the URL so refresh keeps the same page.
+  // Persist user navigation as real browser history. Canonical redirects still use
+  // router.replace elsewhere; opening records, delivery and new forms must PUSH.
   const syncOrderUrl = useCallback((id: string | null, nextView: SalesView = 'form') => {
     const params = new URLSearchParams(searchParams.toString())
-    params.delete('tab')
     params.delete('crmTab')
     if (id) {
       params.set('id', id)
@@ -921,30 +924,33 @@ function SalesContent() {
       else params.delete('view')
     } else {
       params.delete('id')
-      params.delete('view')
+      if (nextView === 'new') params.set('view', 'new')
+      else params.delete('view')
     }
     const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [searchParams, router, pathname])
 
   useEffect(() => {
     const urlId = searchParams.get('id')
+    const urlView = searchParams.get('view')
     if (!urlId) {
-      // Browser back/forward cleared ?id= — leave the list, not a stale form.
-      if (view === 'form' || view === 'delivery') {
-        setActiveId(null)
-        setView('list')
-        setEditingLineId(null)
-      }
+      setActiveId(null)
+      setEditingLineId(null)
+      // New quotation is also a navigable workspace state.
+      setView(urlView === 'new' ? 'new' : 'list')
       return
     }
     const order = saleOrders.find(s => s.id === urlId)
     if (!order) return // wait until store hydrates
     setActiveId(urlId)
-    const urlView = searchParams.get('view')
     setView(urlView === 'delivery' ? 'delivery' : 'form')
-    if (isQuotationStage(order.status)) setListTab('quotations')
-    else if (order.status === 'sale') setListTab('orders')
+    // Preserve the list tab carried by the URL. For a direct record deep-link
+    // without a tab, canonicalize the current entry rather than adding history.
+    if (!searchParams.get('tab')) {
+      if (isQuotationStage(order.status)) setListTabValue('quotations', { history: 'replace' })
+      else if (order.status === 'sale') setListTabValue('orders', { history: 'replace' })
+    }
   }, [searchParams, saleOrders]) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally omit view
 
   // ── Navigation ──────────────────────────────────────────────────────────
@@ -969,7 +975,7 @@ function SalesContent() {
     setNewSalespersonId(currentUser?.id || '')
     setNewSalespersonName(currentUser?.name || '')
     setNewDraftLines([]); setView('new')
-    syncOrderUrl(null)
+    syncOrderUrl(null, 'new')
     startUxTask('sales_quote_create', { module: 'sales' })
   }
 
@@ -1011,7 +1017,7 @@ function SalesContent() {
     params.delete('customerName')
     params.delete('opportunityId')
     params.delete('id')
-    params.delete('view')
+    params.set('view', 'new')
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [searchParams, contacts, pathname, router]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1077,7 +1083,7 @@ function SalesContent() {
         })),
     )
     setView('new')
-    syncOrderUrl(null)
+    syncOrderUrl(null, 'new')
     startUxTask('sales_quote_create', { module: 'sales' })
     showToast(`Duplicated ${so.ref} as a new draft quotation`, 'success')
   }
