@@ -1,5 +1,7 @@
 export { default as DataTable } from './DataTable'
 export type { DataTableProps } from './DataTable'
+export { default as EnterprisePagination, DEFAULT_PAGE_SIZE_OPTIONS } from './EnterprisePagination'
+export type { EnterprisePaginationProps } from './EnterprisePagination'
 export { default as DetailsDrawer } from './DetailsDrawer'
 export type { DrawerTab, DrawerTabId } from './DetailsDrawer'
 export { default as MobileCardView } from './MobileCardView'
