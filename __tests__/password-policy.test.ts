@@ -9,22 +9,25 @@ import { normalizeUpdateUserInput } from '@/lib/auth/validation'
 import { userUpdateSchema, validate } from '@/lib/validation'
 
 describe('password policy (AGENT-SEC-001)', () => {
-  it('exports a minimum length of 8', () => {
-    expect(MIN_PASSWORD_LENGTH).toBe(8)
+  it('exports the hardened minimum length of 12', () => {
+    expect(MIN_PASSWORD_LENGTH).toBe(12)
   })
 
-  it('rejects 6-character passwords in normalizeUpdateUserInput', () => {
-    expect(() => normalizeUpdateUserInput({ password: 'short1' })).toThrow(/at least 8/)
+  it('rejects short passwords in normalizeUpdateUserInput', () => {
+    expect(() => normalizeUpdateUserInput({ password: 'Short1!' })).toThrow(/at least 12/)
   })
 
-  it('rejects 6-character passwords in userUpdateSchema', async () => {
-    await expect(validate(userUpdateSchema, { password: 'short1' })).rejects.toThrow(/at least 8/)
+  it('rejects short passwords in userUpdateSchema', async () => {
+    await expect(validate(userUpdateSchema, { password: 'Short1!' })).rejects.toThrow(/at least 12/)
   })
 
-  it('accepts 8-character passwords in userUpdateSchema', async () => {
-    await expect(validate(userUpdateSchema, { password: 'longpass1' })).resolves.toEqual({
-      password: 'longpass1',
-    })
+  it('accepts a 12+ character password meeting complexity requirements', async () => {
+    const password = 'LongPass123!'
+    await expect(validate(userUpdateSchema, { password })).resolves.toEqual({ password })
+  })
+
+  it('rejects a long password that misses required complexity', async () => {
+    await expect(validate(userUpdateSchema, { password: 'longpassword12' })).rejects.toThrow(/uppercase|special/i)
   })
 
   it('verifies bcrypt hashes without needing a rehash', async () => {
