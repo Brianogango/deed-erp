@@ -16,6 +16,14 @@ Every operational record should answer five questions without forcing the user t
 
 Terminal records must stop offering creation actions for downstream records that already exist. Existing linked documents should switch the affordance from **Create** to **View/Open**. Actions that are not valid in the current business state must disappear or be disabled with an explanation.
 
+## Shared journey rules implemented
+
+- `lib/user-journey.ts` centralizes Create → View → Confirm → None resolution for linked downstream documents.
+- Terminal-state recognition prevents downstream creation from terminal records while still permitting users to open existing linked documents.
+- `__tests__/user-journey.test.ts` locks the Create → View transition, draft confirmation, and terminal-state behavior.
+- Purchase Orders/RFQs now use state-driven row actions: the duplicate View/Edit controls were collapsed into one Open action, Approve only appears while a record is actually approvable, and bulk approval only operates on actionable selected records.
+- Purchase row actions now carry record-specific accessible names and larger touch targets.
+
 ## Priority journeys
 
 ### J1 — Sales to cash
@@ -52,6 +60,12 @@ Acceptance:
 - vendor bill creation changes to View/Open when linked bill exists;
 - bill validation is role-gated and pending-safe;
 - posted/paid bills expose finance/payment state instead of creation actions.
+
+Current implementation:
+- Purchase directory action hierarchy is now state-driven and permission-aligned.
+- Invalid Approve actions are not shown on confirmed/partial/received/cancelled records.
+- Bulk Approve computes the actionable subset and shows its actual count.
+- Open replaces the previous duplicate View + Edit controls because both led to the same form view.
 
 ### J4 — Inventory movement
 Receipt/stock → serial/location visibility → transfer/reservation → validation → destination stock.
