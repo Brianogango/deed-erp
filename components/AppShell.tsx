@@ -449,7 +449,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       window.removeEventListener('focus', refreshActiveRoute)
       document.removeEventListener('visibilitychange', refreshActiveRoute)
     }
-  }, [pathname, currentUserId, isPublicRepairTracker, routeRefreshTick])
+  }, [pathname, currentUserId, isPublicRepairTracker])
 
   // Start app_state hydration as soon as we have a session — do not wait for
   // the mounted skeleton tick. Also notify StoreProvider so Prisma boot APIs
@@ -542,7 +542,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       .catch(() => {
         hydratedRoutesRef.current.delete(route)
       })
-  }, [pathname, currentUserId, isPublicRepairTracker])
+  }, [pathname, currentUserId, isPublicRepairTracker, routeRefreshTick])
 
   // Patch legacy tables whenever module content mutates (tabs, lazy panels,
   // detail drawers). Debounced so React paint bursts don't thrash the DOM.
