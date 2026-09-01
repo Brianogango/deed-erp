@@ -7,6 +7,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
 import { CALENDAR_DAY_TYPES, employeeLeaveTypesFor, formatLocalDate, isLeaveTypeAllowedForGender, leaveDaysForRange, LEAVE_LABELS, type StoreLeaveType } from '@/lib/leave-utils'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 
 // Days are always derived from the date range so a request can never claim
 // more (or fewer) days than the dates cover — maternity/paternity count
@@ -90,7 +91,11 @@ export default function HRLeaveTab() {
   }
 
   // ── Local state ──
-  const [leaveSearch, setLeaveSearch] = useState('')
+  const [leaveSearch, setLeaveSearchValue] = useUrlUiState('leaveQ', '')
+  const [leavePageValue, setLeavePageValue] = useUrlUiState('leavePage', '1')
+  const leavePage = Math.max(1, Number.parseInt(leavePageValue, 10) || 1)
+  const setLeaveSearch = (value: string) => setLeaveSearchValue(value, { queryPatch: { leavePage: null } })
+  const setLeavePage = (page: number) => setLeavePageValue(String(Math.max(1, page)))
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [showSelfLeaveModal, setShowSelfLeaveModal] = useState(false)
 
@@ -352,6 +357,8 @@ export default function HRLeaveTab() {
           rows={filtered}
           rowKey={req => req.id}
           hideSearch
+          page={leavePage}
+          onPageChange={setLeavePage}
           emptyMessage="No leave requests found"
           rowActions={leaveRowActions}
           exportTitle="Leave Requests"
