@@ -4,7 +4,7 @@ import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode 
 
 /**
  * Consistent accessible label/help/error wrapper for ERP form controls.
- * Existing control ids are preserved so labels remain correctly associated.
+ * Existing control ids are preserved unless an explicit htmlFor is supplied.
  */
 export function FormField({
   label,
@@ -33,12 +33,15 @@ export function FormField({
   const inputId = htmlFor || existingId || `erp-field-${generatedId.replace(/:/g, '')}`
   const hintId = `${inputId}-hint`
   const errorId = `${inputId}-error`
-  const describedBy = [hint ? hintId : '', error ? errorId : ''].filter(Boolean).join(' ') || undefined
+  const existingDescribedBy = typeof childProps?.['aria-describedby'] === 'string'
+    ? childProps['aria-describedby']
+    : undefined
+  const describedBy = [existingDescribedBy, hint ? hintId : '', error ? errorId : ''].filter(Boolean).join(' ') || undefined
 
   const control = isValidElement(children)
     ? cloneElement(children as ReactElement<Record<string, unknown>>, {
-        id: existingId ?? inputId,
-        'aria-invalid': error ? true : undefined,
+        id: inputId,
+        'aria-invalid': error ? true : childProps?.['aria-invalid'],
         'aria-describedby': describedBy,
       })
     : children
