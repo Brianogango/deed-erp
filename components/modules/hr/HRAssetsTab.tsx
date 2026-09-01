@@ -269,7 +269,7 @@ export default function HRAssetsTab() {
           {assignError && <div className="rounded-lg bg-[var(--danger-bg)] px-3 py-2 text-xs text-[var(--danger-text)]" role="alert">{assignError}</div>}
           <div className="hr-modal-actions flex justify-end gap-2 pt-2">
             <button className="btn-secondary px-4 py-2 text-xs" onClick={closeAssignModal}>Cancel</button>
-            <AsyncActionButton action={submitAssign} pendingLabel="Saving…" successLabel="Saved" className="btn-primary px-4 py-2 text-xs">
+            <AsyncActionButton action={submitAssign} pendingLabel="Saving…" className="btn-primary px-4 py-2 text-xs">
               Save Assignment
             </AsyncActionButton>
           </div>
@@ -289,7 +289,7 @@ export default function HRAssetsTab() {
           </FormField>
           <div className="hr-modal-actions flex justify-end gap-2 pt-2">
             <button className="btn-secondary px-4 py-2 text-xs" onClick={closeReturnModal}>Cancel</button>
-            <AsyncActionButton action={submitReturn} pendingLabel="Returning…" successLabel="Returned" className="btn-primary px-4 py-2 text-xs">
+            <AsyncActionButton action={submitReturn} pendingLabel="Returning…" className="btn-primary px-4 py-2 text-xs">
               Confirm Return
             </AsyncActionButton>
           </div>

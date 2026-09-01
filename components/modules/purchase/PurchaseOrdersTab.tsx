@@ -49,6 +49,7 @@ function migrateLegacySavedView(stored: string): {
 // createPO/confirmPO. Buttons that trigger those actions must be hidden for
 // any other role, or clicking them is a guaranteed-denied dead end.
 const CAN_MANAGE_PROCUREMENT_ROLES = ['director', 'admin_officer', 'inventory_officer']
+const APPROVABLE_PURCHASE_STATUSES = ['draft', 'sent']
 
 export default function PurchaseOrdersTab() {
   const {
@@ -166,6 +167,13 @@ export default function PurchaseOrdersTab() {
     document.body.removeChild(link)
   }
 
+  const openOrder = (po: PurchaseOrder) => {
+    setActiveId(po.id)
+    setSubView('form')
+  }
+
+  const canApproveOrder = (po: PurchaseOrder) => canManageProcurement && APPROVABLE_PURCHASE_STATUSES.includes(po.status)
+
   const columns: ColumnDef<PurchaseOrder>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
@@ -204,18 +212,38 @@ export default function PurchaseOrdersTab() {
   function poRowActions(po: PurchaseOrder) {
     return (
       <>
-        <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>View</button>
-        <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>Edit</button>
-        {canManageProcurement && (
-          <button className="btn-outline text-[10px] py-0.5 px-2" disabled={!['draft', 'sent'].includes(po.status)} onClick={e => { e.stopPropagation(); confirmPO(po.id) }}>Approve</button>
+        <button
+          type="button"
+          className="btn-outline min-h-9 text-[10px] px-2"
+          aria-label={`Open ${po.ref}`}
+          onClick={e => { e.stopPropagation(); openOrder(po) }}
+        >
+          Open
+        </button>
+        {canApproveOrder(po) && (
+          <button
+            type="button"
+            className="btn-primary min-h-9 text-[10px] px-2"
+            aria-label={`Approve ${po.ref}`}
+            onClick={e => { e.stopPropagation(); confirmPO(po.id) }}
+          >
+            Approve
+          </button>
         )}
-        <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); exportOrders([po]) }}>Export</button>
+        <button
+          type="button"
+          className="btn-outline min-h-9 text-[10px] px-2"
+          aria-label={`Export ${po.ref}`}
+          onClick={e => { e.stopPropagation(); exportOrders([po]) }}
+        >
+          Export
+        </button>
       </>
     )
   }
 
   return (
-    <div className="card overflow-hidden purchase-directory purchase-orders-panel">
+    <section className="card overflow-hidden purchase-directory purchase-orders-panel" aria-label="Purchase orders and requests for quotation">
       <PanelHeader title="Purchase Orders / RFQs" count={filteredPOs.length} />
       <DataTable
         tableId="purchase_orders"
@@ -235,28 +263,30 @@ export default function PurchaseOrdersTab() {
         emptyAction={canManageProcurement ? (
           <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
         ) : undefined}
-        onRowClick={po => { setActiveId(po.id); setSubView('form') }}
+        onRowClick={openOrder}
         rowActions={poRowActions}
-        bulkActions={({ rows }) => (
-          <>
-            <button className="btn-outline text-[10px] py-1 px-2" onClick={() => {
-              const target = rows[0]
-              if (!target) return
-              setActiveId(target.id)
-              setSubView('form')
-            }}>
-              View ({rows.length})
-            </button>
-            {canManageProcurement && (
-              <button className="btn-outline text-[10px] py-1 px-2" onClick={() => rows.filter(po => ['draft', 'sent'].includes(po.status)).forEach(po => confirmPO(po.id))}>
-                Approve
+        bulkActions={({ rows }) => {
+          const approvableRows = rows.filter(canApproveOrder)
+          return (
+            <>
+              <button className="btn-outline text-[10px] py-1 px-2" onClick={() => {
+                const target = rows[0]
+                if (!target) return
+                openOrder(target)
+              }}>
+                Open first ({rows.length})
               </button>
-            )}
-            <button className="btn-outline text-[10px] py-1 px-2" onClick={() => exportOrders(rows)}>
-              Export
-            </button>
-          </>
-        )}
+              {approvableRows.length > 0 && (
+                <button className="btn-primary text-[10px] py-1 px-2" onClick={() => approvableRows.forEach(po => confirmPO(po.id))}>
+                  Approve ({approvableRows.length})
+                </button>
+              )}
+              <button className="btn-outline text-[10px] py-1 px-2" onClick={() => exportOrders(rows)}>
+                Export
+              </button>
+            </>
+          )
+        }}
         renderCard={po => {
           const isRFQ = purchaseDocType(po.status) === 'rfq'
           return (
@@ -273,13 +303,13 @@ export default function PurchaseOrdersTab() {
                 { label: 'Lines', value: po.lines.length },
               ]}
               actions={poRowActions(po)}
-              onClick={() => { setActiveId(po.id); setSubView('form') }}
+              onClick={() => openOrder(po)}
             />
           )
         }}
         exportTitle="Purchase Orders"
         exportFilename="purchase-orders"
       />
-    </div>
+    </section>
   )
 }
