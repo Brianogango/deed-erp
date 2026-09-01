@@ -90,7 +90,7 @@ function AfterSalesContent() {
     params.set('tab', nextTab)
     params.delete('id')
     const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }
 
   // ── Warranty state ──────────────────────────────────────────────────────────
