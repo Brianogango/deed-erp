@@ -10,7 +10,7 @@ import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { nairobiDateKey } from '@/lib/workspace-integrity'
 import {
   Fa, faCartShopping, faPlus, faRotateLeft, faClipboardList,
@@ -63,8 +63,25 @@ function KilimallContent() {
   }
 
   // ── Orders ────────────────────────────────────────────────────────────────────
-  const [orderSearch, setOrderSearch] = useState('')
-  const [orderStatusFilter, setOrderStatusFilter] = useState<KilimallOrderStatus | 'all'>('all')
+  const patchOrdersUi = useUrlUiPatch()
+  const [orderSearch, setOrderSearch] = useUrlUiState('orderQ', '')
+  const [orderStatusValue, setOrderStatusValue] = useUrlUiState('orderStatus', 'all')
+  const orderStatusFilter: KilimallOrderStatus | 'all' =
+    ['pending', 'dispatched', 'delivered', 'returned', 'cancelled'].includes(orderStatusValue)
+      ? orderStatusValue as KilimallOrderStatus
+      : 'all'
+  const setOrderStatusFilter = (value: KilimallOrderStatus | 'all') => setOrderStatusValue(value)
+  const [orderPageValue, setOrderPageValue] = useUrlUiState('orderPage', '1')
+  const orderPage = Math.max(1, Number.parseInt(orderPageValue, 10) || 1)
+  const setOrderPage = (page: number) => setOrderPageValue(String(Math.max(1, page)))
+  const [dispatchSearch, setDispatchSearch] = useUrlUiState('dispatchQ', '')
+  const [dispatchPageValue, setDispatchPageValue] = useUrlUiState('dispatchPage', '1')
+  const dispatchPage = Math.max(1, Number.parseInt(dispatchPageValue, 10) || 1)
+  const setDispatchPage = (page: number) => setDispatchPageValue(String(Math.max(1, page)))
+  const [settlementSearch, setSettlementSearch] = useUrlUiState('settlementQ', '')
+  const [settlementPageValue, setSettlementPageValue] = useUrlUiState('settlementPage', '1')
+  const settlementPage = Math.max(1, Number.parseInt(settlementPageValue, 10) || 1)
+  const setSettlementPage = (page: number) => setSettlementPageValue(String(Math.max(1, page)))
   const [showNewOrder, setShowNewOrder] = useState(false)
   const viewOrder = tab === 'orders' && detailId
     ? kilimallOrders.find(o => o.id === detailId) ?? null
@@ -108,7 +125,10 @@ function KilimallContent() {
   } | null>(null)
 
   // ── Reports ───────────────────────────────────────────────────────────────────
-  const [reportTab, setReportTab] = useState<'ops' | 'financial' | 'control'>('ops')
+  const [reportTabValue, setReportTabValue] = useUrlUiState('reportView', 'ops')
+  const reportTab: 'ops' | 'financial' | 'control' =
+    reportTabValue === 'financial' || reportTabValue === 'control' ? reportTabValue : 'ops'
+  const setReportTab = (value: 'ops' | 'financial' | 'control') => setReportTabValue(value)
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Derived stats
@@ -623,8 +643,10 @@ function KilimallContent() {
             onSearchChange={setOrderSearch}
             searchPlaceholder="Search Kilimall orders by ref, product, or customer..."
             clientSearch={false}
+            page={orderPage}
+            onPageChange={setOrderPage}
             primaryFilters={kilimallOrderPrimaryFilters}
-            onClearFilters={() => { setOrderSearch(''); setOrderStatusFilter('all') }}
+            onClearFilters={() => patchOrdersUi({ orderQ: null, orderStatus: null, orderPage: null })}
             hideColumnFilters
             emptyMessage="No orders found"
             onRowClick={o => setDetailId(o.id)}
@@ -822,7 +844,11 @@ function KilimallContent() {
               columns={dispatchColumns}
               rows={kilimallDispatches}
               rowKey={d => d.id}
+              searchValue={dispatchSearch}
+              onSearchChange={setDispatchSearch}
               searchPlaceholder="Search dispatches…"
+              page={dispatchPage}
+              onPageChange={setDispatchPage}
               emptyMessage="No dispatches yet"
               exportTitle="Kilimall Dispatches"
               exportFilename="kilimall-dispatches"
@@ -844,7 +870,11 @@ function KilimallContent() {
             columns={settlementColumns}
             rows={kilimallSettlements}
             rowKey={s => s.id}
+            searchValue={settlementSearch}
+            onSearchChange={setSettlementSearch}
             searchPlaceholder="Search settlements…"
+            page={settlementPage}
+            onPageChange={setSettlementPage}
             emptyMessage="No settlements recorded"
             onRowClick={s => setDetailId(s.id)}
             exportTitle="Kilimall Settlements"
