@@ -8,7 +8,7 @@ import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faLaptop, faPlus } from '@fortawesome/free-solid-svg-icons'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   holdoverLoanDays,
   holdoverOverdueDays,
@@ -689,8 +689,16 @@ function HoldoversContent() {
   const { holdovers, addHoldover, updateHoldover, showToast } = useOperationsStore()
   const items = useMemo(() => withResolvedStatus(holdovers || []), [holdovers])
 
-  const [filter, setFilter] = useState<'all' | HoldoverStatus>('all')
-  const [search, setSearch] = useState('')
+  const patchListUi = useUrlUiPatch()
+  const [filterValue, setFilterValue] = useUrlUiState('status', 'all')
+  const filter: 'all' | HoldoverStatus =
+    ['active', 'overdue', 'returned'].includes(filterValue) ? filterValue as HoldoverStatus : 'all'
+  const setFilter = (value: 'all' | HoldoverStatus) => setFilterValue(value, { queryPatch: { page: null } })
+  const [search, setSearchValue] = useUrlUiState('q', '')
+  const setSearch = (value: string) => setSearchValue(value, { queryPatch: { page: null } })
+  const [pageValue, setPageValue] = useUrlUiState('page', '1')
+  const page = Math.max(1, Number.parseInt(pageValue, 10) || 1)
+  const setPage = (value: number) => setPageValue(String(Math.max(1, value)))
   const [showNew, setShowNew] = useState(false)
   const [detailId, setDetailId] = useUrlRecordId()
   const [returning, setReturning] = useState<Holdover | null>(null)
@@ -855,8 +863,10 @@ function HoldoversContent() {
               onSearchChange={setSearch}
               searchPlaceholder="Search holdovers by client, device, serial, or reference..."
               clientSearch={false}
+              page={page}
+              onPageChange={setPage}
               primaryFilters={holdoverPrimaryFilters}
-              onClearFilters={() => { setSearch(''); setFilter('all') }}
+              onClearFilters={() => patchListUi({ q: null, status: null, page: null })}
               hideColumnFilters
               emptyMessage={search || filter !== 'all' ? 'No matching holdovers' : 'No holdovers yet'}
               emptyAction={!search && filter === 'all' ? (
