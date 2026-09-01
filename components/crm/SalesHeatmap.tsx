@@ -23,6 +23,17 @@ export default function SalesHeatmap() {
 
   const maxVal = Math.max(...data.flat(), 1)
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const totalOrders = data.flat().reduce((sum, value) => sum + value, 0)
+  const peak = data.reduce(
+    (best, dayData, dayIdx) => dayData.reduce(
+      (current, value, hourIdx) => value > current.value ? { value, dayIdx, hourIdx } : current,
+      best,
+    ),
+    { value: 0, dayIdx: 0, hourIdx: 0 },
+  )
+  const chartSummary = peak.value > 0
+    ? `Sales activity by day and hour. ${totalOrders} dated orders shown. Peak activity is ${peak.value} order${peak.value === 1 ? '' : 's'} on ${days[peak.dayIdx]} at ${peak.hourIdx}:00.`
+    : 'Sales activity by day and hour. No dated orders are available.'
 
   const getColor = (val: number) => {
     if (val === 0) return 'rgba(243, 244, 246, 0.5)'
@@ -31,10 +42,10 @@ export default function SalesHeatmap() {
   }
 
   return (
-    <div className="card p-5 overflow-hidden">
+    <section className="card p-5 overflow-hidden" aria-labelledby="sales-activity-heatmap-title">
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <div>
-          <h3 className="text-sm font-bold text-[var(--text-1)]">Sales Activity Heatmap</h3>
+          <h3 id="sales-activity-heatmap-title" className="text-sm font-bold text-[var(--text-1)]">Sales Activity Heatmap</h3>
           <p className="text-[10px] text-[var(--text-3)]">Frequency of orders by day and hour</p>
         </div>
         {saleOrders.length > 0 && (
@@ -58,8 +69,8 @@ export default function SalesHeatmap() {
         />
       ) : (
         <div className="dt-scroll min-w-0 max-w-full" tabIndex={0} aria-label="Scrollable sales activity heatmap">
-          <div className="min-w-[600px]">
-            <div className="flex">
+          <div className="min-w-[600px]" role="img" aria-label={chartSummary}>
+            <div className="flex" aria-hidden="true">
               <div className="w-10 flex-shrink-0" />
               <div className="flex-1 flex justify-between px-2 mb-2">
                 {['12am', '4am', '8am', '12pm', '4pm', '8pm'].map(h => (
@@ -69,7 +80,7 @@ export default function SalesHeatmap() {
             </div>
 
             {data.map((dayData, dayIdx) => (
-              <div key={days[dayIdx]} className="flex items-center mb-1">
+              <div key={days[dayIdx]} className="flex items-center mb-1" aria-hidden="true">
                 <div className="w-10 text-[10px] font-bold text-[var(--text-3)] flex-shrink-0">{days[dayIdx]}</div>
                 <div className="flex-1 flex gap-1">
                   {dayData.map((val, hourIdx) => (
@@ -77,9 +88,9 @@ export default function SalesHeatmap() {
                       key={hourIdx}
                       className="flex-1 h-6 rounded-sm transition-all hover:ring-2 hover:ring-primary-300 cursor-help relative group"
                       style={{ background: getColor(val) }}
-                      aria-label={`${days[dayIdx]} ${hourIdx}:00 — ${val} order${val === 1 ? '' : 's'}`}
+                      title={`${days[dayIdx]} ${hourIdx}:00 — ${val} order${val === 1 ? '' : 's'}`}
                     >
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10" aria-hidden="true">
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
                         <div className="bg-gray-800 text-white text-[9px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
                           {val} orders at {hourIdx}:00
                         </div>
@@ -92,6 +103,6 @@ export default function SalesHeatmap() {
           </div>
         </div>
       )}
-    </div>
+    </section>
   )
 }
