@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { productSchema, validate } from '@/lib/validation'
 import { publishProduct, toClientProduct } from '@/lib/product-catalog-write'
+import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,22 +21,77 @@ export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const url = new URL(request.url)
+    const searchParams = url.searchParams
     // Catalog boot / merge never reads serial rows — skip them to cut payload size.
-    const lite = url.searchParams.get('lite') === '1' || url.searchParams.get('lite') === 'true'
-    const products = await prisma.product.findMany({
-      include: lite
-        ? {
-          category: { select: { name: true } },
-          images: { select: { imageUrl: true, isPrimary: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
-        }
-        : {
-          serials: true,
-          category: { select: { name: true } },
-          images: { select: { imageUrl: true, isPrimary: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
-        },
-      orderBy: { name: 'asc' },
+    const lite = searchParams.get('lite') === '1' || searchParams.get('lite') === 'true'
+    const include = lite
+      ? {
+        category: { select: { name: true } },
+        images: { select: { imageUrl: true, isPrimary: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } as const },
+      }
+      : {
+        serials: true,
+        category: { select: { name: true } },
+        images: { select: { imageUrl: true, isPrimary: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } as const },
+      }
+
+    // Opt-in paginated mode: any pagination/filter param switches the response
+    // to the shared { items, total, page, limit, totalPages } envelope with the
+    // filtering pushed down to Postgres. The bare (?lite=1) boot path keeps the
+    // legacy raw-array shape — store hydration and catalog-merge depend on it.
+    const paged = ['page', 'limit', 'pageSize', 'q', 'category', 'active', 'kilimall']
+      .some(key => searchParams.has(key))
+    if (!paged) {
+      const products = await prisma.product.findMany({ include, orderBy: { name: 'asc' } })
+      return NextResponse.json(products)
+    }
+
+    // Accept pageSize as an alias for the shared contract's limit.
+    if (!searchParams.has('limit') && searchParams.has('pageSize')) {
+      searchParams.set('limit', searchParams.get('pageSize')!)
+    }
+    const { page, limit, skip, sort, order } = parsePaginationParams(searchParams, {
+      defaultSort: 'name',
+      allowedSorts: ['name', 'sku', 'sellingPrice', 'costPrice', 'createdAt', 'updatedAt'],
     })
-    return NextResponse.json(products)
+
+    const q = searchParams.get('q')?.trim()
+    const category = searchParams.get('category')?.trim()
+    const active = searchParams.get('active')
+    const where: Record<string, unknown> = {
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' } },
+              { sku: { contains: q, mode: 'insensitive' } },
+              { barcode: { contains: q, mode: 'insensitive' } },
+              { modelNumber: { contains: q, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      ...(category ? { category: { is: { name: { equals: category, mode: 'insensitive' } } } } : {}),
+      ...(active === 'true' || active === 'false' ? { isActive: active === 'true' } : {}),
+      ...(searchParams.has('kilimall')
+        ? { isListedKilimall: searchParams.get('kilimall') !== 'false' }
+        : {}),
+    }
+
+    // A catalog reads A→Z by default; only an explicit sort/order falls back
+    // to the shared contract's recency-first default.
+    const orderBy = {
+      [sort ?? 'name']: searchParams.has('sort') || searchParams.has('order') ? order : 'asc',
+    }
+    const [total, products] = await Promise.all([
+      prisma.product.count({ where }),
+      prisma.product.findMany({
+        where,
+        include,
+        orderBy,
+        skip,
+        take: limit,
+      }),
+    ])
+    return NextResponse.json(paginatedResponse(products, total, page, limit))
   })
 }
 
