@@ -216,7 +216,7 @@ function SOPsContent() {
     params.set('tab', nextTab)
     if (nextTab !== 'my') params.delete('id')
     const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }
 
   // ── Admin: Manage / Create ──
