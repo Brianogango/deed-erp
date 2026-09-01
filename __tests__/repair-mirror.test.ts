@@ -134,4 +134,33 @@ describe('mirrorRepairsToPrisma()', () => {
     expect(result.failed).toBe(1)
     expect(result.mirrored).toBe(1)
   })
+
+  it('re-runs from fresh state when a write lands mid-pass instead of dropping it', async () => {
+    // The blob store is re-read for the trailing rerun while the mirror-state
+    // hash lookup keeps its own answer.
+    mockLoadAppState.mockImplementation((keys?: string[]) =>
+      keys?.[0] === 'deed_repairs_v2'
+        ? Promise.resolve({ deed_repairs_v2: [blobRepair] })
+        : Promise.resolve({}),
+    )
+
+    // Hold the first pass inside its upsert so the second call lands mid-pass.
+    let releaseUpsert!: (value: unknown) => void
+    mockPrisma.repair.upsert.mockImplementationOnce(
+      () => new Promise(resolve => { releaseUpsert = resolve }),
+    )
+
+    const first = mirrorRepairsToPrisma([blobRepair])
+    await vi.waitFor(() => expect(mockPrisma.repair.upsert).toHaveBeenCalledTimes(1))
+
+    // Mid-pass write: returns immediately without mirroring, queues the rerun.
+    const dropped = await mirrorRepairsToPrisma([{ ...blobRepair, status: 'approved' }])
+    expect(dropped).toEqual({ mirrored: 0, skipped: 0, failed: 0 })
+
+    releaseUpsert({})
+    await first
+
+    // Trailing pass re-mirrored from the re-read blob state.
+    expect(mockPrisma.repair.upsert).toHaveBeenCalledTimes(2)
+  })
 })
