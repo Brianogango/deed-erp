@@ -110,6 +110,16 @@ export function useUrlRecordId(options: Options = {}) {
 /**
  * Sync a free-form query string value (e.g. tab) both ways with the URL.
  */
+export type SetUrlQueryStateOptions = {
+  history?: 'push' | 'replace'
+  queryPatch?: Record<string, string | null>
+}
+
+/**
+ * Sync a free-form query string value (e.g. tab) both ways with the URL.
+ * User navigation defaults to push. For list UI state (search/filter/page),
+ * prefer useUrlUiState below so typing and filtering do not pollute Back.
+ */
 export function useUrlQueryState(param: string, fallback: string) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -117,21 +127,55 @@ export function useUrlQueryState(param: string, fallback: string) {
   const queryValue = searchParams.get(param) ?? fallback
   const [value, setLocalValue] = useState(queryValue)
 
-  const setValue = useCallback((next: string, opts?: { history?: 'push' | 'replace' }) => {
-    setLocalValue(next)
+  const setValue = useCallback((next: string | null, opts?: SetUrlQueryStateOptions) => {
+    setLocalValue(next ?? fallback)
     const params = new URLSearchParams(searchParams.toString())
-    params.set(param, next)
+    if (next === null) params.delete(param)
+    else params.set(param, next)
+    if (opts?.queryPatch) {
+      for (const [key, value] of Object.entries(opts.queryPatch)) {
+        if (value === null) params.delete(key)
+        else params.set(key, value)
+      }
+    }
     const qs = params.toString()
     const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
       if (opts?.history === 'replace') router.replace(href, { scroll: false })
       else router.push(href, { scroll: false })
     })
-  }, [searchParams, router, pathname, param])
+  }, [searchParams, router, pathname, param, fallback])
 
   useEffect(() => {
     setLocalValue(searchParams.get(param) ?? fallback)
   }, [searchParams, param, fallback])
+
+  return [value, setValue] as const
+}
+
+
+/**
+ * URL-backed state for list controls such as search, filters, sort/layout and
+ * pagination. These changes REPLACE the current history entry so:
+ *   list(search/filter/page) -> record -> Back
+ * returns to the exact list state without making Back replay every keystroke.
+ *
+ * Default/empty values are removed from the query string to keep deep links
+ * compact and canonical.
+ */
+export function useUrlUiState(param: string, fallback: string) {
+  const [value, setQueryValue] = useUrlQueryState(param, fallback)
+
+  const setValue = useCallback((
+    next: string,
+    opts?: { queryPatch?: Record<string, string | null> },
+  ) => {
+    const normalized = next === fallback || next === '' ? null : next
+    setQueryValue(normalized, {
+      history: 'replace',
+      queryPatch: opts?.queryPatch,
+    })
+  }, [fallback, setQueryValue])
 
   return [value, setValue] as const
 }
