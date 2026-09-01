@@ -69,6 +69,7 @@ export default function IntegrityDashboard() {
       setReport(data.integrity || report)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Certification failed')
+      throw err
     } finally {
       setCertifying(false)
     }
