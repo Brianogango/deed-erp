@@ -37,3 +37,18 @@ export function nextActionLabel(opts: {
   if (opts.cta === 'confirm') return `Confirm ${opts.document}`
   return null
 }
+
+export function actionableSelectionCount<T>(rows: readonly T[], isActionable: (row: T) => boolean): number {
+  return rows.reduce((count, row) => count + (isActionable(row) ? 1 : 0), 0)
+}
+
+export function shouldExposeProgressionAction(opts: {
+  status?: string | null
+  allowedStatuses: readonly string[]
+  terminalStatuses?: readonly string[]
+}): boolean {
+  const status = String(opts.status ?? '').toLowerCase()
+  const terminal = new Set((opts.terminalStatuses ?? ['paid', 'delivered', 'closed', 'cancelled', 'returned', 'retained', 'rejected', 'voided']).map(s => String(s).toLowerCase()))
+  if (terminal.has(status)) return false
+  return opts.allowedStatuses.map(s => String(s).toLowerCase()).includes(status)
+}
