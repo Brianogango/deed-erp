@@ -2,6 +2,7 @@
 
 import useSWR, { mutate as globalMutate } from 'swr'
 import type { ApiProduct } from '@/app/api/products/route'
+import { parseCollectionPayload } from '@/lib/api-pagination'
 
 const PRODUCTS_KEY = '/api/products'
 
@@ -24,11 +25,14 @@ export function useProducts(options: UseProductsOptions = {}) {
   if (category) params.set('category', category)
   const key = `${PRODUCTS_KEY}${params.size ? `?${params}` : ''}`
 
-  const { data, error, isLoading, mutate } = useSWR<{ products: ApiProduct[]; total: number }>(
+  // The route answers a raw array on the legacy boot path and the shared
+  // paginated envelope once filters/pagination params are present — accept both.
+  const { data, error, isLoading, mutate } = useSWR<unknown>(
     key,
     fetcher,
     { refreshInterval, revalidateOnFocus: false },
   )
+  const parsed = data != null ? parseCollectionPayload<ApiProduct>(data) : null
 
   const createProduct = async (input: Partial<ApiProduct>) => {
     const res = await fetch(PRODUCTS_KEY, {
@@ -58,8 +62,8 @@ export function useProducts(options: UseProductsOptions = {}) {
   }
 
   return {
-    products: data?.products ?? [],
-    total: data?.total ?? 0,
+    products: parsed?.items ?? [],
+    total: parsed?.total ?? 0,
     isLoading,
     error,
     mutate,
