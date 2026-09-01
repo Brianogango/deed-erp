@@ -290,7 +290,7 @@ function JobModal({
     }
   }
 
-  function submit() {
+  async function submit() {
     if (!form.customerName || !form.pickupAddress || !form.deliveryAddress || !form.scheduledDate) return
     const fee = parseRiderFeeInput(form.riderFee)
     if (fee === null) {
@@ -298,7 +298,7 @@ function JobModal({
       return
     }
     const isGeneral = isGeneralDeliveryJob(form.type)
-    const job = createDeliveryJob({
+    const job = await createDeliveryJob({
       type: form.type,
       saleOrderId:   !isGeneral && form.saleOrderId ? form.saleOrderId : undefined,
       saleOrderRef:  !isGeneral && form.saleOrderId
@@ -317,6 +317,8 @@ function JobModal({
       billedTo:        isGeneral ? 'company' : undefined,
       notes:           form.notes,
     })
+    // Ref allocation failed (offline/server) — no job was created; keep the form open.
+    if (!job) return
     // Pass the entered fee so assign never overwrites it with a zero default rate.
     if (form.riderId) assignRiderToJob(job.id, form.riderId, fee)
     onClose()

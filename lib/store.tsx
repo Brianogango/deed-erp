@@ -11,6 +11,7 @@ import {
 export { isPosBankPayment }
 import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosSessionRef, nextPosTicketRef } from '@/lib/pos-orders-merge'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
+import { allocateDocNumber } from '@/lib/doc-numbers'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
@@ -3325,7 +3326,8 @@ export interface AppState {
   riderWeeklyPays: RiderWeeklyPay[]
   addRider: (r: Omit<Rider, 'id' | 'createdAt'>) => Rider
   updateRider: (id: string, p: Partial<Rider>) => void
-  createDeliveryJob: (j: Omit<DeliveryJob, 'id' | 'ref' | 'status' | 'createdByUserId' | 'createdByName' | 'createdAt'>) => DeliveryJob
+  /** Async: the job ref is allocated atomically server-side (DJB/NNNN). Returns null when the ref could not be allocated. */
+  createDeliveryJob: (j: Omit<DeliveryJob, 'id' | 'ref' | 'status' | 'createdByUserId' | 'createdByName' | 'createdAt'>) => Promise<DeliveryJob | null>
   updateDeliveryJob: (id: string, p: Partial<DeliveryJob>) => void
   deleteDeliveryJob: (id: string) => void
   assignRiderToJob: (jobId: string, riderId: string, riderFee?: number) => void
@@ -3343,7 +3345,7 @@ export interface AppState {
     notes?: string
     /** When false, skip adding the delivery charge invoice line. Default true. */
     addChargeToInvoice?: boolean
-  }) => DeliveryJob | null
+  }) => Promise<DeliveryJob | null>
   advanceJobStatus: (jobId: string, newStatus: DeliveryJobStatus, failureReason?: string) => void
   generateWeeklyPay: (riderId: string, weekStart: string) => RiderWeeklyPay | null
   markWeeklyPayPaid: (id: string) => void
@@ -3722,7 +3724,7 @@ export interface AppState {
   ) => void
   markPartsArrived: (repairId: string) => void
   markRepairReady: (repairId: string) => void
-  scheduleDelivery: (repairId: string, method: 'pickup' | 'delivery' | 'courier', scheduledDate: string, address?: string, riderId?: string, riderName?: string) => void
+  scheduleDelivery: (repairId: string, method: 'pickup' | 'delivery' | 'courier', scheduledDate: string, address?: string, riderId?: string, riderName?: string) => Promise<boolean>
   deliverRepair: (repairId: string, recipientName: string, recipientPhone: string, isRep?: boolean, repRelationship?: string, repIdNumber?: string, closeAfter?: boolean) => void
   closeRepairJob: (repairId: string) => void
   createInvoiceFromRepair: (repairId: string, applyVat?: boolean) => Invoice | null
@@ -4365,6 +4367,15 @@ export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
   if (typeof window !== 'undefined') localStorage.setItem(lsKey, String(next))
   C[key] = next
   return `${prefix}/${String(next).padStart(4, '0')}`
+}
+
+/** Allocate a delivery-job ref from the server-side atomic counter. */
+async function fetchNextDeliveryRef(): Promise<string | null> {
+  try {
+    return await allocateDocNumber('delivery_job')
+  } catch {
+    return null
+  }
 }
 
 // ── Standard document numbering ───────────────────────────────────────────────
@@ -16568,18 +16579,25 @@ const storeCtx: AppState = {
       showToast('Device marked ready for pickup — invoice posted, technician notified')
     },
     
-    scheduleDelivery: (repairId, method, scheduledDate, address, riderId, riderName) => {
+    scheduleDelivery: async (repairId, method, scheduledDate, address, riderId, riderName) => {
       const repair = repairs.find(r => r.id === repairId)
-      if (blockIfOutsourced(repairId, 'schedule delivery')) return
+      if (blockIfOutsourced(repairId, 'schedule delivery')) return false
       let deliveryJobId: string | undefined
 
       if (method === 'delivery' && repair) {
         const user = currentUser()
         const rider = riderId ? riders.find(r => r.id === riderId) : undefined
+        // Server-allocated atomic ref (see createDeliveryJob) — never the
+        // per-browser counter that produced duplicate DJB refs.
+        const ref = await fetchNextDeliveryRef()
+        if (!ref) {
+          showToast('Could not allocate a delivery reference — check your connection and retry', 'error')
+          return false
+        }
         const jobId = uid()
         const job: DeliveryJob = {
           id: jobId,
-          ref: seq('DJB', 'djb'),
+          ref,
           type: 'repair_dropoff',
           status: riderId ? 'assigned' : 'pending',
           repairOrderId: repairId,
@@ -16619,6 +16637,7 @@ const storeCtx: AppState = {
         : `${method === 'courier' ? 'Courier' : 'Pickup'} scheduled for ${scheduledDate}`
       addAuditLog('schedule_delivery', repairId, `Scheduled ${method} for ${scheduledDate}${riderName ? ` via ${riderName}` : ''}`)
       showToast(toastMsg)
+      return true
     },
     
     deliverRepair: (repairId, recipientName, recipientPhone, isRep = false, repRelationship, repIdNumber, closeAfter = false) => {
@@ -18720,10 +18739,18 @@ const storeCtx: AppState = {
     updateRider: (id, p) => {
       setRiders(prev => prev.map(r => r.id === id ? { ...r, ...p } : r))
     },
-    createDeliveryJob: (j) => {
+    createDeliveryJob: async (j) => {
       const user = currentUser()
+      // Server-allocated atomic ref — the per-browser localStorage counter
+      // (seq 'djb') restarted on every client and produced dozens of jobs
+      // sharing DJB/0004 in production.
+      const ref = await fetchNextDeliveryRef()
+      if (!ref) {
+        showToast('Could not allocate a delivery reference — check your connection and retry', 'error')
+        return null
+      }
       const job: DeliveryJob = {
-        ...j, id: uid(), ref: seq('DJB', 'djb'), status: 'pending',
+        ...j, id: uid(), ref, status: 'pending',
         createdByUserId: user?.id ?? '', createdByName: user?.name ?? 'System',
         createdAt: new Date().toISOString(),
       }
@@ -18739,7 +18766,7 @@ const storeCtx: AppState = {
       setDeliveryJobs(prev => prev.filter(j => j.id !== id))
       showToast('Delivery job deleted')
     },
-    scheduleInvoiceDelivery: (invoiceId, opts) => {
+    scheduleInvoiceDelivery: async (invoiceId, opts) => {
       const inv = invRef.current.find(i => i.id === invoiceId)
       if (!inv) { showToast('Invoice not found', 'error'); return null }
       if (inv.type !== 'customer_invoice') {
@@ -18774,7 +18801,7 @@ const storeCtx: AppState = {
       const phone = contact?.phone || contact?.mobile || ''
       const addCharge = opts.addChargeToInvoice !== false && deliveryFee > 0
 
-      const job = storeCtxRef.current!.createDeliveryJob({
+      const job = await storeCtxRef.current!.createDeliveryJob({
         type: 'sales_delivery',
         invoiceId: inv.id,
         invoiceRef: inv.ref,
@@ -18791,6 +18818,7 @@ const storeCtx: AppState = {
         notes: opts.notes?.trim()
           || `Invoice ${inv.ref}${so ? ` · ${so.ref}` : ''}${deliveryFee > 0 ? ` · customer delivery charge ${deliveryFee}` : ''}`,
       })
+      if (!job) return null
 
       if (opts.riderId) {
         storeCtxRef.current!.assignRiderToJob(job.id, opts.riderId, riderFee)

@@ -1284,14 +1284,16 @@ export default function RepairDetailView() {
               </SectionCard>
             )}
 
-            {/* ── Parts Used in Repair ── */}
-            {hasPartsUsed && (
-              <SectionCard delay={260} id="repair-parts">
+            {/* ── Parts Used in Repair — always mounted: the Repair & Parts tab
+                   scrolls here, and the header's Parts actions (Request parts /
+                   Mark parts arrived) must be reachable before the first part
+                   is logged. ── */}
+            <SectionCard delay={260} id="repair-parts">
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
                   title="Parts Used"
-                  subtitle={`${r.partsUsed.length} component${r.partsUsed.length !== 1 ? 's' : ''}`}
+                  subtitle={hasPartsUsed ? `${r.partsUsed.length} component${r.partsUsed.length !== 1 ? 's' : ''}` : 'None logged yet'}
                   action={
                     <SecondaryActionMenu
                       label="Parts"
@@ -1305,6 +1307,11 @@ export default function RepairDetailView() {
                   }
                 />
                 <div className="px-4 sm:px-6 py-4 sm:py-5">
+                  {!hasPartsUsed ? (
+                    <p className="text-[11px] font-semibold text-[var(--text-3)]">
+                      No parts logged yet — use the Parts menu above to request components for this job.
+                    </p>
+                  ) : (
                   <div className="dt-scroll">
                     <table data-no-responsive className="w-full text-left">
                       <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
@@ -1337,9 +1344,9 @@ export default function RepairDetailView() {
                       </tfoot>
                     </table>
                   </div>
+                  )}
                 </div>
-              </SectionCard>
-            )}
+            </SectionCard>
 
 
             {/* Issue Photos */}
@@ -1724,7 +1731,7 @@ export default function RepairDetailView() {
 
             {/* Parts & Procurement */}
             {hasProc ? (
-              <SectionCard delay={180} id={!hasPartsUsed ? 'repair-parts' : undefined}>
+              <SectionCard delay={180}>
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
@@ -1787,7 +1794,7 @@ export default function RepairDetailView() {
                 </div>
               </SectionCard>
             ) : canProcure ? (
-              <SectionCard delay={180} id={!hasPartsUsed ? 'repair-parts' : undefined}>
+              <SectionCard delay={180}>
                 <div className="px-4 sm:px-6 py-5 flex flex-col items-center gap-3">
                   <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center">
                     <Fa icon={faBoxOpen} className="text-orange-400 text-base" />
@@ -1804,7 +1811,7 @@ export default function RepairDetailView() {
                 </div>
               </SectionCard>
             ) : !hasPartsUsed ? (
-              <SectionCard delay={180} id="repair-parts">
+              <SectionCard delay={180}>
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-slate-500"

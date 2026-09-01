@@ -1060,8 +1060,8 @@ export default function InvoiceDetail() {
           companyPickup={companyPickup}
           contactPhone={partnerContact?.phone || partnerContact?.mobile}
           onClose={() => setShowDeliveryModal(false)}
-          onConfirm={opts => {
-            const job = scheduleInvoiceDelivery(invoice.id, opts)
+          onConfirm={async opts => {
+            const job = await scheduleInvoiceDelivery(invoice.id, opts)
             if (job) setShowDeliveryModal(false)
           }}
         />

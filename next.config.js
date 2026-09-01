@@ -70,6 +70,9 @@ const nextConfig = {
     ],
   },
   async headers() {
+    // Visual-regression/manual QA runs serve plain http://localhost; the
+    // production CSP (upgrade-insecure-requests, etc.) breaks hydration there.
+    if (process.env.VISREG_BYPASS_AUTH === 'true') return []
     return [
       {
         source: '/:path*',

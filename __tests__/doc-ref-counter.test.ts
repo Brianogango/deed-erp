@@ -23,6 +23,7 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   payment_receipt: 'RCT',
   reconfiguration: 'RCF',
   pos: 'POS',
+  delivery_job: 'DJB',
 }
 
 beforeEach(() => {

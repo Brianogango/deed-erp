@@ -18,6 +18,32 @@ export function monthLabel(ym: string) {
 
 export function toYM(d: string) { return d.slice(0, 7) }
 
+/**
+ * Display label for a bank account. The account-holder `name` is the company
+ * name on every account ("Deed Technologies Ltd"), so it can never tell
+ * accounts apart — the bank name + account number is the differentiator.
+ */
+export function bankAccountLabel(
+  acc: { name?: string | null; bankName?: string | null; accountNo?: string | null } | null | undefined,
+  opts?: { withAccountNo?: boolean },
+): string {
+  if (!acc) return 'Unknown account'
+  const bank = String(acc.bankName ?? '').trim()
+  const name = String(acc.name ?? '').trim()
+  const accountNo = String(acc.accountNo ?? '').trim()
+  const base = bank || name
+  if (!base) return 'Unknown account'
+  if (opts?.withAccountNo === false) return base
+  return accountNo && accountNo.toUpperCase() !== 'CASH' ? `${base} · ${accountNo}` : base
+}
+
+/** Short badge for compact cards — initials of the bank name, never a raw id. */
+export function bankAccountCode(acc: { id: string; bankName?: string | null; name?: string | null }): string {
+  const src = String(acc.bankName || acc.name || acc.id)
+  const code = src.split(/\s+/).map(w => w[0] ?? '').join('').toUpperCase().slice(0, 5)
+  return code || '—'
+}
+
 function posBank(payment: string, bankAccountId?: string): string {
   if (bankAccountId) return bankAccountId
   if (payment === 'cash')  return 'cash'
@@ -373,11 +399,11 @@ function ReconPanel({
       <div className="finance-recon-header px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: 'var(--border-lt)' }}>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold" style={{ background: color }}>
-            {account.id.toUpperCase().slice(0, 2)}
+            {bankAccountCode(account)}
           </div>
           <div>
-            <p className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>{account.name}</p>
-            <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{account.bankName} · {account.accountNo}</p>
+            <p className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>{bankAccountLabel(account, { withAccountNo: false })}</p>
+            <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{account.accountNo}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -996,7 +1022,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
 
   const filterAccountName = filterAccount === 'all'
     ? 'All accounts'
-    : (bankAccounts.find(a => a.id === filterAccount)?.name ?? filterAccount)
+    : bankAccountLabel(bankAccounts.find(a => a.id === filterAccount))
 
   return (
     <div className="finance-cashbook flex flex-col gap-4 py-3">
@@ -1025,7 +1051,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
               value={filterAccount} onChange={e => setFilterAccount(e.target.value)}>
               <option value="all">All accounts</option>
               {bankAccounts.filter(a => a.active).map(acc => (
-                <option key={acc.id} value={acc.id}>{acc.name}</option>
+                <option key={acc.id} value={acc.id}>{bankAccountLabel(acc)}</option>
               ))}
             </select>
           </label>
@@ -1044,8 +1070,8 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
               onClick={() => { setFilterAccount(p => p === acc.id ? 'all' : acc.id); setActiveTab('cashbook') }}
               style={{ borderColor: filterAccount === acc.id ? color : undefined }}>
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[9px] uppercase tracking-wide font-medium truncate" style={{ color: 'var(--text-4)', maxWidth: 100 }}>{acc.name}</p>
-                <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: color }}>{acc.id.toUpperCase()}</span>
+                <p className="text-[9px] uppercase tracking-wide font-medium truncate" style={{ color: 'var(--text-4)', maxWidth: 140 }}>{bankAccountLabel(acc)}</p>
+                <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: color }}>{bankAccountCode(acc)}</span>
               </div>
               <p className="text-sm font-bold" style={{ color }}>{fmtKes(bookBal)}</p>
               <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>
@@ -1114,9 +1140,9 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                 render: (e: CashbookEntry & { balance: number }) => {
                   const acc = bankAccounts.find(a => a.id === e.bankAccountId)
                   const color = ACCT_COLOR[e.bankAccountId] ?? 'var(--text-4)'
-                  return <span className="text-[10px] font-semibold truncate" style={{ color }}>{acc?.name ?? e.bankAccountId}</span>
+                  return <span className="text-[10px] font-semibold truncate" style={{ color }}>{bankAccountLabel(acc)}</span>
                 },
-                exportValue: (e: CashbookEntry & { balance: number }) => bankAccounts.find(a => a.id === e.bankAccountId)?.name ?? e.bankAccountId,
+                exportValue: (e: CashbookEntry & { balance: number }) => bankAccountLabel(bankAccounts.find(a => a.id === e.bankAccountId)),
               },
               {
                 key: 'debit', label: 'Debit (out)', priority: 1, width: '110px', align: 'right',
@@ -1169,7 +1195,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                       <p className="text-xs font-medium truncate mt-0.5" style={{ color: 'var(--text-1)' }}>{e.description}</p>
                       <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
                         {fmtDate(e.date)}
-                        {acc ? <> · <span style={{ color: bankColor }}>{acc.name}</span></> : null}
+                        {acc ? <> · <span style={{ color: bankColor }}>{bankAccountLabel(acc)}</span></> : null}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
