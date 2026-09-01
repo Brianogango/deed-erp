@@ -19,6 +19,7 @@ import {
   DELIVERY_JOB_TYPE_LABELS,
   isGeneralDeliveryJob,
 } from '@/lib/delivery-job-type'
+import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -1309,7 +1310,11 @@ export default function Delivery() {
   useEffect(() => { setMounted(true) }, [])
 
   const { deliveryJobs, riderWeeklyPays } = useDeliveryStore()
-  const [tab, setTab] = useState<MainTab>('jobs')
+  const [tabValue, setTabValue] = useUrlQueryState('tab', 'jobs')
+  const tab: MainTab = ['jobs', 'riders', 'weekly_pay'].includes(tabValue)
+    ? tabValue as MainTab
+    : 'jobs'
+  const setTab = (next: MainTab) => setTabValue(next)
   const [createRequest, setCreateRequest] = useState(0)
 
   const pendingPay = riderWeeklyPays.filter(p => p.status === 'pending').length
