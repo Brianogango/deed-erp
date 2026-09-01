@@ -44,7 +44,7 @@ const pendingRecordIds = new Map<string, string | null>()
  */
 const pendingQueryStrings = new Map<string, string>()
 
-function queryParamsBase(pathname: string, searchParams: URLSearchParams | ReadonlyURLSearchParams) {
+function queryParamsBase(pathname: string, searchParams: { toString(): string }) {
   const pending = pendingQueryStrings.get(pathname)
   return new URLSearchParams(pending !== undefined ? pending : searchParams.toString())
 }
