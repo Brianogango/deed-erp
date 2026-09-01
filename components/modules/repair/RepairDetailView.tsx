@@ -9,12 +9,12 @@ import { Fa } from '@/components/icons'
 import {
   faArrowLeft, faMicrochip, faCircleExclamation, faCamera, faImage,
   faPlay, faLink, faExternalLinkAlt, faUserCheck, faUserPlus,
-  faFileInvoiceDollar, faCalendarAlt, faTrash, faUpload, faSync,
+  faFileInvoiceDollar, faTrash, faUpload, faSync,
   faExpand, faTools, faCheckCircle, faHistory,
   faClipboardList, faQuoteRight, faStethoscope, faWrench,
   faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle,
   faClock, faStar, faArrowRight, faCartPlus, faBan, faShieldAlt,
-  faTruck, faPrint, faPen, faUndo,
+  faTruck, faUndo,
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -310,7 +310,9 @@ export default function RepairDetailView() {
     : r.status === 'diagnosed' ? 'Generate or edit the quote to continue past diagnosis'
     : null
 
-  // Exactly one dominant workflow CTA; everything else goes into More.
+  // Exactly one dominant workflow CTA. Routine secondary actions live inside
+  // the section they affect; the header overflow is reserved for rare record
+  // administration only.
   const primaryActionId = pickRepairPrimaryAction({
     canVerify,
     canMarkPartsArrived,
@@ -330,6 +332,31 @@ export default function RepairDetailView() {
     serialNumber: r.serialNumber,
     repairOrcStatus: repairOrc?.status,
   })
+
+  const openNoCharge = () => {
+    setNoChargeReason('company_mistake')
+    setNoChargeNotes('')
+    setShowNoChargeModal(true)
+  }
+
+  const openLeaveDevice = () => {
+    setLeaveDeviceNotes('')
+    setLeaveConvertMode('donation')
+    setShowLeaveDeviceModal(true)
+  }
+
+  const openTradeIn = () => {
+    setTradeInPrice('')
+    setTradeInCondition(
+      (r.deviceCondition === 'poor' || r.deviceCondition === 'damaged')
+        ? 'poor'
+        : r.deviceCondition === 'fair'
+          ? 'fair'
+          : 'good',
+    )
+    setTradeInNotes('')
+    setShowTradeInModal(true)
+  }
 
   const openPrepareRelease = () => {
     const repairSerial = r.serialNumber
@@ -560,42 +587,11 @@ export default function RepairDetailView() {
               </div>
               <div className="repair-detail__more-action">
                 <SecondaryActionMenu
-                  ariaLabel="More repair actions"
+                  ariaLabel="Repair record administration"
                   mobilePresentation="anchored"
-              actions={[
-                { id: 'decline', label: 'Decline quote', onClick: () => setShowDeclineModal(true), hidden: !canDeclineQuote, danger: true },
-                { id: 'assign', label: r.assignedTechnicianId ? 'Reassign technician' : 'Assign technician', onClick: () => setShowAssignModal(true), hidden: !canAssign || primaryActionId === 'assign' },
-                { id: 'diagnosis', label: canUpdateDiagnosis ? 'Update diagnosis' : 'Log diagnosis', onClick: () => setShowDiagnosisModal(true), hidden: !(canDiagnose || canUpdateDiagnosis) || primaryActionId === 'diagnose' },
-                { id: 'quote', label: isQuoteDeclinedReopenable(r.status) ? 'Revise & re-send quote' : r.quote ? 'Edit quote' : 'Generate quote', onClick: () => setShowQuoteModal(true), hidden: !canQuote || primaryActionId === 'quote' },
-                { id: 'parts_arrived', label: 'Mark parts arrived', onClick: () => markPartsArrived(r.id), hidden: !canMarkPartsArrived || primaryActionId === 'parts_arrived' },
-                { id: 'progress', label: 'Update progress', onClick: () => setShowProgressModal(true), hidden: !canUpdateProgress || ['start', 'complete', 'invoice'].includes(primaryActionId ?? '') },
-                { id: 'invoice', label: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice', onClick: () => setShowProgressModal(true), hidden: !canInvoice || primaryActionId === 'invoice' },
-                { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
-                { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
-                { id: 'mark_fee_paid', label: 'Mark diagnosis fee paid (early)', onClick: () => markDiagnosisFeePaid(r.id), hidden: !canMarkDiagnosisFeePaid },
-                { id: 'waive_fee', label: 'Waive diagnosis fee', onClick: () => { setWaiveFeeReason(''); setShowWaiveFeeModal(true) }, hidden: !canWaiveDiagnosisFee },
-                { id: 'no_charge', label: 'Mark no-charge (company mistake)', onClick: () => { setNoChargeReason('company_mistake'); setNoChargeNotes(''); setShowNoChargeModal(true) }, hidden: !canMarkNoCharge },
-                { id: 'return', label: isQuoteDeclinedReopenable(r.status) ? 'Return device (after decline)' : 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
-                { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertMode('donation'); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
-                { id: 'tradein', label: 'Trade-in after evaluation', onClick: () => {
-                  setTradeInPrice('')
-                  setTradeInCondition((r.deviceCondition === 'poor' || r.deviceCondition === 'damaged') ? 'poor' : r.deviceCondition === 'fair' ? 'fair' : 'good')
-                  setTradeInNotes('')
-                  setShowTradeInModal(true)
-                }, hidden: !canTradeInFromRepair },
-                { id: 'convert_donation', label: 'Convert → Donation', onClick: () => convertRetainedRepairToDonation(r.id), hidden: !canConvertRetained },
-                { id: 'convert_buyback', label: 'Convert → Buy-back stock', onClick: () => convertRetainedRepairToBuyBack(r.id), hidden: !canConvertRetained },
-                { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
-                { id: 'back', label: 'Back step', onClick: () => moveRepairToPreviousProgress(r.id), hidden: !canMoveBack },
-                { id: 'schedule', label: 'Schedule delivery', onClick: () => setShowDeliveryModal(true), hidden: !canScheduleDelivery },
-                { id: 'prepare_release', label: 'Prepare release', onClick: openPrepareRelease, hidden: !canPrepareRelease || primaryActionId === 'prepare_release' },
-                { id: 'collect', label: 'Mark collected', onClick: () => setShowMarkDeliveredConfirm(true), hidden: !canMarkCollected || primaryActionId === 'collect' },
-                { id: 'close', label: 'Close job', onClick: () => closeRepairJob(r.id), hidden: !canCloseJob || primaryActionId === 'close' },
-                { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')) },
-                { id: 'edit', label: 'Edit details', onClick: () => setShowEditDetailsModal(true), hidden: !canEditDetails },
-                { id: 'sticker', label: 'Print sticker', onClick: () => { void printRepairSticker(r) } },
-                { id: 'cancel', label: 'Cancel repair', onClick: () => setShowCancelModal(true), hidden: !canCancel, danger: true },
-                { id: 'delete', label: 'Delete repair', onClick: () => setShowDeleteConfirm(true), hidden: !canDelete, danger: true },
+                  actions={[
+                    { id: 'cancel', label: 'Cancel repair', onClick: () => setShowCancelModal(true), hidden: !canCancel, danger: true },
+                    { id: 'delete', label: 'Delete repair', onClick: () => setShowDeleteConfirm(true), hidden: !canDelete, danger: true },
                   ]}
                 />
               </div>
@@ -662,6 +658,18 @@ export default function RepairDetailView() {
           <div className="repair-detail__mobile-track"><i style={{ width: `${Math.max(12, ((repairProgressOrderFor(r).indexOf(r.status) + 1) / Math.max(repairProgressOrderFor(r).length, 1)) * 100)}%` }} /></div>
           <p><b>Next:</b> {nextActionHint || 'Continue the repair workflow'}</p>
         </div>
+        {canMoveBack && (
+          <div className="flex justify-end px-3 sm:px-5 pb-2">
+            <button
+              type="button"
+              onClick={() => moveRepairToPreviousProgress(r.id)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-[var(--text-3)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-1)] transition-colors"
+            >
+              <Fa icon={faUndo} className="text-[9px]" />
+              Previous stage
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="repair-detail__summary" aria-label="Repair summary">
@@ -673,14 +681,11 @@ export default function RepairDetailView() {
 
       <nav className="repair-detail__tabs" aria-label="Repair record sections">
         <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-overview')}>Overview</button>
-        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-diagnosis')}>
-          <span className="repair-tab-label--full">Diagnosis &amp; quote</span>
-          <span className="repair-tab-label--compact">Quote</span>
-        </button>
-        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-parts')}>Parts</button>
-        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-qc')}>Quality check</button>
-        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-delivery')}>Delivery</button>
-        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-history')}>Messages &amp; history</button>
+        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-diagnosis')}>Diagnosis</button>
+        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-parts')}>Repair &amp; Parts</button>
+        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-qc')}>QC</button>
+        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-delivery')}>Handover</button>
+        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-history')}>History</button>
         <div className="repair-detail__tab-overflow">
           <SecondaryActionMenu
             label="More"
@@ -688,8 +693,8 @@ export default function RepairDetailView() {
             mobilePresentation="anchored"
             actions={[
               { id: 'qc', label: 'Quality check', onClick: () => scrollToRepairSection('repair-qc') },
-              { id: 'delivery', label: 'Delivery', onClick: () => scrollToRepairSection('repair-delivery') },
-              { id: 'history', label: 'Messages & history', onClick: () => scrollToRepairSection('repair-history') },
+              { id: 'delivery', label: 'Handover', onClick: () => scrollToRepairSection('repair-delivery') },
+              { id: 'history', label: 'History', onClick: () => scrollToRepairSection('repair-history') },
             ]}
           />
         </div>
@@ -710,20 +715,15 @@ export default function RepairDetailView() {
                 title="Device & Client"
                 subtitle="Intake profile"
                 action={
-                  <div className="flex items-center gap-1.5 bg-[var(--bg-surface)] rounded-lg px-2.5 py-1.5 border border-[var(--border)]">
-                    <Fa icon={faCalendarAlt} className="text-[var(--text-3)] text-[9px]" />
-                    <span className="text-[10px] font-bold text-[var(--text-2)] whitespace-nowrap" title="Intake booking date and time">
-                      {(() => {
-                        const raw = String(r.intakeDate || '')
-                        const d = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
-                        if (Number.isNaN(d.getTime())) return raw || '—'
-                        return d.toLocaleString('en-KE', {
-                          year: 'numeric', month: 'short', day: 'numeric',
-                          hour: '2-digit', minute: '2-digit', hour12: false,
-                        })
-                      })()}
-                    </span>
-                  </div>
+                  <SecondaryActionMenu
+                    label="Device"
+                    ariaLabel="Device actions"
+                    mobilePresentation="anchored"
+                    actions={[
+                      { id: 'edit', label: 'Edit details', onClick: () => setShowEditDetailsModal(true), hidden: !canEditDetails },
+                      { id: 'sticker', label: 'Print sticker', onClick: () => { void printRepairSticker(r) } },
+                    ]}
+                  />
                 }
               />
               <div className="px-4 sm:px-6 py-4 sm:py-5 grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-4 sm:gap-y-5">
@@ -870,7 +870,23 @@ export default function RepairDetailView() {
 
             {/* Reported Issue */}
             <SectionCard delay={130}>
-              <SectionHeader icon={faCircleExclamation} iconBg="bg-amber-500" title="Reported Issue" subtitle="Customer's description" />
+              <SectionHeader
+                icon={faCircleExclamation}
+                iconBg="bg-amber-500"
+                title="Reported Issue"
+                subtitle="Customer's description"
+                action={
+                  <SecondaryActionMenu
+                    label="Issue"
+                    ariaLabel="Issue assessment actions"
+                    mobilePresentation="anchored"
+                    actions={[
+                      { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
+                      { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')) },
+                    ]}
+                  />
+                }
+              />
               <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
                 <div className="bg-[var(--bg-surface)] rounded-xl p-4 sm:p-5 border border-[var(--border)]">
                   <Fa icon={faClipboardList} className="text-amber-500 text-base mb-2.5" />
@@ -973,6 +989,14 @@ export default function RepairDetailView() {
                       {canUpdateDiagnosis && (
                         <button onClick={() => setShowDiagnosisModal(true)} className="text-[9px] font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[rgba(37,99,235,0.08)] border border-blue-500/25 hover:bg-[rgba(37,99,235,0.15)] transition-all">Update</button>
                       )}
+                      <SecondaryActionMenu
+                        label="Actions"
+                        ariaLabel="Diagnosis actions"
+                        mobilePresentation="anchored"
+                        actions={[
+                          { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
+                        ]}
+                      />
                     </div>
                   }
                 />
@@ -1268,6 +1292,17 @@ export default function RepairDetailView() {
                   iconBg="bg-orange-500"
                   title="Parts Used"
                   subtitle={`${r.partsUsed.length} component${r.partsUsed.length !== 1 ? 's' : ''}`}
+                  action={
+                    <SecondaryActionMenu
+                      label="Parts"
+                      ariaLabel="Parts actions"
+                      mobilePresentation="anchored"
+                      actions={[
+                        { id: 'request', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
+                        { id: 'arrived', label: 'Mark parts arrived', onClick: () => markPartsArrived(r.id), hidden: !canMarkPartsArrived || primaryActionId === 'parts_arrived' },
+                      ]}
+                    />
+                  }
                 />
                 <div className="px-4 sm:px-6 py-4 sm:py-5">
                   <div className="dt-scroll">
@@ -1415,6 +1450,21 @@ export default function RepairDetailView() {
                     Prepare release
                   </button>
                 )}
+                <div className="flex justify-end pt-1">
+                  <SecondaryActionMenu
+                    label="Handover"
+                    ariaLabel="Handover and device disposition actions"
+                    mobilePresentation="anchored"
+                    actions={[
+                      { id: 'return', label: isQuoteDeclinedReopenable(r.status) ? 'Return device after decline' : 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
+                      { id: 'leave', label: 'Customer leaves device', onClick: openLeaveDevice, hidden: !canLeaveDeviceWithDeed },
+                      { id: 'tradein', label: 'Trade-in after evaluation', onClick: openTradeIn, hidden: !canTradeInFromRepair },
+                      { id: 'convert_donation', label: 'Convert to donation', onClick: () => convertRetainedRepairToDonation(r.id), hidden: !canConvertRetained },
+                      { id: 'convert_buyback', label: 'Convert to buy-back stock', onClick: () => convertRetainedRepairToBuyBack(r.id), hidden: !canConvertRetained },
+                      { id: 'close', label: 'Close job', onClick: () => closeRepairJob(r.id), hidden: !canCloseJob || primaryActionId === 'close' },
+                    ]}
+                  />
+                </div>
               </div>
             </SectionCard>
 
@@ -1457,7 +1507,38 @@ export default function RepairDetailView() {
 
             {/* Financials */}
             <SectionCard delay={100} id={!hasDiagnosis ? 'repair-diagnosis' : undefined}>
-              <SectionHeader id="repair-diagnosis-financials" icon={faQuoteRight} iconBg="bg-emerald-600" title="Financials" subtitle="Quote & charges" />
+              <SectionHeader
+                id="repair-diagnosis-financials"
+                icon={faQuoteRight}
+                iconBg="bg-emerald-600"
+                title="Financials"
+                subtitle="Quote & charges"
+                action={
+                  <SecondaryActionMenu
+                    label="Billing"
+                    ariaLabel="Financial and quote actions"
+                    mobilePresentation="anchored"
+                    actions={[
+                      {
+                        id: 'quote',
+                        label: isQuoteDeclinedReopenable(r.status) ? 'Revise & re-send quote' : r.quote ? 'Edit quote' : 'Generate quote',
+                        onClick: () => setShowQuoteModal(true),
+                        hidden: !canQuote || primaryActionId === 'quote',
+                      },
+                      { id: 'decline', label: 'Decline quote', onClick: () => setShowDeclineModal(true), hidden: !canDeclineQuote, danger: true },
+                      {
+                        id: 'invoice',
+                        label: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice',
+                        onClick: () => setShowProgressModal(true),
+                        hidden: !canInvoice || primaryActionId === 'invoice',
+                      },
+                      { id: 'mark_fee_paid', label: 'Mark diagnosis fee paid', onClick: () => markDiagnosisFeePaid(r.id), hidden: !canMarkDiagnosisFeePaid },
+                      { id: 'waive_fee', label: 'Waive diagnosis fee', onClick: () => { setWaiveFeeReason(''); setShowWaiveFeeModal(true) }, hidden: !canWaiveDiagnosisFee },
+                      { id: 'no_charge', label: 'Mark no-charge', onClick: openNoCharge, hidden: !canMarkNoCharge },
+                    ]}
+                  />
+                }
+              />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 {r.quote ? (
                   <div className="space-y-3">
@@ -1650,9 +1731,15 @@ export default function RepairDetailView() {
                   title="Parts & Procurement"
                   subtitle={`${r.procurementRequests.length} request${r.procurementRequests.length !== 1 ? 's' : ''}`}
                   action={
-                    canProcure
-                      ? <button onClick={() => setShowProcurementModal(true)} className="text-[9px] font-black text-orange-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-all">+ New</button>
-                      : null
+                    <SecondaryActionMenu
+                      label="Parts"
+                      ariaLabel="Parts and procurement actions"
+                      mobilePresentation="anchored"
+                      actions={[
+                        { id: 'request', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
+                        { id: 'arrived', label: 'Mark parts arrived', onClick: () => markPartsArrived(r.id), hidden: !canMarkPartsArrived || primaryActionId === 'parts_arrived' },
+                      ]}
+                    />
                   }
                 />
                 <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
@@ -1723,6 +1810,16 @@ export default function RepairDetailView() {
                   iconBg="bg-slate-500"
                   title="Parts & Procurement"
                   subtitle="No parts activity"
+                  action={
+                    <SecondaryActionMenu
+                      label="Parts"
+                      ariaLabel="Parts actions"
+                      mobilePresentation="anchored"
+                      actions={[
+                        { id: 'arrived', label: 'Mark parts arrived', onClick: () => markPartsArrived(r.id), hidden: !canMarkPartsArrived || primaryActionId === 'parts_arrived' },
+                      ]}
+                    />
+                  }
                 />
                 <div className="px-4 sm:px-6 py-4 sm:py-5">
                   <p className="text-[11px] font-semibold text-[var(--text-3)]">
@@ -1739,6 +1836,19 @@ export default function RepairDetailView() {
                 iconBg="bg-navy-500"
                 title="Work Notes"
                 subtitle="Technician progress log"
+                action={
+                  canUpdateProgress && !['start', 'complete', 'invoice'].includes(primaryActionId ?? '')
+                    ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowProgressModal(true)}
+                        className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-[var(--text-2)] hover:bg-[var(--bg-muted)]"
+                      >
+                        Update stage
+                      </button>
+                    )
+                    : null
+                }
               />
               <div className="px-4 sm:px-6 py-4 space-y-3">
                 {/* Existing note entries */}
