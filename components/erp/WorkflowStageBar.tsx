@@ -19,30 +19,43 @@ export function WorkflowStageBar({
   current,
   blocker,
   className = '',
+  layout = 'scroll',
 }: {
   stages: WorkflowStage[]
   current: string
   blocker?: string | null
   className?: string
+  /**
+   * `scroll` preserves the compact single-line treatment for short workflows.
+   * `wrap` removes horizontal scrolling and lets long operational workflows use
+   * the available width in clean rows.
+   */
+  layout?: 'scroll' | 'wrap'
 }) {
   const currentIndex = Math.max(0, stages.findIndex(stage => stage.id === current))
+  const wrapped = layout === 'wrap'
 
   return (
     <section className={`rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-3 sm:px-4 ${className}`.trim()} aria-label="Workflow progress">
-      <div className="overflow-x-auto pb-1">
-        <ol className="flex min-w-max items-start gap-1" role="list">
+      <div className={wrapped ? 'overflow-visible' : 'overflow-x-auto pb-1'}>
+        <ol
+          className={wrapped
+            ? 'grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7'
+            : 'flex min-w-max items-start gap-1'}
+          role="list"
+        >
           {stages.map((stage, index) => {
             const complete = index < currentIndex
             const active = index === currentIndex
             const upcoming = index > currentIndex
             return (
-              <li key={stage.id} className="flex items-start">
+              <li key={stage.id} className={wrapped ? 'min-w-0' : 'flex items-start'}>
                 <div
-                  className={`flex min-w-[132px] items-start gap-2 rounded-lg px-2.5 py-2 ${
+                  className={`flex min-w-0 items-start gap-2 rounded-lg px-2.5 py-2 ${wrapped ? 'h-full w-full' : 'min-w-[132px]'} ${
                     active
-                      ? 'bg-[var(--primary-light)] text-[var(--text-1)]'
+                      ? 'bg-[var(--primary-light)] text-[var(--text-1)] ring-1 ring-inset ring-[var(--primary)]/20'
                       : complete
-                        ? 'text-[var(--success-text)]'
+                        ? 'bg-[var(--success-bg)]/40 text-[var(--success-text)]'
                         : 'text-[var(--text-4)]'
                   } ${stage.disabled ? 'opacity-50' : ''}`}
                   aria-current={active ? 'step' : undefined}
@@ -60,11 +73,11 @@ export function WorkflowStageBar({
                     {stage.icon ?? (complete ? '✓' : index + 1)}
                   </span>
                   <span className="min-w-0">
-                    <span className={`block text-xs font-semibold ${upcoming ? 'font-medium' : ''}`}>{stage.label}</span>
+                    <span className={`block text-[11px] font-semibold leading-4 sm:text-xs ${upcoming ? 'font-medium' : ''}`}>{stage.label}</span>
                     {stage.description && <span className="mt-0.5 block max-w-[150px] text-[10px] leading-4 text-[var(--text-4)]">{stage.description}</span>}
                   </span>
                 </div>
-                {index < stages.length - 1 && (
+                {!wrapped && index < stages.length - 1 && (
                   <span className={`mt-4 h-px w-5 shrink-0 ${index < currentIndex ? 'bg-[var(--success)]' : 'bg-[var(--border)]'}`} aria-hidden="true" />
                 )}
               </li>
