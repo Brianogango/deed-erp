@@ -107,7 +107,9 @@ export default function Reconfiguration() {
   const [detail, setDetail] = useState<any>(null)
   const tab: 'orders' | 'new' | 'detail' =
     tabValue === 'new' ? 'new' : tabValue === 'detail' && detail ? 'detail' : 'orders'
-  const setTab = (next: 'orders' | 'new' | 'detail') => setTabValue(next)
+  const setTab = useCallback((next: 'orders' | 'new' | 'detail') => {
+    setTabValue(next)
+  }, [setTabValue])
 
   const [statusFilter, setStatusFilter] = useState('')
   const [q, setQ] = useState('')
@@ -169,7 +171,7 @@ export default function Reconfiguration() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [setTab])
 
   useEffect(() => {
     if (enabled && tab === 'orders') void loadOrders()
