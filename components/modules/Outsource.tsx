@@ -7,6 +7,7 @@ import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar, SearchPicker
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
 import { Fa } from '@/components/icons'
+import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard, faPlus, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -112,8 +113,18 @@ function OutsourceContent() {
     if (urlId !== activeJobId) setLocalActiveJobId(urlId)
   }, [searchParams, tab, selectedVendorId, activeJobId])
 
-  const [jobStatusFilter, setJobStatusFilter] = useState<OutsourceJob['status'] | 'all'>('all')
-  const [jobVendorFilter, setJobVendorFilter] = useState<string>('all')
+  const patchJobsUi = useUrlUiPatch()
+  const [jobStatusValue, setJobStatusValue] = useUrlUiState('status', 'all')
+  const jobStatusFilter: OutsourceJob['status'] | 'all' =
+    ['sent', 'returned_resolved', 'returned_unresolved'].includes(jobStatusValue)
+      ? jobStatusValue as OutsourceJob['status']
+      : 'all'
+  const setJobStatusFilter = (value: OutsourceJob['status'] | 'all') => setJobStatusValue(value)
+  const [jobVendorFilter, setJobVendorFilter] = useUrlUiState('vendor', 'all')
+  const [jobSearch, setJobSearch] = useUrlUiState('q', '')
+  const [jobPageValue, setJobPageValue] = useUrlUiState('page', '1')
+  const jobPage = Math.max(1, Number.parseInt(jobPageValue, 10) || 1)
+  const setJobPage = (page: number) => setJobPageValue(String(Math.max(1, page)))
 
   // ── Job modal ──
   const [showJobModal, setShowJobModal] = useState(false)
@@ -578,8 +589,12 @@ function OutsourceContent() {
             rows={filteredJobs}
             rowKey={job => job.id}
             emptyMessage="No outsource jobs match the filter."
+            searchValue={jobSearch}
+            onSearchChange={setJobSearch}
             searchPlaceholder="Search OUT ref, device, customer or repair…"
             clientSearch
+            page={jobPage}
+            onPageChange={setJobPage}
             primaryFilters={[
               {
                 key: 'status',
@@ -608,10 +623,7 @@ function OutsourceContent() {
                 onChange: setJobVendorFilter,
               },
             ]}
-            onClearFilters={() => {
-              setJobStatusFilter('all')
-              setJobVendorFilter('all')
-            }}
+            onClearFilters={() => patchJobsUi({ q: null, status: null, vendor: null, page: null })}
             hideColumnFilters
             onRowClick={job => setActiveJobId(job.id)}
             rowActions={jobRowActions}
