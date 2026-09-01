@@ -72,7 +72,7 @@ function OutsourceContent() {
     setLocalTab(newTab)
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', newTab)
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   const setSelectedVendorId = (id: string | null) => {
@@ -85,7 +85,7 @@ function OutsourceContent() {
     } else {
       params.delete('vendorId')
     }
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   const setActiveJobId = (id: string | null) => {
@@ -98,7 +98,7 @@ function OutsourceContent() {
     } else {
       params.delete('id')
     }
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   useEffect(() => {
