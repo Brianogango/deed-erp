@@ -185,6 +185,55 @@ function ContactsInner() {
   const [formDraft, setFormDraft] = useState<ContactFormValues>(blankCompanyContact())
   const [formKey, setFormKey] = useState(0)
   const [viewTabValue, setViewTabValue] = useUrlQueryState('contactTab', 'info')
+
+  // Detail-modal derivation: filter/reduce the full ledgers only when the
+  // viewed contact or the underlying datasets change, not on every render
+  // (SSE updates re-render the whole module every few seconds otherwise).
+  const viewContactBusiness = useMemo(() => {
+    if (!viewContact) return null
+    const id = viewContact.id
+    const clientSOs      = saleOrders.filter(s => s.customerId === id)
+    const clientInvoices = invoices.filter(i => i.partnerId === id && i.type === 'customer_invoice')
+    const clientRepairs  = repairs.filter(r => r.customerId === id)
+    const clientPOS      = posOrders.filter(p => p.customerId === id)
+    const totalRevenue   = clientInvoices.reduce((s, i) => s + i.amountPaid, 0)
+    const openBalance    = clientInvoices.filter(i => isOpenInvoice(i))
+                                         .reduce((s, i) => s + invoiceResidual(i), 0)
+    const repairRevenue  = clientRepairs.filter(r => r.invoiceId).reduce((s, r) => s + r.total, 0)
+    const clientCredits  = creditsForCustomer(customerCredits, id)
+    const historyCount   = clientSOs.length + clientRepairs.length + clientPOS.length + clientInvoices.length
+    const recentBusiness = [
+      ...clientSOs.map(order => ({
+        kind: isQuotationStage(order.status) ? 'Quotation' : 'Sales order',
+        ref: order.ref ?? order.orderNumber ?? order.id.slice(0, 8),
+        date: order.date,
+        amount: order.total,
+        status: order.status,
+      })),
+      ...clientInvoices.map(invoice => ({
+        kind: 'Invoice',
+        ref: displayDocRef(invoice.ref),
+        date: invoice.date,
+        amount: invoice.total,
+        status: invoiceDocState(invoice.status) === 'posted' ? invoicePaymentStatus(invoice) : invoiceDocState(invoice.status),
+      })),
+      ...clientRepairs.map(repair => ({
+        kind: 'Repair',
+        ref: repair.ref,
+        date: repair.intakeDate,
+        amount: repair.total,
+        status: repair.status,
+      })),
+      ...clientPOS.map(order => ({
+        kind: 'POS sale',
+        ref: order.ref,
+        date: order.date,
+        amount: order.total,
+        status: 'paid',
+      })),
+    ].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 5)
+    return { clientSOs, clientInvoices, clientRepairs, clientPOS, totalRevenue, openBalance, repairRevenue, clientCredits, historyCount, recentBusiness }
+  }, [viewContact, saleOrders, invoices, repairs, posOrders, customerCredits])
   const viewTab: ViewTab = ['info', 'financial', 'persons', 'history', 'chatter'].includes(viewTabValue)
     ? viewTabValue as ViewTab
     : 'info'
@@ -215,6 +264,23 @@ function ContactsInner() {
   })
 
   const creditByCustomer = useMemo(() => creditBalancesByCustomer(customerCredits), [customerCredits])
+
+  // Per-customer activity counts computed once per dataset change — the table
+  // column render/sort accessor runs per row, so filtering the full order /
+  // repair / POS arrays inside it made every render O(contacts × records).
+  const activityByCustomer = useMemo(() => {
+    const map = new Map<string, { orders: number; jobs: number; tills: number }>()
+    const bump = (id: unknown, key: 'orders' | 'jobs' | 'tills') => {
+      if (typeof id !== 'string' || !id) return
+      const entry = map.get(id) ?? { orders: 0, jobs: 0, tills: 0 }
+      entry[key] += 1
+      map.set(id, entry)
+    }
+    saleOrders.forEach(o => bump(o.customerId, 'orders'))
+    repairs.forEach(r => bump(r.customerId, 'jobs'))
+    posOrders.forEach(o => bump(o.customerId, 'tills'))
+    return map
+  }, [saleOrders, repairs, posOrders])
 
   const getCompany = (id?: string) => id ? contacts.find(c => c.id === id) : null
   const getLinkedPersons = (companyId: string) => contacts.filter(c => c.companyId === companyId)
@@ -367,13 +433,17 @@ function ContactsInner() {
     {
       key: 'activity', label: 'Activity', priority: 3, width: '130px',
       render: c => {
-        const orders = saleOrders.filter(order => order.customerId === c.id).length
-        const jobs = repairs.filter(repair => repair.customerId === c.id).length
-        const tills = posOrders.filter(order => order.customerId === c.id).length
+        const activity = activityByCustomer.get(c.id)
+        const orders = activity?.orders ?? 0
+        const jobs = activity?.jobs ?? 0
+        const tills = activity?.tills ?? 0
         const label = orders ? `${orders} order${orders === 1 ? '' : 's'}` : jobs ? `${jobs} repair${jobs === 1 ? '' : 's'}` : tills ? `${tills} POS sale${tills === 1 ? '' : 's'}` : 'No recent activity'
         return <span className="contacts-activity">{label}</span>
       },
-      exportValue: c => saleOrders.filter(order => order.customerId === c.id).length + repairs.filter(repair => repair.customerId === c.id).length + posOrders.filter(order => order.customerId === c.id).length,
+      exportValue: c => {
+        const activity = activityByCustomer.get(c.id)
+        return (activity?.orders ?? 0) + (activity?.jobs ?? 0) + (activity?.tills ?? 0)
+      },
     },
   ]
 
@@ -422,9 +492,10 @@ function ContactsInner() {
 
   function contactCard(c: Contact) {
     const company = getCompany(c.companyId)
-    const orders = saleOrders.filter(order => order.customerId === c.id).length
-    const jobs = repairs.filter(repair => repair.customerId === c.id).length
-    const tills = posOrders.filter(order => order.customerId === c.id).length
+    const activityCounts = activityByCustomer.get(c.id)
+    const orders = activityCounts?.orders ?? 0
+    const jobs = activityCounts?.jobs ?? 0
+    const tills = activityCounts?.tills ?? 0
     const activity = orders
       ? `${orders} order${orders === 1 ? '' : 's'}`
       : jobs
@@ -535,52 +606,12 @@ function ContactsInner() {
       </div>
 
       {/* ── Contact Detail Modal ─────────────────────────────────────────────── */}
-      {viewContact && (() => {
+      {viewContact && viewContactBusiness && (() => {
         const vc = viewContact
         const company = getCompany(vc.companyId)
         const persons = vc.type === 'company' ? getLinkedPersons(vc.id) : []
-
-        const clientSOs      = saleOrders.filter(s => s.customerId === vc.id)
-        const clientInvoices = invoices.filter(i => i.partnerId === vc.id && i.type === 'customer_invoice')
-        const clientRepairs  = repairs.filter(r => r.customerId === vc.id)
-        const clientPOS      = posOrders.filter(p => p.customerId === vc.id)
-        const totalRevenue   = clientInvoices.reduce((s, i) => s + i.amountPaid, 0)
-        const openBalance    = clientInvoices.filter(i => isOpenInvoice(i))
-                                             .reduce((s, i) => s + invoiceResidual(i), 0)
-        const repairRevenue  = clientRepairs.filter(r => r.invoiceId).reduce((s, r) => s + r.total, 0)
-        const clientCredits = creditsForCustomer(customerCredits, vc.id)
+        const { clientSOs, clientInvoices, clientRepairs, clientPOS, totalRevenue, openBalance, repairRevenue, clientCredits, historyCount, recentBusiness } = viewContactBusiness
         const storeCredit = creditByCustomer.get(vc.id) ?? 0
-        const historyCount   = clientSOs.length + clientRepairs.length + clientPOS.length + clientInvoices.length
-        const recentBusiness = [
-          ...clientSOs.map(order => ({
-            kind: isQuotationStage(order.status) ? 'Quotation' : 'Sales order',
-            ref: order.ref ?? order.orderNumber ?? order.id.slice(0, 8),
-            date: order.date,
-            amount: order.total,
-            status: order.status,
-          })),
-          ...clientInvoices.map(invoice => ({
-            kind: 'Invoice',
-            ref: displayDocRef(invoice.ref),
-            date: invoice.date,
-            amount: invoice.total,
-            status: invoiceDocState(invoice.status) === 'posted' ? invoicePaymentStatus(invoice) : invoiceDocState(invoice.status),
-          })),
-          ...clientRepairs.map(repair => ({
-            kind: 'Repair',
-            ref: repair.ref,
-            date: repair.intakeDate,
-            amount: repair.total,
-            status: repair.status,
-          })),
-          ...clientPOS.map(order => ({
-            kind: 'POS sale',
-            ref: order.ref,
-            date: order.date,
-            amount: order.total,
-            status: 'paid',
-          })),
-        ].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 5)
 
         return (
           <Modal

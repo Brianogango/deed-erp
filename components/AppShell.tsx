@@ -642,7 +642,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       setSessionSecondsLeft(left)
       if (left <= 5 * 60 && left > 0) setShowSessionExpiryWarning(true)
       else if (left > 5 * 60) setShowSessionExpiryWarning(false)
-    }, 15_000)
+    }, 60_000)
     return () => {
       cancelled = true
       window.clearInterval(interval)

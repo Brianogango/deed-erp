@@ -1202,7 +1202,10 @@ export default function Topbar() {
       return
     }
     try {
-      const res = await fetch('/api/notifications?limit=200', { cache: 'no-store' })
+      // The bell shows a badge + short dropdown; 200 rows per SSE-driven
+      // refetch was the app's third-highest request volume. 50 covers the
+      // visible surface with margin.
+      const res = await fetch('/api/notifications?limit=50', { cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json()
       setServerNotifs(Array.isArray(data.notifications) ? data.notifications : [])
