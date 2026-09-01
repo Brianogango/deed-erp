@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Badge, PanelHeader } from '@/components/ui'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
-import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
+import { EmptyState, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge, WorkflowStageBar } from '@/components/erp'
 import { Fa, faBarcode, faBox } from '@/components/icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import type { SerialLabelItem } from '@/lib/product-label-meta'
@@ -80,46 +80,51 @@ export default function PurchaseReceiptDetail() {
     }
   }
 
+  const workflow = (
+    <WorkflowStageBar
+      stages={[
+        { id: 'draft', label: 'Pending', description: 'Awaiting receipt processing' },
+        { id: 'validated', label: 'Validated', description: 'Stock and serials committed' },
+      ]}
+      current={validated ? 'validated' : 'draft'}
+      blocker={isDraft && !canProcess ? 'Your role cannot validate this goods receipt.' : undefined}
+    />
+  )
+
   return (
     <div className="purchase-order-detail purchase-receipt-detail">
       <div className="purchase-order-detail__header">
-        <Breadcrumbs
-          items={[
-            { label: 'Purchase', onClick: backToReceipts },
-            { label: 'Receipts', onClick: backToReceipts },
-            { label: activeReceipt.ref },
-          ]}
-        />
-        <div className="purchase-order-detail__title-row">
-          <div className="purchase-order-detail__identity">
-            <button
-              type="button"
-              className="btn-outline text-[11px] py-1 px-2.5"
-              onClick={receiptOrigin === 'po' ? backToPo : backToReceipts}
-              aria-label={receiptOrigin === 'po' ? 'Back to order' : 'Back to receipts'}
-            >
-              {receiptOrigin === 'po' ? '← Order' : '← Receipts'}
-            </button>
-            <span className="text-sm font-bold text-t1">{activeReceipt.ref}</span>
-            <StatusBadge
-              status={validated ? 'done' : 'pending'}
-              label={validated ? 'Validated' : 'Pending'}
+        <RecordHeader
+          title={activeReceipt.ref}
+          entity={activeReceipt.vendorName}
+          status={validated ? 'done' : 'pending'}
+          statusLabel={validated ? 'Validated' : 'Pending'}
+          onBack={receiptOrigin === 'po' ? backToPo : backToReceipts}
+          backLabel={receiptOrigin === 'po' ? 'Order' : 'Receipts'}
+          breadcrumbs={(
+            <Breadcrumbs
+              items={[
+                { label: 'Purchase', onClick: backToReceipts },
+                { label: 'Receipts', onClick: backToReceipts },
+                { label: activeReceipt.ref },
+              ]}
             />
-          </div>
-          <div className="purchase-order-detail__actions">
-            {canProcess && (
-              <PrimaryActionButton hideLabelOnMobile={false} onClick={() => startReceive(activeReceipt.id)}>
-                Process GRN
-              </PrimaryActionButton>
-            )}
+          )}
+          primaryAction={canProcess ? (
+            <PrimaryActionButton hideLabelOnMobile={false} onClick={() => startReceive(activeReceipt.id)}>
+              Process GRN
+            </PrimaryActionButton>
+          ) : undefined}
+          secondaryActions={(
             <SecondaryActionMenu
               actions={[
                 { id: 'print', label: 'Print labels', onClick: () => { void handlePrint() } },
                 { id: 'po', label: `Open ${activeReceipt.poRef}`, hidden: !po, onClick: backToPo },
               ]}
             />
-          </div>
-        </div>
+          )}
+          workflow={workflow}
+        />
       </div>
 
       <section className="purchase-order-summary" aria-label="Goods receipt summary">
@@ -169,7 +174,15 @@ export default function PurchaseReceiptDetail() {
         </div>
 
         {lines.length === 0 ? (
-          <p className="px-4 py-8 text-sm text-t3 text-center">This GRN has no lines yet.</p>
+          <EmptyState
+            title="No receipt lines yet"
+            description={isDraft ? 'Process this GRN to capture received quantities and serial numbers.' : 'This validated goods receipt contains no line items.'}
+            action={canProcess ? (
+              <PrimaryActionButton hideLabelOnMobile={false} onClick={() => startReceive(activeReceipt.id)}>
+                Process GRN
+              </PrimaryActionButton>
+            ) : undefined}
+          />
         ) : (
           <div className="flex flex-col">
             {lines.map(line => {
