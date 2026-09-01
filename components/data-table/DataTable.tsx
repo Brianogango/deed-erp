@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Table, Pagination } from '@/components/ui'
+import { Table } from '@/components/ui'
 import { exportToExcel, exportToPDF, type ExportRow } from '@/lib/export-utils'
 import { useTableBreakpoint } from '@/lib/data-table/use-breakpoint'
 import { useTablePreferences } from '@/lib/data-table/use-table-preferences'
@@ -16,6 +16,7 @@ import type {
 } from '@/lib/data-table/toolbar-types'
 import DataTableToolbar from './DataTableToolbar'
 import MobileCardView from './MobileCardView'
+import EnterprisePagination, { DEFAULT_PAGE_SIZE_OPTIONS } from './EnterprisePagination'
 import AdvancedFilters, { applyFilterRules, type FilterRule } from './AdvancedFilters'
 
 // Breakpoint → max column priority for the *default* visible set.
@@ -46,6 +47,15 @@ function estimateTableMinWidth(
   return 0
 }
 
+function operationalPageSize(requested: number) {
+  const safe = Math.max(1, Math.floor(Number(requested) || 10))
+  // Preserve intentionally small dashboard widgets and large analytical pages.
+  if (safe < 10 || safe > 50) return safe
+  // Large operational lists now follow the Sales contract by default.
+  if (!DEFAULT_PAGE_SIZE_OPTIONS.includes(safe as (typeof DEFAULT_PAGE_SIZE_OPTIONS)[number])) return 10
+  return safe
+}
+
 export interface DataTableProps<T> {
   tableId: string
   columns: ColumnDef<T>[]
@@ -71,7 +81,10 @@ export interface DataTableProps<T> {
    * Set false when the parent already applied search to `rows`.
    */
   clientSearch?: boolean
+  /** Initial rows per page. Operational values between 10 and 50 normalize to the Sales defaults. */
   perPage?: number
+  pageSizeOptions?: readonly number[]
+  showPageSizeSelector?: boolean
   /**
    * Controlled 1-based page. Omit to keep page in local state.
    * Pair with `onPageChange` so a parent can persist page in the URL.
@@ -138,7 +151,9 @@ export default function DataTable<T>({
   searchValue,
   onSearchChange,
   clientSearch = true,
-  perPage = 20,
+  perPage = 10,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
+  showPageSizeSelector = true,
   page: pageProp,
   onPageChange,
   primaryFilters,
@@ -185,12 +200,23 @@ export default function DataTable<T>({
   const [filterRules, setFilterRules] = useState<FilterRule[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [internalPage, setInternalPage] = useState(1)
+  const [pageSize, setPageSize] = useState(() => operationalPageSize(perPage))
   const page = pageProp ?? internalPage
   const goToPage = (next: number) => {
     const nextPage = Math.max(1, Math.floor(Number(next)) || 1)
     if (pageProp === undefined) setInternalPage(nextPage)
     onPageChange?.(nextPage)
   }
+  const changePageSize = (next: number) => {
+    setPageSize(Math.max(1, Math.floor(Number(next)) || 10))
+    goToPage(1)
+  }
+
+  useEffect(() => {
+    const next = operationalPageSize(perPage)
+    setPageSize(current => current === next ? current : next)
+  }, [perPage])
+
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [sort, setSort] = useState<TableSortState | null>(defaultSort)
 
@@ -264,7 +290,7 @@ export default function DataTable<T>({
     return result
   }, [rows, search, filterRules, eligibleColumns, columns, clientSearch, sort])
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPage))
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   useEffect(() => {
     if (page <= totalPages) return
     // Controlled restore (e.g. /finance?tab=invoices&page=3) can mount before
@@ -286,9 +312,9 @@ export default function DataTable<T>({
   }, [sortKey])
 
   const pageRows = useMemo(() => {
-    const start = (page - 1) * perPage
-    return filteredRows.slice(start, start + perPage)
-  }, [filteredRows, page, perPage])
+    const start = (page - 1) * pageSize
+    return filteredRows.slice(start, start + pageSize)
+  }, [filteredRows, page, pageSize])
 
   function toggleSelected(key: string) {
     setSelectedKeys(prev => {
@@ -516,7 +542,16 @@ export default function DataTable<T>({
             </Table>
           )}
 
-          <Pagination page={page} total={filteredRows.length} perPage={perPage} onChange={goToPage} />
+          <EnterprisePagination
+            page={page}
+            total={filteredRows.length}
+            perPage={pageSize}
+            onChange={goToPage}
+            onPerPageChange={changePageSize}
+            pageSizeOptions={pageSizeOptions}
+            showPageSizeSelector={showPageSizeSelector && pageSize <= 50}
+            ariaLabel={`${tableId.replace(/[-_]+/g, ' ')} pagination`}
+          />
         </>
       )}
     </div>
