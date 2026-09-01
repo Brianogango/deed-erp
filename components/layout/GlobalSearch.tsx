@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
+import type { ModuleId } from '@/lib/auth/types'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { useHrStore } from '@/hooks/useHrStore'
@@ -40,7 +41,7 @@ const TYPE_CONFIG: Record<SearchResult['type'], { label: string; icon: React.Rea
   module:   { label: 'Module',    icon: <Fa icon={faArrowRight} />,         color: '#334155',        bg: 'rgba(51,65,85,0.1)' },
 }
 
-const SHORTCUTS: Array<{ label: string; key: string; href: string; module: string; icon: IconProp }> = [
+const SHORTCUTS: Array<{ label: string; key: string; href: string; module: ModuleId; icon: IconProp }> = [
   { label: 'New Repair', key: 'R', href: '/repairs?quick=new', module: 'repair', icon: faScrewdriverWrench },
   { label: 'Invoices', key: 'I', href: '/finance?tab=invoices', module: 'accounting', icon: faFileInvoiceDollar },
   { label: 'POS', key: 'P', href: '/pos', module: 'pos', icon: faCashRegister },
