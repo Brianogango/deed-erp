@@ -5,7 +5,8 @@ import { StatusBadge } from './StatusBadge'
 
 /**
  * Consistent record-detail header:
- * title · entity · status · primary action · overflow
+ * Back | title/entity | status | primary action | secondary/More
+ * followed by optional workflow progress / blocker context.
  */
 export function RecordHeader({
   title,
@@ -15,6 +16,8 @@ export function RecordHeader({
   primaryAction,
   secondaryActions,
   smartButtons,
+  workflow,
+  blocker,
   breadcrumbs,
   onBack,
   backLabel = 'Back',
@@ -26,6 +29,8 @@ export function RecordHeader({
   primaryAction?: ReactNode
   secondaryActions?: ReactNode
   smartButtons?: ReactNode
+  workflow?: ReactNode
+  blocker?: ReactNode
   breadcrumbs?: ReactNode
   onBack?: () => void
   backLabel?: string
@@ -51,6 +56,12 @@ export function RecordHeader({
         {primaryAction}
         {secondaryActions}
       </div>
+      {blocker && (
+        <div className="w-full rounded-lg bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]" role="status">
+          {blocker}
+        </div>
+      )}
+      {workflow && <div className="w-full">{workflow}</div>}
       {smartButtons && <div className="erp-smart-buttons">{smartButtons}</div>}
     </header>
   )
