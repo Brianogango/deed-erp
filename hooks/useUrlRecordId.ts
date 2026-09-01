@@ -117,14 +117,15 @@ export function useUrlQueryState(param: string, fallback: string) {
   const queryValue = searchParams.get(param) ?? fallback
   const [value, setLocalValue] = useState(queryValue)
 
-  const setValue = useCallback((next: string) => {
+  const setValue = useCallback((next: string, opts?: { history?: 'push' | 'replace' }) => {
     setLocalValue(next)
     const params = new URLSearchParams(searchParams.toString())
     params.set(param, next)
     const qs = params.toString()
     const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
-      router.push(href, { scroll: false })
+      if (opts?.history === 'replace') router.replace(href, { scroll: false })
+      else router.push(href, { scroll: false })
     })
   }, [searchParams, router, pathname, param])
 
