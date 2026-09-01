@@ -1,0 +1,170 @@
+/* Phone-only module chrome rules. Loaded after legacy module CSS. */
+@media (max-width: 767px) {
+  .mod-page {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .mod-header {
+    min-height: auto !important;
+    padding: 9px 12px !important;
+    gap: 8px !important;
+    box-shadow: none !important;
+  }
+
+  .mod-header__identity {
+    gap: 8px !important;
+  }
+
+  .mod-header-icon {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 8px !important;
+  }
+
+  .mod-header h1,
+  .mod-header-title {
+    font-size: 16px !important;
+    line-height: 1.2 !important;
+  }
+
+  .mod-header p,
+  .mod-header-subtitle {
+    margin-top: 1px !important;
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+
+  .mod-header__actions,
+  .mod-header-actions {
+    gap: 6px !important;
+  }
+
+  .mod-header__actions :is(button, a),
+  .mod-header-actions :is(button, a) {
+    min-height: 40px !important;
+    padding-inline: 10px !important;
+  }
+
+  /* Tabs stay on a single lightweight horizontal rail instead of wrapping
+     into two or three rows and consuming the whole phone viewport. */
+  .mod-tabs,
+  .module-tabs,
+  [class*='sub-tabs'] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 2px !important;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overscroll-behavior-x: contain;
+    padding: 4px 10px !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mod-tabs::-webkit-scrollbar,
+  .module-tabs::-webkit-scrollbar,
+  [class*='sub-tabs']::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mod-tabs > *,
+  .module-tabs > *,
+  [class*='sub-tabs'] > * {
+    flex: 0 0 auto !important;
+    min-height: 36px !important;
+    padding: 7px 10px !important;
+    white-space: nowrap;
+  }
+
+  /* Section headings should not become miniature dashboard cards. */
+  .panel-header,
+  [class*='panel-header'],
+  [class*='section-header'] {
+    min-height: 44px;
+    padding: 8px 11px !important;
+    gap: 8px !important;
+  }
+
+  .panel-header h2,
+  .panel-header h3,
+  [class*='panel-header'] h2,
+  [class*='panel-header'] h3,
+  [class*='section-header'] h2,
+  [class*='section-header'] h3 {
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+  }
+
+  /* Summary/stat areas: two columns max; never 4–6 tiny tiles on phone. */
+  :is(
+    [class*='summary-grid'],
+    [class*='stats-grid'],
+    [class*='metric-grid'],
+    [class*='kpi-grid'],
+    [class*='metrics']
+  ) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  :is(
+    [class*='summary-grid'],
+    [class*='stats-grid'],
+    [class*='metric-grid'],
+    [class*='kpi-grid'],
+    [class*='metrics']
+  ) > * {
+    min-width: 0;
+    min-height: auto !important;
+    padding: 10px !important;
+    border-radius: 9px !important;
+    box-shadow: none !important;
+  }
+
+  /* Lists and directories keep a single consistent outer gutter. */
+  .mod-body > :is(.card, section, article):not(.erp-table-page),
+  .mod-body > div > :is(.card, section, article):only-child {
+    max-width: calc(100% - 24px);
+  }
+
+  /* Filter drawers/modals must use almost the full phone width; legacy
+     desktop insets created narrow forms with huge dead margins. */
+  [role='dialog'] {
+    padding: 8px !important;
+  }
+
+  [role='dialog'] > div {
+    border-radius: 12px !important;
+  }
+
+  [role='dialog'] :is(.form-grid, .grid-cols-2, .grid-cols-3, .grid-cols-4) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* A touch action stays usable but not oversized. */
+  :is(.btn-primary, .btn-secondary, .btn-outline, .btn-ghost) {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 374px) {
+  .mod-header {
+    padding-inline: 10px !important;
+  }
+
+  .mod-header-subtitle,
+  .mod-header p {
+    display: none;
+  }
+
+  :is(
+    [class*='summary-grid'],
+    [class*='stats-grid'],
+    [class*='metric-grid'],
+    [class*='kpi-grid'],
+    [class*='metrics']
+  ) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

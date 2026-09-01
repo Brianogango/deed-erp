@@ -3,9 +3,9 @@
 import type { ReactNode } from 'react'
 
 /**
- * Full-bleed operational content with consistent responsive containment.
- * The min-width/overflow guards prevent one wide child from pushing the
- * entire ERP shell sideways on phone and tablet viewports.
+ * Shared operational page containment. Wide children must provide their own
+ * local scroller; the page shell itself must not silently clip controls on
+ * phone layouts.
  */
 export function ResponsivePageContainer({
   children,
@@ -20,7 +20,7 @@ export function ResponsivePageContainer({
 }) {
   return (
     <Tag
-      className={`erp-page-container w-full min-w-0 max-w-full overflow-x-hidden ${className}`.trim()}
+      className={`erp-page-container w-full min-w-0 max-w-full ${className}`.trim()}
       aria-label={ariaLabel}
     >
       {children}

@@ -1,5 +1,7 @@
 import './globals.css'
 import '@/components/modules/odoo-record-designs.css'
+import '@/components/erp/mobile-operational.css'
+import '@/components/erp/mobile-chrome.css'
 import type { Metadata, Viewport } from 'next'
 import { getServerSession } from '@/lib/auth/server'
 import { listPublicUsers } from '@/lib/auth/users-repository'
@@ -32,29 +34,18 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  // Deed Navy — colours the mobile browser chrome / PWA title bar.
-  // Must be a literal colour: CSS var() does not resolve inside <meta theme-color>.
   themeColor: '#20164d',
 }
 
-// Font CSS variables live on <html> so Tailwind's preflight font-family
-// declaration (set at the html level) can resolve them.
 const htmlClassName = `${robotoFlex.variable} ${openSans.variable} ${dmMono.variable}`
-// Shell surfaces use the design tokens (bg-bg = --bg-page, text-t1 = --text-1,
-// selection = Deed Navy) so login/portal and the authenticated app share one palette.
 const bodyClassName = 'bg-bg text-t1 antialiased overflow-hidden selection:bg-navy-500 selection:text-white'
 
-// Root layout — mounts AppShell ONCE for authenticated sessions.
-// The AppShell (and AppProvider) are Client Components that Next.js preserves
-// across client-side navigations, so the store, localStorage reads, API fetches,
-// and SSE connection all survive page transitions without remounting.
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession()
   const visregBypassAuth =
     process.env.NODE_ENV !== 'production' &&
     process.env.VISREG_BYPASS_AUTH === 'true'
 
-  // Unauthenticated routes (login, portal, track) render without AppShell.
   if (!session?.user && !visregBypassAuth) {
     return (
       <html lang="en" className={htmlClassName}>
@@ -66,10 +57,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     )
   }
 
-  // Authenticated (or visual-regression bypass mode) — fetch in parallel then render once.
-  // On subsequent navigations the server re-runs this, but the CLIENT-SIDE
-  // AppProvider is preserved (not remounted), so serverState is only used
-  // on the very first mount.
   const fallbackUser = PUBLIC_USERS.find(user => user.username === 'brian') ?? PUBLIC_USERS[0]
   const shellUser = session?.user ?? fallbackUser
   const bootstrapKeys = [
@@ -81,8 +68,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     ? [PUBLIC_USERS, {}]
     : await Promise.all([
         listPublicUsers(),
-        // Keep the initial shell payload small. Module data is hydrated client-side
-        // per route so the first response is not blocked by the full ERP dataset.
         loadAppState(bootstrapKeys),
       ])
 
