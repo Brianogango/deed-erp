@@ -23,7 +23,7 @@ import {
   faArrowsRotate,
 } from '@fortawesome/free-solid-svg-icons'
 
-import { useApp, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
+import { useApp, useStoreHydrated, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
 import { formatRoleLabel } from '@/lib/auth/access'
@@ -37,6 +37,7 @@ import {
 import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
 import { saleOrderInvoiceStatus, invoicePaymentStatus, isOpenInvoice, invoiceResidual, isInvoiceOverdue } from '@/lib/odoo-sales-flow'
 import { onHandQtyAtStockLocations } from '@/lib/business-logic'
+import { isStockTracked, inferTrackingMethod } from '@/lib/inventory-identifiers'
 import { computeLowStockItems } from '@/lib/kpi-stock'
 import { isOpenRepairJob } from '@/lib/repair-progress'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
@@ -196,6 +197,7 @@ function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = 'var
 
 export function Dashboard() {
   const mounted = useMounted()
+  const storeHydrated = useStoreHydrated()
   const [dashboardClock, setDashboardClock] = useState({ greeting: 'Welcome', date: '' })
   useEffect(() => {
     const now = new Date()
@@ -339,12 +341,21 @@ export function Dashboard() {
   }, [visibleSalesOrders])
 
   const inventoryStats = useMemo(() => {
-    const lowStockItems = computeLowStockItems(products, serials, bulkStock)
+    // Same input contract as the Operations/Inventory module: stock-tracked,
+    // active products only. Passing the raw catalog counted discontinued and
+    // non-stock items as "low stock", so Dashboard and Operations disagreed.
+    const stockableProducts = products.filter(p => isStockTracked(inferTrackingMethod({
+      trackingMethod: p.trackingMethod,
+      category: p.category,
+      requiresSerial: p.requiresSerial,
+      unit: p.unit,
+    })) && p.isActive)
+    const lowStockItems = computeLowStockItems(stockableProducts, serials, bulkStock)
     const activeSkus = products.filter(p => p.isActive && p.unit !== 'service')
     const totalUnits = activeSkus.reduce((sum, p) => sum + onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
     const pendingReceipts = purchaseOrders.filter(po => ['sent', 'confirmed', 'partial'].includes(po.status)).length
     const draftTransfers = stockTransfers.filter(t => t.status === 'draft').length
-    const stockValue = products.reduce((sum, p) => sum + p.costPrice * onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
+    const stockValue = stockableProducts.reduce((sum, p) => sum + p.costPrice * onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
 
     return { lowStockItems, activeSkus, totalUnits, pendingReceipts, draftTransfers, stockValue }
   }, [products, serials, bulkStock, purchaseOrders, stockTransfers])
@@ -684,7 +695,9 @@ export function Dashboard() {
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8)
   }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, invoices, visibleSalesOrders, stockTransfers, purchaseOrders, kilimallOrders, visibleRepairs, expenses, currentUserId, has])
 
-  if (!mounted) return <ModuleSkeleton />
+  // Gate on real data, not just mount: on a cold cache the KPI tiles would
+  // otherwise render zeros for the seconds the boot fetch is in flight.
+  if (!mounted || !storeHydrated) return <ModuleSkeleton />
 
   return (
     <div className="dashboard-page">

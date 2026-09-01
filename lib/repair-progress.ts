@@ -1,7 +1,14 @@
 import type { RepairStatus } from '@/lib/repair-types'
 
-/** Jobs that have left the open workshop queue (Dashboard "Open Repairs"). */
-export const CLOSED_REPAIR_STATUSES = ['closed', 'cancelled', 'delivered', 'invoiced'] as const
+/**
+ * Jobs that have left the open workshop queue (Dashboard "Open Repairs").
+ * 'collected' / 'verified_released' / 'returned' / 'retained' are terminal too —
+ * the device has permanently left the shop; without them the Dashboard counted
+ * 51+ finished jobs as open while the Repairs module showed ~10 needing action.
+ * 'declined' and 'unrepairable' stay open: both still need a decision
+ * (revise the quote / arrange device return).
+ */
+export const CLOSED_REPAIR_STATUSES = ['closed', 'cancelled', 'delivered', 'invoiced', 'collected', 'verified_released', 'returned', 'retained'] as const
 
 export function isOpenRepairJob(repair: { status?: string } | null | undefined): boolean {
   const status = String(repair?.status ?? '')

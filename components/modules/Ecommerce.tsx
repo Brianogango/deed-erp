@@ -31,11 +31,9 @@ export default function Ecommerce() {
 
   const listedProducts = products.filter(p => p.canBeSold && p.isActive)
 
-  const onlineOrders: OnlineOrder[] = [
-    { id: 'WEB-001', customer: 'Grace Akinyi',   product: 'iPhone 15 Pro 256GB', total: 84500, status: 'confirmed', date: '2026-04-13' },
-    { id: 'WEB-002', customer: 'Brian K.',        product: 'AirPods Pro 2nd Gen', total: 28500, status: 'paid',      date: '2026-04-13' },
-    { id: 'WEB-003', customer: 'Mary Wanjiku',    product: 'Apple Watch S9 GPS',  total: 65000, status: 'pending',   date: '2026-04-14' },
-  ]
+  // No hardcoded demo orders — the tab shows real online orders once a
+  // storefront integration pushes them, and an honest empty state until then.
+  const onlineOrders: OnlineOrder[] = []
 
   type ProductRow = typeof listedProducts[number]
 
@@ -152,7 +150,7 @@ export default function Ecommerce() {
               searchPlaceholder="Search products…"
               emptyMessage="No products listed"
               rowActions={() => (
-                <button style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '3px 10px' }}>
+                <button style={{ background: 'var(--info-bg)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '3px 10px' }}>
                   View
                 </button>
               )}
@@ -203,7 +201,7 @@ export default function Ecommerce() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { icon: faBoxesStacked, title: 'Manage Products',  desc: 'Add, edit, set prices & stock',        action: () => { setModule('inventory'); router.push('/operations'); },  color: 'var(--warning)' },
-          { icon: faBriefcase, title: 'Process as Sale',  desc: 'Convert online orders to sale orders', action: () => { setModule('sales'); router.push('/sales'); },      color: '#8B5CF6' },
+          { icon: faBriefcase, title: 'Process as Sale',  desc: 'Convert online orders to sale orders', action: () => { setModule('sales'); router.push('/sales'); },      color: 'var(--primary)' },
           { icon: faChartSimple, title: 'View Accounting',  desc: 'Online revenue in accounting',         action: () => { setModule('accounting'); router.push('/finance'); }, color: 'var(--success)' },
         ].map(c => (
           <button key={c.title} onClick={c.action}
