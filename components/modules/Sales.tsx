@@ -892,7 +892,7 @@ function SalesContent() {
   )
   const effectiveActiveInvoiceStatus =
     activeOrder
-    && effectiveActiveInvoiceStatus === 'to_invoice'
+    && activeInvoiceStatus === 'to_invoice'
     && regularLiveInvoices.length > 0
     && regularInvoiceCoverage + 0.5 >= Math.max(0, Number(activeOrder.total) || 0)
       ? 'invoiced' as const
