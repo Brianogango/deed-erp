@@ -138,7 +138,7 @@ function CRMContent() {
     const params = new URLSearchParams(searchParams.toString())
     params.set('crmTab', newTab)
     startTransition(() => {
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+      router.push(`${pathname}?${params.toString()}`, { scroll: false })
     })
   }
 
