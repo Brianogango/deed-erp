@@ -32,7 +32,7 @@ import { ScanInputRow } from '@/components/BarcodeScanner'
 import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
 import { getCategoryMarkupPct, quoteSalePriceFromCost, autoSalePriceFromCost, suggestWholesalePriceFromCost } from '@/lib/sale-price-calculator'
 import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock' | 'valuation'
@@ -293,8 +293,16 @@ function InventoryContent() {
   }
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('All')
-  const [catalogSearch, setCatalogSearch] = useState('')
-  const [catalogCatFilter, setCatalogCatFilter] = useState('All')
+  const patchInventoryUi = useUrlUiPatch()
+  const [catalogSearch, setCatalogSearchValue] = useUrlUiState('catalogQ', '')
+  const [catalogCatFilter, setCatalogCatFilterValue] = useUrlUiState('category', 'All')
+  const [catalogPageValue, setCatalogPageValue] = useUrlUiState('page', '1')
+  const catalogPage = Math.max(1, Number.parseInt(catalogPageValue, 10) || 1)
+  const setCatalogSearch = (value: string) =>
+    setCatalogSearchValue(value, { queryPatch: { page: null } })
+  const setCatalogCatFilter = (value: string) =>
+    setCatalogCatFilterValue(value, { queryPatch: { page: null } })
+  const setCatalogPage = (value: number) => setCatalogPageValue(String(Math.max(1, value)))
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
   const [reportProductId, setReportProductId] = useState('All')
   const [serialLookupQuery, setSerialLookupQuery] = useState('')
@@ -344,8 +352,9 @@ function InventoryContent() {
   const [showNewRefurb, setShowNewRefurb] = useState(false)
   const [refurbSerial, setRefurbSerial] = useState<{ id: string; serial: string; productName: string } | null>(null)
   const [refurbIssueDesc, setRefurbIssueDesc] = useState('')
-  const [warehouseSearchDraft, setWarehouseSearchDraft] = useState('')
-  const [warehouseSearch, setWarehouseSearch] = useState('')
+  const [warehouseSearch, setWarehouseSearch] = useUrlUiState('warehouseQ', '')
+  const [warehouseSearchDraft, setWarehouseSearchDraft] = useState(warehouseSearch)
+  useEffect(() => { setWarehouseSearchDraft(warehouseSearch) }, [warehouseSearch])
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string
     message: string
@@ -2094,7 +2103,7 @@ function InventoryContent() {
                           label: 'in stock',
                           value: catalogProducts.length,
                           tone: 'success',
-                          onClick: () => { setCatalogSearch(''); setCatalogCatFilter('All') },
+                          onClick: () => patchInventoryUi({ catalogQ: null, category: null, page: null }),
                         },
                         {
                           id: 'pending',
@@ -2122,8 +2131,10 @@ function InventoryContent() {
                     onSearchChange={setCatalogSearch}
                     searchPlaceholder="Search product, SKU or barcode…"
                     clientSearch={false}
+                    page={catalogPage}
+                    onPageChange={setCatalogPage}
                     primaryFilters={catalogPrimaryFilters}
-                    onClearFilters={() => { setCatalogSearch(''); setCatalogCatFilter('All') }}
+                    onClearFilters={() => patchInventoryUi({ catalogQ: null, category: null, page: null })}
                     hideColumnFilters
                     emptyMessage={
                       catalogSearch || catalogCatFilter !== 'All'
