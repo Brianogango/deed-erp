@@ -17,6 +17,7 @@ import {
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
+import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -169,9 +170,30 @@ function ExpensesContent() {
     }
   }, [searchParams, tab, canReviewExpenses, defaultTab, router, pathname])
 
-  // ── Review filters ──
-  const [reviewStatus, setReviewStatus] = useState<Expense['status'] | 'all'>('submitted')
-  const [reviewUser,   setReviewUser]   = useState('all')
+  // ── List state ──
+  const patchExpenseUi = useUrlUiPatch()
+
+  const [mineSearch, setMineSearch] = useUrlUiState('mineQ', '')
+  const [minePageValue, setMinePageValue] = useUrlUiState('minePage', '1')
+  const minePage = Math.max(1, Number.parseInt(minePageValue, 10) || 1)
+  const setMinePage = (page: number) => setMinePageValue(String(Math.max(1, page)))
+
+  const [reviewSearch, setReviewSearch] = useUrlUiState('reviewQ', '')
+  const [reviewPageValue, setReviewPageValue] = useUrlUiState('reviewPage', '1')
+  const reviewPage = Math.max(1, Number.parseInt(reviewPageValue, 10) || 1)
+  const setReviewPage = (page: number) => setReviewPageValue(String(Math.max(1, page)))
+
+  const [reviewStatusValue, setReviewStatusValue] = useUrlUiState('status', 'submitted')
+  const reviewStatus: Expense['status'] | 'all' =
+    ['all', 'submitted', 'approved', 'rejected', 'paid', 'reimbursed'].includes(reviewStatusValue)
+      ? reviewStatusValue as Expense['status'] | 'all'
+      : 'submitted'
+  const setReviewStatus = (value: Expense['status'] | 'all') =>
+    setReviewStatusValue(value, { queryPatch: { reviewPage: null } })
+
+  const [reviewUser, setReviewUserValue] = useUrlUiState('staff', 'all')
+  const setReviewUser = (value: string) =>
+    setReviewUserValue(value, { queryPatch: { reviewPage: null } })
 
   const uniqueSubmitters: [string, string][] = canReviewExpenses
     ? Array.from(new Map(expenses.map(e => [e.submittedByUserId, e.submittedByName] as [string, string])))
@@ -297,22 +319,8 @@ function ExpensesContent() {
   }
 
   // ── Review modal ──
-  const queryId = searchParams.get('id')
-  const [reviewingId, setLocalReviewingId] = useState<string | null>(queryId ?? null)
+  const [reviewingId, setReviewingId] = useUrlRecordId()
   const [reviewNotes, setReviewNotes] = useState('')
-
-  const setReviewingId = (id: string | null) => {
-    setLocalReviewingId(id)
-    const params = new URLSearchParams(searchParams.toString())
-    if (id) params.set('id', id)
-    else params.delete('id')
-    router.push(`${pathname}?${params.toString()}`, { scroll: false })
-  }
-
-  useEffect(() => {
-    const urlId = searchParams.get('id')
-    if (urlId !== reviewingId) setLocalReviewingId(urlId)
-  }, [searchParams, reviewingId])
 
   const [reimbursingId, setReimbursingId] = useState<string | null>(null)
   const [reimburseNote, setReimburseNote] = useState('')
@@ -411,6 +419,10 @@ function ExpensesContent() {
             rows={myExpenses}
             showSubmitter={false}
             emptyMessage='No expenses submitted yet. Click "+ New Expense" to get started.'
+            searchValue={mineSearch}
+            onSearchChange={setMineSearch}
+            page={minePage}
+            onPageChange={setMinePage}
             onPreview={openReceiptPreview}
             onView={e => setReviewingId(e.id)}
           />
@@ -426,6 +438,10 @@ function ExpensesContent() {
             showSubmitter
             emptyMessage="No expenses match the filter."
             searchPlaceholder="Search reference or description…"
+            searchValue={reviewSearch}
+            onSearchChange={setReviewSearch}
+            page={reviewPage}
+            onPageChange={setReviewPage}
             primaryFilters={[
               {
                 key: 'status',
@@ -454,10 +470,7 @@ function ExpensesContent() {
                 onChange: setReviewUser,
               },
             ]}
-            onClearFilters={() => {
-              setReviewStatus('all')
-              setReviewUser('all')
-            }}
+            onClearFilters={() => patchExpenseUi({ status: 'all', staff: null, reviewPage: null })}
             onPreview={openReceiptPreview}
             onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
             onReimburse={e => {
@@ -916,6 +929,10 @@ function ExpenseTable({
   showSubmitter,
   emptyMessage,
   searchPlaceholder,
+  searchValue,
+  onSearchChange,
+  page,
+  onPageChange,
   primaryFilters,
   onClearFilters,
   onPreview,
@@ -927,6 +944,10 @@ function ExpenseTable({
   showSubmitter: boolean
   emptyMessage?: string
   searchPlaceholder?: string
+  searchValue?: string
+  onSearchChange?: (value: string) => void
+  page?: number
+  onPageChange?: (page: number) => void
   primaryFilters?: PrimaryFilterConfig[]
   onClearFilters?: () => void
   onPreview: (e: Expense) => void
@@ -1064,7 +1085,11 @@ function ExpenseTable({
       rows={rows}
       rowKey={exp => exp.id}
       emptyMessage={emptyMessage ?? 'No expenses found'}
+      searchValue={searchValue}
+      onSearchChange={onSearchChange}
       searchPlaceholder={searchPlaceholder ?? 'Search reference or description…'}
+      page={page}
+      onPageChange={onPageChange}
       primaryFilters={primaryFilters}
       onClearFilters={onClearFilters}
       hideColumnFilters={Boolean(primaryFilters?.length)}
