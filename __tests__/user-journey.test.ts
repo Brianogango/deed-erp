@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { isTerminalJourneyState, linkedDocumentCta, nextActionLabel } from '@/lib/user-journey'
+import {
+  actionableSelectionCount,
+  isTerminalJourneyState,
+  linkedDocumentCta,
+  nextActionLabel,
+  shouldExposeProgressionAction,
+} from '@/lib/user-journey'
 
 describe('linkedDocumentCta', () => {
   it('creates only when the linked document does not exist and creation is allowed', () => {
@@ -37,5 +43,18 @@ describe('isTerminalJourneyState', () => {
     for (const status of ['draft', 'sent', 'confirmed', 'ready', 'invoiced', 'partial']) {
       expect(isTerminalJourneyState(status)).toBe(false)
     }
+  })
+})
+
+describe('journey action guards', () => {
+  it('counts only actionable rows for bulk actions', () => {
+    const rows = [{ status: 'draft' }, { status: 'received' }, { status: 'sent' }]
+    expect(actionableSelectionCount(rows, row => ['draft', 'sent'].includes(row.status))).toBe(2)
+  })
+
+  it('never exposes progression from terminal states', () => {
+    expect(shouldExposeProgressionAction({ status: 'closed', allowedStatuses: ['ready', 'closed'] })).toBe(false)
+    expect(shouldExposeProgressionAction({ status: 'ready', allowedStatuses: ['ready', 'invoiced'] })).toBe(true)
+    expect(shouldExposeProgressionAction({ status: 'draft', allowedStatuses: ['ready', 'invoiced'] })).toBe(false)
   })
 })
