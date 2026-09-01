@@ -101,7 +101,13 @@ let _mirrorPendingRerun = false
  */
 export async function loadRepairsFromPrisma(): Promise<any[] | null> {
   try {
-    const rows = await prisma.repair.findMany({ select: { payload: true } })
+    // Deterministic order: an unordered findMany returns rows in physical
+    // order, which changes every time the mirror updates a row — the visible
+    // list then re-sorted itself mid-click whenever a poll re-hydrated.
+    const rows = await prisma.repair.findMany({
+      select: { payload: true },
+      orderBy: [{ intakeDate: 'desc' }, { jobNumber: 'desc' }],
+    })
     const withPayload = rows.filter(r => r.payload && typeof r.payload === 'object')
     if (!withPayload.length) return null
     return withPayload.map(r => r.payload)
