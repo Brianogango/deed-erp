@@ -8,7 +8,7 @@ import { Confirm, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa, faBoxOpen, faCreditCard, faMoneyBillWave, faPlus } from '@/components/icons'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<DepositStatus, { label: string; badgeStatus: string }> = {
@@ -535,8 +535,18 @@ function DepositsContent() {
   const mounted = useMounted()
   const { showToast, deposits, completeDeposit, cancelDeposit } = useFinanceStore()
 
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<DepositStatus | 'all'>('all')
+  const patchListUi = useUrlUiPatch()
+  const [search, setSearchValue] = useUrlUiState('q', '')
+  const setSearch = (value: string) => setSearchValue(value, { queryPatch: { page: null } })
+  const [statusValue, setStatusValue] = useUrlUiState('status', 'all')
+  const statusFilter: DepositStatus | 'all' =
+    ['active', 'partially_paid', 'fully_paid', 'completed', 'cancelled'].includes(statusValue)
+      ? statusValue as DepositStatus
+      : 'all'
+  const setStatusFilter = (value: DepositStatus | 'all') => setStatusValue(value, { queryPatch: { page: null } })
+  const [pageValue, setPageValue] = useUrlUiState('page', '1')
+  const page = Math.max(1, Number.parseInt(pageValue, 10) || 1)
+  const setPage = (value: number) => setPageValue(String(Math.max(1, value)))
   const [activeId, setActiveId] = useUrlRecordId()
   const [showNew, setShowNew] = useState(false)
   const [addPaymentFor, setAddPaymentFor] = useState<Deposit | null>(null)
@@ -772,8 +782,10 @@ function DepositsContent() {
           onSearchChange={setSearch}
           searchPlaceholder="Search deposits by reference or customer..."
           clientSearch={false}
+          page={page}
+          onPageChange={setPage}
           primaryFilters={depositPrimaryFilters}
-          onClearFilters={() => { setSearch(''); setStatusFilter('all') }}
+          onClearFilters={() => patchListUi({ q: null, status: null, page: null })}
           hideColumnFilters
           emptyMessage={search || statusFilter !== 'all' ? 'No matching deposits' : 'No deposits yet'}
           emptyAction={!search && statusFilter === 'all' ? (
