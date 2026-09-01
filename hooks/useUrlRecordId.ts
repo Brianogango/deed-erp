@@ -14,13 +14,15 @@ type Options = {
 
 export type SetUrlRecordIdOptions = {
   /**
-   * Merge into the URL in the same replace as the id change.
+   * Merge into the URL in the same navigation as the id change.
    * `null` deletes the key. Use this so a clear cannot clobber a concurrent
    * tab switch that already updated local state but not searchParams yet.
    */
   queryPatch?: Record<string, string | null>
-  /** Skip router.replace — only update local state (URL already correct). */
+  /** Skip router navigation — only update local state (URL already correct). */
   localOnly?: boolean
+  /** User navigation should normally push; use replace only for canonicalization/repair. */
+  history?: 'push' | 'replace'
 }
 
 /**
@@ -73,8 +75,10 @@ export function useUrlRecordId(options: Options = {}) {
       }
     }
     const qs = params.toString()
+    const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+      if (opts?.history === 'replace') router.replace(href, { scroll: false })
+      else router.push(href, { scroll: false })
     })
   }, [searchParams, router, pathname, param, options.whenOpen, options.clearKeys])
 
@@ -113,13 +117,15 @@ export function useUrlQueryState(param: string, fallback: string) {
   const queryValue = searchParams.get(param) ?? fallback
   const [value, setLocalValue] = useState(queryValue)
 
-  const setValue = useCallback((next: string) => {
+  const setValue = useCallback((next: string, opts?: { history?: 'push' | 'replace' }) => {
     setLocalValue(next)
     const params = new URLSearchParams(searchParams.toString())
     params.set(param, next)
     const qs = params.toString()
+    const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+      if (opts?.history === 'replace') router.replace(href, { scroll: false })
+      else router.push(href, { scroll: false })
     })
   }, [searchParams, router, pathname, param])
 

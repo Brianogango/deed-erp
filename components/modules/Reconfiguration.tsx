@@ -26,6 +26,7 @@ import { partCapacityGb } from '@/lib/reconfiguration/product-effect'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { UNIT_CONFIG_SOURCE_LABEL, type UnitConfigSource } from '@/lib/reconfiguration/unit-config'
 import SearchablePick from '@/components/reconfiguration/SearchablePick'
+import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 
 type WorkOrderListItem = {
   id: string
@@ -99,11 +100,16 @@ export default function Reconfiguration() {
   const currentUser = users.find(u => u.id === currentUserId)
   const role = currentUser?.role ?? ''
 
-  const [tab, setTab] = useState<'orders' | 'new' | 'detail'>('orders')
+  const [tabValue, setTabValue] = useUrlQueryState('tab', 'orders')
   const [orders, setOrders] = useState<WorkOrderListItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<any>(null)
+  const tab: 'orders' | 'new' | 'detail' =
+    tabValue === 'new' ? 'new' : tabValue === 'detail' && detail ? 'detail' : 'orders'
+  const setTab = useCallback((next: 'orders' | 'new' | 'detail') => {
+    setTabValue(next)
+  }, [setTabValue])
 
   const [statusFilter, setStatusFilter] = useState('')
   const [q, setQ] = useState('')
@@ -165,7 +171,7 @@ export default function Reconfiguration() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [setTab])
 
   useEffect(() => {
     if (enabled && tab === 'orders') void loadOrders()

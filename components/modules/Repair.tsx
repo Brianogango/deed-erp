@@ -27,7 +27,7 @@ import { ModuleHeader, ModuleSkeleton, TabBar, useMounted } from '@/components/u
 import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faPlus, faTools } from '@fortawesome/free-solid-svg-icons'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { isOpenRepairJob } from '@/lib/repair-progress'
 import { repairModuleView } from '@/lib/repair-workspace-view'
 
@@ -145,7 +145,11 @@ function RepairInner() {
     if (nextView === 'list') setActiveId(null)
   }, [setActiveId])
   const [filter, setFilter] = useState('all')
-  const [mainTab, setMainTab] = useState('client')
+  const [mainTabValue, setMainTabValue] = useUrlQueryState('tab', 'client')
+  const mainTab = mainTabValue === 'refurb' ? 'refurb' : 'client'
+  const setMainTab = useCallback((nextTab) => {
+    setMainTabValue(nextTab === 'refurb' ? 'refurb' : 'client')
+  }, [setMainTabValue])
   
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [showDiagnosisModal, setShowDiagnosisModal] = useState(false)

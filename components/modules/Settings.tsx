@@ -27,6 +27,7 @@ import {
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { compressCompanyLogoDataUrl } from '@/lib/pdf-logo'
 import { resolveSettingsSection } from '@/lib/dashboard-priority'
+import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 type Section =
   | 'general' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
@@ -142,11 +143,21 @@ export default function Settings() {
 
   // Deep links (?tab= / ?section=) land on the right section — e.g. the
   // dashboard's Active Users card links to /settings?tab=users → 'access'.
-  const [section, setSection] = useState<Section>(() => {
-    if (typeof window === 'undefined') return 'general'
+  // User section changes are URL-backed and PUSH history so browser Back returns
+  // to the immediately previous Settings section instead of leaving the module.
+  const initialSection = (() => {
+    if (typeof window === 'undefined') return 'general' as Section
     const params = new URLSearchParams(window.location.search)
     return resolveSettingsSection(params.get('tab') ?? params.get('section')) as Section
-  })
+  })()
+  const [sectionValue, setSectionValue] = useUrlQueryState('section', initialSection)
+  const section = resolveSettingsSection(sectionValue) as Section
+  const setSection = useCallback((
+    next: Section,
+    opts?: { history?: 'push' | 'replace' },
+  ) => {
+    setSectionValue(next, opts)
+  }, [setSectionValue])
 
   const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
   const [editingBankId, setEditingBankId] = useState<string | null>(null)
@@ -230,9 +241,9 @@ export default function Settings() {
   const canManageNotifications = ['director', 'admin_officer'].includes(normalizedRole)
 
   useEffect(() => {
-    if (section === 'access' && !canManageSystemUsers) setSection('general')
-    if (section === 'banks' && !canManageBanks) setSection('general')
-  }, [section, canManageSystemUsers, canManageBanks])
+    if (section === 'access' && !canManageSystemUsers) setSection('general', { history: 'replace' })
+    if (section === 'banks' && !canManageBanks) setSection('general', { history: 'replace' })
+  }, [section, canManageSystemUsers, canManageBanks, setSection])
 
   const openAddBank = () => {
     if (!canManageBanks) {

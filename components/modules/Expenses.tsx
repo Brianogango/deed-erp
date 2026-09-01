@@ -153,7 +153,7 @@ function ExpensesContent() {
     setLocalTab(newTab)
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', newTab)
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   useEffect(() => {
@@ -306,7 +306,7 @@ function ExpensesContent() {
     const params = new URLSearchParams(searchParams.toString())
     if (id) params.set('id', id)
     else params.delete('id')
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   useEffect(() => {

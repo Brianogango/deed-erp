@@ -17,7 +17,7 @@ import {
   faPen, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
   faCashRegister, faInbox, faFileArrowDown, faCheck, faTriangleExclamation, faXmark,
 } from '@/components/icons'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 import {
   creditBalancesByCustomer,
   creditsForCustomer,
@@ -165,19 +165,30 @@ function ContactsInner() {
   const { contacts, addContact,
     saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
-  const [tab, setTab] = useState<FilterTab>('all')
+  const [tabValue, setTabValue] = useUrlQueryState('tab', 'all')
+  const tab: FilterTab = ['all', 'companies', 'individuals', 'customers', 'vendors'].includes(tabValue)
+    ? tabValue as FilterTab
+    : 'all'
+  const setTab = (next: FilterTab) => setTabValue(next)
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importRows, setImportRows] = useState<ImportContactRow[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editId, setEditId] = useState<string | null>(null)
-  const [viewContactId, setViewContactId] = useUrlRecordId()
+  const [viewContactId, setViewContactId] = useUrlRecordId({ clearKeys: ['contactTab'] })
   const viewContact = viewContactId ? contacts.find(c => c.id === viewContactId) ?? null : null
-  const setViewContact = (c: Contact | null) => setViewContactId(c?.id ?? null)
+  const setViewContact = (c: Contact | null) => setViewContactId(
+    c?.id ?? null,
+    c ? { queryPatch: { contactTab: 'info' } } : undefined,
+  )
   const [formDraft, setFormDraft] = useState<ContactFormValues>(blankCompanyContact())
   const [formKey, setFormKey] = useState(0)
-  const [viewTab, setViewTab] = useState<ViewTab>('info')
+  const [viewTabValue, setViewTabValue] = useUrlQueryState('contactTab', 'info')
+  const viewTab: ViewTab = ['info', 'financial', 'persons', 'history', 'chatter'].includes(viewTabValue)
+    ? viewTabValue as ViewTab
+    : 'info'
+  const setViewTab = (next: ViewTab) => setViewTabValue(next)
 
   const [showArchived, setShowArchived] = useState(false)
   const filtered = contacts.filter(c => {
@@ -423,7 +434,7 @@ function ContactsInner() {
       ? (c.tradingName ? `Trading as ${c.tradingName}` : 'Company')
       : [c.jobTitle, company?.name].filter(Boolean).join(' · ') || 'Individual'
     return (
-      <article key={c.id} className="contacts-mobile-card" onClick={() => { setViewContact(c); setViewTab('info') }}>
+      <article key={c.id} className="contacts-mobile-card" onClick={() => { setViewContact(c) }}>
         <div className="contacts-mobile-card__header">
           <span className="contacts-avatar" aria-hidden="true">{contactInitials(c.name)}</span>
           <div className="contacts-mobile-card__identity">
@@ -513,7 +524,7 @@ function ContactsInner() {
           rowKey={c => c.id}
           hideSearch
           emptyMessage="No contacts found"
-          onRowClick={c => { setViewContact(c); setViewTab('info') }}
+          onRowClick={c => { setViewContact(c) }}
           rowActions={contactRowActions}
           renderCard={contactCard}
           exportTitle="Contacts"
@@ -673,7 +684,7 @@ function ContactsInner() {
                     {vc.type === 'individual' && <><dt>ID / Passport</dt><dd className="font-mono">{vc.idNumber || '—'}</dd></>}
                     {vc.type === 'individual' && <><dt>Job title</dt><dd>{vc.jobTitle || '—'}</dd></>}
                     {vc.type === 'individual' && company && (
-                      <><dt>Company</dt><dd><button className="contacts-inline-link" onClick={() => { setViewContact(company); setViewTab('info') }}>{company.name}</button></dd></>
+                      <><dt>Company</dt><dd><button className="contacts-inline-link" onClick={() => { setViewContact(company) }}>{company.name}</button></dd></>
                     )}
                     <dt>Location</dt><dd>{[vc.city, vc.country].filter(Boolean).join(', ') || '—'}</dd>
                     <dt>Added</dt><dd>{fmtDate(vc.createdAt)}</dd>
@@ -707,7 +718,7 @@ function ContactsInner() {
                       <button className="contacts-inline-link" onClick={() => setViewTab('persons')}>View persons</button>
                     </div>
                     {persons[0] ? (
-                      <button className="contacts-primary-person" onClick={() => { setViewContact(persons[0]); setViewTab('info') }}>
+                      <button className="contacts-primary-person" onClick={() => { setViewContact(persons[0]) }}>
                         <span className="contacts-avatar contacts-avatar--sm">{contactInitials(persons[0].name)}</span>
                         <span><strong>{persons[0].name}</strong><small>{persons[0].jobTitle || 'Contact person'}</small></span>
                         <span><small>{persons[0].phone || persons[0].email || 'No contact details'}</small></span>
@@ -821,7 +832,7 @@ function ContactsInner() {
                   <div
                     key={p.id}
                     className="contacts-person-row"
-                    onClick={() => { setViewContact(p); setViewTab('info') }}
+                    onClick={() => { setViewContact(p) }}
                   >
                     <span className="contacts-avatar contacts-avatar--sm" aria-hidden="true">{contactInitials(p.name)}</span>
                     <div className="contacts-person-row__identity">
