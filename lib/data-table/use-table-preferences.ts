@@ -55,34 +55,40 @@ export function useTablePreferences(tableId: string) {
     setHydrated(true)
   }, [tableId])
 
-  const persist = useCallback((next: TablePreferences) => {
-    setPrefs(next)
-    try {
-      localStorage.setItem(storageKey(tableId), JSON.stringify(next))
-    } catch {
-      // ignore storage failures — preferences are a convenience, not a requirement
-    }
+  const persist = useCallback((update: (prev: TablePreferences) => TablePreferences) => {
+    setPrefs(prev => {
+      const next = update(prev)
+      try {
+        localStorage.setItem(storageKey(tableId), JSON.stringify(next))
+      } catch {
+        // ignore storage failures — preferences are a convenience, not a requirement
+      }
+      return next
+    })
   }, [tableId])
 
   const setVisibleColumnKeys = useCallback((keys: string[] | null) => {
-    persist({ ...prefs, visibleColumnKeys: keys })
-  }, [prefs, persist])
+    persist(prev => ({ ...prev, visibleColumnKeys: keys }))
+  }, [persist])
 
   const setDensity = useCallback((density: 'cozy' | 'compact') => {
-    persist({ ...prefs, density })
-  }, [prefs, persist])
+    persist(prev => ({ ...prev, density }))
+  }, [persist])
 
   const setSort = useCallback((sort: TablePreferences['sort']) => {
-    persist({ ...prefs, sort })
-  }, [prefs, persist])
+    persist(prev => ({ ...prev, sort }))
+  }, [persist])
 
   const saveView = useCallback((view: SavedView) => {
-    persist({ ...prefs, savedViews: [...prefs.savedViews.filter(v => v.id !== view.id), view] })
-  }, [prefs, persist])
+    persist(prev => ({
+      ...prev,
+      savedViews: [...prev.savedViews.filter(v => v.id !== view.id), view],
+    }))
+  }, [persist])
 
   const deleteView = useCallback((id: string) => {
-    persist({ ...prefs, savedViews: prefs.savedViews.filter(v => v.id !== id) })
-  }, [prefs, persist])
+    persist(prev => ({ ...prev, savedViews: prev.savedViews.filter(v => v.id !== id) }))
+  }, [persist])
 
   return { prefs, hydrated, setVisibleColumnKeys, setDensity, setSort, saveView, deleteView }
 }
