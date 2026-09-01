@@ -46,12 +46,18 @@ export default function InvoiceDetail() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const listPage = parseFinanceListPage(searchParams.get('listPage') ?? searchParams.get('page'))
+  const listSearch = searchParams.get('listQ') ?? ''
+  const listFilter = searchParams.get('listFilter') ?? 'all'
   const goToDocumentList = (type?: string | null) => {
     const params = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search)
       : searchParams
     const livePage = parseFinanceListPage(params.get('listPage') ?? params.get('page'))
-    const path = financeInvoiceListPath(type, { page: livePage })
+    const path = financeInvoiceListPath(type, {
+      page: livePage,
+      search: params.get('listQ') ?? '',
+      filter: params.get('listFilter') ?? 'all',
+    })
     router.push(path)
   }
   const {
@@ -246,7 +252,11 @@ export default function InvoiceDetail() {
   }
 
   const docLabel = invoice.type === 'customer_invoice' ? 'Invoice' : 'Bill'
-  const documentListPath = financeInvoiceListPath(invoice.type, { page: listPage })
+  const documentListPath = financeInvoiceListPath(invoice.type, {
+    page: listPage,
+    search: listSearch,
+    filter: listFilter,
+  })
   const balance = Math.max(0, invoice.total - invoice.amountPaid)
   const pct = invoice.total > 0 ? Math.min(100, (invoice.amountPaid / invoice.total) * 100) : 0
   // Odoo semantics: document state + separately computed payment status.
