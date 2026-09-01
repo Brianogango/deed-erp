@@ -9,12 +9,12 @@ import { Fa } from '@/components/icons'
 import {
   faArrowLeft, faMicrochip, faCircleExclamation, faCamera, faImage,
   faPlay, faLink, faExternalLinkAlt, faUserCheck, faUserPlus,
-  faFileInvoiceDollar, faCalendarAlt, faTrash, faUpload, faSync,
+  faFileInvoiceDollar, faTrash, faUpload, faSync,
   faExpand, faTools, faCheckCircle, faHistory,
   faClipboardList, faQuoteRight, faStethoscope, faWrench,
   faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle,
   faClock, faStar, faArrowRight, faCartPlus, faBan, faShieldAlt,
-  faTruck, faPrint, faPen, faUndo,
+  faTruck, faUndo,
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -870,7 +870,23 @@ export default function RepairDetailView() {
 
             {/* Reported Issue */}
             <SectionCard delay={130}>
-              <SectionHeader icon={faCircleExclamation} iconBg="bg-amber-500" title="Reported Issue" subtitle="Customer's description" />
+              <SectionHeader
+                icon={faCircleExclamation}
+                iconBg="bg-amber-500"
+                title="Reported Issue"
+                subtitle="Customer's description"
+                action={
+                  <SecondaryActionMenu
+                    label="Issue"
+                    ariaLabel="Issue assessment actions"
+                    mobilePresentation="anchored"
+                    actions={[
+                      { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
+                      { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')) },
+                    ]}
+                  />
+                }
+              />
               <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
                 <div className="bg-[var(--bg-surface)] rounded-xl p-4 sm:p-5 border border-[var(--border)]">
                   <Fa icon={faClipboardList} className="text-amber-500 text-base mb-2.5" />
@@ -979,8 +995,6 @@ export default function RepairDetailView() {
                         mobilePresentation="anchored"
                         actions={[
                           { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
-                          { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
-                          { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')) },
                         ]}
                       />
                     </div>
