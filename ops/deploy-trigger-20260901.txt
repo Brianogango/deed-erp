@@ -1,1 +1,2 @@
 Deployment trigger for merged PRs #584 and #585.
+Requested again on 2026-09-01 after merge verification.
