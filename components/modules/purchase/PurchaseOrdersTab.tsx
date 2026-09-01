@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo } from 'react'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import { usePurchase } from './PurchaseContext'
 import { PanelHeader, RecordCard } from '@/components/ui'
 import { StatusBadge } from '@/components/erp'
@@ -56,8 +57,15 @@ export default function PurchaseOrdersTab() {
   } = usePurchase()
   const canManageProcurement = CAN_MANAGE_PROCUREMENT_ROLES.includes(currentUser?.role ?? '')
   const savedViewKey = 'deed_po_saved_view'
+  const [search, setSearchValue] = useUrlUiState('q', '')
+  const [pageValue, setPageValue] = useUrlUiState('page', '1')
+  const currentPage = Math.max(1, Number.parseInt(pageValue, 10) || 1)
+  const setSearch = (value: string) => setSearchValue(value, { queryPatch: { page: null } })
+  const setPage = (page: number) => setPageValue(String(Math.max(1, page)))
 
   useEffect(() => {
+    // A URL/deep-link selection wins over the user's local saved view.
+    if (typeFilter !== 'all' || statusFilter !== 'all') return
     try {
       const stored = localStorage.getItem(savedViewKey)
       if (!stored) return
@@ -81,7 +89,7 @@ export default function PurchaseOrdersTab() {
     } catch {
       // ignore storage failures
     }
-  }, [setTypeFilter, setStatusFilter])
+  }, [setTypeFilter, setStatusFilter, typeFilter, statusFilter])
 
   useEffect(() => {
     try {
@@ -205,7 +213,11 @@ export default function PurchaseOrdersTab() {
         columns={columns}
         rows={filteredPOs}
         rowKey={po => po.id}
+        searchValue={search}
+        onSearchChange={setSearch}
         searchPlaceholder="Search purchase orders by ref or vendor..."
+        page={currentPage}
+        onPageChange={setPage}
         primaryFilters={primaryFilters}
         onClearFilters={() => { setTypeFilter('all'); setStatusFilter('all') }}
         hideColumnFilters
