@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { FormField, WorkflowStageBar } from '@/components/erp'
 import '@/components/sales-prototype/sales-prototype.css'
 import '@/components/modules/odoo-record-designs.css'
 
@@ -84,23 +85,25 @@ export function SalesDocTotals({
 
 export function SalesDocWorkflow({
   steps,
+  blocker,
 }: {
   steps: Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>
+  blocker?: string | null
 }) {
+  const current = steps.find(step => step.state === 'current')?.key
+    ?? [...steps].reverse().find(step => step.state === 'done')?.key
+    ?? steps[0]?.key
+    ?? ''
+
+  if (!steps.length) return null
+
   return (
-    <div className="sp-workflow" role="list" aria-label="Sales workflow progress">
-      {steps.map(step => (
-        <div
-          key={step.key}
-          className="sp-workflow-step"
-          role="listitem"
-          data-state={step.state}
-          aria-current={step.state === 'current' ? 'step' : undefined}
-        >
-          {step.label}
-        </div>
-      ))}
-    </div>
+    <WorkflowStageBar
+      stages={steps.map(step => ({ id: step.key, label: step.label }))}
+      current={current}
+      blocker={blocker}
+      className="sales-workflow-stagebar"
+    />
   )
 }
 
@@ -114,10 +117,9 @@ export function SalesDocField({
   htmlFor?: string
 }) {
   return (
-    <div className="sp-field">
-      {htmlFor ? <label htmlFor={htmlFor}>{label}</label> : <label>{label}</label>}
+    <FormField label={label} htmlFor={htmlFor} className="sp-field">
       {children}
-    </div>
+    </FormField>
   )
 }
 

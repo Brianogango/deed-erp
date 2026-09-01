@@ -1,6 +1,7 @@
 'use client'
 import { usePurchase } from './PurchaseContext'
-import { Badge, PanelHeader, RecordCard } from '@/components/ui'
+import { PanelHeader, RecordCard } from '@/components/ui'
+import { EmptyState, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { LOCATIONS, type Receipt } from '@/lib/store'
 import { receiptSearchBlob, receiptSerialCount } from '@/lib/purchase/receipt-contents'
@@ -8,6 +9,9 @@ import { receiptSearchBlob, receiptSerialCount } from '@/lib/purchase/receipt-co
 export default function PurchaseReceiptsTab() {
   const { receipts, fmtDate, openReceiptDetail } = usePurchase()
   const rows = [...receipts].reverse()
+
+  const receiptStatus = (r: Receipt) => r.status === 'validated' ? 'done' : 'pending'
+  const receiptStatusLabel = (r: Receipt) => r.status === 'validated' ? 'Done' : 'Pending'
 
   const columns: ColumnDef<Receipt>[] = [
     {
@@ -23,7 +27,7 @@ export default function PurchaseReceiptsTab() {
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '100px',
-      render: r => <Badge status={r.status === 'validated' ? 'active' : 'pending'} label={r.status === 'validated' ? '✓ Done' : 'Pending'} />,
+      render: r => <StatusBadge status={receiptStatus(r)} label={receiptStatusLabel(r)} />,
       exportValue: r => r.status,
     },
     {
@@ -66,35 +70,43 @@ export default function PurchaseReceiptsTab() {
   return (
     <div className="card overflow-hidden purchase-directory purchase-receipts-panel">
       <PanelHeader title="Goods Receipts (GRN)" count={receipts.length} />
-      <DataTable
-        tableId="purchase_receipts"
-        columns={columns}
-        rows={rows}
-        rowKey={r => r.id}
-        emptyMessage="No GRNs yet"
-        searchPlaceholder="Search receipts by ref, vendor, product, or serial…"
-        onRowClick={r => openReceiptDetail(r.id, 'list')}
-        rowActions={rowActions}
-        renderCard={r => (
-          <RecordCard
-            key={r.id}
-            eyebrow={r.ref}
-            title={r.vendorName}
-            subtitle={`PO ${r.poRef}${receiptSerialCount(r) ? ` · ${receiptSerialCount(r)} serials` : ''}`}
-            status={<Badge status={r.status === 'validated' ? 'active' : 'pending'} label={r.status === 'validated' ? 'Done' : 'Pending'} size="xs" />}
-            accent={r.status === 'validated' ? 'var(--success)' : 'var(--warning)'}
-            meta={[
-              { label: 'Date', value: fmtDate(r.date) },
-              { label: 'Location', value: `${LOCATIONS[r.destinationLocation].icon} ${LOCATIONS[r.destinationLocation].name}` },
-              { label: 'Serials', value: receiptSerialCount(r) || 'None' },
-            ]}
-            actions={rowActions(r)}
-            onClick={() => openReceiptDetail(r.id, 'list')}
-          />
-        )}
-        exportTitle="Goods Receipts"
-        exportFilename="goods-receipts"
-      />
+      {rows.length === 0 ? (
+        <EmptyState
+          title="No goods receipts yet"
+          description="Validated purchase receipts will appear here with their PO, destination, products and serial details. Create or confirm a purchase order before receiving stock."
+          className="m-4"
+        />
+      ) : (
+        <DataTable
+          tableId="purchase_receipts"
+          columns={columns}
+          rows={rows}
+          rowKey={r => r.id}
+          emptyMessage="No receipts match the current search or filters"
+          searchPlaceholder="Search receipts by ref, vendor, product, or serial…"
+          onRowClick={r => openReceiptDetail(r.id, 'list')}
+          rowActions={rowActions}
+          renderCard={r => (
+            <RecordCard
+              key={r.id}
+              eyebrow={r.ref}
+              title={r.vendorName}
+              subtitle={`PO ${r.poRef}${receiptSerialCount(r) ? ` · ${receiptSerialCount(r)} serials` : ''}`}
+              status={<StatusBadge status={receiptStatus(r)} label={receiptStatusLabel(r)} />}
+              accent={r.status === 'validated' ? 'var(--success)' : 'var(--warning)'}
+              meta={[
+                { label: 'Date', value: fmtDate(r.date) },
+                { label: 'Location', value: `${LOCATIONS[r.destinationLocation].icon} ${LOCATIONS[r.destinationLocation].name}` },
+                { label: 'Serials', value: receiptSerialCount(r) || 'None' },
+              ]}
+              actions={rowActions(r)}
+              onClick={() => openReceiptDetail(r.id, 'list')}
+            />
+          )}
+          exportTitle="Goods Receipts"
+          exportFilename="goods-receipts"
+        />
+      )}
     </div>
   )
 }

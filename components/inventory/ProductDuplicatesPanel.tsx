@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Modal } from '@/components/ui'
+import { AsyncActionButton, DestructiveAction, EmptyState, ErrorState } from '@/components/erp'
 import type { DuplicateProductGroup } from '@/lib/inventory/duplicate-products'
 
 export default function ProductDuplicatesPanel({
@@ -16,16 +17,20 @@ export default function ProductDuplicatesPanel({
   const [groups, setGroups] = useState<DuplicateProductGroup[]>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const res = await fetch('/api/products/duplicates')
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || 'Could not load duplicates')
       setGroups(Array.isArray(body.groups) ? body.groups : [])
     } catch (err) {
-      onToast(err instanceof Error ? err.message : 'Could not load duplicates', 'error')
+      const message = err instanceof Error ? err.message : 'Could not load duplicates'
+      setLoadError(message)
+      onToast(message, 'error')
     } finally {
       setLoading(false)
     }
@@ -50,6 +55,7 @@ export default function ProductDuplicatesPanel({
       await load()
     } catch (err) {
       onToast(err instanceof Error ? err.message : 'Merge failed', 'error')
+      throw err
     } finally {
       setBusy(false)
     }
@@ -70,6 +76,7 @@ export default function ProductDuplicatesPanel({
       await load()
     } catch (err) {
       onToast(err instanceof Error ? err.message : 'Merge failed', 'error')
+      throw err
     } finally {
       setBusy(false)
     }
@@ -83,14 +90,18 @@ export default function ProductDuplicatesPanel({
       footer={
         <div className="flex items-center justify-between gap-2 w-full">
           <button type="button" className="btn-secondary text-[11px]" onClick={onClose}>Close</button>
-          <button
-            type="button"
-            className="btn-primary text-[11px]"
+          <DestructiveAction
+            label="Merge all obvious duplicates"
+            confirmLabel="Merge duplicates"
+            warning="This moves linked serials, orders and photos to the selected keeper records and archives the duplicate product masters. Review the groups before continuing."
+            action={mergeAll}
             disabled={busy || groups.length === 0}
-            onClick={() => { void mergeAll() }}
-          >
-            Merge all obvious duplicates
-          </button>
+            trigger={
+              <button type="button" className="btn-primary text-[11px]" disabled={busy || groups.length === 0}>
+                Merge all obvious duplicates
+              </button>
+            }
+          />
         </div>
       }
     >
@@ -99,9 +110,20 @@ export default function ProductDuplicatesPanel({
         Serials, orders, and photos move onto the keeper; the extra master is archived.
       </p>
       {loading ? (
-        <p className="text-[12px] text-text-3 py-6">Checking the catalog…</p>
+        <div className="py-8 text-center text-[12px] text-text-3" aria-busy="true">Checking the catalog…</div>
+      ) : loadError ? (
+        <ErrorState
+          title="Could not check duplicate products"
+          description={loadError}
+          retry={() => { void load() }}
+          retryLabel="Check again"
+        />
       ) : groups.length === 0 ? (
-        <p className="text-[12px] text-text-3 py-6">No duplicate product masters found.</p>
+        <EmptyState
+          title="No duplicate product masters found"
+          description="The active catalog does not currently contain obvious duplicate names, SKUs or barcodes."
+          className="min-h-[180px]"
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {groups.map(group => (
@@ -122,14 +144,15 @@ export default function ProductDuplicatesPanel({
                       </p>
                     </div>
                     {index > 0 && (
-                      <button
-                        type="button"
+                      <AsyncActionButton
                         className="btn-secondary text-[10px] px-2.5 py-1.5 flex-shrink-0"
                         disabled={busy}
-                        onClick={() => { void mergePair(group.members[0].id, member.id) }}
+                        action={() => mergePair(group.members[0].id, member.id)}
+                        pendingLabel="Merging…"
+                        successLabel="Merged"
                       >
                         Merge into first
-                      </button>
+                      </AsyncActionButton>
                     )}
                   </li>
                 ))}
