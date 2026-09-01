@@ -1,6 +1,6 @@
 import type { NotificationChannel } from './types'
 
-type NotificationPauseEnv = { NOTIFICATIONS_PAUSE_EMAIL_SMS?: string }
+type NotificationPauseEnv = NodeJS.ProcessEnv | { NOTIFICATIONS_PAUSE_EMAIL_SMS?: string }
 
 /**
  * Temporary operator pause for notification-worker email and SMS.
