@@ -1,9 +1,10 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useRepair } from './repair/RepairContext'
 import { RefurbStatus, fmtDate, fmtKes } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import { StatePanel } from '@/components/ui'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   faMicrochip,
   faCalendarAlt,
@@ -26,7 +27,7 @@ const ACTIVE_COLUMNS: RefurbStatus[] = ['queued', 'assigned', 'in_progress', 're
 
 export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) => void }) {
   const { refurbishmentJobs, currentUserId, currentUser } = useRepair()
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useUrlUiState('q', '')
 
   const isLeadTech = currentUser?.role === 'technical_lead' || currentUser?.role === 'director'
   const isAdmin = currentUser?.role === 'director' || currentUser?.role === 'admin_officer'
