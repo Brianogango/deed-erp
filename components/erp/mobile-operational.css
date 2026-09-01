@@ -1,0 +1,557 @@
+/* Phase 4 mobile rework — phone-specific operational layout rules.
+ * Goal: reduce visual density, eliminate accidental padding stacks, and keep
+ * the current status + one primary action easy to reach on 320–430px screens.
+ * Desktop/tablet behaviour is intentionally untouched.
+ */
+
+@media (max-width: 767px) {
+  :root {
+    --mobile-page-gutter: 12px;
+    --mobile-section-gap: 10px;
+    --mobile-card-padding: 12px;
+    --mobile-control-height: 44px;
+    --mobile-radius: 10px;
+    --mobile-sticky-offset: 0px;
+  }
+
+  /* ── Global operational rhythm ─────────────────────────────────────── */
+  .erp-page-container,
+  .erp-table-page,
+  .mod-body,
+  .module-content,
+  .module-body {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .erp-page-container {
+    overflow-x: clip;
+  }
+
+  .erp-table-page {
+    padding: 0;
+  }
+
+  .erp-table-page-heading {
+    padding: 10px var(--mobile-page-gutter) 8px;
+  }
+
+  .erp-table-page-title {
+    font-size: 16px;
+    line-height: 1.25;
+  }
+
+  .erp-table-page-surface {
+    overflow-x: visible;
+  }
+
+  /* Remove nested-card whitespace. The page owns the gutter; cards do not
+     create a second 16–24px inset on phones. */
+  .erp-table-page-surface > .card,
+  .erp-table-page-surface > [class*='content-card'],
+  .erp-table-page-surface > [class*='directory-card'] {
+    margin-inline: var(--mobile-page-gutter) !important;
+  }
+
+  .card {
+    border-radius: var(--mobile-radius);
+    box-shadow: none !important;
+  }
+
+  /* ── Toolbars: search first, actions second, no multi-row button soup ─ */
+  .erp-page-toolbar {
+    gap: 8px !important;
+    padding: 10px var(--mobile-page-gutter) !important;
+    border-bottom: 1px solid var(--border-lt);
+    background: var(--bg-card);
+  }
+
+  .erp-page-toolbar-left,
+  .erp-page-toolbar-right {
+    gap: 8px !important;
+  }
+
+  .erp-page-toolbar-search {
+    width: 100%;
+  }
+
+  .erp-page-toolbar-search :is(input, select, button) {
+    min-height: var(--mobile-control-height);
+  }
+
+  .erp-page-toolbar-filters,
+  .erp-page-toolbar-views,
+  .erp-page-toolbar-right {
+    flex-wrap: nowrap !important;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .erp-page-toolbar-filters::-webkit-scrollbar,
+  .erp-page-toolbar-views::-webkit-scrollbar,
+  .erp-page-toolbar-right::-webkit-scrollbar {
+    display: none;
+  }
+
+  .erp-page-toolbar-filters > *,
+  .erp-page-toolbar-views > *,
+  .erp-page-toolbar-right > * {
+    flex: 0 0 auto;
+  }
+
+  .erp-page-toolbar :is(.btn-primary, .btn-secondary, .btn-outline, .erp-action-btn) {
+    min-height: 40px;
+    padding-inline: 12px;
+    white-space: nowrap;
+  }
+
+  /* ── Record headers: compact identity + one action row ─────────────── */
+  .erp-record-header {
+    padding: 8px var(--mobile-page-gutter) !important;
+    border-bottom: 1px solid var(--border-lt);
+    background: color-mix(in srgb, var(--bg-card) 96%, transparent);
+    box-shadow: none !important;
+  }
+
+  .erp-record-breadcrumbs {
+    margin-bottom: 6px;
+  }
+
+  .erp-record-header-main,
+  .erp-record-header__main {
+    gap: 8px !important;
+  }
+
+  .erp-record-header__actions,
+  .section-actions {
+    width: 100%;
+    min-width: 0;
+    gap: 6px !important;
+  }
+
+  .erp-record-title {
+    font-size: 16px !important;
+    line-height: 1.2 !important;
+  }
+
+  /* ── Fixed phone action dock ───────────────────────────────────────── */
+  .erp-mobile-action-bar {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    width: auto !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    padding: 7px !important;
+    background: color-mix(in srgb, var(--bg-card) 97%, transparent) !important;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14) !important;
+  }
+
+  .erp-mobile-action-bar__inner {
+    gap: 6px !important;
+  }
+
+  .erp-mobile-action-bar :is(button, a) {
+    width: 100%;
+    min-height: 44px !important;
+    justify-content: center;
+    padding-inline: 10px !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+  }
+
+  /* ── Dense forms become one-column sheets ──────────────────────────── */
+  .erp-record-form,
+  .form-grid,
+  .detail-grid,
+  [class*='info-grid'],
+  [class*='facts-grid'] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .form-input,
+  .form-select,
+  textarea.form-input,
+  .input,
+  select {
+    min-height: 42px;
+  }
+
+  /* ── Data tables: cards own their own horizontal behaviour ─────────── */
+  .dt-scroll,
+  .data-table-scroll,
+  .responsive-table {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dt-toolbar,
+  .data-table-toolbar {
+    gap: 8px !important;
+    padding: 10px var(--mobile-page-gutter) !important;
+  }
+
+  .dt-pagination,
+  .data-table-pagination {
+    gap: 6px !important;
+    padding: 10px var(--mobile-page-gutter) !important;
+  }
+
+  /* ── Repair detail: remove stacked chrome and surface only priority ── */
+  .repair-detail {
+    padding-bottom: 88px !important;
+  }
+
+  .repair-detail__header {
+    position: sticky;
+    top: 0;
+    padding: 8px 10px !important;
+  }
+
+  .repair-detail__header-row {
+    gap: 7px !important;
+  }
+
+  .repair-detail__identity {
+    gap: 8px !important;
+  }
+
+  .repair-detail__identity > button {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .repair-detail__identity-content {
+    gap: 5px 7px !important;
+  }
+
+  .repair-detail__mobile-meta {
+    flex-basis: 100%;
+    font-size: 11px !important;
+  }
+
+  .repair-detail__actions {
+    display: block !important;
+  }
+
+  .repair-detail__action-context {
+    display: flex;
+    max-width: 100%;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .repair-detail__action-context::-webkit-scrollbar { display: none; }
+
+  .repair-detail__action-controls {
+    display: flex !important;
+    align-items: center;
+    gap: 6px !important;
+    margin-top: 6px;
+  }
+
+  .repair-detail__primary-action {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .repair-detail__primary-action .repair-action-btn {
+    width: 100%;
+    min-height: 42px;
+    justify-content: center;
+    border-radius: 8px;
+    padding: 8px 11px;
+  }
+
+  .repair-detail__primary-action .repair-action-btn span {
+    display: inline !important;
+  }
+
+  .repair-detail__progress {
+    margin: 0 !important;
+    padding: 8px var(--mobile-page-gutter) 0 !important;
+  }
+
+  .repair-detail__summary {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1px !important;
+    margin: 8px var(--mobile-page-gutter) 0 !important;
+    overflow: hidden;
+    border: 1px solid var(--border-lt);
+    border-radius: 10px;
+    background: var(--border-lt);
+  }
+
+  .repair-detail__summary > div {
+    min-width: 0;
+    padding: 10px !important;
+    background: var(--bg-card);
+  }
+
+  .repair-detail__summary > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .repair-detail__summary span,
+  .repair-detail__summary small {
+    font-size: 9px !important;
+  }
+
+  .repair-detail__summary strong {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px !important;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .repair-detail__tabs {
+    position: sticky;
+    top: 58px;
+    z-index: 20;
+    gap: 3px !important;
+    margin-top: 8px !important;
+    padding: 6px var(--mobile-page-gutter) !important;
+    overflow-x: auto;
+    border-block: 1px solid var(--border-lt);
+    background: var(--bg-card);
+    scrollbar-width: none;
+  }
+
+  .repair-detail__tabs::-webkit-scrollbar { display: none; }
+
+  .repair-detail__tab {
+    min-height: 34px !important;
+    flex: 0 0 auto;
+    padding: 6px 10px !important;
+    border-radius: 7px !important;
+    font-size: 10px !important;
+  }
+
+  .repair-detail__body {
+    padding: 10px var(--mobile-page-gutter) 18px !important;
+  }
+
+  .repair-detail__grid,
+  .repair-detail__main,
+  .repair-detail__aside {
+    gap: var(--mobile-section-gap) !important;
+  }
+
+  .repair-detail .repair-section-card {
+    border-radius: 10px !important;
+  }
+
+  .repair-detail .repair-section-header {
+    min-height: 48px;
+    padding: 9px 10px !important;
+  }
+
+  .repair-detail .repair-section-header + div,
+  .repair-detail .repair-section-card > div:not(.repair-section-header) {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  /* ── Purchase / GRN / bill detail ──────────────────────────────────── */
+  .purchase-order-detail,
+  .purchase-receipt-detail {
+    padding-bottom: 88px;
+  }
+
+  .purchase-order-detail__header,
+  .purchase-receipt-detail__header {
+    padding: 9px var(--mobile-page-gutter) !important;
+  }
+
+  .purchase-order-detail__title-row,
+  .purchase-order-detail__identity,
+  .purchase-order-detail__actions {
+    gap: 7px !important;
+  }
+
+  .purchase-order-detail__title-row {
+    align-items: stretch !important;
+  }
+
+  .purchase-order-detail__actions {
+    width: 100%;
+  }
+
+  .purchase-order-detail__actions > .erp-action-btn,
+  .purchase-order-detail__actions > .btn-primary {
+    flex: 1;
+    min-height: 42px;
+  }
+
+  .purchase-order-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1px !important;
+    margin: 8px var(--mobile-page-gutter) !important;
+    overflow: hidden;
+    border: 1px solid var(--border-lt);
+    border-radius: 10px;
+    background: var(--border-lt);
+  }
+
+  .purchase-order-summary__item {
+    padding: 9px 10px !important;
+    background: var(--bg-card);
+  }
+
+  .purchase-order-summary__item--next {
+    grid-column: 1 / -1;
+  }
+
+  .purchase-order-detail__progress,
+  .purchase-order-detail__grid {
+    margin-inline: var(--mobile-page-gutter) !important;
+  }
+
+  .purchase-order-detail__grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .purchase-order-detail__main,
+  .purchase-order-detail__side {
+    gap: 10px !important;
+  }
+
+  .purchase-order-lines .table-head {
+    display: none !important;
+  }
+
+  .purchase-order-lines .table-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 6px 10px !important;
+    min-height: auto !important;
+    margin: 0;
+    padding: 11px !important;
+  }
+
+  .purchase-order-lines .table-row > * {
+    min-width: 0;
+  }
+
+  .purchase-order-lines .table-row > :first-child {
+    display: none;
+  }
+
+  .purchase-order-lines .table-row > :nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  /* ── Sales / accounting record detail ──────────────────────────────── */
+  .sales-workspace .erp-record-header,
+  .finance-workspace .erp-record-header,
+  .finance-invoice-detail .invoice-detail__chrome {
+    padding: 9px var(--mobile-page-gutter) !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header {
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions {
+    width: 100%;
+    gap: 6px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .finance-invoice-detail .invoice-detail__body {
+    gap: 10px !important;
+    padding: 10px var(--mobile-page-gutter) 20px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__info-grid,
+  .finance-invoice-detail .invoice-detail__kpi {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__card,
+  .finance-invoice-detail .invoice-detail__info-card,
+  .finance-invoice-detail .invoice-detail__tabs-card,
+  .finance-invoice-detail .invoice-detail__kpi-card {
+    border-radius: 10px !important;
+  }
+
+  /* ── CRM / HR / Inventory / Reconfiguration directory rhythm ──────── */
+  .crm-workspace .mod-body,
+  .hr-workspace .mod-body,
+  .inventory-workspace .mod-body,
+  .reconfiguration-workspace .mod-body,
+  .delivery-workspace .mod-body,
+  .purchase-workspace .mod-body,
+  .sales-workspace .mod-body,
+  .finance-workspace .mod-body {
+    padding-inline: 0 !important;
+  }
+
+  .crm-workspace :is(.card, [class*='panel']),
+  .hr-workspace :is(.card, [class*='panel']),
+  .inventory-workspace :is(.card, [class*='panel']),
+  .reconfiguration-workspace :is(.card, [class*='panel']),
+  .delivery-workspace :is(.card, [class*='panel']) {
+    box-shadow: none !important;
+  }
+
+  .crm-workspace .grid,
+  .hr-workspace .grid,
+  .inventory-workspace .grid,
+  .reconfiguration-workspace .grid,
+  .delivery-workspace .grid {
+    column-gap: 8px;
+    row-gap: 8px;
+  }
+
+  /* Mobile cards should read as records, not dashboard tiles. */
+  [class*='mobile-card'] {
+    border-radius: 10px !important;
+    padding: 11px !important;
+    box-shadow: none !important;
+  }
+
+  [class*='mobile-card'] + [class*='mobile-card'] {
+    margin-top: 8px;
+  }
+
+  /* Avoid clipped bottom content beneath fixed action docks. */
+  :is(.repair-detail, .purchase-order-detail, .purchase-receipt-detail, .finance-invoice-detail)[data-mobile-actions='true'] {
+    padding-bottom: 92px !important;
+  }
+}
+
+@media (max-width: 374px) {
+  :root {
+    --mobile-page-gutter: 10px;
+  }
+
+  .repair-detail__summary,
+  .purchase-order-summary {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .repair-detail__summary > div:first-child,
+  .purchase-order-summary__item--next {
+    grid-column: auto;
+  }
+
+  .erp-mobile-action-bar :is(button, a) {
+    font-size: 11px !important;
+    padding-inline: 8px !important;
+  }
+}
