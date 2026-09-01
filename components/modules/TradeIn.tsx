@@ -15,7 +15,7 @@ import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 import { StatusBadge } from '@/components/erp'
 import { Fa, faBox, faCheck, faCreditCard, faMoneyBillWave, faTrash, faUpload } from '@/components/icons'
-import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -251,7 +251,10 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
 
   const [showNew, setShowNew] = useState(false)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useUrlUiState('buybackQ', '')
+  const [buybackPageValue, setBuybackPageValue] = useUrlUiState('buybackPage', '1')
+  const buybackPage = Math.max(1, Number.parseInt(buybackPageValue, 10) || 1)
+  const setBuybackPage = (page: number) => setBuybackPageValue(String(Math.max(1, page)))
   const [customerId, setCustomerId]   = useState('')
   const [customerName, setCustomerName] = useState('')
   const [originalSORef, setOriginalSORef] = useState('')
@@ -518,6 +521,8 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
         searchValue={search}
         onSearchChange={setSearch}
         clientSearch={false}
+        page={buybackPage}
+        onPageChange={setBuybackPage}
         searchPlaceholder="Search ref, customer, repair…"
         emptyMessage={search ? 'No results.' : 'No buy-backs yet.'}
         onRowClick={bb => onOpenDetail(bb.id)}
@@ -791,7 +796,10 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const sorted = [...donations].sort((a, b) => b.date.localeCompare(a.date))
-  const [donSearch, setDonSearch] = useState('')
+  const [donSearch, setDonSearch] = useUrlUiState('donationQ', '')
+  const [donPageValue, setDonPageValue] = useUrlUiState('donationPage', '1')
+  const donPage = Math.max(1, Number.parseInt(donPageValue, 10) || 1)
+  const setDonPage = (page: number) => setDonPageValue(String(Math.max(1, page)))
   const ds = donSearch.toLowerCase()
   const displayedDon = ds ? sorted.filter(d =>
     d.ref.toLowerCase().includes(ds) ||
@@ -984,6 +992,8 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
         searchValue={donSearch}
         onSearchChange={setDonSearch}
         clientSearch={false}
+        page={donPage}
+        onPageChange={setDonPage}
         searchPlaceholder="Search ref, party…"
         emptyMessage={donSearch ? 'No results.' : 'No donations recorded.'}
         onRowClick={don => onOpenDetail(don.id)}
@@ -1239,7 +1249,10 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
     [originalSORef, saleOrders])
 
   const sorted = [...clientExchanges].sort((a, b) => b.date.localeCompare(a.date))
-  const [excSearch, setExcSearch] = useState('')
+  const [excSearch, setExcSearch] = useUrlUiState('exchangeQ', '')
+  const [excPageValue, setExcPageValue] = useUrlUiState('exchangePage', '1')
+  const excPage = Math.max(1, Number.parseInt(excPageValue, 10) || 1)
+  const setExcPage = (page: number) => setExcPageValue(String(Math.max(1, page)))
   const es = excSearch.toLowerCase()
   const displayedExc = es ? sorted.filter(e =>
     e.ref.toLowerCase().includes(es) ||
@@ -1473,6 +1486,8 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
         searchValue={excSearch}
         onSearchChange={setExcSearch}
         clientSearch={false}
+        page={excPage}
+        onPageChange={setExcPage}
         searchPlaceholder="Search ref, customer…"
         emptyMessage={excSearch ? 'No results.' : 'No exchanges yet.'}
         onRowClick={exc => onOpenDetail(exc.id)}
