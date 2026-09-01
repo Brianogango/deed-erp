@@ -17,7 +17,7 @@ import {
   faPen, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
   faCashRegister, faInbox, faFileArrowDown, faCheck, faTriangleExclamation, faXmark,
 } from '@/components/icons'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 import {
   creditBalancesByCustomer,
   creditsForCustomer,
@@ -165,19 +165,27 @@ function ContactsInner() {
   const { contacts, addContact,
     saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
-  const [tab, setTab] = useState<FilterTab>('all')
+  const [tabValue, setTabValue] = useUrlQueryState('tab', 'all')
+  const tab: FilterTab = ['all', 'companies', 'individuals', 'customers', 'vendors'].includes(tabValue)
+    ? tabValue as FilterTab
+    : 'all'
+  const setTab = (next: FilterTab) => setTabValue(next)
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importRows, setImportRows] = useState<ImportContactRow[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editId, setEditId] = useState<string | null>(null)
-  const [viewContactId, setViewContactId] = useUrlRecordId()
+  const [viewContactId, setViewContactId] = useUrlRecordId({ clearKeys: ['contactTab'] })
   const viewContact = viewContactId ? contacts.find(c => c.id === viewContactId) ?? null : null
   const setViewContact = (c: Contact | null) => setViewContactId(c?.id ?? null)
   const [formDraft, setFormDraft] = useState<ContactFormValues>(blankCompanyContact())
   const [formKey, setFormKey] = useState(0)
-  const [viewTab, setViewTab] = useState<ViewTab>('info')
+  const [viewTabValue, setViewTabValue] = useUrlQueryState('contactTab', 'info')
+  const viewTab: ViewTab = ['info', 'financial', 'persons', 'history', 'chatter'].includes(viewTabValue)
+    ? viewTabValue as ViewTab
+    : 'info'
+  const setViewTab = (next: ViewTab) => setViewTabValue(next)
 
   const [showArchived, setShowArchived] = useState(false)
   const filtered = contacts.filter(c => {
