@@ -6,6 +6,7 @@ import { Badge, PanelHeader, Field, Input, ModuleSkeleton, ModuleHeader, TabBar 
 import { Fa } from '@/components/icons'
 import { faGlobe, faBoxesStacked, faBriefcase, faChartSimple } from '@fortawesome/free-solid-svg-icons'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 
 type OnlineOrder = {
   id: string
@@ -21,7 +22,10 @@ export default function Ecommerce() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const [tab, setTab] = useState<'products' | 'orders' | 'settings'>('products')
+  const [tabValue, setTabValue] = useUrlQueryState('tab', 'products')
+  const tab: 'products' | 'orders' | 'settings' =
+    tabValue === 'orders' || tabValue === 'settings' ? tabValue : 'products'
+  const setTab = (next: 'products' | 'orders' | 'settings') => setTabValue(next)
   const [settings, setSettings] = useState({ storeName: 'Deed Technologies Online Store', currency: 'KES', taxIncluded: true, shippingFee: 500 })
   const router = useRouter()
 
