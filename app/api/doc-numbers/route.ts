@@ -15,6 +15,7 @@ const VALID_KINDS = new Set<DocKind>([
   'receipt',
   'reconfiguration',
   'pos',
+  'delivery_job',
 ])
 
 export async function POST(request: NextRequest) {

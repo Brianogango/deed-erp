@@ -33,6 +33,7 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/delivery':    { label: 'Delivery',       desc: 'Riders & delivery tracking' },
   '/repairs':     { label: 'Repairs',        desc: 'Device repairs & service jobs' },
   '/refurbishment': { label: 'Refurbishment', desc: 'Internal device refurbishing' },
+  '/reconfiguration': { label: 'Reconfiguration', desc: 'Device upgrades & component swaps' },
   '/outsource':   { label: 'Outsource',      desc: 'External repair vendors' },
   '/aftersales':  { label: 'After-Sales',    desc: 'Warranties & RMAs' },
   '/after_sales': { label: 'After-Sales',    desc: 'Warranties & RMAs' },
@@ -1292,31 +1293,12 @@ export default function Topbar() {
     }
   }, [pathname, currentUser, router, showToast])
 
-  // Tab title flashing for urgent notifications
+  // Route-aware tab title. No blinking: a title that alternates to "🚨 Action
+  // Required!" every second is always-on noise, so it taught users to ignore
+  // genuinely urgent states — the bell badge and sound carry urgency instead.
   useEffect(() => {
-    const hasUnreadUrgent = myNotifs.some(
-      n =>
-        !n.read &&
-        (n.icon === '🚨' || n.severity === 'critical')
-    )
-    const baseTitle = `${displayTitle.label} | Deed ERP`
-
-    if (!hasUnreadUrgent) {
-      document.title = baseTitle
-      return
-    }
-
-    let toggle = false
-    const intervalId = setInterval(() => {
-      document.title = toggle ? baseTitle : '🚨 Action Required!'
-      toggle = !toggle
-    }, 1000)
-
-    return () => {
-      clearInterval(intervalId)
-      document.title = baseTitle
-    }
-  }, [myNotifs, displayTitle.label])
+    document.title = `${displayTitle.label} | Deed ERP`
+  }, [displayTitle.label])
 
   // Notification sound effect
   const prevNotifIds = useRef<Set<string>>(new Set())

@@ -29,6 +29,8 @@ export type DocKind =
   | 'payment_receipt'
   | 'reconfiguration'
   | 'pos'
+  /** Delivery jobs (DJB/NNNN) — yearless like POS; jobs are blob-backed, so the atomic counter row is the uniqueness mechanism. */
+  | 'delivery_job'
 
 // Quotations exist both as CRM quotes and as quotation-state sale orders;
 // they share the QUO prefix and therefore one sequence.
@@ -46,6 +48,7 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   payment_receipt: 'RCT',
   reconfiguration: 'RCF',
   pos: 'POS',
+  delivery_job: 'DJB',
 }
 
 const PREFIX = DOC_PREFIX
@@ -181,6 +184,8 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
         }
       case 'pos':
         return maxLegacySeqFromAppStateBlob('deed_posOrders', prefix)
+      case 'delivery_job':
+        return maxLegacySeqFromAppStateBlob('deed_deliveryJobs', prefix)
       default:
         return 0
     }
@@ -198,7 +203,7 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   await ensureCounterTable()
   const now = new Date().toISOString()
   const year = new Date().getFullYear()
-  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : `${PREFIX[kind]}_${year}`
+  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : `${PREFIX[kind]}_${year}`
 
   // Fast path: counter row exists — atomic increment.
   const updated = await sql`
@@ -226,5 +231,6 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   if (!Number.isFinite(nextValue)) throw new Error(`Failed to generate ${kind} number`)
   if (kind === 'client') return `CLT-${String(nextValue).padStart(5, '0')}`
   if (kind === 'pos') return `POS/${String(nextValue).padStart(4, '0')}`
+  if (kind === 'delivery_job') return `DJB/${String(nextValue).padStart(4, '0')}`
   return `${PREFIX[kind]}/${year}/${String(nextValue).padStart(4, '0')}`
 }

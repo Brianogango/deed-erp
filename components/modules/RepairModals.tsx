@@ -951,8 +951,8 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
     riderName: ''
   })
 
-  const handleSchedule = () => {
-    scheduleDelivery(
+  const handleSchedule = async () => {
+    const scheduled = await scheduleDelivery(
       repair.id,
       deliveryForm.method,
       deliveryForm.scheduledDate,
@@ -960,7 +960,8 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
       deliveryForm.riderId || undefined,
       deliveryForm.riderName || undefined,
     )
-    onClose()
+    // Ref allocation failure already toasted — keep the modal open to retry.
+    if (scheduled !== false) onClose()
   }
 
   return (
