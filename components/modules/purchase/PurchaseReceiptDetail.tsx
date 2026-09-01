@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Badge, PanelHeader } from '@/components/ui'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
-import { EmptyState, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge, WorkflowStageBar } from '@/components/erp'
+import { EmptyState, MobileActionBar, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge, WorkflowStageBar } from '@/components/erp'
 import { Fa, faBarcode, faBox } from '@/components/icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import type { SerialLabelItem } from '@/lib/product-label-meta'
@@ -92,7 +92,7 @@ export default function PurchaseReceiptDetail() {
   )
 
   return (
-    <div className="purchase-order-detail purchase-receipt-detail">
+    <div className={`purchase-order-detail purchase-receipt-detail ${canProcess ? 'pb-24 md:pb-0' : ''}`}>
       <div className="purchase-order-detail__header">
         <RecordHeader
           title={activeReceipt.ref}
@@ -188,10 +188,7 @@ export default function PurchaseReceiptDetail() {
             {lines.map(line => {
               const prod = products.find(p => p.id === line.productId)
               return (
-                <section
-                  key={`${line.productId}-${line.productName}`}
-                  className="purchase-receipt-detail__line"
-                >
+                <section key={`${line.productId}-${line.productName}`} className="purchase-receipt-detail__line">
                   <div className="purchase-receipt-detail__line-head">
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-t1">{line.productName}</p>
@@ -234,16 +231,10 @@ export default function PurchaseReceiptDetail() {
                             </div>
                             {unit.specs && <p className="text-[11px] text-t2 mt-1">{unit.specs}</p>}
                             {unit.accessories.length > 0 && (
-                              <p className="text-[10px] text-t3 mt-1">
-                                Accessories: {unit.accessories.join(', ')}
-                              </p>
+                              <p className="text-[10px] text-t3 mt-1">Accessories: {unit.accessories.join(', ')}</p>
                             )}
-                            {unit.accessoryNotes && (
-                              <p className="text-[10px] text-t3 mt-0.5">{unit.accessoryNotes}</p>
-                            )}
-                            {unit.location && (
-                              <p className="text-[10px] text-t3 mt-0.5">{locationLabel(unit.location)}</p>
-                            )}
+                            {unit.accessoryNotes && <p className="text-[10px] text-t3 mt-0.5">{unit.accessoryNotes}</p>}
+                            {unit.location && <p className="text-[10px] text-t3 mt-0.5">{locationLabel(unit.location)}</p>}
                           </li>
                         ))}
                       </ul>
@@ -260,6 +251,22 @@ export default function PurchaseReceiptDetail() {
           </div>
         )}
       </div>
+
+      {canProcess && (
+        <MobileActionBar
+          ariaLabel="Goods receipt actions"
+          secondary={(
+            <button type="button" className="btn-outline w-full" onClick={() => { void handlePrint() }}>
+              Print labels
+            </button>
+          )}
+          primary={(
+            <PrimaryActionButton hideLabelOnMobile={false} className="w-full justify-center" onClick={() => startReceive(activeReceipt.id)}>
+              Process GRN
+            </PrimaryActionButton>
+          )}
+        />
+      )}
     </div>
   )
 }
