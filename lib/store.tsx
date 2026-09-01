@@ -11103,21 +11103,39 @@ const storeCtx: AppState = {
       serialRef.current.filter(s => s.productId === productId && (!location || s.location === location)),
       getAvailableSerials: (productId) =>
       serialRef.current.filter(s => s.productId === productId && s.status === 'available' && (s.location === 'warehouse' || s.location === 'shop')),
-    updateSerial: (id, patch, opts) => setSerials(p => {
-      const next = p.map(s => s.id === id ? { ...s, ...patch } : s)
-      const updated = next.find(s => s.id === id)
-      // Reconfiguration already persisted the serial on the server. Allow that
-      // authoritative response to refresh the client cache without issuing a
-      // second PUT built from potentially stale pre-reconfiguration fields.
-      if (updated && opts?.persist !== false) {
-        sync(`/api/serials/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated),
-        })
+    updateSerial: (id, patch, opts) => {
+      // Server-authoritative flows (notably reconfiguration completion) need
+      // to refresh the client cache without scheduling useLS's debounced
+      // app_state write back to the server. Feed the value through the same
+      // remote-update channel used by SSE; useLS marks that update as
+      // skipNextSync, so stale client fields cannot overwrite the completed
+      // server record.
+      if (opts?.persist === false && typeof window !== 'undefined') {
+        const next = serialRef.current.map(s => s.id === id ? { ...s, ...patch } : s)
+        const serialized = JSON.stringify(next)
+        try {
+          if (serialized.length <= 512 * 1024) window.localStorage.setItem('deed_serials', serialized)
+          else window.localStorage.removeItem('deed_serials')
+        } catch { /* local cache is best-effort */ }
+        window.dispatchEvent(new CustomEvent('deed_remote_update', {
+          detail: { key: 'deed_serials', value: serialized },
+        }))
+        return
       }
-      return next
-    }),
+
+      setSerials(p => {
+        const next = p.map(s => s.id === id ? { ...s, ...patch } : s)
+        const updated = next.find(s => s.id === id)
+        if (updated) {
+          sync(`/api/serials/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+          })
+        }
+        return next
+      })
+    },
 
     releaseSerialToStock: (serialId, destination = 'warehouse') => {
       const user = currentUser()
