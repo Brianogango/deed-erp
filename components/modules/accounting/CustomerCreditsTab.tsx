@@ -2,10 +2,10 @@
 
 import { useMemo } from 'react'
 import { useFinanceStore, fmtDate, fmtKes } from '@/lib/store'
-import { Badge } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCreditCard } from '@fortawesome/free-solid-svg-icons'
+import { EmptyState, StatusBadge } from '@/components/erp'
 import {
   customerCreditSourceLabel,
   customerCreditStatusLabel,
@@ -62,34 +62,42 @@ export default function CustomerCreditsTab() {
       exportValue: c => c.balance ?? 0,
     },
     {
-      key: 'status', label: 'Status', priority: 1, width: '100px',
-      render: c => <Badge status={c.status === 'available' ? 'active' : c.status === 'partially_used' ? 'warning' : c.status === 'void' ? 'cancelled' : 'draft'} label={customerCreditStatusLabel(c.status)} size="xs" />,
+      key: 'status', label: 'Status', priority: 1, width: '110px',
+      render: c => (
+        <StatusBadge
+          status={c.status === 'available' ? 'active' : c.status === 'partially_used' ? 'warning' : c.status === 'void' ? 'cancelled' : 'draft'}
+          label={customerCreditStatusLabel(c.status)}
+          size="xs"
+        />
+      ),
       accessor: c => c.status,
       exportValue: c => customerCreditStatusLabel(c.status),
     },
   ]
 
   return (
-    <div className="flex flex-col min-h-0">
-      <div className="px-4 py-3 border-b flex flex-wrap gap-6" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
+    <div className="flex min-h-0 flex-col">
+      <div className="flex flex-wrap gap-6 border-b px-4 py-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
         <div>
-          <p className="text-[10px] text-t3 mb-0.5">Open store credit</p>
-          <p className="text-base font-mono font-semibold" style={{ color: openTotal > 0 ? 'var(--success)' : 'var(--text-1)' }}>{fmtKes(openTotal)}</p>
+          <p className="mb-0.5 text-[10px] text-t3">Open store credit</p>
+          <p className="font-mono text-base font-semibold" style={{ color: openTotal > 0 ? 'var(--success)' : 'var(--text-1)' }}>{fmtKes(openTotal)}</p>
         </div>
         <div>
-          <p className="text-[10px] text-t3 mb-0.5">Clients with credit</p>
+          <p className="mb-0.5 text-[10px] text-t3">Clients with credit</p>
           <p className="text-base font-semibold text-t1">{clientsWithCredit}</p>
         </div>
-        <p className="text-[11px] text-t3 max-w-xl self-center">
+        <p className="max-w-xl self-center text-[11px] text-t3">
           Credit from buy-backs, returns, and cancelled paid invoices. Apply it on a posted unpaid invoice.
         </p>
       </div>
+
       {customerCredits.length === 0 ? (
-        <div className="py-16 text-center">
-          <Fa icon={faCreditCard} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
-          <p className="text-xs text-t3">No customer credits yet</p>
-          <p className="text-[11px] text-t4 mt-1">After-Sales buy-backs → Add as credit, or issue a credit note on a posted invoice.</p>
-        </div>
+        <EmptyState
+          title="No customer credits yet"
+          description="Credits will appear here after an After-Sales buy-back is added as credit or a credit note is issued on a posted invoice."
+          icon={<Fa icon={faCreditCard} />}
+          className="m-4"
+        />
       ) : (
         <DataTable
           tableId="customer-credits"
