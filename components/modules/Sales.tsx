@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Fragment, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { useUrlQueryState } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   faClipboardCheck,
   faCircleCheck,
@@ -397,12 +397,24 @@ function SalesContent() {
   // Keep the selected list in the URL so Back/Forward restores the exact queue.
   const [listTabValue, setListTabValue] = useUrlQueryState('tab', 'quotations')
   const listTab: 'quotations' | 'orders' = listTabValue === 'orders' ? 'orders' : 'quotations'
-  const [filter, setFilter] = useState<SalesListFilter>('all')
-  const [search, setSearch] = useState('')
-  const setFilterAndReset = (v: SalesListFilter) => { setFilter(v) }
-  const setSearchAndReset = (v: string) => { setSearch(v) }
-  const setListTabAndReset = (t: 'quotations' | 'orders') => { setListTabValue(t); setFilter('all') }
-  const [listViewMode, setListViewMode] = useState<'table' | 'kanban'>('table')
+  const [filterValue, setFilterValue] = useUrlUiState('filter', 'all')
+  const filter: SalesListFilter = [
+    'all', 'my_quotations', 'quotations', 'quotation_sent',
+    'sales_orders', 'cancelled', 'to_invoice', 'fully_invoiced',
+  ].includes(filterValue)
+    ? filterValue as SalesListFilter
+    : 'all'
+  const [search, setSearchValue] = useUrlUiState('q', '')
+  const setFilterAndReset = (v: SalesListFilter) => { setFilterValue(v) }
+  const setSearchAndReset = (v: string) => { setSearchValue(v) }
+  const setListTabAndReset = (t: 'quotations' | 'orders') => {
+    // Tab changes are navigable history; the tab-specific status filter resets
+    // atomically so Back restores the previous tab + filter combination.
+    setListTabValue(t, { queryPatch: { filter: null } })
+  }
+  const [listViewModeValue, setListViewModeValue] = useUrlUiState('layout', 'table')
+  const listViewMode: 'table' | 'kanban' = listViewModeValue === 'kanban' ? 'kanban' : 'table'
+  const setListViewMode = (next: 'table' | 'kanban') => setListViewModeValue(next)
 
   // ── New Quotation form state ────────────────────────────────────────────
   const [newCustomer, setNewCustomer] = useState<{ id: string; name: string } | null>(null)

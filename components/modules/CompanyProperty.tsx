@@ -41,7 +41,7 @@ import { PrimaryActionButton, SecondaryActionMenu, StatusBadge, RecordHeader, Co
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faChair, faPlus } from '@fortawesome/free-solid-svg-icons'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 
 type FormState = {
   name: string
@@ -390,8 +390,19 @@ export default function CompanyProperty() {
   const canManage = canManageCompanyPropertyRole(currentUser?.role)
   const canRunDepreciation = canRunCompanyAssetDepreciationRole(currentUser?.role)
 
-  const [filter, setFilter] = useState<'all' | CompanyAssetStatus>('all')
-  const [search, setSearch] = useState('')
+  const patchListUi = useUrlUiPatch()
+  const [filterValue, setFilterValue] = useUrlUiState('status', 'all')
+  const filter: 'all' | CompanyAssetStatus = [
+    'draft', 'in_use', 'in_storage', 'under_repair', 'lost', 'disposed', 'written_off',
+  ].includes(filterValue)
+    ? filterValue as CompanyAssetStatus
+    : 'all'
+  const [search, setSearchValue] = useUrlUiState('q', '')
+  const [pageValue, setPageValue] = useUrlUiState('page', '1')
+  const page = Math.max(1, Number.parseInt(pageValue, 10) || 1)
+  const setFilter = (value: 'all' | CompanyAssetStatus) => setFilterValue(value, { queryPatch: { page: null } })
+  const setSearch = (value: string) => setSearchValue(value, { queryPatch: { page: null } })
+  const setPage = (value: number) => setPageValue(String(Math.max(1, value)))
   const [form, setForm] = useState<FormState>(emptyForm)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -877,8 +888,10 @@ export default function CompanyProperty() {
           onSearchChange={setSearch}
           searchPlaceholder="Search by name, tag, serial, location…"
           clientSearch={false}
+          page={page}
+          onPageChange={setPage}
           primaryFilters={statusFilters}
-          onClearFilters={() => { setSearch(''); setFilter('all') }}
+          onClearFilters={() => patchListUi({ q: null, status: null, page: null })}
           hideColumnFilters
           emptyMessage={search || filter !== 'all' ? 'No matching property' : 'No company property recorded'}
           emptyAction={!search && filter === 'all' && canManage ? (

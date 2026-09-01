@@ -17,7 +17,7 @@ import {
   faPen, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
   faCashRegister, faInbox, faFileArrowDown, faCheck, faTriangleExclamation, faXmark,
 } from '@/components/icons'
-import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   creditBalancesByCustomer,
   creditsForCustomer,
@@ -170,7 +170,7 @@ function ContactsInner() {
     ? tabValue as FilterTab
     : 'all'
   const setTab = (next: FilterTab) => setTabValue(next)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useUrlUiState('q', '')
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importRows, setImportRows] = useState<ImportContactRow[]>([])
@@ -190,7 +190,9 @@ function ContactsInner() {
     : 'info'
   const setViewTab = (next: ViewTab) => setViewTabValue(next)
 
-  const [showArchived, setShowArchived] = useState(false)
+  const [archivedValue, setArchivedValue] = useUrlUiState('archived', '0')
+  const showArchived = archivedValue === '1'
+  const setShowArchived = (checked: boolean) => setArchivedValue(checked ? '1' : '0')
   const filtered = contacts.filter(c => {
     if (!showArchived && c.isArchived) return false
     const q = search.toLowerCase()

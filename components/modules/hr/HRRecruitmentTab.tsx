@@ -6,6 +6,7 @@ import { Fa } from '@/components/icons'
 import { faPlus, faBriefcase, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 
 type JobForm = {
   title: string
@@ -53,7 +54,13 @@ export default function HRRecruitmentTab() {
   const { currentUser, showToast } = useApp()
   const { jobPostings, candidates, departments, addJobPosting, addCandidate } = useHrStore()
   const isAdmin = currentUser?.role === 'director'
-  const [subTab, setSubTab] = useState<'jobs' | 'candidates'>('jobs')
+  const [subTabValue, setSubTabValue] = useUrlUiState('recruitmentView', 'jobs')
+  const subTab: 'jobs' | 'candidates' = subTabValue === 'candidates' ? 'candidates' : 'jobs'
+  const setSubTab = (value: 'jobs' | 'candidates') => setSubTabValue(value)
+  const [candidateSearch, setCandidateSearch] = useUrlUiState('candidateQ', '')
+  const [candidatePageValue, setCandidatePageValue] = useUrlUiState('candidatePage', '1')
+  const candidatePage = Math.max(1, Number.parseInt(candidatePageValue, 10) || 1)
+  const setCandidatePage = (page: number) => setCandidatePageValue(String(Math.max(1, page)))
   const [showJobModal, setShowJobModal] = useState(false)
   const [showCandidateModal, setShowCandidateModal] = useState(false)
   const [jobForm, setJobForm] = useState<JobForm>(() => emptyJobForm(departments[0]?.id ?? ''))
@@ -216,6 +223,10 @@ export default function HRRecruitmentTab() {
             columns={candidateColumns}
             rows={candidates}
             rowKey={c => c.id}
+            searchValue={candidateSearch}
+            onSearchChange={setCandidateSearch}
+            page={candidatePage}
+            onPageChange={setCandidatePage}
             emptyMessage="No candidates found"
             rowActions={() => <Fa icon={faChevronRight} className="text-[var(--text-4)]" />}
             exportTitle="Candidates"

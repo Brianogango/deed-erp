@@ -173,7 +173,7 @@ export default function DataTable<T>({
 }: DataTableProps<T>) {
   const tableRootRef = useRef<HTMLDivElement | null>(null)
   const breakpoint = useTableBreakpoint(tableRootRef)
-  const { prefs, setVisibleColumnKeys, saveView, deleteView } = useTablePreferences(tableId)
+  const { prefs, hydrated: prefsHydrated, setVisibleColumnKeys, setSort: persistSort, saveView, deleteView } = useTablePreferences(tableId)
 
   const [internalSearch, setInternalSearch] = useState('')
   const search = searchValue !== undefined ? searchValue : internalSearch
@@ -193,6 +193,16 @@ export default function DataTable<T>({
   }
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [sort, setSort] = useState<TableSortState | null>(defaultSort)
+
+  // Sort is part of list context too. Persist it per table so an explicit
+  // record route (or a module remount) returns to the same ordering.
+  useEffect(() => {
+    if (!prefsHydrated) return
+    const next = prefs.sort === undefined ? defaultSort : prefs.sort
+    setSort(prev => (
+      prev?.key === next?.key && prev?.direction === next?.direction ? prev : next
+    ))
+  }, [prefsHydrated, prefs.sort, defaultSort, tableId])
 
   const pickableColumns = useMemo(
     () => columns.filter(c => c.priority <= 3),
@@ -297,6 +307,10 @@ export default function DataTable<T>({
   function applyView(view: SavedView) {
     setSearch(view.search)
     setVisibleColumnKeys(view.visibleColumnKeys)
+    if (view.sort !== undefined) {
+      setSort(view.sort)
+      persistSort(view.sort)
+    }
     goToPage(1)
   }
 
@@ -307,6 +321,7 @@ export default function DataTable<T>({
       search,
       visibleColumnKeys: visibleColumns.map(c => c.key),
       density: prefs.density,
+      sort,
     })
   }
 
@@ -429,7 +444,11 @@ export default function DataTable<T>({
                   sortable: isColumnSortable(c),
                   sortDirection: sort?.key === c.key ? sort.direction : null,
                   onSortClick: isColumnSortable(c)
-                    ? () => setSort(prev => nextSortState(prev, c.key, defaultSort))
+                    ? () => {
+                        const next = nextSortState(sort, c.key, defaultSort)
+                        setSort(next)
+                        persistSort(next)
+                      }
                     : undefined,
                 })),
                 ...(rowActions ? [{ label: 'Actions', width: `${rowActionsWidth}px`, minWidth: rowActionsWidth, sticky: 'right' as const }] : []),

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useHrStore, RefSOP, RefSOPCategory } from '@/lib/store'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import { Confirm, ModuleSkeleton, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
@@ -21,8 +22,12 @@ export default function MyDocuments() {
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin     = currentUser?.role === 'director'
 
-  const [catFilter, setCatFilter]     = useState<RefSOPCategory | 'all'>('all')
-  const [search, setSearch]           = useState('')
+  const [catFilterValue, setCatFilterValue] = useUrlUiState('category', 'all')
+  const catFilter: RefSOPCategory | 'all' = CATEGORIES.some(c => c.id === catFilterValue)
+    ? catFilterValue as RefSOPCategory
+    : 'all'
+  const setCatFilter = (value: RefSOPCategory | 'all') => setCatFilterValue(value)
+  const [search, setSearch] = useUrlUiState('q', '')
   const [expanded, setExpanded]       = useState<Set<string>>(new Set())
   const [showModal, setShowModal]     = useState(false)
   const [editSop, setEditSop]         = useState<RefSOP | null>(null)

@@ -248,6 +248,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const [offlineBanner, setOfflineBanner] = useState(false)
   const [jarvisOpen, setJarvisOpen] = useState(false)
   const hydratedRoutesRef = useRef<Set<string>>(new Set())
+  const lastRouteRefreshRef = useRef(0)
+  const [routeRefreshTick, setRouteRefreshTick] = useState(0)
 
   // Topbar dispatches this event on its DIA button click — kept as a
   // window event rather than a prop so Topbar's signature never changes.
@@ -427,6 +429,28 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
   }, [pathname])
 
+  // Browser tabs can sleep long enough to miss the SSE stream's reconnect
+  // overlap window. When the ERP becomes visible/focused again, invalidate only
+  // the active route's hydration cache and run the same ETag/dirty-key-safe
+  // catch-up used on navigation. This avoids stale queues without a full reload.
+  useEffect(() => {
+    if (isPublicRepairTracker || !currentUserId) return
+    const refreshActiveRoute = () => {
+      if (document.visibilityState !== 'visible') return
+      const now = Date.now()
+      if (now - lastRouteRefreshRef.current < 15_000) return
+      lastRouteRefreshRef.current = now
+      hydratedRoutesRef.current.delete(pathname || '/')
+      setRouteRefreshTick(tick => tick + 1)
+    }
+    window.addEventListener('focus', refreshActiveRoute)
+    document.addEventListener('visibilitychange', refreshActiveRoute)
+    return () => {
+      window.removeEventListener('focus', refreshActiveRoute)
+      document.removeEventListener('visibilitychange', refreshActiveRoute)
+    }
+  }, [pathname, currentUserId, isPublicRepairTracker])
+
   // Start app_state hydration as soon as we have a session — do not wait for
   // the mounted skeleton tick. Also notify StoreProvider so Prisma boot APIs
   // for the new route can warm without a full remount.
@@ -439,6 +463,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       return
     }
     hydratedRoutesRef.current.add(route)
+    lastRouteRefreshRef.current = Date.now()
 
     const keys = appStateKeysForRoute(route)
     if (keys.length === 0) return
@@ -517,7 +542,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       .catch(() => {
         hydratedRoutesRef.current.delete(route)
       })
-  }, [pathname, currentUserId, isPublicRepairTracker])
+  }, [pathname, currentUserId, isPublicRepairTracker, routeRefreshTick])
 
   // Patch legacy tables whenever module content mutates (tabs, lazy panels,
   // detail drawers). Debounced so React paint bursts don't thrash the DOM.

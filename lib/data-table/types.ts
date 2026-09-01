@@ -1,3 +1,4 @@
+import type { TableSortState } from './sort'
 import type { ReactNode } from 'react'
 
 // Column visibility priority — see docs/DATATABLE_REDESIGN_ARCHITECTURE.md §8–10.
@@ -86,10 +87,17 @@ export interface SavedView {
   search: string
   visibleColumnKeys: string[]
   density: 'cozy' | 'compact'
+  /** Optional for backward compatibility with saved views created before Phase 1. */
+  sort?: TableSortState | null
 }
 
 export interface TablePreferences {
   visibleColumnKeys: string[] | null // null = use priority defaults
   density: 'cozy' | 'compact'
   savedViews: SavedView[]
+  /**
+   * undefined = no preference yet, use the table's defaultSort.
+   * null = user explicitly cycled back to unsorted.
+   */
+  sort?: TableSortState | null
 }

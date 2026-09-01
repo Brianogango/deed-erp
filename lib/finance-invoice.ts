@@ -113,22 +113,40 @@ export function parseFinanceListPage(raw: unknown): number {
 /** Customer invoice and vendor bill record page. */
 export function financeInvoicePath(
   id: string,
-  opts?: { listPage?: number | string | null },
+  opts?: {
+    listPage?: number | string | null
+    listSearch?: string | null
+    listFilter?: string | null
+  },
 ): string {
+  const params = new URLSearchParams()
   const page = parseFinanceListPage(opts?.listPage)
-  if (page <= 1) return `/finance/invoices/${id}`
-  return `/finance/invoices/${id}?listPage=${page}`
+  if (page > 1) params.set('listPage', String(page))
+  const search = String(opts?.listSearch ?? '').trim()
+  const filter = String(opts?.listFilter ?? '').trim()
+  if (search) params.set('listQ', search)
+  if (filter && filter !== 'all') params.set('listFilter', filter)
+  const qs = params.toString()
+  return qs ? `/finance/invoices/${id}?${qs}` : `/finance/invoices/${id}`
 }
 
 /** Canonical Accounting list route for an invoice/bill record. */
 export function financeInvoiceListPath(
   type?: string | null,
-  opts?: { page?: number | string | null },
+  opts?: {
+    page?: number | string | null
+    search?: string | null
+    filter?: string | null
+  },
 ): string {
   const params = new URLSearchParams()
   params.set('tab', type === 'vendor_bill' ? 'bills' : 'invoices')
   const page = parseFinanceListPage(opts?.page)
   if (page > 1) params.set('page', String(page))
+  const search = String(opts?.search ?? '').trim()
+  const filter = String(opts?.filter ?? '').trim()
+  if (search) params.set('q', search)
+  if (filter && filter !== 'all') params.set('filter', filter)
   return `/finance?${params.toString()}`
 }
 

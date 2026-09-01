@@ -16,7 +16,7 @@ import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHead
 import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
   faArrowRight, faBan, faChevronLeft, faBoxOpen, faPencil, faTrash,
@@ -72,8 +72,20 @@ function RefurbishmentContent() {
   const employees = useHrStore(s => s.employees)
   const techs       = assignableTechnicians(users, employees)
 
-  const [activeId, setActiveId]           = useUrlRecordId()
-  const [filterStatus, setFilterStatus]   = useState<RefurbStatus | 'all'>('all')
+  const [activeId, setActiveId] = useUrlRecordId()
+  const patchListUi = useUrlUiPatch()
+  const [filterStatusValue, setFilterStatusValue] = useUrlUiState('status', 'all')
+  const filterStatus: RefurbStatus | 'all' =
+    ['queued', 'assigned', 'in_progress', 'ready', 'transferred', 'written_off'].includes(filterStatusValue)
+      ? filterStatusValue as RefurbStatus
+      : 'all'
+  const setFilterStatus = (value: RefurbStatus | 'all') =>
+    setFilterStatusValue(value, { queryPatch: { page: null } })
+  const [jobSearch, setJobSearchValue] = useUrlUiState('q', '')
+  const setJobSearch = (value: string) => setJobSearchValue(value, { queryPatch: { page: null } })
+  const [pageValue, setPageValue] = useUrlUiState('page', '1')
+  const page = Math.max(1, Number.parseInt(pageValue, 10) || 1)
+  const setPage = (value: number) => setPageValue(String(Math.max(1, value)))
 
   const [showAssignModal, setShowAssignModal]       = useState(false)
   const [showNotesModal, setShowNotesModal]         = useState(false)
@@ -866,9 +878,13 @@ function RefurbishmentContent() {
             ] as ColumnDef<RefurbishmentJob>[]}
             rows={filtered}
             rowKey={j => j.id}
-            hideSearch
+            searchValue={jobSearch}
+            onSearchChange={setJobSearch}
+            searchPlaceholder="Search jobs by ref, device, serial or technician…"
+            page={page}
+            onPageChange={setPage}
             primaryFilters={refurbishmentPrimaryFilters}
-            onClearFilters={() => setFilterStatus('all')}
+            onClearFilters={() => patchListUi({ q: null, status: null, page: null })}
             hideColumnFilters
             emptyMessage={
               filterStatus !== 'all'

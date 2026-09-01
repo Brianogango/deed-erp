@@ -4,6 +4,7 @@ import { useApp, fmtDate, fmtKes, type SalaryAdvance } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Field, Input, Modal, RecordCard, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 
 const statusTone: Record<SalaryAdvance['status'], string> = {
   pending: 'pending',
@@ -46,7 +47,17 @@ export default function HRSalaryAdvanceTab() {
   const [reason, setReason] = useState('')
   const [decisionId, setDecisionId] = useState<string | null>(null)
   const [decisionNote, setDecisionNote] = useState('')
-  const [filter, setFilter] = useState<'all' | SalaryAdvance['status']>('all')
+  const [filterValue, setFilterValue] = useUrlUiState('advanceStatus', 'all')
+  const filter: 'all' | SalaryAdvance['status'] =
+    ['pending', 'approved', 'rejected', 'paid', 'repaid', 'cancelled'].includes(filterValue)
+      ? filterValue as SalaryAdvance['status']
+      : 'all'
+  const setFilter = (value: 'all' | SalaryAdvance['status']) => setFilterValue(value, { queryPatch: { advancePage: null } })
+  const [advanceSearch, setAdvanceSearchValue] = useUrlUiState('advanceQ', '')
+  const [advancePageValue, setAdvancePageValue] = useUrlUiState('advancePage', '1')
+  const advancePage = Math.max(1, Number.parseInt(advancePageValue, 10) || 1)
+  const setAdvanceSearch = (value: string) => setAdvanceSearchValue(value, { queryPatch: { advancePage: null } })
+  const setAdvancePage = (page: number) => setAdvancePageValue(String(Math.max(1, page)))
 
   const myAdvances = useMemo(
     () => salaryAdvances.filter(item => item.employeeId === myEmployee?.id),
@@ -252,6 +263,10 @@ export default function HRSalaryAdvanceTab() {
           columns={advanceColumns}
           rows={visibleAdvances}
           rowKey={item => item.id}
+          searchValue={advanceSearch}
+          onSearchChange={setAdvanceSearch}
+          page={advancePage}
+          onPageChange={setAdvancePage}
           emptyMessage="No salary advance applications found"
           emptyAction={myEmployee ? <button className="btn-primary text-[11px]" onClick={() => setShowApply(true)}>Apply for Salary Advance</button> : undefined}
           searchPlaceholder="Search employee, ref…"

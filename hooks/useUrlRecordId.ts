@@ -35,6 +35,24 @@ export type SetUrlRecordIdOptions = {
  */
 const pendingRecordIds = new Map<string, string | null>()
 
+/**
+ * Latest optimistic query string per pathname. Multiple URL-backed controls can
+ * update in the same event (e.g. search changes then DataTable resets page).
+ * Building each navigation from stale useSearchParams would otherwise let the
+ * second update erase the first. Keep a tiny pending snapshot until the router
+ * catches up so same-tick patches compose atomically.
+ */
+const pendingQueryStrings = new Map<string, string>()
+
+function queryParamsBase(pathname: string, searchParams: { toString(): string }) {
+  const pending = pendingQueryStrings.get(pathname)
+  return new URLSearchParams(pending !== undefined ? pending : searchParams.toString())
+}
+
+function rememberPendingQuery(pathname: string, params: URLSearchParams) {
+  pendingQueryStrings.set(pathname, params.toString())
+}
+
 function pendingKey(pathname: string, param: string) {
   return `${pathname}::${param}`
 }
@@ -56,7 +74,7 @@ export function useUrlRecordId(options: Options = {}) {
 
     pendingRecordIds.set(pendingKey(pathname, param), id)
 
-    const params = new URLSearchParams(searchParams.toString())
+    const params = queryParamsBase(pathname, searchParams)
     if (id) {
       params.set(param, id)
       if (options.whenOpen) {
@@ -75,6 +93,7 @@ export function useUrlRecordId(options: Options = {}) {
       }
     }
     const qs = params.toString()
+    rememberPendingQuery(pathname, params)
     const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
       if (opts?.history === 'replace') router.replace(href, { scroll: false })
@@ -99,6 +118,7 @@ export function useUrlRecordId(options: Options = {}) {
   useEffect(() => {
     const onPopState = () => {
       pendingRecordIds.delete(pendingKey(pathname, param))
+      pendingQueryStrings.delete(pathname)
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
@@ -110,6 +130,16 @@ export function useUrlRecordId(options: Options = {}) {
 /**
  * Sync a free-form query string value (e.g. tab) both ways with the URL.
  */
+export type SetUrlQueryStateOptions = {
+  history?: 'push' | 'replace'
+  queryPatch?: Record<string, string | null>
+}
+
+/**
+ * Sync a free-form query string value (e.g. tab) both ways with the URL.
+ * User navigation defaults to push. For list UI state (search/filter/page),
+ * prefer useUrlUiState below so typing and filtering do not pollute Back.
+ */
 export function useUrlQueryState(param: string, fallback: string) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -117,21 +147,90 @@ export function useUrlQueryState(param: string, fallback: string) {
   const queryValue = searchParams.get(param) ?? fallback
   const [value, setLocalValue] = useState(queryValue)
 
-  const setValue = useCallback((next: string, opts?: { history?: 'push' | 'replace' }) => {
-    setLocalValue(next)
-    const params = new URLSearchParams(searchParams.toString())
-    params.set(param, next)
+  const setValue = useCallback((next: string | null, opts?: SetUrlQueryStateOptions) => {
+    setLocalValue(next ?? fallback)
+    const params = queryParamsBase(pathname, searchParams)
+    if (next === null) params.delete(param)
+    else params.set(param, next)
+    if (opts?.queryPatch) {
+      for (const [key, value] of Object.entries(opts.queryPatch)) {
+        if (value === null) params.delete(key)
+        else params.set(key, value)
+      }
+    }
     const qs = params.toString()
+    rememberPendingQuery(pathname, params)
     const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
       if (opts?.history === 'replace') router.replace(href, { scroll: false })
       else router.push(href, { scroll: false })
     })
-  }, [searchParams, router, pathname, param])
+  }, [searchParams, router, pathname, param, fallback])
 
   useEffect(() => {
+    const actual = searchParams.toString()
+    const pending = pendingQueryStrings.get(pathname)
+    if (pending !== undefined && pending !== actual) {
+      const optimistic = new URLSearchParams(pending)
+      setLocalValue(optimistic.get(param) ?? fallback)
+      return
+    }
+    if (pending === actual) pendingQueryStrings.delete(pathname)
     setLocalValue(searchParams.get(param) ?? fallback)
-  }, [searchParams, param, fallback])
+  }, [searchParams, param, fallback, pathname])
 
   return [value, setValue] as const
+}
+
+
+/**
+ * URL-backed state for list controls such as search, filters, sort/layout and
+ * pagination. These changes REPLACE the current history entry so:
+ *   list(search/filter/page) -> record -> Back
+ * returns to the exact list state without making Back replay every keystroke.
+ *
+ * Default/empty values are removed from the query string to keep deep links
+ * compact and canonical.
+ */
+export function useUrlUiState(param: string, fallback: string) {
+  const [value, setQueryValue] = useUrlQueryState(param, fallback)
+
+  const setValue = useCallback((
+    next: string,
+    opts?: { queryPatch?: Record<string, string | null> },
+  ) => {
+    const normalized = next === fallback || next === '' ? null : next
+    setQueryValue(normalized, {
+      history: 'replace',
+      queryPatch: opts?.queryPatch,
+    })
+  }, [fallback, setQueryValue])
+
+  return [value, setValue] as const
+}
+
+
+/**
+ * Atomically replace several URL-backed UI controls. Use this for "Clear all"
+ * and any interaction that changes multiple list controls at once; it avoids
+ * one setter overwriting another from a stale searchParams snapshot.
+ */
+export function useUrlUiPatch() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  return useCallback((patch: Record<string, string | null>) => {
+    const params = queryParamsBase(pathname, searchParams)
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === '') params.delete(key)
+      else params.set(key, value)
+    }
+    const qs = params.toString()
+    rememberPendingQuery(pathname, params)
+    const href = qs ? `${pathname}?${qs}` : pathname
+    startTransition(() => {
+      router.replace(href, { scroll: false })
+    })
+  }, [pathname, router, searchParams])
 }

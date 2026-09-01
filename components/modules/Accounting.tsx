@@ -90,6 +90,7 @@ import {
 } from '@/lib/document-payment-details'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@/components/contacts/ContactFormModal'
+import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES & CONSTANTS
@@ -465,8 +466,21 @@ function AccountingContent() {
   }, [tab])
 
   // ── Invoice / Bill state ────────────────────────────────────────────────────
-  const [invFilter, setInvFilter] = useState('all')
-  const [invSearch, setInvSearch] = useState('')
+  const patchInvoiceUi = useUrlUiPatch()
+  const [invFilter, setInvFilterValue] = useUrlUiState('filter', 'all')
+  const [invSearch, setInvSearchValue] = useUrlUiState('q', '')
+  const setInvFilter = useCallback((value: string) => {
+    setInvoiceListPageState(1)
+    setInvFilterValue(value, { queryPatch: { page: null } })
+  }, [setInvFilterValue])
+  const setInvSearch = useCallback((value: string) => {
+    setInvoiceListPageState(1)
+    setInvSearchValue(value, { queryPatch: { page: null } })
+  }, [setInvSearchValue])
+  const clearInvoiceFilters = useCallback(() => {
+    setInvoiceListPageState(1)
+    patchInvoiceUi({ q: null, filter: null, page: null })
+  }, [patchInvoiceUi])
   const setInvoiceListPage = useCallback((nextPage: number) => {
     const page = parseFinanceListPage(nextPage)
     setInvoiceListPageState(page)
@@ -478,8 +492,12 @@ function AccountingContent() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [pathname, router, searchParams])
   const openInvoiceRecord = useCallback((id: string) => {
-    router.push(financeInvoicePath(id, { listPage: invoiceListPage }))
-  }, [invoiceListPage, router])
+    router.push(financeInvoicePath(id, {
+      listPage: invoiceListPage,
+      listSearch: invSearch,
+      listFilter: invFilter,
+    }))
+  }, [invoiceListPage, invSearch, invFilter, router])
   const [selectedInvIds, setSelectedInvIds] = useState<Set<string>>(new Set())
   const [showBulkPayModal, setShowBulkPayModal] = useState(false)
   const [bulkDownloading, setBulkDownloading] = useState(false)
@@ -774,7 +792,7 @@ function AccountingContent() {
         { value: 'overdue', label: 'Overdue' },
         { value: 'blocked', label: 'Blocked' },
       ],
-        onChange: (value: string) => { setInvFilter(value); setInvoiceListPage(1) },
+        onChange: (value: string) => { setInvFilter(value) },
     },
   ]
 
@@ -932,7 +950,11 @@ function AccountingContent() {
     setChangingPartner(false)
     setReceiptFile(null)
     if (opts?.navigateToInvoiceId) {
-      router.push(financeInvoicePath(opts.navigateToInvoiceId, { listPage: invoiceListPage }))
+      router.push(financeInvoicePath(opts.navigateToInvoiceId, {
+        listPage: invoiceListPage,
+        listSearch: invSearch,
+        listFilter: invFilter,
+      }))
       return
     }
     // Drop deep-link so refresh does not reopen a discarded editor.
@@ -1481,13 +1503,13 @@ function AccountingContent() {
                 rows={filteredInvoices}
                 rowKey={i => i.id}
                 searchValue={invSearch}
-                onSearchChange={value => { setInvSearch(value); setInvoiceListPage(1) }}
+                onSearchChange={value => { setInvSearch(value) }}
                 searchPlaceholder="Search invoice number or partner…"
                 clientSearch={false}
                 page={invoiceListPage}
                 onPageChange={setInvoiceListPage}
                 primaryFilters={invoicePrimaryFilters}
-                onClearFilters={() => { setInvSearch(''); setInvFilter('all'); setInvoiceListPage(1) }}
+                onClearFilters={clearInvoiceFilters}
                 hideColumnFilters
                 selectable
                 emptyMessage={tab === 'invoices' ? 'No invoices found' : 'No bills found'}

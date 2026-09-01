@@ -16,7 +16,7 @@ import {
   faPhone, faEnvelope, faHandshake, faClipboardList, faNoteSticky,
 } from '@/components/icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { isLeadAssigneeRole } from '@/lib/crm/lead-assignees'
 import { opportunityMatchesOwner } from '@/lib/opportunity-normalization'
 
@@ -172,14 +172,17 @@ function CRMContent() {
   }, [setActiveOppId])
   // Directors/admins land on the full pipeline across every rep; they can
   // still narrow to "My Pipeline" or a specific rep with the filter chips.
-  const [ownerFilter, setOwnerFilter] = useState<string>('all')
+  // List controls are URL-backed with replace history so opening an opportunity
+  // and pressing Back restores the exact pipeline/search scope.
+  const [ownerFilter, setOwnerFilter] = useUrlUiState('owner', 'all')
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null)
   const [showClientDetail, setShowClientDetail] = useState(false)
 
-  // Search states
-  const [oppSearch, setOppSearch] = useState('')
-  const [contractSearch, setContractSearch] = useState('')
-  const [activitySearch, setActivitySearch] = useState('')
+  // Search state is kept independently per CRM workspace so switching tabs does
+  // not carry an unrelated query into the next list.
+  const [oppSearch, setOppSearch] = useUrlUiState('pipelineQ', '')
+  const [contractSearch, setContractSearch] = useUrlUiState('contractQ', '')
+  const [activitySearch, setActivitySearch] = useUrlUiState('activityQ', '')
   
   // Modals
   const [showNewOppModal, setShowNewOppModal] = useState(false)

@@ -33,14 +33,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Dependency security audit
-        run: pnpm audit --audit-level high
-
+      # Run correctness gates before the dependency audit so known dependency
+      # advisories do not hide TypeScript or unit-test regressions. The audit
+      # remains a hard failure gate and therefore cannot be bypassed.
       - name: Typecheck
         run: npx tsc --noEmit
 
       - name: Unit tests
         run: pnpm test
+
+      - name: Dependency security audit
+        run: pnpm audit --audit-level high
 
   e2e:
     name: E2E smoke + critical workflows
@@ -53,6 +56,9 @@ jobs:
       E2E_USERNAME: e2edirector
       E2E_PASSWORD: ci-e2e-password-not-for-production
       E2E_RELAX_RATE_LIMIT: '1'
+      # The production Next build currently exceeds Node's ~2GB default heap
+      # while lint/type validation runs. Keep the build deterministic in CI.
+      NODE_OPTIONS: --max-old-space-size=4096
     services:
       postgres:
         image: postgres:16

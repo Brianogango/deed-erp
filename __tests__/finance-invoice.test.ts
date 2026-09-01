@@ -330,6 +330,25 @@ describe('invoice editor navigation', () => {
     expect(parseFinanceListPage(undefined)).toBe(1)
   })
 
+  it('carries search and filter context through the invoice record and back route', () => {
+    expect(financeInvoicePath('inv-1', {
+      listPage: 3,
+      listSearch: 'NCBA Group',
+      listFilter: 'overdue',
+    })).toBe('/finance/invoices/inv-1?listPage=3&listQ=NCBA+Group&listFilter=overdue')
+
+    expect(financeInvoiceListPath('customer_invoice', {
+      page: 3,
+      search: 'NCBA Group',
+      filter: 'overdue',
+    })).toBe('/finance?tab=invoices&page=3&q=NCBA+Group&filter=overdue')
+
+    expect(financeInvoiceListPath('vendor_bill', {
+      search: '',
+      filter: 'all',
+    })).toBe('/finance?tab=bills')
+  })
+
   it('applies a new edit query once, then ignores it until the id changes', () => {
     expect(shouldApplyInvoiceEditQuery('inv-1', null)).toBe(true)
     expect(shouldApplyInvoiceEditQuery('inv-1', 'inv-1')).toBe(false)

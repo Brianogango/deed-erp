@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { NextRequest } from 'next/server'
 
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -51,7 +52,7 @@ describe('admin environment settings API', () => {
   it('saves a generated secret after confirmation', async () => {
     mockGetSession.mockResolvedValue({ user: { id: 'd1', role: 'director' } })
     const file = envFile('CRON_SECRET=\n')
-    const res = await PUT(new Request('http://localhost/api/admin/security/env', {
+    const res = await PUT(new NextRequest('http://localhost/api/admin/security/env', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ generate: ['CRON_SECRET'], confirm: 'SAVE DEED ERP ENV' }),

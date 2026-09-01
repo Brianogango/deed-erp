@@ -7,6 +7,7 @@ import { Badge, Field, Input, Modal, PanelHeader, Select } from '@/components/ui
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCheck, faCircleCheck, faMoneyBillWave, faDownload, faPrint } from '@fortawesome/free-solid-svg-icons'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 
 export default function HRPayrollTab() {
   const {
@@ -48,8 +49,17 @@ export default function HRPayrollTab() {
     })),
   [payrollRuns, journalEntries])
 
-  const [payrollSearch, setPayrollSearch] = useState('')
-  const [payslipSearch, setPayslipSearch] = useState('')
+  const [payrollSearch, setPayrollSearchValue] = useUrlUiState('payrollQ', '')
+  const [payrollPageValue, setPayrollPageValue] = useUrlUiState('payrollPage', '1')
+  const payrollPage = Math.max(1, Number.parseInt(payrollPageValue, 10) || 1)
+  const setPayrollSearch = (value: string) => setPayrollSearchValue(value, { queryPatch: { payrollPage: null } })
+  const setPayrollPage = (page: number) => setPayrollPageValue(String(Math.max(1, page)))
+
+  const [payslipSearch, setPayslipSearchValue] = useUrlUiState('payslipQ', '')
+  const [payslipPageValue, setPayslipPageValue] = useUrlUiState('payslipPage', '1')
+  const payslipPage = Math.max(1, Number.parseInt(payslipPageValue, 10) || 1)
+  const setPayslipSearch = (value: string) => setPayslipSearchValue(value, { queryPatch: { payslipPage: null } })
+  const setPayslipPage = (page: number) => setPayslipPageValue(String(Math.max(1, page)))
   const [showPayrollModal, setShowPayrollModal] = useState(false)
   const [payrollMonth, setPayrollMonth] = useState(new Date().toISOString().slice(5, 7))
   const [payrollYear, setPayrollYear]   = useState(String(new Date().getFullYear()))
@@ -293,6 +303,8 @@ export default function HRPayrollTab() {
           rows={filteredRuns}
           rowKey={run => run.id}
           hideSearch
+          page={payrollPage}
+          onPageChange={setPayrollPage}
           emptyMessage="No payroll runs found"
           rowActions={payrollRunRowActions}
           exportTitle="Payroll Runs"
@@ -313,6 +325,8 @@ export default function HRPayrollTab() {
           rows={filteredPayslips}
           rowKey={ps => ps.id}
           hideSearch
+          page={payslipPage}
+          onPageChange={setPayslipPage}
           emptyMessage="No payslips found"
           rowActions={payslipRowActions}
           exportTitle="Payslips"

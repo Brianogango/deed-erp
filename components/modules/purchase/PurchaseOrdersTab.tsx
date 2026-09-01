@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo } from 'react'
+import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { usePurchase } from './PurchaseContext'
 import { PanelHeader, RecordCard } from '@/components/ui'
 import { StatusBadge } from '@/components/erp'
@@ -56,8 +57,16 @@ export default function PurchaseOrdersTab() {
   } = usePurchase()
   const canManageProcurement = CAN_MANAGE_PROCUREMENT_ROLES.includes(currentUser?.role ?? '')
   const savedViewKey = 'deed_po_saved_view'
+  const patchUi = useUrlUiPatch()
+  const [search, setSearchValue] = useUrlUiState('q', '')
+  const [pageValue, setPageValue] = useUrlUiState('page', '1')
+  const currentPage = Math.max(1, Number.parseInt(pageValue, 10) || 1)
+  const setSearch = (value: string) => setSearchValue(value, { queryPatch: { page: null } })
+  const setPage = (page: number) => setPageValue(String(Math.max(1, page)))
 
   useEffect(() => {
+    // A URL/deep-link selection wins over the user's local saved view.
+    if (typeFilter !== 'all' || statusFilter !== 'all') return
     try {
       const stored = localStorage.getItem(savedViewKey)
       if (!stored) return
@@ -65,8 +74,13 @@ export default function PurchaseOrdersTab() {
       try {
         const parsed = JSON.parse(stored) as { type?: string; status?: string }
         if (parsed && typeof parsed === 'object' && (parsed.type || parsed.status)) {
-          if (parsed.type && isTypeFilter(parsed.type)) setTypeFilter(parsed.type)
-          if (parsed.status && isStatusFilter(parsed.status)) setStatusFilter(parsed.status)
+          const nextType = parsed.type && isTypeFilter(parsed.type) ? parsed.type : 'all'
+          const nextStatus = parsed.status && isStatusFilter(parsed.status) ? parsed.status : 'all'
+          patchUi({
+            type: nextType === 'all' ? null : nextType,
+            status: nextStatus === 'all' ? null : nextStatus,
+            page: null,
+          })
           return
         }
       } catch {
@@ -75,13 +89,16 @@ export default function PurchaseOrdersTab() {
 
       const migrated = migrateLegacySavedView(stored)
       if (migrated) {
-        setTypeFilter(migrated.typeFilter)
-        setStatusFilter(migrated.statusFilter)
+        patchUi({
+          type: migrated.typeFilter === 'all' ? null : migrated.typeFilter,
+          status: migrated.statusFilter === 'all' ? null : migrated.statusFilter,
+          page: null,
+        })
       }
     } catch {
       // ignore storage failures
     }
-  }, [setTypeFilter, setStatusFilter])
+  }, [patchUi, typeFilter, statusFilter])
 
   useEffect(() => {
     try {
@@ -205,9 +222,13 @@ export default function PurchaseOrdersTab() {
         columns={columns}
         rows={filteredPOs}
         rowKey={po => po.id}
+        searchValue={search}
+        onSearchChange={setSearch}
         searchPlaceholder="Search purchase orders by ref or vendor..."
+        page={currentPage}
+        onPageChange={setPage}
         primaryFilters={primaryFilters}
-        onClearFilters={() => { setTypeFilter('all'); setStatusFilter('all') }}
+        onClearFilters={() => patchUi({ type: null, status: null, page: null })}
         hideColumnFilters
         selectable
         emptyMessage={purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match this view'}

@@ -1,7 +1,6 @@
 // @ts-nocheck
 'use client'
 import { Suspense, useState, useMemo } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
@@ -17,7 +16,7 @@ import {
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import TradeIn from './TradeIn'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
-import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { formatWarrantyDuration } from '@/lib/warranty-period'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -74,32 +73,44 @@ function AfterSalesContent() {
   // Inventory officers receive RMA stock; finance/director process money outcomes.
   const canManage   = isAdmin || isFinance || isInventory
 
-  const [tabParam] = useUrlQueryState('tab', 'warranties')
+  const [tabParam, setTabParam] = useUrlQueryState('tab', 'warranties')
   const tab: Tab = AFTER_SALES_TABS.includes(tabParam as Tab)
     ? tabParam as Tab
     : TRADE_IN_TABS.includes(tabParam)
       ? 'trade'
       : 'warranties'
   const [detailId, setDetailId] = useUrlRecordId({ whenOpen: { tab } })
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const pathname = usePathname()
-
   function selectTab(nextTab: Tab) {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('tab', nextTab)
-    params.delete('id')
-    const qs = params.toString()
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    setTabParam(nextTab, { queryPatch: { id: null } })
   }
 
+  const patchListUi = useUrlUiPatch()
+
   // ── Warranty state ──────────────────────────────────────────────────────────
-  const [wFilter, setWFilter] = useState<Warranty['status'] | 'all'>('all')
-  const [wSearch, setWSearch] = useState('')
+  const [wFilterValue, setWFilterValue] = useUrlUiState('warrantyStatus', 'all')
+  const wFilter: Warranty['status'] | 'all' =
+    ['active', 'expiring', 'expired'].includes(wFilterValue) ? wFilterValue as Warranty['status'] : 'all'
+  const setWFilter = (value: Warranty['status'] | 'all') =>
+    setWFilterValue(value, { queryPatch: { warrantyPage: null } })
+  const [wSearch, setWSearchValue] = useUrlUiState('warrantyQ', '')
+  const setWSearch = (value: string) => setWSearchValue(value, { queryPatch: { warrantyPage: null } })
+  const [wPageValue, setWPageValue] = useUrlUiState('warrantyPage', '1')
+  const wPage = Math.max(1, Number.parseInt(wPageValue, 10) || 1)
+  const setWPage = (page: number) => setWPageValue(String(Math.max(1, page)))
 
   // ── RMA state ───────────────────────────────────────────────────────────────
-  const [rmaFilter, setRmaFilter] = useState<ReturnOrder['status'] | 'all'>('all')
-  const [rmaSearch, setRmaSearch] = useState('')
+  const [rmaFilterValue, setRmaFilterValue] = useUrlUiState('returnStatus', 'all')
+  const rmaFilter: ReturnOrder['status'] | 'all' =
+    ['requested', 'approved', 'received', 'processed', 'rejected'].includes(rmaFilterValue)
+      ? rmaFilterValue as ReturnOrder['status']
+      : 'all'
+  const setRmaFilter = (value: ReturnOrder['status'] | 'all') =>
+    setRmaFilterValue(value, { queryPatch: { returnPage: null } })
+  const [rmaSearch, setRmaSearchValue] = useUrlUiState('returnQ', '')
+  const setRmaSearch = (value: string) => setRmaSearchValue(value, { queryPatch: { returnPage: null } })
+  const [rmaPageValue, setRmaPageValue] = useUrlUiState('returnPage', '1')
+  const rmaPage = Math.max(1, Number.parseInt(rmaPageValue, 10) || 1)
+  const setRmaPage = (page: number) => setRmaPageValue(String(Math.max(1, page)))
 
   // Create RMA modal
   const [showCreateRMA, setShowCreateRMA] = useState(false)
@@ -743,6 +754,8 @@ function AfterSalesContent() {
               onSearchChange={setWSearch}
               searchPlaceholder="Search warranties by customer, product, or serial..."
               clientSearch={false}
+              page={wPage}
+              onPageChange={setWPage}
               primaryFilters={[
                 {
                   key: 'status',
@@ -758,7 +771,7 @@ function AfterSalesContent() {
                   onChange: setWFilter,
                 },
               ]}
-              onClearFilters={() => { setWFilter('all'); setWSearch('') }}
+              onClearFilters={() => patchListUi({ warrantyQ: null, warrantyStatus: null, warrantyPage: null })}
               hideColumnFilters
               emptyMessage={warranties.length === 0 ? 'No warranties yet — they are created automatically when a delivery is validated.' : 'No warranties match the filter.'}
               onRowClick={w => setDetailId(w.id)}
@@ -784,6 +797,8 @@ function AfterSalesContent() {
               onSearchChange={setRmaSearch}
               searchPlaceholder="Search returns by reference, customer, or order..."
               clientSearch={false}
+              page={rmaPage}
+              onPageChange={setRmaPage}
               primaryFilters={[
                 {
                   key: 'status',
@@ -801,7 +816,7 @@ function AfterSalesContent() {
                   onChange: setRmaFilter,
                 },
               ]}
-              onClearFilters={() => { setRmaFilter('all'); setRmaSearch('') }}
+              onClearFilters={() => patchListUi({ returnQ: null, returnStatus: null, returnPage: null })}
               hideColumnFilters
               emptyMessage={returnOrders.length === 0 ? 'No return requests yet. Click "+ New Return (RMA)" to create one.' : 'No returns match the filter.'}
               onRowClick={rma => setDetailId(rma.id)}

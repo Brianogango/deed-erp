@@ -21,7 +21,7 @@ import POFormView from './purchase/POFormView'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { parseScanPayload } from '@/lib/barcode-scan'
-import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   filterPurchaseOrders,
   type PurchaseStatusFilter,
@@ -144,8 +144,23 @@ function PurchaseContent() {
     setLocalSubView(nextView)
     if (nextView === 'list') setActiveId(null)
   }, [setActiveId])
-  const [typeFilter, setTypeFilter] = useState<PurchaseTypeFilter>('all')
-  const [statusFilter, setStatusFilter] = useState<PurchaseStatusFilter>('all')
+  const [typeFilterValue, setTypeFilterValue] = useUrlUiState('type', 'all')
+  const typeFilter: PurchaseTypeFilter = ['all', 'rfq', 'po'].includes(typeFilterValue)
+    ? typeFilterValue as PurchaseTypeFilter
+    : 'all'
+  const setTypeFilter = useCallback((value: PurchaseTypeFilter) => {
+    setTypeFilterValue(value, { queryPatch: { page: null } })
+  }, [setTypeFilterValue])
+
+  const [statusFilterValue, setStatusFilterValue] = useUrlUiState('status', 'all')
+  const statusFilter: PurchaseStatusFilter = [
+    'all', 'draft', 'sent', 'confirmed', 'partial', 'received', 'cancelled',
+  ].includes(statusFilterValue)
+    ? statusFilterValue as PurchaseStatusFilter
+    : 'all'
+  const setStatusFilter = useCallback((value: PurchaseStatusFilter) => {
+    setStatusFilterValue(value, { queryPatch: { page: null } })
+  }, [setStatusFilterValue])
 
   // ── New RFQ ────────────────────────────────────────────────────────────────
   const [showNewRFQ,    setShowNewRFQ]    = useState(false)
