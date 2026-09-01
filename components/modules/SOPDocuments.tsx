@@ -1,6 +1,6 @@
 'use client'
 import { Suspense, useState, useMemo, useRef, useEffect } from 'react'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { useHrStore } from '@/lib/store'
 import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
@@ -134,9 +134,10 @@ function SOPDocumentsContent() {
 
   const { docs, save } = useSopDocs()
 
-  const [search, setSearch]           = useState('')
-  const [filterDept, setFilterDept]   = useState<string>('all')
-  const [filterStatus, setFilterStatus] = useState<string>('active')
+  const patchListUi = useUrlUiPatch()
+  const [search, setSearch] = useUrlUiState('q', '')
+  const [filterDept, setFilterDept] = useUrlUiState('dept', 'all')
+  const [filterStatus, setFilterStatus] = useUrlUiState('status', 'active')
   const [viewId, setViewId]           = useUrlRecordId()
   const [editId, setEditId]           = useUrlRecordId({ param: 'edit', clearKeys: ['id'] })
   const [editDoc, setEditDoc]         = useState<Partial<SOPDoc> & { steps: SOPStep[] } | null>(null)
