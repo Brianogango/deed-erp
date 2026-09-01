@@ -19,7 +19,7 @@ import {
   DELIVERY_JOB_TYPE_LABELS,
   isGeneralDeliveryJob,
 } from '@/lib/delivery-job-type'
-import { useUrlQueryState } from '@/hooks/useUrlRecordId'
+import { useUrlQueryState, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -515,9 +515,30 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
   const [assignTarget, setAssignTarget] = useState<DeliveryJob | null>(null)
   const [feeTarget, setFeeTarget] = useState<DeliveryJob | null>(null)
   const [failTarget, setFailTarget] = useState<DeliveryJob | null>(null)
-  const [filterStatus, setFilterStatus] = useState<DeliveryJobStatus | 'all'>('all')
-  const [filterType, setFilterType] = useState<DeliveryJobType | 'all'>('all')
-  const [jobsView, setJobsView] = useState<'list' | 'calendar'>('list')
+  const patchJobsUi = useUrlUiPatch()
+  const [filterStatusValue, setFilterStatusValue] = useUrlUiState('status', 'all')
+  const filterStatus: DeliveryJobStatus | 'all' =
+    ['pending', 'assigned', 'in_transit', 'delivered', 'failed'].includes(filterStatusValue)
+      ? filterStatusValue as DeliveryJobStatus
+      : 'all'
+  const [filterTypeValue, setFilterTypeValue] = useUrlUiState('type', 'all')
+  const filterType: DeliveryJobType | 'all' =
+    Object.prototype.hasOwnProperty.call(JOB_TYPE_LABELS, filterTypeValue)
+      ? filterTypeValue as DeliveryJobType
+      : 'all'
+  const [jobsViewValue, setJobsViewValue] = useUrlUiState('view', 'list')
+  const jobsView: 'list' | 'calendar' = jobsViewValue === 'calendar' ? 'calendar' : 'list'
+  const [jobsSearch, setJobsSearchValue] = useUrlUiState('q', '')
+  const [jobsPageValue, setJobsPageValue] = useUrlUiState('page', '1')
+  const jobsPage = Math.max(1, Number.parseInt(jobsPageValue, 10) || 1)
+
+  const setFilterStatus = (value: DeliveryJobStatus | 'all') =>
+    setFilterStatusValue(value, { queryPatch: { page: null } })
+  const setFilterType = (value: DeliveryJobType | 'all') =>
+    setFilterTypeValue(value, { queryPatch: { page: null } })
+  const setJobsView = (value: 'list' | 'calendar') => setJobsViewValue(value)
+  const setJobsSearch = (value: string) => setJobsSearchValue(value, { queryPatch: { page: null } })
+  const setJobsPage = (value: number) => setJobsPageValue(String(Math.max(1, value)))
 
   const filtered = useMemo(() =>
     deliveryJobs.filter(j =>
@@ -799,9 +820,13 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
           columns={jobColumns}
           rows={filtered}
           rowKey={j => j.id}
-          hideSearch
+          searchValue={jobsSearch}
+          onSearchChange={setJobsSearch}
+          searchPlaceholder="Search delivery ref, customer, rider or destination…"
+          page={jobsPage}
+          onPageChange={setJobsPage}
           primaryFilters={deliveryPrimaryFilters}
-          onClearFilters={() => { setFilterStatus('all'); setFilterType('all') }}
+          onClearFilters={() => patchJobsUi({ q: null, status: null, type: null, page: null })}
           hideColumnFilters
           emptyMessage="No delivery jobs found"
           rowActions={jobRowActions}
