@@ -13,6 +13,7 @@ DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
 HEALTH_URL="${HEALTH_URL:-http://localhost:3000/login}"
 HEALTH_ATTEMPTS="${HEALTH_ATTEMPTS:-24}"
 HEALTH_INTERVAL="${HEALTH_INTERVAL:-5}"
+BUILD_MAX_OLD_SPACE_MB="${BUILD_MAX_OLD_SPACE_MB:-6144}"
 ROLLBACK_STATE_DIR="${ROLLBACK_STATE_DIR:-/var/lib/deed-erp/deploy-rollback}"
 PREVIOUS_BUILD_PATH="$APP_DIR/.next-previous"
 STAGED_BUILD_PATH="$APP_DIR/.next-staging"
@@ -39,6 +40,9 @@ Configuration:
   HEALTH_URL           Local health URL (http://localhost:3000/login)
   HEALTH_ATTEMPTS      Number of checks (24)
   HEALTH_INTERVAL      Seconds between checks (5)
+  BUILD_MAX_OLD_SPACE_MB
+                       Node heap cap (MiB) for the build when NODE_OPTIONS
+                       is not already set (6144)
   ROLLBACK_STATE_DIR   Persistent rollback metadata directory
 
 For the required verified backup, root deployments against local PostgreSQL
@@ -241,7 +245,13 @@ pnpm install --frozen-lockfile
 
 log "--- Building into staging while current .next remains live"
 rm -rf -- "$STAGED_BUILD_PATH"
-NEXT_DIST_DIR=.next-staging pnpm build
+# Node's default old-space cap (~2 GiB on this 8 GiB host) OOM-kills
+# `next build`; raise it for the build only, keeping headroom for the live
+# PM2 workers. An operator-supplied NODE_OPTIONS always wins, and the
+# assignment is scoped to this command so the reloaded app env is untouched.
+NEXT_DIST_DIR=.next-staging \
+  NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=${BUILD_MAX_OLD_SPACE_MB}}" \
+  pnpm build
 if [[ ! -d "$STAGED_BUILD_PATH" ]]; then
   log "Build completed without producing $STAGED_BUILD_PATH"
   deploy_failed 1 "$LINENO"
