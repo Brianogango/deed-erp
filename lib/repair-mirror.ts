@@ -87,6 +87,12 @@ function fingerprint(r: any, mapped: ReturnType<typeof mapRepair>): string {
 }
 
 let _mirrorRunning = false
+// Set when a repair write arrives mid-pass. The pass then re-runs once from
+// the freshest blob state instead of dropping that write — dropping it was
+// the drift behind "customer approved but the ERP never showed it" (the blob
+// moved on while the relational payload that all read surfaces use stayed
+// stale until some later, uncontended write happened to re-mirror the row).
+let _mirrorPendingRerun = false
 
 /**
  * Phase 2a read path: full repairs from the relational table (payload first).
@@ -124,7 +130,10 @@ export async function findRepairInPrisma(refOrId: string): Promise<any | null> {
  */
 export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force?: boolean } = {}): Promise<{ mirrored: number; skipped: number; failed: number }> {
   const result = { mirrored: 0, skipped: 0, failed: 0 }
-  if (_mirrorRunning) return result
+  if (_mirrorRunning) {
+    _mirrorPendingRerun = true
+    return result
+  }
   _mirrorRunning = true
   try {
     const repairs: any[] = typeof repairsInput === 'string' ? JSON.parse(repairsInput) : (repairsInput as any[])
@@ -199,11 +208,23 @@ export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force
     }
 
     if (dirty) await saveStoreKeys({ [MIRROR_STATE_KEY]: JSON.stringify(nextHashes) })
-    return result
   } catch (err) {
     console.error('[repair-mirror] mirror run failed:', err)
-    return result
   } finally {
     _mirrorRunning = false
   }
+
+  if (_mirrorPendingRerun) {
+    _mirrorPendingRerun = false
+    try {
+      // Re-read the freshest blob — the write that queued this rerun carried
+      // a newer array than the one this pass just mirrored.
+      const fresh = await loadAppState(['deed_repairs_v2'])
+      const rows = fresh['deed_repairs_v2']
+      if (Array.isArray(rows) && rows.length > 0) await mirrorRepairsToPrisma(rows)
+    } catch (err) {
+      console.error('[repair-mirror] trailing rerun failed:', err)
+    }
+  }
+  return result
 }
