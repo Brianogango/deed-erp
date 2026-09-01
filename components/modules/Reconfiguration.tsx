@@ -24,7 +24,7 @@ import { applyBenchJob, type BenchActionKind } from '@/lib/reconfiguration/bench
 import { ramComponentProducts, storageComponentProducts } from '@/lib/reconfiguration/part-catalog'
 import { partCapacityGb } from '@/lib/reconfiguration/product-effect'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
-import { UNIT_CONFIG_SOURCE_LABEL, type UnitConfigSource } from '@/lib/reconfiguration/unit-config'
+import { compactSpecsString, UNIT_CONFIG_SOURCE_LABEL, type UnitConfigSource } from '@/lib/reconfiguration/unit-config'
 import SearchablePick from '@/components/reconfiguration/SearchablePick'
 import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 
@@ -96,7 +96,7 @@ function findPart(
 }
 
 export default function Reconfiguration() {
-  const { currentUserId, users, serials, products, systemSettings } = useOperationsStore()
+  const { currentUserId, users, serials, products, systemSettings, updateSerial } = useOperationsStore()
   const currentUser = users.find(u => u.id === currentUserId)
   const role = currentUser?.role ?? ''
 
@@ -143,6 +143,52 @@ export default function Reconfiguration() {
     [serials],
   )
 
+  // Reconfiguration is completed server-side. Mirror that authoritative
+  // snapshot into the in-memory serial store immediately so Inventory, Sales
+  // and POS do not keep rendering the pre-upgrade RAM/SSD until an SSE event
+  // or full page reload arrives.
+  const syncCompletedUnitToClient = useCallback((
+    cfg: any,
+    workOrder?: any,
+    requestedSerialId?: string,
+  ) => {
+    if (!cfg?.current) return
+    const row = (serials || []).find((s: any) =>
+      s.id === cfg.blobSerialId
+      || s.id === cfg.serialId
+      || s.id === requestedSerialId
+      || s.serial === cfg.manufacturerSerial,
+    )
+    if (!row) return
+
+    const specs = compactSpecsString(cfg.current)
+    const finalPrice = Number(workOrder?.finalSellingPrice)
+    const patch: Record<string, unknown> = {}
+
+    if (specs && specs !== row.specs) patch.specs = specs
+    if (cfg.status && cfg.status !== row.status) patch.status = cfg.status
+    if (cfg.location && cfg.location !== row.location) patch.location = cfg.location
+    if (Number.isFinite(finalPrice) && finalPrice >= 0 && finalPrice !== Number(row.salePriceOverride)) {
+      patch.salePriceOverride = finalPrice
+    }
+
+    if (Object.keys(patch).length > 0) {
+      updateSerial(row.id, patch as any, { persist: false })
+    }
+  }, [serials, updateSerial])
+
+  const refreshCompletedUnit = useCallback(async (
+    serialId: string,
+    workOrder?: any,
+  ) => {
+    const cfg = await api<any>(
+      `/api/reconfiguration/device/${encodeURIComponent(serialId)}/configuration`,
+    )
+    setDeviceConfig(cfg)
+    syncCompletedUnitToClient(cfg, workOrder, serialId)
+    return cfg
+  }, [syncCompletedUnitToClient])
+
   const loadOrders = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -187,8 +233,7 @@ export default function Reconfiguration() {
       return
     }
     try {
-      const cfg = await api<any>(`/api/reconfiguration/device/${encodeURIComponent(serialId)}/configuration`)
-      setDeviceConfig(cfg)
+      const cfg = await refreshCompletedUnit(serialId)
       const ramCount = (cfg?.installed || []).filter(
         (i: any) => i.category === 'ram' || i.slotType === 'ram_slot',
       ).length
@@ -322,6 +367,16 @@ export default function Reconfiguration() {
         }),
       })
       setDetail(wo)
+
+      // Do not leave the client on the old unit specs after a successful
+      // server-side reconfiguration. Re-read the promoted snapshot and mirror
+      // it locally before the user returns to Inventory / Sales / POS.
+      try {
+        await refreshCompletedUnit(wizSerialId, wo)
+      } catch {
+        // The work order is already complete; SSE remains a fallback refresh.
+      }
+
       setDoneHint(`Reprint the serial label. This unit is now: ${preview.after.displayName}`)
       setTab('detail')
       await loadOrders()
@@ -342,6 +397,16 @@ export default function Reconfiguration() {
         body: JSON.stringify({ version: detail.version, ...body }),
       })
       setDetail(data)
+      if (path === 'complete' && data?.status === 'completed') {
+        const serialKey = data.serialId || data.manufacturerSerial
+        if (serialKey) {
+          try {
+            await refreshCompletedUnit(serialKey, data)
+          } catch {
+            // Completion succeeded; SSE / the next device load can still refresh.
+          }
+        }
+      }
       await loadOrders()
     } catch (e: any) {
       setError(e.message)
