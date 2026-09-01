@@ -5,7 +5,8 @@ Phase 6 implementation baseline is complete on `ux/phase6-user-journeys`, stacke
 ## What is now enforced
 
 - Shared Create → Confirm/View → None linked-document semantics live in `lib/user-journey.ts`.
-- Repair billing now has a dedicated journey resolver in `lib/repair-journey.ts` so an existing invoice can never resolve back to **Create Invoice**. Draft invoice → **Confirm Invoice**; posted/current invoice → **View Invoice**; existing unpaid out-of-sync invoice → **Align Invoice with Quote**; terminal/no-charge jobs do not create a new customer invoice.
+- Shared journey guards also cover terminal-state progression and actionable subsets for bulk operations.
+- Repair billing has a dedicated journey resolver in `lib/repair-journey.ts` so an existing invoice can never resolve back to **Create Invoice**. Draft invoice → **Confirm Invoice**; posted/current invoice → **View Invoice**; existing unpaid out-of-sync invoice → **Align Invoice with Quote**; terminal/no-charge jobs do not create a new customer invoice.
 - Purchase Orders/RFQs expose one Open action rather than duplicate View/Edit actions, only expose approval while approval is actionable, and only bulk-approve the actionable subset.
 - Existing Sales order logic already uses `saleOrderInvoicePrimaryAction`, which resolves draft linked invoices to Confirm, fully-covered/posting-complete orders to View, and only returns Create when a new invoice is genuinely due.
 - Existing Repair detail logic already uses `pickRepairPrimaryAction` to select one dominant repair CTA and `repairBillingNeedsSync` to distinguish missing billing from invoice alignment.
@@ -43,6 +44,8 @@ Baseline complete through the existing searchable component picker, authoritativ
   - draft → Confirm transition
   - terminal records do not create downstream records
   - terminal records may still open existing linked documents
+  - bulk actions operate on actionable subsets
+  - terminal records do not expose progression actions
 - `__tests__/repair-journey.test.ts`
   - missing invoice → Create Invoice
   - existing posted invoice → View Invoice
@@ -58,6 +61,8 @@ Baseline complete through the existing searchable component picker, authoritativ
 - [x] Existing linked documents resolve away from duplicate Create actions.
 - [x] Draft linked invoices can resolve to Confirm rather than duplicate creation.
 - [x] Terminal records do not create new downstream documents.
+- [x] Terminal records do not expose normal progression actions.
+- [x] Bulk-action helpers can target only actionable selected records.
 - [x] Purchase approval dead ends were removed from row/bulk actions.
 - [x] Purchase actions are permission/state aligned.
 - [x] Repair no-charge and release checkpoints are explicit.
