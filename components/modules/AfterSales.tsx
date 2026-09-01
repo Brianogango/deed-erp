@@ -1,7 +1,6 @@
 // @ts-nocheck
 'use client'
 import { Suspense, useState, useMemo } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
@@ -81,10 +80,6 @@ function AfterSalesContent() {
       ? 'trade'
       : 'warranties'
   const [detailId, setDetailId] = useUrlRecordId({ whenOpen: { tab } })
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const pathname = usePathname()
-
   function selectTab(nextTab: Tab) {
     setTabParam(nextTab, { queryPatch: { id: null } })
   }
