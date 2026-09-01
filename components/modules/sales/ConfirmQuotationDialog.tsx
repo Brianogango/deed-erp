@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Modal } from '@/components/ui'
+import { AsyncActionButton, EmptyState } from '@/components/erp'
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
 import { fmtDate, fmtKes } from '@/lib/store'
 import type { ConfirmQuotationMode } from '@/lib/sales/confirm-quotation'
 import {
@@ -55,11 +57,12 @@ export function ConfirmQuotationDialog({
   onClose,
   onConfirm,
 }: Props) {
-  const [qtyByLineId, setQtyByLineId] = useState(() => defaultConfirmQtyByLineId(lines))
+  const initialQtyByLineId = useMemo(() => defaultConfirmQtyByLineId(lines), [lines])
+  const [qtyByLineId, setQtyByLineId] = useState(() => initialQtyByLineId)
 
   useEffect(() => {
-    setQtyByLineId(defaultConfirmQtyByLineId(lines))
-  }, [lines])
+    setQtyByLineId(initialQtyByLineId)
+  }, [initialQtyByLineId])
 
   const productLines = useMemo(
     () => lines.filter(line => line.lineType !== 'section'),
@@ -87,6 +90,15 @@ export function ConfirmQuotationDialog({
   }).length
   const lineCount = productLines.filter(line => (qtyByLineId[line.id] ?? 0) > 0).length
   const confirmDisabled = confirming || blocked || !hasProduct
+  const dirty = productLines.some(line => (qtyByLineId[line.id] ?? 0) !== (initialQtyByLineId[line.id] ?? 0))
+  const { guardedNavigate } = useUnsavedChangesGuard(
+    dirty && !confirming,
+    'Discard the quantity changes made in this confirmation?'
+  )
+  const requestClose = () => {
+    if (confirming) return
+    guardedNavigate(onClose)
+  }
 
   const setLineQty = (lineId: string, raw: number, max: number) => {
     const qty = Math.min(max, Math.max(0, Math.floor(Number(raw) || 0)))
@@ -97,19 +109,19 @@ export function ConfirmQuotationDialog({
     <Modal
       title="Confirm quotation"
       subtitle={`${orderRef} · ${customerName}`}
-      onClose={confirming ? () => {} : onClose}
+      onClose={requestClose}
       width={560}
       variant="enterprise"
       footer={
         <div className="sales-confirm-dialog__actions">
-          <button type="button" className="btn-outline text-xs" disabled={confirming} onClick={onClose}>
+          <button type="button" className="btn-outline text-xs" disabled={confirming} onClick={requestClose}>
             Cancel
           </button>
           {canSkipReserve && (
-            <button
-              type="button"
+            <AsyncActionButton
               className="btn-secondary text-xs"
               disabled={confirmDisabled}
+              pendingLabel="Confirming…"
               title={
                 blocked
                   ? 'Resolve approvals before confirming'
@@ -117,15 +129,15 @@ export function ConfirmQuotationDialog({
                     ? 'Keep at least one product'
                     : 'Confirm and rename this document without reserving stock'
               }
-              onClick={() => onConfirm('no_reserve', qtyByLineId)}
+              action={() => onConfirm('no_reserve', qtyByLineId)}
             >
               {confirming ? 'Confirming…' : 'Confirm · Manual reserve'}
-            </button>
+            </AsyncActionButton>
           )}
-          <button
-            type="button"
+          <AsyncActionButton
             className="btn-primary text-xs"
             disabled={confirmDisabled}
+            pendingLabel="Confirming…"
             title={
               blocked
                 ? 'Resolve approvals before confirming'
@@ -133,14 +145,14 @@ export function ConfirmQuotationDialog({
                   ? 'Keep at least one product'
                   : 'Confirm — rename this quotation to a Sales Order (same document)'
             }
-            onClick={() => onConfirm(canReserve ? 'reserve' : 'no_reserve', qtyByLineId)}
+            action={() => onConfirm(canReserve ? 'reserve' : 'no_reserve', qtyByLineId)}
           >
             {confirming
               ? 'Confirming…'
               : canReserve
                 ? 'Confirm · Reserve stock'
                 : 'Confirm · Rename to SO'}
-          </button>
+          </AsyncActionButton>
         </div>
       }
     >
@@ -170,7 +182,11 @@ export function ConfirmQuotationDialog({
             </p>
           </header>
           {productLines.length === 0 ? (
-            <p className="m-0 text-[11px] text-[var(--text-3)]">This quotation has no product lines.</p>
+            <EmptyState
+              title="No product lines"
+              description="This quotation has no products that can move into the Sales Order. Add at least one product before confirming."
+              className="min-h-[150px]"
+            />
           ) : (
             <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
               {productLines.map(line => {
