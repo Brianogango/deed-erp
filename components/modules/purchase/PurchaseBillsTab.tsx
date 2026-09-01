@@ -67,11 +67,10 @@ export default function PurchaseBillsTab() {
   function validateAction(b: VendorBill, compact = false) {
     return (
       <AsyncActionButton
-        className={`btn-primary ${compact ? 'text-[9px] py-0.5 px-2' : 'text-[10px] py-1.5 px-3'}`}
+        className={`btn-primary ${compact ? 'min-h-9 text-[9px] py-0.5 px-2' : 'min-h-11 text-[10px] py-1.5 px-3'}`}
         style={{ background: 'var(--success)' }}
         action={() => Promise.resolve(postInvoice(b.id))}
         pendingLabel="Validating…"
-        successLabel="Validated"
         onClickCapture={compact ? e => e.stopPropagation() : undefined}
       >
         Validate
@@ -92,7 +91,7 @@ export default function PurchaseBillsTab() {
   }
 
   return (
-    <div className="card overflow-hidden purchase-directory purchase-bills-panel">
+    <section className="card overflow-hidden purchase-directory purchase-bills-panel" aria-label="Vendor bills">
       <PanelHeader title="Vendor Bills" count={vendorBills.length} />
       {vendorBills.length === 0 ? (
         <EmptyState
@@ -130,6 +129,6 @@ export default function PurchaseBillsTab() {
           exportFilename="vendor-bills"
         />
       )}
-    </div>
+    </section>
   )
 }

@@ -6,6 +6,8 @@
 export { ResponsivePageContainer } from './ResponsivePageContainer'
 export { ModuleChrome } from './ModuleChrome'
 export { PageToolbar } from './PageToolbar'
+export { MobileActionBar } from './MobileActionBar'
+export { AccessibleIconButton } from './AccessibleIconButton'
 export { PrimaryActionButton } from './PrimaryActionButton'
 export { SecondaryActionMenu } from './SecondaryActionMenu'
 export { StatusBadge } from './StatusBadge'

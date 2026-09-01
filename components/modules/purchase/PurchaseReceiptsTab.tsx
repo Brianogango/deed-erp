@@ -59,7 +59,8 @@ export default function PurchaseReceiptsTab() {
     return (
       <button
         type="button"
-        className="btn-outline text-[10px] py-0.5 px-2"
+        className="btn-outline min-h-11 md:min-h-8 text-[10px] py-1 px-3"
+        aria-label={`Open goods receipt ${r.ref}`}
         onClick={e => { e.stopPropagation(); openReceiptDetail(r.id, 'list') }}
       >
         Open
@@ -68,7 +69,7 @@ export default function PurchaseReceiptsTab() {
   }
 
   return (
-    <div className="card overflow-hidden purchase-directory purchase-receipts-panel">
+    <section className="card overflow-hidden purchase-directory purchase-receipts-panel" aria-label="Goods receipts">
       <PanelHeader title="Goods Receipts (GRN)" count={receipts.length} />
       {rows.length === 0 ? (
         <EmptyState
@@ -107,6 +108,6 @@ export default function PurchaseReceiptsTab() {
           exportFilename="goods-receipts"
         />
       )}
-    </div>
+    </section>
   )
 }
