@@ -3943,6 +3943,7 @@ export type SalesStoreState = Pick<AppState,
   | 'unassignSerialFromSOLine'
   | 'addContact'
   | 'createInvoiceFromSO'
+  | 'postInvoice'
   | 'prepareDelivery'
   | 'validateDelivery'
   | 'markDeliveryNoteGenerated'
@@ -6626,6 +6627,7 @@ export function StoreProvider({
     unassignSerialFromSOLine: (...args: Parameters<AppState['unassignSerialFromSOLine']>) => storeCtxRef.current!.unassignSerialFromSOLine(...args),
     addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
     createInvoiceFromSO: (...args: Parameters<AppState['createInvoiceFromSO']>) => storeCtxRef.current!.createInvoiceFromSO(...args),
+    postInvoice: (...args: Parameters<AppState['postInvoice']>) => storeCtxRef.current!.postInvoice(...args),
     prepareDelivery: (...args: Parameters<AppState['prepareDelivery']>) => storeCtxRef.current!.prepareDelivery(...args),
     validateDelivery: (...args: Parameters<AppState['validateDelivery']>) => storeCtxRef.current!.validateDelivery(...args),
     markDeliveryNoteGenerated: (...args: Parameters<AppState['markDeliveryNoteGenerated']>) => storeCtxRef.current!.markDeliveryNoteGenerated(...args),
@@ -12910,6 +12912,17 @@ const storeCtx: AppState = {
               }
             }))
           }
+          // Pull the server-authoritative SO back immediately so qtyInvoiced
+          // and the Sales Order invoice status cannot stay on "To Invoice"
+          // until SSE/localStorage catches up.
+          try {
+            const soResponse = await fetch(`/api/sale-orders/${orderId}`, { cache: 'no-store' })
+            if (soResponse.ok) {
+              const refreshedOrder = await soResponse.json()
+              applySaleOrderPersistResult(setSaleOrders, soRef, orderId, refreshedOrder, { syncLines: true })
+            }
+          } catch { /* SSE remains the fallback */ }
+
           addAuditLog('create_invoice_from_so', local.ref, `Draft invoice created from ${so.ref} (server atomic)`)
           showToast(`Draft invoice ${local.ref} created — post it to finalize`)
           return local
