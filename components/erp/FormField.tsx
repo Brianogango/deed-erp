@@ -4,7 +4,7 @@ import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode 
 
 /**
  * Consistent accessible label/help/error wrapper for ERP form controls.
- * When the child is a React element, aria-invalid/aria-describedby/id are supplied automatically.
+ * Existing control ids are preserved so labels remain correctly associated.
  */
 export function FormField({
   label,
@@ -13,6 +13,7 @@ export function FormField({
   error,
   children,
   className = '',
+  htmlFor,
 }: {
   label: string
   required?: boolean
@@ -20,16 +21,23 @@ export function FormField({
   error?: ReactNode
   children: ReactNode
   className?: string
+  htmlFor?: string
 }) {
   const generatedId = useId()
-  const inputId = `erp-field-${generatedId.replace(/:/g, '')}`
+  const childProps = isValidElement(children)
+    ? (children.props as Record<string, unknown>)
+    : undefined
+  const existingId = typeof childProps?.id === 'string' && childProps.id.trim()
+    ? childProps.id
+    : undefined
+  const inputId = htmlFor || existingId || `erp-field-${generatedId.replace(/:/g, '')}`
   const hintId = `${inputId}-hint`
   const errorId = `${inputId}-error`
   const describedBy = [hint ? hintId : '', error ? errorId : ''].filter(Boolean).join(' ') || undefined
 
   const control = isValidElement(children)
     ? cloneElement(children as ReactElement<Record<string, unknown>>, {
-        id: (children.props as Record<string, unknown>).id ?? inputId,
+        id: existingId ?? inputId,
         'aria-invalid': error ? true : undefined,
         'aria-describedby': describedBy,
       })
