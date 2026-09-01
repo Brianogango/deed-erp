@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { ModuleHeader, TabBar } from '@/components/ui'
 
 export type ModuleTab = {
@@ -12,7 +12,9 @@ export type ModuleTab = {
 
 /**
  * Standard module shell:
- * ModuleHeader → ModuleNavigation (≤6 visible) → body
+ * ModuleHeader → ModuleNavigation (≤6 visible) → body.
+ * The body is exposed as a labelled region so keyboard and screen-reader users
+ * can move directly from module navigation into the active workspace.
  */
 export function ModuleChrome({
   title,
@@ -49,8 +51,12 @@ export function ModuleChrome({
   children: ReactNode
   className?: string
 }) {
+  const regionId = useId().replace(/:/g, '')
+  const activeLabel = tabs?.find(tab => tab.id === activeTab)?.label
+  const workspaceLabel = activeLabel ? `${title} — ${activeLabel}` : title
+
   return (
-    <div className={`mod-page ${className}`.trim()}>
+    <div className={`mod-page min-w-0 max-w-full ${className}`.trim()}>
       <ModuleHeader
         title={title}
         subtitle={subtitle}
@@ -72,7 +78,14 @@ export function ModuleChrome({
           ariaLabel={tabAriaLabel}
         />
       )}
-      <div className="mod-body">{children}</div>
+      <div
+        id={`module-workspace-${regionId}`}
+        className="mod-body min-w-0 max-w-full"
+        role="region"
+        aria-label={workspaceLabel}
+      >
+        {children}
+      </div>
     </div>
   )
 }
