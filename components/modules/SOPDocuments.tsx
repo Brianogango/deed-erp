@@ -1,6 +1,6 @@
 'use client'
 import { Suspense, useState, useMemo, useRef, useEffect } from 'react'
-import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { useHrStore } from '@/lib/store'
 import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
@@ -134,7 +134,6 @@ function SOPDocumentsContent() {
 
   const { docs, save } = useSopDocs()
 
-  const patchListUi = useUrlUiPatch()
   const [search, setSearch] = useUrlUiState('q', '')
   const [filterDept, setFilterDept] = useUrlUiState('dept', 'all')
   const [filterStatus, setFilterStatus] = useUrlUiState('status', 'active')
