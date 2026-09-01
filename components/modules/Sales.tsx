@@ -883,7 +883,9 @@ function SalesContent() {
     [activeInvoices],
   )
   const regularLiveInvoices = useMemo(
-    () => liveInvoices.filter(i => !i.isDownPayment && i.type !== 'customer_credit' && i.type !== 'vendor_bill'),
+    // String(): 'customer_credit' is a legacy/loosely-typed value outside the
+    // InvoiceType union; keep excluding it without tripping TS2367.
+    () => liveInvoices.filter(i => !i.isDownPayment && String(i.type) !== 'customer_credit' && i.type !== 'vendor_bill'),
     [liveInvoices],
   )
   const regularInvoiceCoverage = useMemo(
