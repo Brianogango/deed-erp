@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useEffect } from 'react'
+import { useMemo } from 'react'
 import { DataTable, type ActiveFilterChip, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
@@ -7,6 +7,7 @@ import { fmtKes, fmtDateTime } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
 import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
 import { StatusBadge } from '@/components/erp'
+import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { Fa } from '@/components/icons'
 import {
   faMapMarkerAlt, faCalendarAlt, faChevronRight,
@@ -174,16 +175,28 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     },
   ], [visibleRepairs])
 
-  const [searchQuery, setSearchQuery]       = useState('')
-  const [statusFilter, setStatusFilter]     = useState(filter ?? 'all')
-  const [techFilter, setTechFilter]         = useState('all')
-  const [pathFilter, setPathFilter]         = useState<'all' | 'diagnosis_first' | 'direct_repair'>('all')
-  const [priorityFilter, setPriorityFilter] = useState('all')
-  const [dateFrom, setDateFrom]             = useState('')
-  const [dateTo, setDateTo]                 = useState('')
+  const patchUi = useUrlUiPatch()
+  const [searchQuery, setSearchQueryValue] = useUrlUiState('q', '')
+  const [statusFilter, setStatusFilterValue] = useUrlUiState('status', filter ?? 'all')
+  const [techFilter, setTechFilterValue] = useUrlUiState('tech', 'all')
+  const [pathFilterValue, setPathFilterValue] = useUrlUiState('path', 'all')
+  const pathFilter: 'all' | 'diagnosis_first' | 'direct_repair' =
+    pathFilterValue === 'diagnosis_first' || pathFilterValue === 'direct_repair'
+      ? pathFilterValue
+      : 'all'
+  const [priorityFilter, setPriorityFilterValue] = useUrlUiState('priority', 'all')
+  const [dateFrom, setDateFromValue] = useUrlUiState('from', '')
+  const [dateTo, setDateToValue] = useUrlUiState('to', '')
+  const [pageValue, setPageValue] = useUrlUiState('page', '1')
+  const currentPage = Math.max(1, Number.parseInt(pageValue, 10) || 1)
 
-  // Keep statusFilter in sync with external filter prop
-  useEffect(() => { if (filter !== statusFilter) setStatusFilter(filter) }, [filter])
+  const setSearchQuery = (value: string) => setSearchQueryValue(value, { queryPatch: { page: null } })
+  const setTechFilter = (value: string) => setTechFilterValue(value, { queryPatch: { page: null } })
+  const setPathFilter = (value: 'all' | 'diagnosis_first' | 'direct_repair') => setPathFilterValue(value, { queryPatch: { page: null } })
+  const setPriorityFilter = (value: string) => setPriorityFilterValue(value, { queryPatch: { page: null } })
+  const setDateFrom = (value: string) => setDateFromValue(value, { queryPatch: { page: null } })
+  const setDateTo = (value: string) => setDateToValue(value, { queryPatch: { page: null } })
+  const setCurrentPage = (page: number) => setPageValue(String(Math.max(1, page)))
 
   const technicians = useMemo(() => {
     const m = new Map<string, string>()
@@ -191,11 +204,23 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     return Array.from(m.entries()).map(([id, name]) => ({ id, name }))
   }, [visibleRepairs])
 
-  const handleStatusChange = (val: string) => { setStatusFilter(val); setFilter(val) }
+  const handleStatusChange = (val: string) => {
+    setStatusFilterValue(val, { queryPatch: { page: null } })
+    setFilter(val)
+  }
 
   const clearAll = () => {
-    setSearchQuery(''); handleStatusChange('all')
-    setTechFilter('all'); setPathFilter('all'); setPriorityFilter('all'); setDateFrom(''); setDateTo('')
+    setFilter('all')
+    patchUi({
+      q: null,
+      status: null,
+      tech: null,
+      path: null,
+      priority: null,
+      from: null,
+      to: null,
+      page: null,
+    })
   }
 
   const filteredRepairs = useMemo(() => {
@@ -491,6 +516,8 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
             activeFilters={repairActiveFilters}
             onClearFilters={clearAll}
             hideColumnFilters
+            page={currentPage}
+            onPageChange={setCurrentPage}
             perPage={ITEMS_PER_PAGE}
             emptyMessage="No repair jobs found"
             onRowClick={r => onSelect(r.id)}
