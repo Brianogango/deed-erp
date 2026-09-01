@@ -35,6 +35,24 @@ export type SetUrlRecordIdOptions = {
  */
 const pendingRecordIds = new Map<string, string | null>()
 
+/**
+ * Latest optimistic query string per pathname. Multiple URL-backed controls can
+ * update in the same event (e.g. search changes then DataTable resets page).
+ * Building each navigation from stale useSearchParams would otherwise let the
+ * second update erase the first. Keep a tiny pending snapshot until the router
+ * catches up so same-tick patches compose atomically.
+ */
+const pendingQueryStrings = new Map<string, string>()
+
+function queryParamsBase(pathname: string, searchParams: URLSearchParams | ReadonlyURLSearchParams) {
+  const pending = pendingQueryStrings.get(pathname)
+  return new URLSearchParams(pending !== undefined ? pending : searchParams.toString())
+}
+
+function rememberPendingQuery(pathname: string, params: URLSearchParams) {
+  pendingQueryStrings.set(pathname, params.toString())
+}
+
 function pendingKey(pathname: string, param: string) {
   return `${pathname}::${param}`
 }
@@ -56,7 +74,7 @@ export function useUrlRecordId(options: Options = {}) {
 
     pendingRecordIds.set(pendingKey(pathname, param), id)
 
-    const params = new URLSearchParams(searchParams.toString())
+    const params = queryParamsBase(pathname, searchParams)
     if (id) {
       params.set(param, id)
       if (options.whenOpen) {
@@ -75,6 +93,7 @@ export function useUrlRecordId(options: Options = {}) {
       }
     }
     const qs = params.toString()
+    rememberPendingQuery(pathname, params)
     const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
       if (opts?.history === 'replace') router.replace(href, { scroll: false })
@@ -99,6 +118,7 @@ export function useUrlRecordId(options: Options = {}) {
   useEffect(() => {
     const onPopState = () => {
       pendingRecordIds.delete(pendingKey(pathname, param))
+      pendingQueryStrings.delete(pathname)
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
@@ -129,7 +149,7 @@ export function useUrlQueryState(param: string, fallback: string) {
 
   const setValue = useCallback((next: string | null, opts?: SetUrlQueryStateOptions) => {
     setLocalValue(next ?? fallback)
-    const params = new URLSearchParams(searchParams.toString())
+    const params = queryParamsBase(pathname, searchParams)
     if (next === null) params.delete(param)
     else params.set(param, next)
     if (opts?.queryPatch) {
@@ -139,6 +159,7 @@ export function useUrlQueryState(param: string, fallback: string) {
       }
     }
     const qs = params.toString()
+    rememberPendingQuery(pathname, params)
     const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
       if (opts?.history === 'replace') router.replace(href, { scroll: false })
@@ -147,8 +168,16 @@ export function useUrlQueryState(param: string, fallback: string) {
   }, [searchParams, router, pathname, param, fallback])
 
   useEffect(() => {
+    const actual = searchParams.toString()
+    const pending = pendingQueryStrings.get(pathname)
+    if (pending !== undefined && pending !== actual) {
+      const optimistic = new URLSearchParams(pending)
+      setLocalValue(optimistic.get(param) ?? fallback)
+      return
+    }
+    if (pending === actual) pendingQueryStrings.delete(pathname)
     setLocalValue(searchParams.get(param) ?? fallback)
-  }, [searchParams, param, fallback])
+  }, [searchParams, param, fallback, pathname])
 
   return [value, setValue] as const
 }
@@ -192,12 +221,13 @@ export function useUrlUiPatch() {
   const pathname = usePathname()
 
   return useCallback((patch: Record<string, string | null>) => {
-    const params = new URLSearchParams(searchParams.toString())
+    const params = queryParamsBase(pathname, searchParams)
     for (const [key, value] of Object.entries(patch)) {
       if (value === null || value === '') params.delete(key)
       else params.set(key, value)
     }
     const qs = params.toString()
+    rememberPendingQuery(pathname, params)
     const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
       router.replace(href, { scroll: false })
