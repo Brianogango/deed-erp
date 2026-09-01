@@ -72,6 +72,7 @@ export default function PurchaseBillsTab() {
         action={() => Promise.resolve(postInvoice(b.id))}
         pendingLabel="Validating…"
         successLabel="Validated"
+        onClickCapture={compact ? e => e.stopPropagation() : undefined}
       >
         Validate
       </AsyncActionButton>
