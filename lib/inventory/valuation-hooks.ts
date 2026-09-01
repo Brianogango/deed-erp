@@ -163,7 +163,10 @@ export async function postDeliveryValuationFromPayload(params: {
       results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
     }
   }
-  return finalizeValuation(results)
+  // Legacy blob-only products cannot be valued in Prisma — that is a
+  // bookkeeping gap, not a reason to block delivery validation (and with it
+  // invoicing) for the sale order. Same tolerance POS already had.
+  return finalizeValuation(results, { allowMissingProduct: true })
 }
 
 export async function postPosValuationFromPayload(params: {

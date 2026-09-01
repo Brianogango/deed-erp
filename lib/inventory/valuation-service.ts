@@ -252,18 +252,23 @@ async function applyOutboundValuation(params: {
     })
     let batches = await loadBatches()
     let fifo = consumeBatchesFIFO(toLayers(batches), qty)
-    if (fifo.shortfall > 0 && params.kind === 'pos') {
+    if (fifo.shortfall > 0) {
+      // Legacy stock (pre-batch receipts, serial-tracked units, opening stock)
+      // has no FIFO layers. Cover the shortfall at standard cost — the same
+      // fallback POS already used — instead of blocking the operational
+      // document (delivery validation, and with it invoicing, for sale
+      // orders). Only a failed cover write remains a hard error.
       const fallbackCost = (await resolveStandardCost(params.productId)) ?? 0
       try {
         await upsertFifoBatch({
           productId: params.productId,
           qty: fifo.shortfall,
           unitCost: fallbackCost,
-          reference: `AUTO-${params.reference || 'pos'}`.slice(0, 80),
+          reference: `AUTO-${params.reference || params.kind}`.slice(0, 80),
         })
       } catch (err) {
         throw new Error(
-          `POS FIFO auto-cover failed for product ${params.productId}: ${err instanceof Error ? err.message : String(err)}`,
+          `FIFO auto-cover failed for product ${params.productId}: ${err instanceof Error ? err.message : String(err)}`,
         )
       }
       batches = await loadBatches()
