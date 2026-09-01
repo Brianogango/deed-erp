@@ -31,6 +31,7 @@ export async function buildHistoricalAgeing(opts: {
       invoiceDate: true,
       dueDate: true,
       totalAmount: true,
+      amountPaid: true,
       status: true,
       client: { select: { name: true } },
       paymentAllocations: {
@@ -46,7 +47,13 @@ export async function buildHistoricalAgeing(opts: {
   const items: AgeingInvoiceLike[] = invoices
     .filter(inv => OPEN_STATUSES.has(String(inv.status)) || String(inv.status) === 'paid' || String(inv.status) === 'partially_paid')
     .map(inv => {
-      const allocated = inv.paymentAllocations.reduce((s, a) => s + Number(a.amount || 0), 0)
+      const allocatedRows = inv.paymentAllocations.reduce((s, a) => s + Number(a.amount || 0), 0)
+      // Invoices paid before payment_allocations existed carry the paid amount
+      // only in the amountPaid cache — with zero allocation rows they would
+      // otherwise age as fully unpaid (this inflated AR by ~2M in production).
+      const allocated = inv.paymentAllocations.length > 0
+        ? allocatedRows
+        : Number(inv.amountPaid ?? 0)
       return {
         id: inv.id,
         ref: inv.invoiceNumber,

@@ -844,7 +844,10 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
               <small>Live operations</small>
               <h2>Dispatch queue</h2>
             </div>
-            <span>{stats.pending + stats.in_transit + stats.failed}</span>
+            <span
+              title={`${stats.pending + stats.in_transit + stats.failed} live jobs: ${stats.pending} pending, ${stats.in_transit} in transit, ${stats.failed} failed`}
+              aria-label={`${stats.pending + stats.in_transit + stats.failed} live delivery jobs`}
+            >{stats.pending + stats.in_transit + stats.failed}</span>
           </header>
           <section>
             <div className="delivery-queue-heading"><strong>Unassigned</strong><button type="button" onClick={() => setFilterStatus('pending')}>View all</button></div>

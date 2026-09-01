@@ -155,7 +155,9 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
   const repairStats = useMemo(() => [
     {
       label: 'Needs action',
-      value: visibleRepairs.filter(r => ['pending_verification', 'awaiting_approval'].includes(r.status)).length,
+      // Declined quotes and unrepairable devices also wait on a decision —
+      // including them keeps this bucket consistent with Dashboard Open Repairs.
+      value: visibleRepairs.filter(r => ['pending_verification', 'awaiting_approval', 'declined', 'unrepairable'].includes(r.status)).length,
       tone: 'attention',
     },
     {
