@@ -133,6 +133,7 @@ import {
   deliveryDeliveredTotal,
   canGenerateDeliveryNote,
   saleOrderInvoiceStatus,
+  saleOrderInvoicePrimaryAction,
   saleOrderFulfilmentStatus,
   saleOrderIsOperationallyComplete,
   saleOrderIsAccepted,
@@ -354,7 +355,7 @@ function SalesContent() {
     approvalRequests,
     createSaleOrder, updateSaleOrder, confirmSO, ensureWaitingDeliveryForSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine, moveSOLine, addSOSection,
-    assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
+    assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, postInvoice, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO, createNewSOVersion,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
@@ -489,6 +490,7 @@ function SalesContent() {
   const [invoiceWizardPercent, setInvoiceWizardPercent] = useState('30')
   const [invoiceWizardAmount, setInvoiceWizardAmount] = useState('')
   const [creatingWizardInvoice, setCreatingWizardInvoice] = useState(false)
+  const [postingInvoiceId, setPostingInvoiceId] = useState<string | null>(null)
   const [partialInvoiceQtys, setPartialInvoiceQtys] = useState<Record<string, string>>({})
   const [creatingPartialInvoice, setCreatingPartialInvoice] = useState(false)
   const [creatingNewVersion, setCreatingNewVersion] = useState(false)
@@ -879,6 +881,30 @@ function SalesContent() {
   const liveInvoices = useMemo(
     () => activeInvoices.filter(i => !['cancelled', 'voided', 'void'].includes(String(i.status))),
     [activeInvoices],
+  )
+  const regularLiveInvoices = useMemo(
+    () => liveInvoices.filter(i => !i.isDownPayment && i.type !== 'customer_credit' && i.type !== 'vendor_bill'),
+    [liveInvoices],
+  )
+  const regularInvoiceCoverage = useMemo(
+    () => regularLiveInvoices.reduce((sum, inv) => sum + Math.max(0, Number(inv.total) || 0), 0),
+    [regularLiveInvoices],
+  )
+  const effectiveActiveInvoiceStatus =
+    activeOrder
+    && activeInvoiceStatus === 'to_invoice'
+    && regularLiveInvoices.length > 0
+    && regularInvoiceCoverage + 0.5 >= Math.max(0, Number(activeOrder.total) || 0)
+      ? 'invoiced' as const
+      : activeInvoiceStatus
+  const invoicePrimaryAction = useMemo(
+    () => saleOrderInvoicePrimaryAction({
+      invoices: liveInvoices,
+      orderTotal: Number(activeOrder?.total) || 0,
+      canCreateInvoiceNow,
+      invoiceStatus: effectiveActiveInvoiceStatus,
+    }),
+    [liveInvoices, activeOrder?.total, canCreateInvoiceNow, effectiveActiveInvoiceStatus],
   )
   const activePaymentStatus = useMemo(() => {
     if (activeInvoices.length === 0) return 'not_paid' as const
@@ -2022,7 +2048,7 @@ function SalesContent() {
                             <SalesDocPill label="Confirmed — locked" tone="neutral" />
                           )}
                           {activeOrder.status === 'sale' && (
-                            <SalesDocPill label={SO_INVOICE_STATUS_LABELS[activeInvoiceStatus]} tone={activeInvoiceStatus === 'to_invoice' ? 'warning' : 'neutral'} />
+                            <SalesDocPill label={SO_INVOICE_STATUS_LABELS[effectiveActiveInvoiceStatus]} tone={effectiveActiveInvoiceStatus === 'to_invoice' ? 'warning' : 'neutral'} />
                           )}
                           {activeOrder.status === 'sale' && activeInvoices.length > 0 && (
                             <SalesDocPill
@@ -2233,28 +2259,43 @@ function SalesContent() {
                           ]}
                         />
                         {canInvoiceFromSO && activeOrder.status === 'sale' ? (
-                          liveInvoices.length > 0 && !canCreateInvoiceNow ? (
-                            // Fully billed: creation is done — take the user to the bill.
+                          invoicePrimaryAction.kind === 'confirm' ? (
                             <button
                               type="button"
                               className="sp-btn sp-btn-primary sales-action-primary"
-                              onClick={() => router.push(financeInvoicePath(liveInvoices[0].id))}
+                              disabled={postingInvoiceId === invoicePrimaryAction.invoiceId}
+                              onClick={() => void (async () => {
+                                setPostingInvoiceId(invoicePrimaryAction.invoiceId)
+                                try {
+                                  await Promise.resolve(postInvoice(invoicePrimaryAction.invoiceId))
+                                } finally {
+                                  setPostingInvoiceId(null)
+                                }
+                              })()}
+                            >
+                              {postingInvoiceId === invoicePrimaryAction.invoiceId ? 'Confirming…' : 'Confirm invoice'}
+                            </button>
+                          ) : invoicePrimaryAction.kind === 'view' ? (
+                            <button
+                              type="button"
+                              className="sp-btn sp-btn-primary sales-action-primary"
+                              onClick={() => router.push(financeInvoicePath(invoicePrimaryAction.invoiceId))}
                             >
                               View invoice
                             </button>
                           ) : (
-                          <button
-                            type="button"
-                            className="sp-btn sp-btn-primary sales-action-primary"
-                            onClick={() => {
-                              setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
-                              setInvoiceWizardPercent('30')
-                              setInvoiceWizardAmount('')
-                              setShowInvoiceWizard(true)
-                            }}
-                          >
-                            Create invoice
-                          </button>
+                            <button
+                              type="button"
+                              className="sp-btn sp-btn-primary sales-action-primary"
+                              onClick={() => {
+                                setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
+                                setInvoiceWizardPercent('30')
+                                setInvoiceWizardAmount('')
+                                setShowInvoiceWizard(true)
+                              }}
+                            >
+                              Create invoice
+                            </button>
                           )
                         ) : (
                           <button type="button" className="sp-btn sp-btn-primary sales-action-primary" onClick={() => void openDeliveryView()}>
@@ -2304,7 +2345,7 @@ function SalesContent() {
                           </div>
                           <div>
                             <dt>Invoice</dt>
-                            <dd>{SO_INVOICE_STATUS_LABELS[activeInvoiceStatus]}</dd>
+                            <dd>{SO_INVOICE_STATUS_LABELS[effectiveActiveInvoiceStatus]}</dd>
                           </div>
                           <div>
                             <dt>Payment</dt>
@@ -2324,13 +2365,17 @@ function SalesContent() {
                               : saleOrderIsAccepted(activeOrder)
                                 ? 'Confirm quotation'
                                 : 'Record customer response'
-                          : activeOperationallyComplete
-                            ? 'Order complete'
-                            : visibleDeliveries.length === 0
-                              ? 'Create delivery'
-                              : activeFulfilmentStatus === 'delivered'
-                                ? 'Create invoice'
-                                : 'Complete delivery'}
+                          : invoicePrimaryAction.kind === 'confirm'
+                            ? 'Confirm invoice'
+                            : activeOperationallyComplete
+                              ? 'Order complete'
+                              : invoicePrimaryAction.kind === 'view'
+                                ? 'View invoice'
+                                : visibleDeliveries.length === 0
+                                  ? 'Create delivery'
+                                  : activeFulfilmentStatus === 'delivered'
+                                    ? 'Create invoice'
+                                    : 'Complete delivery'}
                       </strong>
                       <small>
                         {isQuotationStage(activeOrder.status)
@@ -2388,7 +2433,7 @@ function SalesContent() {
                         hasDelivery: visibleDeliveries.length > 0,
                         deliveryPrepared: activeDeliveries.some(d => !!d.preparedAt || d.status === 'ready' || d.status === 'done'),
                         deliveryDone: activeDeliveries.some(d => d.status === 'done'),
-                        invoiced: activeInvoiceStatus === 'invoiced' || activeInvoices.some(i => !i.isDownPayment),
+                        invoiced: effectiveActiveInvoiceStatus === 'invoiced' || activeInvoices.some(i => !i.isDownPayment),
                         complete: activeOperationallyComplete,
                       })}
                     />

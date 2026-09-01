@@ -206,6 +206,52 @@ export const SO_INVOICE_STATUS_LABELS: Record<SoInvoiceStatus, string> = {
  * has been invoiced, and "Upselling Opportunity" when more was delivered than
  * ordered on a fully invoiced order.
  */
+export interface SaleOrderLinkedInvoiceInput {
+  id: string
+  status?: unknown
+  total?: number
+  type?: string
+  isDownPayment?: boolean
+}
+
+export type SaleOrderInvoicePrimaryAction =
+  | { kind: 'create' }
+  | { kind: 'confirm'; invoiceId: string }
+  | { kind: 'view'; invoiceId: string }
+
+/**
+ * Main Sales Order invoice CTA. A draft regular invoice must be confirmed
+ * before another invoice is created. Posted partial invoices may still allow
+ * another invoice; a full-value invoice is treated as complete even if the
+ * client-side qtyInvoiced counters are temporarily stale.
+ */
+export function saleOrderInvoicePrimaryAction(args: {
+  invoices: readonly SaleOrderLinkedInvoiceInput[]
+  orderTotal: number
+  canCreateInvoiceNow: boolean
+  invoiceStatus: SoInvoiceStatus
+}): SaleOrderInvoicePrimaryAction {
+  const regular = args.invoices.filter(inv =>
+    !inv.isDownPayment
+    && inv.type !== 'customer_credit'
+    && inv.type !== 'vendor_bill'
+    && invoiceDocState(inv.status) !== 'cancelled'
+  )
+  const draft = regular.find(inv => invoiceDocState(inv.status) === 'draft')
+  if (draft) return { kind: 'confirm', invoiceId: draft.id }
+
+  const posted = regular.filter(inv => invoiceDocState(inv.status) === 'posted')
+  const covered = posted.reduce((sum, inv) => sum + Math.max(0, Number(inv.total) || 0), 0)
+  const orderTotal = Math.max(0, Number(args.orderTotal) || 0)
+  const fullyCovered =
+    args.invoiceStatus === 'invoiced'
+    || (!args.canCreateInvoiceNow && posted.length > 0)
+    || (orderTotal > 0 && covered + 0.5 >= orderTotal)
+
+  if (fullyCovered && posted.length > 0) return { kind: 'view', invoiceId: posted[0].id }
+  return { kind: 'create' }
+}
+
 export function saleOrderInvoiceStatus(
   status: OdooSaleStatus,
   lines: readonly InvoiceableLine[],

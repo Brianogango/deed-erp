@@ -13,6 +13,7 @@ import {
   SALE_STATUS_LABELS,
   invoiceableQty,
   saleOrderInvoiceStatus,
+  saleOrderInvoicePrimaryAction,
   splitDeliveryForBackorder,
   normalizeDeliveryStatus,
   invoiceDocState,
@@ -559,5 +560,44 @@ describe('list filters', () => {
     expect(matchesSalesListTab(cancelledSoNoConfirmedAt, 'orders')).toBe(true)
     expect(matchesSalesListTab(cancelledSoWithConfirmedAt, 'orders')).toBe(true)
     expect(matchesSalesListTab(liveSo, 'orders')).toBe(true)
+  })
+})
+
+
+describe('sales order invoice primary action', () => {
+  it('shows Confirm invoice when a regular draft invoice already exists', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{ id: 'inv-draft', status: 'draft', total: 1000, type: 'customer_invoice' }],
+      orderTotal: 1000,
+      canCreateInvoiceNow: true,
+      invoiceStatus: 'to_invoice',
+    })).toEqual({ kind: 'confirm', invoiceId: 'inv-draft' })
+  })
+
+  it('shows View invoice for a posted full-value invoice even when qty counters are stale', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{ id: 'inv-posted', status: 'posted', total: 314360, type: 'customer_invoice' }],
+      orderTotal: 314360,
+      canCreateInvoiceNow: true,
+      invoiceStatus: 'to_invoice',
+    })).toEqual({ kind: 'view', invoiceId: 'inv-posted' })
+  })
+
+  it('still allows another invoice after a posted partial invoice', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{ id: 'inv-partial', status: 'posted', total: 500, type: 'customer_invoice' }],
+      orderTotal: 1000,
+      canCreateInvoiceNow: true,
+      invoiceStatus: 'to_invoice',
+    })).toEqual({ kind: 'create' })
+  })
+
+  it('ignores down-payment invoices for the regular invoice CTA', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{ id: 'deposit', status: 'posted', total: 300, type: 'customer_invoice', isDownPayment: true }],
+      orderTotal: 1000,
+      canCreateInvoiceNow: true,
+      invoiceStatus: 'to_invoice',
+    })).toEqual({ kind: 'create' })
   })
 })
