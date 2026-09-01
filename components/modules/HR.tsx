@@ -39,7 +39,7 @@ import {
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { calculatePayroll } from '@/lib/payroll'
 import HRLeaveTab from './hr/HRLeaveTab'
@@ -248,7 +248,11 @@ function HRContent() {
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
-  const [empSearch, setEmpSearch] = useState('')
+  const [empSearch, setEmpSearchValue] = useUrlUiState('employeeQ', '')
+  const [empPageValue, setEmpPageValue] = useUrlUiState('employeePage', '1')
+  const empPage = Math.max(1, Number.parseInt(empPageValue, 10) || 1)
+  const setEmpSearch = (value: string) => setEmpSearchValue(value, { queryPatch: { employeePage: null } })
+  const setEmpPage = (page: number) => setEmpPageValue(String(Math.max(1, page)))
   const [viewEmpId, setViewEmpId] = useUrlRecordId({ param: 'emp' })
   const [editEmpId, setEditEmpId] = useState<string | null>(null)
 
@@ -545,6 +549,8 @@ function HRContent() {
               searchValue={empSearch}
               onSearchChange={setEmpSearch}
               clientSearch={false}
+              page={empPage}
+              onPageChange={setEmpPage}
               searchPlaceholder="Search employees…"
               emptyMessage={employees.length === 0 ? 'No employees yet' : 'No employees match your search'}
               emptyAction={employees.length === 0 ? <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button> : undefined}
