@@ -1,7 +1,8 @@
 'use client'
 
 import { WorkflowStageBar } from '@/components/erp'
-import { Fa, faUserPlus } from '@/components/icons'
+import { Fa } from '@/components/icons'
+import { faUserPlus } from '@fortawesome/free-solid-svg-icons'
 import { useRepair } from './RepairContext'
 import { STEPPER_STEPS, STATUS_LABELS } from '../repair-config'
 
