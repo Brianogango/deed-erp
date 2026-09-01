@@ -178,12 +178,12 @@ export default function RepairPortalPage() {
   useEffect(() => {
     load()
     // Poll so status changes made by staff appear without a manual refresh.
-    const id = setInterval(load, 20000)
+    const id = setInterval(load, 60000)
     return () => clearInterval(id)
   }, [ref])
   useEffect(() => {
     loadMessages()
-    const id = setInterval(loadMessages, 5000)
+    const id = setInterval(loadMessages, 30000)
     return () => clearInterval(id)
   }, [ref])
   useEffect(() => {
