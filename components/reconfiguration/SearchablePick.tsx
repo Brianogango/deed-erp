@@ -44,11 +44,10 @@ export default function SearchablePick({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return options.slice(0, 80)
-    return options
-      .filter(option => option.label.toLowerCase().includes(q))
-      .slice(0, 80)
+    if (!q) return options
+    return options.filter(option => option.label.toLowerCase().includes(q))
   }, [options, query])
+  const activeOptionId = open && filtered[activeIndex] ? `${listId}-option-${activeIndex}` : undefined
 
   const placeMenu = () => {
     const rect = inputRef.current?.getBoundingClientRect()
@@ -94,9 +93,7 @@ export default function SearchablePick({
     const onResize = () => closeMenu()
     const onScroll = (event: Event) => {
       const target = event.target
-      // The list is intentionally scrollable. Because this listener runs in
-      // capture phase, scrolling the dropdown also reaches window; do not
-      // treat that internal list scroll as a viewport change.
+      // Keep the portalled menu open while the user scrolls the options.
       if (target instanceof Node && menuRef.current?.contains(target)) return
       closeMenu()
     }
@@ -133,6 +130,7 @@ export default function SearchablePick({
           aria-label={label}
           aria-expanded={open}
           aria-controls={listId}
+          aria-activedescendant={activeOptionId}
           aria-autocomplete="list"
           autoComplete="off"
           disabled={disabled}
@@ -150,10 +148,16 @@ export default function SearchablePick({
             if (e.key === 'ArrowDown') {
               e.preventDefault()
               if (!open) openMenu()
-              setActiveIndex(i => Math.min(filtered.length - 1, i + 1))
+              setActiveIndex(i => filtered.length ? Math.min(filtered.length - 1, i + 1) : 0)
             } else if (e.key === 'ArrowUp') {
               e.preventDefault()
               setActiveIndex(i => Math.max(0, i - 1))
+            } else if (e.key === 'Home' && open) {
+              e.preventDefault()
+              setActiveIndex(0)
+            } else if (e.key === 'End' && open) {
+              e.preventDefault()
+              setActiveIndex(Math.max(0, filtered.length - 1))
             } else if (e.key === 'Enter' && open) {
               e.preventDefault()
               const option = filtered[activeIndex]
@@ -194,6 +198,9 @@ export default function SearchablePick({
             left: menuPos.left,
             width: menuPos.width,
             maxHeight: menuPos.maxHeight,
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
           }}
         >
           {filtered.length === 0 ? (
@@ -204,6 +211,7 @@ export default function SearchablePick({
             return (
               <button
                 key={option.id}
+                id={`${listId}-option-${index}`}
                 type="button"
                 role="option"
                 aria-selected={chosen}
