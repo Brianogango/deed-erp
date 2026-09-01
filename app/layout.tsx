@@ -1,6 +1,7 @@
 import './globals.css'
 import '@/components/modules/odoo-record-designs.css'
 import '@/components/erp/mobile-operational.css'
+import '@/components/erp/mobile-chrome.css'
 import type { Metadata, Viewport } from 'next'
 import { getServerSession } from '@/lib/auth/server'
 import { listPublicUsers } from '@/lib/auth/users-repository'
