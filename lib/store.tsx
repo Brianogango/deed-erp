@@ -3535,7 +3535,7 @@ export interface AppState {
   // Serials
   getProductSerials: (productId: string, location?: LocationId) => SerialNumber[]
    getAvailableSerials: (productId: string) => SerialNumber[]
-  updateSerial: (id: string, patch: Partial<SerialNumber>) => void
+  updateSerial: (id: string, patch: Partial<SerialNumber>, opts?: { persist?: boolean }) => void
   /** Return a held (assigned) serial to available on-hand stock and detach from SO lines. */
   releaseSerialToStock: (serialId: string, destination?: LocationId) => boolean
 
@@ -11103,10 +11103,19 @@ const storeCtx: AppState = {
       serialRef.current.filter(s => s.productId === productId && (!location || s.location === location)),
       getAvailableSerials: (productId) =>
       serialRef.current.filter(s => s.productId === productId && s.status === 'available' && (s.location === 'warehouse' || s.location === 'shop')),
-    updateSerial: (id, patch) => setSerials(p => {
+    updateSerial: (id, patch, opts) => setSerials(p => {
       const next = p.map(s => s.id === id ? { ...s, ...patch } : s)
       const updated = next.find(s => s.id === id)
-      if (updated) sync(`/api/serials/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      // Reconfiguration already persisted the serial on the server. Allow that
+      // authoritative response to refresh the client cache without issuing a
+      // second PUT built from potentially stale pre-reconfiguration fields.
+      if (updated && opts?.persist !== false) {
+        sync(`/api/serials/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        })
+      }
       return next
     }),
 
