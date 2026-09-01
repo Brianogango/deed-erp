@@ -179,3 +179,28 @@ export function useUrlUiState(param: string, fallback: string) {
 
   return [value, setValue] as const
 }
+
+
+/**
+ * Atomically replace several URL-backed UI controls. Use this for "Clear all"
+ * and any interaction that changes multiple list controls at once; it avoids
+ * one setter overwriting another from a stale searchParams snapshot.
+ */
+export function useUrlUiPatch() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  return useCallback((patch: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString())
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === '') params.delete(key)
+      else params.set(key, value)
+    }
+    const qs = params.toString()
+    const href = qs ? `${pathname}?${qs}` : pathname
+    startTransition(() => {
+      router.replace(href, { scroll: false })
+    })
+  }, [pathname, router, searchParams])
+}
