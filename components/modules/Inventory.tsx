@@ -288,7 +288,7 @@ function InventoryContent() {
       const url = new URL(window.location.href)
       if (next === 'product_catalog') url.searchParams.delete('tab')
       else url.searchParams.set('tab', next)
-      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+      window.history.pushState(null, '', `${url.pathname}${url.search}${url.hash}`)
     }
   }
   const [search, setSearch] = useState('')
