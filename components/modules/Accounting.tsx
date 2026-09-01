@@ -372,7 +372,7 @@ function AccountingContent() {
     if (nextTab === 'reports') params.set('report', isReportTabId(newTab) ? newTab : reportTab)
     else params.delete('report')
     params.delete('page')
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   const setReport = (newReport: ReportTab) => {
@@ -383,7 +383,7 @@ function AccountingContent() {
     params.set('report', newReport)
     params.delete('page')
     setInvoiceListPageState(1)
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   useEffect(() => {
