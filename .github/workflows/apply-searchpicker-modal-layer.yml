@@ -1,0 +1,38 @@
+name: Apply SearchPicker modal layer fix
+on: [push]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lift SearchPicker results above modal dialogs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('components/ui/index.tsx')
+          text = path.read_text()
+          old = 'className="fixed z-[9700] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"'
+          new = 'className="fixed z-[9900] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"'
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected exactly one SearchPicker dropdown layer, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          Path('.github/workflows/apply-searchpicker-modal-layer.yml').unlink(missing_ok=True)
+          PY
+      - name: Validate
+        shell: bash
+        run: |
+          git diff --check
+          grep -q 'fixed z-\[9900\] bg-card border border-border rounded-xl shadow-2xl' components/ui/index.tsx
+          ! grep -q 'fixed z-\[9700\] bg-card border border-border rounded-xl shadow-2xl' components/ui/index.tsx
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/ui/index.tsx .github/workflows
+          git commit -m "Fix SearchPicker results inside modals"
+          git push origin HEAD:fix/searchpicker-modal-dropdown-layer
