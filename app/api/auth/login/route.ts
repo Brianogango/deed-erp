@@ -6,6 +6,7 @@ import { loginSchema, validate } from '@/lib/validation'
 import { publishSessionStatus } from '@/lib/auth/session-validity'
 import { getMfaState, mfaRequiredForRole, setMfaChallengeCookie } from '@/lib/auth/mfa'
 import { issueSessionResponse } from '@/lib/auth/session-issuer'
+import { isTrustedBrowserRequest } from '@/lib/auth/trusted-browser'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 
@@ -65,12 +66,25 @@ export async function POST(request: NextRequest) {
   await clearFailedLogin(account.id)
   const user = toPublicAuthUser(account)
 
-  // Privileged roles receive no ERP session after password verification. They
-  // get a short-lived, HttpOnly MFA challenge and the full session is only
-  // minted by /api/auth/mfa/verify after a valid TOTP.
+  // Privileged roles receive no ERP session after password verification unless
+  // this exact browser presents a valid server-backed trusted-browser token.
+  // Enrollment can never be skipped; trust is accepted only after MFA is enabled.
   if (mfaRequiredForRole(account.role)) {
     try {
       const state = await getMfaState(account.id)
+      if (state.enabled && await isTrustedBrowserRequest(request, account.id, account.sessionVersion)) {
+        void publishSessionStatus(account.id, {
+          isActive: true,
+          role: account.role,
+          actsAsTechnician: Boolean(account.actsAsTechnician),
+          invalidatedAt: Date.now(),
+        })
+        return issueSessionResponse(request, user, {
+          mfaVerified: true,
+          sessionVersion: account.sessionVersion,
+        })
+      }
+
       const mode = state.enabled ? 'verify' : 'enroll'
       const response = NextResponse.json(
         {
