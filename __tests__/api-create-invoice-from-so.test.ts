@@ -213,49 +213,12 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     })
     const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(409)
-    expect((await res.json()).error).toMatch(/Validate the delivery/i)
+    expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
-  it('creates a down-payment invoice without bumping qtyInvoiced', async () => {
+  it('rejects down-payment invoices from the Sales Order create-invoice route', async () => {
     mockLoadAppState.mockResolvedValue({ deed_invoices: [], deed_deliveries: [] })
-    mockPrisma.invoice.findMany = vi.fn().mockResolvedValue([])
-    const withTotal = {
-      ...saleOrder,
-      totalAmount: 100000,
-      subtotal: 86207,
-      taxAmount: 13793,
-      discountAmount: 0,
-    }
-    mockPrisma.saleOrder.findUnique.mockResolvedValue(withTotal)
-    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
-      invoice: {
-        create: mockPrisma.invoice.create.mockResolvedValue({
-          id: INVOICE_ID,
-          invoiceNumber: 'INV/2026/0004',
-          status: 'draft',
-          clientId: CLIENT_ID,
-          saleOrderId: ORDER_ID,
-          subtotal: 25862,
-          taxAmount: 4138,
-          totalAmount: 30000,
-          amountPaid: 0,
-          isDownPayment: true,
-          items: [{
-            id: LINE_ID,
-            description: 'Down payment on SO/2026/0001',
-            qty: 1,
-            unitPrice: 25862,
-            taxRate: 16,
-            lineSubtotal: 25862,
-            lineTax: 4138,
-            lineTotal: 30000,
-            productId: null,
-          }],
-          client: { name: 'Acme Ltd' },
-        }),
-      },
-    }))
     const res = await POST(
       new NextRequest('http://localhost', {
         method: 'POST',
@@ -264,13 +227,12 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       }),
       { params: { id: ORDER_ID } },
     )
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body.invoice.isDownPayment).toBe(true)
-    expect(mockPrisma.saleOrderItem.updateMany).not.toHaveBeenCalled()
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/pro-forma or record a customer deposit/i)
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
-  it('allows ordered-policy invoicing before any delivery is validated', async () => {
+  it('rejects ordered-policy invoicing before delivery is complete', async () => {
     mockPrisma.product.findMany.mockResolvedValue([
       { id: 'prod-1', invoicePolicy: 'order', trackStock: false },
     ])
@@ -280,18 +242,13 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       items: [{ ...saleOrder.items[0], qtyDelivered: 0, qtyInvoiced: 0 }],
     }
     mockPrisma.saleOrder.findUnique.mockResolvedValue(undelivered)
-    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
-      saleOrder: { findUnique: vi.fn().mockResolvedValue(undelivered) },
-      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
-      invoice: { create: mockPrisma.invoice.create },
-    }))
     const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
-    expect(res.status).toBe(200)
-    const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
-    expect(createData.items.create[0].qty).toBe(1)
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
-  it('invoices unlinked service lines from ordered qty without a delivery', async () => {
+  it('rejects unlinked service lines until the Sales Order delivery is complete', async () => {
     mockPrisma.product.findMany.mockResolvedValue([])
     mockLoadAppState.mockResolvedValue({ deed_invoices: [], deed_deliveries: [] })
     const serviceOrder = {
@@ -309,16 +266,10 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       }],
     }
     mockPrisma.saleOrder.findUnique.mockResolvedValue(serviceOrder)
-    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
-      saleOrder: { findUnique: vi.fn().mockResolvedValue(serviceOrder) },
-      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
-      invoice: { create: mockPrisma.invoice.create },
-    }))
     const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
-    expect(res.status).toBe(200)
-    const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
-    expect(createData.items.create[0].qty).toBe(1)
-    expect(createData.items.create[0].description).toMatch(/Service/)
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
   it('rejects a hollow Done delivery with delivered qty 0', async () => {
@@ -332,7 +283,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     })
     const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(409)
-    expect((await res.json()).error).toMatch(/Validate the delivery/i)
+    expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
@@ -350,20 +301,16 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     expect(mockPrisma.$transaction).toHaveBeenCalled()
   })
 
-  it('invoices delivered quantity only after the validated-delivery gate', async () => {
+  it('rejects invoicing until every order line is fully delivered', async () => {
     const partial = {
       ...saleOrder,
       items: [{ ...saleOrder.items[0], qty: 3, qtyDelivered: 1 }],
     }
     mockPrisma.saleOrder.findUnique.mockResolvedValue(partial)
-    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
-      saleOrder: { findUnique: vi.fn().mockResolvedValue(partial) },
-      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
-      invoice: { create: mockPrisma.invoice.create },
-    }))
-    await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
-    const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
-    expect(createData.items.create[0].qty).toBe(1)
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
   describe('partial-invoice line overrides', () => {
