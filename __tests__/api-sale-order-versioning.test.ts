@@ -59,7 +59,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockGetSession.mockResolvedValue(sessionFor('sales_rep'))
   mockPrismaSO.findUnique.mockResolvedValue(baseQuotation)
-  mockPrismaSO.findMany.mockResolvedValue([{ versionNumber: 1 }])
+  mockPrismaSO.findMany.mockResolvedValue([{ id: ORDER_ID, versionNumber: 1, status: 'quotation' }])
   mockPrismaSO.update.mockResolvedValue({})
   mockPrismaSO.create.mockImplementation(async ({ data }: any) => ({
     id: 'new-version-id',
@@ -75,7 +75,10 @@ describe('POST /api/sale-orders/:id/new-version', () => {
     expect(res.status).toBe(201)
     const body = await res.json()
     expect(body.orderNumber ?? body.ref).toBe('QUO/2026/0001-V2')
-    expect(mockPrismaSO.update).toHaveBeenCalledWith({ where: { id: ORDER_ID }, data: { versionGroupId: ORDER_ID } })
+    expect(mockPrismaSO.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: { locked: true, versionGroupId: ORDER_ID },
+    })
     const createArgs = mockPrismaSO.create.mock.calls[0][0]
     expect(createArgs.data.versionNumber).toBe(2)
     expect(createArgs.data.versionGroupId).toBe(ORDER_ID)
@@ -89,22 +92,62 @@ describe('POST /api/sale-orders/:id/new-version', () => {
       if (where.id === ORDER_ID) return { orderNumber: 'QUO/2026/0001' }
       return null
     })
-    mockPrismaSO.findMany.mockResolvedValue([{ versionNumber: 1 }, { versionNumber: 2 }])
+    mockPrismaSO.findMany.mockResolvedValue([
+      { id: ORDER_ID, versionNumber: 1, status: 'quotation' },
+      { id: 'v2-id', versionNumber: 2, status: 'quotation' },
+    ])
     const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: 'v2-id' } })
     expect(res.status).toBe(201)
     const createArgs = mockPrismaSO.create.mock.calls[0][0]
     expect(createArgs.data.versionNumber).toBe(3)
     expect(createArgs.data.orderNumber).toBe('QUO/2026/0001-V3')
     expect(createArgs.data.versionGroupId).toBe(ORDER_ID)
-    // root already has versionGroupId set — must not be re-updated
-    expect(mockPrismaSO.update).not.toHaveBeenCalled()
+    // Source revision is locked as an audit snapshot; versionGroupId is already set.
+    expect(mockPrismaSO.update).toHaveBeenCalledWith({
+      where: { id: 'v2-id' },
+      data: { locked: true },
+    })
+  })
+
+  it('rejects revising from a superseded quotation revision', async () => {
+    mockPrismaSO.findMany.mockResolvedValue([
+      { id: ORDER_ID, versionNumber: 1, status: 'quotation' },
+      { id: 'v2-id', versionNumber: 2, status: 'quotation' },
+    ])
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/Only the latest quotation revision/i)
+    expect(mockPrismaSO.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects quotation revisions after the lineage has become a Sales Order', async () => {
+    const latestQuote = {
+      ...baseQuotation,
+      id: 'v2-id',
+      status: 'quotation',
+      versionNumber: 2,
+      versionGroupId: ORDER_ID,
+    }
+    mockPrismaSO.findUnique.mockImplementation(async ({ where }: any) => {
+      if (where.id === 'v2-id') return latestQuote
+      if (where.id === ORDER_ID) return { orderNumber: 'QUO/2026/0001' }
+      return null
+    })
+    mockPrismaSO.findMany.mockResolvedValue([
+      { id: ORDER_ID, versionNumber: 1, status: 'sale' },
+      { id: 'v2-id', versionNumber: 2, status: 'quotation' },
+    ])
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: 'v2-id' } })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/already become a Sales Order/i)
+    expect(mockPrismaSO.create).not.toHaveBeenCalled()
   })
 
   it('rejects versioning a confirmed Sales Order', async () => {
     mockPrismaSO.findUnique.mockResolvedValue({ ...baseQuotation, status: 'sale' })
     const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(409)
-    expect((await res.json()).error).toMatch(/Duplicate instead/i)
+    expect((await res.json()).error).toMatch(/controlled Sales Order amendment/i)
     expect(mockPrismaSO.create).not.toHaveBeenCalled()
   })
 

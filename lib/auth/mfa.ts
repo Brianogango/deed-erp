@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/auth/db'
 import { shouldUseSecureCookie } from '@/lib/auth/session-issuer'
 import { requiresPrivilegedMfa } from '@/lib/auth/mfa-policy'
+import { revokeAllTrustedBrowsers } from '@/lib/auth/trusted-browser'
 
 export type MfaChallengeMode = 'enroll' | 'verify'
 
@@ -202,8 +203,6 @@ export async function verifyMfaCode(userId: string, code: string, enableOnSucces
   if (lastUsedStep != null && matchedStep <= lastUsedStep) return false
 
   const now = new Date().toISOString()
-  // Replay protection must be atomic: two concurrent requests using the same
-  // TOTP step cannot both succeed after reading the same previous value.
   const updated = await sql`
     UPDATE user_mfa
     SET enabled = ${enableOnSuccess ? true : Boolean(rows[0].enabled)},
@@ -218,5 +217,6 @@ export async function verifyMfaCode(userId: string, code: string, enableOnSucces
 }
 
 export async function resetUserMfa(userId: string) {
+  await revokeAllTrustedBrowsers(userId)
   await sql`DELETE FROM user_mfa WHERE user_id = ${userId}`
 }

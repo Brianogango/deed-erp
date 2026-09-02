@@ -6,6 +6,7 @@ import { issueSessionResponse } from '@/lib/auth/session-issuer'
 import { publishSessionStatus } from '@/lib/auth/session-validity'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { InputSecurityError, readSafeJson } from '@/lib/input-security'
+import { trustCurrentBrowser } from '@/lib/auth/trusted-browser'
 
 export async function POST(request: NextRequest) {
   const challenge = challengeFromRequest(request)
@@ -32,9 +33,14 @@ export async function POST(request: NextRequest) {
     throw error
   }
 
-  const code = body && typeof body === 'object' && !Array.isArray(body)
-    ? String((body as Record<string, unknown>).code || '')
-    : ''
+  const payload = body && typeof body === 'object' && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : {}
+  const code = String(payload.code || '')
+  // Existing login clients send only { code }. Treat successful MFA as opting
+  // into this personal-browser convenience unless a newer client explicitly
+  // sends trustBrowser:false.
+  const trustBrowser = payload.trustBrowser !== false
 
   const verified = await verifyMfaCode(challenge.uid, code, challenge.mode === 'enroll').catch(() => false)
   if (!verified) {
@@ -52,5 +58,15 @@ export async function POST(request: NextRequest) {
   })
 
   const user = toPublicAuthUser(account)
-  return issueSessionResponse(request, user, { mfaVerified: true, sessionVersion: account.sessionVersion })
+  const response = issueSessionResponse(request, user, { mfaVerified: true, sessionVersion: account.sessionVersion })
+  if (trustBrowser) {
+    try {
+      await trustCurrentBrowser(response, request, account.id, account.sessionVersion)
+    } catch (error) {
+      // Authentication has already succeeded. Fail closed only for future
+      // convenience: the next login will ask for MFA again if trust cannot save.
+      console.error('[auth/mfa/verify] could not trust browser:', error instanceof Error ? error.message : 'unknown_error')
+    }
+  }
+  return response
 }

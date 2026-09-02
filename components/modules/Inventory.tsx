@@ -353,6 +353,7 @@ function InventoryContent() {
   const [refurbSerial, setRefurbSerial] = useState<{ id: string; serial: string; productName: string } | null>(null)
   const [refurbIssueDesc, setRefurbIssueDesc] = useState('')
   const [warehouseSearch, setWarehouseSearch] = useUrlUiState('warehouseQ', '')
+  const [warehouseLocation, setWarehouseLocation] = useUrlUiState('location', 'warehouse')
   const [warehouseSearchDraft, setWarehouseSearchDraft] = useState(warehouseSearch)
   useEffect(() => { setWarehouseSearchDraft(warehouseSearch) }, [warehouseSearch])
   const [pendingConfirm, setPendingConfirm] = useState<{
@@ -1705,10 +1706,9 @@ function InventoryContent() {
         const readyCount = filteredWarehouseSerials.length + filteredBulkWarehouse.reduce((s, p) => s + p.qty, 0)
         const issuesCount = filteredIssuesSerials.length + filteredBulkShop.reduce((s, p) => s + p.qty, 0)
         const refurbCount = filteredRepairSerials.length + filteredBulkRepair.reduce((s, p) => s + p.qty, 0)
-        const boardEmphasis =
-          readyCount > 0 && issuesCount === 0 && refurbCount === 0
-            ? 'inventory-warehouse-board inventory-warehouse-board--ready-heavy'
-            : 'inventory-warehouse-board'
+        const activeWarehouseLocation = ['warehouse', 'issues', 'refurbishment'].includes(warehouseLocation)
+          ? warehouseLocation as 'warehouse' | 'issues' | 'refurbishment'
+          : 'warehouse'
 
         return (
           <div className="operations-warehouse">
@@ -1748,221 +1748,233 @@ function InventoryContent() {
               </p>
             )}
 
-            <div className="operations-warehouse-layout">
-            <div className={boardEmphasis}>
-            <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} tone="navy"
-              count={readyCount}
-              emptyText={q ? 'No warehouse stock matches this search' : 'No stock in warehouse'}>
-              {filteredWarehouseSerials.map(s => {
-                const prod = products.find(p => p.id === s.productId)
-                return (
-                <WarehouseRow
-                  key={s.id}
-                  title={s.productName}
-                  meta={(
-                    <>
-                      <p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>
-                      <p className="font-mono text-[10px] text-text-3 mt-0.5">SKU: {s.sku ?? prod?.sku ?? '—'}</p>
-                    </>
-                  )}
-                  actions={(
-                    <>
-                      <ActionBtn
-                        label={<><Fa icon={faPrint} /> Label</>}
-                        tone="primary"
-                        ariaLabel={`Print label for ${s.serial}`}
-                        onClick={() => { void printLabelsForSerialUnits({ serials: [s], products }) }}
-                      />
-                      <SecondaryActionMenu
-                        ariaLabel={`More actions for ${s.serial}`}
-                        label="More"
-                        actions={[
-                          {
-                            id: 'move-issues',
-                            label: 'Move to With Issues',
-                            onClick: () => requestMoveToIssues(s),
-                          },
-                          {
-                            id: 'send-refurb',
-                            label: 'Send for Refurbishment',
-                            onClick: () => requestSendForRefurbishment(s),
-                          },
-                        ]}
-                      />
-                    </>
-                  )}
-                />
-                )
-              })}
-              {filteredBulkWarehouse.map(p => (
-                <WarehouseRow
-                  key={p.id}
-                  title={p.name}
-                  meta={(
-                    <p className="text-[10px] text-text-3 mt-0.5">
-                      <span className="tabular-nums font-semibold">{p.qty}</span> units in warehouse
-                    </p>
-                  )}
-                  actions={(
-                    <>
-                      <ActionBtn
-                        label={<><Fa icon={faPrint} /> Print {p.qty} Label{p.qty !== 1 ? 's' : ''}</>}
-                        tone="primary"
-                        ariaLabel={`Print ${p.qty} labels for ${p.name}`}
-                        onClick={() => printProductLabels(p, p.qty)}
-                      />
-                      <span className="text-[10px] text-text-4 italic self-center">Use Transfers tab to move bulk items</span>
-                    </>
-                  )}
-                />
-              ))}
-            </Section>
+            <div className="rounded-token-md border border-[var(--border-lt)] bg-[var(--bg-card)] overflow-hidden">
+              <div className="flex flex-wrap gap-2 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] p-2" role="tablist" aria-label="Inventory stock location">
+                {[
+                  { id: 'warehouse', label: 'Warehouse', sublabel: 'Ready for Sale', count: readyCount, icon: faIndustry },
+                  { id: 'issues', label: 'With Issues', sublabel: 'Needs attention', count: issuesCount, icon: faTriangleExclamation },
+                  { id: 'refurbishment', label: 'Refurbishment', sublabel: 'Internal stock', count: refurbCount, icon: faWrench },
+                ].map(item => {
+                  const selected = activeWarehouseLocation === item.id
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => setWarehouseLocation(item.id)}
+                      className={`min-w-[150px] flex-1 rounded-xl border px-3 py-2.5 text-left transition ${selected
+                        ? 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--navy)] shadow-sm'
+                        : 'border-transparent bg-transparent text-text-2 hover:border-[var(--border)] hover:bg-[var(--bg-muted)]'}`}
+                    >
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Fa icon={item.icon} className="shrink-0 text-[13px]" aria-hidden="true" />
+                          <span className="min-w-0">
+                            <span className="block truncate text-[12px] font-bold">{item.label}</span>
+                            <span className="block truncate text-[10px] text-text-3">{item.sublabel}</span>
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-md bg-white/80 px-2 py-0.5 text-[10px] font-bold tabular-nums text-text-2">{item.count.toLocaleString()}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
 
-            <Section title="With Issues" icon={<Fa icon={faTriangleExclamation} />} tone="warning"
-              count={issuesCount}
-              emptyText={q ? 'No With Issues stock matches this search' : 'No machines with issues'}>
-              {filteredIssuesSerials.map(s => (
-                <WarehouseRow
-                  key={s.id}
-                  title={s.productName}
-                  meta={<p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>}
-                  actions={(
-                    <>
-                      <ActionBtn
-                        label="Return to Warehouse"
-                        tone="success"
-                        ariaLabel={`Return ${s.serial} to warehouse`}
-                        onClick={() => quickMove(s.productId, s.productName, 'shop', 'warehouse', s.id)}
-                      />
-                      <SecondaryActionMenu
-                        ariaLabel={`More actions for ${s.serial}`}
-                        label="More"
-                        actions={[
-                          {
-                            id: 'send-refurb',
-                            label: 'Send for Refurbishment',
-                            onClick: () => requestSendForRefurbishment(s),
-                          },
-                        ]}
-                      />
-                    </>
-                  )}
-                />
-              ))}
-              {filteredBulkShop.map(p => (
-                <WarehouseRow
-                  key={p.id}
-                  title={p.name}
-                  meta={(
-                    <p className="text-[10px] text-text-3 mt-0.5">
-                      <span className="tabular-nums font-semibold">{p.qty}</span> units with issues
-                    </p>
-                  )}
-                  actions={<span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>}
-                />
-              ))}
-            </Section>
-
-            <Section title="Refurbishment Unit — Internal Stock" icon={<Fa icon={faWrench} />} tone="info"
-              count={refurbCount}
-              emptyText={q ? 'No refurbishment stock matches this search' : 'No stock currently in refurbishment'}>
-              {filteredRepairSerials.map(s => {
-                const refurbJob = refurbishmentJobs.filter(j => j.serialId === s.id).sort((a, b) => b.intakeDate.localeCompare(a.intakeDate))[0] ?? null
-                const REFURB_STATUS_LABEL: Record<string, string> = {
-                  queued: 'Queued',
-                  assigned: 'Assigned',
-                  in_progress: 'In Progress',
-                  ready: 'Ready to Sell',
-                  transferred: 'Transferred',
-                  written_off: 'Written Off',
-                }
-                return (
-                  <WarehouseRow
+              <div className="p-3 sm:p-4">
+                {activeWarehouseLocation === 'warehouse' && (
+                  <div className="inventory-warehouse-board inventory-warehouse-board--single">
+                    <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} tone="navy"
+                    count={readyCount}
+                    emptyText={q ? 'No warehouse stock matches this search' : 'No stock in warehouse'}>
+                    {filteredWarehouseSerials.map(s => {
+                    const prod = products.find(p => p.id === s.productId)
+                    return (
+                    <WarehouseRow
                     key={s.id}
                     title={s.productName}
                     meta={(
-                      <>
-                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                          <span className="font-mono text-[11px] text-text-2 tabular-nums">{s.serial}</span>
-                          {refurbJob && (
-                            <StatusBadge
-                              status={refurbJob.status}
-                              label={REFURB_STATUS_LABEL[refurbJob.status] ?? refurbJob.status.replace(/_/g, ' ')}
-                              size="xs"
-                            />
-                          )}
-                        </div>
-                        {refurbJob && (
-                          <div className="flex items-center gap-3 mt-1 text-[10px] text-text-4 flex-wrap">
-                            <span>Job: <span className="font-mono font-bold text-primary-600">{refurbJob.ref}</span></span>
-                            {refurbJob.assignedTechnicianName ? <span>Tech: {refurbJob.assignedTechnicianName}</span> : <span className="italic">Unassigned - manage in Refurbishment module</span>}
-                          </div>
-                        )}
-                      </>
+                    <>
+                    <p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>
+                    <p className="font-mono text-[10px] text-text-3 mt-0.5">SKU: {s.sku ?? prod?.sku ?? '—'}</p>
+                    </>
+                    )}
+                    actions={(
+                    <>
+                    <ActionBtn
+                    label={<><Fa icon={faPrint} /> Label</>}
+                    tone="primary"
+                    ariaLabel={`Print label for ${s.serial}`}
+                    onClick={() => { void printLabelsForSerialUnits({ serials: [s], products }) }}
+                    />
+                    <SecondaryActionMenu
+                    ariaLabel={`More actions for ${s.serial}`}
+                    label="More"
+                    actions={[
+                    {
+                    id: 'move-issues',
+                    label: 'Move to With Issues',
+                    onClick: () => requestMoveToIssues(s),
+                    },
+                    {
+                    id: 'send-refurb',
+                    label: 'Send for Refurbishment',
+                    onClick: () => requestSendForRefurbishment(s),
+                    },
+                    ]}
+                    />
+                    </>
+                    )}
+                    />
+                    )
+                    })}
+                    {filteredBulkWarehouse.map(p => (
+                    <WarehouseRow
+                    key={p.id}
+                    title={p.name}
+                    meta={(
+                    <p className="text-[10px] text-text-3 mt-0.5">
+                    <span className="tabular-nums font-semibold">{p.qty}</span> units in warehouse
+                    </p>
+                    )}
+                    actions={(
+                    <>
+                    <ActionBtn
+                    label={<><Fa icon={faPrint} /> Print {p.qty} Label{p.qty !== 1 ? 's' : ''}</>}
+                    tone="primary"
+                    ariaLabel={`Print ${p.qty} labels for ${p.name}`}
+                    onClick={() => printProductLabels(p, p.qty)}
+                    />
+                    <span className="text-[10px] text-text-4 italic self-center">Use Transfers tab to move bulk items</span>
+                    </>
+                    )}
+                    />
+                    ))}
+                    </Section>
+                  </div>
+                )}
+                {activeWarehouseLocation === 'issues' && (
+                  <div className="inventory-warehouse-board inventory-warehouse-board--single">
+                    <Section title="With Issues" icon={<Fa icon={faTriangleExclamation} />} tone="warning"
+                    count={issuesCount}
+                    emptyText={q ? 'No With Issues stock matches this search' : 'No machines with issues'}>
+                    {filteredIssuesSerials.map(s => (
+                    <WarehouseRow
+                    key={s.id}
+                    title={s.productName}
+                    meta={<p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>}
+                    actions={(
+                    <>
+                    <ActionBtn
+                    label="Return to Warehouse"
+                    tone="success"
+                    ariaLabel={`Return ${s.serial} to warehouse`}
+                    onClick={() => quickMove(s.productId, s.productName, 'shop', 'warehouse', s.id)}
+                    />
+                    <SecondaryActionMenu
+                    ariaLabel={`More actions for ${s.serial}`}
+                    label="More"
+                    actions={[
+                    {
+                    id: 'send-refurb',
+                    label: 'Send for Refurbishment',
+                    onClick: () => requestSendForRefurbishment(s),
+                    },
+                    ]}
+                    />
+                    </>
+                    )}
+                    />
+                    ))}
+                    {filteredBulkShop.map(p => (
+                    <WarehouseRow
+                    key={p.id}
+                    title={p.name}
+                    meta={(
+                    <p className="text-[10px] text-text-3 mt-0.5">
+                    <span className="tabular-nums font-semibold">{p.qty}</span> units with issues
+                    </p>
+                    )}
+                    actions={<span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>}
+                    />
+                    ))}
+                    </Section>
+                  </div>
+                )}
+                {activeWarehouseLocation === 'refurbishment' && (
+                  <div className="inventory-warehouse-board inventory-warehouse-board--single">
+                    <Section title="Refurbishment Unit — Internal Stock" icon={<Fa icon={faWrench} />} tone="info"
+                    count={refurbCount}
+                    emptyText={q ? 'No refurbishment stock matches this search' : 'No stock currently in refurbishment'}>
+                    {filteredRepairSerials.map(s => {
+                    const refurbJob = refurbishmentJobs.filter(j => j.serialId === s.id).sort((a, b) => b.intakeDate.localeCompare(a.intakeDate))[0] ?? null
+                    const REFURB_STATUS_LABEL: Record<string, string> = {
+                    queued: 'Queued',
+                    assigned: 'Assigned',
+                    in_progress: 'In Progress',
+                    ready: 'Ready to Sell',
+                    transferred: 'Transferred',
+                    written_off: 'Written Off',
+                    }
+                    return (
+                    <WarehouseRow
+                    key={s.id}
+                    title={s.productName}
+                    meta={(
+                    <>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                    <span className="font-mono text-[11px] text-text-2 tabular-nums">{s.serial}</span>
+                    {refurbJob && (
+                    <StatusBadge
+                    status={refurbJob.status}
+                    label={REFURB_STATUS_LABEL[refurbJob.status] ?? refurbJob.status.replace(/_/g, ' ')}
+                    size="xs"
+                    />
+                    )}
+                    </div>
+                    {refurbJob && (
+                    <div className="flex items-center gap-3 mt-1 text-[10px] text-text-4 flex-wrap">
+                    <span>Job: <span className="font-mono font-bold text-primary-600">{refurbJob.ref}</span></span>
+                    {refurbJob.assignedTechnicianName ? <span>Tech: {refurbJob.assignedTechnicianName}</span> : <span className="italic">Unassigned - manage in Refurbishment module</span>}
+                    </div>
+                    )}
+                    </>
                     )}
                     actions={
-                      refurbJob?.status === 'ready' && canTransfer ? (
-                        <ActionBtn
-                          label="Transfer to Warehouse"
-                          tone="success"
-                          ariaLabel={`Transfer ${s.serial} to warehouse`}
-                          onClick={() => transferToSell(refurbJob.id)}
-                        />
-                      ) : undefined
+                    refurbJob?.status === 'ready' && canTransfer ? (
+                    <ActionBtn
+                    label="Transfer to Warehouse"
+                    tone="success"
+                    ariaLabel={`Transfer ${s.serial} to warehouse`}
+                    onClick={() => transferToSell(refurbJob.id)}
+                    />
+                    ) : undefined
                     }
-                  />
-                )
-              })}
-              {filteredBulkRepair.map(p => (
-                <WarehouseRow
-                  key={p.id}
-                  title={p.name}
-                  meta={(
+                    />
+                    )
+                    })}
+                    {filteredBulkRepair.map(p => (
+                    <WarehouseRow
+                    key={p.id}
+                    title={p.name}
+                    meta={(
                     <p className="text-[10px] text-text-3 mt-0.5">
-                      <span className="tabular-nums font-semibold">{p.qty}</span> units in refurbishment
+                    <span className="tabular-nums font-semibold">{p.qty}</span> units in refurbishment
                     </p>
-                  )}
-                  actions={<span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>}
-                />
-              ))}
-              {(filteredRepairSerials.length > 0 || filteredBulkRepair.length > 0) && (
-                <div className="px-4 py-2 text-[10px] bg-[var(--info-bg)] text-[var(--info-text)] border-t border-[var(--border-lt)]">
-                  <Fa icon={faWrench} /> Manage assignments, progress &amp; transfers in the <strong>Refurbishment</strong> module
-                </div>
-              )}
-            </Section>
-            </div>
-            <aside className="operations-attention" aria-label="Warehouse priorities">
-              <section className="operations-attention__card">
-                <div className="operations-attention__heading">
-                  <div>
-                    <p>Needs attention</p>
-                    <span>Operational exceptions</span>
+                    )}
+                    actions={<span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>}
+                    />
+                    ))}
+                    {(filteredRepairSerials.length > 0 || filteredBulkRepair.length > 0) && (
+                    <div className="px-4 py-2 text-[10px] bg-[var(--info-bg)] text-[var(--info-text)] border-t border-[var(--border-lt)]">
+                    <Fa icon={faWrench} /> Manage assignments, progress &amp; transfers in the <strong>Refurbishment</strong> module
+                    </div>
+                    )}
+                    </Section>
                   </div>
-                  <strong className="tabular-nums">{(issuesCount + refurbCount + kpis.lowStock).toLocaleString()}</strong>
-                </div>
-                <button type="button" onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }}>
-                  <span>Low-stock products</span><strong>{kpis.lowStock.toLocaleString()}</strong>
-                </button>
-                <button type="button" onClick={() => setActiveTab('warehouse_view')}>
-                  <span>Units with issues</span><strong>{issuesCount.toLocaleString()}</strong>
-                </button>
-                <button type="button" onClick={() => setActiveTab('warehouse_view')}>
-                  <span>In refurbishment</span><strong>{refurbCount.toLocaleString()}</strong>
-                </button>
-              </section>
-              <section className="operations-attention__card">
-                <div className="operations-attention__heading">
-                  <div>
-                    <p>Locations</p>
-                    <span>Live stock distribution</span>
-                  </div>
-                </div>
-                <div className="operations-location"><span><i className="operations-location__dot operations-location__dot--ready" />Warehouse</span><strong>{readyCount.toLocaleString()}</strong></div>
-                <div className="operations-location"><span><i className="operations-location__dot operations-location__dot--issue" />With issues</span><strong>{issuesCount.toLocaleString()}</strong></div>
-                <div className="operations-location"><span><i className="operations-location__dot operations-location__dot--repair" />Refurbishment</span><strong>{refurbCount.toLocaleString()}</strong></div>
-              </section>
-            </aside>
+                )}
+              </div>
             </div>
           </div>
         )
