@@ -218,6 +218,7 @@ export default function DataTable<T>({
   }, [perPage])
 
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const selectPageRef = useRef<HTMLInputElement | null>(null)
   const [sort, setSort] = useState<TableSortState | null>(defaultSort)
 
   // Sort is part of list context too. Persist it per table so an explicit
@@ -315,6 +316,25 @@ export default function DataTable<T>({
     const start = (page - 1) * pageSize
     return filteredRows.slice(start, start + pageSize)
   }, [filteredRows, page, pageSize])
+
+  const pageKeys = useMemo(() => pageRows.map(rowKey), [pageRows, rowKey])
+  const selectedOnPage = pageKeys.filter(key => selectedKeys.has(key)).length
+  const allPageRowsSelected = pageKeys.length > 0 && selectedOnPage === pageKeys.length
+  const somePageRowsSelected = selectedOnPage > 0 && !allPageRowsSelected
+  const hasFooter = visibleColumns.some(column => column.footer)
+
+  useEffect(() => {
+    if (selectPageRef.current) selectPageRef.current.indeterminate = somePageRowsSelected
+  }, [somePageRowsSelected])
+
+  function togglePageSelection() {
+    setSelectedKeys(previous => {
+      const next = new Set(previous)
+      if (allPageRowsSelected) pageKeys.forEach(key => next.delete(key))
+      else pageKeys.forEach(key => next.add(key))
+      return next
+    })
+  }
 
   function toggleSelected(key: string) {
     setSelectedKeys(prev => {
@@ -457,7 +477,21 @@ export default function DataTable<T>({
               tableId={tableId}
               minWidth={tableMinWidth}
               cols={[
-                ...(selectable ? [{ label: '', width: '36px' }] : []),
+                ...(selectable ? [{
+                  label: 'Select',
+                  width: '36px',
+                  header: (
+                    <input
+                      ref={selectPageRef}
+                      type="checkbox"
+                      checked={allPageRowsSelected}
+                      disabled={pageRows.length === 0}
+                      onChange={togglePageSelection}
+                      aria-label={allPageRowsSelected ? 'Clear selection on this page' : 'Select all rows on this page'}
+                      style={{ accentColor: 'var(--primary)' }}
+                    />
+                  ),
+                }] : []),
                 ...visibleColumns.map(c => ({
                   label: c.label,
                   // Status pills need room for labels like "Not paid"; prefer the
@@ -539,6 +573,26 @@ export default function DataTable<T>({
                   </div>
                 )
               })}
+              {hasFooter && pageRows.length > 0 && (
+                <div className="table-row data-table-summary-row" role="row" aria-label="Current page totals">
+                  {selectable && <span role="gridcell" />}
+                  {visibleColumns.map((column, index) => (
+                    <span
+                      role="gridcell"
+                      key={column.key}
+                      className={`data-table-cell data-table-cell-${column.key.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()}`}
+                      style={column.align ? { textAlign: column.align } : undefined}
+                    >
+                      {column.footer
+                        ? column.footer(pageRows, filteredRows)
+                        : index === 0
+                          ? <span className="data-table-summary-label">Page total</span>
+                          : null}
+                    </span>
+                  ))}
+                  {rowActions && <span role="gridcell" className="data-table-actions" />}
+                </div>
+              )}
             </Table>
           )}
 

@@ -282,6 +282,11 @@ export default function ChartOfAccountsTab() {
         )
       },
       exportValue: a => getLiveBalance(a),
+      footer: pageRows => (
+        <span className="font-mono text-[12px] font-bold tabular-nums">
+          {fmtKes(pageRows.reduce((sum, account) => sum + getLiveBalance(account), 0))}
+        </span>
+      ),
     },
     {
       key: 'status', label: 'Status', priority: 2, width: '88px',

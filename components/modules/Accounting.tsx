@@ -1467,6 +1467,7 @@ function AccountingContent() {
                     key: 'total', label: 'Total', priority: 1 as const, width: '100px', align: 'right' as const,
                     render: (i: Invoice) => <span className="text-xs font-bold text-[var(--text-1)] tabular-nums">{fmtKes(i.total)}</span>,
                     exportValue: (i: Invoice) => i.total,
+                    footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + invoice.total, 0))}</span>,
                   },
                   {
                     key: 'paid', label: 'Paid', priority: 3 as const, width: '96px', align: 'right' as const,
@@ -1477,6 +1478,7 @@ function AccountingContent() {
                         : <span className="text-xs text-[var(--text-4)]">—</span>
                     },
                     exportValue: (i: Invoice) => i.amountPaid,
+                    footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + invoice.amountPaid, 0))}</span>,
                   },
                   {
                     key: 'balance', label: 'Balance', priority: 1 as const, width: '100px', align: 'right' as const,
@@ -1485,6 +1487,7 @@ function AccountingContent() {
                       return <span className={`text-xs font-bold tabular-nums ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
                     },
                     exportValue: (i: Invoice) => Math.max(0, i.total - i.amountPaid),
+                    footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + Math.max(0, invoice.total - invoice.amountPaid), 0))}</span>,
                   },
                   {
                     key: 'status', label: 'Status', priority: 1 as const, width: '140px',

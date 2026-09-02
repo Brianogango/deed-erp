@@ -2972,6 +2972,27 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     background: var(--bg-surface);
   }
 
+  .table-row.data-table-summary-row {
+    min-height: 40px;
+    border-top: 1px solid var(--border);
+    border-bottom: 0;
+    background: var(--bg-surface);
+    color: var(--text-1);
+    font-weight: 700;
+  }
+
+  .table-row.data-table-summary-row:hover {
+    background: var(--bg-surface);
+  }
+
+  .data-table-summary-label {
+    color: var(--text-3);
+    font-size: var(--fs-label);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
   .table-row[tabindex]:focus-visible {
     position: relative;
     z-index: 1;

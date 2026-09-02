@@ -891,6 +891,7 @@ export function Table({
 }: {
   cols: {
     label: string
+    header?: ReactNode
     width?: string
     minWidth?: number
     sticky?: 'left' | 'right'
@@ -1230,7 +1231,7 @@ export function Table({
               } : undefined}
               title={c.sortable ? `Sort by ${c.label}` : undefined}
             >
-              {c.label}
+              {c.header ?? c.label}
               {resizable && (
                 <button
                   type="button"
