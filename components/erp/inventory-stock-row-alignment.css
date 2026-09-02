@@ -1,0 +1,81 @@
+/* Warehouse stock rows: full-width, left aligned, compact on desktop. */
+.operations-warehouse .inventory-warehouse-row {
+  width: 100% !important;
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 20px !important;
+  padding: 12px 16px !important;
+  text-align: left !important;
+}
+
+.operations-warehouse .inventory-warehouse-row__meta {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 20px !important;
+  text-align: left !important;
+}
+
+.operations-warehouse .inventory-warehouse-row__meta > * {
+  text-align: left !important;
+  margin-top: 0 !important;
+}
+
+.operations-warehouse .inventory-warehouse-row__meta > p:first-child {
+  flex: 1 1 46% !important;
+  min-width: 260px !important;
+  max-width: none !important;
+}
+
+.operations-warehouse .inventory-warehouse-row__meta > p:not(:first-child),
+.operations-warehouse .inventory-warehouse-row__meta > div {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+}
+
+.operations-warehouse .inventory-warehouse-row__actions {
+  margin-left: auto !important;
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  text-align: left !important;
+}
+
+/* Keep the location panel itself truly edge-to-edge within its card. */
+.operations-warehouse .inventory-warehouse-row,
+.operations-warehouse .inventory-warehouse-row__meta,
+.operations-warehouse .inventory-warehouse-row__actions {
+  box-sizing: border-box;
+}
+
+@media (max-width: 1023px) {
+  .operations-warehouse .inventory-warehouse-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .operations-warehouse .inventory-warehouse-row__meta {
+    display: block !important;
+  }
+
+  .operations-warehouse .inventory-warehouse-row__meta > p:first-child {
+    min-width: 0 !important;
+  }
+
+  .operations-warehouse .inventory-warehouse-row__meta > * + * {
+    margin-top: 3px !important;
+  }
+
+  .operations-warehouse .inventory-warehouse-row__actions {
+    margin-left: 0 !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+  }
+}
