@@ -63,11 +63,17 @@ describe('appStateKeysForRoute', () => {
       'deed_posOrders',
       'deed_purchaseOrders',
       'deed_payrollRuns',
+      // Dashboard reads these collections on first paint — omitting them
+      // leaves a stale local cache in place after a deploy.
+      'deed_bankStatementLines',
+      'deed_stockTransfers',
+      'deed_kilimallOrders',
+      'deed_outsourceJobs',
+      'deed_refurbishmentJobs',
+      'deed_journalEntries',
     ]))
     expect(keys).not.toContain('deed_stockReservations')
     expect(keys).not.toContain('deed_outboundReleases')
-    expect(keys).not.toContain('deed_bankStatementLines')
-    expect(keys).not.toContain('deed_stockTransfers')
   })
 
   it('hydrates stock moves on operations and inventory', () => {

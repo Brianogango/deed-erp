@@ -11,6 +11,7 @@ import { PUBLIC_USERS } from '@/lib/auth/public-users'
 import { loadAppState } from '@/lib/server-store'
 import AppShell from '@/components/AppShell'
 import SwRegister from '@/components/SwRegister'
+import ClientStoreShapeGuard from '@/components/ClientStoreShapeGuard'
 import VersionDriftBanner from '@/components/layout/VersionDriftBanner'
 import { getServerBuildId } from '@/lib/app-version'
 import { robotoFlex, openSans, dmMono } from './fonts'
@@ -54,6 +55,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
       <html lang="en" className={htmlClassName}>
         <body className={bodyClassName} data-build={getServerBuildId()}>
+          <ClientStoreShapeGuard />
           <SwRegister />
           {children}
         </body>
@@ -78,6 +80,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={htmlClassName}>
       <body className={bodyClassName} data-build={getServerBuildId()}>
+        <ClientStoreShapeGuard />
         <SwRegister />
         <AppShell initialUser={shellUser} initialUsers={users} serverState={serverState}>
           {children}
