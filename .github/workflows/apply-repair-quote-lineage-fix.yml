@@ -1,0 +1,215 @@
+name: Apply repair quote lineage fix
+on: [push]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch repair quote state and invoice lineage
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          store = Path('lib/store.tsx')
+          s = store.read_text()
+
+          # 1) Persist the revised repair quote into both React state and repairsRef.
+          pattern = re.compile(r'''      setRepairs\(p => p\.map\(r => r\.id === repairId \? \{\n        \.\.\.r,\n        quote,\n        laborCost: derivedLaborCost,\n        logisticsCost: derivedLogisticsCost,\n        total: chargeTotal,\n        diagnosisFee: chargeFee \? resolvedFee\.amount : \(r\.diagnosisFeeStatus === 'waived' \? 0 : r\.diagnosisFee\),\n        diagnosisFeeStatus: chargeFee\n          \? \(r\.diagnosisFeeStatus === 'paid' \|\| r\.diagnosisFeePaidAt \? 'paid' : 'applicable'\)\n          : \(isDirectRepairPath\(r\.repairPath\) \|\| isNoCharge \? 'not_applicable' : r\.diagnosisFeeStatus\),\n        diagnosisFeeBilling: r\.diagnosisFeeBilling \?\? resolvedFee\.billing,\n        customerBillingType: r\.customerBillingType \?\? resolvedFee\.customerType,\n        deviceTier: resolvedFee\.tier \?\? r\.deviceTier,\n        status: quoteStatus,\n        quoteApprovalDeadline: \(isNoCharge \|\| isDirectRepair\) \? undefined : quote\.validUntil,\n        \.\.\.\(linkedSaleOrderId \? \{ saleOrderId: linkedSaleOrderId, saleOrderRef: linkedSaleOrderRef \} : \{\}\),\n        \.\.\.\(salesQuoteId \? \{ salesQuoteId, salesQuoteRef \} : \{\}\),\n        \.\.\.\(invoiceIdToUpdate \? \{ invoiceId: invoiceIdToUpdate \} : \{\}\),\n        // Clear reserved parts — they were unreserved above \(Gap 3\)\n        \.\.\.\(isUpdate \? \{\n          partsUsed: \[\],\n          procurementRequests: \(r\.procurementRequests \?\? \[\]\)\.map\(req =>\n            \['pending', 'ordered'\]\.includes\(req\.status\) \? \{ \.\.\.req, status: 'cancelled' as const \} : req\n          \),\n        \} : \{\}\),\n      \} : r\)\)''')
+          replacement = '''      const savedRepair: RepairOrder = {
+        ...repair,
+        quote,
+        laborCost: derivedLaborCost,
+        logisticsCost: derivedLogisticsCost,
+        total: chargeTotal,
+        diagnosisFee: chargeFee ? resolvedFee.amount : (repair.diagnosisFeeStatus === 'waived' ? 0 : repair.diagnosisFee),
+        diagnosisFeeStatus: chargeFee
+          ? (repair.diagnosisFeeStatus === 'paid' || repair.diagnosisFeePaidAt ? 'paid' : 'applicable')
+          : (isDirectRepairPath(repair.repairPath) || isNoCharge ? 'not_applicable' : repair.diagnosisFeeStatus),
+        diagnosisFeeBilling: repair.diagnosisFeeBilling ?? resolvedFee.billing,
+        customerBillingType: repair.customerBillingType ?? resolvedFee.customerType,
+        deviceTier: resolvedFee.tier ?? repair.deviceTier,
+        status: quoteStatus,
+        quoteApprovalDeadline: (isNoCharge || isDirectRepair) ? undefined : quote.validUntil,
+        ...(linkedSaleOrderId ? { saleOrderId: linkedSaleOrderId, saleOrderRef: linkedSaleOrderRef } : {}),
+        ...(salesQuoteId ? { salesQuoteId, salesQuoteRef } : {}),
+        ...(invoiceIdToUpdate ? { invoiceId: invoiceIdToUpdate } : {}),
+        ...(isUpdate ? {
+          partsUsed: [],
+          procurementRequests: (repair.procurementRequests ?? []).map(req =>
+            ['pending', 'ordered'].includes(req.status) ? { ...req, status: 'cancelled' as const } : req
+          ),
+        } : {}),
+      }
+      repairsRef.current = repairsRef.current.map(r => r.id === repairId ? savedRepair : r)
+      setRepairs(p => p.map(r => r.id === repairId ? savedRepair : r))'''
+          s, n = pattern.subn(replacement, s, count=1)
+          if n != 1:
+            raise SystemExit(f'quote state patch failed: {n}')
+
+          # 2) On quote approval with missing parts, confirm the existing SO and quote only.
+          # Do not create a draft invoice at approval time.
+          start = s.index('        // Create a quotation-status SO if one doesn\'t exist yet')
+          end_marker = '        return\n      }\n      \n      // Reserve parts — transfer bulk into repair_unit + assign serials'
+          end = s.index(end_marker, start)
+          replacement2 = '''        // Preserve the commercial lineage: approval converts the existing
+        // repair quotation into the confirmed Sales Order. Billing happens
+        // later from that same SO when the repair reaches Ready.
+        let awaitingSoId = repair.saleOrderId ?? (repair as any).linkedSaleOrderId
+        let awaitingSoRef = repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
+        const linkedAwaitingSo = findSaleOrderForRepair(soRef.current, repair)
+        awaitingSoId = linkedAwaitingSo?.id ?? awaitingSoId
+        awaitingSoRef = linkedAwaitingSo?.ref ?? linkedAwaitingSo?.orderNumber ?? awaitingSoRef
+        const approvedSoLines = repair.quote.lines.map(l => ({
+          id: uid(),
+          ...saleLineFieldsForRepairQuoteLine(l),
+        }))
+        if (!awaitingSoId) {
+          awaitingSoId = uid()
+          awaitingSoRef = await storeCtxRef.current!.allocateDocRef('SO')
+          const awaitingSo: SaleOrder = {
+            id: awaitingSoId, ref: awaitingSoRef, status: 'sale', confirmedAt: new Date().toISOString(),
+            customerId: repair.customerId, customerName: repair.customerName,
+            date: now(), validUntil: addDays(now(), 30),
+            lines: approvedSoLines,
+            subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
+            notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
+            source: 'repair', repairId: repair.id, repairRef: repair.ref,
+            createdByUserId: repair.createdBy,
+          }
+          setSaleOrders(p => [awaitingSo, ...p])
+          sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingSo) })
+        } else {
+          const soPatch = {
+            status: 'sale' as const,
+            confirmedAt: linkedAwaitingSo?.confirmedAt ?? new Date().toISOString(),
+            lines: approvedSoLines,
+            subtotal: repair.quote.subtotal,
+            taxAmount: repair.quote.tax,
+            taxTotal: repair.quote.tax,
+            totalAmount: repair.quote.total,
+            total: repair.quote.total,
+            notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
+            source: 'repair', repairId: repair.id, repairRef: repair.ref,
+          }
+          setSaleOrders(p => p.map(order => order.id === awaitingSoId ? { ...order, ...soPatch } : order))
+          sync(`/api/sale-orders/${awaitingSoId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
+        }
+
+        setRepairs(p => p.map(r => r.id === repairId ? {
+          ...r,
+          saleOrderId: awaitingSoId,
+          saleOrderRef: awaitingSoRef,
+        } : r))
+        repairsRef.current = repairsRef.current.map(r => r.id === repairId ? {
+          ...r,
+          status: 'awaiting_parts',
+          quote: { ...r.quote!, approvedDate: r.quote?.approvedDate ?? now(), approvedBy: r.quote?.approvedBy ?? 'customer' },
+          saleOrderId: awaitingSoId,
+          saleOrderRef: awaitingSoRef,
+        } : r)
+
+        const approvedSalesQuote = findSalesQuoteForRepair(quotes, repair)
+        if (approvedSalesQuote) {
+          setQuotes(p => {
+            const next = p.map(q => q.id === approvedSalesQuote.id ? {
+              ...q,
+              status: 'accepted' as const,
+              saleOrderId: awaitingSoId ?? q.saleOrderId,
+              acceptedDate: q.acceptedDate ?? now(),
+              convertedDate: q.convertedDate ?? now(),
+            } : q)
+            const updated = next.find(q => q.id === approvedSalesQuote.id)
+            if (updated) sync(`/api/quotes/${approvedSalesQuote.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return next
+          })
+        }
+        return
+      }
+      
+      // Reserve parts — transfer bulk into repair_unit + assign serials'''
+          s = s[:start] + replacement2 + s[end + len(end_marker):]
+
+          # 3) New repair invoices must be created through the linked SO endpoint,
+          # not as standalone posted invoices from Repair.
+          pattern3 = re.compile(r'''      \} else if \(!invoice\) \{\n        const freshRepair = repairsRef\.current\.find\(r => r\.id === repairId\).*?        createdNew = true\n      \}''', re.S)
+          replacement3 = '''      } else if (!invoice) {
+        const freshRepair = repairsRef.current.find(r => r.id === repairId)
+        if (freshRepair?.invoiceId) {
+          const raced = resolveExistingInvoice(freshRepair)
+          if (raced && raced.status !== 'cancelled') {
+            showToast('Invoice already exists for this repair', 'info')
+            return raced
+          }
+        }
+        if (!soId) {
+          showToast('Repair Sales Order is missing — align the quote before invoicing', 'error')
+          return null
+        }
+        const res = await fetch(`/api/sale-orders/${soId}/create-invoice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'regular', source: 'repair' }),
+        })
+        const payload = await res.json().catch(() => null)
+        if (!res.ok || !payload?.invoice) {
+          showToast(payload?.error || 'Could not convert the Repair Sales Order to an invoice', 'error')
+          return null
+        }
+        invoice = payload.invoice as Invoice
+        invRef.current = [invoice, ...invRef.current.filter(inv => inv.id !== invoice!.id)]
+        setInvoices(p => [invoice!, ...p.filter(inv => inv.id !== invoice!.id)])
+        createdNew = true
+      }'''
+          s, n3 = pattern3.subn(replacement3, s, count=1)
+          if n3 != 1:
+            raise SystemExit(f'invoice lineage patch failed: {n3}')
+
+          store.write_text(s)
+
+          # 4) Allow the canonical SO→invoice endpoint to treat Repair Ready/QC
+          # completion as the fulfillment gate, while ordinary sales remain delivery-first.
+          route = Path('app/api/sale-orders/[id]/create-invoice/route.ts')
+          r = route.read_text()
+          old = """    const blobRepairId = linkedRepair?.id ? String(linkedRepair.id) : undefined\n    const priorDownPayments = sumUnappliedDownPayments("""
+          new = """    const blobRepairId = linkedRepair?.id ? String(linkedRepair.id) : undefined\n    const repairFulfillmentReady = !!linkedRepair && [\n      'ready', 'invoiced', 'verified_released', 'delivered', 'collected', 'closed',\n    ].includes(String((linkedRepair as any).status ?? '').toLowerCase())\n    const priorDownPayments = sumUnappliedDownPayments("""
+          if old not in r:
+            raise SystemExit('repair fulfillment anchor missing')
+          r = r.replace(old, new, 1)
+
+          old2 = """    const policyForItem = (item: { productId?: string | null }): InvoicePolicy => {\n      const product = item.productId ? productById.get(item.productId) : undefined"""
+          new2 = """    const policyForItem = (item: { productId?: string | null }): InvoicePolicy => {\n      // Repair jobs are fulfilled by workshop QC/Ready, not warehouse delivery.\n      // Their linked SO still remains the invoice source of truth.\n      if (repairFulfillmentReady) return 'order'\n      const product = item.productId ? productById.get(item.productId) : undefined"""
+          if old2 not in r:
+            raise SystemExit('policy anchor missing')
+          r = r.replace(old2, new2, 1)
+
+          old3 = """    if (!hasValidatedDelivery || !fullyDelivered) {\n      return NextResponse.json({\n        error: 'Complete and validate the Sales Order delivery before creating an invoice',\n      }, { status: 409 })\n    }"""
+          new3 = """    if ((!hasValidatedDelivery || !fullyDelivered) && !repairFulfillmentReady) {\n      return NextResponse.json({\n        error: 'Complete and validate the Sales Order delivery before creating an invoice',\n      }, { status: 409 })\n    }"""
+          if old3 not in r:
+            raise SystemExit('delivery gate anchor missing')
+          r = r.replace(old3, new3, 1)
+          route.write_text(r)
+
+          Path('.github/workflows/apply-repair-quote-lineage-fix.yml').unlink(missing_ok=True)
+          PY
+      - name: Validate patch
+        shell: bash
+        run: |
+          git diff --check
+          grep -q "repairsRef.current = repairsRef.current.map(r => r.id === repairId ? savedRepair : r)" lib/store.tsx
+          grep -q "Repair Sales Order is missing" lib/store.tsx
+          grep -q "repairFulfillmentReady" app/api/sale-orders/\[id\]/create-invoice/route.ts
+          ! grep -q "Mark linked Sales Quote as accepted and create a draft invoice" lib/store.tsx
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/store.tsx app/api/sale-orders/'[id]'/create-invoice/route.ts .github/workflows
+          git commit -m "Keep repair quote and invoice lineage aligned"
+          git push origin HEAD:fix/repair-quote-state-and-so-invoice-lineage
