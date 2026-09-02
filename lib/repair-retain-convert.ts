@@ -6,9 +6,19 @@ type RepairLike = {
   serialNumber?: string
   serialId?: string
   deviceCondition?: string
+  deviceBrand?: string
+  deviceModel?: string
 }
 
 const normalize = (value: unknown) => String(value ?? '').trim().toLowerCase()
+const normalizeSearchText = (value: unknown) => normalize(value)
+  .replace(/[^a-z0-9]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+function uniqueMatch<T>(items: T[]): T | null {
+  return items.length === 1 ? items[0] : null
+}
 
 export function findRepairCatalogProduct<T extends NamedProduct>(
   products: T[],
@@ -18,9 +28,42 @@ export function findRepairCatalogProduct<T extends NamedProduct>(
     const byId = products.find(p => p.id === repair.productId)
     if (byId) return byId
   }
-  const name = normalize(repair.productName)
-  if (!name) return null
-  return products.find(p => normalize(p.name) === name) ?? null
+
+  const name = normalizeSearchText(repair.productName)
+  if (name) {
+    const exact = products.find(p => normalizeSearchText(p.name) === name)
+    if (exact) return exact
+  }
+
+  // Older repair intakes often stored a friendly family name (for example
+  // "HP EliteBook") instead of a catalog product id. Use the structured
+  // brand/model captured on the repair to recover the catalog link safely.
+  const brand = normalizeSearchText(repair.deviceBrand)
+  const model = normalizeSearchText(repair.deviceModel)
+  if (model) {
+    const byBrandModel = uniqueMatch(products.filter(product => {
+      const productName = normalizeSearchText(product.name)
+      return productName.includes(model) && (!brand || productName.includes(brand))
+    }))
+    if (byBrandModel) return byBrandModel
+
+    // Some catalog rows omit the brand but still contain the full model.
+    const byModel = uniqueMatch(products.filter(product => normalizeSearchText(product.name).includes(model)))
+    if (byModel) return byModel
+  }
+
+  // As a final compatibility path, accept a family-name match only when it
+  // resolves to exactly one catalog product. Never guess when several SKUs
+  // share the same family name.
+  if (name) {
+    const byFamily = uniqueMatch(products.filter(product => {
+      const productName = normalizeSearchText(product.name)
+      return productName.startsWith(`${name} `) || productName.includes(` ${name} `) || name.startsWith(`${productName} `)
+    }))
+    if (byFamily) return byFamily
+  }
+
+  return null
 }
 
 export function buyBackConditionFromRepair(
@@ -88,4 +131,3 @@ export function canCreateTradeInFromRepair(repair: {
   if (repair.retainedBuyBackId || repair.retainedDonationId) return false
   return (TRADE_IN_FROM_REPAIR_STATUSES as readonly string[]).includes(repair.status)
 }
-
