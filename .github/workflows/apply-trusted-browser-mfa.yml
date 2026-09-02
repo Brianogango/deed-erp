@@ -1,0 +1,214 @@
+name: Apply trusted browser MFA
+on:
+  push:
+    branches:
+      - feat/trusted-browser-mfa
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/trusted-browser-mfa
+          fetch-depth: 0
+      - name: Patch auth flow
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          # Login route: after password succeeds, trust can satisfy MFA only for
+          # an already-enrolled user and only when the server record validates.
+          p = Path('app/api/auth/login/route.ts')
+          s = p.read_text()
+          s = s.replace(
+            "import { issueSessionResponse } from '@/lib/auth/session-issuer'\n",
+            "import { issueSessionResponse } from '@/lib/auth/session-issuer'\nimport { isTrustedBrowserRequest } from '@/lib/auth/trusted-browser'\n",
+            1,
+          )
+          old = """  if (mfaRequiredForRole(account.role)) {
+    try {
+      const state = await getMfaState(account.id)
+      const mode = state.enabled ? 'verify' : 'enroll'
+      const response = NextResponse.json(
+        {
+          mfaRequired: true,
+          mfaEnrollmentRequired: mode === 'enroll',
+          message: mode === 'enroll'
+            ? 'Authenticator setup is required for this privileged account.'
+            : 'Enter the six-digit code from your authenticator app.',
+        },
+        { headers: { 'Cache-Control': 'no-store, private' } },
+      )
+      setMfaChallengeCookie(response, request, account.id, mode)
+      return response
+    } catch (error) {
+"""
+          new = """  if (mfaRequiredForRole(account.role)) {
+    try {
+      const state = await getMfaState(account.id)
+
+      // Enrollment can never be skipped. For an already-enrolled account,
+      // a valid 30-day server-backed trusted-browser credential satisfies MFA.
+      if (state.enabled && await isTrustedBrowserRequest(request, account.id, account.sessionVersion)) {
+        void publishSessionStatus(account.id, {
+          isActive: true,
+          role: account.role,
+          actsAsTechnician: Boolean(account.actsAsTechnician),
+          invalidatedAt: Date.now(),
+        })
+        return issueSessionResponse(request, user, {
+          mfaVerified: true,
+          sessionVersion: account.sessionVersion,
+        })
+      }
+
+      const mode = state.enabled ? 'verify' : 'enroll'
+      const response = NextResponse.json(
+        {
+          mfaRequired: true,
+          mfaEnrollmentRequired: mode === 'enroll',
+          message: mode === 'enroll'
+            ? 'Authenticator setup is required for this privileged account.'
+            : 'Enter the six-digit code from your authenticator app.',
+        },
+        { headers: { 'Cache-Control': 'no-store, private' } },
+      )
+      setMfaChallengeCookie(response, request, account.id, mode)
+      return response
+    } catch (error) {
+"""
+          if old not in s: raise SystemExit('login MFA block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # MFA verify: optional (default-on in UI) trusted-browser issuance.
+          p = Path('app/api/auth/mfa/verify/route.ts')
+          s = p.read_text()
+          s = s.replace(
+            "import { InputSecurityError, readSafeJson } from '@/lib/input-security'\n",
+            "import { InputSecurityError, readSafeJson } from '@/lib/input-security'\nimport { trustCurrentBrowser } from '@/lib/auth/trusted-browser'\n",
+            1,
+          )
+          old = """  const code = body && typeof body === 'object' && !Array.isArray(body)
+    ? String((body as Record<string, unknown>).code || '')
+    : ''
+
+  const verified = await verifyMfaCode(challenge.uid, code, challenge.mode === 'enroll').catch(() => false)
+"""
+          new = """  const payload = body && typeof body === 'object' && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : {}
+  const code = String(payload.code || '')
+  const trustBrowser = payload.trustBrowser === true
+
+  const verified = await verifyMfaCode(challenge.uid, code, challenge.mode === 'enroll').catch(() => false)
+"""
+          if old not in s: raise SystemExit('verify payload block not found')
+          s = s.replace(old, new, 1)
+          old = """  const user = toPublicAuthUser(account)
+  return issueSessionResponse(request, user, { mfaVerified: true, sessionVersion: account.sessionVersion })
+"""
+          new = """  const user = toPublicAuthUser(account)
+  const response = issueSessionResponse(request, user, { mfaVerified: true, sessionVersion: account.sessionVersion })
+  if (trustBrowser) {
+    try {
+      await trustCurrentBrowser(response, request, account.id, account.sessionVersion)
+    } catch (error) {
+      // MFA succeeded; do not deny access solely because remembering the browser
+      // failed. The next login will safely require MFA again.
+      console.error('[auth/mfa/verify] could not trust browser:', error instanceof Error ? error.message : 'unknown_error')
+    }
+  }
+  return response
+"""
+          if old not in s: raise SystemExit('verify response block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # Resetting MFA revokes every remembered browser for that account.
+          p = Path('lib/auth/mfa.ts')
+          s = p.read_text()
+          s = s.replace(
+            "import { requiresPrivilegedMfa } from '@/lib/auth/mfa-policy'\n",
+            "import { requiresPrivilegedMfa } from '@/lib/auth/mfa-policy'\nimport { revokeAllTrustedBrowsers } from '@/lib/auth/trusted-browser'\n",
+            1,
+          )
+          old = """export async function resetUserMfa(userId: string) {
+  await sql`DELETE FROM user_mfa WHERE user_id = ${userId}`
+}
+"""
+          new = """export async function resetUserMfa(userId: string) {
+  await revokeAllTrustedBrowsers(userId)
+  await sql`DELETE FROM user_mfa WHERE user_id = ${userId}`
+}
+"""
+          if old not in s: raise SystemExit('resetUserMfa block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # Active production login UI: default to trusting a personal browser,
+          # but keep user agency with an explicit checkbox.
+          p = Path('components/modules/Login.tsx')
+          s = p.read_text()
+          s = s.replace(
+            "  const [manualKey, setManualKey] = useState('')\n",
+            "  const [manualKey, setManualKey] = useState('')\n  const [trustBrowser, setTrustBrowser] = useState(true)\n",
+            1,
+          )
+          s = s.replace(
+            "        body: JSON.stringify({ code }),\n",
+            "        body: JSON.stringify({ code, trustBrowser }),\n",
+            1,
+          )
+          anchor = """            <OtpField
+              id="login-mfa-code"
+              value={code}
+              onChange={setCode}
+              verifying={pending}
+              disabled={pending}
+              label="Authenticator PIN"
+            />
+"""
+          if anchor not in s:
+            # tolerate the current component id if it differs
+            start = s.find('            <OtpField', s.find("phase === 'credentials'"))
+            end = s.find('            />', start)
+            if start < 0 or end < 0: raise SystemExit('Login OtpField not found')
+            end += len('            />\n')
+            anchor = s[start:end]
+          addition = anchor + """            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={trustBrowser}
+                onChange={event => setTrustBrowser(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--primary)] focus:ring-[var(--primary)]"
+              />
+              <span>
+                <span className="block text-[12px] font-semibold text-slate-700">Trust this browser for 30 days</span>
+                <span className="mt-0.5 block text-[10.5px] leading-4 text-slate-500">MFA will still be required in another browser, private window, or after security changes. Do not use this on a shared computer.</span>
+              </span>
+            </label>
+"""
+          s = s.replace(anchor, addition, 1)
+          p.write_text(s)
+
+          # Remove this one-shot workflow after the patch commit.
+          Path('.github/workflows/apply-trusted-browser-mfa.yml').unlink(missing_ok=True)
+          PY
+      - name: Validate patch
+        run: |
+          git diff --check
+          grep -n "isTrustedBrowserRequest\|mfaVerified: true" app/api/auth/login/route.ts
+          grep -n "trustBrowser\|trustCurrentBrowser" app/api/auth/mfa/verify/route.ts
+          grep -n "Trust this browser for 30 days" components/modules/Login.tsx
+          grep -n "revokeAllTrustedBrowsers" lib/auth/mfa.ts
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/api/auth/login/route.ts app/api/auth/mfa/verify/route.ts lib/auth/mfa.ts components/modules/Login.tsx .github/workflows
+          git commit -m "Remember trusted browsers after MFA"
+          git push origin HEAD:feat/trusted-browser-mfa
