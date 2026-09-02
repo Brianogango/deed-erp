@@ -1131,6 +1131,18 @@ function SalesContent() {
   const handleCreateNewVersion = async (so: SalesOrderView) => {
     setCreatingNewVersion(true)
     try {
+      const historyRes = await fetch(`/api/sale-orders/${so.id}/versions`, { cache: 'no-store' })
+      const history = await historyRes.json().catch(() => null)
+      const rows = Array.isArray(history?.versions) ? history.versions : []
+      const latest = rows.find((row: any) => row.isLatest)
+      if (latest && latest.id !== so.id) {
+        showToast(`Revision ${so.versionNumber ?? 1} is read-only. Open Revision ${latest.versionNumber} to revise the quotation.`, 'error')
+        return
+      }
+      if (rows.some((row: any) => row.status === 'sale')) {
+        showToast('This quotation has already become a Sales Order. Use a controlled Sales Order amendment instead.', 'error')
+        return
+      }
       const created = await createNewSOVersion(so.id)
       if (created?.id) openOrder(created.id)
     } finally {
@@ -2190,8 +2202,8 @@ function SalesContent() {
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
                               { label: 'Download pro-forma', icon: faDownload, disabled: !activeOrder.lines.length, onClick: () => void downloadProformaInvoice(activeOrder) },
                               { label: 'Duplicate', icon: faCopy, onClick: () => duplicateSaleOrder(activeOrder) },
-                              { label: creatingNewVersion ? 'Creating version…' : 'New Version', icon: faCodeBranch, disabled: creatingNewVersion, onClick: () => void handleCreateNewVersion(activeOrder) },
-                              { label: 'Version History', icon: faClockRotateLeft, onClick: () => void openVersionHistory(activeOrder) },
+                              { label: creatingNewVersion ? 'Creating revision…' : 'Revise Quotation', icon: faCodeBranch, disabled: creatingNewVersion, onClick: () => void handleCreateNewVersion(activeOrder) },
+                              { label: 'Revision History', icon: faClockRotateLeft, onClick: () => void openVersionHistory(activeOrder) },
                               { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
                               { label: 'Delete', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
                             ]}
@@ -2264,7 +2276,7 @@ function SalesContent() {
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
                             ...(!activeOrder.locked && systemSettings.salesLockConfirmed && isAdmin ? [{ label: 'Lock', icon: faSave, onClick: () => setSaleOrderLock(activeOrder.id, true) }] : []),
                             { label: 'Duplicate', icon: faCopy, onClick: () => duplicateSaleOrder(activeOrder) },
-                            { label: 'Version History', icon: faClockRotateLeft, onClick: () => void openVersionHistory(activeOrder) },
+                            { label: 'Revision History', icon: faClockRotateLeft, onClick: () => void openVersionHistory(activeOrder) },
                             ...(canReverseConfirmedSO ? [
                               { label: 'Set to Quotation', icon: faRotateLeft, onClick: () => resetSOToDraft(activeOrder.id) },
                               { label: 'Cancel', icon: faBan, tone: 'danger' as const, onClick: () => setShowCancelConfirm(true) },
@@ -3487,15 +3499,15 @@ function SalesContent() {
         </Modal>
       )}
 
-      {/* Version history — full lineage for a quotation created via "New Version".
+      {/* Revision history — immutable lineage created through “Revise Quotation”.
           Most quotations have exactly one row here (never versioned). */}
       {showVersionHistory && (
-        <Modal title="Version History" onClose={() => { setShowVersionHistory(false); setVersionHistoryRows([]) }} width={560}>
+        <Modal title="Revision History" onClose={() => { setShowVersionHistory(false); setVersionHistoryRows([]) }} width={560}>
           <div className="flex flex-col gap-3">
             {loadingVersionHistory ? (
-              <p className="text-xs text-[var(--text-3)]">Loading versions…</p>
+              <p className="text-xs text-[var(--text-3)]">Loading revisions…</p>
             ) : versionHistoryRows.length === 0 ? (
-              <p className="text-xs text-[var(--text-3)]">No version history found.</p>
+              <p className="text-xs text-[var(--text-3)]">No earlier revisions found.</p>
             ) : (
               versionHistoryRows.map((v, idx) => {
                 const prev = idx > 0 ? versionHistoryRows[idx - 1] : null
