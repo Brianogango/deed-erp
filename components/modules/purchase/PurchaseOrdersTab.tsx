@@ -206,6 +206,11 @@ export default function PurchaseOrdersTab() {
       key: 'total', label: 'Total', priority: 2, width: '85px', align: 'right',
       render: po => <span className="font-mono text-[11px] font-semibold text-t1">{fmtKes(po.total)}</span>,
       exportValue: po => po.total,
+      footer: pageRows => (
+        <span className="font-mono text-[11px] font-bold tabular-nums">
+          {fmtKes(pageRows.reduce((sum, po) => sum + po.total, 0))}
+        </span>
+      ),
     },
   ]
 

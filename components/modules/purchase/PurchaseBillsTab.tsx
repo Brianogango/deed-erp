@@ -41,6 +41,11 @@ export default function PurchaseBillsTab() {
         return <span className="font-mono text-[11px]" style={{ color: outstanding <= 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtKes(outstanding)}</span>
       },
       exportValue: b => b.total - b.amountPaid,
+      footer: pageRows => (
+        <span className="font-mono text-[11px] font-bold tabular-nums">
+          {fmtKes(pageRows.reduce((sum, bill) => sum + Math.max(0, bill.total - bill.amountPaid), 0))}
+        </span>
+      ),
     },
     {
       key: 'po', label: 'PO', priority: 2, width: '90px',
@@ -56,11 +61,21 @@ export default function PurchaseBillsTab() {
       key: 'total', label: 'Total', priority: 2, width: '90px', align: 'right',
       render: b => <span className="font-mono text-[11px] text-t1">{fmtKes(b.total)}</span>,
       exportValue: b => b.total,
+      footer: pageRows => (
+        <span className="font-mono text-[11px] font-bold tabular-nums">
+          {fmtKes(pageRows.reduce((sum, bill) => sum + bill.total, 0))}
+        </span>
+      ),
     },
     {
       key: 'paid', label: 'Paid', priority: 3, width: '90px', align: 'right',
       render: b => <span className="font-mono text-[11px]" style={{ color: 'var(--success)' }}>{fmtKes(b.amountPaid)}</span>,
       exportValue: b => b.amountPaid,
+      footer: pageRows => (
+        <span className="font-mono text-[11px] font-bold tabular-nums">
+          {fmtKes(pageRows.reduce((sum, bill) => sum + bill.amountPaid, 0))}
+        </span>
+      ),
     },
   ]
 

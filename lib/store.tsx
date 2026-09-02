@@ -3623,7 +3623,7 @@ export interface AppState {
   // Validate receipt — the CRITICAL stock entry step
   // serialAccessories: map of serial string → accessories array (e.g. { 'SN001': ['Charger','Bag'] })
   // serialIssues: map of serial string → issue description (non-empty = received with issues → refurbishment)
-  validateReceipt: (receiptId: string, lines: Receipt['lines'], destination: LocationId, serialAccessories?: Record<string, string[]>, serialAccessoryNotes?: Record<string, string>, serialSpecs?: Record<string, string>, serialIssues?: Record<string, string>) => void
+  validateReceipt: (receiptId: string, lines: Receipt['lines'], destination: LocationId, serialAccessories?: Record<string, string[]>, serialAccessoryNotes?: Record<string, string>, serialSpecs?: Record<string, string>, serialIssues?: Record<string, string>) => Promise<boolean>
   deletePO: (id: string) => void
   /** lineOverrides caps each line's bill qty (still clamped to billableQty) — omit to bill everything billable, matching prior one-click behaviour. */
   createBillFromPO: (poId: string, lineOverrides?: Array<{ lineId: string; qty: number }>) => Invoice | null
@@ -3692,7 +3692,7 @@ export interface AppState {
   /** Optional `intake` is merged into the created job before the authoritative POST (path, warranty, accessories, etc.). */
   createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string, intake?: Partial<RepairOrder>) => Promise<RepairOrder>
   updateRepair: (id: string, p: Partial<RepairOrder>) => void
-  deleteRepair: (id: string) => void
+  deleteRepair: (id: string) => Promise<boolean>
   checkWarrantyForRepair: (repairId: string, serial: string) => boolean
   fileWarrantyClaim: (repairId: string, notes: string) => void
   
@@ -13872,18 +13872,30 @@ const storeCtx: AppState = {
     },
     validateReceipt: async (receiptId, lines, destination, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues) => {
       if (!canValidatePurchaseReceiptAction(currentUser())) {
-        showToast('Only Director, Admin Officer, or Inventory Officer can validate GRNs', 'error'); return
+        showToast('Only Director, Admin Officer, or Inventory Officer can validate GRNs', 'error'); return false
       }
-      const receipt = recRef.current.find(r => r.id === receiptId)!
-      const po = poRef.current.find(p => p.id === receipt.poId)!
+      const receipt = recRef.current.find(r => r.id === receiptId)
+      if (!receipt) {
+        showToast('Receipt no longer exists. Refresh the list and try again.', 'error')
+        return false
+      }
+      if (receipt.status !== 'draft') {
+        showToast(`${receipt.ref} has already been validated`, 'info')
+        return false
+      }
+      const po = poRef.current.find(p => p.id === receipt.poId)
+      if (!po) {
+        showToast('Linked purchase order was not found. Refresh and try again.', 'error')
+        return false
+      }
       // Validate: serialized products need all serial numbers
       for (const line of lines) {
         if (line.requiresSerial && line.serials.length < line.qtyReceived) {
-          showToast(`Enter all serial numbers for ${line.productName} (${line.serials.length}/${line.qtyReceived})`, 'error'); return
+          showToast(`Enter all serial numbers for ${line.productName} (${line.serials.length}/${line.qtyReceived})`, 'error'); return false
         }
         for (const s of line.serials) {
           if (serialRef.current.find(x => x.serial === s)) {
-            showToast(`Serial ${s} already exists in system`, 'error'); return
+            showToast(`Serial ${s} already exists in system`, 'error'); return false
           }
         }
       }
@@ -13993,11 +14005,11 @@ const storeCtx: AppState = {
           const payload = await response.json().catch(() => null) as { errors?: string[]; error?: string } | null
           const message = payload?.errors?.[0] || payload?.error || 'Receipt validation failed'
           showToast(message, 'error')
-          return
+          return false
         }
       } catch {
         showToast('Could not validate receipt on server', 'error')
-        return
+        return false
       }
 
       // Server already wrote products/bulkStock/serials blobs — do not re-increment
@@ -14120,6 +14132,7 @@ const storeCtx: AppState = {
         showToast(followUpReceipt ? `Stock received · ${followUpReceipt.ref} created for remaining items` : `Stock received · use "Create Bill" to generate the vendor invoice`)
       }
       addAuditLog('validate_receipt', receipt.ref, `Stock received from ${receipt.vendorName}`)
+      return true
     },
     deletePO: (id) => { 
       setPurchaseOrders(p => p.filter(po => po.id !== id)); 
@@ -14973,17 +14986,32 @@ const storeCtx: AppState = {
         })
       }
     },
-    deleteRepair: (id) => {
+    deleteRepair: async (id) => {
       const user = currentUser()
       if (!user || user.role !== 'director') {
-        showToast('Only a director can delete a repair', 'error'); return
+        showToast('Only a director can delete a repair', 'error'); return false
       }
-      const repair = repairs.find(r => r.id === id)
-      if (!repair) return
+      const repair = repairsRef.current.find(r => r.id === id)
+      if (!repair) {
+        showToast('Repair no longer exists. Refresh the list and try again.', 'error')
+        return false
+      }
+      try {
+        const response = await fetch(`/api/repairs/${id}`, { method: 'DELETE' })
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error || 'Could not delete the repair', 'error')
+          return false
+        }
+      } catch {
+        showToast('Could not reach the server to delete the repair', 'error')
+        return false
+      }
       setRepairs(p => p.filter(r => r.id !== id))
       setOutsourceJobs(p => p.map(j => j.repairOrderId === id ? { ...j, repairOrderId: undefined } : j))
       addAuditLog('delete_repair', repair.ref, `Repair ${repair.ref} deleted by ${user.name}`)
       showToast(`Repair ${repair.ref} deleted`)
+      return true
     },
     checkWarrantyForRepair: (repairId, serial) => {
       const war = warRef.current.find(w => w.serialNumber === serial && w.status === 'active')

@@ -1766,15 +1766,20 @@ export function CancelRepairModal({ repair, onClose }: { repair: RepairOrder; on
 }
 
 export function DeleteRepairConfirm({ repair, onClose, onDeleted }: { repair: RepairOrder; onClose: () => void; onDeleted?: () => void }) {
-  const { deleteRepair, showToast } = useRepairStore()
+  const { deleteRepair } = useRepairStore()
   const [loading, setLoading] = useState(false)
 
-  function handleDelete() {
+  async function handleDelete() {
+    if (loading) return
     setLoading(true)
-    deleteRepair(repair.id)
-    showToast(`Repair ${repair.ref} deleted`, 'success')
-    onDeleted?.()
-    onClose()
+    try {
+      const deleted = await deleteRepair(repair.id)
+      if (!deleted) return
+      onDeleted?.()
+      onClose()
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -1796,8 +1801,8 @@ export function DeleteRepairConfirm({ repair, onClose, onDeleted }: { repair: Re
         </div>
         <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Back</button>
-          <ActionBtn onClick={handleDelete} color="linear-gradient(135deg,#7C3AED,#9333EA)" shadow="0 8px 24px rgba(124,58,237,0.4)" disabled={loading}>
-            <Fa icon={faTrash} /> Delete Permanently
+          <ActionBtn onClick={() => { void handleDelete() }} color="linear-gradient(135deg,#7C3AED,#9333EA)" shadow="0 8px 24px rgba(124,58,237,0.4)" disabled={loading}>
+            <Fa icon={faTrash} /> {loading ? 'Deleting…' : 'Delete Permanently'}
           </ActionBtn>
         </div>
       </div>

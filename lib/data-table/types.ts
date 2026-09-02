@@ -25,6 +25,11 @@ export interface ColumnDef<T> {
   /** Cell content for the table/grid rendering (desktop + tablet + laptop). */
   render: (row: T) => ReactNode
   /**
+   * Optional Odoo-style summary for this column. The first argument contains
+   * only the current page; the second contains every filtered row.
+   */
+  footer?: (pageRows: T[], filteredRows: T[]) => ReactNode
+  /**
    * Raw record value used by search, filters, and export. Prefer this when
    * `render` returns badges, links, or other React elements.
    */
