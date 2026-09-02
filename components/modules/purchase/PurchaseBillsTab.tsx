@@ -1,14 +1,17 @@
 'use client'
+import { useRouter } from 'next/navigation'
 import { usePurchase } from './PurchaseContext'
 import { PanelHeader, RecordCard } from '@/components/ui'
 import { AsyncActionButton, EmptyState, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import type { Invoice } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { financeInvoicePath } from '@/lib/finance-invoice'
 
 type VendorBill = Invoice
 
 export default function PurchaseBillsTab() {
+  const router = useRouter()
   const {
     vendorBills, purchaseOrders, postInvoice, currentUser,
     fmtKes, fmtDate,
@@ -18,11 +21,22 @@ export default function PurchaseBillsTab() {
   const linkedPORef = (b: VendorBill) => b.purchaseOrderId ? (purchaseOrders.find(p => p.id === b.purchaseOrderId)?.ref ?? '—') : '—'
   const billStatus = (b: VendorBill) => invoiceDocState(b.status) === 'posted' ? invoicePaymentStatus(b) : invoiceDocState(b.status)
   const billStatusLabel = (b: VendorBill) => invoiceDocState(b.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(b)] : undefined
+  const openBill = (b: VendorBill) => router.push(financeInvoicePath(b.id))
 
   const columns: ColumnDef<VendorBill>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: b => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{displayDocRef(b.ref)}</span>,
+      render: b => (
+        <button
+          type="button"
+          className="font-mono text-[11px] font-semibold hover:underline text-left"
+          style={{ color: 'var(--navy)' }}
+          onClick={e => { e.stopPropagation(); openBill(b) }}
+          aria-label={`Open vendor bill ${displayDocRef(b.ref)}`}
+        >
+          {displayDocRef(b.ref)}
+        </button>
+      ),
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.4fr',
@@ -121,6 +135,7 @@ export default function PurchaseBillsTab() {
           rows={vendorBills}
           rowKey={b => b.id}
           emptyMessage="No vendor bills match the current search or filters"
+          onRowClick={openBill}
           rowActions={rowActions}
           renderCard={b => (
             <RecordCard
