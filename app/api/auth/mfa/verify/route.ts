@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
   })
 
   const user = toPublicAuthUser(account)
-  const response = issueSessionResponse(request, user, { mfaVerified: true, sessionVersion: account.sessionVersion })
+  const response = await issueSessionResponse(request, user, { mfaVerified: true, sessionVersion: account.sessionVersion })
   if (trustBrowser) {
     try {
       await trustCurrentBrowser(response, request, account.id, account.sessionVersion)
