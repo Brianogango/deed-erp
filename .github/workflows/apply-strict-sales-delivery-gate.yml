@@ -10,133 +10,20 @@ permissions:
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/strict-sales-delivery-before-invoice
           fetch-depth: 0
-
-      - name: Enforce delivery before invoice
-        shell: python
+      - name: Apply patch
+        run: python scripts/apply_strict_sales_delivery_gate.py
+      - name: Commit patch
         run: |
-          from pathlib import Path
-          import re
-
-          sales = Path('components/modules/Sales.tsx')
-          text = sales.read_text()
-
-          # 1) UI eligibility: no invoice CTA until the whole SO is delivered.
-          marker = """  const canCreateInvoiceNow = useMemo(() => {
-    if (!activeOrder || activeOrder.status !== 'sale') return false
-"""
-          replacement = """  const canCreateInvoiceNow = useMemo(() => {
-    if (!activeOrder || activeOrder.status !== 'sale') return false
-    // Deed policy: a Sales Order cannot create a customer invoice before
-    // fulfilment is fully delivered. Pro-forma/deposit collection is separate.
-    if (saleOrderFulfilmentStatus(activeOrder.status, activeOrder.lines ?? []) !== 'delivered') return false
-"""
-          if marker not in text:
-              raise SystemExit('canCreateInvoiceNow marker not found')
-          text = text.replace(marker, replacement, 1)
-
-          # 2) Remove the down-payment invoice escape hatch from SO More actions.
-          text, n = re.subn(
-              r"\s*\.\.\.\(canInvoiceFromSO && !canCreateInvoiceNow \? \[\{\s*label: 'Create down payment…',.*?\}\] : \[\]\),",
-              '',
-              text,
-              count=1,
-              flags=re.S,
-          )
-          if n != 1:
-              raise SystemExit('SO down-payment menu block not found')
-
-          # 3) In the invoice panel, delivery is the only pre-invoice action.
-          text, n = re.subn(
-              r"onClick=\{\(\) => \{\s*setInvoiceWizardMode\(canCreateInvoiceNow \? 'regular' : 'down_payment_percent'\)\s*setInvoiceWizardPercent\('30'\)\s*setInvoiceWizardAmount\(''\)\s*setShowInvoiceWizard\(true\)\s*\}\}\s*>\s*\{canCreateInvoiceNow \? 'Create invoice…' : 'Create down payment…'\}",
-              """onClick={() => {
-                                          if (!canCreateInvoiceNow) {
-                                            void openDeliveryView()
-                                            return
-                                          }
-                                          setInvoiceWizardMode('regular')
-                                          setInvoiceWizardPercent('30')
-                                          setInvoiceWizardAmount('')
-                                          setShowInvoiceWizard(true)
-                                        }}
-                                      >
-                                        {canCreateInvoiceNow ? 'Create invoice…' : 'Complete delivery'}""",
-              text,
-              count=1,
-              flags=re.S,
-          )
-          if n != 1:
-              raise SystemExit('Invoice panel pre-delivery CTA not found')
-
-          sales.write_text(text)
-
-          route = Path('app/api/sale-orders/[id]/create-invoice/route.ts')
-          api = route.read_text()
-
-          # 4) An advance request is a pro-forma/deposit workflow, never a customer invoice.
-          api, n = re.subn(
-              r"\n    // ── Down-payment invoice \(deposit\).*?\n    const deliveries = Array\.isArray\(state\.deed_deliveries\)",
-              """
-    // A pre-delivery request for funds must use Pro-forma / Deposits, not a
-    // customer invoice. This route is strictly delivery-first.
-    if (isDownPaymentMode(mode)) {
-      return NextResponse.json({
-        error: 'Create a pro-forma or record a customer deposit. An invoice can only be created after delivery is validated.',
-      }, { status: 409 })
-    }
-
-    const deliveries = Array.isArray(state.deed_deliveries)""",
-              api,
-              count=1,
-              flags=re.S,
-          )
-          if n != 1:
-              raise SystemExit('Down-payment API block not found')
-
-          # 5) Server-side source-of-truth gate: UI bypasses/direct API calls also fail.
-          heal_marker = """    const healedItems = await Promise.all((confirmed.items ?? []).map(async item => {
-"""
-          if heal_marker not in api:
-              raise SystemExit('healedItems marker not found')
-
-          insert_after = """    }))
-
-    let invoiceable = healedItems.map(item => {
-"""
-          strict_gate = """    }))
-
-    const fullyDelivered = healedItems
-      .filter(item => Number(item.qty) > 0)
-      .every(item => Number(item.qtyDelivered) >= Number(item.qty))
-
-    if (!hasValidatedDelivery || !fullyDelivered) {
-      return NextResponse.json({
-        error: 'Complete and validate the Sales Order delivery before creating an invoice',
-      }, { status: 409 })
-    }
-
-    let invoiceable = healedItems.map(item => {
-"""
-          if insert_after not in api:
-              raise SystemExit('invoiceable insertion marker not found')
-          api = api.replace(insert_after, strict_gate, 1)
-
-          route.write_text(api)
-
-          # One-shot workflow: remove itself from the resulting commit.
-          Path('.github/workflows/apply-strict-sales-delivery-gate.yml').unlink()
-
-      - name: Commit strict gate
-        run: |
+          rm -f scripts/apply_strict_sales_delivery_gate.py .github/workflows/apply-strict-sales-delivery-gate.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add components/modules/Sales.tsx app/api/sale-orders/[id]/create-invoice/route.ts .github/workflows/apply-strict-sales-delivery-gate.yml
+          git add -A
           git diff --cached --check
           git commit -m "Enforce validated delivery before Sales invoice"
           git push origin HEAD:fix/strict-sales-delivery-before-invoice
