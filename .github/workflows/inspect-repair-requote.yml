@@ -1,0 +1,24 @@
+name: Inspect repair requote flow
+on:
+  push:
+    branches:
+      - fix/repair-requote-renotify-salesperson-copy
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/repair-requote-renotify-salesperson-copy
+      - name: Inspect quote store logic
+        run: |
+          echo '--- Salesperson field ---'
+          grep -n -A35 -B15 "Salesperson (commission)" components/sales/SalespersonCloserField.tsx || true
+          echo '--- generateRepairQuote ---'
+          grep -n -A170 -B30 "generateRepairQuote" lib/store.tsx || true
+          echo '--- moveRepairToPreviousProgress ---'
+          grep -n -A140 -B25 "moveRepairToPreviousProgress" lib/store.tsx || true
+          echo '--- updateRepairProgress ---'
+          grep -n -A120 -B20 "updateRepairProgress" lib/store.tsx || true
