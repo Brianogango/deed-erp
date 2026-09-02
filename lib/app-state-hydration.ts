@@ -24,8 +24,10 @@ const HR_APP_STATE_KEYS = [
 
 const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   // Dashboard KPIs need the same inputs as Operations / Finance so the
-  // numbers do not disagree: serials+bulkStock for on-hand, POS/POs for
-  // cashbook negatives, stock moves are still deferred to /operations.
+  // numbers do not disagree. Keep this list aligned with every collection
+  // consumed by components/modules/Dashboard.tsx: stale or omitted datasets
+  // must re-hydrate from the server instead of leaving an old local cache in
+  // place.
   '/': [
     'deed_products',
     'deed_saleOrders',
@@ -36,11 +38,17 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
     'deed_contacts',
     'deed_accounts',
     'deed_bankAccounts',
+    'deed_bankStatementLines',
     'deed_serials',
     'deed_bulkStock',
     'deed_posOrders',
     'deed_purchaseOrders',
     'deed_payrollRuns',
+    'deed_stockTransfers',
+    'deed_kilimallOrders',
+    'deed_outsourceJobs',
+    'deed_refurbishmentJobs',
+    'deed_journalEntries',
   ],
   '/sales': ['deed_saleOrders', 'deed_quotes', 'deed_products', 'deed_serials', 'deed_invoices', 'deed_deliveries', 'deed_contacts', 'deed_warranties', 'deed_bulkStock', 'deed_stockReservations', 'deed_approvalRequests', 'deed_bankAccounts', 'deed_documentPaymentDetails', 'deed_customerCredits'],
   // CRM needs companies/opportunities/contacts — not the full sales + stock catalogs.
