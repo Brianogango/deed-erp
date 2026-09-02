@@ -204,6 +204,7 @@ function PurchaseContent() {
 
   // ── GRN state ──────────────────────────────────────────────────────────────
   const [activeReceiptId,      setActiveReceiptId]      = useState<string | null>(null)
+  const [isValidatingReceipt,  setIsValidatingReceipt]  = useState(false)
   const [receiptOrigin,        setReceiptOrigin]        = useState<'list' | 'po'>('list')
   const [grnLines,             setGrnLines]             = useState<Receipt['lines']>([])
   const [destLocation,         setDestLocation]         = useState<LocationId>('warehouse')
@@ -654,23 +655,29 @@ function PurchaseContent() {
     if (serialItems.length) printSerialLabels(serialItems)
   }
 
-  const handleValidateReceipt = () => {
-    if (!activeReceiptId) return
+  const handleValidateReceipt = async () => {
+    if (!activeReceiptId || isValidatingReceipt) return
     for (const line of grnLines) {
       if (line.requiresSerial && line.serials.length < line.qtyReceived) {
         showToast(`Enter all ${line.qtyReceived} serials for ${line.productName} (${line.serials.length} done)`, 'error'); return
       }
     }
-    validateReceipt(activeReceiptId, grnLines, destLocation, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues)
-    setSerialAccessories({}); setSerialAccessoryNotes({})
-    setSerialSpecs({}); setSerialIssues({})
-    if (receiptOrigin === 'list') {
-      setLocalSubView('receipt')
-      setLocalActiveId(null)
-      setUrlActiveId(activeReceiptId, { queryPatch: { tab: 'receipts' } })
-    } else {
-      setSubView('form')
-      setActiveReceiptId(null)
+    setIsValidatingReceipt(true)
+    try {
+      const validated = await validateReceipt(activeReceiptId, grnLines, destLocation, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues)
+      if (!validated) return
+      setSerialAccessories({}); setSerialAccessoryNotes({})
+      setSerialSpecs({}); setSerialIssues({})
+      if (receiptOrigin === 'list') {
+        setLocalSubView('receipt')
+        setLocalActiveId(null)
+        setUrlActiveId(activeReceiptId, { queryPatch: { tab: 'receipts' } })
+      } else {
+        setSubView('form')
+        setActiveReceiptId(null)
+      }
+    } finally {
+      setIsValidatingReceipt(false)
     }
   }
 
@@ -1046,9 +1053,9 @@ function PurchaseContent() {
               onClick={handlePrintReceivedLabels}>
               <Fa icon={faPrint} /> Print Labels
             </button>
-            <button className="btn-primary" style={{ background: allComplete ? 'var(--success)' : 'var(--border)', cursor: allComplete ? 'pointer' : 'not-allowed' }}
-              onClick={handleValidateReceipt} disabled={!allComplete}>
-              ✓ Validate GRN — Update Inventory
+            <button className="btn-primary" style={{ background: allComplete ? 'var(--success)' : 'var(--border)', cursor: allComplete && !isValidatingReceipt ? 'pointer' : 'not-allowed' }}
+              onClick={() => { void handleValidateReceipt() }} disabled={!allComplete || isValidatingReceipt} aria-busy={isValidatingReceipt}>
+              {isValidatingReceipt ? 'Validating GRN…' : '✓ Validate GRN — Update Inventory'}
             </button>
           </div>
         </div>
