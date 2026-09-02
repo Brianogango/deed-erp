@@ -19,6 +19,41 @@ describe('repair-retain-convert helpers', () => {
     expect(findRepairCatalogProduct(products, { productName: 'missing' })).toBeNull()
   })
 
+  it('recovers a missing catalog link from repair brand/model metadata', () => {
+    const catalog = [
+      { id: 'elite-840', name: 'HP EliteBook 840 G5' },
+      { id: 'elite-850', name: 'HP EliteBook 850 G5' },
+      { id: 'lat-5420', name: 'Dell Latitude 5420' },
+    ]
+
+    expect(findRepairCatalogProduct(catalog, {
+      productName: 'HP EliteBook',
+      deviceBrand: 'HP',
+      deviceModel: '840 G5',
+    })?.id).toBe('elite-840')
+
+    expect(findRepairCatalogProduct(catalog, {
+      productName: 'EliteBook',
+      deviceModel: '850 G5',
+    })?.id).toBe('elite-850')
+  })
+
+  it('does not guess when a repair family name matches multiple catalog SKUs', () => {
+    const catalog = [
+      { id: 'elite-840', name: 'HP EliteBook 840 G5' },
+      { id: 'elite-850', name: 'HP EliteBook 850 G5' },
+    ]
+    expect(findRepairCatalogProduct(catalog, { productName: 'HP EliteBook' })).toBeNull()
+  })
+
+  it('accepts a unique family-name match for older repair records', () => {
+    const catalog = [
+      { id: 'elite-840', name: 'HP EliteBook 840 G5' },
+      { id: 'lat-5420', name: 'Dell Latitude 5420' },
+    ]
+    expect(findRepairCatalogProduct(catalog, { productName: 'HP EliteBook' })?.id).toBe('elite-840')
+  })
+
   it('maps device condition for buy-back', () => {
     expect(buyBackConditionFromRepair('damaged')).toBe('poor')
     expect(buyBackConditionFromRepair('fair')).toBe('fair')
