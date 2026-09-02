@@ -1,0 +1,33 @@
+/*
+ * Keep the public portal's direct grid authoritative over the older
+ * 12-column/action rules that still live in globals.css.
+ */
+.client-repair-portal > .client-repair-grid {
+  box-sizing: border-box;
+  width: calc(100% - 64px) !important;
+  max-width: 1460px !important;
+  grid-template-columns: minmax(0, 1fr) 300px !important;
+}
+
+@media (max-width: 1200px) {
+  .client-repair-portal > .client-repair-grid {
+    width: calc(100% - 32px) !important;
+    max-width: 900px !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .client-repair-portal > .client-repair-grid > * {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+
+  .client-repair-portal > .client-repair-grid > .client-repair-latest {
+    position: static !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .client-repair-portal > .client-repair-grid {
+    width: calc(100% - 20px) !important;
+  }
+}
