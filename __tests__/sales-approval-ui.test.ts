@@ -5,6 +5,7 @@ import {
   getPendingApprovals,
   processApproval,
   approvalRecipientIds,
+  isSalesConfirmGatingApproval,
 } from '@/lib/sales-approvals'
 
 const users = [
@@ -99,6 +100,22 @@ describe('sales approval authorization', () => {
       users,
     )
     expect(request.approvers).toEqual([])
+  })
+
+  it('keeps credit_override levels for resume but confirm does not use them by default', () => {
+    const request = createApprovalRequest(
+      'credit_override',
+      'sales_order',
+      'so-1',
+      'QUO/2026/0143',
+      'sales-1',
+      'Cynthia',
+      { creditRequested: 80000, creditAvailable: 0 },
+      users,
+    )
+    expect(request.approvers).toHaveLength(1)
+    expect(request.approvers[0]?.role).toBe('finance_officer')
+    expect(isSalesConfirmGatingApproval('credit_override', undefined)).toBe(false)
   })
 
   it('rejects unauthorized approvers', () => {

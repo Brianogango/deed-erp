@@ -3,6 +3,7 @@ import type { ApprovalType } from '@/lib/sales-flow-types'
 import {
   extractApprovalValue,
   getApprovalRolesSync,
+  isCreditOverrideApprovalRequired,
   isSpecialPricingApprovalRequired,
   rolesFromThresholds,
   type ApprovalThreshold,
@@ -18,14 +19,18 @@ import { loadAppState } from '@/lib/server-store'
  * - purchase_high_value never gates PO confirm (amount cap removed)
  * - special_pricing is Director OR Finance when Settings resumes it;
  *   otherwise the ladder is on hold (roles kept, confirm not blocked)
+ * - credit_override is Finance (then Director above 100k) when Settings
+ *   resumes it; otherwise the ladder is on hold (roles kept, confirm not blocked)
  */
-async function specialPricingApprovalRequiredFromSettings(): Promise<boolean> {
+async function salesConfirmApprovalSettingsFromStore(): Promise<{
+  salesRequireSpecialPricingApproval?: boolean
+  salesRequireCreditOverrideApproval?: boolean
+}> {
   try {
     const state = await loadAppState(['deed_systemSettings'])
-    const settings = (state as any)?.deed_systemSettings ?? (state as any)?.systemSettings ?? {}
-    return isSpecialPricingApprovalRequired(settings)
+    return (state as any)?.deed_systemSettings ?? (state as any)?.systemSettings ?? {}
   } catch {
-    return false
+    return {}
   }
 }
 
@@ -33,8 +38,11 @@ export async function getApprovalRoles(type: ApprovalType, details: any): Promis
   if (type === 'backorder') return []
   if (type === 'purchase_high_value') return []
   if (type === 'special_pricing') {
-    if (!(await specialPricingApprovalRequiredFromSettings())) return []
+    if (!isSpecialPricingApprovalRequired(await salesConfirmApprovalSettingsFromStore())) return []
     return ['director', 'finance_officer']
+  }
+  if (type === 'credit_override') {
+    if (!isCreditOverrideApprovalRequired(await salesConfirmApprovalSettingsFromStore())) return []
   }
 
   try {

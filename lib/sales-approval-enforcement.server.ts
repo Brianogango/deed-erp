@@ -265,8 +265,8 @@ export async function enforceSaleOrderApprovals(opts: {
 
   if (isConfirming) {
     // Do not fail-close on a leftover `existing.approvalStatus === 'pending'`
-    // from special_pricing while that ladder is on hold. Client leftover
-    // checks still block discount / credit; trigger scan below still enforces.
+    // from special_pricing / credit_override while those ladders are on hold.
+    // Client leftover checks still block discount; trigger scan below still enforces.
     const pendingFlag =
       body.approvalStatus === 'pending' ||
       (typeof body.approvalRequiredReason === 'string' && body.approvalRequiredReason.length > 0 &&

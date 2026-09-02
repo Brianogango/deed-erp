@@ -761,6 +761,12 @@ export interface SystemSettings {
    * on hold; the ladder is kept, not deleted.
    */
   salesRequireSpecialPricingApproval: boolean
+  /**
+   * When true, exceeding available customer credit requires Finance
+   * (`credit_override`; Director as well above KES 100k) before confirm.
+   * Default false = on hold; the ladder is kept, not deleted.
+   */
+  salesRequireCreditOverrideApproval: boolean
   // Inventory
   invProductsMasterOnly: boolean
   invNoDirectStockEdits: boolean
@@ -859,6 +865,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   salesLockConfirmed: true,
   salesMinMarginPercent: 10,
   salesRequireSpecialPricingApproval: false,
+  salesRequireCreditOverrideApproval: false,
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'average',
@@ -11943,7 +11950,7 @@ const storeCtx: AppState = {
           creditAvailable: !creditStatus.ok ? Number((creditStatus as any).creditAvailable) || 0 : undefined,
           backorderQty,
         })
-        // Detection stays; special_pricing does not gate confirm while on hold.
+        // Detection stays; special_pricing / credit_override do not gate confirm while on hold.
         const gatingTriggers = approvalTriggers.filter(t =>
           isSalesConfirmGatingApproval(t.type, systemSettings),
         )
