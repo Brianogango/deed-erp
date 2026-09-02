@@ -64,10 +64,10 @@ export function SalespersonCloserField({
         if (next) onChange(next.id, next.name)
       }}
     >
-      {!valueId && <option value="">Select who closed this sale…</option>}
+      {!valueId && <option value="">Select salesperson…</option>}
       {options.map(c => (
         <option key={c.id} value={c.id}>
-          {c.hasEmployee ? c.name : `${c.name} (no HR employee — commission will not post)`}
+          {c.name}
         </option>
       ))}
     </select>
