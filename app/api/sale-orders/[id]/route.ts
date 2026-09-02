@@ -342,7 +342,7 @@ async function enforceSaleWorkflow(
     return NextResponse.json({ error: 'Only a director can lock or unlock a confirmed order' }, { status: 403 })
   }
   // Sent quotations are commercially frozen until Reset to Draft (Odoo Sent ≠ Draft).
-  // No director bypass — revise via Reset / New Version, not silent PATCH.
+  // No director bypass — revise via Reset / Revise Quotation, not silent PATCH.
   const sentFreeze = from === 'quotation_sent' && to === 'quotation_sent'
   if (sentFreeze && hasCommercialChange(existing, body)) {
     return NextResponse.json(
@@ -354,7 +354,7 @@ async function enforceSaleWorkflow(
   const acceptedFreeze = Boolean(existing.acceptedAt) && isQuotationStage(from) && to !== 'quotation' && to !== 'sale'
   if (acceptedFreeze && hasCommercialChange(existing, body)) {
     return NextResponse.json(
-      { error: 'Accepted quotations are locked. Create a new version or reset to draft to change commercial terms.' },
+      { error: 'Accepted quotations are locked. Revise the quotation or reset to draft to change commercial terms.' },
       { status: 409 },
     )
   }
@@ -442,6 +442,23 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       salespersonId: existing.salespersonId,
     }, session.user.id) && !(trimRole && validTrim)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Older quotation revisions are immutable audit snapshots. Enforce this
+    // server-side so deep links or crafted requests cannot edit or confirm them.
+    if (existing.versionGroupId) {
+      const lineage = await prisma.saleOrder.findMany({
+        where: { OR: [{ id: existing.versionGroupId }, { versionGroupId: existing.versionGroupId }] },
+        select: { id: true, versionNumber: true },
+      })
+      const maxRevision = Math.max(1, ...lineage.map(row => row.versionNumber ?? 1))
+      const latest = lineage.find(row => (row.versionNumber ?? 1) === maxRevision)
+      if (latest && latest.id !== existing.id) {
+        return NextResponse.json(
+          { error: `Revision ${existing.versionNumber ?? 1} is read-only. Open Revision ${maxRevision} to edit, send, or confirm the quotation.` },
+          { status: 409 },
+        )
+      }
     }
 
     const expectedVersion = readExpectedVersion(body)

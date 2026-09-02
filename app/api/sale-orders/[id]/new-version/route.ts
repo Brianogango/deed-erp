@@ -51,7 +51,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!NEW_VERSION_ROLES.includes(session.user.role)) {
-      return NextResponse.json({ error: 'Your role cannot create a new quotation version' }, { status: 403 })
+      return NextResponse.json({ error: 'Your role cannot revise quotations' }, { status: 403 })
     }
 
     const source = await prisma.saleOrder.findUnique({
@@ -61,7 +61,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     if (!source) return NextResponse.json({ error: 'Sale order not found' }, { status: 404 })
     if (!isQuotationStage(normalizeSaleStatus(source.status))) {
       return NextResponse.json(
-        { error: 'Only a quotation can have a new version — confirmed Sales Orders use Duplicate instead' },
+        { error: 'Only quotations can be revised. Confirmed Sales Orders require a controlled Sales Order amendment' },
         { status: 409 },
       )
     }
@@ -74,17 +74,35 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
 
     const siblings = await prisma.saleOrder.findMany({
       where: { OR: [{ id: rootId }, { versionGroupId: rootId }] },
-      select: { versionNumber: true },
+      select: { id: true, versionNumber: true, status: true },
     })
-    const nextVersion = Math.max(1, ...siblings.map(s => s.versionNumber)) + 1
+    const maxVersion = Math.max(1, ...siblings.map(s => s.versionNumber ?? 1))
+    const latest = siblings.find(s => (s.versionNumber ?? 1) === maxVersion)
+    if (latest && latest.id !== source.id) {
+      return NextResponse.json(
+        { error: `Only the latest quotation revision can be revised. Open Revision ${maxVersion} first.` },
+        { status: 409 },
+      )
+    }
+    if (siblings.some(s => normalizeSaleStatus(s.status) === 'sale')) {
+      return NextResponse.json(
+        { error: 'Quotation revisions are closed because this quotation has already become a Sales Order. Use a controlled Sales Order amendment instead.' },
+        { status: 409 },
+      )
+    }
+    const nextVersion = maxVersion + 1
     const newOrderNumber = `${baseRef(root.orderNumber)}-V${nextVersion}`
 
     let created
     try {
       created = await prisma.$transaction(async tx => {
-        if (!source.versionGroupId) {
-          await tx.saleOrder.update({ where: { id: rootId }, data: { versionGroupId: rootId } })
-        }
+        await tx.saleOrder.update({
+          where: { id: source.id },
+          data: {
+            locked: true,
+            ...(!source.versionGroupId ? { versionGroupId: rootId } : {}),
+          },
+        })
         return tx.saleOrder.create({
           data: {
             orderNumber: newOrderNumber,
@@ -128,13 +146,13 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
         })
       })
     } catch (err: any) {
-      // Unique (version_group_id, version_number) — another "New Version"
+      // Unique (version_group_id, version_number) — another revision
       // request for the same lineage won the race between our read of
       // `siblings` and this create. Ask the caller to retry rather than
       // surfacing a raw 500 for what is really just a concurrency conflict.
       if (err?.code === 'P2002') {
         return NextResponse.json(
-          { error: 'Someone else just created a new version of this quotation — refresh and try again' },
+          { error: 'Someone else just created a new quotation revision — refresh and try again' },
           { status: 409 },
         )
       }

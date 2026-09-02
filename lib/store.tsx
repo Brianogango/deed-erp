@@ -3566,7 +3566,7 @@ export interface AppState {
   setSaleOrderLock: (id: string, locked: boolean) => void
   resetSOToDraft: (id: string) => void | Promise<boolean>
   cancelSO: (id: string) => void
-  /** Quotation versioning: clone a quotation-stage SO into a new draft version (v2, v3, …). Confirmed SOs use duplicateSaleOrder in the UI instead. */
+  /** Quotation revisioning: clone the latest quotation into a new editable revision (v2, v3, …). Confirmed Sales Orders cannot be revised. */
   createNewSOVersion: (orderId: string) => Promise<SaleOrder | null>
   /** Reserve quantity / assigned serials for this delivery. */
   prepareDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => boolean
@@ -13180,23 +13180,23 @@ const storeCtx: AppState = {
       const so = soRef.current.find(s => s.id === orderId)
       if (!so) { showToast('Quotation not found', 'error'); return null }
       if (!isQuotationStage(so.status)) {
-        showToast('Only a quotation can have a new version — use Duplicate for confirmed Sales Orders', 'error')
+        showToast('Only quotations can be revised — confirmed Sales Orders require an amendment', 'error')
         return null
       }
       try {
         const res = await fetch(`/api/sale-orders/${orderId}/new-version`, { method: 'POST' })
         const payload = await res.json().catch(() => null)
         if (!res.ok || !payload?.id) {
-          showToast(payload?.error || 'Could not create a new version', 'error')
+          showToast(payload?.error || 'Could not revise this quotation', 'error')
           return null
         }
         const created = payload as SaleOrder
         setSaleOrders(p => [created, ...p])
-        addAuditLog('sale_order_new_version', created.ref, `Version ${created.versionNumber} created from ${so.ref}`)
-        showToast(`Created ${created.ref}`)
+        addAuditLog('sale_order_new_version', created.ref, `Revision ${created.versionNumber} created from ${so.ref}`)
+        showToast(`Revision ${created.versionNumber ?? 1} created — edit and resend ${created.ref}`)
         return created
       } catch {
-        showToast('Could not reach the server to create a new version', 'error')
+        showToast('Could not reach the server to revise this quotation', 'error')
         return null
       }
     },
