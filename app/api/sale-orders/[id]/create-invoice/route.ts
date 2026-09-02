@@ -104,6 +104,9 @@ export async function POST(
       }
     }
     const blobRepairId = linkedRepair?.id ? String(linkedRepair.id) : undefined
+    const repairFulfillmentReady = !!linkedRepair && [
+      'ready', 'invoiced', 'verified_released', 'delivered', 'collected', 'closed',
+    ].includes(String((linkedRepair as any).status ?? '').toLowerCase())
     const priorDownPayments = sumUnappliedDownPayments(
       [
         ...blobInvoices,
@@ -164,6 +167,8 @@ export async function POST(
       : []
     const productById = new Map(products.map(p => [p.id, p]))
     const policyForItem = (item: { productId?: string | null }): InvoicePolicy => {
+      // Repair fulfillment is workshop QC/Ready. Ordinary Sales still requires a validated delivery.
+      if (repairFulfillmentReady) return 'order'
       const product = item.productId ? productById.get(item.productId) : undefined
       const specs = product?.specs && typeof product.specs === 'object' && !Array.isArray(product.specs)
         ? product.specs as Record<string, unknown>
@@ -213,7 +218,7 @@ export async function POST(
       .filter(item => Number(item.qty) > 0)
       .every(item => Number(item.qtyDelivered) >= Number(item.qty))
 
-    if (!hasValidatedDelivery || !fullyDelivered) {
+    if ((!hasValidatedDelivery || !fullyDelivered) && !repairFulfillmentReady) {
       return NextResponse.json({
         error: 'Complete and validate the Sales Order delivery before creating an invoice',
       }, { status: 409 })

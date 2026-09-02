@@ -6,6 +6,7 @@ import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 import { useOverlayDismiss } from '@/lib/overlay-dismiss'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
+import { searchPickerExactMatch, searchPickerMatches } from '@/lib/search-picker-match'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -1439,6 +1440,7 @@ export function SearchPicker<T extends { id: string }>({
   selectedLabel,
   labelClassName,
   inputClassName,
+  onQueryChange,
 }: {
   label: string
   placeholder: string
@@ -1453,9 +1455,11 @@ export function SearchPicker<T extends { id: string }>({
   selectedLabel?: string
   labelClassName?: string
   inputClassName?: string
+  onQueryChange?: (query: string) => void
 }) {
   const [query, setQuery] = useState(selectedLabel ?? '')
   const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuPosition, setMenuPosition] = useState<{
@@ -1475,9 +1479,29 @@ export function SearchPicker<T extends { id: string }>({
     }
   }, [selectedLabel, open])
 
-  const filtered = items.filter(item =>
-    JSON.stringify(item).toLowerCase().includes(query.toLowerCase())
+  const filtered = useMemo(
+    () => items.filter(item => searchPickerMatches(item, query)),
+    [items, query],
   )
+
+  const commitItem = useCallback((item: T) => {
+    onSelect(item)
+    setOpen(false)
+    if (formatSelected) {
+      setQuery(formatSelected(item))
+    } else {
+      const anyItem = item as { name?: string; label?: string; ref?: string }
+      setQuery(String(anyItem.name || anyItem.label || anyItem.ref || '').trim())
+    }
+  }, [formatSelected, onSelect])
+
+  useEffect(() => {
+    const exact = searchPickerExactMatch(items, query)
+    if (exact) onSelect(exact)
+    // Remote hits can land after the name was typed; do not depend on onSelect
+    // (parents often pass an inline lambda).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items])
 
   const positionMenu = useCallback(() => {
     const rect = ref.current?.getBoundingClientRect()
@@ -1523,6 +1547,10 @@ export function SearchPicker<T extends { id: string }>({
     }
   }, [open, positionMenu])
 
+  useEffect(() => {
+    if (activeIndex >= filtered.length) setActiveIndex(0)
+  }, [filtered.length, activeIndex])
+
   return (
     <div className="flex flex-col gap-1.5 relative w-full" ref={ref}>
       {label ? (
@@ -1536,12 +1564,43 @@ export function SearchPicker<T extends { id: string }>({
           className={`form-input w-full pr-10 ${inputClassName ?? ''}`}
           placeholder={placeholder}
           aria-label={label || placeholder}
+          role="combobox"
+          aria-expanded={open}
+          aria-autocomplete="list"
+          autoComplete="off"
           value={query}
           onChange={e => {
-            setQuery(e.target.value)
+            const next = e.target.value
+            setQuery(next)
             setOpen(true)
+            setActiveIndex(0)
+            onQueryChange?.(next)
+            const exact = searchPickerExactMatch(items, next)
+            if (exact) onSelect(exact)
           }}
           onFocus={() => setOpen(true)}
+          onKeyDown={e => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              if (!open) setOpen(true)
+              setActiveIndex(i => (filtered.length === 0 ? 0 : (i + 1) % filtered.length))
+              return
+            }
+            if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              if (!open) setOpen(true)
+              setActiveIndex(i => (filtered.length === 0 ? 0 : (i - 1 + filtered.length) % filtered.length))
+              return
+            }
+            if (e.key === 'Enter') {
+              const exact = searchPickerExactMatch(items, query)
+              const pick = exact ?? filtered[activeIndex] ?? (filtered.length === 1 ? filtered[0] : null)
+              if (pick) {
+                e.preventDefault()
+                commitItem(pick)
+              }
+            }
+          }}
         />
         <svg
           className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -1552,7 +1611,7 @@ export function SearchPicker<T extends { id: string }>({
           <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       </div>
-      {open && menuPosition && (filtered.length > 0 || (onCreateNew && query.length > 0)) && createPortal(
+          {open && menuPosition && (filtered.length > 0 || query.trim().length > 0 || Boolean(onCreateNew && query.length > 0)) && createPortal(
         <div
           ref={menuRef}
           className="fixed z-[9700] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"
@@ -1587,22 +1646,15 @@ export function SearchPicker<T extends { id: string }>({
               </div>
             </div>
           )}
-          {filtered.map(item => (
+          {filtered.length === 0 && (
+            <div className="p-3 text-xs text-text-3">No matching products</div>
+          )}
+          {filtered.map((item, index) => (
             <div
               key={item.id}
-              className="p-3 hover:bg-surface cursor-pointer transition-colors"
-              onClick={() => {
-                onSelect(item)
-                setOpen(false)
-                // Keep a visible label after select. Clearing the input made
-                // "Add Product" look like the choice failed even when state set.
-                if (formatSelected) {
-                  setQuery(formatSelected(item))
-                } else {
-                  const anyItem = item as { name?: string; label?: string; ref?: string }
-                  setQuery(String(anyItem.name || anyItem.label || anyItem.ref || '').trim())
-                }
-              }}
+              className={`p-3 hover:bg-surface cursor-pointer transition-colors ${index === activeIndex ? 'bg-surface' : ''}`}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => commitItem(item)}
             >
               {renderItem(item)}
             </div>

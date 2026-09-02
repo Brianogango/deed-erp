@@ -313,6 +313,36 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
+  it('allows invoicing a Ready repair SO without a warehouse delivery note', async () => {
+    const undelivered = {
+      ...saleOrder,
+      notes: 'Repair quote — REP/0289 — HP SPECTRE X360 14',
+      items: [{ ...saleOrder.items[0], qtyDelivered: 0 }],
+    }
+    mockPrisma.saleOrder.findUnique.mockResolvedValue(undelivered)
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [],
+      deed_deliveries: [],
+      deed_repairs_v2: [{
+        id: REPAIR_ID,
+        ref: 'REP/0289',
+        saleOrderId: ORDER_ID,
+        status: 'ready',
+      }],
+    })
+    mockPrisma.repair.findUnique.mockResolvedValue({ id: REPAIR_ID })
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+      saleOrder: { findUnique: vi.fn().mockResolvedValue(undelivered) },
+      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+      invoice: { create: mockPrisma.invoice.create },
+      repair: { update: mockPrisma.repair.update },
+    }))
+
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(200)
+    expect(mockPrisma.$transaction).toHaveBeenCalled()
+  })
+
   describe('partial-invoice line overrides', () => {
     it('caps a requested override qty at the line’s invoiceable maximum', async () => {
       const partial = {
