@@ -1,21 +1,186 @@
-name: Inspect quotation revision controls
+name: Apply quotation revision control
 on:
   push:
     branches:
       - fix/quotation-revision-control
 permissions:
-  contents: read
+  contents: write
 jobs:
-  inspect:
+  apply:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect revision flow
+        with:
+          ref: fix/quotation-revision-control
+          fetch-depth: 0
+      - name: Apply patch
         run: |
-          echo '--- createNewSOVersion everywhere ---'
-          grep -R -n -A100 -B25 "createNewSOVersion" --exclude-dir=node_modules . | head -n 900 || true
-          echo '--- versionNumber everywhere ---'
-          grep -R -n -A80 -B20 "versionNumber" app lib components --exclude='Sales.tsx' | head -n 900 || true
-          echo '--- sale order version routes ---'
-          find app/api/sale-orders -maxdepth 5 -type f -print | sort || true
-          grep -R -n -A120 -B20 "versions" app/api/sale-orders lib --exclude-dir=node_modules | head -n 900 || true
+          python <<'PY'
+          from pathlib import Path
+
+          p = Path('app/api/sale-orders/[id]/new-version/route.ts')
+          s = p.read_text()
+          s = s.replace('Your role cannot create a new quotation version', 'Your role cannot revise quotations')
+          s = s.replace('Only a quotation can have a new version — confirmed Sales Orders use Duplicate instead', 'Only quotations can be revised. Confirmed Sales Orders require a controlled Sales Order amendment')
+          old = """    const siblings = await prisma.saleOrder.findMany({
+      where: { OR: [{ id: rootId }, { versionGroupId: rootId }] },
+      select: { versionNumber: true },
+    })
+    const nextVersion = Math.max(1, ...siblings.map(s => s.versionNumber)) + 1
+    const newOrderNumber = `${baseRef(root.orderNumber)}-V${nextVersion}`
+"""
+          new = """    const siblings = await prisma.saleOrder.findMany({
+      where: { OR: [{ id: rootId }, { versionGroupId: rootId }] },
+      select: { id: true, versionNumber: true, status: true },
+    })
+    const maxVersion = Math.max(1, ...siblings.map(s => s.versionNumber ?? 1))
+    const latest = siblings.find(s => (s.versionNumber ?? 1) === maxVersion)
+    if (latest && latest.id !== source.id) {
+      return NextResponse.json(
+        { error: `Only the latest quotation revision can be revised. Open Revision ${maxVersion} first.` },
+        { status: 409 },
+      )
+    }
+    if (siblings.some(s => normalizeSaleStatus(s.status) === 'sale')) {
+      return NextResponse.json(
+        { error: 'Quotation revisions are closed because this quotation has already become a Sales Order. Use a controlled Sales Order amendment instead.' },
+        { status: 409 },
+      )
+    }
+    const nextVersion = maxVersion + 1
+    const newOrderNumber = `${baseRef(root.orderNumber)}-V${nextVersion}`
+"""
+          if old not in s: raise SystemExit('new-version siblings block not found')
+          s = s.replace(old, new, 1)
+          old_tx = """        if (!source.versionGroupId) {
+          await tx.saleOrder.update({ where: { id: rootId }, data: { versionGroupId: rootId } })
+        }
+        return tx.saleOrder.create({
+"""
+          new_tx = """        await tx.saleOrder.update({
+          where: { id: source.id },
+          data: {
+            locked: true,
+            ...(!source.versionGroupId ? { versionGroupId: rootId } : {}),
+          },
+        })
+        return tx.saleOrder.create({
+"""
+          if old_tx not in s: raise SystemExit('new-version transaction block not found')
+          s = s.replace(old_tx, new_tx, 1)
+          s = s.replace('Unique (version_group_id, version_number) — another "New Version"', 'Unique (version_group_id, version_number) — another revision')
+          s = s.replace('Someone else just created a new version of this quotation — refresh and try again', 'Someone else just created a new quotation revision — refresh and try again')
+          p.write_text(s)
+
+          p = Path('app/api/sale-orders/[id]/route.ts')
+          s = p.read_text()
+          anchor = """    if (!canAccessRecord(session.user.role, 'sale_order', {
+      createdByUserId: existing.createdById,
+      salespersonId: existing.salespersonId,
+    }, session.user.id) && !(trimRole && validTrim)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const expectedVersion = readExpectedVersion(body)
+"""
+          replacement = """    if (!canAccessRecord(session.user.role, 'sale_order', {
+      createdByUserId: existing.createdById,
+      salespersonId: existing.salespersonId,
+    }, session.user.id) && !(trimRole && validTrim)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (existing.versionGroupId) {
+      const lineage = await prisma.saleOrder.findMany({
+        where: { OR: [{ id: existing.versionGroupId }, { versionGroupId: existing.versionGroupId }] },
+        select: { id: true, versionNumber: true },
+      })
+      const maxRevision = Math.max(1, ...lineage.map(row => row.versionNumber ?? 1))
+      const latest = lineage.find(row => (row.versionNumber ?? 1) === maxRevision)
+      if (latest && latest.id !== existing.id) {
+        return NextResponse.json(
+          { error: `Revision ${existing.versionNumber ?? 1} is read-only. Open Revision ${maxRevision} to edit, send, or confirm the quotation.` },
+          { status: 409 },
+        )
+      }
+    }
+
+    const expectedVersion = readExpectedVersion(body)
+"""
+          if anchor not in s: raise SystemExit('sale-order PUT access anchor not found')
+          s = s.replace(anchor, replacement, 1)
+          s = s.replace('revise via Reset / New Version, not silent PATCH.', 'revise via Reset / Revise Quotation, not silent PATCH.')
+          s = s.replace('Accepted quotations are locked. Create a new version or reset to draft to change commercial terms.', 'Accepted quotations are locked. Revise the quotation or reset to draft to change commercial terms.')
+          p.write_text(s)
+
+          p = Path('lib/store.tsx')
+          s = p.read_text()
+          s = s.replace('Quotation versioning: clone a quotation-stage SO into a new draft version (v2, v3, …). Confirmed SOs use duplicateSaleOrder in the UI instead.', 'Quotation revisioning: clone the latest quotation into a new editable revision (v2, v3, …). Confirmed Sales Orders cannot be revised.')
+          s = s.replace('Only a quotation can have a new version — use Duplicate for confirmed Sales Orders', 'Only quotations can be revised — confirmed Sales Orders require an amendment')
+          s = s.replace("showToast(payload?.error || 'Could not create a new version', 'error')", "showToast(payload?.error || 'Could not revise this quotation', 'error')")
+          s = s.replace("addAuditLog('sale_order_new_version', created.ref, `Version ${created.versionNumber} created from ${so.ref}`)", "addAuditLog('sale_order_new_version', created.ref, `Revision ${created.versionNumber} created from ${so.ref}`)")
+          s = s.replace("showToast(`Created ${created.ref}`)", "showToast(`Revision ${created.versionNumber ?? 1} created — edit and resend ${created.ref}`)")
+          s = s.replace("showToast('Could not reach the server to create a new version', 'error')", "showToast('Could not reach the server to revise this quotation', 'error')")
+          p.write_text(s)
+
+          p = Path('components/modules/Sales.tsx')
+          s = p.read_text()
+          old_handler = """  const handleCreateNewVersion = async (so: SalesOrderView) => {
+    setCreatingNewVersion(true)
+    try {
+      const created = await createNewSOVersion(so.id)
+      if (created?.id) openOrder(created.id)
+    } finally {
+      setCreatingNewVersion(false)
+    }
+  }
+"""
+          new_handler = """  const handleCreateNewVersion = async (so: SalesOrderView) => {
+    setCreatingNewVersion(true)
+    try {
+      const historyRes = await fetch(`/api/sale-orders/${so.id}/versions`, { cache: 'no-store' })
+      const history = await historyRes.json().catch(() => null)
+      const rows = Array.isArray(history?.versions) ? history.versions : []
+      const latest = rows.find((row: any) => row.isLatest)
+      if (latest && latest.id !== so.id) {
+        showToast(`Revision ${so.versionNumber ?? 1} is read-only. Open Revision ${latest.versionNumber} to revise the quotation.`, 'error')
+        return
+      }
+      if (rows.some((row: any) => row.status === 'sale')) {
+        showToast('This quotation has already become a Sales Order. Use a controlled Sales Order amendment instead.', 'error')
+        return
+      }
+      const created = await createNewSOVersion(so.id)
+      if (created?.id) openOrder(created.id)
+    } finally {
+      setCreatingNewVersion(false)
+    }
+  }
+"""
+          if old_handler not in s: raise SystemExit('Sales handler not found')
+          s = s.replace(old_handler, new_handler, 1)
+          s = s.replace("creatingNewVersion ? 'Creating version…' : 'New Version'", "creatingNewVersion ? 'Creating revision…' : 'Revise Quotation'")
+          s = s.replace("label: 'Version History'", "label: 'Revision History'")
+          s = s.replace('title="Version History"', 'title="Revision History"')
+          s = s.replace('Loading versions…', 'Loading revisions…')
+          s = s.replace('No version history found.', 'No earlier revisions found.')
+          s = s.replace('Version history — full lineage for a quotation created via "New Version".', 'Revision history — immutable lineage created through “Revise Quotation”.')
+          p.write_text(s)
+
+          Path('.github/workflows/apply-quotation-revision-control.yml').unlink(missing_ok=True)
+          Path('.github/workflows/inspect-quotation-revision.yml').unlink(missing_ok=True)
+          PY
+      - name: Validate patch
+        run: |
+          git diff --check
+          grep -n "Revise Quotation\|Revision History" components/modules/Sales.tsx | head -n 30
+          grep -n "latest quotation revision\|controlled Sales Order amendment\|locked: true" app/api/sale-orders/[id]/new-version/route.ts
+          grep -n "is read-only" app/api/sale-orders/[id]/route.ts | head
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/modules/Sales.tsx lib/store.tsx app/api/sale-orders/[id]/new-version/route.ts app/api/sale-orders/[id]/route.ts .github/workflows
+          git commit -m "Enforce quotation revision control"
+          git push origin HEAD:fix/quotation-revision-control
