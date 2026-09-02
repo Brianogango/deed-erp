@@ -1,0 +1,21 @@
+/*
+ * Global portal-overlay stacking contract.
+ *
+ * Modal, SlidePanel and Confirm are all portalled directly to <body>. Some of
+ * those primitives historically used different z-index values (9000/9100/9600),
+ * which meant a child overlay such as "Create new contact" could render behind
+ * the modal that launched it. Portal dialogs are siblings, so one shared layer
+ * lets DOM order decide which newly-opened dialog is on top.
+ *
+ * Keep this below toast notifications (9999) and above shell/dropdown overlays.
+ */
+body > [role='dialog'][aria-modal='true'] {
+  z-index: 9850 !important;
+}
+
+/* Defensive coverage for legacy module dialogs that already expose dialog
+ * semantics but carry their own utility z-index. */
+body > .deposit-modal-overlay[role='dialog'],
+body > .holdover-modal-overlay[role='dialog'] {
+  z-index: 9850 !important;
+}
