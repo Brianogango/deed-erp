@@ -2188,7 +2188,7 @@ function SalesContent() {
                               ] : []),
                               { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
-                              { label: 'Pro-forma preview', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => setShowProformaPreview(true) },
+                              { label: 'Download pro-forma', icon: faDownload, disabled: !activeOrder.lines.length, onClick: () => void downloadProformaInvoice(activeOrder) },
                               { label: 'Duplicate', icon: faCopy, onClick: () => duplicateSaleOrder(activeOrder) },
                               { label: creatingNewVersion ? 'Creating version…' : 'New Version', icon: faCodeBranch, disabled: creatingNewVersion, onClick: () => void handleCreateNewVersion(activeOrder) },
                               { label: 'Version History', icon: faClockRotateLeft, onClick: () => void openVersionHistory(activeOrder) },
@@ -2249,7 +2249,17 @@ function SalesContent() {
                             // Delivery lives on the primary button for users who cannot
                             // invoice; keep it in the menu only when the primary is invoice.
                             ...(canInvoiceFromSO ? [{ label: visibleDeliveries.length === 0 ? 'Create delivery' : 'Open deliveries', icon: faTruck, onClick: () => void openDeliveryView() }] : []),
-                            ...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),
+                            ...(canInvoiceFromSO && !canCreateInvoiceNow ? [{
+                    label: 'Create down payment…',
+                    icon: faMoneyBillWave,
+                    onClick: () => {
+                      setInvoiceWizardMode('down_payment_percent')
+                      setInvoiceWizardPercent('30')
+                      setInvoiceWizardAmount('')
+                      setShowInvoiceWizard(true)
+                    },
+                  }] : []),
+                  ...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),
                             ...(activeDeliveries.some(d => canGenerateDeliveryNote(d)) ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => canGenerateDeliveryNote(d)) ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
                             ...(!activeOrder.locked && systemSettings.salesLockConfirmed && isAdmin ? [{ label: 'Lock', icon: faSave, onClick: () => setSaleOrderLock(activeOrder.id, true) }] : []),
@@ -2302,13 +2312,19 @@ function SalesContent() {
                               type="button"
                               className="sp-btn sp-btn-primary sales-action-primary"
                               onClick={() => {
-                                setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
-                                setInvoiceWizardPercent('30')
-                                setInvoiceWizardAmount('')
-                                setShowInvoiceWizard(true)
-                              }}
-                            >
-                              Create invoice
+                      if (!canCreateInvoiceNow) {
+                        void openDeliveryView()
+                        return
+                      }
+                      setInvoiceWizardMode('regular')
+                      setInvoiceWizardPercent('30')
+                      setInvoiceWizardAmount('')
+                      setShowInvoiceWizard(true)
+                    }}
+                  >
+                    {canCreateInvoiceNow
+                      ? 'Create invoice'
+                      : visibleDeliveries.length === 0 ? 'Create delivery' : 'Complete delivery'}
                             </button>
                           )
                         ) : (
@@ -3068,11 +3084,13 @@ function SalesContent() {
                                         type="button"
                                         className="sp-btn sp-btn-primary"
                                         onClick={() => {
-                                          setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
-                                          setShowInvoiceWizard(true)
-                                        }}
-                                      >
-                                        Create invoice…
+                                setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
+                                setInvoiceWizardPercent('30')
+                                setInvoiceWizardAmount('')
+                                setShowInvoiceWizard(true)
+                              }}
+                            >
+                              {canCreateInvoiceNow ? 'Create invoice…' : 'Create down payment…'}
                                       </button>
                                       {!canCreateInvoiceNow && (
                                         <button type="button" className="sp-btn" onClick={() => void openDeliveryView()}>
