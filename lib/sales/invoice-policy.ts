@@ -1,7 +1,12 @@
 /**
- * Resolve Odoo-style invoicing policy for a sale-order line.
- * Product setting wins; missing product defaults to delivered quantities
- * for stockable goods (safer for hardware) and ordered for services.
+ * Resolve the invoicing policy for a sale-order line.
+ *
+ * Deed's operational sales flow is delivery-first for physical stock:
+ * confirmed SO -> delivery -> validate -> invoice.  A legacy/catalog
+ * `ordered quantities` setting must therefore never make stockable hardware
+ * invoiceable before it has actually been delivered.  Services and other
+ * non-stock lines can still bill on ordered quantity, including when their
+ * explicit line/product policy says `order`.
  */
 
 import type { InvoicePolicy } from '@/lib/odoo-sales-flow'
@@ -20,11 +25,6 @@ export function resolveInvoicePolicy(opts: {
   /** Prisma Product.trackStock — false means service / non-stockable. */
   trackStock?: unknown
 }): InvoicePolicy {
-  const fromLine = normalizePolicy(opts.linePolicy)
-  if (fromLine) return fromLine
-  const fromProduct = normalizePolicy(opts.productPolicy)
-  if (fromProduct) return fromProduct
-
   const catalog = {
     unit: opts.productUnit,
     productKind: opts.productKind,
@@ -40,19 +40,24 @@ export function resolveInvoicePolicy(opts: {
     || opts.trackingMethod != null
 
   const productId = String(opts.productId ?? '').trim()
-  // Unlinked commercial line with no catalog product: cannot pick, bill ordered qty.
-  if (!productId && !hasCatalogHint) return 'order'
-
-  if (isNonStockSaleLine(
+  const nonStockLine = isNonStockSaleLine(
     {
       productId: productId || (hasCatalogHint ? '__catalog__' : ''),
       unit: opts.lineUnit ?? opts.productUnit,
       lineType: opts.lineType,
     },
     hasCatalogHint ? catalog : undefined,
-  )) return 'order'
+  ) || (hasCatalogHint && isNonStockProduct(catalog))
 
-  if (hasCatalogHint && isNonStockProduct(catalog)) return 'order'
+  // Explicit policies are respected only where they cannot bypass physical
+  // fulfilment. A stockable item is always invoiced from delivered quantity.
+  const explicit = normalizePolicy(opts.linePolicy) ?? normalizePolicy(opts.productPolicy)
+  if (explicit === 'delivery') return 'delivery'
+  if (explicit === 'order' && nonStockLine) return 'order'
+
+  // Unlinked commercial/service-style lines cannot be picked in warehouse.
+  if (!productId && !hasCatalogHint) return 'order'
+  if (nonStockLine) return 'order'
 
   return 'delivery'
 }

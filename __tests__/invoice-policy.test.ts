@@ -8,11 +8,30 @@ import {
 } from '@/lib/odoo-sales-flow'
 
 describe('resolveInvoicePolicy', () => {
-  it('prefers explicit line policy', () => {
+  it('never lets an ordered-qty policy bypass delivery for stockable goods', () => {
     expect(resolveInvoicePolicy({
       linePolicy: 'order',
       productPolicy: 'delivery',
       productUnit: 'unit',
+      trackStock: true,
+      productId: 'laptop-1',
+    })).toBe('delivery')
+
+    expect(resolveInvoicePolicy({
+      productPolicy: 'ordered_quantities',
+      productUnit: 'unit',
+      trackStock: true,
+      productId: 'ssd-1',
+    })).toBe('delivery')
+  })
+
+  it('respects ordered-qty invoicing for services and non-stock lines', () => {
+    expect(resolveInvoicePolicy({
+      linePolicy: 'order',
+      productPolicy: 'delivery',
+      productUnit: 'service',
+      trackStock: false,
+      productId: 'service-1',
     })).toBe('order')
   })
 
@@ -27,7 +46,7 @@ describe('resolveInvoicePolicy', () => {
 })
 
 describe('invoiceableQty with policies', () => {
-  it('allows ordered-policy invoicing before delivery', () => {
+  it('allows ordered-policy invoicing before delivery for eligible non-stock lines', () => {
     expect(invoiceableQty({
       qty: 5,
       qtyDelivered: 0,
