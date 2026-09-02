@@ -12,9 +12,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Inspect revision flow
         run: |
-          echo '--- handler ---'
-          grep -n -A120 -B30 "handleCreateNewVersion" components/modules/Sales.tsx || true
-          echo '--- history state/ui ---'
-          grep -n -A100 -B25 "Version History\|versionHistory\|showVersion" components/modules/Sales.tsx || true
-          echo '--- edit gates ---'
-          grep -n -A80 -B20 "canEdit\|isEditable\|status === 'quotation'\|status === \"quotation\"" components/modules/Sales.tsx | head -n 500 || true
+          echo '--- createNewSOVersion everywhere ---'
+          grep -R -n -A100 -B25 "createNewSOVersion" --exclude-dir=node_modules . | head -n 900 || true
+          echo '--- versionNumber everywhere ---'
+          grep -R -n -A80 -B20 "versionNumber" app lib components --exclude='Sales.tsx' | head -n 900 || true
+          echo '--- sale order version routes ---'
+          find app/api/sale-orders -maxdepth 5 -type f -print | sort || true
+          grep -R -n -A120 -B20 "versions" app/api/sale-orders lib --exclude-dir=node_modules | head -n 900 || true
