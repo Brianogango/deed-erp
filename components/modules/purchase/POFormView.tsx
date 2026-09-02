@@ -500,6 +500,8 @@ export default function POFormView() {
                       label=""
                       placeholder="Assign vendor…"
                       items={vendors}
+                      selectedLabel={activePO.vendorName}
+                      formatSelected={v => v.name}
                       onSelect={v => updatePO(activePO.id, { vendorId: v.id, vendorName: v.name })}
                       renderItem={v => <span className="text-xs">{v.name}</span>}
                     />

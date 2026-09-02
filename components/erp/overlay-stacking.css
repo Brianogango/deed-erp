@@ -7,7 +7,10 @@
  * the modal that launched it. Portal dialogs are siblings, so one shared layer
  * lets DOM order decide which newly-opened dialog is on top.
  *
- * Keep this below toast notifications (9999) and above shell/dropdown overlays.
+ * Keep this below toast notifications (9999) and SearchPicker menus (9900),
+ * and above shell/dropdown overlays. SearchPicker results are portalled to
+ * body as role=listbox (not dialog); they must sit above this 9850 layer or
+ * vendor/product search inside modals looks broken.
  */
 body > [role='dialog'][aria-modal='true'] {
   z-index: 9850 !important;

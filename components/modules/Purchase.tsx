@@ -1248,6 +1248,8 @@ function PurchaseContent() {
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                 <div className="lg:col-span-2">
                   <SearchPicker label="Vendor *" placeholder="Search vendor…" items={vendors}
+                    selectedLabel={newVendorName}
+                    formatSelected={v => v.name}
                     onSelect={v => { setNewVendorId(v.id); setNewVendorName(v.name) }}
                     renderItem={v => (
                       <div>
@@ -1318,6 +1320,8 @@ function PurchaseContent() {
                                   label=""
                                   placeholder="Select product..."
                                   items={purchasableProds}
+                                  selectedLabel={line.productName}
+                                  formatSelected={p => p.name}
                                   onSelect={p => setNewRfqLines(prev => prev.map((x, j) => j === i ? {
                                     ...x,
                                     productId: p.id,
@@ -1543,6 +1547,8 @@ function PurchaseContent() {
             <div className="p-3 rounded-lg" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
               <p className="text-xs font-semibold text-t1 mb-2">Step 1 — Select vendor for new PO</p>
               <SearchPicker label="Vendor *" placeholder="Search vendor…" items={vendors}
+                selectedLabel={importVendorName}
+                formatSelected={v => v.name}
                 onSelect={v => { setImportVendorId(v.id); setImportVendorName(v.name) }}
                 renderItem={v => (
                   <div><p className="text-xs font-medium text-t1">{v.name}</p>
