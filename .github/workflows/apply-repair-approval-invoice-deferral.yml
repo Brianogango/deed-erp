@@ -1,0 +1,29 @@
+name: Apply repair approval invoice deferral
+on:
+  push:
+    branches:
+      - fix/repair-quote-state-and-so-invoice-lineage
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch
+        run: python3 scripts/apply_repair_approval_invoice_deferral.py
+      - name: Validate
+        run: |
+          git diff --check
+          grep -q "invoice deferred until repair is Ready" lib/store.tsx
+          grep -q "Invoice will be created after QC" lib/store.tsx
+          ! grep -q "Confirm SO + create Invoice" lib/store.tsx
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Defer repair invoice until Ready"
+          git push origin HEAD:fix/repair-quote-state-and-so-invoice-lineage
