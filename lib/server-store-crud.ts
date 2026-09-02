@@ -51,6 +51,11 @@ export interface CrudConfig<T extends object> {
    * with 422. For PATCH, `previous` is the existing row; for POST it is undefined.
    */
   validateWrite?: (next: T, previous: T | undefined) => string | null
+  /**
+   * Optional hard-delete guard. Return an error string when a record must be
+   * preserved (for example because downstream financial/audit documents exist).
+   */
+  validateDelete?: (existing: T) => string | null
   /** Roles allowed to write (POST/PATCH/DELETE). GET is open to any authenticated user. */
   allowedWriteRoles?: string[]
   /**
@@ -224,6 +229,10 @@ export function makeDeleteHandler<T extends object>(config: CrudConfig<T>) {
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (config.recordAccess && (!session || !config.recordAccess(session.user, existing, 'delete'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (config.validateDelete) {
+      const deleteError = config.validateDelete(existing)
+      if (deleteError) return NextResponse.json({ error: deleteError }, { status: 409 })
     }
 
     const filtered = items.filter(i => (i as AnyRecord)['id'] !== params.id)
