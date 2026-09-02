@@ -1,8 +1,5 @@
 name: Apply commercial PDF cleanup
-on:
-  push:
-    branches:
-      - fix/remove-commercial-pdf-badges-acceptance
+on: [push]
 permissions:
   contents: write
 jobs:
@@ -11,56 +8,81 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/remove-commercial-pdf-badges-acceptance
           fetch-depth: 0
-      - name: Patch commercial PDFs
+      - name: Apply patch
+        shell: bash
         run: |
-          python <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
           import re
-
           p = Path('lib/deed-document-pdf.ts')
           s = p.read_text()
 
-          # Remove the top-right commercial document status badges entirely.
-          s = re.sub(r"\nconst statusFor = \(input: DeedPdfInput\) => \{.*?\n\}\n", "\n", s, count=1, flags=re.S)
-          s = re.sub(r"\nfunction drawStatus\(doc: jsPDF, input: DeedPdfInput, y: number\) \{.*?\n\}\n", "\n", s, count=1, flags=re.S)
+          s, n1 = re.subn(r"\nconst statusFor = \(input: DeedPdfInput\) => \{.*?\n\}\n", "\n", s, count=1, flags=re.S)
+          s, n2 = re.subn(r"\nfunction drawStatus\(doc: jsPDF, input: DeedPdfInput, y: number\) \{.*?\n\}\n", "\n", s, count=1, flags=re.S)
+          if n1 != 1 or n2 != 1:
+              raise SystemExit(f'status cleanup failed: {n1=} {n2=}')
           if '  drawStatus(doc, input, y)\n' not in s:
-            raise SystemExit('drawStatus call not found')
+              raise SystemExit('drawStatus call missing')
           s = s.replace('  drawStatus(doc, input, y)\n', '', 1)
 
-          # Quotation PDF should not include the customer signature/acceptance block.
-          # Other document signature/acknowledgement layouts remain unchanged.
-          old = """  if (input.showSignature || delivery || kind === 'quotation') {
+          old = """  } else if (showSignature && kind !== 'proforma' && kind !== 'invoice' && kind !== 'bill' && kind !== 'receipt') {
     y = ensureRoom(doc, company, input, y, 102)
     line(doc, MARGIN, y, RIGHT, BORDER, .55)
     const quote = kind === 'quotation'
     writeLabel(doc, quote ? 'Accept quotation' : 'Authorised by', MARGIN, y + 18)
-    if (!quote) writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 12, y + 18)
+    if (!quote) writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 14, y + 18)
+    const leftWidth = quote ? CONTENT_W * .7 : CONTENT_W / 2 - 14
+    const signatureFields = quote ? ['Signature', 'Name', 'Date'] : ['Signature', 'Name', 'Date']
+    signatureFields.forEach((label, index) => {
+      const rowY = y + 42 + index * 18
+      doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+      doc.text(`${label}:`, MARGIN, rowY)
+      line(doc, MARGIN + 48, rowY + 2, MARGIN + leftWidth, BORDER, .55)
+      if (!quote) {
+        const rx = MARGIN + CONTENT_W / 2 + 14
+        doc.text(`${label}:`, rx, rowY)
+        line(doc, rx + 48, rowY + 2, RIGHT, BORDER, .55)
+      }
+    })
+    y += 98
+  }
 """
-          if old not in s:
-            raise SystemExit('quotation signature block anchor not found')
-          new = """  if (input.showSignature || delivery) {
+          new = """  } else if (showSignature && kind !== 'quotation' && kind !== 'proforma' && kind !== 'invoice' && kind !== 'bill' && kind !== 'receipt') {
     y = ensureRoom(doc, company, input, y, 102)
     line(doc, MARGIN, y, RIGHT, BORDER, .55)
     writeLabel(doc, 'Authorised by', MARGIN, y + 18)
-    writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 12, y + 18)
+    writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 14, y + 18)
+    const leftWidth = CONTENT_W / 2 - 14
+    const signatureFields = ['Signature', 'Name', 'Date']
+    signatureFields.forEach((label, index) => {
+      const rowY = y + 42 + index * 18
+      doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+      doc.text(`${label}:`, MARGIN, rowY)
+      line(doc, MARGIN + 48, rowY + 2, MARGIN + leftWidth, BORDER, .55)
+      const rx = MARGIN + CONTENT_W / 2 + 14
+      doc.text(`${label}:`, rx, rowY)
+      line(doc, rx + 48, rowY + 2, RIGHT, BORDER, .55)
+    })
+    y += 98
+  }
 """
+          if old not in s:
+              raise SystemExit('signature block anchor missing')
           s = s.replace(old, new, 1)
-
-          # Remove quote-only branching that is now unreachable in the remaining signature block.
-          s = s.replace("    const leftLabel = quote ? 'Signature' : 'Name / Signature'\n", "    const leftLabel = 'Name / Signature'\n")
-          s = s.replace("    const rightLabel = quote ? '' : 'Name / Signature'\n", "    const rightLabel = 'Name / Signature'\n")
-          s = s.replace("    if (rightLabel) {\n", "    {\n")
 
           p.write_text(s)
           Path('.github/workflows/apply-commercial-pdf-cleanup.yml').unlink(missing_ok=True)
           PY
       - name: Validate patch
+        shell: bash
         run: |
           git diff --check
-          ! grep -q "QUOTE READY\|drawStatus\|statusFor\|Accept quotation" lib/deed-document-pdf.ts
+          grep -q "Accept quotation" lib/deed-document-pdf.ts && exit 1 || true
+          grep -q "drawStatus" lib/deed-document-pdf.ts && exit 1 || true
+          grep -q "statusFor" lib/deed-document-pdf.ts && exit 1 || true
       - name: Commit patch
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
