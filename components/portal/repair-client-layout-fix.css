@@ -1,33 +1,131 @@
 /*
- * Keep the public portal's direct grid authoritative over the older
- * 12-column/action rules that still live in globals.css.
+ * Public repair portal layout guard.
+ *
+ * The portal still shares global legacy client-repair selectors with the
+ * Odoo record stylesheet. Those older rules use a 12-column grid and can win
+ * at some viewport/zoom combinations, collapsing the new two-column portal
+ * into a ~40px implicit column. Keep the public portal's direct grid and its
+ * children authoritative here. This file is intentionally loaded last.
  */
-.client-repair-portal > .client-repair-grid {
-  box-sizing: border-box;
-  width: calc(100% - 64px) !important;
+.client-repair-portal.client-repair-portal--overview > main.client-repair-grid,
+.client-repair-portal.client-repair-portal--action > main.client-repair-grid,
+.client-repair-portal > main.client-repair-grid {
+  box-sizing: border-box !important;
+  display: grid !important;
+  width: min(1460px, calc(100% - 64px)) !important;
+  min-width: 0 !important;
   max-width: 1460px !important;
+  margin: 0 auto !important;
+  padding: 22px 0 34px !important;
   grid-template-columns: minmax(0, 1fr) 300px !important;
+  grid-auto-columns: 0 !important;
+  grid-auto-flow: row !important;
+  gap: 12px 18px !important;
+  align-items: start !important;
+}
+
+.client-repair-portal > main.client-repair-grid > * {
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+.client-repair-portal > main.client-repair-grid > .client-repair-hero {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  width: 100% !important;
+}
+
+.client-repair-portal > main.client-repair-grid > .client-repair-progress {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
+  width: 100% !important;
+}
+
+.client-repair-portal > main.client-repair-grid > .client-repair-quote {
+  grid-column: 1 !important;
+  grid-row: 3 !important;
+  width: 100% !important;
+}
+
+.client-repair-portal > main.client-repair-grid > .client-repair-payment,
+.client-repair-portal > main.client-repair-grid > .client-repair-device,
+.client-repair-portal > main.client-repair-grid > .client-repair-diagnosis,
+.client-repair-portal > main.client-repair-grid > .client-repair-disclosure,
+.client-repair-portal > main.client-repair-grid > .client-repair-photos,
+.client-repair-portal > main.client-repair-grid > .client-repair-reports,
+.client-repair-portal > main.client-repair-grid > .client-repair-messages {
+  grid-column: 1 !important;
+  width: 100% !important;
+}
+
+.client-repair-portal > main.client-repair-grid > .client-repair-latest {
+  grid-column: 2 !important;
+  grid-row: 1 / span 4 !important;
+  width: 300px !important;
+  min-width: 300px !important;
+  max-width: 300px !important;
+  justify-self: stretch !important;
+  position: sticky !important;
+  top: 92px !important;
+}
+
+.client-repair-nav__identity {
+  min-width: 118px !important;
+}
+
+.client-repair-nav__brand {
+  display: block !important;
+  width: 112px !important;
+  height: auto !important;
+  max-width: 112px !important;
+  object-fit: contain !important;
+  filter: none !important;
+  background: transparent !important;
 }
 
 @media (max-width: 1200px) {
-  .client-repair-portal > .client-repair-grid {
-    width: calc(100% - 32px) !important;
+  .client-repair-portal.client-repair-portal--overview > main.client-repair-grid,
+  .client-repair-portal.client-repair-portal--action > main.client-repair-grid,
+  .client-repair-portal > main.client-repair-grid {
+    width: min(900px, calc(100% - 32px)) !important;
     max-width: 900px !important;
     grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-columns: 0 !important;
+    padding-top: 16px !important;
   }
 
-  .client-repair-portal > .client-repair-grid > * {
+  .client-repair-portal > main.client-repair-grid > * {
     grid-column: 1 !important;
     grid-row: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
   }
 
-  .client-repair-portal > .client-repair-grid > .client-repair-latest {
+  .client-repair-portal > main.client-repair-grid > .client-repair-latest {
     position: static !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
   }
 }
 
 @media (max-width: 640px) {
-  .client-repair-portal > .client-repair-grid {
+  .client-repair-portal.client-repair-portal--overview > main.client-repair-grid,
+  .client-repair-portal.client-repair-portal--action > main.client-repair-grid,
+  .client-repair-portal > main.client-repair-grid {
     width: calc(100% - 20px) !important;
+    max-width: none !important;
+    padding: 10px 0 92px !important;
+  }
+
+  .client-repair-nav__identity {
+    min-width: 72px !important;
+  }
+
+  .client-repair-nav__brand {
+    width: 78px !important;
+    max-width: 78px !important;
   }
 }
