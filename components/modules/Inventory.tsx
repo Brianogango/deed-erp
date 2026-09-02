@@ -372,6 +372,8 @@ function InventoryContent() {
     productId: string; productName: string
     type: 'add' | 'subtract'; qty: string; reason: AdjReason; notes: string
   }>({ productId: '', productName: '', type: 'subtract', qty: '', reason: 'count_correction', notes: '' })
+  const [adjSearch, setAdjSearch] = useState('')
+  const [adjRemoteHits, setAdjRemoteHits] = useState<Product[]>([])
 
   // Stock take (cycle count) state
   const [stockTakeLines, setStockTakeLines] = useState<{ productId: string; productName: string; systemQty: number; countedQty: string }[]>([])
@@ -406,6 +408,58 @@ function InventoryContent() {
     })) && p.isActive),
     [products],
   )
+
+  const adjPickerProducts = useMemo(() => {
+    const byId = new Map<string, Product>()
+    for (const p of products) {
+      if (!p.isActive || String(p.unit ?? '').toLowerCase() === 'service') continue
+      byId.set(p.id, p)
+    }
+    for (const p of adjRemoteHits) {
+      if (!p.isActive || String(p.unit ?? '').toLowerCase() === 'service') continue
+      if (!byId.has(p.id)) byId.set(p.id, p)
+    }
+    return [...byId.values()]
+  }, [products, adjRemoteHits])
+
+  useEffect(() => {
+    const q = adjSearch.trim()
+    if (!showAdjForm || q.length < 2) {
+      setAdjRemoteHits([])
+      return
+    }
+    const ac = new AbortController()
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/products?q=${encodeURIComponent(q)}&active=true&limit=25&lite=1`, { signal: ac.signal })
+        .then(res => (res.ok ? res.json() : null))
+        .then(data => {
+          const rows = Array.isArray(data) ? data : data?.items
+          if (!Array.isArray(rows)) return
+          setAdjRemoteHits(rows.map((row: Record<string, unknown>) => ({
+            id: String(row.id ?? ''),
+            name: String(row.name ?? ''),
+            sku: String(row.sku ?? ''),
+            isActive: row.isActive !== false,
+            unit: typeof row.unit === 'string' ? row.unit : 'pcs',
+            stockQty: Number(row.stockQty ?? 0),
+            trackingMethod: typeof row.trackingMethod === 'string' ? row.trackingMethod : undefined,
+            category: typeof row.category === 'string'
+              ? row.category
+              : (row.category && typeof row.category === 'object' && 'name' in row.category
+                ? String((row.category as { name?: unknown }).name ?? '')
+                : ''),
+            requiresSerial: Boolean(row.requiresSerial),
+          }) as Product))
+        })
+        .catch(err => {
+          if (err?.name !== 'AbortError') setAdjRemoteHits([])
+        })
+    }, 180)
+    return () => {
+      ac.abort()
+      window.clearTimeout(timer)
+    }
+  }, [adjSearch, showAdjForm])
 
   const filteredProducts = useMemo(
     () => products.filter(p => {
@@ -2675,10 +2729,12 @@ function InventoryContent() {
           if (!qty || qty <= 0)   { showToast('Enter a valid quantity', 'error'); return }
           createAdjustment(adjForm.productId, adjForm.productName, adjForm.type, qty, adjForm.reason, adjForm.notes)
           setAdjForm({ productId: '', productName: '', type: 'subtract', qty: '', reason: 'count_correction', notes: '' })
+          setAdjSearch('')
           setShowAdjForm(false)
         }
 
-        const selectedAdjProduct = stockableProducts.find(p => p.id === adjForm.productId)
+        const selectedAdjProduct = adjPickerProducts.find(p => p.id === adjForm.productId)
+          ?? products.find(p => p.id === adjForm.productId)
         const adjProductStock = selectedAdjProduct
           ? (() => { const l = getStockByLocation(selectedAdjProduct.id); return (l.warehouse ?? 0) + (l.shop ?? 0) + (l.repair_unit ?? 0) })()
           : null
@@ -2853,7 +2909,10 @@ function InventoryContent() {
                   <Field label="Product" required>
                     <SearchPicker
                       label="" placeholder="Search product..."
-                      items={stockableProducts}
+                      items={adjPickerProducts}
+                      selectedLabel={adjForm.productName}
+                      formatSelected={p => p.name}
+                      onQueryChange={setAdjSearch}
                       onSelect={p => setAdjForm(f => ({ ...f, productId: p.id, productName: p.name }))}
                       renderItem={p => `${p.name} (${p.sku})`}
                     />
