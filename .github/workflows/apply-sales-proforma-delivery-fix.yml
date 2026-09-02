@@ -22,19 +22,19 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           path = Path('components/modules/Sales.tsx')
           text = path.read_text()
 
-          replacements = [
-            (
-              "{ label: 'Pro-forma preview', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => setShowProformaPreview(true) },",
-              "{ label: 'Download pro-forma', icon: faDownload, disabled: !activeOrder.lines.length, onClick: () => void downloadProformaInvoice(activeOrder) },",
-              'Pro-forma menu',
-            ),
-            (
-              "...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),",
-              """...(canInvoiceFromSO && !canCreateInvoiceNow ? [{
+          old = "{ label: 'Pro-forma preview', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => setShowProformaPreview(true) },"
+          new = "{ label: 'Download pro-forma', icon: faDownload, disabled: !activeOrder.lines.length, onClick: () => void downloadProformaInvoice(activeOrder) },"
+          if old not in text:
+              raise SystemExit('Pro-forma menu target not found')
+          text = text.replace(old, new, 1)
+
+          old = "...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),"
+          new = """...(canInvoiceFromSO && !canCreateInvoiceNow ? [{
                               label: 'Create down payment…',
                               icon: faMoneyBillWave,
                               onClick: () => {
@@ -44,19 +44,21 @@ jobs:
                                 setShowInvoiceWizard(true)
                               },
                             }] : []),
-                            ...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),""",
-              'SO secondary invoice actions',
-            ),
-            (
-              """onClick={() => {
-                                setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
-                                setInvoiceWizardPercent('30')
-                                setInvoiceWizardAmount('')
-                                setShowInvoiceWizard(true)
-                              }}
-                            >
-                              Create invoice""",
-              """onClick={() => {
+                            ...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),"""
+          if old not in text:
+              raise SystemExit('SO secondary invoice actions target not found')
+          text = text.replace(old, new, 1)
+
+          primary_pattern = re.compile(
+              r"onClick=\{\(\) => \{\s*"
+              r"setInvoiceWizardMode\(canCreateInvoiceNow \? 'regular' : 'down_payment_percent'\)\s*"
+              r"setInvoiceWizardPercent\('30'\)\s*"
+              r"setInvoiceWizardAmount\(''\)\s*"
+              r"setShowInvoiceWizard\(true\)\s*"
+              r"\}\}\s*>\s*Create invoice",
+              re.MULTILINE,
+          )
+          primary_replacement = """onClick={() => {
                                 if (!canCreateInvoiceNow) {
                                   void openDeliveryView()
                                   return
@@ -69,32 +71,29 @@ jobs:
                             >
                               {canCreateInvoiceNow
                                 ? 'Create invoice'
-                                : visibleDeliveries.length === 0 ? 'Create delivery' : 'Complete delivery'}""",
-              'SO primary action',
-            ),
-            (
-              """onClick={() => {
-                                          setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
-                                          setShowInvoiceWizard(true)
-                                        }}
-                                      >
-                                        Create invoice…""",
-              """onClick={() => {
+                                : visibleDeliveries.length === 0 ? 'Create delivery' : 'Complete delivery'}"""
+          text, count = primary_pattern.subn(primary_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'SO primary action target count={count}')
+
+          invoice_tab_pattern = re.compile(
+              r"onClick=\{\(\) => \{\s*"
+              r"setInvoiceWizardMode\(canCreateInvoiceNow \? 'regular' : 'down_payment_percent'\)\s*"
+              r"setShowInvoiceWizard\(true\)\s*"
+              r"\}\}\s*>\s*Create invoice…",
+              re.MULTILINE,
+          )
+          invoice_tab_replacement = """onClick={() => {
                                           setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
                                           setInvoiceWizardPercent('30')
                                           setInvoiceWizardAmount('')
                                           setShowInvoiceWizard(true)
                                         }}
                                       >
-                                        {canCreateInvoiceNow ? 'Create invoice…' : 'Create down payment…'}""",
-              'Invoices tab CTA',
-            ),
-          ]
-
-          for old, new, label in replacements:
-              if old not in text:
-                  raise SystemExit(f'{label} target not found')
-              text = text.replace(old, new, 1)
+                                        {canCreateInvoiceNow ? 'Create invoice…' : 'Create down payment…'}"""
+          text, count = invoice_tab_pattern.subn(invoice_tab_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Invoices tab CTA target count={count}')
 
           path.write_text(text)
           Path('.github/workflows/apply-sales-proforma-delivery-fix.yml').unlink()
