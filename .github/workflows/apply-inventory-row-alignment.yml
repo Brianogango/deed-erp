@@ -1,0 +1,82 @@
+name: Apply inventory row alignment
+on: [push]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch warehouse row layout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('components/modules/Inventory.tsx')
+          s = p.read_text()
+          old = '''        const WarehouseRow = ({
+          title,
+          meta,
+          actions,
+        }: {
+          title: string
+          meta: React.ReactNode
+          actions?: React.ReactNode
+        }) => (
+          <div className="inventory-warehouse-row w-full min-w-0 text-left">
+            <div className="inventory-warehouse-row__meta min-w-0 flex-1 text-left">
+              <p className="text-[12px] font-bold text-text-1 truncate" title={title}>{title}</p>
+              {meta}
+            </div>
+            {actions ? (
+              <div className="inventory-warehouse-row__actions">
+                {actions}
+              </div>
+            ) : null}
+          </div>
+        )
+'''
+          new = '''        const WarehouseRow = ({
+          title,
+          meta,
+          actions,
+        }: {
+          title: string
+          meta: React.ReactNode
+          actions?: React.ReactNode
+        }) => (
+          <div className="w-full min-w-0 px-4 py-3 text-left flex flex-col items-stretch gap-2 lg:flex-row lg:items-center lg:gap-4">
+            <div className="min-w-0 flex-1 text-left lg:flex lg:items-center lg:gap-4">
+              <p className="min-w-0 text-[12px] font-bold text-text-1 truncate text-left lg:max-w-[46%]" title={title}>{title}</p>
+              <div className="min-w-0 text-left lg:flex-1 lg:flex lg:items-center lg:gap-3 [&_p]:text-left [&_div]:text-left">
+                {meta}
+              </div>
+            </div>
+            {actions ? (
+              <div className="flex flex-wrap items-center justify-start gap-2 lg:ml-auto lg:shrink-0 lg:justify-end">
+                {actions}
+              </div>
+            ) : null}
+          </div>
+        )
+'''
+          if old not in s:
+              raise SystemExit('WarehouseRow anchor not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          Path('.github/workflows/apply-inventory-row-alignment.yml').unlink(missing_ok=True)
+          PY
+      - name: Validate patch
+        run: |
+          git diff --check
+          grep -q "lg:flex-row lg:items-center" components/modules/Inventory.tsx
+          grep -q "lg:ml-auto lg:shrink-0 lg:justify-end" components/modules/Inventory.tsx
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/modules/Inventory.tsx .github/workflows
+          git commit -m "Align inventory stock rows for wide screens"
+          git push origin HEAD:fix/inventory-stock-row-alignment
