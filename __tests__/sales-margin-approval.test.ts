@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { computeSaleOrderApprovalTriggers, lineGrossMarginPercent } from '@/lib/sales/margin-approval'
 import {
   APPROVAL_RULES,
+  isCreditOverrideApprovalRequired,
   isSalesConfirmGatingApproval,
   isSpecialPricingApprovalRequired,
   salesConfirmGatingApprovalTypes,
@@ -81,6 +82,21 @@ describe('special_pricing approval hold', () => {
     expect(salesConfirmGatingApprovalTypes(undefined)).not.toContain('special_pricing')
     expect(salesConfirmGatingApprovalTypes({ salesRequireSpecialPricingApproval: true })).toContain('special_pricing')
     expect(isSalesConfirmGatingApproval('special_pricing', undefined)).toBe(false)
+    expect(isSalesConfirmGatingApproval('discount', undefined)).toBe(true)
+  })
+})
+
+describe('credit_override approval hold', () => {
+  it('keeps the credit_override ladder but does not gate confirm by default', () => {
+    expect(APPROVAL_RULES.credit_override({ creditRequested: 150000, creditAvailable: 0 })).toEqual(['finance_officer', 'director'])
+    expect(APPROVAL_RULES.credit_override({ creditRequested: 50000, creditAvailable: 0 })).toEqual(['finance_officer'])
+    expect(isCreditOverrideApprovalRequired(undefined)).toBe(false)
+    expect(isCreditOverrideApprovalRequired({})).toBe(false)
+    expect(isCreditOverrideApprovalRequired({ salesRequireCreditOverrideApproval: false })).toBe(false)
+    expect(isCreditOverrideApprovalRequired({ salesRequireCreditOverrideApproval: true })).toBe(true)
+    expect(salesConfirmGatingApprovalTypes(undefined)).not.toContain('credit_override')
+    expect(salesConfirmGatingApprovalTypes({ salesRequireCreditOverrideApproval: true })).toContain('credit_override')
+    expect(isSalesConfirmGatingApproval('credit_override', undefined)).toBe(false)
     expect(isSalesConfirmGatingApproval('discount', undefined)).toBe(true)
   })
 })

@@ -14,7 +14,17 @@ export type ApprovalThreshold = { maxValue: number; requiredRoles: string[] }
  * `special_pricing` roles are kept, but confirm is on hold unless
  * `salesRequireSpecialPricingApproval` is explicitly true (below cost /
  * lowest selling point / pricelist). Do not delete this ladder.
+ *
+ * `credit_override` roles are kept, but confirm is on hold unless
+ * `salesRequireCreditOverrideApproval` is explicitly true. Do not delete
+ * this ladder.
  */
+
+export type SalesConfirmApprovalSettings = {
+  salesRequireSpecialPricingApproval?: boolean
+  salesRequireCreditOverrideApproval?: boolean
+} | null
+
 export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = {
   discount: (details) => {
     const percent = details.discountPercent || 0
@@ -24,6 +34,7 @@ export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = 
   },
   // Roles kept for resume. Confirm gating is `isSpecialPricingApprovalRequired`.
   special_pricing: () => ['director', 'finance_officer'],
+  // Roles kept for resume. Confirm gating is `isCreditOverrideApprovalRequired`.
   credit_override: (details) => {
     const amount = details.creditRequested || 0
     const available = details.creditAvailable || 0
@@ -52,22 +63,35 @@ export const SALES_CONFIRM_APPROVAL_TYPES: ApprovalType[] = [
  * On hold unless Settings explicitly turns it back on.
  */
 export function isSpecialPricingApprovalRequired(
-  settings?: { salesRequireSpecialPricingApproval?: boolean } | null,
+  settings?: SalesConfirmApprovalSettings,
 ): boolean {
   return settings?.salesRequireSpecialPricingApproval === true
 }
 
+/**
+ * Credit-overage authorization before confirm.
+ * On hold unless Settings explicitly turns it back on.
+ */
+export function isCreditOverrideApprovalRequired(
+  settings?: SalesConfirmApprovalSettings,
+): boolean {
+  return settings?.salesRequireCreditOverrideApproval === true
+}
+
 /** Approval types that still block confirm for the current settings. */
 export function salesConfirmGatingApprovalTypes(
-  settings?: { salesRequireSpecialPricingApproval?: boolean } | null,
+  settings?: SalesConfirmApprovalSettings,
 ): ApprovalType[] {
-  if (isSpecialPricingApprovalRequired(settings)) return [...SALES_CONFIRM_APPROVAL_TYPES]
-  return SALES_CONFIRM_APPROVAL_TYPES.filter(type => type !== 'special_pricing')
+  return SALES_CONFIRM_APPROVAL_TYPES.filter(type => {
+    if (type === 'special_pricing') return isSpecialPricingApprovalRequired(settings)
+    if (type === 'credit_override') return isCreditOverrideApprovalRequired(settings)
+    return true
+  })
 }
 
 export function isSalesConfirmGatingApproval(
   type: string,
-  settings?: { salesRequireSpecialPricingApproval?: boolean } | null,
+  settings?: SalesConfirmApprovalSettings,
 ): boolean {
   return (salesConfirmGatingApprovalTypes(settings) as string[]).includes(type)
 }

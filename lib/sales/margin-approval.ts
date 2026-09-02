@@ -7,8 +7,9 @@
  * matching the Deed Margins spreadsheet identity.
  *
  * Confirm gating for special_pricing is on hold unless Settings
- * `salesRequireSpecialPricingApproval` is true. This function still detects
- * below-cost / below-margin / below-pricelist so the rule can be resumed.
+ * `salesRequireSpecialPricingApproval` is true. Credit-overage gating is on
+ * hold unless `salesRequireCreditOverrideApproval` is true. This function
+ * still detects those conditions so the rules can be resumed.
  */
 
 import type { ApprovalType } from '@/lib/sales-flow-types'

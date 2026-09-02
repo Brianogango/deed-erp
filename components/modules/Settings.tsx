@@ -1022,6 +1022,12 @@ export default function Settings() {
                     onChange={v => updateSystemSettings({ salesRequireSpecialPricingApproval: v })}
                   />
                 </SettingRow>
+                <SettingRow label="Require approval when credit is exceeded" desc="On hold. When on, confirming above available customer credit needs Finance (and Director above KES 100,000). The rule is kept — turn this on to resume.">
+                  <Toggle
+                    on={ss.salesRequireCreditOverrideApproval === true}
+                    onChange={v => updateSystemSettings({ salesRequireCreditOverrideApproval: v })}
+                  />
+                </SettingRow>
                 <SettingRow label="Minimum sales margin %" desc="Gross margin after discount used to detect selling below the lowest selling point. Authorization stays on hold unless the toggle above is on. Floor price remains product cost.">
                   <Input
                     type="number"
