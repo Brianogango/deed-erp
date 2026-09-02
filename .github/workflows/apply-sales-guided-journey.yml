@@ -1,0 +1,81 @@
+name: Apply Sales guided journey
+
+on:
+  push:
+    branches:
+      - fix/strict-sales-delivery-before-invoice
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/strict-sales-delivery-before-invoice
+          fetch-depth: 0
+      - name: Apply guided journey
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p = Path('components/modules/Sales.tsx')
+          s = p.read_text()
+
+          # Remove partial-invoice choice from the normal SO journey.
+          s, n = re.subn(r"\n\s*\.\.\.\(canInvoiceFromSO && canCreateInvoiceNow \? \[\{ label: 'Create Partial Invoice…'.*?\}\] : \[\]\),", '', s, count=1)
+          if n != 1: raise SystemExit('partial invoice action marker not found')
+
+          # Payment is now an explicit milestone in the simplified SO journey.
+          old = """                        complete: activeOperationallyComplete,
+                      })}"""
+          new = """                        paid: activePaymentStatus === 'paid',
+                        complete: activeOperationallyComplete,
+                      })}"""
+          if old not in s: raise SystemExit('workflow call marker not found')
+          s = s.replace(old, new, 1)
+
+          # Replace the noisy six-button related-record row with four task-oriented cards.
+          start = s.index('                  <section className="sales-doc-smart-row" aria-label="Related sales records">')
+          end = s.index('                  </section>', start) + len('                  </section>')
+          block = '''                  <section className="sales-doc-smart-row sales-doc-smart-row--journey" aria-label="Sales Order journey records">
+                    <button type="button" className="sales-doc-smart-button">
+                      <span>Customer</span>
+                      <strong>{activeOrder.customerName || 'Not set'}</strong>
+                    </button>
+                    <button type="button" className="sales-doc-smart-button" onClick={() => void openDeliveryView()}>
+                      <span>Delivery</span>
+                      <strong>{activeFulfilmentStatus === 'delivered' ? 'Delivered ✓' : visibleDeliveries.length === 0 ? 'Not created' : 'In progress'}</strong>
+                    </button>
+                    <button
+                      type="button"
+                      className="sales-doc-smart-button"
+                      onClick={() => {
+                        const invoiceId = activeInvoices.find(i => !i.isDownPayment)?.id
+                        if (invoiceId) router.push(financeInvoicePath(invoiceId))
+                      }}
+                      disabled={!activeInvoices.some(i => !i.isDownPayment)}
+                    >
+                      <span>Invoice</span>
+                      <strong>{activeInvoices.some(i => !i.isDownPayment) ? SO_INVOICE_STATUS_LABELS[effectiveActiveInvoiceStatus] : 'Not created'}</strong>
+                    </button>
+                    <button type="button" className="sales-doc-smart-button" disabled={activeInvoices.length === 0}>
+                      <span>Payment</span>
+                      <strong>{activeInvoices.length > 0 ? PAYMENT_STATUS_LABELS[activePaymentStatus] : 'Awaiting invoice'}</strong>
+                    </button>
+                  </section>'''
+          s = s[:start] + block + s[end:]
+
+          p.write_text(s)
+          Path('.github/workflows/apply-sales-guided-journey.yml').unlink()
+      - name: Commit guided journey
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/modules/Sales.tsx .github/workflows/apply-sales-guided-journey.yml
+          git diff --cached --check
+          git commit -m "Simplify Sales Order into guided journey"
+          git push origin HEAD:fix/strict-sales-delivery-before-invoice
