@@ -129,128 +129,12 @@ export async function POST(
     }
     const unappliedDownPayments = Math.max(priorDownPayments, prismaPriorDown)
 
-    // ── Down-payment invoice (deposit) — no product qtyInvoiced bump ────────
+    // A pre-delivery request for funds must use Pro-forma / Deposits, not a
+    // customer invoice. This route is strictly delivery-first.
     if (isDownPaymentMode(mode)) {
-      const orderTotal = saleOrderDownPaymentBase({
-        totalAmount: confirmed.totalAmount,
-        subtotal: confirmed.subtotal,
-        taxAmount: confirmed.taxAmount,
-        discountAmount: confirmed.discountAmount,
-      })
-      const computed = computeDownPaymentAmount({
-        mode,
-        orderTotal,
-        percent: body?.percent,
-        amount: body?.amount,
-        priorDownPayments: unappliedDownPayments,
-      })
-      if (!computed.ok) {
-        return NextResponse.json({ error: computed.error }, { status: 409 })
-      }
-
-      const amount = computed.amount
-      // VAT follows the company-wide rate from Settings → Accounting → Taxes.
-      const csState = await loadAppState(['deed_companySettings'])
-      const cs = csState.deed_companySettings as { vatRate?: unknown } | null
-      const taxRate = Number(cs && typeof cs === 'object' ? cs.vatRate : 16) || 16
-      const lineSubtotal = Math.round(amount / (1 + taxRate / 100))
-      const lineTax = amount - lineSubtotal
-      const draftRef = await getNextDocNumber('invoice').catch(() => `DRAFT-INV-${Date.now().toString().slice(-6)}`)
-      const dueDate = new Date(Date.now() + 7 * 86400000)
-      const subject = computed.percent != null
-        ? `[Down Payment ${computed.percent}%]`
-        : `[Down Payment fixed]`
-      const notes = `${subject} on ${confirmed.orderNumber}`
-
-      const result = await prisma.$transaction(async (tx) => {
-        const invoice = await tx.invoice.create({
-          data: {
-            invoiceNumber: draftRef,
-            status: 'draft',
-            clientId: confirmed.clientId,
-            saleOrderId: confirmed.id,
-            ...(prismaRepairId ? { repairId: prismaRepairId } : {}),
-            invoiceDate: new Date(),
-            dueDate,
-            subject,
-            subtotal: lineSubtotal,
-            taxAmount: lineTax,
-            discountAmount: 0,
-            totalAmount: amount,
-            amountPaid: 0,
-            isDownPayment: true,
-            downPaymentPercent: computed.percent,
-            notes,
-            createdById: actor.id,
-            items: {
-              create: [{
-                description: `Down payment on ${confirmed.orderNumber}`,
-                qty: 1,
-                unitPrice: lineSubtotal,
-                taxRate,
-                lineSubtotal,
-                lineTax,
-                lineTotal: amount,
-              }],
-            },
-          },
-          include: { items: true, client: true },
-        })
-        if (prismaRepairId && !linkedRepair?.invoiceId) {
-          await tx.repair.update({
-            where: { id: prismaRepairId },
-            data: { invoiceId: invoice.id },
-          })
-        }
-        return invoice
-      })
-
-      const date = new Date().toISOString().slice(0, 10)
-      const clientInvoice = {
-        id: result.id,
-        ref: result.invoiceNumber,
-        type: 'customer_invoice' as const,
-        status: 'draft' as const,
-        partnerId: confirmed.clientId,
-        partnerName: confirmed.client?.name ?? '',
-        date,
-        dueDate: dueDate.toISOString().slice(0, 10),
-        lines: mapDbInvoiceItemsToClientLines(result.items),
-        subtotal: lineSubtotal,
-        taxTotal: lineTax,
-        discountAmount: 0,
-        total: amount,
-        amountPaid: 0,
-        saleOrderId: confirmed.id,
-        ...(blobRepairId ? { repairId: blobRepairId } : {}),
-        isDownPayment: true,
-        downPaymentPercent: computed.percent,
-        notes,
-        subject,
-      }
-      try {
-        const invoices = [...blobInvoices]
-        invoices.unshift(clientInvoice)
-        const nextRepairs = stampInvoiceOnMatchingRepair(
-          blobRepairs,
-          linkedRepair,
-          { id: result.id, ref: result.invoiceNumber, date },
-        )
-        await saveStoreKeys({
-          deed_invoices: JSON.stringify(invoices),
-          ...(nextRepairs !== blobRepairs ? { deed_repairs_v2: JSON.stringify(nextRepairs) } : {}),
-        })
-      } catch { /* Prisma authoritative */ }
-
-      await writeFinancialAudit({
-        userId: actor.id,
-        action: 'create_down_payment_invoice',
-        entityType: 'invoice',
-        entityId: result.id,
-        newValues: { saleOrderId: orderId, ref: result.invoiceNumber, total: amount, mode },
-      })
-
-      return NextResponse.json({ ok: true, invoice: clientInvoice })
+      return NextResponse.json({
+        error: 'Create a pro-forma or record a customer deposit. An invoice can only be created after delivery is validated.',
+      }, { status: 409 })
     }
 
     const deliveries = Array.isArray(state.deed_deliveries)
@@ -324,6 +208,16 @@ export async function POST(
       }
       return item
     }))
+
+    const fullyDelivered = healedItems
+      .filter(item => Number(item.qty) > 0)
+      .every(item => Number(item.qtyDelivered) >= Number(item.qty))
+
+    if (!hasValidatedDelivery || !fullyDelivered) {
+      return NextResponse.json({
+        error: 'Complete and validate the Sales Order delivery before creating an invoice',
+      }, { status: 409 })
+    }
 
     let invoiceable = healedItems.map(item => {
       const invoicePolicy = policyForItem(item)

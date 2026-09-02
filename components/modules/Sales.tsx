@@ -838,6 +838,9 @@ function SalesContent() {
   /** True when at least one line can be invoiced now (respects ordered vs delivered policy). */
   const canCreateInvoiceNow = useMemo(() => {
     if (!activeOrder || activeOrder.status !== 'sale') return false
+    // Deed policy: a Sales Order cannot create a customer invoice before
+    // fulfilment is fully delivered. Pro-forma/deposit collection is separate.
+    if (saleOrderFulfilmentStatus(activeOrder.status, activeOrder.lines ?? []) !== 'delivered') return false
     return (activeOrder.lines ?? []).some((l: any) => {
       if (l.lineType === 'section') return false
       return invoiceableQty({
@@ -2249,16 +2252,6 @@ function SalesContent() {
                             // Delivery lives on the primary button for users who cannot
                             // invoice; keep it in the menu only when the primary is invoice.
                             ...(canInvoiceFromSO ? [{ label: visibleDeliveries.length === 0 ? 'Create delivery' : 'Open deliveries', icon: faTruck, onClick: () => void openDeliveryView() }] : []),
-                            ...(canInvoiceFromSO && !canCreateInvoiceNow ? [{
-                    label: 'Create down payment…',
-                    icon: faMoneyBillWave,
-                    onClick: () => {
-                      setInvoiceWizardMode('down_payment_percent')
-                      setInvoiceWizardPercent('30')
-                      setInvoiceWizardAmount('')
-                      setShowInvoiceWizard(true)
-                    },
-                  }] : []),
                   ...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),
                             ...(activeDeliveries.some(d => canGenerateDeliveryNote(d)) ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => canGenerateDeliveryNote(d)) ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
@@ -3084,13 +3077,17 @@ function SalesContent() {
                                         type="button"
                                         className="sp-btn sp-btn-primary"
                                         onClick={() => {
-                                setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
-                                setInvoiceWizardPercent('30')
-                                setInvoiceWizardAmount('')
-                                setShowInvoiceWizard(true)
-                              }}
-                            >
-                              {canCreateInvoiceNow ? 'Create invoice…' : 'Create down payment…'}
+                                          if (!canCreateInvoiceNow) {
+                                            void openDeliveryView()
+                                            return
+                                          }
+                                          setInvoiceWizardMode('regular')
+                                          setInvoiceWizardPercent('30')
+                                          setInvoiceWizardAmount('')
+                                          setShowInvoiceWizard(true)
+                                        }}
+                                      >
+                                        {canCreateInvoiceNow ? 'Create invoice…' : 'Complete delivery'}
                                       </button>
                                       {!canCreateInvoiceNow && (
                                         <button type="button" className="sp-btn" onClick={() => void openDeliveryView()}>
