@@ -4748,6 +4748,38 @@ export const DIRTY_KEYS_LS = 'deed_dirty_keys'
 
 type SyncStage = 'idle' | 'syncing' | 'synced' | 'error' | 'conflict'
 
+/**
+ * True once the store holds real data: warm localStorage cache (instant) or
+ * the first server hydration completes. KPI surfaces gate on this so a cold
+ * device shows a skeleton instead of flashing zeros while the boot fetch is
+ * in flight. A 4s cap guarantees the page never traps on the skeleton.
+ *
+ * Dashboard imports this hook. Leaving it unexported crashes `/` with
+ * "useStoreHydrated is not a function" after the KPI-coherence merge.
+ */
+export function useStoreHydrated(): boolean {
+  const [hydrated, setHydrated] = useState<boolean>(() => {
+    if (_serverHydrated) return true
+    if (typeof window === 'undefined') return false
+    return Boolean(window.localStorage.getItem(LAST_SYNC_AT_LS))
+  })
+  useEffect(() => {
+    if (hydrated) return
+    const done = () => setHydrated(true)
+    const onStatus = (e: Event) => {
+      const stage = (e as CustomEvent).detail?.stage
+      if (stage === 'idle' || stage === 'synced' || stage === 'error') done()
+    }
+    window.addEventListener(SYNC_STATUS_EVENT, onStatus)
+    const timeout = window.setTimeout(done, 4000)
+    return () => {
+      window.removeEventListener(SYNC_STATUS_EVENT, onStatus)
+      window.clearTimeout(timeout)
+    }
+  }, [hydrated])
+  return hydrated
+}
+
 function emitSyncStatus(stage: SyncStage, extras?: { skippedKeys?: string[]; message?: string }) {
   if (typeof window === 'undefined') return
   const pendingKeys = Object.keys(_pendingSync).length

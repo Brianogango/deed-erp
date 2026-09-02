@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { appStateKeysForRoute } from '@/lib/app-state-hydration'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 describe('dashboard app-state hydration contract', () => {
   it('hydrates every collection the dashboard reads before rendering KPIs', () => {
@@ -27,5 +29,10 @@ describe('dashboard app-state hydration contract', () => {
       'deed_refurbishmentJobs',
       'deed_journalEntries',
     ]))
+  })
+
+  it('exports useStoreHydrated because Dashboard gates KPIs on it', () => {
+    const store = readFileSync(join(process.cwd(), 'lib/store.tsx'), 'utf8')
+    expect(store).toMatch(/export function useStoreHydrated\(\)/)
   })
 })
