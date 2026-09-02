@@ -6,7 +6,7 @@ import { sql } from '@/lib/auth/db'
 import { shouldUseSecureCookie } from '@/lib/auth/session-issuer'
 
 const TRUSTED_BROWSER_COOKIE = 'deed-trusted-browser'
-const TRUSTED_BROWSER_TTL_SECONDS = 30 * 24 * 60 * 60
+const TRUSTED_BROWSER_TTL_SECONDS = 180 * 24 * 60 * 60
 
 function tokenHash(secret: string): string {
   return crypto.createHash('sha256').update(secret, 'utf8').digest('hex')
