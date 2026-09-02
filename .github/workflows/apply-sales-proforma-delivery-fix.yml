@@ -18,7 +18,7 @@ jobs:
           ref: fix/sales-proforma-delivery-invoice-gate
           fetch-depth: 0
 
-      - name: Apply exact Sales.tsx replacements
+      - name: Apply Sales.tsx replacements
         shell: python
         run: |
           from pathlib import Path
@@ -26,14 +26,15 @@ jobs:
           path = Path('components/modules/Sales.tsx')
           text = path.read_text()
 
-          old = """                              { label: 'Pro-forma preview', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => setShowProformaPreview(true) },"""
-          new = """                              { label: 'Download pro-forma', icon: faDownload, disabled: !activeOrder.lines.length, onClick: () => void downloadProformaInvoice(activeOrder) },"""
-          if old not in text:
-              raise SystemExit('Pro-forma menu target not found')
-          text = text.replace(old, new, 1)
-
-          old = """                            ...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),"""
-          new = """                            ...(canInvoiceFromSO && !canCreateInvoiceNow ? [{
+          replacements = [
+            (
+              "{ label: 'Pro-forma preview', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => setShowProformaPreview(true) },",
+              "{ label: 'Download pro-forma', icon: faDownload, disabled: !activeOrder.lines.length, onClick: () => void downloadProformaInvoice(activeOrder) },",
+              'Pro-forma menu',
+            ),
+            (
+              "...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),",
+              """...(canInvoiceFromSO && !canCreateInvoiceNow ? [{
                               label: 'Create down payment…',
                               icon: faMoneyBillWave,
                               onClick: () => {
@@ -43,86 +44,59 @@ jobs:
                                 setShowInvoiceWizard(true)
                               },
                             }] : []),
-                            ...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),"""
-          if old not in text:
-              raise SystemExit('SO More invoice target not found')
-          text = text.replace(old, new, 1)
-
-          old = """                          ) : (
-                            <button
-                              type=\"button\"
-                              className=\"sp-btn sp-btn-primary sales-action-primary\"
-                              onClick={() => {
+                            ...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),""",
+              'SO secondary invoice actions',
+            ),
+            (
+              """onClick={() => {
                                 setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
                                 setInvoiceWizardPercent('30')
                                 setInvoiceWizardAmount('')
                                 setShowInvoiceWizard(true)
                               }}
                             >
-                              Create invoice
-                            </button>
-                          )
-                        ) : (
-                          <button type=\"button\" className=\"sp-btn sp-btn-primary sales-action-primary\" onClick={() => void openDeliveryView()}>
-                            {visibleDeliveries.length === 0 ? 'Create delivery' : 'Delivery'}
-                          </button>
-                        )}"""
-          new = """                          ) : canCreateInvoiceNow ? (
-                            <button
-                              type=\"button\"
-                              className=\"sp-btn sp-btn-primary sales-action-primary\"
-                              onClick={() => {
+                              Create invoice""",
+              """onClick={() => {
+                                if (!canCreateInvoiceNow) {
+                                  void openDeliveryView()
+                                  return
+                                }
                                 setInvoiceWizardMode('regular')
                                 setInvoiceWizardPercent('30')
                                 setInvoiceWizardAmount('')
                                 setShowInvoiceWizard(true)
                               }}
                             >
-                              Create invoice
-                            </button>
-                          ) : (
-                            <button type=\"button\" className=\"sp-btn sp-btn-primary sales-action-primary\" onClick={() => void openDeliveryView()}>
-                              {visibleDeliveries.length === 0 ? 'Create delivery' : 'Complete delivery'}
-                            </button>
-                          )
-                        ) : (
-                          <button type=\"button\" className=\"sp-btn sp-btn-primary sales-action-primary\" onClick={() => void openDeliveryView()}>
-                            {visibleDeliveries.length === 0 ? 'Create delivery' : 'Delivery'}
-                          </button>
-                        )}"""
-          if old not in text:
-              raise SystemExit('Primary invoice action target not found')
-          text = text.replace(old, new, 1)
-
-          old = """                                      <button
-                                        type=\"button\"
-                                        className=\"sp-btn sp-btn-primary\"
-                                        onClick={() => {
+                              {canCreateInvoiceNow
+                                ? 'Create invoice'
+                                : visibleDeliveries.length === 0 ? 'Create delivery' : 'Complete delivery'}""",
+              'SO primary action',
+            ),
+            (
+              """onClick={() => {
                                           setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
                                           setShowInvoiceWizard(true)
                                         }}
                                       >
-                                        Create invoice…
-                                      </button>"""
-          new = """                                      <button
-                                        type=\"button\"
-                                        className=\"sp-btn sp-btn-primary\"
-                                        onClick={() => {
+                                        Create invoice…""",
+              """onClick={() => {
                                           setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
                                           setInvoiceWizardPercent('30')
                                           setInvoiceWizardAmount('')
                                           setShowInvoiceWizard(true)
                                         }}
                                       >
-                                        {canCreateInvoiceNow ? 'Create invoice…' : 'Create down payment…'}
-                                      </button>"""
-          if old not in text:
-              raise SystemExit('Invoices tab CTA target not found')
-          text = text.replace(old, new, 1)
+                                        {canCreateInvoiceNow ? 'Create invoice…' : 'Create down payment…'}""",
+              'Invoices tab CTA',
+            ),
+          ]
+
+          for old, new, label in replacements:
+              if old not in text:
+                  raise SystemExit(f'{label} target not found')
+              text = text.replace(old, new, 1)
 
           path.write_text(text)
-
-          # One-shot workflow: remove itself from the resulting code commit.
           Path('.github/workflows/apply-sales-proforma-delivery-fix.yml').unlink()
 
       - name: Commit targeted changes
