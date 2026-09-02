@@ -95,11 +95,8 @@ const BLUE: [number, number, number] = [7, 139, 212]
 const MUTED: [number, number, number] = [91, 107, 128]
 const BORDER: [number, number, number] = [205, 219, 232]
 const SOFT: [number, number, number] = [246, 250, 253]
-const GREEN: [number, number, number] = [17, 134, 83]
-const GREEN_SOFT: [number, number, number] = [234, 248, 240]
 const AMBER: [number, number, number] = [188, 101, 0]
 const AMBER_SOFT: [number, number, number] = [255, 247, 232]
-const RED: [number, number, number] = [210, 38, 38]
 
 const money = (value: number) =>
   Number(value || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -123,20 +120,6 @@ const titleKind = (title: string) => {
   if (value.includes('receipt')) return 'receipt'
   if (value.includes('bill')) return 'bill'
   return 'invoice'
-}
-
-const statusFor = (input: DeedPdfInput) => {
-  const kind = titleKind(input.title)
-  if (kind === 'quotation') return { label: 'QUOTE READY', color: GREEN, fill: GREEN_SOFT }
-  if (kind === 'sales-order') return { label: 'CONFIRMED', color: GREEN, fill: GREEN_SOFT }
-  if (kind === 'proforma') return { label: 'SENT', color: BLUE, fill: SOFT }
-  if (kind === 'delivery') return { label: 'READY', color: GREEN, fill: GREEN_SOFT }
-  if (kind === 'receipt') return { label: 'PAID', color: GREEN, fill: GREEN_SOFT }
-  const total = Number(input.total) || 0
-  const paid = Number(input.amountPaid) || 0
-  if (paid >= total && total > 0) return { label: 'PAID', color: GREEN, fill: GREEN_SOFT }
-  if (paid > 0) return { label: 'PART PAID', color: AMBER, fill: AMBER_SOFT }
-  return { label: 'OPEN', color: BLUE, fill: SOFT }
 }
 
 const partyLabelFor = (input: DeedPdfInput) => {
@@ -207,15 +190,6 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
   }
 }
 
-function drawStatus(doc: jsPDF, input: DeedPdfInput, y: number) {
-  const status = statusFor(input)
-  const width = Math.max(54, doc.getTextWidth(status.label) + 18)
-  doc.setFillColor(...status.fill).setDrawColor(...status.color).setLineWidth(.55)
-  doc.roundedRect(RIGHT - width, y - 13, width, 22, 4, 4, 'FD')
-  doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...status.color)
-  doc.text(status.label, RIGHT - width / 2, y + 1, { align: 'center' })
-}
-
 function drawFooter(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, page: number, pages: number) {
   line(doc, MARGIN, PAGE_H - 38, RIGHT, CYAN, .9)
   doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
@@ -280,7 +254,6 @@ export function buildDeedDocumentPdf(
   let y = 112
   doc.setFont('helvetica', 'bold').setFontSize(21).setTextColor(...NAVY)
   doc.text(input.title.toUpperCase(), MARGIN, y)
-  drawStatus(doc, input, y)
 
   y += 24
   doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...NAVY)
@@ -504,24 +477,21 @@ export function buildDeedDocumentPdf(
       line(doc, x, rowY + 5, x + half, BORDER, .55)
     })
     y += 102
-  } else if (showSignature && kind !== 'proforma' && kind !== 'invoice' && kind !== 'bill' && kind !== 'receipt') {
+  } else if (showSignature && kind !== 'quotation' && kind !== 'proforma' && kind !== 'invoice' && kind !== 'bill' && kind !== 'receipt') {
     y = ensureRoom(doc, company, input, y, 102)
     line(doc, MARGIN, y, RIGHT, BORDER, .55)
-    const quote = kind === 'quotation'
-    writeLabel(doc, quote ? 'Accept quotation' : 'Authorised by', MARGIN, y + 18)
-    if (!quote) writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 14, y + 18)
-    const leftWidth = quote ? CONTENT_W * .7 : CONTENT_W / 2 - 14
-    const signatureFields = quote ? ['Signature', 'Name', 'Date'] : ['Signature', 'Name', 'Date']
+    writeLabel(doc, 'Authorised by', MARGIN, y + 18)
+    writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 14, y + 18)
+    const leftWidth = CONTENT_W / 2 - 14
+    const signatureFields = ['Signature', 'Name', 'Date']
     signatureFields.forEach((label, index) => {
       const rowY = y + 42 + index * 18
       doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
       doc.text(`${label}:`, MARGIN, rowY)
       line(doc, MARGIN + 48, rowY + 2, MARGIN + leftWidth, BORDER, .55)
-      if (!quote) {
-        const rx = MARGIN + CONTENT_W / 2 + 14
-        doc.text(`${label}:`, rx, rowY)
-        line(doc, rx + 48, rowY + 2, RIGHT, BORDER, .55)
-      }
+      const rx = MARGIN + CONTENT_W / 2 + 14
+      doc.text(`${label}:`, rx, rowY)
+      line(doc, rx + 48, rowY + 2, RIGHT, BORDER, .55)
     })
     y += 98
   }
