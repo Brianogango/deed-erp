@@ -1,0 +1,20 @@
+name: Inspect quotation revision controls
+on:
+  push:
+    branches:
+      - fix/quotation-revision-control
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect revision flow
+        run: |
+          echo '--- handler ---'
+          grep -n -A120 -B30 "handleCreateNewVersion" components/modules/Sales.tsx || true
+          echo '--- history state/ui ---'
+          grep -n -A100 -B25 "Version History\|versionHistory\|showVersion" components/modules/Sales.tsx || true
+          echo '--- edit gates ---'
+          grep -n -A80 -B20 "canEdit\|isEditable\|status === 'quotation'\|status === \"quotation\"" components/modules/Sales.tsx | head -n 500 || true
