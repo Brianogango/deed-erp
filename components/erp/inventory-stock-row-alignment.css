@@ -2,49 +2,56 @@
 .operations-warehouse .inventory-warehouse-row {
   width: 100% !important;
   min-width: 0 !important;
-  display: flex !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 20px !important;
+  column-gap: 24px !important;
   padding: 12px 16px !important;
   text-align: left !important;
 }
 
 .operations-warehouse .inventory-warehouse-row__meta {
+  width: 100% !important;
   min-width: 0 !important;
-  flex: 1 1 auto !important;
-  display: flex !important;
+  margin: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(320px, 1.5fr) minmax(140px, 0.55fr) minmax(220px, 1fr) !important;
   align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 20px !important;
+  justify-items: start !important;
+  column-gap: 20px !important;
+  row-gap: 4px !important;
   text-align: left !important;
 }
 
 .operations-warehouse .inventory-warehouse-row__meta > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
   text-align: left !important;
-  margin-top: 0 !important;
+  justify-self: start !important;
 }
 
 .operations-warehouse .inventory-warehouse-row__meta > p:first-child {
-  flex: 1 1 46% !important;
-  min-width: 260px !important;
+  width: 100% !important;
+  min-width: 0 !important;
   max-width: none !important;
+  justify-self: stretch !important;
 }
 
-.operations-warehouse .inventory-warehouse-row__meta > p:not(:first-child),
 .operations-warehouse .inventory-warehouse-row__meta > div {
-  flex: 0 1 auto !important;
-  min-width: 0 !important;
+  justify-content: flex-start !important;
 }
 
 .operations-warehouse .inventory-warehouse-row__actions {
-  margin-left: auto !important;
+  margin: 0 !important;
   flex: 0 0 auto !important;
   display: flex !important;
   align-items: center !important;
   justify-content: flex-end !important;
   gap: 8px !important;
   text-align: left !important;
+  justify-self: end !important;
+  white-space: nowrap !important;
 }
 
 /* Keep the location panel itself truly edge-to-edge within its card. */
@@ -54,8 +61,16 @@
   box-sizing: border-box;
 }
 
+@media (max-width: 1279px) {
+  .operations-warehouse .inventory-warehouse-row__meta {
+    grid-template-columns: minmax(260px, 1.4fr) minmax(120px, 0.6fr) minmax(180px, 1fr) !important;
+    column-gap: 14px !important;
+  }
+}
+
 @media (max-width: 1023px) {
   .operations-warehouse .inventory-warehouse-row {
+    display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 10px !important;
@@ -65,10 +80,6 @@
     display: block !important;
   }
 
-  .operations-warehouse .inventory-warehouse-row__meta > p:first-child {
-    min-width: 0 !important;
-  }
-
   .operations-warehouse .inventory-warehouse-row__meta > * + * {
     margin-top: 3px !important;
   }
@@ -76,6 +87,8 @@
   .operations-warehouse .inventory-warehouse-row__actions {
     margin-left: 0 !important;
     justify-content: flex-start !important;
+    justify-self: start !important;
     flex-wrap: wrap !important;
+    white-space: normal !important;
   }
 }
