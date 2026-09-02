@@ -1,0 +1,69 @@
+name: Apply commercial PDF cleanup
+on:
+  push:
+    branches:
+      - fix/remove-commercial-pdf-badges-acceptance
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/remove-commercial-pdf-badges-acceptance
+          fetch-depth: 0
+      - name: Patch commercial PDFs
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('lib/deed-document-pdf.ts')
+          s = p.read_text()
+
+          # Remove the top-right commercial document status badges entirely.
+          s = re.sub(r"\nconst statusFor = \(input: DeedPdfInput\) => \{.*?\n\}\n", "\n", s, count=1, flags=re.S)
+          s = re.sub(r"\nfunction drawStatus\(doc: jsPDF, input: DeedPdfInput, y: number\) \{.*?\n\}\n", "\n", s, count=1, flags=re.S)
+          if '  drawStatus(doc, input, y)\n' not in s:
+            raise SystemExit('drawStatus call not found')
+          s = s.replace('  drawStatus(doc, input, y)\n', '', 1)
+
+          # Quotation PDF should not include the customer signature/acceptance block.
+          # Other document signature/acknowledgement layouts remain unchanged.
+          old = """  if (input.showSignature || delivery || kind === 'quotation') {
+    y = ensureRoom(doc, company, input, y, 102)
+    line(doc, MARGIN, y, RIGHT, BORDER, .55)
+    const quote = kind === 'quotation'
+    writeLabel(doc, quote ? 'Accept quotation' : 'Authorised by', MARGIN, y + 18)
+    if (!quote) writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 12, y + 18)
+"""
+          if old not in s:
+            raise SystemExit('quotation signature block anchor not found')
+          new = """  if (input.showSignature || delivery) {
+    y = ensureRoom(doc, company, input, y, 102)
+    line(doc, MARGIN, y, RIGHT, BORDER, .55)
+    writeLabel(doc, 'Authorised by', MARGIN, y + 18)
+    writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 12, y + 18)
+"""
+          s = s.replace(old, new, 1)
+
+          # Remove quote-only branching that is now unreachable in the remaining signature block.
+          s = s.replace("    const leftLabel = quote ? 'Signature' : 'Name / Signature'\n", "    const leftLabel = 'Name / Signature'\n")
+          s = s.replace("    const rightLabel = quote ? '' : 'Name / Signature'\n", "    const rightLabel = 'Name / Signature'\n")
+          s = s.replace("    if (rightLabel) {\n", "    {\n")
+
+          p.write_text(s)
+          Path('.github/workflows/apply-commercial-pdf-cleanup.yml').unlink(missing_ok=True)
+          PY
+      - name: Validate patch
+        run: |
+          git diff --check
+          ! grep -q "QUOTE READY\|drawStatus\|statusFor\|Accept quotation" lib/deed-document-pdf.ts
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/deed-document-pdf.ts .github/workflows
+          git commit -m "Remove commercial PDF badges and quote acceptance block"
+          git push origin HEAD:fix/remove-commercial-pdf-badges-acceptance
