@@ -3711,7 +3711,7 @@ export interface AppState {
     repairId: string,
     opts: { reason: BillingExemptReason; notes: string },
   ) => void
-  generateRepairQuote: (repairId: string, lines: Omit<RepairQuoteLine, 'id' | 'reserved'>[], applyVat?: boolean) => void
+  generateRepairQuote: (repairId: string, lines: Omit<RepairQuoteLine, 'id' | 'reserved'>[], applyVat?: boolean) => Promise<RepairQuote | undefined>
   sendQuoteToCustomer: (repairId: string) => void
   approveRepairQuote: (repairId: string, approved: boolean, reason?: string) => void
   startRepair: (repairId: string) => void
@@ -15704,32 +15704,46 @@ const storeCtx: AppState = {
           ? `Quote revised: KES ${prevQuote?.total ?? 0} → KES ${quote.total}\n${changeSummary}`
           : `Quote ${isUpdate ? 'updated' : 'generated'}${coverageLabel}: KES ${quote.total}`
         addAuditLog(isUpdate ? 'update_quote' : 'generate_quote', repairId, auditDetail)
+        let customerNotified = false
         if (repair.customerEmail || repair.customerPhone) {
-          const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}` : undefined
-          fetch('/api/notifications/send', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'quote',
-              customerName: repair.customerName,
-              customerEmail: repair.customerEmail,
-              customerPhone: repair.customerPhone,
-              channels: repair.customerEmail ? ['email'] : undefined,
-              repairRef: repair.ref,
-              deviceName: repair.productName,
-              quoteTotal: quote.total,
-              quoteUrl: trackingUrl,
-              changeSummary,
-            }),
-          }).catch(() => {})
+          const trackingUrl = typeof window !== 'undefined'
+            ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}`
+            : undefined
+          try {
+            const notifyResponse = await fetch('/api/notifications/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'quote',
+                repairRef: repair.ref,
+                quoteTotal: quote.total,
+                quoteUrl: trackingUrl,
+                changeSummary,
+                isRevision: isUpdate,
+                idempotencyKey: `repair-quote:${repair.id}:${quote.id}`,
+                channels: ['email', 'whatsapp', 'sms'],
+              }),
+            })
+            const notifyResult = await notifyResponse.json().catch(() => null)
+            customerNotified = Boolean(notifyResponse.ok && notifyResult?.success)
+          } catch {
+            customerNotified = false
+          }
         }
         showToast(
-          reopeningAfterDecline
-            ? 'Revised quote sent after decline — awaiting customer re-approval'
-            : isUpdate
-              ? 'Quote revised — customer re-notified, procurement requests reset'
-              : `Quote generated — customer notified via ${repair.customerEmail ? 'email' : 'SMS'}`,
+          customerNotified
+            ? reopeningAfterDecline
+              ? 'Revised quote sent after decline — customer re-notified for approval'
+              : isUpdate
+                ? 'Quote updated — customer re-notified for approval'
+                : 'Quote generated — customer notified for approval'
+            : (repair.customerEmail || repair.customerPhone)
+              ? (isUpdate ? 'Quote updated, but customer notification could not be confirmed' : 'Quote generated, but customer notification could not be confirmed')
+              : (isUpdate ? 'Quote updated — no customer email or phone is available' : 'Quote generated — no customer email or phone is available'),
+          customerNotified ? 'success' : 'info',
         )
       }
+      return quote
     },
     
     sendQuoteToCustomer: async (repairId) => {

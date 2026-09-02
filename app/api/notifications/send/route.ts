@@ -105,11 +105,12 @@ export async function POST(request: NextRequest) {
       const channels = requestedChannels(params, type === 'quote' ? ['email', 'whatsapp', 'sms'] : ['whatsapp', 'sms'])
       const deviceName = [record.repair.deviceBrand, record.repair.deviceModel || record.repair.deviceType].filter(Boolean).join(' ')
       const quoteTotal = Number(params.quoteTotal || record.repair.estimatedCost || 0)
+      const quoteRevision = type === 'quote' && Boolean(params.isRevision)
       const title = type === 'quote'
-        ? `Repair quotation ready — ${record.repair.jobNumber}`
+        ? `${quoteRevision ? 'Updated repair quotation' : 'Repair quotation ready'} — ${record.repair.jobNumber}`
         : `Repair update — ${record.repair.jobNumber}`
       const message = type === 'quote'
-        ? `Your repair quotation is ready. Repair: ${record.repair.jobNumber}. Device: ${deviceName}. Total: KES ${quoteTotal.toLocaleString('en-KE')}.${params.quoteUrl ? ` View: ${params.quoteUrl}` : ''}`
+        ? `${quoteRevision ? 'Your repair quotation has been updated. Please review and approve the revised quote.' : 'Your repair quotation is ready.'} Repair: ${record.repair.jobNumber}. Device: ${deviceName}. Total: KES ${quoteTotal.toLocaleString('en-KE')}.${params.quoteUrl ? ` View: ${params.quoteUrl}` : ''}`
         : String(params.message || 'There is an update on your repair.')
 
       event = await publishNotificationEvent({
