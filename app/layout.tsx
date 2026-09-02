@@ -11,6 +11,8 @@ import { PUBLIC_USERS } from '@/lib/auth/public-users'
 import { loadAppState } from '@/lib/server-store'
 import AppShell from '@/components/AppShell'
 import SwRegister from '@/components/SwRegister'
+import VersionDriftBanner from '@/components/layout/VersionDriftBanner'
+import { getServerBuildId } from '@/lib/app-version'
 import { robotoFlex, openSans, dmMono } from './fonts'
 
 export const metadata: Metadata = {
@@ -51,7 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (!session?.user && !visregBypassAuth) {
     return (
       <html lang="en" className={htmlClassName}>
-        <body className={bodyClassName}>
+        <body className={bodyClassName} data-build={getServerBuildId()}>
           <SwRegister />
           {children}
         </body>
@@ -75,11 +77,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en" className={htmlClassName}>
-      <body className={bodyClassName}>
+      <body className={bodyClassName} data-build={getServerBuildId()}>
         <SwRegister />
         <AppShell initialUser={shellUser} initialUsers={users} serverState={serverState}>
           {children}
         </AppShell>
+        <VersionDriftBanner />
       </body>
     </html>
   )
