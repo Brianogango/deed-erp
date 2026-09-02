@@ -3692,7 +3692,7 @@ export interface AppState {
   /** Optional `intake` is merged into the created job before the authoritative POST (path, warranty, accessories, etc.). */
   createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string, intake?: Partial<RepairOrder>) => Promise<RepairOrder>
   updateRepair: (id: string, p: Partial<RepairOrder>) => void
-  deleteRepair: (id: string) => void
+  deleteRepair: (id: string) => Promise<boolean>
   checkWarrantyForRepair: (repairId: string, serial: string) => boolean
   fileWarrantyClaim: (repairId: string, notes: string) => void
   
@@ -14986,17 +14986,32 @@ const storeCtx: AppState = {
         })
       }
     },
-    deleteRepair: (id) => {
+    deleteRepair: async (id) => {
       const user = currentUser()
       if (!user || user.role !== 'director') {
-        showToast('Only a director can delete a repair', 'error'); return
+        showToast('Only a director can delete a repair', 'error'); return false
       }
-      const repair = repairs.find(r => r.id === id)
-      if (!repair) return
+      const repair = repairsRef.current.find(r => r.id === id)
+      if (!repair) {
+        showToast('Repair no longer exists. Refresh the list and try again.', 'error')
+        return false
+      }
+      try {
+        const response = await fetch(`/api/repairs/${id}`, { method: 'DELETE' })
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error || 'Could not delete the repair', 'error')
+          return false
+        }
+      } catch {
+        showToast('Could not reach the server to delete the repair', 'error')
+        return false
+      }
       setRepairs(p => p.filter(r => r.id !== id))
       setOutsourceJobs(p => p.map(j => j.repairOrderId === id ? { ...j, repairOrderId: undefined } : j))
       addAuditLog('delete_repair', repair.ref, `Repair ${repair.ref} deleted by ${user.name}`)
       showToast(`Repair ${repair.ref} deleted`)
+      return true
     },
     checkWarrantyForRepair: (repairId, serial) => {
       const war = warRef.current.find(w => w.serialNumber === serial && w.status === 'active')
