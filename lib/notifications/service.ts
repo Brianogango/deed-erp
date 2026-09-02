@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { createHash } from 'crypto'
+
 import prisma from '@/lib/prisma'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { defaultNotificationPolicy } from './registry'
@@ -10,6 +12,25 @@ import type {
 } from './types'
 
 type DbClient = Prisma.TransactionClient | PrismaClient
+
+// notification_events column bounds (see prisma/schema.prisma). Scanner titles
+// embed product names (up to 500 chars) — an unclamped title used to fail the
+// whole publish with P2000 and silently kill every inventory scan.
+const clampText = (value: string, max: number) =>
+  value.length <= max ? value : `${value.slice(0, max - 1)}…`
+
+const IDEMPOTENCY_KEY_MAX = 240
+
+/**
+ * Keep over-long idempotency keys inside the VarChar(240) column without losing
+ * uniqueness: the variable parts (entity id, state version) sit at the end, so
+ * a plain truncation could collapse distinct keys — carry a hash tail instead.
+ */
+export function clampIdempotencyKey(key: string): string {
+  if (key.length <= IDEMPOTENCY_KEY_MAX) return key
+  const digest = createHash('sha256').update(key).digest('hex').slice(0, 32)
+  return `${key.slice(0, IDEMPOTENCY_KEY_MAX - 34)}#${digest}`
+}
 
 const unique = (values: Array<string | null | undefined>) =>
   [...new Set(values.map(v => String(v || '').trim()).filter(Boolean))]
@@ -85,25 +106,27 @@ export async function publishNotificationEvent(
         ? new Date(Date.now() + policy.escalationMinutes * 60_000)
         : null)
 
+    const idempotencyKey = clampIdempotencyKey(input.idempotencyKey)
+
     const existing = await db.notificationEvent.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { idempotencyKey },
     })
     if (existing) return existing
 
     const event = await db.notificationEvent.create({
       data: {
-        eventType: input.eventType,
-        entityType: input.entityType || null,
-        entityId: input.entityId || null,
+        eventType: clampText(input.eventType, 120),
+        entityType: input.entityType ? clampText(input.entityType, 80) : null,
+        entityId: input.entityId ? clampText(input.entityId, 160) : null,
         actorUserId: input.actorUserId || null,
-        severity,
-        priority,
-        title: input.title,
+        severity: clampText(severity, 20),
+        priority: clampText(priority, 20),
+        title: clampText(input.title, 240),
         body: input.body,
         actionUrl: input.actionUrl || null,
         metadata: (input.metadata || {}) as Prisma.InputJsonValue,
         routing: routing as unknown as Prisma.InputJsonValue,
-        idempotencyKey: input.idempotencyKey,
+        idempotencyKey,
         requiresAcknowledgement,
         dueAt: asDate(input.dueAt),
         escalateAt,
