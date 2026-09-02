@@ -571,32 +571,10 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
     })
     setSaving(true)
     try {
-      await Promise.resolve(generateRepairQuote(repair.id, lines as any, applyVat))
-      if (repair.customerPhone) {
-        const quoteTotal = lines.reduce((sum, line) => sum + Number(line.subtotal || 0), 0)
-          + (applyVat
-            ? Math.round(lines
-                .filter(line => !line.isDiagnosisFee)
-                .reduce((sum, line) => sum + Number(line.subtotal || 0), 0) * (companySettings.vatRate / 100))
-            : 0)
-        const quoteUrl = typeof window !== 'undefined'
-          ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}`
-          : `/portal/repair/${encodeURIComponent(repair.ref)}`
-        const notify = await fetch('/api/notifications/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'quote',
-            repairRef: repair.ref,
-            quoteTotal,
-            quoteUrl,
-            channels: ['email', 'whatsapp', 'sms'],
-          }),
-        }).catch(() => null)
-        if (!notify?.ok) {
-          showToast('Quote saved, but customer SMS notification could not be confirmed', 'info')
-        }
-      }
+      const savedQuote = await Promise.resolve(generateRepairQuote(repair.id, lines as any, applyVat))
+      // Quote generation owns portal sync and customer delivery. Keeping the
+      // send in one place prevents duplicate messages and makes revisions reliable.
+      if (!savedQuote) return
       onClose()
     } finally {
       setSaving(false)

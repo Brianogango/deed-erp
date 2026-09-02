@@ -155,31 +155,32 @@ export function deliveryStatusPill(status: string): { label: string; tone: Sales
 }
 
 /**
- * Operational fulfilment/billing stepper. Payment is intentionally excluded —
- * it stays a separate dimension (see payment status pills on the SO header).
+ * Customer-facing Sales Order journey. Keep internal warehouse states inside
+ * Delivery; Sales only exposes the milestones a salesperson must understand.
  */
 export function buildSoWorkflowSteps(input: {
   hasDelivery: boolean
   deliveryPrepared: boolean
   deliveryDone: boolean
   invoiced: boolean
+  paid?: boolean
   complete?: boolean
 }): Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }> {
   const keys = [
-    { key: 'confirmed', label: 'Confirmed' },
-    { key: 'reserved', label: 'Reserved' },
-    { key: 'ready', label: 'Ready to Deliver' },
-    { key: 'delivered', label: 'Delivered' },
-    { key: 'invoiced', label: 'Invoiced' },
+    { key: 'confirmed', label: 'Order confirmed' },
+    { key: 'delivery', label: 'Delivery' },
+    { key: 'invoice', label: 'Invoice' },
+    { key: 'payment', label: 'Payment' },
     { key: 'complete', label: 'Complete' },
   ] as const
+
   let idx = 0
-  if (input.complete) idx = 5
-  else if (input.invoiced) idx = 4
-  else if (input.deliveryDone) idx = 3
-  else if (input.deliveryPrepared) idx = 2
-  else if (input.hasDelivery) idx = 1
-  else idx = 0
+  if (input.complete) idx = 4
+  else if (input.paid) idx = 4
+  else if (input.invoiced) idx = 3
+  else if (input.deliveryDone) idx = 2
+  else if (input.hasDelivery || input.deliveryPrepared) idx = 1
+
   return keys.map((k, i) => ({
     key: k.key,
     label: k.label,
