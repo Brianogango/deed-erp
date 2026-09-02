@@ -1689,8 +1689,8 @@ function InventoryContent() {
           meta: React.ReactNode
           actions?: React.ReactNode
         }) => (
-          <div className="inventory-warehouse-row">
-            <div className="inventory-warehouse-row__meta min-w-0">
+          <div className="inventory-warehouse-row w-full min-w-0 text-left">
+            <div className="inventory-warehouse-row__meta min-w-0 flex-1 text-left">
               <p className="text-[12px] font-bold text-text-1 truncate" title={title}>{title}</p>
               {meta}
             </div>
@@ -1748,7 +1748,7 @@ function InventoryContent() {
               </p>
             )}
 
-            <div className="rounded-token-md border border-[var(--border-lt)] bg-[var(--bg-card)] overflow-hidden">
+            <div className="w-full min-w-0 rounded-token-md border border-[var(--border-lt)] bg-[var(--bg-card)] overflow-hidden">
               <div className="flex flex-wrap gap-2 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] p-2" role="tablist" aria-label="Inventory stock location">
                 {[
                   { id: 'warehouse', label: 'Warehouse', sublabel: 'Ready for Sale', count: readyCount, icon: faIndustry },
@@ -1784,7 +1784,7 @@ function InventoryContent() {
 
               <div className="p-3 sm:p-4">
                 {activeWarehouseLocation === 'warehouse' && (
-                  <div className="inventory-warehouse-board inventory-warehouse-board--single">
+                  <div className="w-full min-w-0">
                     <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} tone="navy"
                     count={readyCount}
                     emptyText={q ? 'No warehouse stock matches this search' : 'No stock in warehouse'}>
@@ -1855,7 +1855,7 @@ function InventoryContent() {
                   </div>
                 )}
                 {activeWarehouseLocation === 'issues' && (
-                  <div className="inventory-warehouse-board inventory-warehouse-board--single">
+                  <div className="w-full min-w-0">
                     <Section title="With Issues" icon={<Fa icon={faTriangleExclamation} />} tone="warning"
                     count={issuesCount}
                     emptyText={q ? 'No With Issues stock matches this search' : 'No machines with issues'}>
@@ -1903,7 +1903,7 @@ function InventoryContent() {
                   </div>
                 )}
                 {activeWarehouseLocation === 'refurbishment' && (
-                  <div className="inventory-warehouse-board inventory-warehouse-board--single">
+                  <div className="w-full min-w-0">
                     <Section title="Refurbishment Unit — Internal Stock" icon={<Fa icon={faWrench} />} tone="info"
                     count={refurbCount}
                     emptyText={q ? 'No refurbishment stock matches this search' : 'No stock currently in refurbishment'}>
