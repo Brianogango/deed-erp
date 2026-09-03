@@ -1,12 +1,11 @@
 // @ts-nocheck
 'use client'
-import { useState, useMemo, useRef, useCallback, Suspense } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect, Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import { useRepairStore } from '@/lib/store'
 import { useRepair, RepairProvider } from './repair/RepairContext'
 import RepairClientJobs from './RepairClientJobs'
 import RepairRefurbJobs from './RepairRefurbJobs'
-import RepairDetailView from './repair/RepairDetailView'
-import RepairIntake from '../repair/RepairIntake'
 import {
   AssignTechnicianModal,
   LogDiagnosisModal,
@@ -31,8 +30,15 @@ import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { isOpenRepairJob } from '@/lib/repair-progress'
 import { repairModuleView } from '@/lib/repair-workspace-view'
 
+const RepairDetailView = dynamic(() => import('./repair/RepairDetailView'), {
+  loading: () => <ModuleSkeleton />,
+})
+const RepairIntake = dynamic(() => import('../repair/RepairIntake'), {
+  loading: () => <ModuleSkeleton />,
+})
+
 function RepairContent() {
-  const { 
+  const {
     view, setView, activeRepair, setActiveId, mainTab, setMainTab, openRepairCount, currentUser,
     showAssignModal, setShowAssignModal,
     showDiagnosisModal, setShowDiagnosisModal,
@@ -93,11 +99,8 @@ function RepairContent() {
         <RepairIntake onCancel={() => setView('list')} onSuccess={(id) => { setActiveId(id); setView('detail') }} />
       )}
 
-      {view === 'detail' && activeRepair && (
-        <RepairDetailView />
-      )}
+      {view === 'detail' && activeRepair && <RepairDetailView />}
 
-      {/* Global Repair Modals */}
       {showAssignModal && activeRepair && <AssignTechnicianModal repair={activeRepair} onClose={() => setShowAssignModal(false)} />}
       {showDiagnosisModal && activeRepair && <LogDiagnosisModal repair={activeRepair} onClose={() => setShowDiagnosisModal(false)} />}
       {showQuoteModal && activeRepair && <QuoteModal repair={activeRepair} onClose={() => setShowQuoteModal(false)} />}
@@ -138,19 +141,21 @@ function RepairInner() {
   const setView = useCallback((nextView) => {
     if (nextView === 'intake') {
       setIsIntake(true)
-      setActiveId(null)
+      setActiveId(null, { history: 'replace' })
       return
     }
     setIsIntake(false)
-    if (nextView === 'list') setActiveId(null)
+    // Leaving a detail/intake is not a new navigation destination. Replacing
+    // the current entry prevents Repair -> list -> Repair -> list history loops.
+    if (nextView === 'list') setActiveId(null, { history: 'replace' })
   }, [setActiveId])
   const [filter, setFilter] = useState('all')
   const [mainTabValue, setMainTabValue] = useUrlQueryState('tab', 'client')
   const mainTab = mainTabValue === 'refurb' ? 'refurb' : 'client'
   const setMainTab = useCallback((nextTab) => {
-    setMainTabValue(nextTab === 'refurb' ? 'refurb' : 'client')
+    setMainTabValue(nextTab === 'refurb' ? 'refurb' : 'client', { history: 'replace' })
   }, [setMainTabValue])
-  
+
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [showDiagnosisModal, setShowDiagnosisModal] = useState(false)
   const [showQuoteModal, setShowQuoteModal] = useState(false)
@@ -186,7 +191,6 @@ function RepairInner() {
         const res = await fetch(`/api/repair-qc-reports/${encodeURIComponent(repair.ref)}`, { method: 'POST', body: form })
         const payload = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(payload.error || 'QC report upload failed')
-
         const report = payload.report
         updateRepair(repairId, {
           qcReportData: undefined,
@@ -197,11 +201,7 @@ function RepairInner() {
           qcReportType: report.contentType,
           qcReportUploadedAt: report.uploadedAt,
         })
-        appendRepairHistory(repairId, {
-          status: 'qc',
-          date: new Date().toISOString(),
-          note: `QC report attached: ${report.name}`,
-        })
+        appendRepairHistory(repairId, { status: 'qc', date: new Date().toISOString(), note: `QC report attached: ${report.name}` })
         showToast('QC report uploaded as a lightweight download link', 'success')
       } catch (err) {
         showToast(err instanceof Error ? err.message : 'QC report upload failed', 'error')
@@ -211,8 +211,6 @@ function RepairInner() {
       return
     }
 
-    // Diagnosis reports: store on the server (like QC reports) instead of
-    // embedding the file as base64 inside the repair record.
     if (!repair?.ref) {
       setLoading(false)
       showToast('Repair reference is missing; report was not uploaded', 'error')
@@ -224,18 +222,9 @@ function RepairInner() {
       const res = await fetch(`/api/repair-diagnosis-reports/${encodeURIComponent(repair.ref)}`, { method: 'POST', body: form })
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(payload.error || 'Diagnosis report upload failed')
-
       const report = payload.report
-      updateRepair(repairId, {
-        diagnosisReportData: undefined,
-        diagnosisReportName: report.name,
-        diagnosisReportUrl: report.url,
-      })
-      appendRepairHistory(repairId, {
-        status: 'diagnosed',
-        date: new Date().toISOString(),
-        note: `Diagnosis report attached: ${report.name}`,
-      })
+      updateRepair(repairId, { diagnosisReportData: undefined, diagnosisReportName: report.name, diagnosisReportUrl: report.url })
+      appendRepairHistory(repairId, { status: 'diagnosed', date: new Date().toISOString(), note: `Diagnosis report attached: ${report.name}` })
       showToast('Diagnosis report uploaded as a lightweight download link', 'success')
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Diagnosis report upload failed', 'error')
@@ -244,17 +233,59 @@ function RepairInner() {
     }
   }, [repairs, updateRepair, appendRepairHistory, showToast])
 
-  const activeRepair = useMemo(() => repairs.find(r => r.id === activeId) ?? null, [repairs, activeId])
+  const localActiveRepair = useMemo(() => repairs.find(r => r.id === activeId) ?? null, [repairs, activeId])
+  const [serverActiveRepair, setServerActiveRepair] = useState(null)
+
+  // Keep the open record authoritative without reloading the whole Repair
+  // module. This catches updates made from Sales, portal actions, ORC and other
+  // tabs. It pauses in background tabs and refreshes immediately on focus.
+  useEffect(() => {
+    setServerActiveRepair(null)
+    if (!activeId) return
+    let cancelled = false
+    let timer = null
+
+    const refreshOpenRepair = async () => {
+      if (document.visibilityState === 'hidden') return
+      try {
+        const res = await fetch(`/api/repairs/${encodeURIComponent(activeId)}`, { cache: 'no-store' })
+        if (!res.ok) return
+        const payload = await res.json()
+        if (!cancelled && payload?.repair?.id === activeId) setServerActiveRepair(payload.repair)
+      } catch {
+        // Preserve the local snapshot when connectivity is interrupted.
+      }
+    }
+
+    const onFocus = () => { void refreshOpenRepair() }
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshOpenRepair() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
+    timer = window.setInterval(() => { void refreshOpenRepair() }, 8000)
+    void refreshOpenRepair()
+
+    return () => {
+      cancelled = true
+      if (timer) window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [activeId])
+
+  // Local mutations must win instantly; the next focused/polled server read
+  // reconciles them. This avoids a stale remote snapshot masking a just-saved
+  // diagnosis, quote, QC or status change.
+  useEffect(() => { setServerActiveRepair(null) }, [localActiveRepair])
+
+  const activeRepair = serverActiveRepair?.id === activeId ? serverActiveRepair : localActiveRepair
   const view = repairModuleView(isIntake, activeId)
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
   const allVisibleRepairs = useMemo(() => getVisibleRepairs(), [getVisibleRepairs, repairs])
-  const openRepairCount = useMemo(
-    () => allVisibleRepairs.filter(isOpenRepairJob).length,
-    [allVisibleRepairs],
-  )
-  const visibleRepairs = useMemo(() => {
-    return filter === 'all' ? allVisibleRepairs : allVisibleRepairs.filter(r => r.status === filter)
-  }, [allVisibleRepairs, filter])
+  const openRepairCount = useMemo(() => allVisibleRepairs.filter(isOpenRepairJob).length, [allVisibleRepairs])
+
+  // RepairClientJobs owns the URL-backed status/search/filter state. Keeping a
+  // second status filter here caused races and stale/empty lists after Back.
+  const visibleRepairs = allVisibleRepairs
 
   if (!mounted) return <ModuleSkeleton />
 
