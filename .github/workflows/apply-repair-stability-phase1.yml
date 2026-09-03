@@ -5,7 +5,6 @@ on:
       - fix/repair-stability-phase1-stable
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
