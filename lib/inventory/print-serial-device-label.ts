@@ -1,5 +1,5 @@
 /**
- * Client helper: build + print 100×60mm labels for blob SerialNumber rows,
+ * Client helper: build + print 80×40mm labels for blob SerialNumber rows,
  * enriching RAM/SSD from the current reconfiguration snapshot when available.
  */
 
