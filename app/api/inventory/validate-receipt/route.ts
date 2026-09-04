@@ -53,6 +53,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result)
   }
 
+  if (!body.receiptId || !body.purchaseOrderId) {
+    return NextResponse.json(
+      { ok: false, error: 'The receipt is not linked to a purchase order. Return to Purchase and reopen the GRN.' },
+      { status: 422 },
+    )
+  }
+  const preflightState = await loadAppState(['deed_receipts', 'deed_purchaseOrders'])
+  const preflightReceipts = Array.isArray(preflightState.deed_receipts) ? preflightState.deed_receipts as any[] : []
+  const preflightOrders = Array.isArray(preflightState.deed_purchaseOrders) ? preflightState.deed_purchaseOrders as any[] : []
+  const preflightReceipt = preflightReceipts.find(item => item?.id === body.receiptId)
+  if (!preflightReceipt) {
+    return NextResponse.json(
+      { ok: false, error: 'This goods receipt no longer exists. Refresh Purchase before receiving stock.' },
+      { status: 404 },
+    )
+  }
+  if (preflightReceipt.status !== 'draft') {
+    return NextResponse.json(
+      { ok: false, error: `${preflightReceipt.ref || 'This receipt'} has already updated inventory.` },
+      { status: 409 },
+    )
+  }
+  if (!preflightOrders.some(item => item?.id === body.purchaseOrderId)) {
+    return NextResponse.json(
+      { ok: false, error: 'The linked purchase order no longer exists. No stock was changed.' },
+      { status: 404 },
+    )
+  }
+
   const stock = await applyReceiptStockMutation({
     receiptId: String(body.receiptId || ''),
     receiptRef: String(body.receiptRef || 'REC'),
