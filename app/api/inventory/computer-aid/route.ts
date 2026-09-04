@@ -180,6 +180,7 @@ export async function GET() {
         sku: product.sku || '',
         requiresSerial: Boolean(product.requiresSerial || product.trackingMethod === 'SERIAL'),
       })),
+    serials: serials.filter(row => ['warehouse', CA_LOCATION].includes(String(row.location)) && row.status !== 'sold'),
     custodySerials,
     custodyBulk,
     movements: movements.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
