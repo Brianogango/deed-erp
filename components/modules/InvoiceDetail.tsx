@@ -17,6 +17,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
 import { canCancelOrResetInvoice, canApplyCustomerCredit } from '@/lib/finance-controls'
+import { financePaymentPreview } from '@/lib/finance-payment-preview'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Breadcrumbs, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge } from '@/components/erp'
@@ -304,7 +305,7 @@ export default function InvoiceDetail() {
     if (!payAmount || Number(payAmount) <= 0) return
     if (balance <= 0) { showToast(`${docLabel} is already fully settled`, 'info'); return }
     if (payMethod === 'bank_transfer' && !payBankAccountId) { showToast('Select a bank account for bank transfer payments', 'error'); return }
-    registerPayment(invoice.id, Math.min(Number(payAmount), balance), payMethod, payBankAccountId || undefined, payReference, payDate)
+    registerPayment(invoice.id, financePaymentPreview(payAmount, balance).applied, payMethod, payBankAccountId || undefined, payReference, payDate)
     setShowPayModal(false)
     setPayAmount('')
     setPayReference('')
@@ -438,9 +439,10 @@ export default function InvoiceDetail() {
     }
   }
 
-  const paying = Math.min(Number(payAmount) || 0, balance)
-  const willFullyPay = paying >= balance
-  const overpay = (Number(payAmount) || 0) > balance
+  const paymentPreview = financePaymentPreview(payAmount, balance)
+  const paying = paymentPreview.applied
+  const willFullyPay = paymentPreview.fullySettles
+  const overpay = paymentPreview.isOverpayment
   const invoiceIsVat = documentHasVat(invoice)
   const titleRef = invoice.ref.startsWith('DRAFT/') ? displayDocRef(invoice.ref) : invoice.ref
   const partnerCountry = partnerContact?.country || 'Kenya'
