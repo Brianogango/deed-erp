@@ -643,11 +643,15 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                 <span>{data.checklist.total ? Math.round((data.checklist.completed / data.checklist.total) * 100) : 0}%</span>
               </div>
               <div className="accounting-dashboard__checklist">
-                {data.checklist.items.map(item => (
-                  <button type="button" key={item.id} onClick={() => onNavigate('integrity')}>
+                {data.checklist.items.map((item, index) => (
+                  <button type="button" key={item.id} onClick={() => onNavigate('integrity')} title={item.detail || item.label}>
                     {item.status === 'done' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                    <span>{item.label}</span>
-                    <strong>{item.status === 'done' ? 'Done' : 'Attention'}</strong>
+                    <span>
+                      <small>Step {index + 1}</small>
+                      {item.label}
+                      {item.detail && <em>{item.detail}</em>}
+                    </span>
+                    <strong>{item.status === 'done' ? 'Complete' : 'Review'}</strong>
                   </button>
                 ))}
               </div>
