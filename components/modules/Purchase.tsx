@@ -1042,8 +1042,8 @@ function PurchaseContent() {
         <div className="flex items-center justify-between p-4 card flex-wrap gap-3">
           <div className="text-xs">
             {allComplete
-              ? <span className="inline-flex items-center gap-1" style={{ color: 'var(--success)' }}><Fa icon={faCheck} aria-hidden="true" /> All items ready — validate to update stock</span>
-              : <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> Complete all serial numbers before validating</span>}
+              ? <span className="inline-flex items-center gap-1" style={{ color: 'var(--success)' }}><Fa icon={faCheck} aria-hidden="true" /> Ready to receive — review and update inventory</span>
+              : <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> Capture the missing serial numbers to continue</span>}
           </div>
           <div className="flex gap-2 flex-wrap">
             <button className="btn-outline" onClick={leaveReceive}>Cancel</button>
@@ -1055,7 +1055,7 @@ function PurchaseContent() {
             </button>
             <button className="btn-primary" style={{ background: allComplete ? 'var(--success)' : 'var(--border)', cursor: allComplete && !isValidatingReceipt ? 'pointer' : 'not-allowed' }}
               onClick={() => { void handleValidateReceipt() }} disabled={!allComplete || isValidatingReceipt} aria-busy={isValidatingReceipt}>
-              {isValidatingReceipt ? 'Validating GRN…' : '✓ Validate GRN — Update Inventory'}
+              {isValidatingReceipt ? 'Updating stock and purchase…' : 'Receive Goods & Update Inventory'}
             </button>
           </div>
         </div>
