@@ -3,15 +3,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
-import { upsertBulkStock } from '@/lib/business-logic'
+import { upsertBulkStock, type BulkStockLevel } from '@/lib/business-logic'
+import type { LocationId } from '@/lib/store'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
 
 const ALLOWED_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
-const CA_LOCATION = 'computer_aid'
-const CA_COLLECTED = 'computer_aid_collected'
-const CA_ISSUES = 'computer_aid_issues'
+const CA_LOCATION: LocationId = 'computer_aid'
+const CA_COLLECTED: LocationId = 'computer_aid_collected'
+const CA_ISSUES: LocationId = 'computer_aid_issues'
 
 type CustodyStatus = 'in_custody' | 'collected' | 'with_issues' | 'returned'
 type CustodyAction = 'direct_entry' | 'transfer_in' | 'collection' | 'issue' | 'return'
@@ -40,7 +41,7 @@ type SerialRow = {
   specs?: string
 }
 
-type BulkRow = { productId: string; location: string; qty: number }
+type BulkRow = BulkStockLevel
 
 type StockMove = {
   id: string
@@ -151,15 +152,18 @@ export async function GET() {
     ? state.deed_computerAidMovements
     : []) as CustodyMovement[]
 
+  const isCustodyLocation = (location: string | undefined) =>
+    location === CA_LOCATION || location === CA_ISSUES
+
   const custodySerials = serials
-    .filter(row => [CA_LOCATION, CA_ISSUES].includes(String(row.location)))
+    .filter(row => isCustodyLocation(row.location))
     .map(row => ({
       ...row,
       productName: row.productName || products.find(product => product.id === row.productId)?.name || 'Product',
     }))
 
   const custodyBulk = bulk
-    .filter(row => [CA_LOCATION, CA_ISSUES].includes(String(row.location)) && Number(row.qty) > 0)
+    .filter(row => isCustodyLocation(row.location) && Number(row.qty) > 0)
     .map(row => ({
       ...row,
       productName: products.find(product => product.id === row.productId)?.name || 'Product',
@@ -230,8 +234,8 @@ export async function POST(request: NextRequest) {
       }, { status: 422 })
     }
 
-    let fromLocation: string | undefined
-    let toLocation = CA_LOCATION
+    let fromLocation: LocationId | undefined
+    let toLocation: LocationId = CA_LOCATION
     let serialNumbers: string[] = []
     let serialIds: string[] = []
     let stockType: StockMove['type'] = 'transfer'
@@ -261,34 +265,36 @@ export async function POST(request: NextRequest) {
         serialIds = created.map(row => row.id)
         serialNumbers = created.map(row => row.serial)
       } else {
-        bulk = upsertBulkStock(bulk, productId, CA_LOCATION as never, qty)
+        bulk = upsertBulkStock(bulk, productId, CA_LOCATION, qty)
       }
     } else {
-      fromLocation = action === 'transfer_in' ? 'warehouse' : CA_LOCATION
-      toLocation = action === 'collection'
+      const sourceLocation: LocationId = action === 'transfer_in' ? 'warehouse' : CA_LOCATION
+      const destLocation: LocationId = action === 'collection'
         ? CA_COLLECTED
         : action === 'issue'
           ? CA_ISSUES
           : 'warehouse'
+      fromLocation = sourceLocation
+      toLocation = destLocation
 
       if (requiresSerial) {
         const selected = serials.filter(row => requestedSerialIds.includes(row.id))
-        if (selected.length !== qty || selected.some(row => row.productId !== productId || row.location !== fromLocation)) {
+        if (selected.length !== qty || selected.some(row => row.productId !== productId || row.location !== sourceLocation)) {
           return NextResponse.json({ error: 'One or more selected serials are no longer available at the source location' }, { status: 409 })
         }
         const selectedIds = new Set(selected.map(row => row.id))
-        serials = serials.map(row => selectedIds.has(row.id) ? { ...row, location: toLocation } : row)
+        serials = serials.map(row => selectedIds.has(row.id) ? { ...row, location: destLocation } : row)
         serialIds = selected.map(row => row.id)
         serialNumbers = selected.map(row => row.serial)
       } else {
         const available = bulk
-          .filter(row => row.productId === productId && row.location === fromLocation)
+          .filter(row => row.productId === productId && row.location === sourceLocation)
           .reduce((sum, row) => sum + Math.max(0, Number(row.qty) || 0), 0)
         if (available < qty) {
           return NextResponse.json({ error: `Only ${available} unit(s) available at the source location` }, { status: 409 })
         }
-        bulk = upsertBulkStock(bulk, productId, fromLocation as never, -qty)
-        bulk = upsertBulkStock(bulk, productId, toLocation as never, qty)
+        bulk = upsertBulkStock(bulk, productId, sourceLocation, -qty)
+        bulk = upsertBulkStock(bulk, productId, destLocation, qty)
       }
 
       if (action === 'transfer_in' || action === 'return') {
