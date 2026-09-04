@@ -120,6 +120,44 @@ type MainTab =
   | 'integrity'
   | 'cash_flow'
 
+type FinanceSection = 'overview' | 'money_in' | 'money_out' | 'banking' | 'accounting' | 'reports'
+
+const FINANCE_SECTIONS: Array<{ id: FinanceSection; label: string; defaultTab: MainTab }> = [
+  { id: 'overview', label: 'Overview', defaultTab: 'dashboard' },
+  { id: 'money_in', label: 'Money In', defaultTab: 'invoices' },
+  { id: 'money_out', label: 'Money Out', defaultTab: 'bills' },
+  { id: 'banking', label: 'Banking', defaultTab: 'cashbook' },
+  { id: 'accounting', label: 'Accounting', defaultTab: 'journals' },
+  { id: 'reports', label: 'Reports', defaultTab: 'reports' },
+]
+
+const FINANCE_SECTION_TABS: Record<FinanceSection, Array<{ id: MainTab; label: string }>> = {
+  overview: [{ id: 'dashboard', label: 'Action centre' }],
+  money_in: [
+    { id: 'invoices', label: 'Customer invoices' },
+    { id: 'credits', label: 'Customer credits' },
+    { id: 'refunds', label: 'Refunds' },
+    { id: 'commissions', label: 'Sales commissions' },
+  ],
+  money_out: [{ id: 'bills', label: 'Vendor bills' }],
+  banking: [{ id: 'cashbook', label: 'Cashbook & reconciliation' }],
+  accounting: [
+    { id: 'journals', label: 'Accounting entries' },
+    { id: 'coa', label: 'Chart of accounts' },
+    { id: 'gl', label: 'General ledger' },
+    { id: 'partner_ledger', label: 'Customer & supplier ledger' },
+    { id: 'integrity', label: 'Integrity controls' },
+    { id: 'migration', label: 'Data migration' },
+  ],
+  reports: [{ id: 'reports', label: 'Financial reports' }],
+}
+
+const FINANCE_TAB_SECTION: Partial<Record<MainTab, FinanceSection>> = Object.fromEntries(
+  Object.entries(FINANCE_SECTION_TABS).flatMap(([section, tabs]) =>
+    tabs.map(item => [item.id, section as FinanceSection]),
+  ),
+)
+
 type ReportTab = 'financial_report' | 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position' | 'fx' | 'cash_flow'
 const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'financial_report', label: 'Financial report', icon: faChartLine },
@@ -134,6 +172,8 @@ const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'fx', label: 'FX revaluation', icon: faMoneyBillWave },
 ]
 const REPORT_TAB_IDS = new Set<ReportTab>(['financial_report', 'monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position', 'fx', 'cash_flow'])
+const MANAGEMENT_REPORT_IDS = new Set<ReportTab>(['pl', 'bs', 'cash_flow', 'ageing', 'financial_report'])
+const CONTROL_REPORT_IDS = new Set<ReportTab>(['monthly', 'vat', 'trial_balance', 'cash_position', 'fx'])
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
 const CA_GROUPS = [
@@ -758,12 +798,12 @@ function AccountingContent() {
     credits: { title: 'Customer credits', subtitle: 'Credit balances and applications' },
     commissions: { title: 'Salespeople', subtitle: 'Commission statements and payment status' },
     refunds: { title: 'Refunds', subtitle: 'Approved customer refund payments' },
-    journals: { title: 'Journals', subtitle: 'Posted entries and audit-ready movements' },
+    journals: { title: 'Accounting entries', subtitle: 'Posted entries and audit-ready movements' },
     reports: { title: 'Financial reports', subtitle: 'Management, statutory and control reports' },
     cashbook: { title: 'Cashbook', subtitle: 'Daily transactions and bank reconciliation' },
     coa: { title: 'Chart of accounts', subtitle: 'Accounts, groups and liquidity ledgers' },
     gl: { title: 'General ledger', subtitle: 'Account movements and running balances' },
-    partner_ledger: { title: 'Partner ledger', subtitle: 'Customer and supplier account history' },
+    partner_ledger: { title: 'Customer & supplier ledger', subtitle: 'Customer and supplier account history' },
     migration: { title: 'Data migration', subtitle: 'Import opening balances and legacy records' },
     monthly: { title: 'Monthly report', subtitle: 'Management performance for the selected month' },
     pl: { title: 'Profit and loss', subtitle: 'Income and expenses for the selected period' },
@@ -1357,50 +1397,71 @@ function AccountingContent() {
         {/* KPI strip and workflow alerts removed — AR/AP, cash position, and
             finance exceptions now live on the central dashboard */}
 
-        <TabBar
-          tabs={[
-            { id: 'dashboard', label: 'Dashboard' },
-            { id: 'invoices', label: 'Customer invoices' },
-            { id: 'bills', label: 'Vendor bills' },
-            { id: 'credits', label: 'Credits' },
-            { id: 'commissions', label: 'Salespeople' },
-            { id: 'refunds', label: 'Refunds' },
-            { id: 'journals', label: 'Journals' },
-            { id: 'reports', label: 'Reports' },
-            { id: 'integrity', label: 'Integrity' },
-            { id: 'cashbook', label: 'Cashbook' },
-            { id: 'coa', label: 'Accounts' },
-            { id: 'gl', label: 'Ledger' },
-            { id: 'partner_ledger', label: 'Partner ledger' },
-            { id: 'migration', label: 'Migration' },
-          ]}
-          active={tab}
-          onChange={id => setTab(id as MainTab)}
-          maxVisibleMobile={3}
-          maxVisibleTablet={5}
-          maxVisibleDesktop={6}
-          ariaLabel="Accounting sections"
-        />
+        <div className="border-b border-border-lt bg-card">
+          <TabBar
+            tabs={FINANCE_SECTIONS.map(section => ({ id: section.id, label: section.label }))}
+            active={FINANCE_TAB_SECTION[tab] || 'overview'}
+            onChange={id => {
+              const section = FINANCE_SECTIONS.find(item => item.id === id)
+              if (section) setTab(section.defaultTab)
+            }}
+            maxVisibleMobile={3}
+            maxVisibleTablet={6}
+            maxVisibleDesktop={6}
+            ariaLabel="Finance workspaces"
+          />
+          {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && (
+            <div className="px-3 pb-2">
+              <TabBar
+                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview']}
+                active={tab}
+                onChange={id => setTab(id as MainTab)}
+                className="border-0 bg-transparent px-0 py-0"
+                maxVisibleMobile={3}
+                maxVisibleTablet={5}
+                maxVisibleDesktop={6}
+                ariaLabel="Finance workspace sections"
+              />
+            </div>
+          )}
+        </div>
 
         <div className="mod-body finance-workspace__body">
         {tab === 'reports' && (
           <div className="finance-report-command mb-3 space-y-2">
-            <div className="finance-report-tabs rounded-xl border border-border-lt bg-card p-2">
-              <div className="px-1 pb-1 text-xs font-semibold text-text-3">Reports</div>
-              <TabBar
-                tabs={REPORT_TABS.map(t => ({ id: t.id, label: t.label }))}
-                active={reportTab}
-                onChange={id => setReport(id as ReportTab)}
-                className="border-0 px-0 py-0 bg-transparent"
-                maxVisibleMobile={4}
-                maxVisibleTablet={7}
-                maxVisibleDesktop={7}
-                ariaLabel="Report types"
-              />
+            <div className="finance-report-tabs rounded-xl border border-border-lt bg-card p-2 space-y-2">
+              <div>
+                <div className="px-1 pb-1 text-xs font-semibold text-text-3">Management reports</div>
+                <TabBar
+                  tabs={REPORT_TABS.filter(t => MANAGEMENT_REPORT_IDS.has(t.id)).map(t => ({ id: t.id, label: t.label }))}
+                  active={reportTab}
+                  onChange={id => setReport(id as ReportTab)}
+                  className="border-0 px-0 py-0 bg-transparent"
+                  maxVisibleMobile={3}
+                  maxVisibleTablet={5}
+                  maxVisibleDesktop={5}
+                  ariaLabel="Management reports"
+                />
+              </div>
+              <details className="border-t border-border-lt pt-2">
+                <summary className="px-1 text-xs font-semibold text-text-3 cursor-pointer">Compliance & detailed reports</summary>
+                <TabBar
+                  tabs={REPORT_TABS.filter(t => CONTROL_REPORT_IDS.has(t.id)).map(t => ({ id: t.id, label: t.label }))}
+                  active={reportTab}
+                  onChange={id => setReport(id as ReportTab)}
+                  className="border-0 px-0 pt-2 pb-0 bg-transparent"
+                  maxVisibleMobile={3}
+                  maxVisibleTablet={5}
+                  maxVisibleDesktop={5}
+                  ariaLabel="Compliance and detailed reports"
+                />
+              </details>
             </div>
             {journalSot && (
-              <div
-                className={`finance-sot-notice rounded-xl border px-3 py-2 text-xs ${
+              <details className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-xs">
+                <summary className="cursor-pointer font-semibold text-[var(--text-2)]">Report data status</summary>
+                <div
+                  className={`finance-sot-notice mt-2 rounded-lg border px-3 py-2 text-xs ${
                   journalSot.certified
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
                     : 'border-amber-200 bg-amber-50 text-amber-950'
@@ -1426,8 +1487,9 @@ function AccountingContent() {
                       : ''}
                     . Certify from Settings → Data Cutover after verify.
                   </>
-                )}
-              </div>
+                  )}
+                </div>
+              </details>
             )}
           </div>
         )}
@@ -1507,7 +1569,7 @@ function AccountingContent() {
                 rowKey={i => i.id}
                 searchValue={invSearch}
                 onSearchChange={value => { setInvSearch(value) }}
-                searchPlaceholder="Search invoice number or partner…"
+                searchPlaceholder={tab === 'invoices' ? 'Search invoice number or customer…' : 'Search bill number or vendor…'}
                 clientSearch={false}
                 page={invoiceListPage}
                 onPageChange={setInvoiceListPage}
@@ -1570,7 +1632,7 @@ function AccountingContent() {
                           setShowBulkPayModal(true)
                         }}
                       >
-                        Pay {payable.length} {bulkLabel.toLowerCase()}{payable.length !== 1 ? 's' : ''}
+                        {tab === 'invoices' ? 'Record receipt for' : 'Pay'} {payable.length} {bulkLabel.toLowerCase()}{payable.length !== 1 ? 's' : ''}
                       </button>
                     </div>
                   )
@@ -2261,7 +2323,7 @@ function AccountingContent() {
           const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
           const bulkPartnerLabel = tab === 'invoices' ? 'Customer' : 'Vendor'
           return (
-            <Modal title={`Pay ${selItems.length} ${bulkLabel}${selItems.length !== 1 ? 's' : ''}`} subtitle={`Total outstanding: ${fmtKes(totalOutstanding)}`} onClose={() => setShowBulkPayModal(false)} width={500}>
+            <Modal title={`${tab === 'invoices' ? 'Record receipt for' : 'Pay'} ${selItems.length} ${bulkLabel}${selItems.length !== 1 ? 's' : ''}`} subtitle={`Balance to clear: ${fmtKes(totalOutstanding)}`} onClose={() => setShowBulkPayModal(false)} width={500}>
               <div className="finance-payment-dialog flex flex-col gap-4">
                 {/* Item list */}
                 <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
@@ -2296,9 +2358,9 @@ function AccountingContent() {
                   ]} />
                 </Field>
                 {activeBanks.length > 0 && (
-                  <Field label="Bank / Account Paid From">
+                  <Field label={tab === 'invoices' ? 'Bank / Account Received Into' : 'Bank / Account Paid From'}>
                     <Select value={payBankAccountId} onChange={setPayBankAccountId} options={[
-                      { value: '', label: '— Select bank account —' },
+                      { value: '', label: tab === 'invoices' ? '— Select receiving account —' : '— Select paying account —' },
                       ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id }))
                     ]} />
                   </Field>
@@ -2329,7 +2391,7 @@ function AccountingContent() {
                       showToast(`${selItems.length} payment${selItems.length !== 1 ? 's' : ''} recorded successfully`, 'success')
                     }}
                   >
-                    Confirm Payment — {fmtKes(totalOutstanding)}
+                    {tab === 'invoices' ? 'Confirm Receipt' : 'Confirm Payment'} — {fmtKes(totalOutstanding)}
                   </button>
                 </div>
               </div>
