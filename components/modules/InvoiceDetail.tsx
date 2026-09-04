@@ -286,9 +286,9 @@ export default function InvoiceDetail() {
     const isPaid = isPosted && payState === 'paid'
     return [
       { key: 'draft', label: 'Draft', state: docState === 'draft' ? 'current' : isPosted ? 'done' : 'todo' },
-      { key: 'posted', label: 'Posted', state: docState === 'draft' ? 'todo' : isPartPaid || isPaid ? 'done' : isPosted ? 'current' : 'todo' },
-      { key: 'part-paid', label: 'Part Paid', state: isPaid ? 'done' : isPartPaid ? 'current' : 'todo' },
-      { key: 'paid', label: 'Paid', state: isPaid ? 'current' : 'todo' },
+      { key: 'posted', label: 'Confirmed', state: docState === 'draft' ? 'todo' : isPartPaid || isPaid ? 'done' : isPosted ? 'current' : 'todo' },
+      { key: 'part-paid', label: invoice.type === 'customer_invoice' ? 'Part received' : 'Part paid', state: isPaid ? 'done' : isPartPaid ? 'current' : 'todo' },
+      { key: 'paid', label: invoice.type === 'customer_invoice' ? 'Received' : 'Paid', state: isPaid ? 'current' : 'todo' },
     ] as Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>
   })()
   const invoiceSmartButtons = [
@@ -297,14 +297,14 @@ export default function InvoiceDetail() {
     { key: 'sales-order', label: 'Sales Order', value: linkedSaleOrder ? '1' : '0' },
     { key: 'delivery', label: 'Delivery', value: linkedDeliveryJob ? '1' : '0' },
     { key: 'credit-notes', label: 'Credit Notes', value: '0' },
-    { key: 'activities', label: 'Activities', value: '2' },
+    { key: 'activities', label: 'History', value: 'View' },
   ]
 
   const handlePayment = () => {
     if (!payAmount || Number(payAmount) <= 0) return
-    if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
+    if (balance <= 0) { showToast(`${docLabel} is already fully settled`, 'info'); return }
     if (payMethod === 'bank_transfer' && !payBankAccountId) { showToast('Select a bank account for bank transfer payments', 'error'); return }
-    registerPayment(invoice.id, Number(payAmount), payMethod, payBankAccountId || undefined, payReference, payDate)
+    registerPayment(invoice.id, Math.min(Number(payAmount), balance), payMethod, payBankAccountId || undefined, payReference, payDate)
     setShowPayModal(false)
     setPayAmount('')
     setPayReference('')
@@ -609,12 +609,19 @@ export default function InvoiceDetail() {
                 onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}
                 hideLabelOnMobile={false}
               >
-                Register payment
+                {invoice.type === 'customer_invoice' ? 'Record receipt' : 'Record payment'}
               </PrimaryActionButton>
             )}
             <SecondaryActionMenu actions={moreActions} label="More actions" ariaLabel="More actions" />
           </div>
         </div>
+
+        {!canManageFinance && (
+          <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3 text-xs text-[var(--text-3)]" role="note">
+            <strong className="text-[var(--text-1)]">View-only access.</strong>{' '}
+            You can review this ${docLabel.toLowerCase()} and its history, but only Finance, Administration or a Director can confirm, edit or record payments.
+          </div>
+        )}
 
         <div className="invoice-detail__workflow" role="list" aria-label="Invoice workflow">
           {invoiceWorkflowSteps.map(step => (
@@ -936,7 +943,7 @@ export default function InvoiceDetail() {
             {([
               ['payments', 'Payments'],
               ['notes', `Notes`],
-              ['activity', 'Activity'],
+              ['activity', 'History & activity'],
               ['instructions', 'Payment instructions'],
             ] as const).filter(([id]) => id !== 'instructions' || invoice.type === 'customer_invoice').map(([id, label]) => (
               <button
@@ -1007,7 +1014,7 @@ export default function InvoiceDetail() {
                 model="invoice"
                 recordId={invoice.id}
                 staffName={currentUser?.name || 'Staff'}
-                title="Internal Notes & Activities"
+                title="Document history & internal activity"
                 compact
               />
             )}
@@ -1069,7 +1076,7 @@ export default function InvoiceDetail() {
 
       {/* ── Register Payment modal ─────────────────────────────────────────── */}
       {showPayModal && (
-        <Modal title="Register Payment" onClose={() => setShowPayModal(false)} width={420}>
+        <Modal title={invoice.type === 'customer_invoice' ? 'Record customer receipt' : 'Record vendor payment'} onClose={() => setShowPayModal(false)} width={460}>
           <div className="flex flex-col gap-4">
             {/* Invoice summary */}
             <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex justify-between">
@@ -1083,11 +1090,11 @@ export default function InvoiceDetail() {
               </div>
             </div>
 
-            <Field label="Payment Date">
+            <Field label={invoice.type === 'customer_invoice' ? 'Receipt date' : 'Payment date'}>
               <Input type="date" value={payDate} onChange={setPayDate} />
             </Field>
 
-            <Field label={`Amount (max ${fmtKes(balance)})`}>
+            <Field label={`${invoice.type === 'customer_invoice' ? 'Amount received' : 'Amount paid'} (max ${fmtKes(balance)})`}>
               <Input type="number" value={payAmount} onChange={setPayAmount} placeholder="0.00" />
               {overpay && (
                 <p className="text-[10px] text-amber-600 mt-1 font-bold">Will be capped at {fmtKes(balance)}</p>
@@ -1100,7 +1107,22 @@ export default function InvoiceDetail() {
               )}
             </Field>
 
-            <Field label="Payment Method">
+            <div className="grid grid-cols-3 gap-2 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3" aria-label="Payment balance preview">
+              <div>
+                <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">Before</p>
+                <p className="text-xs font-bold font-mono text-[var(--text-1)]">{fmtKes(balance)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">{invoice.type === 'customer_invoice' ? 'Receiving' : 'Paying'}</p>
+                <p className="text-xs font-bold font-mono text-[var(--primary)]">− {fmtKes(paying)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">After</p>
+                <p className="text-xs font-bold font-mono text-[var(--text-1)]">{fmtKes(Math.max(0, balance - paying))}</p>
+              </div>
+            </div>
+
+            <Field label={invoice.type === 'customer_invoice' ? 'Receipt method' : 'Payment method'}>
               <Select
                 value={payMethod}
                 onChange={setPayMethod}
@@ -1115,7 +1137,7 @@ export default function InvoiceDetail() {
             </Field>
 
             {activeBanks.length > 0 && (
-              <Field label="Journal — Bank / Cash Account Received To">
+              <Field label={invoice.type === 'customer_invoice' ? 'Bank / cash account received into' : 'Bank / cash account paid from'}>
                 <Select
                   value={payBankAccountId}
                   onChange={setPayBankAccountId}
@@ -1155,7 +1177,7 @@ export default function InvoiceDetail() {
                 disabled={!payAmount || Number(payAmount) <= 0 || balance <= 0 || stkBusy}
                 onClick={handlePayment}
               >
-                {willFullyPay || overpay ? 'Mark as Paid' : 'Record Partial Payment'}
+                {invoice.type === 'customer_invoice' ? (willFullyPay || overpay ? 'Confirm full receipt' : 'Record partial receipt') : (willFullyPay || overpay ? 'Confirm full payment' : 'Record partial payment')}
               </button>
             </div>
           </div>
