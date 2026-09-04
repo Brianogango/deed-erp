@@ -1,39 +1,44 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-describe('80x40 serialized-device thermal label', () => {
-  const source = readFileSync('lib/inventory/serial-device-label.ts', 'utf8')
+describe('shared 80x40 thermal label renderer', () => {
+  const template = readFileSync('lib/inventory/thermal-label-template.ts', 'utf8')
+  const serialSource = readFileSync('lib/inventory/serial-device-label.ts', 'utf8')
+  const productSource = readFileSync('lib/product-label.ts', 'utf8')
 
   it('targets exact 80mm by 40mm label stock', () => {
-    expect(source).toContain('@page { size: 80mm 40mm; margin: 0; }')
-    expect(source).toContain('width: 80mm;')
-    expect(source).toContain('height: 40mm;')
+    expect(template).toContain('@page { size: 80mm 40mm; margin: 0; }')
+    expect(template).toContain('width: 80mm;')
+    expect(template).toContain('height: 40mm;')
   })
 
-  it('keeps the label minimal and removes low-value print clutter', () => {
-    expect(source).not.toContain('qrDataUrl')
-    expect(source).not.toContain('class="badge"')
-    expect(source).not.toContain('class="meta-col"')
-    expect(source).not.toContain('SERIAL NUMBER')
+  it('keeps the shared label minimal and high contrast', () => {
+    expect(template).not.toContain('qrDataUrl')
+    expect(template).not.toContain('IN STOCK')
+    expect(template).not.toContain('WARRANTY')
+    expect(template).not.toContain('CONDITION')
+    expect(template).toContain("const INK = '#000000'")
+    expect(template).toContain('lineColor: INK')
+    expect(template).toContain('filter: grayscale(1) contrast(2)')
   })
 
-  it('prints the important asset information at readable sizes', () => {
-    expect(source).toContain('class="model"')
-    expect(source).toContain('PROCESSOR')
-    expect(source).toContain('RAM')
-    expect(source).toContain('STORAGE')
-    expect(source).toContain('font-size: 11.5pt')
-    expect(source).toContain('font-size: 8.8pt')
+  it('uses readable model and specification sizing', () => {
+    expect(template).toContain('font-size: 11.5pt')
+    expect(template).toContain('font-size: 8.8pt')
+    expect(template).toContain('thermal-spec-key')
+    expect(template).toContain('thermal-barcode-caption')
   })
 
-  it('prints the serial only beneath the barcode', () => {
-    expect(source).toContain('<div class="barcode-caption">${esc(view.serial || view.barcodeValue)}</div>')
-    expect(source).not.toContain('class="serial-num"')
+  it('routes both serialized-device and generic product labels through the same renderer', () => {
+    expect(serialSource).toContain("printThermalLabelBatch(labels, 'Serial Device Labels')")
+    expect(productSource).toContain("printThermalLabelBatch(labels, 'Serial Labels')")
+    expect(productSource).toContain('printThermalLabelBatch(Array.from({ length: count }, () => label)')
   })
 
-  it('uses black-only high-contrast thermal output', () => {
-    expect(source).toContain("const INK = '#000000'")
-    expect(source).toContain('lineColor: INK')
-    expect(source).toContain('filter: grayscale(1) contrast(2)')
+  it('keeps serialized unit identity beneath the barcode instead of a separate serial block', () => {
+    expect(serialSource).toContain('caption: view.serial || view.barcodeValue')
+    expect(serialSource).not.toContain('SERIAL NUMBER')
+    expect(productSource).not.toContain('Serial No.')
+    expect(productSource).not.toContain('qrDataUrl')
   })
 })

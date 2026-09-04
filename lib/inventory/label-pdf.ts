@@ -1,7 +1,12 @@
 /**
- * Bulk label PDF helpers. Uses jsPDF already in the ERP dependency set.
- * Browser-only — call from client event handlers.
+ * Bulk label PDF helpers.
+ * PDF exports use the same 80×40mm black-and-white visual system as direct
+ * thermal printing so Product Master, GRN and Warehouse labels stay consistent.
  */
+
+import { productThermalSpecs } from '@/lib/product-label'
+import { catalogBaseName } from '@/lib/reconfiguration/unit-selling-name'
+import type { ThermalLabelSpec } from '@/lib/inventory/thermal-label-template'
 
 export type ProductLabelPdfItem = {
   name: string
@@ -23,18 +28,21 @@ export type SerialLabelPdfItem = {
   specs?: string
 }
 
-function conditionShort(productType?: string) {
-  const t = String(productType || '').toLowerCase()
-  if (t === 'new') return 'NEW'
-  if (t === 'refurbished') return 'REFURB'
-  return ''
+type JsPdfDoc = import('jspdf').jsPDF
+
+type PdfThermalLabel = {
+  title: string
+  barcodeValue: string
+  caption: string
+  specs: ThermalLabelSpec[]
 }
 
-function categoryConditionMeta(category?: string, productType?: string) {
-  const cat = String(category || '').trim()
-  const cond = conditionShort(productType)
-  if (cat && cond) return `${cat} · ${cond}`
-  return cat || cond || ''
+function clean(value: unknown): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim()
+}
+
+function titleForLabel(value: string): string {
+  return clean(catalogBaseName(value) || value || 'PRODUCT').toUpperCase()
 }
 
 function stampFilename(prefix: string) {
@@ -45,67 +53,166 @@ function stampFilename(prefix: string) {
   return `${prefix}-${yyyy}-${mm}-${dd}.pdf`
 }
 
+function barcodeDataUrl(value: string): string {
+  if (typeof window === 'undefined' || !value.trim()) return ''
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const JsBarcode = require('jsbarcode')
+    const canvas = document.createElement('canvas')
+    JsBarcode(canvas, value, {
+      format: 'CODE128',
+      width: 2.2,
+      height: 52,
+      displayValue: false,
+      margin: 0,
+      background: '#FFFFFF',
+      lineColor: '#000000',
+    })
+    return canvas.toDataURL('image/png')
+  } catch {
+    return ''
+  }
+}
+
+async function imageDataUrl(src: string): Promise<string | null> {
+  if (typeof window === 'undefined') return null
+  try {
+    const res = await fetch(src)
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return await new Promise(resolve => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null)
+      reader.onerror = () => resolve(null)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
+function drawSpecColumn(
+  doc: JsPdfDoc,
+  spec: ThermalLabelSpec,
+  x: number,
+  width: number,
+  primary = false,
+) {
+  doc.setTextColor(0, 0, 0)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(5.8)
+  doc.text(clean(spec.label).toUpperCase(), x, 13.4)
+
+  doc.setFontSize(primary ? 8.3 : 8.8)
+  const value = clean(spec.value) || '—'
+  const lines = doc.splitTextToSize(value, Math.max(5, width - 1))
+  doc.text(lines.slice(0, 2), x, 17.6)
+}
+
+function drawThermalLabel(doc: JsPdfDoc, item: PdfThermalLabel, logoData: string | null) {
+  doc.setFillColor(255, 255, 255)
+  doc.rect(0, 0, 80, 40, 'F')
+  doc.setDrawColor(0, 0, 0)
+  doc.setTextColor(0, 0, 0)
+
+  if (logoData) {
+    doc.addImage(logoData, 'PNG', 2.2, 2.0, 11.5, 6.3, undefined, 'FAST')
+  } else {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.text('deed', 2.2, 5.4)
+    doc.setFontSize(3.8)
+    doc.text('TECHNOLOGIES LTD', 2.2, 7.3)
+  }
+
+  doc.setLineWidth(0.35)
+  doc.line(15.2, 1.7, 15.2, 9.5)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11.5)
+  const titleLines = doc.splitTextToSize(item.title, 60.5)
+  doc.text(titleLines.slice(0, 2), 17.1, 4.5)
+
+  doc.setLineWidth(0.35)
+  doc.line(2.2, 10.3, 77.8, 10.3)
+
+  const specs = item.specs.length ? item.specs.slice(0, 3) : [{ label: 'Specification', value: '—' }]
+  if (specs.length === 1) {
+    drawSpecColumn(doc, specs[0], 2.2, 75.6, true)
+  } else if (specs.length === 2) {
+    drawSpecColumn(doc, specs[0], 2.2, 36.5, true)
+    doc.setLineWidth(0.25)
+    doc.line(39.5, 11.5, 39.5, 20.2)
+    drawSpecColumn(doc, specs[1], 41.2, 36.6)
+  } else {
+    drawSpecColumn(doc, specs[0], 2.2, 34.5, true)
+    doc.setLineWidth(0.25)
+    doc.line(37.5, 11.5, 37.5, 20.2)
+    drawSpecColumn(doc, specs[1], 39.2, 15.0)
+    doc.line(55.0, 11.5, 55.0, 20.2)
+    drawSpecColumn(doc, specs[2], 56.7, 21.1)
+  }
+
+  doc.setLineWidth(0.35)
+  doc.line(2.2, 21.4, 77.8, 21.4)
+
+  const barcode = barcodeDataUrl(item.barcodeValue)
+  if (barcode) {
+    doc.addImage(barcode, 'PNG', 4.0, 23.3, 72.0, 8.0, undefined, 'FAST')
+  } else {
+    doc.setLineWidth(0.3)
+    doc.rect(4.0, 23.3, 72.0, 8.0)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'bold')
+    doc.text(item.barcodeValue, 40, 28.4, { align: 'center' })
+  }
+
+  doc.setTextColor(0, 0, 0)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.text(item.caption, 40, 34.8, { align: 'center' })
+}
+
+async function saveThermalLabelsPdf(
+  labels: PdfThermalLabel[],
+  filename: string,
+): Promise<string> {
+  if (!labels.length) throw new Error('No labels selected')
+
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [80, 40] })
+  const logoData = await imageDataUrl('/deed-logo-receipt.png')
+
+  labels.forEach((label, index) => {
+    if (index > 0) doc.addPage([80, 40], 'landscape')
+    drawThermalLabel(doc, label, logoData)
+  })
+
+  doc.save(filename)
+  return filename
+}
+
 export async function downloadProductLabelsPdf(
   items: ProductLabelPdfItem[],
   opts?: { filename?: string; companyName?: string },
 ): Promise<string> {
   if (!items.length) throw new Error('No products selected')
-  const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const cols = 3
-  const rows = 7
-  const labelW = 60
-  const labelH = 38
-  const marginX = 12
-  const marginY = 10
-  const gapX = 4
-  const gapY = 4
 
-  items.forEach((item, index) => {
-    const pageIndex = Math.floor(index / (cols * rows))
-    if (pageIndex > 0 && index % (cols * rows) === 0) doc.addPage()
-    const local = index % (cols * rows)
-    const col = local % cols
-    const row = Math.floor(local / cols)
-    const x = marginX + col * (labelW + gapX)
-    const y = marginY + row * (labelH + gapY)
-
-    doc.setDrawColor(200, 200, 200)
-    doc.roundedRect(x, y, labelW, labelH, 1.5, 1.5)
-    doc.setFontSize(8)
-    doc.setTextColor(0, 176, 215)
-    doc.setFont('helvetica', 'bold')
-    doc.text(opts?.companyName || 'deed.', x + 2.5, y + 6)
-    doc.setTextColor(100, 116, 139)
-    doc.setFontSize(6)
-    doc.text(categoryConditionMeta(item.category, item.productType).toUpperCase().slice(0, 22), x + labelW - 2.5, y + 6, { align: 'right' })
-    doc.setTextColor(15, 23, 42)
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'bold')
-    const nameLines = doc.splitTextToSize(item.name, labelW - 5)
-    doc.text(nameLines.slice(0, 2), x + 2.5, y + 12)
-    if (item.specs) {
-      doc.setFontSize(5.5)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(71, 85, 105)
-      doc.text(String(item.specs).slice(0, 42), x + 2.5, y + 18)
+  const labels = items.map(item => {
+    const barcodeValue = clean(item.barcode) || clean(item.sku)
+    return {
+      title: titleForLabel(item.name),
+      barcodeValue,
+      caption: clean(item.sku) || barcodeValue,
+      specs: productThermalSpecs({
+        name: item.name,
+        category: item.category,
+        specsText: item.specs,
+      }),
     }
-    if (typeof item.salePrice === 'number') {
-      doc.setFontSize(11)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(26, 31, 94)
-      doc.text(`KES ${Math.round(item.salePrice).toLocaleString('en-KE')}`, x + 2.5, y + 23)
-    }
-    doc.setFontSize(6)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(80, 80, 80)
-    doc.text(item.barcode || item.sku, x + labelW / 2, y + 30, { align: 'center' })
-    doc.text(`SKU: ${item.sku}`, x + labelW / 2, y + 34, { align: 'center' })
-  })
+  }).filter(label => label.barcodeValue)
 
-  const filename = opts?.filename || stampFilename('product-labels')
-  doc.save(filename)
-  return filename
+  return saveThermalLabelsPdf(labels, opts?.filename || stampFilename('product-labels-80x40'))
 }
 
 export async function downloadSerialLabelsPdf(
@@ -113,66 +220,20 @@ export async function downloadSerialLabelsPdf(
   opts?: { filename?: string; companyName?: string },
 ): Promise<string> {
   if (!items.length) throw new Error('No serials selected')
-  const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const cols = 3
-  const rows = 7
-  const labelW = 60
-  const labelH = 38
-  const marginX = 12
-  const marginY = 10
-  const gapX = 4
-  const gapY = 4
 
-  items.forEach((item, index) => {
-    const pageIndex = Math.floor(index / (cols * rows))
-    if (pageIndex > 0 && index % (cols * rows) === 0) doc.addPage()
-    const local = index % (cols * rows)
-    const col = local % cols
-    const row = Math.floor(local / cols)
-    const x = marginX + col * (labelW + gapX)
-    const y = marginY + row * (labelH + gapY)
-
-    doc.setDrawColor(200, 200, 200)
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(x, y, labelW, labelH, 1.5, 1.5)
-    doc.setDrawColor(26, 31, 94)
-    doc.setLineWidth(0.8)
-    doc.line(x, y + 2, x, y + labelH - 2)
-    doc.setLineWidth(0.2)
-
-    doc.setFontSize(8)
-    doc.setTextColor(0, 176, 215)
-    doc.setFont('helvetica', 'bold')
-    doc.text(opts?.companyName || 'deed.', x + 3, y + 6)
-    doc.setFontSize(5.5)
-    doc.setTextColor(100, 116, 139)
-    doc.text(categoryConditionMeta(item.category, item.productType).toUpperCase().slice(0, 22), x + labelW - 3, y + 6, { align: 'right' })
-    doc.setTextColor(15, 23, 42)
-    doc.setFontSize(7)
-    const nameLines = doc.splitTextToSize(item.productName, labelW - 8)
-    doc.text(nameLines.slice(0, 2), x + 3, y + 11)
-    if (item.specs) {
-      doc.setFontSize(5)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(71, 85, 105)
-      doc.text(String(item.specs).slice(0, 40), x + 3, y + 17)
+  const labels = items.map(item => {
+    const barcodeValue = clean(item.serial) || clean(item.barcode) || clean(item.sku)
+    return {
+      title: titleForLabel(item.productName),
+      barcodeValue,
+      caption: clean(item.serial) || barcodeValue,
+      specs: productThermalSpecs({
+        name: item.productName,
+        category: item.category,
+        specsText: item.specs,
+      }),
     }
-    doc.setFontSize(5.5)
-    doc.setTextColor(100, 116, 139)
-    doc.setFont('helvetica', 'bold')
-    doc.text('SERIAL NO.', x + 3, y + 21)
-    doc.setTextColor(26, 31, 94)
-    doc.setFontSize(10)
-    doc.setFont('courier', 'bold')
-    doc.text(item.serial.slice(0, 22), x + 3, y + 27)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(71, 85, 105)
-    doc.text(`SKU ${item.sku}`, x + 3, y + 33)
-  })
+  }).filter(label => label.barcodeValue)
 
-  const filename = opts?.filename || stampFilename('inventory-serial-labels')
-  doc.save(filename)
-  return filename
+  return saveThermalLabelsPdf(labels, opts?.filename || stampFilename('inventory-serial-labels-80x40'))
 }
