@@ -205,6 +205,7 @@ function PurchaseContent() {
   // ── GRN state ──────────────────────────────────────────────────────────────
   const [activeReceiptId,      setActiveReceiptId]      = useState<string | null>(null)
   const [isValidatingReceipt,  setIsValidatingReceipt]  = useState(false)
+  const [showValidateReview,   setShowValidateReview]   = useState(false)
   const [receiptOrigin,        setReceiptOrigin]        = useState<'list' | 'po'>('list')
   const [grnLines,             setGrnLines]             = useState<Receipt['lines']>([])
   const [destLocation,         setDestLocation]         = useState<LocationId>('warehouse')
@@ -666,6 +667,7 @@ function PurchaseContent() {
     try {
       const validated = await validateReceipt(activeReceiptId, grnLines, destLocation, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues)
       if (!validated) return
+      setShowValidateReview(false)
       setSerialAccessories({}); setSerialAccessoryNotes({})
       setSerialSpecs({}); setSerialIssues({})
       if (receiptOrigin === 'list') {
@@ -876,7 +878,13 @@ function PurchaseContent() {
   // RECEIVE VIEW
   // ══════════════════════════════════════════════════════════════════════════
   if (subView === 'receive' && activePO && activeReceipt) {
-    const allComplete = grnLines.every(l => !l.requiresSerial || l.serials.length >= l.qtyReceived)
+    const receivingQty = grnLines.reduce((sum, line) => sum + Math.max(0, Number(line.qtyReceived) || 0), 0)
+    const expectedQty = grnLines.reduce((sum, line) => sum + Math.max(0, Number(line.qtyExpected) || 0), 0)
+    const remainingQty = Math.max(0, expectedQty - receivingQty)
+    const hasSerializedLines = grnLines.some(line => line.requiresSerial && line.qtyReceived > 0)
+    const serialsComplete = grnLines.every(line => !line.requiresSerial || line.serials.length === line.qtyReceived)
+    const allComplete = receivingQty > 0 && serialsComplete
+    const receiveStep = receivingQty === 0 ? 1 : hasSerializedLines && !serialsComplete ? 2 : 3
     return (
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 flex-wrap">
@@ -884,6 +892,34 @@ function PurchaseContent() {
           <span className="text-xs font-semibold">GRN — {activeReceipt.ref}</span>
           <span className="text-[10px] text-t3">From: {activePO.vendorName}</span>
           <StatusBadge status={activePO.status} label={STATUS_LABEL[activePO.status]} />
+        </div>
+
+        <div className="card p-3" aria-label="Receiving progress">
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              ['1', 'Confirm quantities'],
+              ['2', hasSerializedLines ? 'Capture serials' : 'Serials not required'],
+              ['3', 'Review & receive'],
+            ].map(([number, label], index) => {
+              const step = index + 1
+              const complete = step < receiveStep || (step === 2 && !hasSerializedLines && receivingQty > 0)
+              const active = step === receiveStep
+              return (
+                <div key={number} className="rounded-lg border px-3 py-2" style={{
+                  borderColor: active ? 'var(--navy)' : 'var(--border-lt)',
+                  background: complete ? 'var(--success-bg)' : 'var(--bg-surface)',
+                }}>
+                  <p className="text-[9px] uppercase tracking-wider text-t4 mb-0.5">Step {number}</p>
+                  <p className="text-[11px] font-semibold text-t1">{complete ? '✓ ' : ''}{label}</p>
+                </div>
+              )
+            })}
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+            <div><p className="text-[9px] uppercase text-t4">Expected</p><p className="text-sm font-bold text-t1">{expectedQty}</p></div>
+            <div><p className="text-[9px] uppercase text-t4">Receiving now</p><p className="text-sm font-bold text-t1">{receivingQty}</p></div>
+            <div><p className="text-[9px] uppercase text-t4">Remaining</p><p className="text-sm font-bold text-t1">{remainingQty}</p></div>
+          </div>
         </div>
 
         <div className="card p-4 flex items-start gap-4 flex-wrap">
@@ -1042,8 +1078,8 @@ function PurchaseContent() {
         <div className="flex items-center justify-between p-4 card flex-wrap gap-3">
           <div className="text-xs">
             {allComplete
-              ? <span className="inline-flex items-center gap-1" style={{ color: 'var(--success)' }}><Fa icon={faCheck} aria-hidden="true" /> All items ready — validate to update stock</span>
-              : <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> Complete all serial numbers before validating</span>}
+              ? <span className="inline-flex items-center gap-1" style={{ color: 'var(--success)' }}><Fa icon={faCheck} aria-hidden="true" /> Ready to receive — review and update inventory</span>
+              : <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> Capture the missing serial numbers to continue</span>}
           </div>
           <div className="flex gap-2 flex-wrap">
             <button className="btn-outline" onClick={leaveReceive}>Cancel</button>
@@ -1054,11 +1090,40 @@ function PurchaseContent() {
               <Fa icon={faPrint} /> Print Labels
             </button>
             <button className="btn-primary" style={{ background: allComplete ? 'var(--success)' : 'var(--border)', cursor: allComplete && !isValidatingReceipt ? 'pointer' : 'not-allowed' }}
-              onClick={() => { void handleValidateReceipt() }} disabled={!allComplete || isValidatingReceipt} aria-busy={isValidatingReceipt}>
-              {isValidatingReceipt ? 'Validating GRN…' : '✓ Validate GRN — Update Inventory'}
+              onClick={() => setShowValidateReview(true)} disabled={!allComplete || isValidatingReceipt} aria-busy={isValidatingReceipt}>
+              {isValidatingReceipt ? 'Updating stock and purchase…' : 'Receive Goods & Update Inventory'}
             </button>
           </div>
         </div>
+
+        {showValidateReview && (
+          <Modal title="Review goods receipt" subtitle={activeReceipt.ref} onClose={() => setShowValidateReview(false)} width={680}>
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="card p-3"><p className="text-[9px] uppercase text-t4">Receiving</p><p className="text-lg font-bold text-t1">{receivingQty}</p></div>
+                <div className="card p-3"><p className="text-[9px] uppercase text-t4">Remaining</p><p className="text-lg font-bold text-t1">{remainingQty}</p></div>
+                <div className="card p-3"><p className="text-[9px] uppercase text-t4">Destination</p><p className="text-xs font-bold text-t1 mt-1">{LOCATIONS[destLocation].name}</p></div>
+              </div>
+              <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-lt)' }}>
+                {grnLines.filter(line => line.qtyReceived > 0).map(line => (
+                  <div key={line.productId} className="flex justify-between gap-3 px-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--border-lt)' }}>
+                    <div><p className="text-xs font-semibold text-t1">{line.productName}</p>{line.requiresSerial && <p className="text-[10px] text-t3">{line.serials.length} serial(s) captured</p>}</div>
+                    <p className="text-xs font-bold text-t1">{line.qtyReceived}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-lg p-3 text-xs" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
+                This will update inventory, valuation and the purchase-order balance. The validated receipt cannot be edited directly afterward.
+              </div>
+              <div className="flex justify-end gap-2">
+                <button className="btn-outline" disabled={isValidatingReceipt} onClick={() => setShowValidateReview(false)}>Go back</button>
+                <button className="btn-primary" disabled={isValidatingReceipt} aria-busy={isValidatingReceipt} onClick={() => { void handleValidateReceipt() }}>
+                  {isValidatingReceipt ? 'Updating stock and purchase…' : 'Confirm & Update Inventory'}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
       </div>
     )
   }

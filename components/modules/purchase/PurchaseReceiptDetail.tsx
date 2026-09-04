@@ -112,7 +112,7 @@ export default function PurchaseReceiptDetail() {
           )}
           primaryAction={canProcess ? (
             <PrimaryActionButton hideLabelOnMobile={false} onClick={() => startReceive(activeReceipt.id)}>
-              Process GRN
+              Review & Receive Goods
             </PrimaryActionButton>
           ) : undefined}
           secondaryActions={(
@@ -165,7 +165,7 @@ export default function PurchaseReceiptDetail() {
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-wider text-t3 mb-0.5">Status</p>
-            <p className="text-t1">{validated ? 'Stock updated' : 'Awaiting validation'}</p>
+            <p className="text-t1">{validated ? 'Stock updated' : 'Awaiting stock update'}</p>
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-wider text-t3 mb-0.5">Lines</p>
@@ -262,7 +262,7 @@ export default function PurchaseReceiptDetail() {
           )}
           primary={(
             <PrimaryActionButton hideLabelOnMobile={false} className="w-full justify-center" onClick={() => startReceive(activeReceipt.id)}>
-              Process GRN
+              Review & Receive Goods
             </PrimaryActionButton>
           )}
         />

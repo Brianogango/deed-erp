@@ -806,6 +806,23 @@ async function applyReceiptRelational(params: {
         }
       }
     }
+
+    // The GRN transaction owns purchase progress. Updating only the line
+    // counters left the PO header at "confirmed"; the browser's later PATCH
+    // was then rejected because confirmed → partial/received is not a legal
+    // client-driven transition.
+    if (po) {
+      const refreshedItems = await tx.purchaseOrderItem.findMany({ where: { poId: po.id } })
+      const allReceived = refreshedItems.length > 0
+        && refreshedItems.every(item => item.qtyReceived >= item.qtyOrdered)
+      const anyReceived = refreshedItems.some(item => item.qtyReceived > 0)
+      if (anyReceived) {
+        await tx.purchaseOrder.update({
+          where: { id: po.id },
+          data: { status: allReceived ? 'received' : 'partial' },
+        })
+      }
+    }
   })
 
   return { grnItemsByProductId, resolvedProductIds }
