@@ -35,7 +35,7 @@ describe('exportToPDF', () => {
     ])
 
     exportToPDF(
-      'Product Catalog',
+      'Inventory Report',
       ['Product', 'Category', 'Available', 'Cost', 'Sale price', 'Margin'],
       rows,
       'inventory-catalog',
@@ -46,7 +46,7 @@ describe('exportToPDF', () => {
     expect(blob.type).toBe('application/pdf')
 
     return blob.text().then(text => {
-      // Previous exporter hard-coded /Count 1 and dropped overflow rows.
+      // Generic operational exports still paginate rather than dropping overflow rows.
       expect(text).toMatch(/\/Count\s+[2-9]\d*/)
       expect(text).toContain('Page 1 of')
       expect(text).toContain('80 rows')
