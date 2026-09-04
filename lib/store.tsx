@@ -118,7 +118,6 @@ import {
 } from '@/lib/sale-order-draft-edits'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergeCollectionById } from '@/lib/collection-merge'
-import { CLIENT_IMMUTABLE_STORE_KEYS } from '@/lib/auth/authorization'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 import { fetchAllCollectionPages } from '@/lib/api-pagination'
 import {
@@ -4862,7 +4861,10 @@ function markKeysSynced(saved: Record<string, string>) {
 }
 
 function canQueueStoreSync(key: string) {
-  return isKnownClientAppStateKey(key) && !CLIENT_IMMUTABLE_STORE_KEYS.has(key)
+  // Keep this list aligned with CLIENT_IMMUTABLE_STORE_KEYS in authorization.ts.
+  // Do not import that module here — it is server-only and breaks the client bundle.
+  if (key === 'deed_auditLogs' || key === 'deed_audit_timeline_v1') return false
+  return isKnownClientAppStateKey(key)
 }
 
 function dropUnsyncablePendingKeys(entries: Record<string, string>) {
