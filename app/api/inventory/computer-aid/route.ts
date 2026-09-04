@@ -1,10 +1,10 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { normalizePermissionRole } from '@/lib/permissions'
+import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { upsertBulkStock } from '@/lib/business-logic'
-import { writeFinancialAudit } from '@/lib/accounting/audit'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
 
