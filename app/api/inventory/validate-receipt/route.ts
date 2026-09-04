@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
   if (!body || !Array.isArray(body.lines)) {
     return NextResponse.json({ error: 'Expected body { lines: [...] }' }, { status: 400 })
   }
+  const receiptLines = body.lines
 
   const state = await loadAppState(['deed_serials'])
   const existingSerials = Array.isArray(state.deed_serials) ? state.deed_serials as Array<{ serial?: string; barcode?: string }> : []
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
     receipts[receiptIndex] = {
       ...currentReceipt,
       status: 'validated',
-      lines: body.lines,
+      lines: receiptLines,
       destinationLocation: destination,
       validatedAt: new Date().toISOString(),
       validatedBy: session.user.id,
@@ -186,7 +187,7 @@ export async function POST(request: NextRequest) {
     if (poIndex >= 0) {
       const currentPo = purchaseOrders[poIndex]
       const receivedByProduct = new Map<string, number>()
-      for (const line of body.lines) {
+      for (const line of receiptLines) {
         const productId = String(line.productId || '')
         receivedByProduct.set(productId, (receivedByProduct.get(productId) || 0) + Math.max(0, Number(line.qtyReceived) || 0))
       }
