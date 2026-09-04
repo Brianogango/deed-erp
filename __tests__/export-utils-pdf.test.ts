@@ -38,7 +38,7 @@ describe('exportToPDF', () => {
       'Inventory Report',
       ['Product', 'Category', 'Available', 'Cost', 'Sale price', 'Margin'],
       rows,
-      'inventory-catalog',
+      'inventory-report',
     )
 
     expect(createObjectURL).toHaveBeenCalledTimes(1)
@@ -50,7 +50,7 @@ describe('exportToPDF', () => {
       expect(text).toMatch(/\/Count\s+[2-9]\d*/)
       expect(text).toContain('Page 1 of')
       expect(text).toContain('80 rows')
-      expect(clicks[0].download).toBe('inventory-catalog.pdf')
+      expect(clicks[0].download).toBe('inventory-report.pdf')
     })
   })
 })
