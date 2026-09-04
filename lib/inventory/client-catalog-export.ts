@@ -18,13 +18,7 @@ export type ClientCatalogRow = {
   imageUrl: string | null
 }
 
-const NAVY: [number, number, number] = [16, 47, 103]
-const BLUE: [number, number, number] = [10, 103, 178]
-const CYAN: [number, number, number] = [0, 174, 239]
 const INK: [number, number, number] = [18, 33, 61]
-const MUTED: [number, number, number] = [93, 109, 132]
-const BORDER: [number, number, number] = [214, 227, 239]
-const PALE_BLUE: [number, number, number] = [239, 247, 253]
 
 function clean(value: unknown): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim()
@@ -226,91 +220,53 @@ export async function exportClientCatalogPdfFromTable(
   const pageH = doc.internal.pageSize.getHeight()
   const margin = 10
   const logo = await fetchDataUrl(absoluteUrl(co.logoUrl))
-  const images = new Map<string, string | null>()
-  await Promise.all(rows.map(async row => {
-    if (!row.imageUrl || images.has(row.imageUrl)) return
-    images.set(row.imageUrl, await fetchDataUrl(row.imageUrl))
-  }))
 
-  const drawFrame = (pageNumber: number) => {
+  const drawFrame = (_pageNumber: number) => {
     if (logo) {
-      try { doc.addImage(logo, imageFormat(logo), margin, 7, 36, 13, undefined, 'FAST') } catch { /* fallback below */ }
+      try { doc.addImage(logo, imageFormat(logo), margin, 7, 32, 11.5, undefined, 'FAST') } catch { /* plain text fallback below */ }
     } else {
-      doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...NAVY)
-      doc.text('deed', margin, 17)
-      doc.setFontSize(6).setTextColor(...BLUE)
-      doc.text('TECHNOLOGIES LTD', margin + 1, 21)
+      doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...INK)
+      doc.text('DEED TECHNOLOGIES', margin, 15)
     }
+    doc.setDrawColor(210, 210, 210).setLineWidth(0.25)
+    doc.line(margin, 23, pageW - margin, 23)
 
-    doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...NAVY)
-    doc.text('PRODUCT CATALOG', pageW / 2, 13.5, { align: 'center' })
-    doc.setFont('helvetica', 'normal').setFontSize(7.2).setTextColor(...MUTED)
-    doc.text('Reliable Devices for Work, Learning and Everyday Use', pageW / 2, 19, { align: 'center' })
-    doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...NAVY)
-    doc.text('Technology Solutions.', pageW - margin, 11.5, { align: 'right' })
-    doc.text('Built for Impact.', pageW - margin, 15.5, { align: 'right' })
-    doc.setDrawColor(...CYAN).setLineWidth(0.7)
-    doc.line(margin, 25, pageW - margin, 25)
-
-    doc.setDrawColor(...CYAN).setLineWidth(0.5)
-    doc.line(margin, pageH - 15, pageW - margin, pageH - 15)
-    doc.setFont('helvetica', 'normal').setFontSize(6.7).setTextColor(...MUTED)
-    doc.text([co.website, co.email, co.phone].filter(Boolean).join('   |   '), margin, pageH - 8.5)
-    doc.setFont('helvetica', 'bold').setTextColor(...NAVY)
-    doc.text(`Page ${pageNumber}   |   People. Technology. A Brighter Tomorrow.`, pageW - margin, pageH - 8.5, { align: 'right' })
+    if (logo) {
+      try { doc.addImage(logo, imageFormat(logo), pageW / 2 - 10, pageH - 11, 20, 7, undefined, 'FAST') } catch { /* no footer fallback */ }
+    }
   }
 
   autoTable(doc, {
-    startY: 30,
-    margin: { left: margin, right: margin, top: 30, bottom: 21 },
-    head: [['IMAGE', 'MODEL / SERIES', 'KEY SPECIFICATIONS', 'QTY', 'SELLING PRICE (KES)']],
-    body: rows.map(row => ['', row.model, row.specs, String(row.qty), row.priceLabel.replace(/^KES\s*/, '')]),
+    startY: 28,
+    margin: { left: margin, right: margin, top: 28, bottom: 17 },
+    head: [['MODEL / SERIES', 'KEY SPECIFICATIONS', 'QTY', 'SELLING PRICE (KES)']],
+    body: rows.map(row => [row.model, row.specs, String(row.qty), row.priceLabel.replace(/^KES\s*/, '')]),
     theme: 'grid',
     styles: {
       font: 'helvetica',
-      fontSize: 7.4,
+      fontSize: 8,
       textColor: INK,
-      lineColor: BORDER,
-      lineWidth: 0.2,
-      cellPadding: 2.1,
-      minCellHeight: 13.5,
+      lineColor: [218, 218, 218],
+      lineWidth: 0.15,
+      cellPadding: 2.5,
+      minCellHeight: 10,
       valign: 'middle',
       overflow: 'linebreak',
     },
     headStyles: {
-      fillColor: NAVY,
-      textColor: [255, 255, 255],
+      fillColor: [242, 242, 242],
+      textColor: INK,
       fontStyle: 'bold',
       halign: 'center',
-      fontSize: 7.2,
+      fontSize: 7.5,
       minCellHeight: 8,
     },
-    alternateRowStyles: { fillColor: PALE_BLUE },
+    alternateRowStyles: { fillColor: [255, 255, 255] },
     columnStyles: {
-      0: { cellWidth: 20, halign: 'center' },
-      1: { cellWidth: 47, fontStyle: 'bold', textColor: NAVY },
-      2: { cellWidth: 74 },
-      3: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-      4: { cellWidth: 29, halign: 'right', fontStyle: 'bold', textColor: NAVY },
-    },
-    didDrawCell: hook => {
-      if (hook.section !== 'body' || hook.column.index !== 0) return
-      const row = rows[hook.row.index]
-      const data = row?.imageUrl ? images.get(row.imageUrl) : null
-      if (!data) return
-      try {
-        const pad = 1.25
-        doc.addImage(
-          data,
-          imageFormat(data),
-          hook.cell.x + pad,
-          hook.cell.y + pad,
-          hook.cell.width - pad * 2,
-          hook.cell.height - pad * 2,
-          undefined,
-          'FAST',
-        )
-      } catch { /* keep clean blank image cell */ }
+      0: { cellWidth: 53, fontStyle: 'bold', textColor: INK },
+      1: { cellWidth: 95 },
+      2: { cellWidth: 14, halign: 'center' },
+      3: { cellWidth: 28, halign: 'right', fontStyle: 'bold', textColor: INK },
     },
     didDrawPage: () => drawFrame(doc.getNumberOfPages()),
   })
@@ -342,13 +298,10 @@ export async function exportClientCatalogExcelFromTable(
   const co = company()
   const XLSX = await loadXlsx()
   const sheet: Array<Array<string | number>> = [
-    ['', 'PRODUCT CATALOG', '', '', ''],
-    ['', 'Reliable Devices for Work, Learning and Everyday Use', '', '', ''],
-    [[co.website, co.email, co.phone].filter(Boolean).join('   |   '), '', '', '', ''],
+    ['', '', '', ''],
     [],
-    ['Image', 'Model / Series', 'Key Specifications', 'Qty Available', 'Selling Price (KES)'],
+    ['Model / Series', 'Key Specifications', 'Qty Available', 'Selling Price (KES)'],
     ...rows.map(row => [
-      row.imageUrl ? 'Product image' : '',
       row.model,
       row.specs,
       row.qty,
@@ -356,14 +309,11 @@ export async function exportClientCatalogExcelFromTable(
     ]),
   ]
   const ws = XLSX.utils.aoa_to_sheet(sheet)
-  ws['!merges'] = [
-    { s: { r: 0, c: 1 }, e: { r: 0, c: 4 } },
-    { s: { r: 1, c: 1 }, e: { r: 1, c: 4 } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 4 } },
-  ]
-  ws['!cols'] = [{ wch: 17 }, { wch: 34 }, { wch: 62 }, { wch: 14 }, { wch: 20 }]
-  ws['!rows'] = [{ hpt: 30 }, { hpt: 22 }, { hpt: 18 }, { hpt: 8 }, { hpt: 30 }, ...rows.map(() => ({ hpt: 48 }))]
-  ws['!autofilter'] = { ref: `A5:E${Math.max(5, rows.length + 5)}` }
+  ws['!cols'] = [{ wch: 36 }, { wch: 64 }, { wch: 14 }, { wch: 20 }]
+  ws['!rows'] = [{ hpt: 34 }, { hpt: 8 }, { hpt: 26 }, ...rows.map(() => ({ hpt: 28 }))]
+  ws['!autofilter'] = { ref: `A3:D${Math.max(3, rows.length + 3)}` }
+  ws['!freeze'] = { xSplit: 0, ySplit: 3, topLeftCell: 'A4', activePane: 'bottomLeft', state: 'frozen' }
+  ws['!margins'] = { left: 0.35, right: 0.35, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.2 }
 
   const logoUrl = absoluteUrl(co.logoUrl)
   if (ws.A1 && logoUrl && /^https?:\/\//i.test(logoUrl)) {
@@ -372,34 +322,42 @@ export async function exportClientCatalogExcelFromTable(
     ws.A1.v = undefined
   } else if (ws.A1) {
     ws.A1.v = co.name
+    ws.A1.s = { font: { name: 'Arial', sz: 14, bold: true, color: { rgb: '222222' } } }
   }
-  if (ws.B1) ws.B1.s = { ...style('FFFFFF', '102F67', true, 'center'), font: { name: 'Arial', sz: 20, bold: true, color: { rgb: '102F67' } } }
-  if (ws.B2) ws.B2.s = { ...style('FFFFFF', '5D6D84', false, 'center'), font: { name: 'Arial', sz: 10, color: { rgb: '5D6D84' } } }
-  if (ws.A3) ws.A3.s = { ...style('FFFFFF', '5D6D84', false, 'center'), font: { name: 'Arial', sz: 9, color: { rgb: '5D6D84' } } }
 
-  for (let col = 0; col < 5; col++) {
-    const address = XLSX.utils.encode_cell({ r: 4, c: col })
-    if (ws[address]) ws[address].s = style('102F67', 'FFFFFF', true, col >= 3 ? 'center' : 'left')
+  for (let col = 0; col < 4; col++) {
+    const address = XLSX.utils.encode_cell({ r: 2, c: col })
+    if (ws[address]) {
+      ws[address].s = {
+        font: { name: 'Arial', sz: 10, bold: true, color: { rgb: '222222' } },
+        fill: { patternType: 'solid', fgColor: { rgb: 'F2F2F2' } },
+        alignment: { vertical: 'center', horizontal: col >= 2 ? 'center' : 'left', wrapText: true },
+        border: {
+          bottom: { style: 'thin', color: { rgb: 'BDBDBD' } },
+        },
+      }
+    }
   }
 
   rows.forEach((row, index) => {
-    const r = index + 5
-    for (let col = 0; col < 5; col++) {
-      const address = XLSX.utils.encode_cell({ r, c: col })
+    const rowIndex = index + 3
+    for (let col = 0; col < 4; col++) {
+      const address = XLSX.utils.encode_cell({ r: rowIndex, c: col })
       const cell = ws[address]
       if (!cell) continue
-      cell.s = style(index % 2 === 0 ? 'FFFFFF' : 'EFF7FD', '12213D', col === 1 || col >= 3, col === 3 ? 'center' : col === 4 ? 'right' : 'left')
+      cell.s = {
+        font: { name: 'Arial', sz: 10, bold: col === 0 || col === 3, color: { rgb: '222222' } },
+        alignment: {
+          vertical: 'center',
+          horizontal: col === 2 ? 'center' : col === 3 ? 'right' : 'left',
+          wrapText: true,
+        },
+        border: {
+          bottom: { style: 'thin', color: { rgb: 'E2E2E2' } },
+        },
+      }
     }
-    const imageCell = ws[XLSX.utils.encode_cell({ r, c: 0 })]
-    if (imageCell && row.imageUrl && /^https?:\/\//i.test(row.imageUrl)) {
-      imageCell.t = 'n'
-      imageCell.f = `IMAGE("${row.imageUrl.replace(/"/g, '""')}","Product image",0)`
-      imageCell.v = undefined
-    } else if (imageCell && row.imageUrl) {
-      imageCell.v = 'View image'
-      imageCell.l = { Target: row.imageUrl, Tooltip: 'Open product image' }
-    }
-    const priceCell = ws[XLSX.utils.encode_cell({ r, c: 4 })]
+    const priceCell = ws[XLSX.utils.encode_cell({ r: rowIndex, c: 3 })]
     if (priceCell && typeof priceCell.v === 'number') priceCell.z = 'KES #,##0'
   })
 

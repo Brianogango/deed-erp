@@ -65,7 +65,8 @@ export function calcStockByLocation(
   productId: string,
 ): Record<LocationId, number> {
   const locs: Record<LocationId, number> = {
-    warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0,
+    warehouse: 0, shop: 0, repair_unit: 0, computer_aid: 0, computer_aid_collected: 0,
+    computer_aid_issues: 0, vendor: 0, customer: 0, employee: 0,
     pending_testing: 0, quarantine: 0,
   }
   if (!product) return locs

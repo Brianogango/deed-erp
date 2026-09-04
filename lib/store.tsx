@@ -290,12 +290,15 @@ export type UserRole = AuthUserRole
 export type User = PublicUser
 
 // ─── Stock Locations ──────────────────────────────────────────────────────────
-export type LocationId = 'warehouse' | 'shop' | 'repair_unit' | 'vendor' | 'customer' | 'employee' | 'pending_testing' | 'quarantine'
+export type LocationId = 'warehouse' | 'shop' | 'repair_unit' | 'computer_aid' | 'computer_aid_collected' | 'computer_aid_issues' | 'vendor' | 'customer' | 'employee' | 'pending_testing' | 'quarantine'
 
 export const LOCATIONS: Record<LocationId, { name: string; icon: string; color: string }> = {
   warehouse:         { name: 'Warehouse (Main)',  icon: '🏭', color: '#875BF7' },
   shop:              { name: 'With Issues',        icon: '⚠️',  color: '#F59E0B' },
   repair_unit:       { name: 'Repair Unit',       icon: '🔧', color: '#F04438' },
+  computer_aid:      { name: 'Computer Aid',      icon: '🤝', color: '#0EA5E9' },
+  computer_aid_collected: { name: 'Computer Aid — Collected', icon: '✅', color: '#12B76A' },
+  computer_aid_issues: { name: 'Computer Aid — With Issues', icon: '⚠️', color: '#F79009' },
   vendor:            { name: 'Vendor',            icon: '🚚', color: '#F79009' },
   customer:          { name: 'Customer',          icon: '👤', color: '#2E90FA' },
   employee:          { name: 'Employee Asset',    icon: '🧑', color: '#7F56D9' },

@@ -24,6 +24,7 @@ import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategor
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
 import ProductPhotoFields, { uploadProductPhoto } from '@/components/inventory/ProductPhotoFields'
 import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPanel'
+import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
 import type { ProductImageSlot } from '@/lib/product-images'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
@@ -1760,8 +1761,10 @@ function InventoryContent() {
         const readyCount = filteredWarehouseSerials.length + filteredBulkWarehouse.reduce((s, p) => s + p.qty, 0)
         const issuesCount = filteredIssuesSerials.length + filteredBulkShop.reduce((s, p) => s + p.qty, 0)
         const refurbCount = filteredRepairSerials.length + filteredBulkRepair.reduce((s, p) => s + p.qty, 0)
-        const activeWarehouseLocation = ['warehouse', 'issues', 'refurbishment'].includes(warehouseLocation)
-          ? warehouseLocation as 'warehouse' | 'issues' | 'refurbishment'
+        const computerAidCount = serials.filter(s => s.location === 'computer_aid' && s.status !== 'sold').length
+          + bulkStock.filter(row => row.location === 'computer_aid').reduce((sum, row) => sum + Math.max(0, Number(row.qty) || 0), 0)
+        const activeWarehouseLocation = ['warehouse', 'issues', 'refurbishment', 'computer_aid'].includes(warehouseLocation)
+          ? warehouseLocation as 'warehouse' | 'issues' | 'refurbishment' | 'computer_aid'
           : 'warehouse'
 
         return (
@@ -1808,6 +1811,7 @@ function InventoryContent() {
                   { id: 'warehouse', label: 'Warehouse', sublabel: 'Ready for Sale', count: readyCount, icon: faIndustry },
                   { id: 'issues', label: 'With Issues', sublabel: 'Needs attention', count: issuesCount, icon: faTriangleExclamation },
                   { id: 'refurbishment', label: 'Refurbishment', sublabel: 'Internal stock', count: refurbCount, icon: faWrench },
+                  { id: 'computer_aid', label: 'Computer Aid', sublabel: 'Held in custody', count: computerAidCount, icon: faBoxesStacked },
                 ].map(item => {
                   const selected = activeWarehouseLocation === item.id
                   return (
@@ -1955,6 +1959,9 @@ function InventoryContent() {
                     ))}
                     </Section>
                   </div>
+                )}
+                {activeWarehouseLocation === 'computer_aid' && (
+                  <ComputerAidCustodyPanel />
                 )}
                 {activeWarehouseLocation === 'refurbishment' && (
                   <div className="w-full min-w-0">
