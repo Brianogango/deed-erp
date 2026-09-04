@@ -651,12 +651,12 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                   </button>
                 ))}
               </div>
-              <button type="button" className="accounting-dashboard__panel-link" onClick={() => onNavigate('integrity')}>View finance integrity</button>
+              <button type="button" className="accounting-dashboard__panel-link" onClick={() => onNavigate('integrity')}>Review control details</button>
             </Panel>
 
             <Panel
-              title="Finance Alerts & Exceptions"
-              subtitle={data.integrity.allPassed ? 'No critical integrity failures' : `${data.integrity.failedCount} integrity gate(s) failing`}
+              title="Needs attention"
+              subtitle={data.integrity.allPassed ? 'No critical finance tasks' : `${data.integrity.failedCount} control issue${data.integrity.failedCount === 1 ? '' : 's'} need review`}
               delay={480}
               action={<span className={`accounting-dashboard__alert-count ${data.alerts.some(a => a.severity !== 'ok') ? 'is-active' : ''}`}>{data.alerts.filter(a => a.severity !== 'ok').length}</span>}
             >
@@ -666,7 +666,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                     <span className={`accounting-dashboard__alert-icon is-${alert.severity}`}>{alert.severity === 'ok' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}</span>
                     <span>{alert.label}</span>
                     <strong>{alert.amount == null ? '' : formatKes(alert.amount, true)}</strong>
-                    <small>View</small>
+                    <small>Open</small>
                   </button>
                 ))}
               </div>
@@ -677,7 +677,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
             <div>
               <ShieldCheck size={15} />
               <span>
-                Finance integrity: <strong>{data.integrity.passedCount}/{data.integrity.total}</strong> controls passing
+                Financial controls: <strong>{data.integrity.passedCount}/{data.integrity.total}</strong> controls passing
               </span>
             </div>
             <span>Updated {new Date(data.meta.generatedAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</span>
