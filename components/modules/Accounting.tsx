@@ -798,12 +798,12 @@ function AccountingContent() {
     credits: { title: 'Customer credits', subtitle: 'Credit balances and applications' },
     commissions: { title: 'Salespeople', subtitle: 'Commission statements and payment status' },
     refunds: { title: 'Refunds', subtitle: 'Approved customer refund payments' },
-    journals: { title: 'Journals', subtitle: 'Posted entries and audit-ready movements' },
+    journals: { title: 'Accounting entries', subtitle: 'Posted entries and audit-ready movements' },
     reports: { title: 'Financial reports', subtitle: 'Management, statutory and control reports' },
     cashbook: { title: 'Cashbook', subtitle: 'Daily transactions and bank reconciliation' },
     coa: { title: 'Chart of accounts', subtitle: 'Accounts, groups and liquidity ledgers' },
     gl: { title: 'General ledger', subtitle: 'Account movements and running balances' },
-    partner_ledger: { title: 'Partner ledger', subtitle: 'Customer and supplier account history' },
+    partner_ledger: { title: 'Customer & supplier ledger', subtitle: 'Customer and supplier account history' },
     migration: { title: 'Data migration', subtitle: 'Import opening balances and legacy records' },
     monthly: { title: 'Monthly report', subtitle: 'Management performance for the selected month' },
     pl: { title: 'Profit and loss', subtitle: 'Income and expenses for the selected period' },
@@ -1458,8 +1458,10 @@ function AccountingContent() {
               </details>
             </div>
             {journalSot && (
-              <div
-                className={`finance-sot-notice rounded-xl border px-3 py-2 text-xs ${
+              <details className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-xs">
+                <summary className="cursor-pointer font-semibold text-[var(--text-2)]">Report data status</summary>
+                <div
+                  className={`finance-sot-notice mt-2 rounded-lg border px-3 py-2 text-xs ${
                   journalSot.certified
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
                     : 'border-amber-200 bg-amber-50 text-amber-950'
@@ -1485,8 +1487,9 @@ function AccountingContent() {
                       : ''}
                     . Certify from Settings → Data Cutover after verify.
                   </>
-                )}
-              </div>
+                  )}
+                </div>
+              </details>
             )}
           </div>
         )}
@@ -1566,7 +1569,7 @@ function AccountingContent() {
                 rowKey={i => i.id}
                 searchValue={invSearch}
                 onSearchChange={value => { setInvSearch(value) }}
-                searchPlaceholder="Search invoice number or partner…"
+                searchPlaceholder={tab === 'invoices' ? 'Search invoice number or customer…' : 'Search bill number or vendor…'}
                 clientSearch={false}
                 page={invoiceListPage}
                 onPageChange={setInvoiceListPage}
@@ -1629,7 +1632,7 @@ function AccountingContent() {
                           setShowBulkPayModal(true)
                         }}
                       >
-                        Pay {payable.length} {bulkLabel.toLowerCase()}{payable.length !== 1 ? 's' : ''}
+                        {tab === 'invoices' ? 'Record receipt for' : 'Pay'} {payable.length} {bulkLabel.toLowerCase()}{payable.length !== 1 ? 's' : ''}
                       </button>
                     </div>
                   )
@@ -2320,7 +2323,7 @@ function AccountingContent() {
           const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
           const bulkPartnerLabel = tab === 'invoices' ? 'Customer' : 'Vendor'
           return (
-            <Modal title={`Pay ${selItems.length} ${bulkLabel}${selItems.length !== 1 ? 's' : ''}`} subtitle={`Total outstanding: ${fmtKes(totalOutstanding)}`} onClose={() => setShowBulkPayModal(false)} width={500}>
+            <Modal title={`${tab === 'invoices' ? 'Record receipt for' : 'Pay'} ${selItems.length} ${bulkLabel}${selItems.length !== 1 ? 's' : ''}`} subtitle={`Balance to clear: ${fmtKes(totalOutstanding)}`} onClose={() => setShowBulkPayModal(false)} width={500}>
               <div className="finance-payment-dialog flex flex-col gap-4">
                 {/* Item list */}
                 <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
@@ -2355,9 +2358,9 @@ function AccountingContent() {
                   ]} />
                 </Field>
                 {activeBanks.length > 0 && (
-                  <Field label="Bank / Account Paid From">
+                  <Field label={tab === 'invoices' ? 'Bank / Account Received Into' : 'Bank / Account Paid From'}>
                     <Select value={payBankAccountId} onChange={setPayBankAccountId} options={[
-                      { value: '', label: '— Select bank account —' },
+                      { value: '', label: tab === 'invoices' ? '— Select receiving account —' : '— Select paying account —' },
                       ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id }))
                     ]} />
                   </Field>
@@ -2388,7 +2391,7 @@ function AccountingContent() {
                       showToast(`${selItems.length} payment${selItems.length !== 1 ? 's' : ''} recorded successfully`, 'success')
                     }}
                   >
-                    Confirm Payment — {fmtKes(totalOutstanding)}
+                    {tab === 'invoices' ? 'Confirm Receipt' : 'Confirm Payment'} — {fmtKes(totalOutstanding)}
                   </button>
                 </div>
               </div>
