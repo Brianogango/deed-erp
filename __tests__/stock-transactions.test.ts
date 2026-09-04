@@ -13,7 +13,9 @@ const mockStockReservationFindMany = vi.fn()
 const mockSaleOrderFindUnique = vi.fn()
 const mockMirrorReservations = vi.fn()
 const mockPurchaseOrderFindUnique = vi.fn()
+const mockPurchaseOrderUpdate = vi.fn()
 const mockPurchaseOrderItemUpdate = vi.fn()
+const mockPurchaseOrderItemFindMany = vi.fn()
 const mockGoodsReceivedNoteCreate = vi.fn()
 const mockGrnItemCreate = vi.fn()
 const mockSerialNumberCreate = vi.fn()
@@ -49,9 +51,11 @@ vi.mock('@/lib/prisma', () => ({
     },
     purchaseOrder: {
       findUnique: (...args: unknown[]) => mockPurchaseOrderFindUnique(...args),
+      update: (...args: unknown[]) => mockPurchaseOrderUpdate(...args),
     },
     purchaseOrderItem: {
       update: (...args: unknown[]) => mockPurchaseOrderItemUpdate(...args),
+      findMany: (...args: unknown[]) => mockPurchaseOrderItemFindMany(...args),
     },
     goodsReceivedNote: {
       create: (...args: unknown[]) => mockGoodsReceivedNoteCreate(...args),
@@ -87,9 +91,11 @@ beforeEach(() => {
       },
       purchaseOrder: {
         findUnique: mockPurchaseOrderFindUnique,
+        update: mockPurchaseOrderUpdate,
       },
       purchaseOrderItem: {
         update: mockPurchaseOrderItemUpdate,
+        findMany: mockPurchaseOrderItemFindMany,
       },
       goodsReceivedNote: {
         create: mockGoodsReceivedNoteCreate,
@@ -108,7 +114,17 @@ beforeEach(() => {
   mockStockReservationFindMany.mockResolvedValue([])
   mockMirrorReservations.mockResolvedValue({ mirrored: 1, skipped: 0, failed: 0 })
   mockPurchaseOrderFindUnique.mockResolvedValue(null)
+  mockPurchaseOrderUpdate.mockResolvedValue({})
   mockPurchaseOrderItemUpdate.mockResolvedValue({})
+  mockPurchaseOrderItemFindMany.mockImplementation(async () => {
+    const po = await mockPurchaseOrderFindUnique.mock.results.at(-1)?.value
+    const items = [...((po as { items?: Array<Record<string, unknown>> } | null)?.items ?? [])]
+    for (const [arg] of mockPurchaseOrderItemUpdate.mock.calls as Array<[{ where: { id: string }; data: Record<string, unknown> }]>) {
+      const index = items.findIndex(item => item.id === arg.where.id)
+      if (index >= 0) items[index] = { ...items[index], ...arg.data }
+    }
+    return items
+  })
   mockGoodsReceivedNoteCreate.mockResolvedValue({ id: 'grn-1' })
   mockGrnItemCreate.mockResolvedValue({ id: 'grn-item-1' })
   mockSerialNumberCreate.mockResolvedValue({})
@@ -281,6 +297,10 @@ describe('applyReceiptStockMutation() — atomic relational GRN', () => {
         data: expect.objectContaining({ poItemId: PO_ITEM_ID, productId: PRODUCT_ID, qtyReceived: 3, unitCost: 100 }),
       }),
     )
+    expect(mockPurchaseOrderUpdate).toHaveBeenCalledWith({
+      where: { id: PO_ID },
+      data: { status: 'partial' },
+    })
   })
 
   it('clamps qtyReceived at qtyOrdered rather than overshooting', async () => {
@@ -302,6 +322,10 @@ describe('applyReceiptStockMutation() — atomic relational GRN', () => {
     expect(mockPurchaseOrderItemUpdate).toHaveBeenCalledWith({
       where: { id: PO_ITEM_ID },
       data: { qtyReceived: 5 },
+    })
+    expect(mockPurchaseOrderUpdate).toHaveBeenCalledWith({
+      where: { id: PO_ID },
+      data: { status: 'received' },
     })
   })
 

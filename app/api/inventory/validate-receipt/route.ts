@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { hasPermission } from '@/lib/auth/authorization'
-import { loadAppState } from '@/lib/server-store'
+import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { validateReceiptInput } from '@/lib/inventory-validation'
 import { applyReceiptStockMutation, reverseReceiptStockMutation } from '@/lib/inventory/stock-transactions'
 import { postReceiptValuationFromPayload } from '@/lib/inventory/valuation-hooks'
@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
   if (!body || !Array.isArray(body.lines)) {
     return NextResponse.json({ error: 'Expected body { lines: [...] }' }, { status: 400 })
   }
+  const receiptLines = body.lines
 
   const state = await loadAppState(['deed_serials'])
   const existingSerials = Array.isArray(state.deed_serials) ? state.deed_serials as Array<{ serial?: string; barcode?: string }> : []
@@ -51,6 +52,35 @@ export async function POST(request: NextRequest) {
   const shouldApplyStock = Boolean(body.applyStock || (body.destination && body.receiptRef))
   if (!shouldApplyStock) {
     return NextResponse.json(result)
+  }
+
+  if (!body.receiptId || !body.purchaseOrderId) {
+    return NextResponse.json(
+      { ok: false, error: 'The receipt is not linked to a purchase order. Return to Purchase and reopen the GRN.' },
+      { status: 422 },
+    )
+  }
+  const preflightState = await loadAppState(['deed_receipts', 'deed_purchaseOrders'])
+  const preflightReceipts = Array.isArray(preflightState.deed_receipts) ? preflightState.deed_receipts as any[] : []
+  const preflightOrders = Array.isArray(preflightState.deed_purchaseOrders) ? preflightState.deed_purchaseOrders as any[] : []
+  const preflightReceipt = preflightReceipts.find(item => item?.id === body.receiptId)
+  if (!preflightReceipt) {
+    return NextResponse.json(
+      { ok: false, error: 'This goods receipt no longer exists. Refresh Purchase before receiving stock.' },
+      { status: 404 },
+    )
+  }
+  if (preflightReceipt.status !== 'draft') {
+    return NextResponse.json(
+      { ok: false, error: `${preflightReceipt.ref || 'This receipt'} has already updated inventory.` },
+      { status: 409 },
+    )
+  }
+  if (!preflightOrders.some(item => item?.id === body.purchaseOrderId)) {
+    return NextResponse.json(
+      { ok: false, error: 'The linked purchase order no longer exists. No stock was changed.' },
+      { status: 404 },
+    )
   }
 
   const stock = await applyReceiptStockMutation({
@@ -127,5 +157,73 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({ ...result, stockApplied: true, moves: stock.moves, valuation })
+  // Persist the operational document state before reporting success. Previously
+  // the browser performed these writes after this endpoint returned, so a lost
+  // request or optimistic-lock conflict could leave stock received while the
+  // GRN still appeared as draft and the PO still appeared unreceived.
+  const finalized = await withAppStateKeyLock('deed_receipts', async () => {
+    const documentState = await loadAppStateForWrite(['deed_receipts', 'deed_purchaseOrders'])
+    const receipts = Array.isArray(documentState.deed_receipts) ? [...documentState.deed_receipts] as any[] : []
+    const purchaseOrders = Array.isArray(documentState.deed_purchaseOrders) ? [...documentState.deed_purchaseOrders] as any[] : []
+    const receiptIndex = receipts.findIndex(item => item?.id === body.receiptId)
+    if (receiptIndex < 0) {
+      throw new Error('Receipt no longer exists. Refresh Purchase and try again.')
+    }
+
+    const currentReceipt = receipts[receiptIndex]
+    if (currentReceipt.status !== 'draft' && currentReceipt.status !== 'validated') {
+      throw new Error(`Receipt ${currentReceipt.ref || body.receiptRef || ''} cannot be validated from status ${currentReceipt.status}`)
+    }
+    receipts[receiptIndex] = {
+      ...currentReceipt,
+      status: 'validated',
+      lines: receiptLines,
+      destinationLocation: destination,
+      validatedAt: new Date().toISOString(),
+      validatedBy: session.user.id,
+    }
+
+    const poIndex = purchaseOrders.findIndex(item => item?.id === body.purchaseOrderId)
+    if (poIndex >= 0) {
+      const currentPo = purchaseOrders[poIndex]
+      const receivedByProduct = new Map<string, number>()
+      for (const line of receiptLines) {
+        const productId = String(line.productId || '')
+        receivedByProduct.set(productId, (receivedByProduct.get(productId) || 0) + Math.max(0, Number(line.qtyReceived) || 0))
+      }
+      const poLines = (Array.isArray(currentPo.lines) ? currentPo.lines : []).map((line: any) => {
+        const added = receivedByProduct.get(String(line.productId || '')) || 0
+        return added > 0
+          ? { ...line, qtyReceived: Math.min(Number(line.qty) || 0, (Number(line.qtyReceived) || 0) + added) }
+          : line
+      })
+      const allReceived = poLines.length > 0 && poLines.every((line: any) => Number(line.qtyReceived) >= Number(line.qty))
+      const anyReceived = poLines.some((line: any) => Number(line.qtyReceived) > 0)
+      const receiptIds = Array.isArray(currentPo.receiptIds) ? currentPo.receiptIds : []
+      purchaseOrders[poIndex] = {
+        ...currentPo,
+        lines: poLines,
+        status: allReceived ? 'received' : anyReceived ? 'partial' : currentPo.status,
+        receiptIds: receiptIds.includes(body.receiptId) ? receiptIds : [...receiptIds, body.receiptId],
+      }
+    }
+
+    await saveStoreKeys({
+      deed_receipts: JSON.stringify(receipts),
+      deed_purchaseOrders: JSON.stringify(purchaseOrders),
+    })
+    return {
+      receipt: receipts[receiptIndex],
+      purchaseOrder: poIndex >= 0 ? purchaseOrders[poIndex] : null,
+    }
+  })
+
+  return NextResponse.json({
+    ...result,
+    stockApplied: true,
+    moves: stock.moves,
+    valuation,
+    finalized,
+    message: `${receiptRef} validated successfully. Stock and purchase progress were updated.`,
+  })
 }
