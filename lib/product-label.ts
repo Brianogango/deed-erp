@@ -50,7 +50,13 @@ function formatStorage(config: ReturnType<typeof parseSpecsString>): string {
   return `${capacity} ${storageType}`
 }
 
+function isAccessoryLike(name: string, category?: string | null): boolean {
+  if (/\baccessor(?:y|ies)\b/i.test(category || '')) return true
+  return /\blaptop\b/i.test(name) && /\b(sleeve|bag|case|cover|pouch|skin)\b/i.test(name)
+}
+
 function isComputerLike(name: string, category?: string | null): boolean {
+  if (isAccessoryLike(name, category)) return false
   return /\b(laptop|notebook|desktop|workstation|computer|all[ -]?in[ -]?one|aio|macbook|thinkpad|elitebook|probook|latitude|optiplex)\b/i.test(
     `${name} ${category || ''}`,
   )
@@ -69,6 +75,7 @@ export function productThermalSpecs(opts: {
   const source = clean(`${opts.name} ${opts.specsText || ''}`)
   const parsed = parseSpecsString(source)
   const computer = isComputerLike(opts.name, opts.category)
+  const accessory = isAccessoryLike(opts.name, opts.category)
   const hasDeviceFacts = Boolean(
     clean(parsed.processor)
       || clean(parsed.processorGeneration)
@@ -76,7 +83,7 @@ export function productThermalSpecs(opts: {
       || (Number(parsed.primaryStorageGb) || 0) > 0,
   )
 
-  if (computer || hasDeviceFacts) {
+  if (!accessory && (computer || hasDeviceFacts)) {
     return [
       { label: 'Processor', value: formatProcessor(parsed) },
       { label: 'RAM', value: formatRam(parsed) },
