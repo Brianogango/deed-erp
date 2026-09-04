@@ -25,6 +25,7 @@ import InventoryProductsPanel from '@/components/inventory/InventoryProductsPane
 import ProductPhotoFields, { uploadProductPhoto } from '@/components/inventory/ProductPhotoFields'
 import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPanel'
 import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPanel'
+import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
 import type { ProductImageSlot } from '@/lib/product-images'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
@@ -35,9 +36,9 @@ import { getCategoryMarkupPct, quoteSalePriceFromCost, autoSalePriceFromCost, su
 import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 
-type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
+type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'checkouts' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock' | 'valuation'
-const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'movements', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'stock_take', 'reports']
+const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'movements', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'checkouts', 'stock_take', 'reports']
 const INVENTORY_TAB_ALIASES: Record<string, MainTab> = {
   warehouse: 'warehouse_view',
   products: 'product_master',
@@ -1593,9 +1594,11 @@ function InventoryContent() {
           ['stock_in', 'Stock in'],
           ['stock_out', 'Stock out'],
           ['adjustments', 'Adjustments'],
+          ['checkouts', 'Checkouts'],
         ] as [MainTab, string][])
           .filter(([value]) => (value !== 'stock_in' && value !== 'stock_out') || canEditStock)
           .filter(([value]) => value !== 'adjustments' || canRequestAdj)
+          .filter(([value]) => value !== 'checkouts' || canRequestAdj)
           .filter(([value]) => value !== 'stock_take' || canRequestAdj)
           .map(([id, label]) => ({ id, label }))}
         active={tab}
@@ -2716,6 +2719,8 @@ function InventoryContent() {
           />
         </div>
       )}
+
+      {tab === 'checkouts' && <StockCheckoutPanel />}
 
       {tab === 'adjustments' && (() => {
         const ADJ_REASONS: Record<AdjReason, string> = {
