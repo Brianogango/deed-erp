@@ -14,7 +14,7 @@ import { isNonStockProduct } from '@/lib/sales/non-stock-line'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-const VALID_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit', 'vendor', 'customer', 'employee']
+const VALID_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit', 'computer_aid', 'computer_aid_collected', 'computer_aid_issues', 'vendor', 'customer', 'employee']
 
 function asLocationId(value: string | undefined): LocationId {
   const loc = String(value || 'warehouse')
