@@ -172,6 +172,8 @@ const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'fx', label: 'FX revaluation', icon: faMoneyBillWave },
 ]
 const REPORT_TAB_IDS = new Set<ReportTab>(['financial_report', 'monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position', 'fx', 'cash_flow'])
+const MANAGEMENT_REPORT_IDS = new Set<ReportTab>(['pl', 'bs', 'cash_flow', 'ageing', 'financial_report'])
+const CONTROL_REPORT_IDS = new Set<ReportTab>(['monthly', 'vat', 'trial_balance', 'cash_position', 'fx'])
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
 const CA_GROUPS = [
@@ -1427,18 +1429,33 @@ function AccountingContent() {
         <div className="mod-body finance-workspace__body">
         {tab === 'reports' && (
           <div className="finance-report-command mb-3 space-y-2">
-            <div className="finance-report-tabs rounded-xl border border-border-lt bg-card p-2">
-              <div className="px-1 pb-1 text-xs font-semibold text-text-3">Reports</div>
-              <TabBar
-                tabs={REPORT_TABS.map(t => ({ id: t.id, label: t.label }))}
-                active={reportTab}
-                onChange={id => setReport(id as ReportTab)}
-                className="border-0 px-0 py-0 bg-transparent"
-                maxVisibleMobile={4}
-                maxVisibleTablet={7}
-                maxVisibleDesktop={7}
-                ariaLabel="Report types"
-              />
+            <div className="finance-report-tabs rounded-xl border border-border-lt bg-card p-2 space-y-2">
+              <div>
+                <div className="px-1 pb-1 text-xs font-semibold text-text-3">Management reports</div>
+                <TabBar
+                  tabs={REPORT_TABS.filter(t => MANAGEMENT_REPORT_IDS.has(t.id)).map(t => ({ id: t.id, label: t.label }))}
+                  active={reportTab}
+                  onChange={id => setReport(id as ReportTab)}
+                  className="border-0 px-0 py-0 bg-transparent"
+                  maxVisibleMobile={3}
+                  maxVisibleTablet={5}
+                  maxVisibleDesktop={5}
+                  ariaLabel="Management reports"
+                />
+              </div>
+              <details className="border-t border-border-lt pt-2">
+                <summary className="px-1 text-xs font-semibold text-text-3 cursor-pointer">Compliance & detailed reports</summary>
+                <TabBar
+                  tabs={REPORT_TABS.filter(t => CONTROL_REPORT_IDS.has(t.id)).map(t => ({ id: t.id, label: t.label }))}
+                  active={reportTab}
+                  onChange={id => setReport(id as ReportTab)}
+                  className="border-0 px-0 pt-2 pb-0 bg-transparent"
+                  maxVisibleMobile={3}
+                  maxVisibleTablet={5}
+                  maxVisibleDesktop={5}
+                  ariaLabel="Compliance and detailed reports"
+                />
+              </details>
             </div>
             {journalSot && (
               <div
