@@ -10,7 +10,11 @@ import {
 export type { ExportRow } from '@/lib/export-utils-base'
 export { exportToCsv }
 
-const isClientCatalog = (title: string) => title.trim().toLowerCase() === 'product catalog'
+const isClientCatalog = (title: string, filename: string) => {
+  const normalizedTitle = title.trim().toLowerCase()
+  const normalizedFilename = filename.trim().toLowerCase().replace(/\.(?:pdf|xlsx?)$/i, '')
+  return normalizedTitle === 'product catalog' || normalizedFilename === 'inventory-catalog'
+}
 
 /**
  * Product Catalog is customer-facing: it deliberately does not expose cost,
@@ -23,7 +27,7 @@ export async function exportToExcel(
   rows: ExportRow[],
   filename: string,
 ) {
-  if (isClientCatalog(title)) {
+  if (isClientCatalog(title, filename)) {
     const { exportClientCatalogExcelFromTable } = await import('@/lib/inventory/client-catalog-export')
     return exportClientCatalogExcelFromTable(headers, rows, filename)
   }
@@ -41,7 +45,7 @@ export function exportToPDF(
   filename: string,
   orientation: 'portrait' | 'landscape' = 'landscape',
 ): void | Promise<void> {
-  if (isClientCatalog(title)) {
+  if (isClientCatalog(title, filename)) {
     return import('@/lib/inventory/client-catalog-export').then(({ exportClientCatalogPdfFromTable }) =>
       exportClientCatalogPdfFromTable(headers, rows, filename),
     )
