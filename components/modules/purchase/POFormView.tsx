@@ -208,6 +208,33 @@ export default function POFormView() {
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
     const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)
     const billsCount     = linkedBill ? 1 : 0
+    const activityItems = [
+      { key: `po-${activePO.id}`, date: activePO.date, title: 'Purchase order created', detail: activePO.ref },
+      ...poReceipts.map(receipt => ({
+        key: `receipt-${receipt.id}`,
+        date: receipt.date,
+        title: receipt.status === 'validated' ? 'Goods received and stock updated' : 'Goods receipt created',
+        detail: receipt.ref,
+      })),
+      ...poReturns.map(ret => ({
+        key: `return-${ret.id}`,
+        date: ret.date,
+        title: 'Supplier return recorded',
+        detail: ret.ref,
+      })),
+      ...(linkedBill ? [{
+        key: `bill-${linkedBill.id}`,
+        date: linkedBill.date,
+        title: invoiceDocState(linkedBill.status) === 'posted' ? 'Vendor bill confirmed' : 'Vendor bill created',
+        detail: linkedBill.ref,
+      }] : []),
+      ...(linkedBill && (linkedBill.amountPaid ?? 0) > 0 ? [{
+        key: `payment-${linkedBill.id}`,
+        date: linkedBill.date,
+        title: (linkedBill.amountPaid ?? 0) >= (linkedBill.total ?? 0) ? 'Vendor bill paid' : 'Vendor payment recorded',
+        detail: fmtKes(linkedBill.amountPaid ?? 0),
+      }] : []),
+    ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
 
     const poStepClickable = (step: string, index: number) => {
       if (index === 1 && activePO.status === 'draft') return canSend
@@ -844,6 +871,24 @@ export default function POFormView() {
                       : 'Available after goods are received'}
                   </p>
                 )}
+              </div>
+            </div>
+
+            <div className="card p-3">
+              <p className="text-xs font-semibold text-t1 mb-3">Purchase activity</p>
+              <div className="flex flex-col">
+                {activityItems.map((item, index) => (
+                  <div key={item.key} className="flex gap-2.5 pb-3 last:pb-0">
+                    <div className="flex flex-col items-center">
+                      <span className="w-2 h-2 rounded-full mt-1" style={{ background: index === 0 ? 'var(--navy)' : 'var(--border)' }} />
+                      {index < activityItems.length - 1 && <span className="w-px flex-1 mt-1" style={{ background: 'var(--border-lt)' }} />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-t1">{item.title}</p>
+                      <p className="text-[10px] text-t3">{item.detail} · {item.date || 'Date unavailable'}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
