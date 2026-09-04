@@ -117,10 +117,7 @@ export default function InventoryProductsPanel({
     () => products.filter(p => productMatchesFilters({
       product: p,
       filters,
-      qty: qtyByProduct.get(p.id) || { onHand: 0, available: 0, reserved: 0, refurbishment: 0, underRepair: 0, held: 0, byLocation: {
-        warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0,
-        pending_testing: 0, quarantine: 0,
-      } },
+      qty: qtyByProduct.get(p.id) || getProductQtySnapshot(p, serials, bulkStock, filters.warehouse),
       serials,
       vendorProductIds: filters.vendorId === 'all' ? undefined : vendorProductIds,
     })),
