@@ -250,12 +250,9 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       if (willBeVendor && poId) {
         try {
           const { assertVendorBillThreeWayMatchServer } = await import('@/lib/purchase/assert-bill-match.server')
-          const billLines = (lines ?? preMirror.lines ?? before.items.map(i => ({
-            productId: i.productId ?? undefined,
-            qty: Number(i.qty),
-            description: i.description,
-          }))).map((l: any) => ({
-            productId: l?.productId,
+          const billLines = (lines ?? preMirror.lines ?? before.items).map((l: any) => ({
+            purchaseOrderItemId: l?.purchaseOrderItemId ?? l?.poItemId ?? undefined,
+            productId: l?.productId ?? undefined,
             qty: Number(l?.qty) || 0,
             description: l?.description,
           }))

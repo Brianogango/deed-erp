@@ -93,4 +93,33 @@ describe('vendor bill 3-way match — own reservation excluded', () => {
     })
     expect(result.ok).toBe(true)
   })
+
+  it('preflight links a blob product id to the PO line by description', async () => {
+    setup()
+    mockPrisma.purchaseOrder.findUnique.mockResolvedValue({
+      id: PO_ID,
+      poNumber: 'PO/2026/0165',
+      clientId: 'client-1',
+      items: [{
+        id: PO_ITEM_ID,
+        productId: PRODUCT_ID,
+        qtyOrdered: 1,
+        qtyReceived: 1,
+        qtyBilled: 1,
+        unitCost: 153000,
+        taxRate: 0,
+        description: 'HP Omnibook X Flip 14-KP0023DX',
+      }],
+    })
+    const result = await assertVendorBillThreeWayMatchServer({
+      purchaseOrderId: PO_ID,
+      billLines: [{
+        productId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        qty: 1,
+        description: 'HP Omnibook X Flip 14-KP0023DX ×1',
+      }],
+      excludeBillId: BILL_ID,
+    })
+    expect(result.ok).toBe(true)
+  })
 })

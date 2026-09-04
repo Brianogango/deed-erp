@@ -11,6 +11,7 @@ import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { isPosInvoiceWrite, POS_INVOICE_WRITE_ROLES, salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
+import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -147,6 +148,7 @@ function mapInvoiceItems(lines: any[], isCreditNote = false) {
       sortOrder: index,
       productId: optionalUuid(l.productId) ?? undefined,
       serialNumberId: optionalUuid(l.serialNumberId ?? l.serialId) ?? undefined,
+      purchaseOrderItemId: optionalUuid(l.purchaseOrderItemId ?? l.poItemId) ?? undefined,
     }
   })
 }
@@ -267,8 +269,14 @@ export async function POST(request: Request) {
           ])
           const matchedItems = po
             ? items
-                .filter(item => item.productId)
-                .map(item => ({ item, poItem: po.items.find(i => i.productId === item.productId) }))
+                .map(item => ({
+                  item,
+                  poItem: resolveVendorBillPoItem(po.items, {
+                    purchaseOrderItemId: (item as any).purchaseOrderItemId,
+                    productId: item.productId,
+                    description: item.description,
+                  }),
+                }))
                 .filter((m): m is { item: typeof items[number]; poItem: NonNullable<typeof m.poItem> } => Boolean(m.poItem))
             : []
           const activeBilledByProduct = new Map<string, number>()

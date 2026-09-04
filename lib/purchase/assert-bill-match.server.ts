@@ -6,6 +6,7 @@
 import 'server-only'
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
+import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 
 export type VendorBillMatchLine = {
   purchaseOrderItemId?: string | null
@@ -64,8 +65,11 @@ export async function assertVendorBillThreeWayMatchInTx(
   if (input.excludeBillId) {
     const own = await tx.invoice.findUnique({ where: { id: input.excludeBillId }, include: { items: true } })
     for (const item of own?.items ?? []) {
-      const poItem = (item.purchaseOrderItemId && byId.get(item.purchaseOrderItemId))
-        || po.items.find(l => l.productId === item.productId)
+      const poItem = resolveVendorBillPoItem(po.items, {
+        purchaseOrderItemId: item.purchaseOrderItemId,
+        productId: item.productId,
+        description: item.description,
+      })
       if (poItem) {
         ownQtyByPoItem.set(poItem.id, (ownQtyByPoItem.get(poItem.id) || 0) + Math.max(0, Math.floor(n(item.qty))))
       }
@@ -77,18 +81,12 @@ export async function assertVendorBillThreeWayMatchInTx(
     const qty = n(bill.qty)
     if (qty <= 0) throw new Error(`Vendor bill line must have a positive quantity: ${bill.description || 'line'}`)
 
-    let poItem = bill.purchaseOrderItemId ? byId.get(bill.purchaseOrderItemId) : undefined
-    if (!poItem && bill.productId) {
-      if ((productMultiplicity.get(bill.productId) || 0) > 1) {
-        throw new Error(`PO ${po.poNumber} contains product ${bill.productId} on multiple lines; purchaseOrderItemId is required`)
-      }
-      poItem = po.items.find(line => line.productId === bill.productId)
+    if (bill.productId && (productMultiplicity.get(bill.productId) || 0) > 1 && !bill.purchaseOrderItemId) {
+      throw new Error(`PO ${po.poNumber} contains product ${bill.productId} on multiple lines; purchaseOrderItemId is required`)
     }
+    const poItem = resolveVendorBillPoItem(po.items, bill)
     if (!poItem) {
       throw new Error(`Every vendor bill line must reference a valid purchase-order line: ${bill.description || bill.productId || 'line'}`)
-    }
-    if (bill.productId && bill.productId !== poItem.productId) {
-      throw new Error(`Bill product does not match PO line ${poItem.id}`)
     }
     if (bill.unitPrice != null && !close(n(bill.unitPrice), n(poItem.unitCost), priceTolerance)) {
       throw new Error(`Price mismatch on PO ${po.poNumber}: billed ${n(bill.unitPrice)} vs ordered ${n(poItem.unitCost)}`)
@@ -154,26 +152,29 @@ export async function assertVendorBillThreeWayMatchServer(
     if (input.vendorId && po.clientId && input.vendorId !== po.clientId) {
       throw new Error(`Vendor mismatch: bill vendor does not match PO ${po.poNumber}`)
     }
-    // Quantities this bill already reserved on each PO line at creation.
-    const ownQtyByProduct = new Map<string, number>()
+    const ownQtyByPoItem = new Map<string, number>()
     if (input.excludeBillId) {
       const own = await tx.invoice.findUnique({ where: { id: input.excludeBillId }, include: { items: true } })
       for (const item of own?.items ?? []) {
-        if (!item.productId) continue
-        ownQtyByProduct.set(item.productId, (ownQtyByProduct.get(item.productId) || 0) + Math.max(0, Math.floor(n(item.qty))))
+        const poItem = resolveVendorBillPoItem(po.items, {
+          purchaseOrderItemId: item.purchaseOrderItemId,
+          productId: item.productId,
+          description: item.description,
+        })
+        if (poItem) {
+          ownQtyByPoItem.set(poItem.id, (ownQtyByPoItem.get(poItem.id) || 0) + Math.max(0, Math.floor(n(item.qty))))
+        }
       }
     }
-    const requestedByProduct = new Map<string, number>()
+    const requested = new Map<string, number>()
     for (const bill of input.billLines) {
-      const poItem = bill.purchaseOrderItemId
-        ? po.items.find(x => x.id === bill.purchaseOrderItemId)
-        : po.items.find(x => x.productId === bill.productId)
+      const poItem = resolveVendorBillPoItem(po.items, bill)
       if (!poItem) throw new Error('Vendor bill line is not linked to a purchase-order line')
-      requestedByProduct.set(poItem.productId, (requestedByProduct.get(poItem.productId) || 0) + n(bill.qty))
+      requested.set(poItem.id, (requested.get(poItem.id) || 0) + n(bill.qty))
     }
-    for (const [productId, qty] of requestedByProduct) {
-      const poItem = po.items.find(x => x.productId === productId)!
-      const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled) + (ownQtyByProduct.get(productId) || 0)
+    for (const [poItemId, qty] of requested) {
+      const poItem = po.items.find(x => x.id === poItemId)!
+      const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled) + (ownQtyByPoItem.get(poItemId) || 0)
       if (qty <= 0 || qty > remaining) {
         throw new Error(`3-way match failed: quantity ${qty} exceeds received/unbilled ${remaining}`)
       }
