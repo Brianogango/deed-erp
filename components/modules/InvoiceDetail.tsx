@@ -301,6 +301,37 @@ export default function InvoiceDetail() {
     { key: 'activities', label: 'History', value: 'View' },
   ]
 
+  const documentHistory = [
+    {
+      id: 'created',
+      date: invoice.date,
+      title: `${docLabel} created`,
+      detail: `${invoice.partnerName} · ${fmtKes(invoice.total)}`,
+    },
+    ...(docState !== 'draft'
+      ? [{
+          id: 'confirmed',
+          date: invoice.date,
+          title: `${docLabel} confirmed`,
+          detail: 'Accounting entry posted',
+        }]
+      : []),
+    ...(invoice.payments || []).map(payment => ({
+      id: payment.id,
+      date: payment.date,
+      title: invoice.type === 'customer_invoice' ? 'Customer receipt recorded' : 'Vendor payment recorded',
+      detail: `${fmtKes(payment.amount)} · ${payment.method.replace('_', ' ')}${payment.reference ? ` · ${payment.reference}` : ''}`,
+    })),
+    ...(docState === 'cancelled'
+      ? [{
+          id: 'cancelled',
+          date: invoice.date,
+          title: `${docLabel} cancelled`,
+          detail: 'No further payments can be recorded',
+        }]
+      : []),
+  ].sort((a, b) => String(b.date).localeCompare(String(a.date)))
+
   const handlePayment = () => {
     if (!payAmount || Number(payAmount) <= 0) return
     if (balance <= 0) { showToast(`${docLabel} is already fully settled`, 'info'); return }
@@ -965,7 +996,7 @@ export default function InvoiceDetail() {
             {detailTab === 'notes' && (
               <div className="invoice-detail__tab-stack">
                 <p className="invoice-detail__info-muted">
-                  {invoice.notes?.trim() || 'No notes yet. Customer-facing notes can be set when editing the invoice.'}
+                  {invoice.notes?.trim() || `No notes yet. Add ${invoice.type === 'customer_invoice' ? 'customer-facing' : 'vendor bill'} notes while editing this ${docLabel.toLowerCase()}.`}
                 </p>
                 {invoice.type === 'customer_invoice' && (
                   <DocumentEmailSendHistory
@@ -994,7 +1025,11 @@ export default function InvoiceDetail() {
                   ))}
                 </div>
               ) : (
-                <p className="invoice-detail__info-muted">No payments recorded yet.</p>
+                <p className="invoice-detail__info-muted">
+                  {invoice.type === 'customer_invoice'
+                    ? 'No customer receipts recorded yet. Use Record receipt when payment arrives.'
+                    : 'No vendor payments recorded yet. Use Record payment when the supplier is paid.'}
+                </p>
               )
             )}
 
@@ -1012,13 +1047,25 @@ export default function InvoiceDetail() {
             )}
 
             {detailTab === 'activity' && (
-              <Chatter
-                model="invoice"
-                recordId={invoice.id}
-                staffName={currentUser?.name || 'Staff'}
-                title="Document history & internal activity"
-                compact
-              />
+              <div className="invoice-detail__tab-stack">
+                <div className="invoice-detail__pay-list" aria-label="Document history">
+                  {documentHistory.map(event => (
+                    <div key={event.id} className="invoice-detail__pay-row">
+                      <div>
+                        <p className="invoice-detail__pay-method">{event.title}</p>
+                        <p className="invoice-detail__pay-meta">{fmtDate(event.date)} · {event.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Chatter
+                  model="invoice"
+                  recordId={invoice.id}
+                  staffName={currentUser?.name || 'Staff'}
+                  title="Internal notes & follow-ups"
+                  compact
+                />
+              </div>
             )}
           </div>
         </section>
