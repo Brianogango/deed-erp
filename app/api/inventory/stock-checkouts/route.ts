@@ -3,24 +3,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
-import { upsertBulkStock } from '@/lib/business-logic'
+import { upsertBulkStock, type BulkStockLevel } from '@/lib/business-logic'
+import type { LocationId } from '@/lib/store'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
 
 const REQUEST_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
 const APPROVE_ROLES = ['director', 'inventory_officer', 'technical_lead']
-const SOURCE_LOCATIONS = ['warehouse', 'shop', 'repair_unit']
+const SOURCE_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit']
 
 type CheckoutStatus = 'pending' | 'approved' | 'issued' | 'partially_closed' | 'completed' | 'rejected' | 'cancelled'
 type Outcome = 'consumed' | 'returned' | 'exception'
 type ProductRow = { id: string; name?: string; sku?: string; stockQty?: number; requiresSerial?: boolean; trackingMethod?: string; isActive?: boolean }
 type SerialRow = { id: string; serial: string; productId: string; productName?: string; location?: string; status?: string }
-type BulkRow = { productId: string; location: string; qty: number }
+type BulkRow = BulkStockLevel
 type StockMove = { id: string; type: 'out' | 'transfer' | 'return'; productId: string; productName: string; qty: number; reason: string; fromLocation?: string; toLocation?: string; serialNumbers: string[]; date: string; userId: string; documentRef: string }
 type Checkout = {
   id: string; ref: string; status: CheckoutStatus; productId: string; productName: string; sku: string
-  qty: number; serialIds: string[]; serialNumbers: string[]; sourceLocation: string
+  qty: number; serialIds: string[]; serialNumbers: string[]; sourceLocation: LocationId
   receiverName: string; purpose: string; relatedJob: string; deviceRef: string; deviceSerial: string
   expectedReturnDate: string; notes: string; requestedBy: string; requestedByName: string; requestedAt: string
   approvedBy?: string; approvedAt?: string; issuedBy?: string; issuedAt?: string; rejectionReason?: string
@@ -32,6 +33,8 @@ const sessionName = (user: { name?: string | null; email?: string | null; id: st
 const isSerialized = (p: ProductRow) => Boolean(p.requiresSerial || p.trackingMethod === 'SERIAL')
 const nextRef = (rows: Checkout[]) => `CHK-${String(rows.reduce((n, r) => Math.max(n, Number(r.ref?.split('-').pop()) || 0), 0) + 1).padStart(5, '0')}`
 const outstanding = (r: Checkout) => r.qty - r.consumedQty - r.returnedQty - r.exceptionQty
+const isSourceLocation = (location: string): location is LocationId =>
+  SOURCE_LOCATIONS.some(candidate => candidate === location)
 
 async function auth(approve = false) {
   const session = await getServerSession()
@@ -52,10 +55,10 @@ export async function GET() {
   const checkouts = list<Checkout>(state.deed_stockCheckouts).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
   return NextResponse.json({
     products: products.map(p => ({ id: p.id, name: p.name, sku: p.sku || '', serialized: isSerialized(p) })),
-    serials: serials.filter(s => SOURCE_LOCATIONS.includes(String(s.location)) && s.status !== 'sold'),
+    serials: serials.filter(s => isSourceLocation(String(s.location)) && s.status !== 'sold'),
     bulk,
     checkouts,
-    canApprove: APPROVE_ROLES.map(normalizePermissionRole).filter(Boolean).includes(normalizePermissionRole(access.session.user.role) || ''),
+    canApprove: APPROVE_ROLES.some(role => normalizePermissionRole(role) === normalizePermissionRole(access.session.user.role)),
     currentUserId: access.session.user.id,
   })
 }
@@ -79,8 +82,9 @@ export async function POST(request: NextRequest) {
 
     if (action === 'request') {
       const product = products.find(p => p.id === String(body.productId || ''))
-      const sourceLocation = String(body.sourceLocation || 'warehouse')
-      if (!product || !SOURCE_LOCATIONS.includes(sourceLocation)) return NextResponse.json({ error: 'Select a valid product and source location' }, { status: 422 })
+      const sourceLocationRaw = String(body.sourceLocation || 'warehouse')
+      if (!product || !isSourceLocation(sourceLocationRaw)) return NextResponse.json({ error: 'Select a valid product and source location' }, { status: 422 })
+      const sourceLocation = sourceLocationRaw
       const serialIds = Array.isArray(body.serialIds) ? body.serialIds.map(String) : []
       const qty = isSerialized(product) ? serialIds.length : Math.floor(Number(body.qty) || 0)
       if (qty < 1 || !String(body.receiverName || '').trim() || !String(body.purpose || '').trim()) return NextResponse.json({ error: 'Product, quantity, receiver and purpose are required' }, { status: 422 })
@@ -115,7 +119,7 @@ export async function POST(request: NextRequest) {
         } else {
           const available = bulk.filter(x => x.productId === row.productId && x.location === row.sourceLocation).reduce((n, x) => n + Math.max(0, Number(x.qty) || 0), 0)
           if (available < row.qty) return NextResponse.json({ error: `Only ${available} unit(s) remain at the source` }, { status: 409 })
-          bulk = upsertBulkStock(bulk as never, row.productId, row.sourceLocation as never, -row.qty) as never
+          bulk = upsertBulkStock(bulk, row.productId, row.sourceLocation, -row.qty)
         }
         const pi = products.findIndex(p => p.id === row.productId); if (pi >= 0) products[pi] = { ...products[pi], stockQty: Math.max(0, Number(products[pi].stockQty || 0) - row.qty) }
         row.status = 'issued'; row.issuedBy = access.session.user.id; row.issuedAt = now
@@ -135,7 +139,7 @@ export async function POST(request: NextRequest) {
           ;(row as Checkout & { closedSerialIds?: string[] }).closedSerialIds = [...alreadyClosed, ...outcomeSerialIds]
         }
         if (outcome === 'returned') {
-          if (!product || !isSerialized(product)) bulk = upsertBulkStock(bulk as never, row.productId, row.sourceLocation as never, qty) as never
+          if (!product || !isSerialized(product)) bulk = upsertBulkStock(bulk, row.productId, row.sourceLocation, qty)
           const pi = products.findIndex(p => p.id === row.productId); if (pi >= 0) products[pi] = { ...products[pi], stockQty: Number(products[pi].stockQty || 0) + qty }
           moves.unshift({ id: randomUUID(), type: 'return', productId: row.productId, productName: row.productName, qty, reason: `Checkout return · ${row.ref}`, fromLocation: 'employee', toLocation: row.sourceLocation, serialNumbers: serials.filter(s => outcomeSerialIds.includes(s.id)).map(s => s.serial), date: now.slice(0, 10), userId: access.session.user.id, documentRef: row.ref })
         }
