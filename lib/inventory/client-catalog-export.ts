@@ -309,13 +309,10 @@ export async function exportClientCatalogExcelFromTable(
   const co = company()
   const XLSX = await loadXlsx()
   const sheet: Array<Array<string | number>> = [
-    ['', 'PRODUCT CATALOG', '', '', ''],
-    ['', 'Reliable Devices for Work, Learning and Everyday Use', '', '', ''],
-    [[co.website, co.email, co.phone].filter(Boolean).join('   |   '), '', '', '', ''],
+    ['', '', '', ''],
     [],
-    ['Image', 'Model / Series', 'Key Specifications', 'Qty Available', 'Selling Price (KES)'],
+    ['Model / Series', 'Key Specifications', 'Qty Available', 'Selling Price (KES)'],
     ...rows.map(row => [
-      row.imageUrl ? 'Product image' : '',
       row.model,
       row.specs,
       row.qty,
@@ -323,14 +320,11 @@ export async function exportClientCatalogExcelFromTable(
     ]),
   ]
   const ws = XLSX.utils.aoa_to_sheet(sheet)
-  ws['!merges'] = [
-    { s: { r: 0, c: 1 }, e: { r: 0, c: 4 } },
-    { s: { r: 1, c: 1 }, e: { r: 1, c: 4 } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 4 } },
-  ]
-  ws['!cols'] = [{ wch: 17 }, { wch: 34 }, { wch: 62 }, { wch: 14 }, { wch: 20 }]
-  ws['!rows'] = [{ hpt: 30 }, { hpt: 22 }, { hpt: 18 }, { hpt: 8 }, { hpt: 30 }, ...rows.map(() => ({ hpt: 48 }))]
-  ws['!autofilter'] = { ref: `A5:E${Math.max(5, rows.length + 5)}` }
+  ws['!cols'] = [{ wch: 36 }, { wch: 64 }, { wch: 14 }, { wch: 20 }]
+  ws['!rows'] = [{ hpt: 34 }, { hpt: 8 }, { hpt: 26 }, ...rows.map(() => ({ hpt: 28 }))]
+  ws['!autofilter'] = { ref: `A3:D${Math.max(3, rows.length + 3)}` }
+  ws['!freeze'] = { xSplit: 0, ySplit: 3, topLeftCell: 'A4', activePane: 'bottomLeft', state: 'frozen' }
+  ws['!margins'] = { left: 0.35, right: 0.35, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.2 }
 
   const logoUrl = absoluteUrl(co.logoUrl)
   if (ws.A1 && logoUrl && /^https?:\/\//i.test(logoUrl)) {
@@ -339,34 +333,42 @@ export async function exportClientCatalogExcelFromTable(
     ws.A1.v = undefined
   } else if (ws.A1) {
     ws.A1.v = co.name
+    ws.A1.s = { font: { name: 'Arial', sz: 14, bold: true, color: { rgb: '222222' } } }
   }
-  if (ws.B1) ws.B1.s = { ...style('FFFFFF', '102F67', true, 'center'), font: { name: 'Arial', sz: 20, bold: true, color: { rgb: '102F67' } } }
-  if (ws.B2) ws.B2.s = { ...style('FFFFFF', '5D6D84', false, 'center'), font: { name: 'Arial', sz: 10, color: { rgb: '5D6D84' } } }
-  if (ws.A3) ws.A3.s = { ...style('FFFFFF', '5D6D84', false, 'center'), font: { name: 'Arial', sz: 9, color: { rgb: '5D6D84' } } }
 
-  for (let col = 0; col < 5; col++) {
-    const address = XLSX.utils.encode_cell({ r: 4, c: col })
-    if (ws[address]) ws[address].s = style('102F67', 'FFFFFF', true, col >= 3 ? 'center' : 'left')
+  for (let col = 0; col < 4; col++) {
+    const address = XLSX.utils.encode_cell({ r: 2, c: col })
+    if (ws[address]) {
+      ws[address].s = {
+        font: { name: 'Arial', sz: 10, bold: true, color: { rgb: '222222' } },
+        fill: { patternType: 'solid', fgColor: { rgb: 'F2F2F2' } },
+        alignment: { vertical: 'center', horizontal: col >= 2 ? 'center' : 'left', wrapText: true },
+        border: {
+          bottom: { style: 'thin', color: { rgb: 'BDBDBD' } },
+        },
+      }
+    }
   }
 
   rows.forEach((row, index) => {
-    const r = index + 5
-    for (let col = 0; col < 5; col++) {
-      const address = XLSX.utils.encode_cell({ r, c: col })
+    const rowIndex = index + 3
+    for (let col = 0; col < 4; col++) {
+      const address = XLSX.utils.encode_cell({ r: rowIndex, c: col })
       const cell = ws[address]
       if (!cell) continue
-      cell.s = style(index % 2 === 0 ? 'FFFFFF' : 'EFF7FD', '12213D', col === 1 || col >= 3, col === 3 ? 'center' : col === 4 ? 'right' : 'left')
+      cell.s = {
+        font: { name: 'Arial', sz: 10, bold: col === 0 || col === 3, color: { rgb: '222222' } },
+        alignment: {
+          vertical: 'center',
+          horizontal: col === 2 ? 'center' : col === 3 ? 'right' : 'left',
+          wrapText: true,
+        },
+        border: {
+          bottom: { style: 'thin', color: { rgb: 'E2E2E2' } },
+        },
+      }
     }
-    const imageCell = ws[XLSX.utils.encode_cell({ r, c: 0 })]
-    if (imageCell && row.imageUrl && /^https?:\/\//i.test(row.imageUrl)) {
-      imageCell.t = 'n'
-      imageCell.f = `IMAGE("${row.imageUrl.replace(/"/g, '""')}","Product image",0)`
-      imageCell.v = undefined
-    } else if (imageCell && row.imageUrl) {
-      imageCell.v = 'View image'
-      imageCell.l = { Target: row.imageUrl, Tooltip: 'Open product image' }
-    }
-    const priceCell = ws[XLSX.utils.encode_cell({ r, c: 4 })]
+    const priceCell = ws[XLSX.utils.encode_cell({ r: rowIndex, c: 3 })]
     if (priceCell && typeof priceCell.v === 'number') priceCell.z = 'KES #,##0'
   })
 
