@@ -232,85 +232,52 @@ export async function exportClientCatalogPdfFromTable(
     images.set(row.imageUrl, await fetchDataUrl(row.imageUrl))
   }))
 
-  const drawFrame = (pageNumber: number) => {
+  const drawFrame = (_pageNumber: number) => {
     if (logo) {
-      try { doc.addImage(logo, imageFormat(logo), margin, 7, 36, 13, undefined, 'FAST') } catch { /* fallback below */ }
+      try { doc.addImage(logo, imageFormat(logo), margin, 7, 32, 11.5, undefined, 'FAST') } catch { /* plain text fallback below */ }
     } else {
-      doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...NAVY)
-      doc.text('deed', margin, 17)
-      doc.setFontSize(6).setTextColor(...BLUE)
-      doc.text('TECHNOLOGIES LTD', margin + 1, 21)
+      doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...INK)
+      doc.text('DEED TECHNOLOGIES', margin, 15)
     }
+    doc.setDrawColor(210, 210, 210).setLineWidth(0.25)
+    doc.line(margin, 23, pageW - margin, 23)
 
-    doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...NAVY)
-    doc.text('PRODUCT CATALOG', pageW / 2, 13.5, { align: 'center' })
-    doc.setFont('helvetica', 'normal').setFontSize(7.2).setTextColor(...MUTED)
-    doc.text('Reliable Devices for Work, Learning and Everyday Use', pageW / 2, 19, { align: 'center' })
-    doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...NAVY)
-    doc.text('Technology Solutions.', pageW - margin, 11.5, { align: 'right' })
-    doc.text('Built for Impact.', pageW - margin, 15.5, { align: 'right' })
-    doc.setDrawColor(...CYAN).setLineWidth(0.7)
-    doc.line(margin, 25, pageW - margin, 25)
-
-    doc.setDrawColor(...CYAN).setLineWidth(0.5)
-    doc.line(margin, pageH - 15, pageW - margin, pageH - 15)
-    doc.setFont('helvetica', 'normal').setFontSize(6.7).setTextColor(...MUTED)
-    doc.text([co.website, co.email, co.phone].filter(Boolean).join('   |   '), margin, pageH - 8.5)
-    doc.setFont('helvetica', 'bold').setTextColor(...NAVY)
-    doc.text(`Page ${pageNumber}   |   People. Technology. A Brighter Tomorrow.`, pageW - margin, pageH - 8.5, { align: 'right' })
+    if (logo) {
+      try { doc.addImage(logo, imageFormat(logo), pageW / 2 - 10, pageH - 11, 20, 7, undefined, 'FAST') } catch { /* no footer fallback */ }
+    }
   }
 
   autoTable(doc, {
-    startY: 30,
-    margin: { left: margin, right: margin, top: 30, bottom: 21 },
-    head: [['IMAGE', 'MODEL / SERIES', 'KEY SPECIFICATIONS', 'QTY', 'SELLING PRICE (KES)']],
-    body: rows.map(row => ['', row.model, row.specs, String(row.qty), row.priceLabel.replace(/^KES\s*/, '')]),
+    startY: 28,
+    margin: { left: margin, right: margin, top: 28, bottom: 17 },
+    head: [['MODEL / SERIES', 'KEY SPECIFICATIONS', 'QTY', 'SELLING PRICE (KES)']],
+    body: rows.map(row => [row.model, row.specs, String(row.qty), row.priceLabel.replace(/^KES\s*/, '')]),
     theme: 'grid',
     styles: {
       font: 'helvetica',
-      fontSize: 7.4,
+      fontSize: 8,
       textColor: INK,
-      lineColor: BORDER,
-      lineWidth: 0.2,
-      cellPadding: 2.1,
-      minCellHeight: 13.5,
+      lineColor: [218, 218, 218],
+      lineWidth: 0.15,
+      cellPadding: 2.5,
+      minCellHeight: 10,
       valign: 'middle',
       overflow: 'linebreak',
     },
     headStyles: {
-      fillColor: NAVY,
-      textColor: [255, 255, 255],
+      fillColor: [242, 242, 242],
+      textColor: INK,
       fontStyle: 'bold',
       halign: 'center',
-      fontSize: 7.2,
+      fontSize: 7.5,
       minCellHeight: 8,
     },
-    alternateRowStyles: { fillColor: PALE_BLUE },
+    alternateRowStyles: { fillColor: [255, 255, 255] },
     columnStyles: {
-      0: { cellWidth: 20, halign: 'center' },
-      1: { cellWidth: 47, fontStyle: 'bold', textColor: NAVY },
-      2: { cellWidth: 74 },
-      3: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-      4: { cellWidth: 29, halign: 'right', fontStyle: 'bold', textColor: NAVY },
-    },
-    didDrawCell: hook => {
-      if (hook.section !== 'body' || hook.column.index !== 0) return
-      const row = rows[hook.row.index]
-      const data = row?.imageUrl ? images.get(row.imageUrl) : null
-      if (!data) return
-      try {
-        const pad = 1.25
-        doc.addImage(
-          data,
-          imageFormat(data),
-          hook.cell.x + pad,
-          hook.cell.y + pad,
-          hook.cell.width - pad * 2,
-          hook.cell.height - pad * 2,
-          undefined,
-          'FAST',
-        )
-      } catch { /* keep clean blank image cell */ }
+      0: { cellWidth: 53, fontStyle: 'bold', textColor: INK },
+      1: { cellWidth: 95 },
+      2: { cellWidth: 14, halign: 'center' },
+      3: { cellWidth: 28, halign: 'right', fontStyle: 'bold', textColor: INK },
     },
     didDrawPage: () => drawFrame(doc.getNumberOfPages()),
   })
