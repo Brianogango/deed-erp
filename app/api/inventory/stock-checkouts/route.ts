@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
         if (product && isSerialized(product)) {
           if (outcomeSerialIds.length !== qty || outcomeSerialIds.some(id => !row.serialIds.includes(id) || alreadyClosed.has(id))) return NextResponse.json({ error: 'Select the serials being closed' }, { status: 422 })
           const ids = new Set(outcomeSerialIds)
-          serials = serials.map(s => ids.has(s.id) ? { ...s, location: outcome === 'returned' ? row.sourceLocation : outcome === 'exception' ? 'quarantine' : 'customer', status: outcome === 'returned' ? 'available' : outcome === 'exception' ? 'under_repair' : 'written_off' } : s)
+          serials = serials.map(s => ids.has(s.id) ? { ...s, location: outcome === 'returned' ? row.sourceLocation : outcome === 'exception' ? 'quarantine' : 'employee', status: outcome === 'returned' ? 'available' : outcome === 'exception' ? 'under_repair' : 'written_off' } : s)
           ;(row as Checkout & { closedSerialIds?: string[] }).closedSerialIds = [...alreadyClosed, ...outcomeSerialIds]
         }
         if (outcome === 'returned') {
