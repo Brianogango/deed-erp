@@ -123,6 +123,19 @@ describe('POST /api/store — sensitive key gating', () => {
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 
+  it('saves permitted keys and drops unknown namespaces from a mixed batch', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const res = await STORE_POST(postReq({
+      deed_quotes: '[]',
+      deed_notifications: '[]',
+      deed_oppActivities: '[]',
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.unknownKeys).toEqual(expect.arrayContaining(['deed_notifications', 'deed_oppActivities']))
+    expect(mockSaveStoreKeys).toHaveBeenCalledWith({ deed_quotes: '[]' })
+  })
+
   it('rejects unexpected top-level request fields', async () => {
     mockGetSession.mockResolvedValue(directorSession)
     const res = await STORE_POST(postReq({ deed_quotes: '[]', admin: true }))

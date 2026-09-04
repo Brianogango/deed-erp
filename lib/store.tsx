@@ -118,6 +118,8 @@ import {
 } from '@/lib/sale-order-draft-edits'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergeCollectionById } from '@/lib/collection-merge'
+import { CLIENT_IMMUTABLE_STORE_KEYS } from '@/lib/auth/authorization'
+import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 import { fetchAllCollectionPages } from '@/lib/api-pagination'
 import {
   registerSaleOrderDraftPersistApi,
@@ -4859,6 +4861,22 @@ function markKeysSynced(saved: Record<string, string>) {
   }
 }
 
+function canQueueStoreSync(key: string) {
+  return isKnownClientAppStateKey(key) && !CLIENT_IMMUTABLE_STORE_KEYS.has(key)
+}
+
+function dropUnsyncablePendingKeys(entries: Record<string, string>) {
+  const dropped = Object.keys(entries).filter(key => !canQueueStoreSync(key))
+  if (dropped.length === 0) return entries
+  dropped.forEach(key => { if (_pendingSync[key] === entries[key]) delete _pendingSync[key] })
+  removeDirtyKeys(dropped)
+  const kept: Record<string, string> = {}
+  Object.keys(entries).forEach(key => {
+    if (canQueueStoreSync(key)) kept[key] = entries[key]
+  })
+  return kept
+}
+
 /**
  * Fallback when the server rejects a multi-key batch wholesale (e.g. a 409
  * optimistic-concurrency conflict, or a single malformed/append-only key).
@@ -4880,9 +4898,10 @@ async function flushKeysIndividually(entries: Record<string, string>) {
         if (typeof window !== 'undefined') window.location.href = '/login'
         return
       }
-      // 2xx = saved; 403 = this session may never write the key. Either way it
-      // must leave the retry queue so it stops blocking future flushes.
-      if (res.ok || res.status === 403) {
+      // 2xx = saved; 400/403 = this key can never succeed for this payload or
+      // session. Leave the retry queue so one unknown/immutable key cannot
+      // keep splitting every later flush into a parallel POST storm.
+      if (res.ok || res.status === 403 || res.status === 400) {
         markKeysSynced({ [key]: entries[key] })
       } else {
         failedKeys.push(key)
@@ -4902,7 +4921,11 @@ async function flushKeysIndividually(entries: Record<string, string>) {
 
 async function flushServerSync() {
   if (Object.keys(_pendingSync).length === 0) return
-  const entries = { ..._pendingSync }
+  const entries = dropUnsyncablePendingKeys({ ..._pendingSync })
+  if (Object.keys(entries).length === 0) {
+    emitSyncStatus('synced')
+    return
+  }
   emitSyncStatus('syncing')
   // Do NOT clear _pendingSync before the fetch resolves — keeping entries here
   // blocks applyRemoteState from overwriting local changes with a stale SSE push
@@ -4957,6 +4980,11 @@ async function flushServerSync() {
 }
 
 export function debouncedServerSync(key: string, value: string) {
+  if (!canQueueStoreSync(key)) {
+    delete _pendingSync[key]
+    removeDirtyKeys([key])
+    return
+  }
   _pendingSync[key] = value
   addDirtyKey(key)
   emitSyncStatus('syncing')
