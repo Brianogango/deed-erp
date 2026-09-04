@@ -120,6 +120,44 @@ type MainTab =
   | 'integrity'
   | 'cash_flow'
 
+type FinanceSection = 'overview' | 'money_in' | 'money_out' | 'banking' | 'accounting' | 'reports'
+
+const FINANCE_SECTIONS: Array<{ id: FinanceSection; label: string; defaultTab: MainTab }> = [
+  { id: 'overview', label: 'Overview', defaultTab: 'dashboard' },
+  { id: 'money_in', label: 'Money In', defaultTab: 'invoices' },
+  { id: 'money_out', label: 'Money Out', defaultTab: 'bills' },
+  { id: 'banking', label: 'Banking', defaultTab: 'cashbook' },
+  { id: 'accounting', label: 'Accounting', defaultTab: 'journals' },
+  { id: 'reports', label: 'Reports', defaultTab: 'reports' },
+]
+
+const FINANCE_SECTION_TABS: Record<FinanceSection, Array<{ id: MainTab; label: string }>> = {
+  overview: [{ id: 'dashboard', label: 'Action centre' }],
+  money_in: [
+    { id: 'invoices', label: 'Customer invoices' },
+    { id: 'credits', label: 'Customer credits' },
+    { id: 'refunds', label: 'Refunds' },
+    { id: 'commissions', label: 'Sales commissions' },
+  ],
+  money_out: [{ id: 'bills', label: 'Vendor bills' }],
+  banking: [{ id: 'cashbook', label: 'Cashbook & reconciliation' }],
+  accounting: [
+    { id: 'journals', label: 'Accounting entries' },
+    { id: 'coa', label: 'Chart of accounts' },
+    { id: 'gl', label: 'General ledger' },
+    { id: 'partner_ledger', label: 'Customer & supplier ledger' },
+    { id: 'integrity', label: 'Integrity controls' },
+    { id: 'migration', label: 'Data migration' },
+  ],
+  reports: [{ id: 'reports', label: 'Financial reports' }],
+}
+
+const FINANCE_TAB_SECTION: Partial<Record<MainTab, FinanceSection>> = Object.fromEntries(
+  Object.entries(FINANCE_SECTION_TABS).flatMap(([section, tabs]) =>
+    tabs.map(item => [item.id, section as FinanceSection]),
+  ),
+)
+
 type ReportTab = 'financial_report' | 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position' | 'fx' | 'cash_flow'
 const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'financial_report', label: 'Financial report', icon: faChartLine },
@@ -1357,30 +1395,34 @@ function AccountingContent() {
         {/* KPI strip and workflow alerts removed — AR/AP, cash position, and
             finance exceptions now live on the central dashboard */}
 
-        <TabBar
-          tabs={[
-            { id: 'dashboard', label: 'Dashboard' },
-            { id: 'invoices', label: 'Customer invoices' },
-            { id: 'bills', label: 'Vendor bills' },
-            { id: 'credits', label: 'Credits' },
-            { id: 'commissions', label: 'Salespeople' },
-            { id: 'refunds', label: 'Refunds' },
-            { id: 'journals', label: 'Journals' },
-            { id: 'reports', label: 'Reports' },
-            { id: 'integrity', label: 'Integrity' },
-            { id: 'cashbook', label: 'Cashbook' },
-            { id: 'coa', label: 'Accounts' },
-            { id: 'gl', label: 'Ledger' },
-            { id: 'partner_ledger', label: 'Partner ledger' },
-            { id: 'migration', label: 'Migration' },
-          ]}
-          active={tab}
-          onChange={id => setTab(id as MainTab)}
-          maxVisibleMobile={3}
-          maxVisibleTablet={5}
-          maxVisibleDesktop={6}
-          ariaLabel="Accounting sections"
-        />
+        <div className="border-b border-border-lt bg-card">
+          <TabBar
+            tabs={FINANCE_SECTIONS.map(section => ({ id: section.id, label: section.label }))}
+            active={FINANCE_TAB_SECTION[tab] || 'overview'}
+            onChange={id => {
+              const section = FINANCE_SECTIONS.find(item => item.id === id)
+              if (section) setTab(section.defaultTab)
+            }}
+            maxVisibleMobile={3}
+            maxVisibleTablet={6}
+            maxVisibleDesktop={6}
+            ariaLabel="Finance workspaces"
+          />
+          {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && (
+            <div className="px-3 pb-2">
+              <TabBar
+                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview']}
+                active={tab}
+                onChange={id => setTab(id as MainTab)}
+                className="border-0 bg-transparent px-0 py-0"
+                maxVisibleMobile={3}
+                maxVisibleTablet={5}
+                maxVisibleDesktop={6}
+                ariaLabel="Finance workspace sections"
+              />
+            </div>
+          )}
+        </div>
 
         <div className="mod-body finance-workspace__body">
         {tab === 'reports' && (
