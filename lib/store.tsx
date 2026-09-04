@@ -1191,6 +1191,7 @@ export interface InvoiceLine {
   discountPct?: number
   lineType?: 'item' | 'section'
   productId?: string    // original product (for account lookup)
+  purchaseOrderItemId?: string
   serialNumberId?: string
   accountCode?: string  // revenue account code (e.g. '5001')
   /** Statutory VAT category. PO bills set this from taxRate (16 → standard_16). */
@@ -14275,6 +14276,7 @@ const storeCtx: AppState = {
           id: uid(), description: `${l.productName} ×${l.billQty}`, qty: l.billQty,
           unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.billQty * l.unitPrice,
           productId: l.productId,
+          purchaseOrderItemId: l.id,
           taxCategory: Number(l.taxRate) > 0 ? 'standard_16' : 'out_of_scope',
         })),
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: 0,
