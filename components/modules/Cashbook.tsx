@@ -412,10 +412,26 @@ function ReconPanel({
           </span>
           {stmtLines.length > 0 && !isLocked && (
             <button className="btn-primary text-[10px] px-3 py-1" onClick={handleAutoMatch}>
-              Auto-Match
+              Auto-match
             </button>
           )}
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 border-b" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }} aria-label="Reconciliation steps">
+        {[
+          ['1', 'Add statement lines', 'Enter or import the bank statement for this period.'],
+          ['2', 'Match transactions', 'Use auto-match, then review any unmatched items.'],
+          ['3', 'Confirm balances', 'Save only when the adjusted balances agree.'],
+        ].map(([step, title, detail]) => (
+          <div key={step} className="flex gap-2 px-4 py-3 border-b sm:border-b-0 sm:border-r last:border-r-0" style={{ borderColor: 'var(--border-lt)' }}>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: color }}>{step}</span>
+            <div>
+              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-1)' }}>{title}</p>
+              <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>{detail}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
@@ -472,7 +488,7 @@ function ReconPanel({
             <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-4)' }}>
               Add Statement Line
             </p>
-            <div className="finance-recon-entry-form grid gap-2" style={{ gridTemplateColumns: '110px 1fr 120px 90px 100px 100px 90px 80px' }}>
+            <div className="finance-recon-entry-form grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[110px_minmax(180px,1fr)_120px_100px_110px_110px_100px_80px] gap-2">
               <input type="date" className="form-input text-[10px]"
                 value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
               <input type="text" className="form-input text-[10px]" placeholder="Description / Narration"
@@ -599,7 +615,7 @@ function ReconPanel({
           {pendingMatch && (
             <div className="mx-4 my-2 px-3 py-2 rounded-lg text-xs"
               style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid #FCD34D' }}>
-              Now click a cashbook entry below to match it with the selected statement line
+              Statement line selected. Choose the matching cashbook transaction below; compare the date, reference and amount before confirming.
             </div>
           )}
 
@@ -609,6 +625,11 @@ function ReconPanel({
               <p className="px-4 pt-2 pb-1 text-[10px] uppercase font-semibold tracking-wide" style={{ color: 'var(--text-4)' }}>
                 Select a cashbook entry to match
               </p>
+              {cashbookEntries.filter(e => !matchedEntryIds.has(e.id)).length === 0 && (
+                <p className="px-4 py-4 text-xs" style={{ color: 'var(--text-3)' }}>
+                  No unmatched cashbook transactions are available. Add the missing cashbook entry or cancel this match.
+                </p>
+              )}
               {cashbookEntries.filter(e => !matchedEntryIds.has(e.id)).map(e => (
                 <div key={e.id} className="table-row cursor-pointer"
                   style={{ gridTemplateColumns: '90px 90px 1fr 100px 100px' }}
