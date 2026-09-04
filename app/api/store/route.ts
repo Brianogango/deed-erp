@@ -155,7 +155,15 @@ export async function POST(request: Request) {
       && !CLIENT_IMMUTABLE_STORE_KEYS.has(key)
       && !isKnownClientAppStateKey(key),
   )
-  if (unknownStoreKeys.length > 0) {
+  const deedKeys = Object.keys(rawBody).filter(key => key.startsWith('deed_'))
+  const hasKnownOrImmutable = deedKeys.some(
+    key => CLIENT_IMMUTABLE_STORE_KEYS.has(key) || isKnownClientAppStateKey(key),
+  )
+  // Attacker-only namespaces still 400. Mixed batches must not: the client
+  // flushes every dirty key together, so an unregistered CRM/notification/SOP
+  // blob used to 400 invoices and repairs in the same request, then retry each
+  // key in parallel (production: hundreds of POST /api/store 400s + 499s).
+  if (unknownStoreKeys.length > 0 && !hasKnownOrImmutable) {
     return NextResponse.json(
       { error: 'Unknown app-state key', keys: unknownStoreKeys.slice(0, 20) },
       { status: 400 },
@@ -167,6 +175,7 @@ export async function POST(request: Request) {
     for (const [k, v] of Object.entries(rawBody)) {
       if (!k.startsWith('deed_')) continue
       if (CLIENT_IMMUTABLE_STORE_KEYS.has(k)) continue
+      if (!isKnownClientAppStateKey(k)) continue
       assertSafeStoreValue(v, k)
       entries[k] = typeof v === 'string' ? v : JSON.stringify(v)
     }
@@ -178,6 +187,15 @@ export async function POST(request: Request) {
   }
 
   if (Object.keys(entries).length === 0) {
+    if (unknownStoreKeys.length > 0) {
+      return NextResponse.json({
+        ok: true,
+        savedKeys: 0,
+        skippedKeys: [],
+        deniedKeys: [],
+        unknownKeys: unknownStoreKeys,
+      })
+    }
     return NextResponse.json({ error: 'No valid deed_ keys supplied' }, { status: 400 })
   }
 
@@ -392,7 +410,7 @@ export async function POST(request: Request) {
     const version = await getAppStateVersion(writeKeys)
     const etag = buildStoreEtag(session, writeKeys, version)
     return NextResponse.json(
-      { ok: true, savedKeys: 0, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits, version },
+      { ok: true, savedKeys: 0, skippedKeys, deniedKeys, unknownKeys: unknownStoreKeys, rejectedPostedInvoiceEdits, version },
       { headers: { ETag: etag } },
     )
   }
@@ -402,7 +420,7 @@ export async function POST(request: Request) {
   const version = await getAppStateVersion(savedKeys)
   const etag = buildStoreEtag(session, savedKeys, version)
   return NextResponse.json(
-    { ok: true, savedKeys: savedKeys.length, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits, version },
+    { ok: true, savedKeys: savedKeys.length, skippedKeys, deniedKeys, unknownKeys: unknownStoreKeys, rejectedPostedInvoiceEdits, version },
     { headers: { ETag: etag } },
   )
 }
