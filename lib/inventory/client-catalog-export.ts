@@ -18,13 +18,7 @@ export type ClientCatalogRow = {
   imageUrl: string | null
 }
 
-const NAVY: [number, number, number] = [16, 47, 103]
-const BLUE: [number, number, number] = [10, 103, 178]
-const CYAN: [number, number, number] = [0, 174, 239]
 const INK: [number, number, number] = [18, 33, 61]
-const MUTED: [number, number, number] = [93, 109, 132]
-const BORDER: [number, number, number] = [214, 227, 239]
-const PALE_BLUE: [number, number, number] = [239, 247, 253]
 
 function clean(value: unknown): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim()
@@ -226,11 +220,6 @@ export async function exportClientCatalogPdfFromTable(
   const pageH = doc.internal.pageSize.getHeight()
   const margin = 10
   const logo = await fetchDataUrl(absoluteUrl(co.logoUrl))
-  const images = new Map<string, string | null>()
-  await Promise.all(rows.map(async row => {
-    if (!row.imageUrl || images.has(row.imageUrl)) return
-    images.set(row.imageUrl, await fetchDataUrl(row.imageUrl))
-  }))
 
   const drawFrame = (_pageNumber: number) => {
     if (logo) {

@@ -35,7 +35,11 @@ describe('calcStockByLocation()', () => {
   describe('bulk (non-serial) products', () => {
     it('returns zeros for all locations when no bulk stock exists', () => {
       const result = calcStockByLocation(bulkProduct, [], [], 'prod-1')
-      expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0 })
+      expect(result).toEqual({
+        warehouse: 0, shop: 0, repair_unit: 0,
+        computer_aid: 0, computer_aid_collected: 0, computer_aid_issues: 0,
+        vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0,
+      })
     })
 
     it('reads qty from bulk stock levels for matching product', () => {
@@ -69,7 +73,11 @@ describe('calcStockByLocation()', () => {
   describe('serial products', () => {
     it('returns zeros when no serials exist', () => {
       const result = calcStockByLocation(serialProduct, [], [], 'prod-1')
-      expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0 })
+      expect(result).toEqual({
+        warehouse: 0, shop: 0, repair_unit: 0,
+        computer_aid: 0, computer_aid_collected: 0, computer_aid_issues: 0,
+        vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0,
+      })
     })
 
     it('counts each active serial at its location', () => {
@@ -110,7 +118,11 @@ describe('calcStockByLocation()', () => {
   describe('undefined product', () => {
     it('returns all-zeros when product is undefined', () => {
       const result = calcStockByLocation(undefined, [], [], 'prod-1')
-      expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0 })
+      expect(result).toEqual({
+        warehouse: 0, shop: 0, repair_unit: 0,
+        computer_aid: 0, computer_aid_collected: 0, computer_aid_issues: 0,
+        vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0,
+      })
     })
   })
 })
@@ -129,6 +141,7 @@ describe('onHandQtyAtStockLocations() / isLowStockSku()', () => {
       { productId: 'prod-1', location: 'warehouse', qty: 2 },
       { productId: 'prod-1', location: 'shop', qty: 1 },
       { productId: 'prod-1', location: 'repair_unit', qty: 1 },
+      { productId: 'prod-1', location: 'computer_aid', qty: 7 },
       { productId: 'prod-1', location: 'customer', qty: 9 },
     ]
     expect(onHandQtyAtStockLocations(bulkSku, [], bulk, 'prod-1')).toBe(4)
@@ -171,6 +184,7 @@ describe('availableSellableQty()', () => {
       { productId: 'prod-1', location: 'warehouse', qty: 3 },
       { productId: 'prod-1', location: 'shop', qty: 2 },
       { productId: 'prod-1', location: 'repair_unit', qty: 1 },
+      { productId: 'prod-1', location: 'computer_aid', qty: 6 },
       { productId: 'prod-1', location: 'quarantine', qty: 8 },
     ]
     expect(availableSellableQty(
@@ -179,6 +193,21 @@ describe('availableSellableQty()', () => {
       bulk,
       'prod-1',
     )).toBe(3)
+  })
+
+  it('does not treat Computer Aid custody serials as saleable warehouse stock', () => {
+    const serials: SerialNumber[] = [
+      { productId: 'prod-1', location: 'warehouse', status: 'available' },
+      { productId: 'prod-1', location: 'computer_aid', status: 'available' },
+      { productId: 'prod-1', location: 'computer_aid_collected', status: 'available' },
+      { productId: 'prod-1', location: 'computer_aid_issues', status: 'available' },
+    ]
+    expect(availableSellableQty(
+      { category: 'Laptops', requiresSerial: true },
+      serials,
+      [],
+      'prod-1',
+    )).toBe(1)
   })
 
   it('returns 0 for services', () => {
