@@ -1,0 +1,41 @@
+name: Apply client catalog export
+
+on:
+  push:
+    branches:
+      - feat/client-facing-catalog-export
+    paths:
+      - .github/workflows/apply-client-catalog-export.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/client-facing-catalog-export
+          fetch-depth: 0
+      - name: Apply catalog export patch
+        run: python3 scripts/apply_client_catalog_export.py
+      - name: Validate patch
+        run: |
+          git diff --check
+          grep -q "customExportOptions" components/data-table/DataTable.tsx
+          grep -q "exportClientCatalogPdf" components/modules/Inventory.tsx
+          grep -q "SELLING PRICE (KES)" lib/inventory/client-catalog-export.ts
+          test -f __tests__/client-catalog-export.test.ts
+      - name: Commit product changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Make catalog exports client-facing"
+            git push origin HEAD:feat/client-facing-catalog-export
+          fi
