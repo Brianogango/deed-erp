@@ -232,11 +232,11 @@ export default function POFormView() {
       : canConfirm
         ? 'Confirm order'
         : canReceive
-          ? 'Process GRN'
+          ? 'Receive goods'
           : canCreateBill
             ? 'Create bill'
             : canValidateBill
-              ? 'Validate bill'
+              ? 'Confirm vendor bill'
               : canPay
                 ? 'Register payment'
                 : 'No action due'
@@ -350,7 +350,7 @@ export default function POFormView() {
                   try { await Promise.resolve(postInvoice(linkedBill!.id)) } finally { setActionBusy(null) }
                 }}
               >
-                {actionBusy === 'validate' ? 'Posting…' : 'Validate Bill'}
+                {actionBusy === 'validate' ? 'Confirming…' : 'Confirm Vendor Bill'}
               </PrimaryActionButton>
             )}
             {!canSend && !canConfirm && !canReceive && !canCreateBill && !canValidateBill && canPay && (
@@ -854,7 +854,7 @@ export default function POFormView() {
                 {activePO.lines.filter(l => l.requiresSerial).map(l => (
                   <p key={l.id} className="text-t3 mb-0.5">• {l.productName} — {l.qty} unit(s)</p>
                 ))}
-                <p className="mt-2 text-t3">All serial numbers must be scanned during GRN validation.</p>
+                <p className="mt-2 text-t3">All serial numbers must be captured before the receipt can update inventory.</p>
               </div>
             )}
           </div>
