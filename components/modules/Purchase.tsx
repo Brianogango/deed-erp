@@ -667,6 +667,7 @@ function PurchaseContent() {
     try {
       const validated = await validateReceipt(activeReceiptId, grnLines, destLocation, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues)
       if (!validated) return
+      setShowValidateReview(false)
       setSerialAccessories({}); setSerialAccessoryNotes({})
       setSerialSpecs({}); setSerialIssues({})
       if (receiptOrigin === 'list') {
@@ -1116,10 +1117,7 @@ function PurchaseContent() {
               </div>
               <div className="flex justify-end gap-2">
                 <button className="btn-outline" disabled={isValidatingReceipt} onClick={() => setShowValidateReview(false)}>Go back</button>
-                <button className="btn-primary" disabled={isValidatingReceipt} aria-busy={isValidatingReceipt} onClick={async () => {
-                  await handleValidateReceipt()
-                  setShowValidateReview(false)
-                }}>
+                <button className="btn-primary" disabled={isValidatingReceipt} aria-busy={isValidatingReceipt} onClick={() => { void handleValidateReceipt() }}>
                   {isValidatingReceipt ? 'Updating stock and purchase…' : 'Confirm & Update Inventory'}
                 </button>
               </div>
