@@ -327,7 +327,7 @@ export default function POFormView() {
                   try { await openReceive() } finally { setActionBusy(null) }
                 }}
               >
-                {actionBusy === 'receive' ? 'Opening…' : 'Process GRN'}
+                {actionBusy === 'receive' ? 'Opening receipt…' : 'Receive Goods'}
               </PrimaryActionButton>
             )}
             {!canSend && !canConfirm && !canReceive && canCreateBill && (
