@@ -630,6 +630,7 @@ function SalesContent() {
   // Shared mapping onto the Odoo-style PDF document.
   const salesDocumentPdfInput = (so: SalesOrderView, title: string, overrides: Partial<CommercialPdfInput> = {}): CommercialPdfInput => {
     const contact = contacts.find(c => c.id === so.customerId)
+    const optionalProducts = Array.isArray(so.optionalProducts) ? so.optionalProducts : []
     const merged = {
       title,
       ref: so.ref,
@@ -643,7 +644,8 @@ function SalesContent() {
       customerPhone: contact?.phone || contact?.mobile || undefined,
       customerEmail: contact?.email || undefined,
       customerTaxId: contact?.vatNumber || undefined,
-      lines: so.lines.map(l => {
+      lines: [
+        ...so.lines.map(l => {
         // A confirmed/delivered line may already have a serial assigned —
         // show its live specs (e.g. after a reconfiguration) rather than
         // leaving the customer-facing document silent on what's shipping,
@@ -668,12 +670,34 @@ function SalesContent() {
           serial: assignedSerial?.serial,
           specs: assignedSerial?.specs,
         }
-      }),
+        }),
+        ...(optionalProducts.length > 0
+          ? [
+              {
+                lineType: 'section' as const,
+                description: 'Optional products — not included in quotation total',
+                qty: 0,
+                unitPrice: 0,
+                taxRate: 0,
+                discountPct: 0,
+                subtotal: 0,
+              },
+              ...optionalProducts.map(item => ({
+                description: item.productName || 'Optional product',
+                qty: Number(item.qty) || 0,
+                unitPrice: Number(item.unitPrice) || 0,
+                taxRate: 0,
+                discountPct: 0,
+                subtotal: (Number(item.qty) || 0) * (Number(item.unitPrice) || 0),
+              })),
+            ]
+          : []),
+      ],
       subtotal: so.subtotal,
       taxTotal: so.taxTotal,
       postTaxDiscountTotal: so.discountAmount,
       total: so.total,
-      notes: so.notes,
+      notes: [so.notes, so.termsAndConditions ? `Terms and conditions\n${so.termsAndConditions}` : ''].filter(Boolean).join('\n\n') || undefined,
       currency: so.currencyCode || companySettings.currency || 'KES',
       ...overrides,
     }
@@ -1412,6 +1436,8 @@ function SalesContent() {
         invoiceAddress?: string
         deliveryAddress?: string
         paymentDetails?: Partial<DocumentPaymentDetails>
+        termsAndConditions?: string
+        optionalProducts?: Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>
         lines: DraftLine[]
       }
       if (parsed.customer) setNewCustomer(parsed.customer)
@@ -1422,6 +1448,8 @@ function SalesContent() {
       if (parsed.invoiceAddress) setNewInvoiceAddress(parsed.invoiceAddress)
       if (parsed.deliveryAddress) setNewDeliveryAddress(parsed.deliveryAddress)
       if (parsed.paymentDetails) setNewPaymentDetails(normalizeDocumentPaymentDetails(parsed.paymentDetails))
+      if (parsed.termsAndConditions) setNewTermsAndConditions(parsed.termsAndConditions)
+      if (Array.isArray(parsed.optionalProducts)) setNewOptionalProducts(parsed.optionalProducts)
       if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
         setNewDraftLines(parsed.lines.map(line => ({
           ...line,
@@ -1447,6 +1475,8 @@ function SalesContent() {
         invoiceAddress: newInvoiceAddress,
         deliveryAddress: newDeliveryAddress,
         paymentDetails: newPaymentDetails,
+        termsAndConditions: newTermsAndConditions,
+        optionalProducts: newOptionalProducts,
         lines: newDraftLines,
       }
       try {
@@ -1459,7 +1489,7 @@ function SalesContent() {
     return () => {
       if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
     }
-  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newNotes, newCustomerRef, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
+  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newNotes, newCustomerRef, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newTermsAndConditions, newOptionalProducts, newDraftLines])
 
   // Align quote payment bank: VAT → NCBA; non-VAT → ABSA / I&M
   useEffect(() => {
