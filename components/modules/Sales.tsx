@@ -4300,8 +4300,46 @@ function NewQuotationForm({
         )}
 
         {createTab === 'Optional Products' && (
-          <div className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-            Optional products (prototype placeholder).
+          <div className="sp-panel-pad flex flex-col gap-4">
+            <div>
+              <p className="text-xs font-semibold text-[var(--sp-text)]">Alternative products</p>
+              <p className="mt-1 text-[11px] text-[var(--sp-text-3)]">Offer alternatives without including them in the quotation total.</p>
+            </div>
+            <select
+              aria-label="Add an optional product"
+              className="form-input text-xs"
+              value=""
+              onChange={event => {
+                const product = products.find(item => item.id === event.target.value)
+                if (!product || newOptionalProducts.some(item => item.productId === product.id)) return
+                setNewOptionalProducts([...newOptionalProducts, {
+                  id: uid(),
+                  productId: product.id,
+                  productName: product.name,
+                  qty: 1,
+                  unitPrice: Number(product.salePrice) || 0,
+                }])
+              }}
+            >
+              <option value="">Add an optional product…</option>
+              {products.filter(product => !newOptionalProducts.some(item => item.productId === product.id)).map(product => (
+                <option key={product.id} value={product.id}>{product.name} · {salesKes(product.salePrice)}</option>
+              ))}
+            </select>
+            {newOptionalProducts.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-[var(--sp-border)] p-5 text-center text-xs text-[var(--sp-text-3)]">No optional products added.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {newOptionalProducts.map(item => (
+                  <div key={item.id} className="grid grid-cols-1 gap-2 rounded-lg border border-[var(--sp-border)] p-3 sm:grid-cols-[minmax(0,1fr)_90px_140px_auto] sm:items-center">
+                    <strong className="truncate text-xs text-[var(--sp-text)]">{item.productName}</strong>
+                    <input aria-label={`Quantity for ${item.productName}`} type="number" min={1} value={item.qty} onChange={event => setNewOptionalProducts(newOptionalProducts.map(row => row.id === item.id ? { ...row, qty: Math.max(1, Number(event.target.value) || 1) } : row))} />
+                    <input aria-label={`Price for ${item.productName}`} type="number" min={0} value={item.unitPrice} onChange={event => setNewOptionalProducts(newOptionalProducts.map(row => row.id === item.id ? { ...row, unitPrice: Math.max(0, Number(event.target.value) || 0) } : row))} />
+                    <button type="button" className="btn-outline" onClick={() => setNewOptionalProducts(newOptionalProducts.filter(row => row.id !== item.id))}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -4327,14 +4365,46 @@ function NewQuotationForm({
         )}
 
         {createTab === 'Terms and Conditions' && (
-          <div className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-            Terms and Conditions content (prototype placeholder — demo data only).
+          <div className="sp-panel-pad">
+            <SalesDocField label="Commercial terms" htmlFor="quote-terms">
+              <textarea
+                id="quote-terms"
+                rows={8}
+                value={newTermsAndConditions}
+                onChange={event => setNewTermsAndConditions(event.target.value)}
+                placeholder="Payment schedule, delivery obligations, warranty, validity, exclusions and acceptance conditions…"
+              />
+            </SalesDocField>
+            <p className="mt-2 text-[11px] text-[var(--sp-text-3)]">These terms are saved with the quotation and remain available after confirmation.</p>
           </div>
         )}
 
         {createTab === 'Attachments' && (
-          <div className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-            Attachments content (prototype placeholder — demo data only).
+          <div className="sp-panel-pad flex flex-col gap-4">
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-[var(--sp-border-strong)] bg-[var(--sp-soft)] px-4 py-7 text-center">
+              <span className="text-xs font-semibold text-[var(--sp-text)]">Choose supporting files</span>
+              <span className="mt-1 text-[11px] text-[var(--sp-text-3)]">Files upload after the quotation is saved and receives a reference.</span>
+              <input type="file" multiple className="sr-only" onChange={event => {
+                const selected = Array.from(event.target.files ?? [])
+                setNewQuoteAttachments([...newQuoteAttachments, ...selected.filter(file => !newQuoteAttachments.some(existing => existing.name === file.name && existing.size === file.size))])
+                event.currentTarget.value = ''
+              }} />
+            </label>
+            {newQuoteAttachments.length === 0 ? (
+              <p className="text-center text-xs text-[var(--sp-text-3)]">No files selected.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {newQuoteAttachments.map((file, index) => (
+                  <div key={`${file.name}-${file.size}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--sp-border)] px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-[var(--sp-text)]">{file.name}</p>
+                      <p className="text-[10px] text-[var(--sp-text-3)]">{(file.size / 1024).toFixed(file.size >= 1024 * 1024 ? 0 : 1)} KB</p>
+                    </div>
+                    <button type="button" className="btn-outline" onClick={() => setNewQuoteAttachments(newQuoteAttachments.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
