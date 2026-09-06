@@ -117,9 +117,34 @@ export const CATEGORY_ACCOUNT_DEFAULTS: Record<string, CategoryAccountDefaults> 
   },
 }
 
+const CATEGORY_DEFAULT_ALIASES: Record<string, string> = {
+  'Complete Desktops': 'Desktops',
+  'Printer Consumables': 'Printers',
+  'Consumer Electronics': 'Mobile Devices',
+}
+
+const GENERAL_STORABLE_CATEGORIES = new Set([
+  'Monitors',
+  'Servers',
+  'Power Backup Solutions',
+])
+
 export function categoryDefaults(category?: string | null): CategoryAccountDefaults {
   if (!category) return {}
-  return CATEGORY_ACCOUNT_DEFAULTS[category] ?? {}
+  const canonical = CATEGORY_DEFAULT_ALIASES[category] || category
+  const configured = CATEGORY_ACCOUNT_DEFAULTS[canonical]
+  if (configured) {
+    return category === 'Printer Consumables'
+      ? { ...configured, productKind: 'consumable' }
+      : configured
+  }
+  if (GENERAL_STORABLE_CATEGORIES.has(category)) {
+    return {
+      productKind: 'storable',
+      ...COMPANY_ACCOUNT_FALLBACKS,
+    }
+  }
+  return {}
 }
 
 function pickCode(
