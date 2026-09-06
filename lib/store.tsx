@@ -1162,6 +1162,8 @@ export interface SaleOrder {
   total: number
   amountPaid: number
   notes?: string
+  termsAndConditions?: string
+  optionalProducts?: Array<{ id: string; productId?: string; productName: string; qty: number; unitPrice: number }>
   lockVersion?: number
   createdById?: string
   createdByUserId?: string
@@ -3554,7 +3556,7 @@ export interface AppState {
   releaseSerialToStock: (serialId: string, destination?: LocationId) => boolean
 
   // Sale Orders
-  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam' | 'discountAmount'>>) => SaleOrder | Promise<SaleOrder>
+  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam' | 'discountAmount' | 'termsAndConditions' | 'optionalProducts'>>) => SaleOrder | Promise<SaleOrder>
   updateSaleOrder: (
     id: string,
     p: Partial<SaleOrder>,
@@ -11310,6 +11312,8 @@ const storeCtx: AppState = {
         deliveryDate: initial.deliveryDate,
         paymentTerms: initial.paymentTerms,
         notes: initial.notes ?? '',
+        termsAndConditions: initial.termsAndConditions,
+        optionalProducts: initial.optionalProducts ?? [],
         customerRef: initial.customerRef,
         invoiceAddress: initial.invoiceAddress,
         deliveryAddress: initial.deliveryAddress,
