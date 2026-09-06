@@ -30725,3 +30725,27 @@ body:has(.crm-workspace) [role="dialog"] > div {
     padding-inline: 1rem;
   }
 }
+
+
+.form-workspace-section-heading {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.35rem;
+  border-bottom: 1px solid var(--border-lt);
+}
+
+.form-workspace-section-heading strong,
+.form-workspace-section-heading span {
+  display: block;
+}
+
+.form-workspace-section-heading strong {
+  color: var(--text-1);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.form-workspace-section-heading span {
+  margin-top: 0.35rem;
+  color: var(--text-4);
+  font-size: 0.78rem;
+}
