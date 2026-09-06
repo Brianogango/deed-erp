@@ -30259,3 +30259,70 @@ body:has(.crm-workspace) [role="dialog"] > div {
     animation: none !important;
   }
 }
+
+
+/* Finance dashboard: posted customer-invoice revenue snapshots. */
+.accounting-dashboard__revenue-periods {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(138px, 1fr));
+  overflow-x: auto;
+  margin-bottom: 14px;
+  border: 1px solid var(--finance-border);
+  border-radius: 20px;
+  background: var(--finance-surface);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+  scrollbar-width: thin;
+}
+
+.accounting-dashboard__revenue-periods button {
+  min-width: 0;
+  padding: 18px 22px;
+  border: 0;
+  border-left: 1px solid var(--finance-border);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.accounting-dashboard__revenue-periods button:first-child {
+  border-left: 0;
+}
+
+.accounting-dashboard__revenue-periods button:hover,
+.accounting-dashboard__revenue-periods button:focus-visible {
+  background: var(--finance-surface-soft);
+  outline: none;
+}
+
+.accounting-dashboard__revenue-periods span,
+.accounting-dashboard__revenue-periods strong {
+  display: block;
+  white-space: nowrap;
+}
+
+.accounting-dashboard__revenue-periods span {
+  margin-bottom: 5px;
+  color: var(--finance-text-3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.accounting-dashboard__revenue-periods strong {
+  color: var(--finance-text-1);
+  font-size: clamp(15px, 1.5vw, 20px);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .accounting-dashboard__revenue-periods {
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+    border-radius: 16px;
+  }
+
+  .accounting-dashboard__revenue-periods button {
+    padding: 15px 16px;
+  }
+}
