@@ -71,6 +71,17 @@ describe('product creation sale categories', () => {
     expect(resolveProductCreationCategoryOptions(configured).some(option => option.label === 'Unsafe')).toBe(false)
   })
 
+  it('accepts administrator-created categories only through protected custom identifiers', () => {
+    const options = resolveProductCreationCategoryOptions([
+      { value: 'custom:projectors', label: 'Sale - Projectors', enabled: true },
+      { value: 'Projectors', label: 'Unsafe direct mapping', enabled: true },
+    ])
+
+    expect(options).toEqual([
+      { value: 'custom:projectors', label: 'Sale - Projectors' },
+    ])
+  })
+
   it('maps each new category to the correct pricing band', () => {
     const expected = {
       'Complete Desktops': 'refurb_desktops',
