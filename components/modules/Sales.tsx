@@ -426,6 +426,9 @@ function SalesContent() {
   const [showCreditNoteModal, setShowCreditNoteModal] = useState(false)
   const [draftDirtyTick, setDraftDirtyTick] = useState(0)
   const [newNotes, setNewNotes] = useState('')
+  const [newTermsAndConditions, setNewTermsAndConditions] = useState('')
+  const [newOptionalProducts, setNewOptionalProducts] = useState<Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>>([])
+  const [newQuoteAttachments, setNewQuoteAttachments] = useState<File[]>([])
   const [newCustomerRef, setNewCustomerRef] = useState('')
   const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
   const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
@@ -1570,11 +1573,27 @@ function SalesContent() {
       salespersonId: newSalespersonId || currentUser?.id,
       salespersonName: newSalespersonName || currentUser?.name,
       ...(newNotes ? { notes: newNotes } : {}),
+      ...(newTermsAndConditions ? { termsAndConditions: newTermsAndConditions.trim() } : {}),
+      ...(newOptionalProducts.length ? { optionalProducts: newOptionalProducts } : {}),
       ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
       ...(newInvoiceAddress ? { invoiceAddress: newInvoiceAddress } : {}),
       ...(newDeliveryAddress ? { deliveryAddress: newDeliveryAddress } : {}),
     })
     setDocumentPaymentDetails(so.id, newPaymentDetails)
+    if (newQuoteAttachments.length > 0) {
+      const failed: string[] = []
+      for (const file of newQuoteAttachments) {
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
+          const response = await fetch(`/api/sale-order-attachments/${so.id}`, { method: 'POST', body: formData })
+          if (!response.ok) failed.push(file.name)
+        } catch {
+          failed.push(file.name)
+        }
+      }
+      if (failed.length) showToast(`Quotation saved, but ${failed.length} attachment${failed.length === 1 ? '' : 's'} could not be uploaded.`, 'error')
+    }
     try {
       localStorage.removeItem(quoteDraftKey)
     } catch {
@@ -1594,6 +1613,9 @@ function SalesContent() {
     setNewDeliveryDate('')
     setNewValidUntil('')
     setNewNotes('')
+    setNewTermsAndConditions('')
+    setNewOptionalProducts([])
+    setNewQuoteAttachments([])
     setNewCustomerRef('')
     setNewInvoiceAddress('')
     setNewDeliveryAddress('')
@@ -1749,6 +1771,12 @@ function SalesContent() {
                   }}
                   newNotes={newNotes}
                   setNewNotes={setNewNotes}
+                  newTermsAndConditions={newTermsAndConditions}
+                  setNewTermsAndConditions={setNewTermsAndConditions}
+                  newOptionalProducts={newOptionalProducts}
+                  setNewOptionalProducts={setNewOptionalProducts}
+                  newQuoteAttachments={newQuoteAttachments}
+                  setNewQuoteAttachments={setNewQuoteAttachments}
                   newCustomerRef={newCustomerRef}
                   setNewCustomerRef={setNewCustomerRef}
                   newInvoiceAddress={newInvoiceAddress}
@@ -3805,6 +3833,8 @@ function SalesContent() {
 function NewQuotationForm({
   customers, products, newCustomer, setNewCustomer, newDeliveryDate, setNewDeliveryDate,
   newValidUntil, setNewValidUntil, newNotes, setNewNotes,
+  newTermsAndConditions, setNewTermsAndConditions, newOptionalProducts, setNewOptionalProducts,
+  newQuoteAttachments, setNewQuoteAttachments,
   newCustomerRef, setNewCustomerRef, newInvoiceAddress, setNewInvoiceAddress,
   newDeliveryAddress, setNewDeliveryAddress, newPaymentDetails, setNewPaymentDetails,
   newPricelist, setNewPricelist, availablePricelists, salesPricelistsEnabled,
@@ -3819,6 +3849,10 @@ function NewQuotationForm({
   newDeliveryDate: string; setNewDeliveryDate: (v: string) => void
   newValidUntil: string; setNewValidUntil: (v: string) => void
   newNotes: string; setNewNotes: (v: string) => void
+  newTermsAndConditions: string; setNewTermsAndConditions: (v: string) => void
+  newOptionalProducts: Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>
+  setNewOptionalProducts: (value: Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>) => void
+  newQuoteAttachments: File[]; setNewQuoteAttachments: (files: File[]) => void
   newCustomerRef: string; setNewCustomerRef: (v: string) => void
   newInvoiceAddress: string; setNewInvoiceAddress: (v: string) => void
   newDeliveryAddress: string; setNewDeliveryAddress: (v: string) => void
