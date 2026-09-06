@@ -1658,7 +1658,6 @@ function AccountingContent() {
                 page={invoiceListPage}
                 onPageChange={setInvoiceListPage}
                 primaryFilters={invoicePrimaryFilters}
-                onClearFilters={Boolean(invSearch.trim() || invFilter !== 'all') ? clearInvoiceFilters : undefined}
                 hideColumnFilters
                 selectable
                 emptyMessage={tab === 'invoices' ? 'No invoices found' : 'No bills found'}
