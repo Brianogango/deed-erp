@@ -454,14 +454,14 @@ export function Modal({
               {subtitle && (
                 <p
                   className={`${workspace ? 'mt-1 text-sm font-normal text-text-3' : enterprise ? 'mt-1 text-[13px] font-normal normal-case tracking-normal text-slate-500' : 'text-[11px] sm:text-[10px] mt-0.5 font-bold uppercase tracking-wider truncate'}`}
-                  style={enterprise ? undefined : { color: accent, opacity: 0.65 }}
+                  style={workspace || enterprise ? undefined : { color: accent, opacity: 0.65 }}
                 >
                   {subtitle}
                 </p>
               )}
             </div>
           </div>
-          <button
+          {!workspace && <button
             type="button"
             className={`ml-3 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-lg font-bold transition-[background-color,color,border-color,transform] ${
               enterprise ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' : 'sm:h-8 sm:w-8 sm:text-base hover:scale-110 active:scale-90'
@@ -471,17 +471,17 @@ export function Modal({
             aria-label="Close"
           >
             ×
-          </button>
+          </button>}
         </div>
         {/* Body */}
         <div className={`modal-content-shell min-h-0 flex-1 overflow-y-auto flex flex-col ${
-          enterprise ? 'gap-5 p-5 sm:p-6' : 'gap-3 p-4 sm:gap-4 sm:p-6'
+          workspace ? 'gap-5 px-4 py-5 sm:px-8 sm:py-7' : enterprise ? 'gap-5 p-5 sm:p-6' : 'gap-3 p-4 sm:gap-4 sm:p-6'
         }`}>
           {children}
         </div>
         {footer && (
           <div className={`modal-footer-shell flex flex-shrink-0 items-center justify-end gap-2 border-t px-5 py-3 sm:px-6 ${
-            enterprise ? 'border-slate-200 bg-white sm:py-4' : 'border-border-lt bg-card'
+            workspace ? 'border-border-lt bg-card sm:px-8 sm:py-4' : enterprise ? 'border-slate-200 bg-white sm:py-4' : 'border-border-lt bg-card'
           }`}>
             {footer}
           </div>
@@ -501,21 +501,24 @@ export function SlidePanel({
   onClose,
   children,
   actions,
+  variant = 'panel',
 }: {
   title: string
   subtitle?: string
   onClose: () => void
   children: ReactNode
   actions?: ReactNode
+  variant?: 'panel' | 'workspace'
 }) {
   useBodyScrollLock(true)
   const titleId = useId()
   const panelRef = useFocusTrap<HTMLDivElement>(true, onClose)
   const overlayDismiss = useOverlayDismiss(onClose)
+  const workspace = variant === 'workspace'
   return (
     <Portal>
     <div
-      className="fixed inset-0 z-[9000] h-dvh overscroll-contain backdrop-blur-xs bg-black/40 flex justify-end"
+      className={`fixed inset-0 z-[9000] h-dvh overscroll-contain flex ${workspace ? 'justify-stretch bg-[var(--bg-app)]' : 'justify-end backdrop-blur-xs bg-black/40'}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -524,27 +527,27 @@ export function SlidePanel({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="flex flex-col w-full sm:w-[min(95vw,720px)] max-w-5xl h-full overflow-hidden bg-card border-l border-border shadow-2xl"
-        style={{ animation: 'slideInRight 0.28s cubic-bezier(0.25,0.46,0.45,0.94) both' }}
+        className={`flex h-full w-full flex-col overflow-hidden ${workspace ? 'max-w-none bg-[var(--bg-app)]' : 'sm:w-[min(95vw,720px)] max-w-5xl bg-card border-l border-border shadow-2xl'}`}
+        style={{ animation: workspace ? 'none' : 'slideInRight 0.28s cubic-bezier(0.25,0.46,0.45,0.94) both' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 sm:px-6 py-3.5 sm:py-4 border-b bg-surface border-border-lt flex-shrink-0">
+        <div className={`flex flex-shrink-0 items-center gap-3 border-b border-border-lt ${workspace ? 'min-h-[76px] bg-[var(--bg-app)] px-4 py-4 sm:px-8' : 'bg-surface px-4 py-3.5 sm:px-6 sm:py-4'}`}>
           <button
-            className="p-2 sm:p-1.5 text-text-3 text-xl sm:text-2xl hover:bg-muted/50 rounded-lg transition-colors"
+            className={workspace ? 'form-workspace-back' : 'p-2 sm:p-1.5 text-text-3 text-xl sm:text-2xl hover:bg-muted/50 rounded-lg transition-colors'}
             onClick={onClose}
             aria-label="Close panel"
           >
             ←
           </button>
           <div className="flex-1 min-w-0">
-            <h2 id={titleId} className="text-base sm:text-sm font-semibold text-text-1">{title}</h2>
-            {subtitle && <p className="text-[11px] sm:text-[10px] text-text-3">{subtitle}</p>}
+            <h2 id={titleId} className={workspace ? 'text-xl sm:text-2xl font-bold text-text-1' : 'text-base sm:text-sm font-semibold text-text-1'}>{title}</h2>
+            {subtitle && <p className={workspace ? 'mt-1 text-sm text-text-3' : 'text-[11px] sm:text-[10px] text-text-3'}>{subtitle}</p>}
           </div>
           {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
         </div>
         {/* Body */}
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        <div className={`flex-1 overflow-y-auto ${workspace ? 'form-workspace-body' : ''}`}>{children}</div>
       </div>
     </div>
     </Portal>
