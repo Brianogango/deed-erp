@@ -159,10 +159,11 @@ function useBodyScrollLock(locked: boolean) {
   }, [locked])
 }
 
-function Portal({ children }: { children: ReactNode }) {
+function Portal({ children, targetId }: { children: ReactNode; targetId?: string }) {
   const mounted = useMounted()
   if (!mounted) return null
-  return createPortal(children, document.body)
+  const target = targetId ? document.getElementById(targetId) : null
+  return createPortal(children, target ?? document.body)
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -394,9 +395,9 @@ export function Modal({
   const workspace = variant === 'workspace'
 
   return (
-    <Portal>
+    <Portal targetId={workspace ? 'module-workspace-root' : undefined}>
     <div
-      className={`fixed inset-0 z-[9600] flex h-dvh overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0' : 'items-center justify-center p-4 sm:p-6'}`}
+      className={`${workspace ? 'absolute h-full' : 'fixed h-dvh'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
       style={{
         background: workspace ? 'var(--bg-app)' : enterprise ? 'rgba(15,23,42,0.48)' : 'rgba(0,0,0,0.55)',
         backdropFilter: workspace ? 'none' : enterprise ? 'blur(3px)' : 'blur(8px)',
@@ -410,7 +411,7 @@ export function Modal({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className={`flex w-full flex-col overflow-hidden ${workspace ? 'h-dvh max-h-none rounded-none' : `my-auto rounded-[14px] sm:rounded-2xl ${enterprise ? 'max-h-[calc(100dvh-48px)]' : 'max-h-[calc(100dvh-20px)] sm:max-h-[92vh]'}`}`}
+        className={`flex w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell h-full max-h-none rounded-none' : `my-auto rounded-[14px] sm:rounded-2xl ${enterprise ? 'max-h-[calc(100dvh-48px)]' : 'max-h-[calc(100dvh-20px)] sm:max-h-[92vh]'}`}`}
         style={{
           maxWidth: workspace ? 'none' : width,
           background: workspace ? 'var(--bg-app)' : enterprise ? '#FFFFFF' : 'var(--bg-card)',
@@ -425,7 +426,7 @@ export function Modal({
         {/* Header */}
         <div
           className={`flex flex-shrink-0 items-center justify-between border-b px-5 py-4 sm:px-6 ${
-            workspace ? 'min-h-[76px] py-4 sm:px-8' : enterprise ? 'sm:py-5' : 'sm:py-5'
+            workspace ? 'form-workspace-header' : enterprise ? 'sm:py-5' : 'sm:py-5'
           }`}
           style={{
             background: workspace ? 'var(--bg-app)' : enterprise ? '#FFFFFF' : `linear-gradient(135deg, ${accent}0e 0%, ${accent}1a 100%)`,
@@ -475,7 +476,7 @@ export function Modal({
         </div>
         {/* Body */}
         <div className={`modal-content-shell min-h-0 flex-1 overflow-y-auto flex flex-col ${
-          workspace ? 'gap-5 px-4 py-5 sm:px-8 sm:py-7' : enterprise ? 'gap-5 p-5 sm:p-6' : 'gap-3 p-4 sm:gap-4 sm:p-6'
+          workspace ? 'form-workspace-body gap-5' : enterprise ? 'gap-5 p-5 sm:p-6' : 'gap-3 p-4 sm:gap-4 sm:p-6'
         }`}>
           {children}
         </div>
@@ -516,9 +517,9 @@ export function SlidePanel({
   const overlayDismiss = useOverlayDismiss(onClose)
   const workspace = variant === 'workspace'
   return (
-    <Portal>
+    <Portal targetId={workspace ? 'module-workspace-root' : undefined}>
     <div
-      className={`fixed inset-0 z-[9000] h-dvh overscroll-contain flex ${workspace ? 'justify-stretch bg-[var(--bg-app)]' : 'justify-end backdrop-blur-xs bg-black/40'}`}
+      className={`${workspace ? 'absolute h-full' : 'fixed h-dvh'} inset-0 z-[9000] overscroll-contain flex ${workspace ? 'justify-stretch bg-[var(--bg-app)] pointer-events-auto' : 'justify-end backdrop-blur-xs bg-black/40'}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -527,12 +528,12 @@ export function SlidePanel({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={`flex h-full w-full flex-col overflow-hidden ${workspace ? 'max-w-none bg-[var(--bg-app)]' : 'sm:w-[min(95vw,720px)] max-w-5xl bg-card border-l border-border shadow-2xl'}`}
+        className={`flex h-full w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell max-w-none bg-[var(--bg-app)]' : 'sm:w-[min(95vw,720px)] max-w-5xl bg-card border-l border-border shadow-2xl'}`}
         style={{ animation: workspace ? 'none' : 'slideInRight 0.28s cubic-bezier(0.25,0.46,0.45,0.94) both' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className={`flex flex-shrink-0 items-center gap-3 border-b border-border-lt ${workspace ? 'min-h-[76px] bg-[var(--bg-app)] px-4 py-4 sm:px-8' : 'bg-surface px-4 py-3.5 sm:px-6 sm:py-4'}`}>
+        <div className={`flex flex-shrink-0 items-center gap-3 border-b border-border-lt ${workspace ? 'form-workspace-header bg-[var(--bg-app)]' : 'bg-surface px-4 py-3.5 sm:px-6 sm:py-4'}`}>
           <button
             className={workspace ? 'form-workspace-back' : 'p-2 sm:p-1.5 text-text-3 text-xl sm:text-2xl hover:bg-muted/50 rounded-lg transition-colors'}
             onClick={onClose}

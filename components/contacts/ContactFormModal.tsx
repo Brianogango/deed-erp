@@ -178,9 +178,13 @@ export default function ContactFormModal({
       onClose={onClose}
     >
       <div className={`contacts-form-sheet contacts-form-sheet--${form.type}`}>
+      <div className="form-workspace-section-heading">
+        <strong>{forceVendor ? 'Vendor' : forceCustomer ? 'Customer' : 'Contact'}</strong>
+        <span>{forceVendor ? 'Supplier identity and purchasing details' : 'The display name is used across quotations, invoices and statements'}</span>
+      </div>
       {!editId && (
         <div className="contacts-type-switch" role="group" aria-label="Contact type">
-          {(['individual', 'company'] as const).map(t => (
+          {(['company', 'individual'] as const).map(t => (
             <button
               key={t}
               type="button"
@@ -190,7 +194,7 @@ export default function ContactFormModal({
             >
               {t === 'individual'
                 ? <><Fa icon={faUser} /> <span><strong>Individual</strong><small>Person / contact</small></span></>
-                : <><Fa icon={faBuilding} /> <span><strong>Company</strong><small>Organisation / business</small></span></>}
+                : <><Fa icon={faBuilding} /> <span><strong>Business</strong><small>Company / organisation</small></span></>}
             </button>
           ))}
         </div>

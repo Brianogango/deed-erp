@@ -765,12 +765,13 @@ function AppContent({ children }: { children: React.ReactNode }) {
           id="main-content"
           ref={contentRef}
           className="
-            flex-1 overflow-y-auto overflow-x-hidden
+            relative flex-1 overflow-y-auto overflow-x-hidden
             p-2 md:p-2.5 lg:p-3
             transition-all duration-200
           "
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
+          <div id="module-workspace-root" className="pointer-events-none absolute inset-0 z-[80]" />
           <div className="min-w-0">
             {children}
           </div>
