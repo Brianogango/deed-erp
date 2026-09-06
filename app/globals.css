@@ -2839,6 +2839,19 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     box-shadow: var(--shadow-xs);
   }
 
+  .table-scroll.table-scroll--min-width {
+    overflow-x: auto;
+  }
+
+  @media (min-width: 768px) {
+    .table-scroll.table-scroll--min-width > .flex,
+    .table-scroll.table-scroll--min-width > [role='grid'] {
+      min-width: var(--table-min-width, 0);
+      max-width: none;
+      width: max(100%, var(--table-min-width, 0px));
+    }
+  }
+
   /* Match DataTable JS breakpoint (<768 = mobile cards). Tables always fill
      the card width — columns shrink/truncate instead of sideways scroll. */
   @media (min-width: 768px) {

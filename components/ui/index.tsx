@@ -881,7 +881,7 @@ export function Table({
   cols,
   children,
   empty = 'No records found',
-  minWidth = 640,
+  minWidth = 0,
   tableId,
   stickyHeader = true,
   resizable = true,
@@ -1119,7 +1119,10 @@ export function Table({
   const showEmptyState = !isLoading && !error && visibleRows === 0
 
   return (
-    <div className="table-scroll responsive-table relative max-w-full min-w-0">
+    <div
+      className={`table-scroll responsive-table relative max-w-full min-w-0${minWidth > 0 ? ' table-scroll--min-width' : ''}`}
+      style={minWidth > 0 ? { ['--table-min-width' as string]: `${minWidth}px` } : undefined}
+    >
       {!hideColumnMenu && tableId && cols.length > 3 && (
         <div className="flex items-center justify-end gap-2 border-b border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-2">
           <button
@@ -1169,10 +1172,9 @@ export function Table({
       <div
         className="flex flex-col"
         style={{
-          // Always fill the card — never force a wider minWidth that creates h-scroll.
           width: '100%',
-          minWidth: 0,
-          maxWidth: '100%',
+          minWidth: minWidth > 0 ? minWidth : 0,
+          maxWidth: minWidth > 0 ? 'none' : '100%',
           '--table-cols': grid,
         } as React.CSSProperties}
         role="grid"

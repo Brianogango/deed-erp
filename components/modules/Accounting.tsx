@@ -518,6 +518,10 @@ function AccountingContent() {
     setInvoiceListPageState(1)
     setInvSearchValue(value, { queryPatch: { page: null } })
   }, [setInvSearchValue])
+  const clearInvoiceFilters = useCallback(() => {
+    setInvoiceListPageState(1)
+    patchInvoiceUi({ q: null, filter: null, page: null })
+  }, [patchInvoiceUi])
   const setInvoiceListPage = useCallback((nextPage: number) => {
     const page = parseFinanceListPage(nextPage)
     setInvoiceListPageState(page)
@@ -1654,6 +1658,7 @@ function AccountingContent() {
                 page={invoiceListPage}
                 onPageChange={setInvoiceListPage}
                 primaryFilters={invoicePrimaryFilters}
+                onClearFilters={clearInvoiceFilters}
                 hideColumnFilters
                 selectable
                 emptyMessage={tab === 'invoices' ? 'No invoices found' : 'No bills found'}
