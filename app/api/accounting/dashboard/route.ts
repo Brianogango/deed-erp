@@ -227,6 +227,10 @@ export async function GET(request: NextRequest) {
           clientId: true,
           totalAmount: true,
           client: { select: { name: true } },
+          paymentAllocations: {
+            where: { reversedAt: null, applicationDate: { lte: dateTo } },
+            select: { amount: true },
+          },
         },
       }),
       prisma.invoice.findMany({
@@ -309,6 +313,15 @@ export async function GET(request: NextRequest) {
       lastMonth: revenueBetween(lastMonthStart, lastMonthEnd),
       thisYear: revenueBetween(yearStart, todayStart),
     }
+
+    const selectedInvoiceTotal = customerInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0)
+    const selectedInvoiceCollected = customerInvoices.reduce(
+      (sum, invoice) => sum + invoice.paymentAllocations.reduce((paid, allocation) => paid + Number(allocation.amount || 0), 0),
+      0,
+    )
+    const collectionRate = selectedInvoiceTotal > 0
+      ? Math.min(100, Math.max(0, selectedInvoiceCollected / selectedInvoiceTotal * 100))
+      : 0
 
     const previousGrossProfit = money(previousPl.grossProfit)
     const currentCash = money(cashFlow.closingCash)
@@ -570,6 +583,9 @@ export async function GET(request: NextRequest) {
         generatedAt: new Date().toISOString(),
       },
       kpis,
+      performance: {
+        collectionRate: money(collectionRate),
+      },
       revenuePeriods,
       revenueTrend,
       cashTrend,
