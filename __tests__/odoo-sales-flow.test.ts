@@ -18,6 +18,7 @@ import {
   normalizeDeliveryStatus,
   invoiceDocState,
   invoicePaymentStatus,
+  financeListPaymentStatusLabel,
   isInvoiceOverdue,
   invoiceResidual,
   isOpenInvoice,
@@ -425,6 +426,13 @@ describe('invoice document state and payment status', () => {
   it('a reversed/cancelled invoice with prior payments is Reversed', () => {
     expect(invoicePaymentStatus({ status: 'cancelled', total: 100, amountPaid: 100 })).toBe('reversed')
     expect(invoicePaymentStatus({ status: 'cancelled', total: 100, amountPaid: 0 })).toBe('not_paid')
+  })
+
+  it('list payment column hides draft state but keeps Reversed on cancelled paid invoices', () => {
+    expect(financeListPaymentStatusLabel({ status: 'draft', total: 100, amountPaid: 0 })).toBe('Not available')
+    expect(financeListPaymentStatusLabel({ status: 'cancelled', total: 100, amountPaid: 0 })).toBe('Not available')
+    expect(financeListPaymentStatusLabel({ status: 'cancelled', total: 100, amountPaid: 100 })).toBe('Reversed')
+    expect(financeListPaymentStatusLabel({ status: 'posted', total: 100, amountPaid: 40 })).toBe('Partially Paid')
   })
 
   it('overdue is computed from due date + residual and does not change the document state', () => {

@@ -755,6 +755,18 @@ export function invoicePaymentStatus(inv: PaymentStatusInput): PaymentStatus {
 }
 
 /**
+ * Invoice/bill list payment column. Drafts hide payment state until posting,
+ * but a cancelled document that already had money still shows Reversed.
+ */
+export function financeListPaymentStatusLabel(inv: PaymentStatusInput): string {
+  const paymentState = invoicePaymentStatus(inv)
+  if (invoiceDocState(inv.status) !== 'posted' && paymentState !== 'reversed') {
+    return 'Not available'
+  }
+  return PAYMENT_STATUS_LABELS[paymentState]
+}
+
+/**
  * Overdue is a computed badge/filter, never a stored document state:
  * a posted invoice past its due date with a residual balance.
  */
