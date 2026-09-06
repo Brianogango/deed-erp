@@ -2681,23 +2681,19 @@ function SalesContent() {
                         </div>
                       )}
 
-                    <div className="sp-panel sp-panel-pad sales-order-meta-panel">
+                    <div className="sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--unified">
+                      <div className="sales-order-unified-heading">
+                        <strong>{isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sales order'}</strong>
+                        <span>Customer, dates, terms and ownership</span>
+                      </div>
                       <div className="sp-grid-2 sales-order-meta-grid">
                         <div className="sales-order-meta-column sales-order-meta-column--customer">
-                          <div className="sales-order-section-heading">
-                            <span>Customer details</span>
-                            <small>Billing contact</small>
-                          </div>
                           <SalesDocField label="Customer"><input readOnly value={activeOrder.customerName || ''} /></SalesDocField>
                           <SalesDocField label="Contact"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.name || '—' })()} /></SalesDocField>
                           <SalesDocField label="Email"><input readOnly value={customers.find(c => c.id === activeOrder.customerId)?.email || '—'} /></SalesDocField>
                           <SalesDocField label="Phone"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.phone || c?.mobile || '—' })()} /></SalesDocField>
                         </div>
                         <div className="sales-order-meta-column sales-order-meta-column--commercial">
-                          <div className="sales-order-section-heading">
-                            <span>Commercial details</span>
-                            <small>Dates, pricing and ownership</small>
-                          </div>
                           <SalesDocField label="Reference">
                             <div className="sales-order-reference">
                               <strong>{activeOrder.ref}</strong>
@@ -4032,13 +4028,13 @@ function NewQuotationForm({
         </div>
       </div>
 
-      <div className="sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--new">
+      <div className="sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--new sales-order-meta-panel--unified">
+        <div className="sales-order-unified-heading">
+          <strong>Quotation</strong>
+          <span>Who this quotation is for, with dates, terms and ownership</span>
+        </div>
         <div className="sp-grid-2 sales-order-meta-grid">
           <div className="sales-order-meta-column sales-order-meta-column--customer">
-            <div className="sales-order-section-heading">
-              <span>Customer details</span>
-              <small>Choose the billing contact</small>
-            </div>
             <SalesDocField label="Customer" htmlFor="quote-customer">
               <div className="relative" ref={customerRef}>
                 <div
@@ -4102,10 +4098,6 @@ function NewQuotationForm({
           </div>
 
           <div className="sales-order-meta-column sales-order-meta-column--commercial">
-            <div className="sales-order-section-heading">
-              <span>Commercial details</span>
-              <small>Dates, terms and ownership</small>
-            </div>
             <SalesDocField label="Quotation date" htmlFor="quote-date">
               <input id="quote-date" type="date" aria-label="Quotation date" value={new Date().toISOString().slice(0, 10)} readOnly />
             </SalesDocField>
