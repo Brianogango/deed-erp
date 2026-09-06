@@ -8,6 +8,11 @@ import {
   kindRequiresInventoryAccounts, applyCategoryAccountDefaults, resolveProductAccounts,
 } from '@/lib/store'
 import type { ProductKind } from '@/lib/product-kind'
+import {
+  defaultProductCreationCategory,
+  inventoryCategoryFilterOptions,
+  resolveProductCreationCategoryOptions,
+} from '@/lib/product-categories'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { PrimaryActionButton, SecondaryActionMenu, TablePageLayout, OperationalSummary, CompactInfoNotice, StatusBadge } from '@/components/erp'
@@ -117,8 +122,8 @@ function applyCostBandPrices<T extends Record<string, any>>(
   }
 }
 
-const blankProduct = (formDefaults?: { minStock?: number; warrantyMonths?: number }) => {
-  const category = 'Laptops' as CategoryId
+const blankProduct = (formDefaults?: { minStock?: number; warrantyMonths?: number; category?: string }) => {
+  const category = (formDefaults?.category || 'Laptops') as CategoryId
   const defaults = applyCategoryAccountDefaults(category, {})
   const productKind = defaults.productKind
   const trackingMethod = defaultTrackingForKind(productKind, category)
@@ -319,6 +324,7 @@ function InventoryContent() {
   const productFormDefaults = {
     minStock: systemSettings.invDefaultMinStock ?? 5,
     warrantyMonths: systemSettings.invDefaultWarrantyMonths ?? 6,
+    category: defaultProductCreationCategory((systemSettings as any).invProductCategories),
   }
   const emptyPhotoSlots = (): Record<ProductImageSlot, { url: string | null; source: 'upload' | 'catalog' | null; pending?: boolean }> => ({
     1: { url: null, source: null },
@@ -1533,7 +1539,7 @@ function InventoryContent() {
         onChange={e => { const f = e.target.files?.[0]; if (f) handleOpeningImportFile(f); e.target.value = '' }} />
 
       <ModuleHeader
-        title="Operations"
+        title="Inventory"
         subtitle="Inventory, warehouse and stock control"
         icon={<Fa icon={faBoxesStacked} />}
         count={kpis.productMasters}
@@ -1606,11 +1612,11 @@ function InventoryContent() {
         maxVisibleMobile={3}
         maxVisibleTablet={5}
         maxVisibleDesktop={6}
-        ariaLabel="Operations sections"
+        ariaLabel="Inventory sections"
       />
 
       <div className="mod-body">
-      <div className="inventory-pilot-rail operations-summary" aria-label="Operations overview">
+      <div className="inventory-pilot-rail operations-summary" aria-label="Inventory overview">
         <button type="button" className={`inventory-pilot-stat ${tab === 'product_catalog' ? 'is-active' : ''}`} onClick={() => setActiveTab('product_catalog')}>
           <span className="inventory-pilot-stat-label">Active products</span>
           <span className="inventory-pilot-stat-value tabular-nums">{kpis.productMasters.toLocaleString()}</span>
@@ -2163,7 +2169,7 @@ function InventoryContent() {
                   allValue: 'All',
                   options: [
                     { value: 'All', label: 'All categories' },
-                    ...ALL_CATEGORIES.map(c => ({ value: c, label: c })),
+                    ...inventoryCategoryFilterOptions((systemSettings as any).invProductCategories),
                   ],
                   onChange: setCatalogCatFilter,
                 },
@@ -3142,7 +3148,7 @@ function InventoryContent() {
           <div className="card p-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Month"><Select value={reportMonth} onChange={value => setReportMonth(value)} options={MONTH_OPTS} /></Field>
-              <Field label="Category"><Select value={catFilter} onChange={value => setCatFilter(value)} options={[{ value: 'All', label: 'All categories' }, ...ALL_CATEGORIES.map(c => ({ value: c, label: c }))]} /></Field>
+              <Field label="Category"><Select value={catFilter} onChange={value => setCatFilter(value)} options={[{ value: 'All', label: 'All categories' }, ...inventoryCategoryFilterOptions((systemSettings as any).invProductCategories)]} /></Field>
               <Field label="Product"><Select value={reportProductId} onChange={value => setReportProductId(value)} options={[{ value: 'All', label: 'All products' }, ...stockableProducts.map(p => ({ value: p.id, label: p.name }))]} /></Field>
             </div>
           </div>
@@ -3919,7 +3925,15 @@ function InventoryContent() {
                         priceDifferenceAccountCode: defaults.priceDifferenceAccountCode,
                       }, systemSettings))
                   }}
-                  options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))}
+                  options={[
+                    ...resolveProductCreationCategoryOptions((systemSettings as any).invProductCategories),
+                    ...(
+                      form.category &&
+                      !resolveProductCreationCategoryOptions((systemSettings as any).invProductCategories).some(option => option.value === form.category)
+                        ? [{ value: form.category, label: `Existing - ${form.category}` }]
+                        : []
+                    ),
+                  ]}
                 />
               </Field>
               <Field label="Tracking Method">

@@ -28,6 +28,7 @@ import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { compressCompanyLogoDataUrl } from '@/lib/pdf-logo'
 import { resolveSettingsSection } from '@/lib/dashboard-priority'
 import { useUrlQueryState } from '@/hooks/useUrlRecordId'
+import { normalizeProductCategorySettings, PRODUCT_CREATION_CATEGORY_OPTIONS, type ProductCategorySetting } from '@/lib/product-categories'
 type Section =
   | 'general' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
@@ -140,6 +141,9 @@ export default function Settings() {
     showToast,
   } = useApp()
   const { employees, updateEmployee } = useHrStore()
+  const productCategorySettings = normalizeProductCategorySettings((ss as any).invProductCategories)
+  const saveProductCategorySettings = (next: ProductCategorySetting[]) =>
+    updateSystemSettings({ invProductCategories: next } as any)
 
   // Deep links (?tab= / ?section=) land on the right section — e.g. the
   // dashboard's Active Users card links to /settings?tab=users → 'access'.
@@ -1076,6 +1080,81 @@ export default function Settings() {
                     { value: 'standard', label: 'Standard Price (not yet posted)' },
                   ]} />
                 </SettingRow>
+              </SectionCard>
+              <SectionCard title="Product Categories">
+                <div className="py-3 space-y-2">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <p className="text-[11px] text-gray-500 max-w-2xl">
+                      Choose which categories appear during product creation and edit their display names.
+                      Internal identifiers remain protected so stock tracking, accounts and pricing rules continue to work.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold px-3 py-2 rounded-lg border border-navy-500 bg-navy-500 text-white hover:bg-navy-600 whitespace-nowrap"
+                        onClick={() => saveProductCategorySettings([
+                          ...productCategorySettings,
+                          {
+                            value: `custom:${Date.now().toString(36)}`,
+                            label: 'New category',
+                            enabled: true,
+                          },
+                        ])}
+                      >
+                        Add category
+                      </button>
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                        onClick={() => saveProductCategorySettings(
+                          PRODUCT_CREATION_CATEGORY_OPTIONS.map(option => ({ ...option, enabled: true })),
+                        )}
+                      >
+                        Restore defaults
+                      </button>
+                    </div>
+                  </div>
+                  {productCategorySettings.map((category, index) => (
+                    <div key={category.value} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 items-center rounded-lg border border-gray-200 bg-white px-3 py-2">
+                      <Toggle
+                        on={category.enabled}
+                        onChange={enabled => {
+                          const next = [...productCategorySettings]
+                          next[index] = { ...category, enabled }
+                          saveProductCategorySettings(next)
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <Input
+                          value={category.label}
+                          onChange={label => {
+                            const next = [...productCategorySettings]
+                            next[index] = { ...category, label }
+                            saveProductCategorySettings(next)
+                          }}
+                        />
+                        <div className="mt-1 flex items-center justify-between gap-3 text-[10px] text-gray-400">
+                          <span>
+                            {category.value.startsWith('custom:')
+                              ? 'Custom category · Quantity tracking · Manual pricing'
+                              : `System mapping: ${category.value}`}
+                          </span>
+                          {category.value.startsWith('custom:') && (
+                            <button
+                              type="button"
+                              className="text-red-600 hover:text-red-700 font-semibold"
+                              onClick={() => saveProductCategorySettings(
+                                productCategorySettings.filter(item => item.value !== category.value),
+                              )}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </SectionCard>
               <SectionCard title="Product Defaults">
                 <SettingRow label="Default Min Stock" desc="Low-stock alert threshold pre-filled when a new product does not set one">
