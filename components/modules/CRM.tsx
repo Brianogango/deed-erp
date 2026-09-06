@@ -1037,7 +1037,7 @@ function CRMContent() {
 
         {/* Modals */}
         {showNewOppModal && (
-          <Modal title="New Opportunity" onClose={() => setShowNewOppModal(false)} width={600}>
+          <Modal title="New Opportunity" subtitle="Capture the customer, expected value, stage and next action" variant="workspace" onClose={() => setShowNewOppModal(false)} width={600}>
             <Field label="Opportunity Name"><Input value={oppForm.name} onChange={v => setOppForm(p => ({ ...p, name: v }))} placeholder="e.g. 50 Laptops for HQ" /></Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <Field label="Company">
