@@ -159,10 +159,11 @@ function useBodyScrollLock(locked: boolean) {
   }, [locked])
 }
 
-function Portal({ children }: { children: ReactNode }) {
+function Portal({ children, targetId }: { children: ReactNode; targetId?: string }) {
   const mounted = useMounted()
   if (!mounted) return null
-  return createPortal(children, document.body)
+  const target = targetId ? document.getElementById(targetId) : null
+  return createPortal(children, target ?? document.body)
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -394,9 +395,9 @@ export function Modal({
   const workspace = variant === 'workspace'
 
   return (
-    <Portal>
+    <Portal targetId={workspace ? 'module-workspace-root' : undefined}>
     <div
-      className={`fixed inset-0 z-[9600] flex h-dvh overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0' : 'items-center justify-center p-4 sm:p-6'}`}
+      className={`${workspace ? 'absolute h-full' : 'fixed h-dvh'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
       style={{
         background: workspace ? 'var(--bg-app)' : enterprise ? 'rgba(15,23,42,0.48)' : 'rgba(0,0,0,0.55)',
         backdropFilter: workspace ? 'none' : enterprise ? 'blur(3px)' : 'blur(8px)',
@@ -516,9 +517,9 @@ export function SlidePanel({
   const overlayDismiss = useOverlayDismiss(onClose)
   const workspace = variant === 'workspace'
   return (
-    <Portal>
+    <Portal targetId={workspace ? 'module-workspace-root' : undefined}>
     <div
-      className={`fixed inset-0 z-[9000] h-dvh overscroll-contain flex ${workspace ? 'justify-stretch bg-[var(--bg-app)]' : 'justify-end backdrop-blur-xs bg-black/40'}`}
+      className={`${workspace ? 'absolute h-full' : 'fixed h-dvh'} inset-0 z-[9000] overscroll-contain flex ${workspace ? 'justify-stretch bg-[var(--bg-app)] pointer-events-auto' : 'justify-end backdrop-blur-xs bg-black/40'}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
