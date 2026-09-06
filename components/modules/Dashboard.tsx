@@ -97,7 +97,6 @@ function KpiCard({
   label,
   value,
   sub,
-  color,
   icon,
   onClick,
   isCurrency,
