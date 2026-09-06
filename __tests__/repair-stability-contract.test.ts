@@ -13,6 +13,15 @@ describe('repair stability contract', () => {
     expect(src).toContain('/api/repairs/${encodeURIComponent(activeId)}')
     expect(src).toContain("cache: 'no-store'")
     expect(src).toContain("document.visibilityState === 'hidden'")
+    expect(src).toContain('canApplyPolledRepair')
+    expect(src).toContain('isDeedRepairsBlobDirty')
+  })
+
+  it('opens Refurbishment jobs in the Refurbishment module instead of Repair detail', () => {
+    const src = readFileSync('components/modules/Repair.tsx', 'utf8')
+    expect(src).toContain('openRefurbJob')
+    expect(src).toContain('refurbishmentJobHref')
+    expect(src).not.toContain("RepairRefurbJobs onSelect={(id) => { setActiveId(id); setView('detail') }}")
   })
 
   it('exposes an authoritative permission-scoped Repair detail GET', () => {

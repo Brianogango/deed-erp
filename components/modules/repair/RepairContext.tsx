@@ -50,6 +50,8 @@ export interface RepairCtxValue {
   activeId: string | null; setActiveId: (id: string | null) => void
   filter: any; setFilter: (f: any) => void
   mainTab: 'client' | 'refurb'; setMainTab: (t: 'client' | 'refurb') => void
+  openRefurbJob: (id: string) => void
+  detailPanel: 'hidden' | 'detail' | 'loading' | 'missing'
   // Quick-assign / invoice
   quickAssignRepairId: string | null; setQuickAssignRepairId: (v: string | null) => void
   invoiceRepairId: string | null; setInvoiceRepairId: (v: string | null) => void

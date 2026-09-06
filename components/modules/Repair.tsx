@@ -22,12 +22,21 @@ import {
   EditRepairDetailsModal,
   StopAtDiagnosisModal
 } from './RepairModals'
-import { ModuleHeader, ModuleSkeleton, TabBar, useMounted } from '@/components/ui'
+import { ModuleHeader, ModuleSkeleton, StatePanel, TabBar, useMounted } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faPlus, faTools } from '@fortawesome/free-solid-svg-icons'
+import { useRouter } from 'next/navigation'
 import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { isOpenRepairJob } from '@/lib/repair-progress'
+import {
+  canApplyPolledRepair,
+  isDeedRepairsBlobDirty,
+  refurbishmentJobHref,
+  repairDetailPanel,
+  resolveRepairWorkspaceId,
+} from '@/lib/repair-open-record'
+import { DIRTY_KEYS_LS } from '@/lib/store'
 import { repairModuleView } from '@/lib/repair-workspace-view'
 
 const RepairDetailView = dynamic(() => import('./repair/RepairDetailView'), {
@@ -40,6 +49,7 @@ const RepairIntake = dynamic(() => import('../repair/RepairIntake'), {
 function RepairContent() {
   const {
     view, setView, activeRepair, setActiveId, mainTab, setMainTab, openRepairCount, currentUser,
+    openRefurbJob, detailPanel,
     showAssignModal, setShowAssignModal,
     showDiagnosisModal, setShowDiagnosisModal,
     showQuoteModal, setShowQuoteModal,
@@ -89,7 +99,7 @@ function RepairContent() {
             {mainTab === 'client' ? (
               <RepairClientJobs onSelect={(id) => { setActiveId(id); setView('detail') }} />
             ) : (
-              <RepairRefurbJobs onSelect={(id) => { setActiveId(id); setView('detail') }} />
+              <RepairRefurbJobs onSelect={openRefurbJob} />
             )}
           </div>
         </div>
@@ -99,7 +109,30 @@ function RepairContent() {
         <RepairIntake onCancel={() => setView('list')} onSuccess={(id) => { setActiveId(id); setView('detail') }} />
       )}
 
-      {view === 'detail' && activeRepair && <RepairDetailView />}
+      {detailPanel === 'detail' && activeRepair && <RepairDetailView />}
+      {detailPanel === 'loading' && (
+        <div className="flex-1 min-h-0 overflow-auto p-6">
+          <StatePanel
+            tone="loading"
+            title="Loading repair job"
+            description="Fetching the open job. Stay on this page."
+          />
+        </div>
+      )}
+      {detailPanel === 'missing' && (
+        <div className="flex-1 min-h-0 overflow-auto p-6">
+          <StatePanel
+            tone="empty"
+            title="Repair job not found"
+            description="This link is not a repair order. It may have been removed, or it belongs to another module."
+            action={(
+              <PrimaryActionButton onClick={() => setView('list')} hideLabelOnMobile={false}>
+                Back to jobs
+              </PrimaryActionButton>
+            )}
+          />
+        </div>
+      )}
 
       {showAssignModal && activeRepair && <AssignTechnicianModal repair={activeRepair} onClose={() => setShowAssignModal(false)} />}
       {showDiagnosisModal && activeRepair && <LogDiagnosisModal repair={activeRepair} onClose={() => setShowDiagnosisModal(false)} />}
@@ -133,8 +166,10 @@ function RepairInner() {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs, warranties, systemSettings, companySettings,
     createRepair, updateRepair, deleteRepair, verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
     startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived, scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
-    getVisibleRepairs, updateRepairProgress, moveRepairToPreviousProgress, requestProcurement, markUnrepairable, returnToCustomer, fileWarrantyClaim, showToast, appendRepairHistory
+    getVisibleRepairs, updateRepairProgress, moveRepairToPreviousProgress, requestProcurement, markUnrepairable, returnToCustomer, fileWarrantyClaim, showToast, appendRepairHistory,
+    setModule,
   } = useRepairStore()
+  const router = useRouter()
 
   const [activeId, setActiveId] = useUrlRecordId()
   const [isIntake, setIsIntake] = useState(false)
@@ -235,23 +270,69 @@ function RepairInner() {
 
   const localActiveRepair = useMemo(() => repairs.find(r => r.id === activeId) ?? null, [repairs, activeId])
   const [serverActiveRepair, setServerActiveRepair] = useState(null)
+  const [detailLookup, setDetailLookup] = useState('idle')
+  const localGenerationRef = useRef(0)
+  const workspaceIdKind = useMemo(
+    () => resolveRepairWorkspaceId(
+      activeId,
+      repairs.map(r => r.id),
+      refurbishmentJobs.map(j => j.id),
+    ),
+    [activeId, repairs, refurbishmentJobs],
+  )
+
+  const openRefurbJob = useCallback((id) => {
+    setModule('refurbishment')
+    router.push(refurbishmentJobHref(id))
+  }, [router, setModule])
+
+  useEffect(() => {
+    if (workspaceIdKind !== 'refurb' || !activeId) return
+    setModule('refurbishment')
+    router.replace(refurbishmentJobHref(activeId))
+  }, [activeId, router, setModule, workspaceIdKind])
+
+  const localActiveRepairRef = useRef(localActiveRepair)
+  localActiveRepairRef.current = localActiveRepair
+  const skipGenerationBumpRef = useRef(true)
 
   // Keep the open record authoritative without reloading the whole Repair
   // module. This catches updates made from Sales, portal actions, ORC and other
   // tabs. It pauses in background tabs and refreshes immediately on focus.
   useEffect(() => {
     setServerActiveRepair(null)
-    if (!activeId) return
+    if (!activeId || workspaceIdKind === 'refurb') {
+      setDetailLookup('idle')
+      return
+    }
+    setDetailLookup(localActiveRepairRef.current ? 'idle' : 'loading')
     let cancelled = false
     let timer = null
 
     const refreshOpenRepair = async () => {
       if (document.visibilityState === 'hidden') return
+      const fetchGeneration = localGenerationRef.current
+      const repairsBlobDirty = isDeedRepairsBlobDirty(
+        typeof window === 'undefined' ? null : window.localStorage.getItem(DIRTY_KEYS_LS),
+      )
+      if (repairsBlobDirty) return
       try {
         const res = await fetch(`/api/repairs/${encodeURIComponent(activeId)}`, { cache: 'no-store' })
-        if (!res.ok) return
+        if (!res.ok) {
+          if (!cancelled && !localActiveRepairRef.current && (res.status === 404 || res.status === 403)) {
+            setDetailLookup('missing')
+          }
+          return
+        }
         const payload = await res.json()
-        if (!cancelled && payload?.repair?.id === activeId) setServerActiveRepair(payload.repair)
+        if (cancelled || payload?.repair?.id !== activeId) return
+        if (!canApplyPolledRepair({
+          repairsBlobDirty: isDeedRepairsBlobDirty(window.localStorage.getItem(DIRTY_KEYS_LS)),
+          localGeneration: localGenerationRef.current,
+          fetchGeneration,
+        })) return
+        setServerActiveRepair(payload.repair)
+        setDetailLookup('idle')
       } catch {
         // Preserve the local snapshot when connectivity is interrupted.
       }
@@ -270,15 +351,35 @@ function RepairInner() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [activeId])
+  }, [activeId, workspaceIdKind])
 
   // Local mutations must win instantly; the next focused/polled server read
   // reconciles them. This avoids a stale remote snapshot masking a just-saved
-  // diagnosis, quote, QC or status change.
-  useEffect(() => { setServerActiveRepair(null) }, [localActiveRepair])
+  // diagnosis, quote, QC or status change. Skip the first bump so the initial
+  // GET can apply; later store writes invalidate in-flight polls.
+  useEffect(() => {
+    if (skipGenerationBumpRef.current) {
+      skipGenerationBumpRef.current = false
+    } else {
+      localGenerationRef.current += 1
+    }
+    setServerActiveRepair(null)
+  }, [localActiveRepair])
 
-  const activeRepair = serverActiveRepair?.id === activeId ? serverActiveRepair : localActiveRepair
-  const view = repairModuleView(isIntake, activeId)
+  const repairsBlobDirty = typeof window !== 'undefined'
+    && isDeedRepairsBlobDirty(window.localStorage.getItem(DIRTY_KEYS_LS))
+  const activeRepair = (
+    !repairsBlobDirty && serverActiveRepair?.id === activeId
+  ) ? serverActiveRepair : localActiveRepair
+  const view = repairModuleView(
+    isIntake,
+    workspaceIdKind === 'refurb' ? null : activeId,
+  )
+  const detailPanel = repairDetailPanel({
+    view,
+    hasActiveRepair: Boolean(activeRepair),
+    lookup: detailLookup,
+  })
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
   const allVisibleRepairs = useMemo(() => getVisibleRepairs(), [getVisibleRepairs, repairs])
   const openRepairCount = useMemo(() => allVisibleRepairs.filter(isOpenRepairJob).length, [allVisibleRepairs])
@@ -295,6 +396,7 @@ function RepairInner() {
     startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived, scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
     getVisibleRepairs, updateRepairProgress, moveRepairToPreviousProgress, requestProcurement, markUnrepairable, returnToCustomer, fileWarrantyClaim, showToast, appendRepairHistory,
     view, setView, activeId, setActiveId, filter, setFilter, mainTab, setMainTab,
+    openRefurbJob, detailPanel,
     showAssignModal, setShowAssignModal, showDiagnosisModal, setShowDiagnosisModal, showQuoteModal, setShowQuoteModal, showQAModal, setShowQAModal,
     showDeliveryModal, setShowDeliveryModal, showProgressModal, setShowProgressModal, showProcurementModal, setShowProcurementModal, showReturnModal, setShowReturnModal,
     showDeclineModal, setShowDeclineModal, showMarkDeliveredConfirm, setShowMarkDeliveredConfirm,
