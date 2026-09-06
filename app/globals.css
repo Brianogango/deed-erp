@@ -30896,3 +30896,128 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .dashboard-page .dashboard-performance-grid i {
   background: conic-gradient(var(--primary) var(--dashboard-progress), var(--bg-muted) 0);
 }
+
+
+/* Persistent-shell record pages: shared across contacts, sales, finance and operations. */
+.form-workspace-shell {
+  background: var(--bg-page);
+}
+
+.form-workspace-header {
+  min-height: 6.5rem;
+  flex: 0 0 auto;
+  gap: 1rem;
+  border-bottom: 0 !important;
+  padding: 1.75rem clamp(1.25rem, 2.25vw, 2.25rem) 1.25rem !important;
+  background: var(--bg-page) !important;
+}
+
+.form-workspace-header .form-workspace-back {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: var(--bg-card);
+  box-shadow: none;
+}
+
+.form-workspace-header h2 {
+  font-size: clamp(1.35rem, 1.2rem + 0.45vw, 1.65rem) !important;
+  letter-spacing: -0.025em;
+}
+
+.form-workspace-header p {
+  margin-top: 0.2rem !important;
+  color: var(--text-4) !important;
+  font-size: 0.875rem !important;
+}
+
+.form-workspace-body {
+  padding: 0 clamp(1.25rem, 2.25vw, 2.25rem) 5.5rem !important;
+  background: var(--bg-page);
+}
+
+.form-workspace-body > * {
+  width: min(100%, 1500px);
+  margin-inline: auto;
+  border: 1px solid var(--border-lt);
+  border-radius: 1.5rem;
+  padding: clamp(1.35rem, 2vw, 2.25rem);
+  background: var(--bg-card);
+  box-shadow: none;
+}
+
+.form-workspace-body > .contacts-form-sheet {
+  border-radius: 1.5rem;
+  padding: clamp(1.35rem, 2vw, 2.25rem);
+}
+
+.form-workspace-body .contacts-type-switch {
+  margin-bottom: 1.5rem;
+}
+
+.form-workspace-body .contacts-form-footer {
+  margin-right: calc(clamp(1.35rem, 2vw, 2.25rem) * -1);
+  margin-bottom: calc(clamp(1.35rem, 2vw, 2.25rem) * -1);
+  margin-left: calc(clamp(1.35rem, 2vw, 2.25rem) * -1);
+  padding-inline: clamp(1.35rem, 2vw, 2.25rem);
+}
+
+@media (max-width: 639px) {
+  .form-workspace-header {
+    min-height: 5.25rem;
+    padding: 1rem 0.75rem 0.75rem !important;
+  }
+
+  .form-workspace-header h2 {
+    font-size: 1.2rem !important;
+  }
+
+  .form-workspace-header p {
+    overflow: hidden;
+    font-size: 0.75rem !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .form-workspace-body {
+    padding: 0 0.75rem 5rem !important;
+  }
+
+  .form-workspace-body > *,
+  .form-workspace-body > .contacts-form-sheet {
+    border-radius: 1rem;
+    padding: 1rem;
+  }
+
+  .form-workspace-body .contacts-form-footer {
+    margin-right: -1rem;
+    margin-bottom: -1rem;
+    margin-left: -1rem;
+    padding-inline: 1rem;
+  }
+}
+
+
+.form-workspace-section-heading {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.35rem;
+  border-bottom: 1px solid var(--border-lt);
+}
+
+.form-workspace-section-heading strong,
+.form-workspace-section-heading span {
+  display: block;
+}
+
+.form-workspace-section-heading strong {
+  color: var(--text-1);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.form-workspace-section-heading span {
+  margin-top: 0.35rem;
+  color: var(--text-4);
+  font-size: 0.78rem;
+}
