@@ -60,7 +60,7 @@ export const PRODUCT_CREATION_CATEGORY_OPTIONS: Array<{ value: CategoryId; label
 
 
 export type ProductCategorySetting = {
-  value: CategoryId
+  value: string
   label: string
   enabled: boolean
 }
@@ -80,13 +80,14 @@ export function normalizeProductCategorySettings(raw?: unknown): ProductCategory
 
   for (const candidate of raw) {
     if (!candidate || typeof candidate !== 'object') continue
-    const value = String((candidate as { value?: unknown }).value || '') as CategoryId
-    const fallback = defaults.get(value)
-    if (!fallback || seen.has(value)) continue
-    seen.add(value)
+    const value = String((candidate as { value?: unknown }).value || '').trim()
+    const fallback = defaults.get(value as CategoryId)
+    const isCustom = value.startsWith('custom:') && value.length > 'custom:'.length
+    if ((!fallback && !isCustom) || seen.has(value as CategoryId)) continue
+    seen.add(value as CategoryId)
     normalized.push({
       value,
-      label: String((candidate as { label?: unknown }).label || '').trim() || fallback.label,
+      label: String((candidate as { label?: unknown }).label || '').trim() || fallback?.label || 'New category',
       enabled: (candidate as { enabled?: unknown }).enabled !== false,
     })
   }
@@ -98,7 +99,7 @@ export function normalizeProductCategorySettings(raw?: unknown): ProductCategory
   return normalized
 }
 
-export function resolveProductCreationCategoryOptions(raw?: unknown): Array<{ value: CategoryId; label: string }> {
+export function resolveProductCreationCategoryOptions(raw?: unknown): Array<{ value: string; label: string }> {
   return normalizeProductCategorySettings(raw)
     .filter(option => option.enabled)
     .map(({ value, label }) => ({ value, label }))
