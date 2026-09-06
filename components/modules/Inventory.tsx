@@ -8,6 +8,7 @@ import {
   kindRequiresInventoryAccounts, applyCategoryAccountDefaults, resolveProductAccounts,
 } from '@/lib/store'
 import type { ProductKind } from '@/lib/product-kind'
+import { PRODUCT_CREATION_CATEGORY_OPTIONS } from '@/lib/product-categories'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { PrimaryActionButton, SecondaryActionMenu, TablePageLayout, OperationalSummary, CompactInfoNotice, StatusBadge } from '@/components/erp'
@@ -3919,7 +3920,15 @@ function InventoryContent() {
                         priceDifferenceAccountCode: defaults.priceDifferenceAccountCode,
                       }, systemSettings))
                   }}
-                  options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))}
+                  options={[
+                    ...PRODUCT_CREATION_CATEGORY_OPTIONS,
+                    ...(
+                      form.category &&
+                      !PRODUCT_CREATION_CATEGORY_OPTIONS.some(option => option.value === form.category)
+                        ? [{ value: form.category, label: `Existing - ${form.category}` }]
+                        : []
+                    ),
+                  ]}
                 />
               </Field>
               <Field label="Tracking Method">
