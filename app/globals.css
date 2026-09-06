@@ -28,6 +28,7 @@
     /* ── Page / Surface Tokens ───────────────────────────────────────────── */
     --bg: #F1F5F9;
     --bg-page: #F1F5F9;
+    --bg-app: var(--bg-page);
     --bg-surface: #F8FAFC;
     --bg-panel: #E2E8F0;
     --bg-card: #FFFFFF;
@@ -127,6 +128,7 @@
   [data-theme='dark'] {
     --bg: #0F172A;
     --bg-page: #0B1220;
+    --bg-app: var(--bg-page);
     --bg-surface: #111827;
     --bg-panel: #1E293B;
     --bg-card: #151D2E;
