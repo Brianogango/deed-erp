@@ -57,3 +57,49 @@ export const PRODUCT_CREATION_CATEGORY_OPTIONS: Array<{ value: CategoryId; label
   { value: 'Networking', label: 'Sale - Networking Equipment' },
   { value: 'Consumer Electronics', label: 'Sale - Consumer Electronics' },
 ]
+
+
+export type ProductCategorySetting = {
+  value: CategoryId
+  label: string
+  enabled: boolean
+}
+
+/**
+ * Normalizes administrator-managed category settings while protecting the
+ * canonical identifiers used by stock, accounting and pricing logic.
+ */
+export function normalizeProductCategorySettings(raw?: unknown): ProductCategorySetting[] {
+  if (!Array.isArray(raw)) {
+    return PRODUCT_CREATION_CATEGORY_OPTIONS.map(option => ({ ...option, enabled: true }))
+  }
+
+  const defaults = new Map(PRODUCT_CREATION_CATEGORY_OPTIONS.map(option => [option.value, option]))
+  const seen = new Set<CategoryId>()
+  const normalized: ProductCategorySetting[] = []
+
+  for (const candidate of raw) {
+    if (!candidate || typeof candidate !== 'object') continue
+    const value = String((candidate as { value?: unknown }).value || '') as CategoryId
+    const fallback = defaults.get(value)
+    if (!fallback || seen.has(value)) continue
+    seen.add(value)
+    normalized.push({
+      value,
+      label: String((candidate as { label?: unknown }).label || '').trim() || fallback.label,
+      enabled: (candidate as { enabled?: unknown }).enabled !== false,
+    })
+  }
+
+  for (const option of PRODUCT_CREATION_CATEGORY_OPTIONS) {
+    if (!seen.has(option.value)) normalized.push({ ...option, enabled: false })
+  }
+
+  return normalized
+}
+
+export function resolveProductCreationCategoryOptions(raw?: unknown): Array<{ value: CategoryId; label: string }> {
+  return normalizeProductCategorySettings(raw)
+    .filter(option => option.enabled)
+    .map(({ value, label }) => ({ value, label }))
+}
