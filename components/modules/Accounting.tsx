@@ -773,7 +773,9 @@ function AccountingContent() {
         if (
           !q ||
           i.ref.toLowerCase().includes(q) ||
-          i.partnerName.toLowerCase().includes(q)
+          i.partnerName.toLowerCase().includes(q) ||
+          sourceReferenceForInvoice(i).toLowerCase().includes(q) ||
+          (i.salespersonName || i.postedByName || '').toLowerCase().includes(q)
         ) {
           res.push(i)
         }
@@ -781,6 +783,36 @@ function AccountingContent() {
     }
     return res.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
+
+  const sourceReferenceForInvoice = (invoice: Invoice): string => {
+    const explicit = String(
+      (invoice as Invoice & { sourceRef?: string }).sourceRef
+      || (invoice as Invoice & { saleOrderRef?: string }).saleOrderRef
+      || (invoice as Invoice & { purchaseOrderRef?: string }).purchaseOrderRef
+      || '',
+    ).trim()
+    if (explicit) return explicit
+    if (invoice.type === 'customer_invoice' && invoice.saleOrderId) {
+      return saleOrders.find(order => order.id === invoice.saleOrderId)?.ref || '—'
+    }
+    if (invoice.type === 'vendor_bill' && invoice.purchaseOrderId) {
+      return purchaseOrders.find(order => order.id === invoice.purchaseOrderId)?.ref || '—'
+    }
+    return '—'
+  }
+
+  const documentCurrencyAmount = (invoice: Invoice, amount: number): string => {
+    const code = String(invoice.currencyCode || companySettings.currency || 'KES').toUpperCase()
+    try {
+      return new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: /^[A-Z]{3}$/.test(code) ? code : 'KES',
+        maximumFractionDigits: 2,
+      }).format(amount)
+    } catch {
+      return code + ' ' + amount.toLocaleString('en-KE', { maximumFractionDigits: 2 })
+    }
+  }
 
   const financeHeader: Record<MainTab, { title: string; subtitle: string }> = {
     dashboard: {
@@ -1503,64 +1535,106 @@ function AccountingContent() {
           ) : tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
               <DataTable
-                tableId={`finance-${tab}-list-v2`}
+                tableId={`finance-${tab}-list-v3`}
                 columns={([
                   {
-                    key: 'number', label: 'Number', priority: 1 as const, width: '110px',
+                    key: 'number', label: 'Number', priority: 1 as const, width: '118px',
                     render: (i: Invoice) => <span className="text-xs font-bold text-primary-600 erp-truncate" title={displayDocRef(i.ref)}>{displayDocRef(i.ref)}</span>,
                     accessor: (i: Invoice) => displayDocRef(i.ref),
                   },
                   {
-                    key: 'partner', label: tab === 'invoices' ? 'Customer' : 'Vendor', priority: 1 as const, width: 'minmax(8rem, 2fr)',
-                    render: (i: Invoice) => <span className="text-xs text-[var(--text-1)] erp-truncate" title={i.partnerName}>{i.partnerName}</span>,
+                    key: 'partner', label: tab === 'invoices' ? 'Invoice Partner Display Name' : 'Bill Partner Display Name', priority: 1 as const, width: 'minmax(12rem, 2fr)',
+                    render: (i: Invoice) => <span className="text-xs font-semibold text-[var(--text-1)] erp-truncate" title={i.partnerName}>{i.partnerName}</span>,
                     accessor: (i: Invoice) => i.partnerName,
                   },
                   {
-                    key: 'date', label: 'Date', priority: 2 as const, width: '96px',
+                    key: 'document_date', label: tab === 'invoices' ? 'Invoice Date' : 'Bill Date', priority: 1 as const, width: '108px',
                     render: (i: Invoice) => <span className="text-xs text-[var(--text-3)] tabular-nums">{fmtDate(i.date)}</span>,
                     exportValue: (i: Invoice) => i.date,
                   },
                   {
-                    key: 'due', label: 'Due', priority: 2 as const, width: '96px',
+                    key: 'accounting_date', label: 'Accounting Date', priority: 3 as const, width: '118px',
+                    render: (i: Invoice) => <span className="text-xs text-[var(--text-3)] tabular-nums">{i.postedAt ? fmtDate(i.postedAt.slice(0, 10)) : '—'}</span>,
+                    exportValue: (i: Invoice) => i.postedAt?.slice(0, 10) || '',
+                  },
+                  {
+                    key: 'due', label: 'Due Date', priority: 2 as const, width: '104px',
                     render: (i: Invoice) => <span className="text-xs text-[var(--text-3)] tabular-nums">{fmtDate(i.dueDate)}</span>,
                     exportValue: (i: Invoice) => i.dueDate ?? '',
                   },
                   {
-                    key: 'total', label: 'Total', priority: 1 as const, width: '100px', align: 'right' as const,
+                    key: 'reference', label: 'Reference', priority: 2 as const, width: '120px',
+                    render: (i: Invoice) => {
+                      const reference = sourceReferenceForInvoice(i)
+                      return <span className="text-xs font-mono text-[var(--text-2)] erp-truncate" title={reference}>{reference}</span>
+                    },
+                    accessor: (i: Invoice) => sourceReferenceForInvoice(i),
+                  },
+                  {
+                    key: 'salesperson', label: tab === 'invoices' ? 'Salesperson' : 'Responsible', priority: 3 as const, width: '130px',
+                    render: (i: Invoice) => <span className="text-xs text-[var(--text-2)] erp-truncate" title={i.salespersonName || i.postedByName || ''}>{i.salespersonName || i.postedByName || '—'}</span>,
+                    accessor: (i: Invoice) => i.salespersonName || i.postedByName || '',
+                  },
+                  {
+                    key: 'activities', label: 'Activities', priority: 3 as const, width: '90px', align: 'center' as const,
+                    render: (i: Invoice) => {
+                      const count = (i.payments || []).length + (i.notes?.trim() ? 1 : 0)
+                      return <span className={count > 0 ? 'badge badge-blue text-[10px]' : 'badge badge-gray text-[10px]'}>{count > 0 ? count + ' update' + (count === 1 ? '' : 's') : 'None'}</span>
+                    },
+                    exportValue: (i: Invoice) => (i.payments || []).length + (i.notes?.trim() ? 1 : 0),
+                  },
+                  {
+                    key: 'untaxed', label: 'Untaxed Amount', priority: 2 as const, width: '118px', align: 'right' as const,
+                    render: (i: Invoice) => <span className="text-xs tabular-nums text-[var(--text-2)]">{fmtKes(i.subtotal)}</span>,
+                    exportValue: (i: Invoice) => i.subtotal,
+                    footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + invoice.subtotal, 0))}</span>,
+                  },
+                  {
+                    key: 'tax', label: 'Tax', priority: 2 as const, width: '100px', align: 'right' as const,
+                    render: (i: Invoice) => <span className="text-xs tabular-nums text-[var(--text-2)]">{i.taxTotal > 0 ? fmtKes(i.taxTotal) : '—'}</span>,
+                    exportValue: (i: Invoice) => i.taxTotal,
+                    footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + invoice.taxTotal, 0))}</span>,
+                  },
+                  {
+                    key: 'total', label: 'Total', priority: 1 as const, width: '112px', align: 'right' as const,
                     render: (i: Invoice) => <span className="text-xs font-bold text-[var(--text-1)] tabular-nums">{fmtKes(i.total)}</span>,
                     exportValue: (i: Invoice) => i.total,
                     footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + invoice.total, 0))}</span>,
                   },
                   {
-                    key: 'paid', label: 'Paid', priority: 3 as const, width: '96px', align: 'right' as const,
-                    render: (i: Invoice) => {
-                      const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
-                      return i.amountPaid > 0
-                        ? <span className="text-xs font-bold text-emerald-600 tabular-nums" title={`${Math.round(pct)}%`}>{fmtKes(i.amountPaid)}</span>
-                        : <span className="text-xs text-[var(--text-4)]">—</span>
-                    },
-                    exportValue: (i: Invoice) => i.amountPaid,
-                    footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + invoice.amountPaid, 0))}</span>,
+                    key: 'currency_total', label: 'Document Currency', priority: 3 as const, width: '138px', align: 'right' as const,
+                    render: (i: Invoice) => <span className="text-xs font-medium text-[var(--text-2)] tabular-nums whitespace-nowrap">{documentCurrencyAmount(i, i.total)}</span>,
+                    exportValue: (i: Invoice) => (i.currencyCode || companySettings.currency || 'KES') + ' ' + i.total,
                   },
                   {
-                    key: 'balance', label: 'Balance', priority: 1 as const, width: '100px', align: 'right' as const,
+                    key: 'balance', label: 'Amount Due', priority: 1 as const, width: '112px', align: 'right' as const,
                     render: (i: Invoice) => {
                       const balance = Math.max(0, i.total - i.amountPaid)
-                      return <span className={`text-xs font-bold tabular-nums ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
+                      return <span className={'text-xs font-bold tabular-nums ' + (balance > 0 ? 'text-red-500' : 'text-emerald-600')}>{balance > 0 ? fmtKes(balance) : 'Settled'}</span>
                     },
                     exportValue: (i: Invoice) => Math.max(0, i.total - i.amountPaid),
                     footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + Math.max(0, invoice.total - invoice.amountPaid), 0))}</span>,
                   },
                   {
-                    key: 'status', label: 'Status', priority: 1 as const, width: '140px',
+                    key: 'payment_status', label: 'Payment Status', priority: 1 as const, width: '132px',
                     render: (i: Invoice) => {
-                      const badge = invoiceBadge(i)
+                      const state = invoiceDocState(i.status)
+                      if (state !== 'posted') return <Badge status="pending" label="Not available" />
+                      const paymentState = invoicePaymentStatus(i)
                       return (
                         <span className="inline-flex items-center gap-1 flex-wrap">
-                          <Badge status={badge.status as any} label={badge.label} />
-                          {badge.overdue && <Badge status="cancelled" label="Overdue" />}
+                          <Badge status={paymentState === 'paid' ? 'active' : paymentState === 'blocked' ? 'cancelled' : 'pending'} label={PAYMENT_STATUS_LABELS[paymentState]} />
+                          {isInvoiceOverdue(i) && <Badge status="cancelled" label="Overdue" />}
                         </span>
                       )
+                    },
+                    exportValue: (i: Invoice) => invoiceDocState(i.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(i)] : 'Not available',
+                  },
+                  {
+                    key: 'status', label: 'Status', priority: 1 as const, width: '104px',
+                    render: (i: Invoice) => {
+                      const state = invoiceDocState(i.status)
+                      return <Badge status={state === 'posted' ? 'active' : state === 'cancelled' ? 'cancelled' : 'pending'} label={INVOICE_DOC_STATE_LABELS[state]} />
                     },
                     exportValue: (i: Invoice) => INVOICE_DOC_STATE_LABELS[invoiceDocState(i.status)],
                   },
