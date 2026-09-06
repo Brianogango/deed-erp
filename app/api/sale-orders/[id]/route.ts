@@ -251,6 +251,12 @@ function hasCommercialChange(existing: any, body: any): boolean {
       Number(body.taxAmount ?? body.taxTotal) !== Number(existing.taxAmount)
   ) || (
     body.discountAmount !== undefined && Number(body.discountAmount) !== Number(existing.discountAmount)
+  ) || (
+    body.termsAndConditions !== undefined &&
+      String(body.termsAndConditions ?? '') !== String(existing.termsAndConditions ?? '')
+  ) || (
+    body.optionalProducts !== undefined &&
+      JSON.stringify(normalizeOptionalProducts(body.optionalProducts)) !== JSON.stringify(existing.optionalProducts ?? [])
   )
   if (changedScalar) return true
 
