@@ -42,6 +42,16 @@ type DashboardData = {
     generatedAt: string
   }
   kpis: Array<{ id: string; label: string; value: number; change: number | null; tone: string }>
+  performance: {
+    collectionRate: number
+  }
+  revenuePeriods: {
+    today: number
+    yesterday: number
+    thisWeek: number
+    lastMonth: number
+    thisYear: number
+  }
   revenueTrend: Array<{ month: string; label: string; revenue: number; expenses: number; profit: number }>
   cashTrend: Array<{ month: string; label: string; inflows: number; outflows: number; net: number }>
   ageing: {
@@ -391,8 +401,23 @@ export default function AccountingDashboard({ onNavigate }: Props) {
 
       {data ? (
         <>
+          <section className="accounting-dashboard__revenue-periods accounting-dashboard__enter" aria-label="Posted invoice revenue by period">
+            {([
+              ['Today', data.revenuePeriods.today],
+              ['Yesterday', data.revenuePeriods.yesterday],
+              ['This week', data.revenuePeriods.thisWeek],
+              ['Last month', data.revenuePeriods.lastMonth],
+              ['This year', data.revenuePeriods.thisYear],
+            ] as const).map(([label, value]) => (
+              <button type="button" key={label} onClick={() => onNavigate('invoices')}>
+                <span>{label}</span>
+                <strong><AnimatedAmount value={value} /></strong>
+              </button>
+            ))}
+          </section>
+
           <div className="accounting-dashboard__kpis">
-            {data.kpis.map((kpi, index) => {
+            {data.kpis.filter(kpi => ['revenue', 'netProfit', 'ar', 'ap'].includes(kpi.id)).map((kpi, index) => {
               const Icon = kpiIcons[kpi.id] || Activity
               const changePositive = kpi.change != null && kpi.change >= 0
               return (
@@ -427,81 +452,109 @@ export default function AccountingDashboard({ onNavigate }: Props) {
             })}
           </div>
 
-          <div className="accounting-dashboard__top-grid">
-            <Panel title="Revenue vs Expenses vs Profit Trend" subtitle="KES · rolling 12 months" className="accounting-dashboard__trend-panel" delay={120}>
-              <div className="accounting-dashboard__chart-lg">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={data.revenueTrend} margin={{ top: 8, right: 12, left: -14, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--finance-border)" />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'var(--finance-text-3)' }} />
-                    <YAxis tickLine={false} axisLine={false} tickFormatter={v => formatKes(v, true).replace('KES ', '')} tick={{ fontSize: 9, fill: 'var(--finance-text-3)' }} width={54} />
-                    <Tooltip formatter={(v: unknown) => formatKes(Number(Array.isArray(v) ? v[0] : v))} labelStyle={{ color: '#111827' }} />
-                    <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#2563eb" strokeWidth={2.2} dot={{ r: 2.5 }} activeDot={{ r: 4 }} animationDuration={700} />
-                    <Line type="monotone" dataKey="expenses" name="Expenses" stroke="#14b8a6" strokeWidth={2} dot={{ r: 2 }} animationDuration={850} />
-                    <Line type="monotone" dataKey="profit" name="Net Profit" stroke="#172554" strokeWidth={2} dot={{ r: 2 }} animationDuration={1000} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="accounting-dashboard__legend">
-                <span><i className="is-blue" />Revenue</span>
-                <span><i className="is-teal" />Expenses</span>
-                <span><i className="is-navy" />Net Profit</span>
-              </div>
-            </Panel>
+          <div className="accounting-dashboard__executive-grid">
+            <div className="accounting-dashboard__executive-main">
+              <Panel title="Revenue, Expenses & Profit" subtitle="KES · rolling 12 months" className="accounting-dashboard__trend-panel" delay={120}>
+                <div className="accounting-dashboard__chart-lg">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={data.revenueTrend} margin={{ top: 8, right: 12, left: -14, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--dash-border)" />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'var(--dash-muted)' }} />
+                      <YAxis tickLine={false} axisLine={false} tickFormatter={v => formatKes(v, true).replace('KES ', '')} tick={{ fontSize: 9, fill: 'var(--dash-muted)' }} width={54} />
+                      <Tooltip formatter={(v: unknown) => formatKes(Number(Array.isArray(v) ? v[0] : v))} labelStyle={{ color: '#111827' }} />
+                      <Bar dataKey="revenue" name="Revenue" fill="#0f5c9e" radius={[3, 3, 0, 0]} animationDuration={700} />
+                      <Bar dataKey="expenses" name="Expenses" fill="#93c5fd" radius={[3, 3, 0, 0]} animationDuration={850} />
+                      <Line type="monotone" dataKey="profit" name="Profit" stroke="#10b981" strokeWidth={2.2} dot={{ r: 2.5 }} animationDuration={1000} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="accounting-dashboard__legend">
+                  <span><i className="is-blue" />Revenue</span>
+                  <span><i className="is-cyan" />Expenses</span>
+                  <span><i className="is-green" />Profit</span>
+                </div>
+              </Panel>
 
-            <Panel title="Cash Flow Overview" subtitle="KES · recent 6 months" className="accounting-dashboard__cash-panel" delay={160}>
-              <div className="accounting-dashboard__chart-lg">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={cashChart} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--finance-border)" />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'var(--finance-text-3)' }} />
-                    <YAxis tickLine={false} axisLine={false} tickFormatter={v => formatKes(v, true).replace('KES ', '')} tick={{ fontSize: 9, fill: 'var(--finance-text-3)' }} width={54} />
-                    <Tooltip formatter={(v: unknown) => formatKes(Number(Array.isArray(v) ? v[0] : v))} labelStyle={{ color: '#111827' }} />
-                    <Bar dataKey="inflows" name="Cash Inflows" fill="#10b981" radius={[3, 3, 0, 0]} animationDuration={700} />
-                    <Bar dataKey="outflowsNegative" name="Cash Outflows" fill="#ef4444" radius={[0, 0, 3, 3]} animationDuration={850} />
-                    <Line type="monotone" dataKey="net" name="Net Cash" stroke="#2563eb" strokeWidth={2.2} dot={{ r: 2.5 }} animationDuration={1000} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="accounting-dashboard__legend">
-                <span><i className="is-green" />Cash Inflows</span>
-                <span><i className="is-red" />Cash Outflows</span>
-                <span><i className="is-blue" />Net Cash</span>
-              </div>
-            </Panel>
+              <div className="accounting-dashboard__executive-lower">
+                <Panel title="Cash Position" subtitle="Current posted balances" delay={180}>
+                  <div className="accounting-dashboard__metric-list is-large">
+                    <div><span>Cash & bank balance</span><strong>{formatKes(data.cashFlow.closingCash, true)}</strong></div>
+                    <div><span>Period inflows</span><strong>{formatKes(data.cashFlow.inflows, true)}</strong></div>
+                    <div><span>Upcoming payables</span><strong>{formatKes(data.ageing.ap.balance, true)}</strong></div>
+                  </div>
+                  <button type="button" className="accounting-dashboard__panel-link" onClick={() => onNavigate('cashbook')}>Open cashbook</button>
+                </Panel>
 
-            <div className="accounting-dashboard__ageing-stack">
-              <AgeingPanel title="Accounts Receivable Aging" totals={data.ageing.ar} kind="ar" onNavigate={onNavigate} />
-              <AgeingPanel title="Accounts Payable Aging" totals={data.ageing.ap} kind="ap" onNavigate={onNavigate} />
-            </div>
-          </div>
-
-          <div className="accounting-dashboard__bank-wrap accounting-dashboard__enter">
-            <div className="accounting-dashboard__bank-head">
-              <div>
-                <h3>Bank Balances & Reconciliation</h3>
-                <p>Statement balance compared with posted book balance</p>
+                <Panel title="Receivables Ageing" subtitle={`Outstanding ${formatKes(data.ageing.ar.balance, true)}`} delay={220}>
+                  <div className="accounting-dashboard__ageing-bars">
+                    {([
+                      ['Current', data.ageing.ar.current],
+                      ['1–30 days', data.ageing.ar.d30],
+                      ['31–60 days', data.ageing.ar.d60],
+                      ['61–90 days', data.ageing.ar.d90],
+                      ['90+ days', data.ageing.ar.over90],
+                    ] as const).map(([label, amount]) => (
+                      <div key={label}>
+                        <span>{label}</span>
+                        <i><b style={{ width: `${data.ageing.ar.balance > 0 ? Math.max(2, amount / data.ageing.ar.balance * 100) : 0}%` }} /></i>
+                        <strong>{formatKes(amount, true)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" className="accounting-dashboard__panel-link" onClick={() => onNavigate('ageing')}>Open ageing report</button>
+                </Panel>
               </div>
-              <button type="button" onClick={() => onNavigate('cashbook')}>View all banks</button>
             </div>
-            <div className="accounting-dashboard__table-scroll">
-              <table className="accounting-dashboard__table">
-                <thead><tr><th>Bank account</th><th>Bank balance</th><th>Book balance</th><th>Variance</th><th>Status</th></tr></thead>
-                <tbody>
-                  {data.banks.length ? data.banks.slice(0, 6).map(bank => (
-                    <tr key={bank.id}>
-                      <td><strong>{bank.name}</strong><small>{bank.currency}</small></td>
-                      <td>{bank.bankBalance == null ? '—' : formatKes(bank.bankBalance, true)}</td>
-                      <td>{bank.bookBalance == null ? <span className="accounting-dashboard__shared-gl">Shared GL</span> : formatKes(bank.bookBalance, true)}</td>
-                      <td className={bank.variance && Math.abs(bank.variance) > 1 ? 'is-negative' : ''}>{bank.variance == null ? '—' : formatKes(bank.variance, true)}</td>
-                      <td><span className={`accounting-dashboard__status is-${bank.status}`}><i />{bank.status === 'reconciled' ? 'Reconciled' : bank.status === 'items_pending' ? 'Items pending' : 'No statement'}</span></td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan={5}><EmptyValue>No active bank accounts configured</EmptyValue></td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+
+            <aside className="accounting-dashboard__executive-rail">
+              <Panel title="Needs Attention" subtitle={data.alerts.every(alert => alert.severity === 'ok') ? 'All finance controls are clear' : 'Items requiring action'} delay={140}>
+                <div className="accounting-dashboard__alerts">
+                  {data.alerts.filter(alert => alert.severity !== 'ok').slice(0, 4).map(alert => (
+                    <button type="button" key={alert.id} onClick={() => onNavigate(alert.target)}>
+                      <span className={`accounting-dashboard__alert-icon is-${alert.severity}`}><AlertTriangle size={14} /></span>
+                      <span>{alert.label}</span>
+                      <strong>{alert.amount == null ? '' : formatKes(alert.amount, true)}</strong>
+                      <small>Open</small>
+                    </button>
+                  ))}
+                  {data.alerts.every(alert => alert.severity === 'ok') && <EmptyValue>Nothing needs attention</EmptyValue>}
+                </div>
+              </Panel>
+
+              <Panel title="Performance" subtitle="Where finance stands now" delay={180}>
+                <div className="accounting-dashboard__performance-rings">
+                  {([
+                    ['Collection', data.performance.collectionRate, '%'],
+                    ['Gross margin', data.profitLoss.revenue > 0 ? data.profitLoss.grossProfit / data.profitLoss.revenue * 100 : 0, '%'],
+                    ['Inventory turnover', Math.min(100, data.inventory.turnover / 6 * 100), `${formatNumber(data.inventory.turnover)}×`],
+                    ['Controls', data.integrity.total > 0 ? data.integrity.passedCount / data.integrity.total * 100 : 0, `${data.integrity.passedCount}/${data.integrity.total}`],
+                  ] as const).map(([label, progress, suffix]) => (
+                    <div key={label}>
+                      <i style={{ '--ring-progress': `${Math.max(0, Math.min(100, Number(progress)))}%` } as CSSProperties}>
+                        <strong>{suffix === '%' ? `${Math.round(Number(progress))}%` : suffix}</strong>
+                      </i>
+                      <span>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+
+              <Panel title="Month-End Progress" subtitle={`${data.checklist.completed} of ${data.checklist.total} complete`} delay={220}>
+                <div className="accounting-dashboard__check-progress">
+                  <div><i style={{ width: `${data.checklist.total ? data.checklist.completed / data.checklist.total * 100 : 0}%` }} /></div>
+                  <span>{data.checklist.total ? Math.round(data.checklist.completed / data.checklist.total * 100) : 0}%</span>
+                </div>
+                <div className="accounting-dashboard__rail-checklist">
+                  {data.checklist.items.map(item => (
+                    <button type="button" key={item.id} data-status={item.status} onClick={() => onNavigate('integrity')}>
+                      {item.status === 'done' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                      <span>{item.label}</span>
+                      <strong>{item.status === 'done' ? 'Complete' : 'Review'}</strong>
+                    </button>
+                  ))}
+                </div>
+              </Panel>
+            </aside>
           </div>
 
           <div className="accounting-dashboard__middle-grid">
