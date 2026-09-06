@@ -595,8 +595,8 @@ export default function CompanyProperty() {
     return (
       <div className="mod-page">
         <PermissionDeniedState
-          title="Property"
-          description="Company Property is limited to the Director, Admin Officer, and Finance Officer."
+          title="Asset Management"
+          description="Asset Management is limited to the Director, Admin Officer, and Finance Officer."
         />
       </div>
     )
@@ -830,7 +830,7 @@ export default function CompanyProperty() {
   return (
     <div className="mod-page">
       <ModuleHeader
-        title="Property"
+        title="Asset Management"
         subtitle="Office furniture, fittings, and equipment — not trading stock"
         icon={<Fa icon={faChair} />}
         count={items.length}
@@ -846,7 +846,7 @@ export default function CompanyProperty() {
         ) : undefined}
       />
 
-      <div className="kpi-summary-strip" aria-label="Property overview">
+      <div className="kpi-summary-strip" aria-label="Asset Management overview">
         <article className="kpi-summary-card kpi-summary-card--green"><span>In use</span><strong>{inUse.length}</strong></article>
         <article className="kpi-summary-card"><span>In storage</span><strong>{inStorage.length}</strong></article>
         <article className="kpi-summary-card"><span>Capital on register</span><strong>{fmtKes(capitalCost)}</strong></article>
@@ -900,7 +900,7 @@ export default function CompanyProperty() {
             </button>
           ) : undefined}
           onRowClick={a => setRecordId(a.id)}
-          exportTitle="Company Property"
+          exportTitle="Asset Management"
           exportFilename="company-property"
         />
       </div>
