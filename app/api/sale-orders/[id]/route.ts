@@ -123,6 +123,17 @@ function mapSaleOrderToClient(order: any) {
   }
 }
 
+function normalizeOptionalProducts(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.slice(0, 100).map((item: any) => ({
+    id: String(item?.id ?? '').slice(0, 120),
+    productId: String(item?.productId ?? '').slice(0, 120),
+    productName: String(item?.productName ?? '').slice(0, 300),
+    qty: Math.max(0, Number(item?.qty) || 0),
+    unitPrice: Math.max(0, Number(item?.unitPrice) || 0),
+  })).filter(item => item.productName && item.qty > 0)
+}
+
 async function buildSaleOrderUpdateData(body: any, existing: any) {
   const existingItems: any[] = existing?.items ?? []
   const data: Record<string, any> = {}
@@ -167,6 +178,8 @@ async function buildSaleOrderUpdateData(body: any, existing: any) {
   if (body.deliveryAddress !== undefined) data.deliveryAddress = body.deliveryAddress ?? null
   if (body.amountPaid !== undefined) data.amountPaid = Number(body.amountPaid ?? 0)
   if (body.notes !== undefined) data.notes = body.notes ?? null
+  if (body.termsAndConditions !== undefined) data.termsAndConditions = body.termsAndConditions ? String(body.termsAndConditions).slice(0, 20000) : null
+  if (body.optionalProducts !== undefined) data.optionalProducts = normalizeOptionalProducts(body.optionalProducts)
   if (body.quoteId !== undefined) data.quoteId = optionalUuid(body.quoteId) ?? null
 
   if (body.clientId !== undefined || body.customerId !== undefined) {
