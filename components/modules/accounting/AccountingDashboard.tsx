@@ -42,6 +42,9 @@ type DashboardData = {
     generatedAt: string
   }
   kpis: Array<{ id: string; label: string; value: number; change: number | null; tone: string }>
+  performance: {
+    collectionRate: number
+  }
   revenuePeriods: {
     today: number
     yesterday: number
@@ -521,7 +524,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
               <Panel title="Performance" subtitle="Where finance stands now" delay={180}>
                 <div className="accounting-dashboard__performance-rings">
                   {([
-                    ['Collection', data.profitLoss.revenue + data.ageing.ar.balance > 0 ? data.profitLoss.revenue / (data.profitLoss.revenue + data.ageing.ar.balance) * 100 : 0, '%'],
+                    ['Collection', data.performance.collectionRate, '%'],
                     ['Gross margin', data.profitLoss.revenue > 0 ? data.profitLoss.grossProfit / data.profitLoss.revenue * 100 : 0, '%'],
                     ['Inventory turnover', Math.min(100, data.inventory.turnover / 6 * 100), `${formatNumber(data.inventory.turnover)}×`],
                     ['Controls', data.integrity.total > 0 ? data.integrity.passedCount / data.integrity.total * 100 : 0, `${data.integrity.passedCount}/${data.integrity.total}`],
