@@ -315,11 +315,13 @@ function RepairInner() {
       const repairsBlobDirty = isDeedRepairsBlobDirty(
         typeof window === 'undefined' ? null : window.localStorage.getItem(DIRTY_KEYS_LS),
       )
-      if (repairsBlobDirty) return
+      // Dirty local writes must not be overlaid — but an unknown id still
+      // needs a lookup so the workspace is not left on a loading panel.
+      if (repairsBlobDirty && localActiveRepairRef.current) return
       try {
         const res = await fetch(`/api/repairs/${encodeURIComponent(activeId)}`, { cache: 'no-store' })
         if (!res.ok) {
-          if (!cancelled && !localActiveRepairRef.current && (res.status === 404 || res.status === 403)) {
+          if (!cancelled && !localActiveRepairRef.current) {
             setDetailLookup('missing')
           }
           return
