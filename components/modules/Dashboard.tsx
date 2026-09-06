@@ -695,6 +695,71 @@ export function Dashboard() {
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8)
   }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, invoices, visibleSalesOrders, stockTransfers, purchaseOrders, kilimallOrders, visibleRepairs, expenses, currentUserId, has])
 
+  const executiveStats = useMemo(() => {
+    const nairobiKey = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Nairobi',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
+    const today = new Date(`${nairobiKey}T00:00:00Z`)
+    const key = (date: Date) => date.toISOString().slice(0, 10)
+    const shiftDays = (date: Date, days: number) => {
+      const next = new Date(date)
+      next.setUTCDate(next.getUTCDate() + days)
+      return next
+    }
+    const monthStart = (date: Date, offset = 0) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + offset, 1))
+    const yearStart = new Date(Date.UTC(today.getUTCFullYear(), 0, 1))
+    const yesterday = shiftDays(today, -1)
+    const weekStart = shiftDays(today, -((today.getUTCDay() + 6) % 7))
+    const previousMonthStart = monthStart(today, -1)
+    const previousMonthEnd = shiftDays(monthStart(today), -1)
+
+    const customerInvoices = invoices.filter(invoice => invoice.type === 'customer_invoice')
+    const recognized = customerInvoices.filter(invoice => invoicePaymentStatus(invoice) === 'paid')
+    const totalBetween = (from: Date, to: Date) => recognized
+      .filter(invoice => {
+        const invoiceDate = String(invoice.date || '').slice(0, 10)
+        return invoiceDate >= key(from) && invoiceDate <= key(to)
+      })
+      .reduce((sum, invoice) => sum + Number(invoice.total || 0), 0)
+
+    const issuedTotal = customerInvoices.reduce((sum, invoice) => sum + Number(invoice.total || 0), 0)
+    const collectedTotal = customerInvoices.reduce(
+      (sum, invoice) => sum + Math.min(Number(invoice.total || 0), Number(invoice.amountPaid || 0)),
+      0,
+    )
+    const salesPopulation = visibleSalesOrders.filter(order => order.status !== 'cancelled')
+    const wonSales = salesPopulation.filter(order => order.status === 'sale').length
+    const healthyStock = inventoryStats.activeSkus.length - inventoryStats.lowStockItems.length
+    const repairPopulation = visibleRepairs.filter(repair => repair.status !== 'cancelled')
+
+    return {
+      periods: [
+        { label: 'Today', value: totalBetween(today, today) },
+        { label: 'Yesterday', value: totalBetween(yesterday, yesterday) },
+        { label: 'This week', value: totalBetween(weekStart, today) },
+        { label: 'Last month', value: totalBetween(previousMonthStart, previousMonthEnd) },
+        { label: 'This year', value: totalBetween(yearStart, today) },
+      ],
+      paidThisWeek: recognized.filter(invoice => {
+        const invoiceDate = String(invoice.date || '').slice(0, 10)
+        return invoiceDate >= key(weekStart) && invoiceDate <= key(today)
+      }).length,
+      collectionRate: issuedTotal > 0 ? collectedTotal / issuedTotal * 100 : 0,
+      conversionRate: salesPopulation.length > 0 ? wonSales / salesPopulation.length * 100 : 0,
+      stockHealth: inventoryStats.activeSkus.length > 0 ? Math.max(0, healthyStock) / inventoryStats.activeSkus.length * 100 : 0,
+      repairProgress: repairPopulation.length > 0
+        ? repairPopulation.filter(repair => repair.status === 'ready' || repair.status === 'closed').length / repairPopulation.length * 100
+        : 0,
+    }
+  }, [invoices, inventoryStats.activeSkus, inventoryStats.lowStockItems, visibleRepairs, visibleSalesOrders])
+
+  const visibleExecutiveKpis = kpis
+    .filter(({ key }) => canShowDashboardKpi(currentUser, key))
+    .slice(0, 6)
+
   // Gate on real data, not just mount: on a cold cache the KPI tiles would
   // otherwise render zeros for the seconds the boot fetch is in flight.
   if (!mounted || !storeHydrated) return <ModuleSkeleton />
@@ -731,44 +796,91 @@ export function Dashboard() {
         }}
       />
 
-      {/* ── P1 · Needs attention now ─────────────────────────────────────── */}
-      {focusItems.length > 0 ? (
-        <section className="dashboard-panel overflow-hidden">
-          <CardHeader title="Needs attention" sub="Overdue items, approvals, and blockers — most urgent first" />
-          <div className="dashboard-alerts-list">
-            {focusItems.map(item => (
-              <button
-                type="button"
-                key={item.key}
-                onClick={item.path ? () => (item.module ? handleNav(item.module, item.path) : handleRoute(item.path)) : undefined}
-                className={`dashboard-alert dashboard-alert-${item.tone} ${item.path ? 'cursor-pointer' : 'cursor-default'}`}
-              >
-                <span className="dashboard-alert-dot" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block text-[13px] sm:text-sm font-bold text-[var(--text-1)] truncate">{item.title}</span>
-                  <span className="block text-[11px] sm:text-xs text-[var(--text-3)] mt-0.5 truncate">{item.sub}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : (
-        <div className="dashboard-all-clear">
-          <div className="dashboard-all-clear-icon"><Fa icon={faCircleCheck} /></div>
-          <div>
-            <p className="text-sm font-extrabold text-[var(--text-1)]">You&apos;re all caught up</p>
-            <p className="text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">No overdue approvals, blockers, or urgent exceptions for your role.</p>
-          </div>
-        </div>
-      )}
+      <div className="dashboard-executive-grid">
+        <main className="dashboard-executive-main">
+          <section className="dashboard-weekly-brief dashboard-panel">
+            <div className="dashboard-weekly-brief-head">
+              <div className="dashboard-weekly-icon"><Fa icon={faArrowsRotate} /></div>
+              <div>
+                <h2>This week</h2>
+                <p>Live company activity from the ERP</p>
+              </div>
+            </div>
+            <p className="dashboard-weekly-copy">
+              {canSeeFinance
+                ? `${fmtKes(executiveStats.periods[2].value)} in paid invoice revenue across ${executiveStats.paidThisWeek} invoice${executiveStats.paidThisWeek === 1 ? '' : 's'} this week. ${financeStats.overdueInvoices.length} overdue customer invoice${financeStats.overdueInvoices.length === 1 ? '' : 's'} currently need collection.`
+                : `${salesStats.openOrders} open sale${salesStats.openOrders === 1 ? '' : 's'}, ${inventoryStats.lowStockItems.length} low-stock item${inventoryStats.lowStockItems.length === 1 ? '' : 's'}, and ${repairStats.active.length} active repair${repairStats.active.length === 1 ? '' : 's'} are visible for your role.`}
+            </p>
+            <div className="dashboard-weekly-chips">
+              {canSeeFinance && <button type="button" onClick={() => handleNav('accounting', '/finance?tab=invoices')}>{executiveStats.paidThisWeek} invoices paid this week</button>}
+              {canSeeSales && <button type="button" onClick={() => handleNav('sales', '/sales')}>{salesStats.openOrders} open sales</button>}
+              {canSeeWorkshop && <button type="button" onClick={() => handleNav('repair', '/repairs')}>{repairStats.active.length} active repairs</button>}
+            </div>
+          </section>
 
-      {/* ── P2 · Today's workload ────────────────────────────────────────── */}
-      <SectionLabel label={`${formatRoleLabel(role)} overview`} />
-      <div className="dashboard-kpi-grid">
-        {kpis
-          .filter(({ key }) => canShowDashboardKpi(currentUser, key))
-          .slice(0, 6)
-          .map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
+          <div className="dashboard-kpi-grid dashboard-kpi-grid--executive">
+            {visibleExecutiveKpis.map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
+          </div>
+
+          {canSeeFinance && (
+            <section className="dashboard-period-strip dashboard-panel" aria-label="Paid invoice revenue by period">
+              {executiveStats.periods.map(period => (
+                <button type="button" key={period.label} onClick={() => handleNav('accounting', '/finance?tab=invoices')}>
+                  <span>{period.label}</span>
+                  <strong>{fmtKes(period.value)}</strong>
+                </button>
+              ))}
+            </section>
+          )}
+        </main>
+
+        <aside className="dashboard-executive-rail">
+          <section className="dashboard-panel overflow-hidden">
+            <CardHeader title="Needs attention" sub="Most urgent items first" />
+            {focusItems.length > 0 ? (
+              <div className="dashboard-alerts-list dashboard-alerts-list--rail">
+                {focusItems.slice(0, 5).map(item => (
+                  <button
+                    type="button"
+                    key={item.key}
+                    onClick={item.path ? () => (item.module ? handleNav(item.module, item.path) : handleRoute(item.path)) : undefined}
+                    className={`dashboard-alert dashboard-alert-${item.tone} ${item.path ? 'cursor-pointer' : 'cursor-default'}`}
+                  >
+                    <span className="dashboard-alert-dot" aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-bold text-[var(--text-1)] truncate">{item.title}</span>
+                      <span className="block text-[11px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="dashboard-all-clear dashboard-all-clear--rail">
+                <div className="dashboard-all-clear-icon"><Fa icon={faCircleCheck} /></div>
+                <p>All caught up. Nothing needs attention.</p>
+              </div>
+            )}
+          </section>
+
+          <section className="dashboard-panel overflow-hidden">
+            <CardHeader title="Performance" sub="Where things stand right now" />
+            <div className="dashboard-performance-grid">
+              {[
+                { label: 'Collection', value: executiveStats.collectionRate },
+                { label: 'Conversion', value: executiveStats.conversionRate },
+                { label: 'Stock health', value: executiveStats.stockHealth },
+                { label: 'Repair progress', value: executiveStats.repairProgress },
+              ].map(metric => (
+                <div key={metric.label}>
+                  <i style={{ '--dashboard-progress': `${Math.max(0, Math.min(100, metric.value))}%` } as React.CSSProperties}>
+                    <strong>{Math.round(metric.value)}%</strong>
+                  </i>
+                  <span>{metric.label}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </aside>
       </div>
 
       {(canSeeInventory || canSeeWorkshop) && (
