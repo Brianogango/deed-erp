@@ -1443,6 +1443,10 @@ model SaleOrder {
   totalAmount     Decimal       @default(0) @map("total_amount") @db.Decimal(14, 2)
   amountPaid      Decimal       @default(0) @map("amount_paid") @db.Decimal(14, 2)
   notes           String?       @db.Text
+  // Saved quotation-only content. Optional products are alternatives and are
+  // deliberately excluded from commercial totals until promoted to order lines.
+  termsAndConditions String?     @map("terms_and_conditions") @db.Text
+  optionalProducts   Json?       @map("optional_products")
   // Quotation Sent metadata (recorded when Send by Email succeeds).
   sentAt          DateTime?     @map("sent_at")
   sentById        String?       @map("sent_by") @db.Uuid
