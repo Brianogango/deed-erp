@@ -8,6 +8,7 @@ import { buildCashFlowStatement } from '@/lib/accounting/cash-flow.server'
 import { buildVatReturnFromTaxLedger } from '@/lib/accounting/vat-reports.server'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
 import { COA_ROLE_CODES } from '@/lib/accounting/coa-roles'
+import { ACTIVE_INVOICE_STATUS_FILTER, collectedOnInvoice } from '@/lib/accounting/dashboard-metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,6 +92,7 @@ export async function GET(request: NextRequest) {
 
     const trendStart = monthStart(addMonths(dateTo, -11))
     const cashTrendStart = monthStart(addMonths(dateTo, -5))
+    const cashQueryStart = cashTrendStart < dateFrom ? cashTrendStart : dateFrom
 
     // Fixed calendar snapshots for the dashboard revenue strip. Invoice dates
     // are date-only business dates, so UTC boundaries avoid browser/server drift.
@@ -196,7 +198,7 @@ export async function GET(request: NextRequest) {
         where: {
           journalEntry: {
             isPosted: true,
-            entryDate: { gte: cashTrendStart, lte: dateTo },
+            entryDate: { gte: cashQueryStart, lte: dateTo },
           },
           account: { code: { startsWith: '22' } },
         },
@@ -210,6 +212,7 @@ export async function GET(request: NextRequest) {
         where: {
           documentType: 'customer_invoice',
           postingStatus: 'posted',
+          status: ACTIVE_INVOICE_STATUS_FILTER,
           invoiceDate: { gte: revenueSnapshotStart, lte: todayStart },
         },
         select: {
@@ -221,11 +224,13 @@ export async function GET(request: NextRequest) {
         where: {
           documentType: 'customer_invoice',
           postingStatus: 'posted',
+          status: ACTIVE_INVOICE_STATUS_FILTER,
           invoiceDate: { gte: dateFrom, lte: dateTo },
         },
         select: {
           clientId: true,
           totalAmount: true,
+          amountPaid: true,
           client: { select: { name: true } },
           paymentAllocations: {
             where: { reversedAt: null, applicationDate: { lte: dateTo } },
@@ -316,7 +321,7 @@ export async function GET(request: NextRequest) {
 
     const selectedInvoiceTotal = customerInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0)
     const selectedInvoiceCollected = customerInvoices.reduce(
-      (sum, invoice) => sum + invoice.paymentAllocations.reduce((paid, allocation) => paid + Number(allocation.amount || 0), 0),
+      (sum, invoice) => sum + collectedOnInvoice(invoice),
       0,
     )
     const collectionRate = selectedInvoiceTotal > 0
@@ -441,7 +446,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    function topPartners(rows: typeof customerInvoices) {
+    function topPartners(rows: Array<{ clientId: string; totalAmount: unknown; client?: { name: string } | null }>) {
       const map = new Map<string, { id: string; name: string; amount: number }>()
       for (const row of rows) {
         const id = row.clientId || row.client?.name || 'unknown'
@@ -662,8 +667,12 @@ export async function GET(request: NextRequest) {
       },
       alerts,
       cashFlow: {
-        inflows: money(cashTrend.reduce((s, x) => s + x.inflows, 0)),
-        outflows: money(cashTrend.reduce((s, x) => s + x.outflows, 0)),
+        inflows: money(cashLines
+          .filter(line => line.journalEntry.entryDate >= dateFrom && line.journalEntry.entryDate <= dateTo)
+          .reduce((sum, line) => sum + Number(line.debit || 0), 0)),
+        outflows: money(cashLines
+          .filter(line => line.journalEntry.entryDate >= dateFrom && line.journalEntry.entryDate <= dateTo)
+          .reduce((sum, line) => sum + Number(line.credit || 0), 0)),
         netChange: money(cashFlow.netChange),
         openingCash: money(cashFlow.openingCash),
         closingCash: money(cashFlow.closingCash),

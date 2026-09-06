@@ -30478,8 +30478,12 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-bottom: 0;
 }
 
-.accounting-dashboard__rail-checklist button svg {
+.accounting-dashboard__rail-checklist button[data-status='done'] svg {
   color: var(--dash-green);
+}
+
+.accounting-dashboard__rail-checklist button:not([data-status='done']) svg {
+  color: var(--dash-amber, #f59e0b);
 }
 
 .accounting-dashboard__rail-checklist button strong {
