@@ -8,7 +8,6 @@ import { buildCashFlowStatement } from '@/lib/accounting/cash-flow.server'
 import { buildVatReturnFromTaxLedger } from '@/lib/accounting/vat-reports.server'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
 import { COA_ROLE_CODES } from '@/lib/accounting/coa-roles'
-import { ACTIVE_INVOICE_STATUS_FILTER, collectedOnInvoice } from '@/lib/accounting/dashboard-metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,24 +91,6 @@ export async function GET(request: NextRequest) {
 
     const trendStart = monthStart(addMonths(dateTo, -11))
     const cashTrendStart = monthStart(addMonths(dateTo, -5))
-    const cashQueryStart = cashTrendStart < dateFrom ? cashTrendStart : dateFrom
-
-    // Fixed calendar snapshots for the dashboard revenue strip. Invoice dates
-    // are date-only business dates, so UTC boundaries avoid browser/server drift.
-    const kenyaToday = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Africa/Nairobi',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(now)
-    const todayStart = parseDate(kenyaToday, now)
-    const yesterdayStart = addDays(todayStart, -1)
-    const weekStart = addDays(todayStart, -((todayStart.getUTCDay() + 6) % 7))
-    const currentMonthStart = monthStart(todayStart)
-    const lastMonthStart = addMonths(currentMonthStart, -1)
-    const lastMonthEnd = addDays(currentMonthStart, -1)
-    const yearStart = startOfYear(todayStart)
-    const revenueSnapshotStart = lastMonthStart < yearStart ? lastMonthStart : yearStart
 
     const [
       pl,
@@ -127,7 +108,6 @@ export async function GET(request: NextRequest) {
       latestStatements,
       trendLines,
       cashLines,
-      revenueSnapshotInvoices,
       customerInvoices,
       vendorInvoices,
       recentJournals,
@@ -198,7 +178,7 @@ export async function GET(request: NextRequest) {
         where: {
           journalEntry: {
             isPosted: true,
-            entryDate: { gte: cashQueryStart, lte: dateTo },
+            entryDate: { gte: cashTrendStart, lte: dateTo },
           },
           account: { code: { startsWith: '22' } },
         },
@@ -212,30 +192,12 @@ export async function GET(request: NextRequest) {
         where: {
           documentType: 'customer_invoice',
           postingStatus: 'posted',
-          status: ACTIVE_INVOICE_STATUS_FILTER,
-          invoiceDate: { gte: revenueSnapshotStart, lte: todayStart },
-        },
-        select: {
-          invoiceDate: true,
-          totalAmount: true,
-        },
-      }),
-      prisma.invoice.findMany({
-        where: {
-          documentType: 'customer_invoice',
-          postingStatus: 'posted',
-          status: ACTIVE_INVOICE_STATUS_FILTER,
           invoiceDate: { gte: dateFrom, lte: dateTo },
         },
         select: {
           clientId: true,
           totalAmount: true,
-          amountPaid: true,
           client: { select: { name: true } },
-          paymentAllocations: {
-            where: { reversedAt: null, applicationDate: { lte: dateTo } },
-            select: { amount: true },
-          },
         },
       }),
       prisma.invoice.findMany({
@@ -305,28 +267,6 @@ export async function GET(request: NextRequest) {
         },
       }),
     ])
-
-    const revenueBetween = (from: Date, to: Date) => money(
-      revenueSnapshotInvoices
-        .filter(invoice => invoice.invoiceDate >= from && invoice.invoiceDate <= to)
-        .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0),
-    )
-    const revenuePeriods = {
-      today: revenueBetween(todayStart, todayStart),
-      yesterday: revenueBetween(yesterdayStart, yesterdayStart),
-      thisWeek: revenueBetween(weekStart, todayStart),
-      lastMonth: revenueBetween(lastMonthStart, lastMonthEnd),
-      thisYear: revenueBetween(yearStart, todayStart),
-    }
-
-    const selectedInvoiceTotal = customerInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0)
-    const selectedInvoiceCollected = customerInvoices.reduce(
-      (sum, invoice) => sum + collectedOnInvoice(invoice),
-      0,
-    )
-    const collectionRate = selectedInvoiceTotal > 0
-      ? Math.min(100, Math.max(0, selectedInvoiceCollected / selectedInvoiceTotal * 100))
-      : 0
 
     const previousGrossProfit = money(previousPl.grossProfit)
     const currentCash = money(cashFlow.closingCash)
@@ -446,7 +386,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    function topPartners(rows: Array<{ clientId: string; totalAmount: unknown; client?: { name: string } | null }>) {
+    function topPartners(rows: typeof customerInvoices) {
       const map = new Map<string, { id: string; name: string; amount: number }>()
       for (const row of rows) {
         const id = row.clientId || row.client?.name || 'unknown'
@@ -588,10 +528,6 @@ export async function GET(request: NextRequest) {
         generatedAt: new Date().toISOString(),
       },
       kpis,
-      performance: {
-        collectionRate: money(collectionRate),
-      },
-      revenuePeriods,
       revenueTrend,
       cashTrend,
       ageing: {
@@ -667,12 +603,8 @@ export async function GET(request: NextRequest) {
       },
       alerts,
       cashFlow: {
-        inflows: money(cashLines
-          .filter(line => line.journalEntry.entryDate >= dateFrom && line.journalEntry.entryDate <= dateTo)
-          .reduce((sum, line) => sum + Number(line.debit || 0), 0)),
-        outflows: money(cashLines
-          .filter(line => line.journalEntry.entryDate >= dateFrom && line.journalEntry.entryDate <= dateTo)
-          .reduce((sum, line) => sum + Number(line.credit || 0), 0)),
+        inflows: money(cashTrend.reduce((s, x) => s + x.inflows, 0)),
+        outflows: money(cashTrend.reduce((s, x) => s + x.outflows, 0)),
         netChange: money(cashFlow.netChange),
         openingCash: money(cashFlow.openingCash),
         closingCash: money(cashFlow.closingCash),
