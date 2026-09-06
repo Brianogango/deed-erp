@@ -426,6 +426,9 @@ function SalesContent() {
   const [showCreditNoteModal, setShowCreditNoteModal] = useState(false)
   const [draftDirtyTick, setDraftDirtyTick] = useState(0)
   const [newNotes, setNewNotes] = useState('')
+  const [newTermsAndConditions, setNewTermsAndConditions] = useState('')
+  const [newOptionalProducts, setNewOptionalProducts] = useState<Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>>([])
+  const [newQuoteAttachments, setNewQuoteAttachments] = useState<File[]>([])
   const [newCustomerRef, setNewCustomerRef] = useState('')
   const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
   const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
@@ -627,6 +630,7 @@ function SalesContent() {
   // Shared mapping onto the Odoo-style PDF document.
   const salesDocumentPdfInput = (so: SalesOrderView, title: string, overrides: Partial<CommercialPdfInput> = {}): CommercialPdfInput => {
     const contact = contacts.find(c => c.id === so.customerId)
+    const optionalProducts = Array.isArray(so.optionalProducts) ? so.optionalProducts : []
     const merged = {
       title,
       ref: so.ref,
@@ -640,7 +644,8 @@ function SalesContent() {
       customerPhone: contact?.phone || contact?.mobile || undefined,
       customerEmail: contact?.email || undefined,
       customerTaxId: contact?.vatNumber || undefined,
-      lines: so.lines.map(l => {
+      lines: [
+        ...so.lines.map(l => {
         // A confirmed/delivered line may already have a serial assigned —
         // show its live specs (e.g. after a reconfiguration) rather than
         // leaving the customer-facing document silent on what's shipping,
@@ -665,12 +670,34 @@ function SalesContent() {
           serial: assignedSerial?.serial,
           specs: assignedSerial?.specs,
         }
-      }),
+        }),
+        ...(optionalProducts.length > 0
+          ? [
+              {
+                lineType: 'section' as const,
+                description: 'Optional products — not included in quotation total',
+                qty: 0,
+                unitPrice: 0,
+                taxRate: 0,
+                discountPct: 0,
+                subtotal: 0,
+              },
+              ...optionalProducts.map(item => ({
+                description: item.productName || 'Optional product',
+                qty: Number(item.qty) || 0,
+                unitPrice: Number(item.unitPrice) || 0,
+                taxRate: 0,
+                discountPct: 0,
+                subtotal: (Number(item.qty) || 0) * (Number(item.unitPrice) || 0),
+              })),
+            ]
+          : []),
+      ],
       subtotal: so.subtotal,
       taxTotal: so.taxTotal,
       postTaxDiscountTotal: so.discountAmount,
       total: so.total,
-      notes: so.notes,
+      notes: [so.notes, so.termsAndConditions ? `Terms and conditions\n${so.termsAndConditions}` : ''].filter(Boolean).join('\n\n') || undefined,
       currency: so.currencyCode || companySettings.currency || 'KES',
       ...overrides,
     }
@@ -1409,6 +1436,8 @@ function SalesContent() {
         invoiceAddress?: string
         deliveryAddress?: string
         paymentDetails?: Partial<DocumentPaymentDetails>
+        termsAndConditions?: string
+        optionalProducts?: Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>
         lines: DraftLine[]
       }
       if (parsed.customer) setNewCustomer(parsed.customer)
@@ -1419,6 +1448,8 @@ function SalesContent() {
       if (parsed.invoiceAddress) setNewInvoiceAddress(parsed.invoiceAddress)
       if (parsed.deliveryAddress) setNewDeliveryAddress(parsed.deliveryAddress)
       if (parsed.paymentDetails) setNewPaymentDetails(normalizeDocumentPaymentDetails(parsed.paymentDetails))
+      if (parsed.termsAndConditions) setNewTermsAndConditions(parsed.termsAndConditions)
+      if (Array.isArray(parsed.optionalProducts)) setNewOptionalProducts(parsed.optionalProducts)
       if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
         setNewDraftLines(parsed.lines.map(line => ({
           ...line,
@@ -1444,6 +1475,8 @@ function SalesContent() {
         invoiceAddress: newInvoiceAddress,
         deliveryAddress: newDeliveryAddress,
         paymentDetails: newPaymentDetails,
+        termsAndConditions: newTermsAndConditions,
+        optionalProducts: newOptionalProducts,
         lines: newDraftLines,
       }
       try {
@@ -1456,7 +1489,7 @@ function SalesContent() {
     return () => {
       if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
     }
-  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newNotes, newCustomerRef, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
+  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newNotes, newCustomerRef, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newTermsAndConditions, newOptionalProducts, newDraftLines])
 
   // Align quote payment bank: VAT → NCBA; non-VAT → ABSA / I&M
   useEffect(() => {
@@ -1570,11 +1603,27 @@ function SalesContent() {
       salespersonId: newSalespersonId || currentUser?.id,
       salespersonName: newSalespersonName || currentUser?.name,
       ...(newNotes ? { notes: newNotes } : {}),
+      ...(newTermsAndConditions ? { termsAndConditions: newTermsAndConditions.trim() } : {}),
+      ...(newOptionalProducts.length ? { optionalProducts: newOptionalProducts } : {}),
       ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
       ...(newInvoiceAddress ? { invoiceAddress: newInvoiceAddress } : {}),
       ...(newDeliveryAddress ? { deliveryAddress: newDeliveryAddress } : {}),
     })
     setDocumentPaymentDetails(so.id, newPaymentDetails)
+    if (newQuoteAttachments.length > 0) {
+      const failed: string[] = []
+      for (const file of newQuoteAttachments) {
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
+          const response = await fetch(`/api/sale-order-attachments/${so.id}`, { method: 'POST', body: formData })
+          if (!response.ok) failed.push(file.name)
+        } catch {
+          failed.push(file.name)
+        }
+      }
+      if (failed.length) showToast(`Quotation saved, but ${failed.length} attachment${failed.length === 1 ? '' : 's'} could not be uploaded.`, 'error')
+    }
     try {
       localStorage.removeItem(quoteDraftKey)
     } catch {
@@ -1594,6 +1643,9 @@ function SalesContent() {
     setNewDeliveryDate('')
     setNewValidUntil('')
     setNewNotes('')
+    setNewTermsAndConditions('')
+    setNewOptionalProducts([])
+    setNewQuoteAttachments([])
     setNewCustomerRef('')
     setNewInvoiceAddress('')
     setNewDeliveryAddress('')
@@ -1749,6 +1801,12 @@ function SalesContent() {
                   }}
                   newNotes={newNotes}
                   setNewNotes={setNewNotes}
+                  newTermsAndConditions={newTermsAndConditions}
+                  setNewTermsAndConditions={setNewTermsAndConditions}
+                  newOptionalProducts={newOptionalProducts}
+                  setNewOptionalProducts={setNewOptionalProducts}
+                  newQuoteAttachments={newQuoteAttachments}
+                  setNewQuoteAttachments={setNewQuoteAttachments}
                   newCustomerRef={newCustomerRef}
                   setNewCustomerRef={setNewCustomerRef}
                   newInvoiceAddress={newInvoiceAddress}
@@ -2623,23 +2681,19 @@ function SalesContent() {
                         </div>
                       )}
 
-                    <div className="sp-panel sp-panel-pad sales-order-meta-panel">
+                    <div className="sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--unified">
+                      <div className="sales-order-unified-heading">
+                        <strong>{isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sales order'}</strong>
+                        <span>Customer, dates, terms and ownership</span>
+                      </div>
                       <div className="sp-grid-2 sales-order-meta-grid">
                         <div className="sales-order-meta-column sales-order-meta-column--customer">
-                          <div className="sales-order-section-heading">
-                            <span>Customer details</span>
-                            <small>Billing contact</small>
-                          </div>
                           <SalesDocField label="Customer"><input readOnly value={activeOrder.customerName || ''} /></SalesDocField>
                           <SalesDocField label="Contact"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.name || '—' })()} /></SalesDocField>
                           <SalesDocField label="Email"><input readOnly value={customers.find(c => c.id === activeOrder.customerId)?.email || '—'} /></SalesDocField>
                           <SalesDocField label="Phone"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.phone || c?.mobile || '—' })()} /></SalesDocField>
                         </div>
                         <div className="sales-order-meta-column sales-order-meta-column--commercial">
-                          <div className="sales-order-section-heading">
-                            <span>Commercial details</span>
-                            <small>Dates, pricing and ownership</small>
-                          </div>
                           <SalesDocField label="Reference">
                             <div className="sales-order-reference">
                               <strong>{activeOrder.ref}</strong>
@@ -2975,20 +3029,64 @@ function SalesContent() {
                           </div>
                         )}
                         {detailTab === 'Optional Products' && (
-                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-                            No optional products have been added to this quotation.
-                          </p>
+                          <div className="sp-panel-pad">
+                            {Array.isArray((activeOrder as any).optionalProducts) && (activeOrder as any).optionalProducts.length > 0 ? (
+                              <div className="flex flex-col gap-2">
+                                {(activeOrder as any).optionalProducts.map((item: any) => (
+                                  <div key={item.id || item.productId} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-4 rounded-lg border border-[var(--sp-border)] px-3 py-2 text-xs">
+                                    <strong className="truncate text-[var(--sp-text)]">{item.productName}</strong>
+                                    <span>{item.qty} × {salesKes(item.unitPrice)}</span>
+                                    <strong>{salesKes((Number(item.qty) || 0) * (Number(item.unitPrice) || 0))}</strong>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-[var(--sp-text-3)]">No optional products were included.</p>
+                            )}
+                          </div>
                         )}
 
                         {detailTab === 'Terms and Conditions' && (
-                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-                            Terms and conditions content.
-                          </p>
+                          <div className="sp-panel-pad">
+                            <SalesDocField label="Commercial terms">
+                              <textarea
+                                rows={8}
+                                value={(activeOrder as any).termsAndConditions ?? ''}
+                                readOnly={!isQuotationDraft(activeOrder.status) || !!activeOrder.locked}
+                                onChange={event => updateSaleOrder(activeOrder.id, { termsAndConditions: event.target.value } as any)}
+                                placeholder="No commercial terms recorded."
+                              />
+                            </SalesDocField>
+                          </div>
                         )}
                         {detailTab === 'Attachments' && (
-                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-                            Attachments are managed after the document is saved.
-                          </p>
+                          <div className="sp-panel-pad flex flex-col gap-3">
+                            {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
+                              <label className="btn-outline w-fit cursor-pointer">
+                                {uploadingAttachment ? 'Uploading…' : 'Attach file'}
+                                <input type="file" className="sr-only" disabled={uploadingAttachment} onChange={event => {
+                                  const file = event.target.files?.[0]
+                                  if (file) void uploadSoAttachment(file)
+                                  event.currentTarget.value = ''
+                                }} />
+                              </label>
+                            )}
+                            {soAttachments.length === 0 ? (
+                              <p className="text-xs text-[var(--sp-text-3)]">No files attached.</p>
+                            ) : (
+                              soAttachments.map(file => (
+                                <div key={file.id} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--sp-border)] px-3 py-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-semibold text-[var(--sp-text)]">{file.name}</p>
+                                    <p className="text-[10px] text-[var(--sp-text-3)]">{Math.max(1, Math.round(file.size / 1024))} KB</p>
+                                  </div>
+                                  {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
+                                    <button type="button" className="btn-outline" onClick={() => void deleteSoAttachment(file.id)}>Remove</button>
+                                  )}
+                                </div>
+                              ))
+                            )}
+                          </div>
                         )}
                         {detailTab === 'Delivery and Stock' && (
                           <div className="sp-panel-pad">
@@ -3805,6 +3903,8 @@ function SalesContent() {
 function NewQuotationForm({
   customers, products, newCustomer, setNewCustomer, newDeliveryDate, setNewDeliveryDate,
   newValidUntil, setNewValidUntil, newNotes, setNewNotes,
+  newTermsAndConditions, setNewTermsAndConditions, newOptionalProducts, setNewOptionalProducts,
+  newQuoteAttachments, setNewQuoteAttachments,
   newCustomerRef, setNewCustomerRef, newInvoiceAddress, setNewInvoiceAddress,
   newDeliveryAddress, setNewDeliveryAddress, newPaymentDetails, setNewPaymentDetails,
   newPricelist, setNewPricelist, availablePricelists, salesPricelistsEnabled,
@@ -3819,6 +3919,10 @@ function NewQuotationForm({
   newDeliveryDate: string; setNewDeliveryDate: (v: string) => void
   newValidUntil: string; setNewValidUntil: (v: string) => void
   newNotes: string; setNewNotes: (v: string) => void
+  newTermsAndConditions: string; setNewTermsAndConditions: (v: string) => void
+  newOptionalProducts: Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>
+  setNewOptionalProducts: (value: Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>) => void
+  newQuoteAttachments: File[]; setNewQuoteAttachments: (files: File[]) => void
   newCustomerRef: string; setNewCustomerRef: (v: string) => void
   newInvoiceAddress: string; setNewInvoiceAddress: (v: string) => void
   newDeliveryAddress: string; setNewDeliveryAddress: (v: string) => void
@@ -3924,13 +4028,13 @@ function NewQuotationForm({
         </div>
       </div>
 
-      <div className="sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--new">
+      <div className="sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--new sales-order-meta-panel--unified">
+        <div className="sales-order-unified-heading">
+          <strong>Quotation</strong>
+          <span>Who this quotation is for, with dates, terms and ownership</span>
+        </div>
         <div className="sp-grid-2 sales-order-meta-grid">
           <div className="sales-order-meta-column sales-order-meta-column--customer">
-            <div className="sales-order-section-heading">
-              <span>Customer details</span>
-              <small>Choose the billing contact</small>
-            </div>
             <SalesDocField label="Customer" htmlFor="quote-customer">
               <div className="relative" ref={customerRef}>
                 <div
@@ -3994,10 +4098,6 @@ function NewQuotationForm({
           </div>
 
           <div className="sales-order-meta-column sales-order-meta-column--commercial">
-            <div className="sales-order-section-heading">
-              <span>Commercial details</span>
-              <small>Dates, terms and ownership</small>
-            </div>
             <SalesDocField label="Quotation date" htmlFor="quote-date">
               <input id="quote-date" type="date" aria-label="Quotation date" value={new Date().toISOString().slice(0, 10)} readOnly />
             </SalesDocField>
@@ -4266,8 +4366,46 @@ function NewQuotationForm({
         )}
 
         {createTab === 'Optional Products' && (
-          <div className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-            Optional products (prototype placeholder).
+          <div className="sp-panel-pad flex flex-col gap-4">
+            <div>
+              <p className="text-xs font-semibold text-[var(--sp-text)]">Alternative products</p>
+              <p className="mt-1 text-[11px] text-[var(--sp-text-3)]">Offer alternatives without including them in the quotation total.</p>
+            </div>
+            <select
+              aria-label="Add an optional product"
+              className="form-input text-xs"
+              value=""
+              onChange={event => {
+                const product = products.find(item => item.id === event.target.value)
+                if (!product || newOptionalProducts.some(item => item.productId === product.id)) return
+                setNewOptionalProducts([...newOptionalProducts, {
+                  id: uid(),
+                  productId: product.id,
+                  productName: product.name,
+                  qty: 1,
+                  unitPrice: Number(product.salePrice) || 0,
+                }])
+              }}
+            >
+              <option value="">Add an optional product…</option>
+              {products.filter(product => !newOptionalProducts.some(item => item.productId === product.id)).map(product => (
+                <option key={product.id} value={product.id}>{product.name} · {salesKes(product.salePrice)}</option>
+              ))}
+            </select>
+            {newOptionalProducts.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-[var(--sp-border)] p-5 text-center text-xs text-[var(--sp-text-3)]">No optional products added.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {newOptionalProducts.map(item => (
+                  <div key={item.id} className="grid grid-cols-1 gap-2 rounded-lg border border-[var(--sp-border)] p-3 sm:grid-cols-[minmax(0,1fr)_90px_140px_auto] sm:items-center">
+                    <strong className="truncate text-xs text-[var(--sp-text)]">{item.productName}</strong>
+                    <input aria-label={`Quantity for ${item.productName}`} type="number" min={1} value={item.qty} onChange={event => setNewOptionalProducts(newOptionalProducts.map(row => row.id === item.id ? { ...row, qty: Math.max(1, Number(event.target.value) || 1) } : row))} />
+                    <input aria-label={`Price for ${item.productName}`} type="number" min={0} value={item.unitPrice} onChange={event => setNewOptionalProducts(newOptionalProducts.map(row => row.id === item.id ? { ...row, unitPrice: Math.max(0, Number(event.target.value) || 0) } : row))} />
+                    <button type="button" className="btn-outline" onClick={() => setNewOptionalProducts(newOptionalProducts.filter(row => row.id !== item.id))}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -4293,14 +4431,46 @@ function NewQuotationForm({
         )}
 
         {createTab === 'Terms and Conditions' && (
-          <div className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-            Terms and Conditions content (prototype placeholder — demo data only).
+          <div className="sp-panel-pad">
+            <SalesDocField label="Commercial terms" htmlFor="quote-terms">
+              <textarea
+                id="quote-terms"
+                rows={8}
+                value={newTermsAndConditions}
+                onChange={event => setNewTermsAndConditions(event.target.value)}
+                placeholder="Payment schedule, delivery obligations, warranty, validity, exclusions and acceptance conditions…"
+              />
+            </SalesDocField>
+            <p className="mt-2 text-[11px] text-[var(--sp-text-3)]">These terms are saved with the quotation and remain available after confirmation.</p>
           </div>
         )}
 
         {createTab === 'Attachments' && (
-          <div className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-            Attachments content (prototype placeholder — demo data only).
+          <div className="sp-panel-pad flex flex-col gap-4">
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-[var(--sp-border-strong)] bg-[var(--sp-soft)] px-4 py-7 text-center">
+              <span className="text-xs font-semibold text-[var(--sp-text)]">Choose supporting files</span>
+              <span className="mt-1 text-[11px] text-[var(--sp-text-3)]">Files upload after the quotation is saved and receives a reference.</span>
+              <input type="file" multiple className="sr-only" onChange={event => {
+                const selected = Array.from(event.target.files ?? [])
+                setNewQuoteAttachments([...newQuoteAttachments, ...selected.filter(file => !newQuoteAttachments.some(existing => existing.name === file.name && existing.size === file.size))])
+                event.currentTarget.value = ''
+              }} />
+            </label>
+            {newQuoteAttachments.length === 0 ? (
+              <p className="text-center text-xs text-[var(--sp-text-3)]">No files selected.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {newQuoteAttachments.map((file, index) => (
+                  <div key={`${file.name}-${file.size}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--sp-border)] px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-[var(--sp-text)]">{file.name}</p>
+                      <p className="text-[10px] text-[var(--sp-text-3)]">{(file.size / 1024).toFixed(file.size >= 1024 * 1024 ? 0 : 1)} KB</p>
+                    </div>
+                    <button type="button" className="btn-outline" onClick={() => setNewQuoteAttachments(newQuoteAttachments.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

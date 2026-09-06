@@ -91,6 +91,17 @@ function mapSaleOrderToClient(order: any) {
   }
 }
 
+function normalizeOptionalProducts(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.slice(0, 100).map((item: any) => ({
+    id: String(item?.id ?? '').slice(0, 120),
+    productId: String(item?.productId ?? '').slice(0, 120),
+    productName: String(item?.productName ?? '').slice(0, 300),
+    qty: Math.max(0, Number(item?.qty) || 0),
+    unitPrice: Math.max(0, Number(item?.unitPrice) || 0),
+  })).filter(item => item.productName && item.qty > 0)
+}
+
 function mapSaleOrderItems(lines: any[], knownProductIds?: Set<string>) {
   return lines.map((item: any) => {
     if (item?.lineType === 'section' || (Number(item?.qty ?? 0) === 0 && !item?.productId && !(Number(item?.unitPrice) > 0))) {
@@ -267,6 +278,8 @@ export async function POST(request: Request) {
         totalAmount: totals.totalAmount,
         amountPaid: 0,
         notes: body.notes ?? null,
+        termsAndConditions: body.termsAndConditions ? String(body.termsAndConditions).slice(0, 20000) : null,
+        optionalProducts: normalizeOptionalProducts(body.optionalProducts),
         customerRef: body.customerRef ? String(body.customerRef).slice(0, 120) : null,
         invoiceAddress: body.invoiceAddress ?? null,
         deliveryAddress: body.deliveryAddress ?? null,
