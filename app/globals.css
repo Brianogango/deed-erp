@@ -30259,3 +30259,251 @@ body:has(.crm-workspace) [role="dialog"] > div {
     animation: none !important;
   }
 }
+
+
+/* Main dashboard executive layout: role-aware, data-backed overview. */
+.dashboard-executive-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.35fr) minmax(280px, .9fr);
+  align-items: start;
+  gap: 1rem;
+}
+
+.dashboard-executive-main,
+.dashboard-executive-rail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dashboard-weekly-brief {
+  padding: 1.15rem 1.35rem;
+}
+
+.dashboard-weekly-brief-head {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding-bottom: .85rem;
+  border-bottom: 1px solid var(--border-lt);
+}
+
+.dashboard-weekly-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: .75rem;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.dashboard-weekly-brief h2 {
+  color: var(--text-1);
+  font-size: .9rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.dashboard-weekly-brief-head p {
+  margin-top: .1rem;
+  color: var(--text-4);
+  font-size: .68rem;
+}
+
+.dashboard-weekly-copy {
+  margin-top: 1rem;
+  color: var(--text-2);
+  font-size: .82rem;
+  line-height: 1.65;
+}
+
+.dashboard-weekly-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-top: .85rem;
+}
+
+.dashboard-weekly-chips button {
+  padding: .42rem .72rem;
+  border: 0;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: .66rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.dashboard-kpi-grid--executive {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-period-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(125px, 1fr));
+  overflow-x: auto;
+  border-radius: 1rem;
+  scrollbar-width: thin;
+}
+
+.dashboard-period-strip button {
+  min-width: 0;
+  padding: .95rem 1.15rem;
+  border: 0;
+  border-left: 1px solid var(--border-lt);
+  background: transparent;
+  color: var(--text-1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dashboard-period-strip button:first-child {
+  border-left: 0;
+}
+
+.dashboard-period-strip button:hover,
+.dashboard-period-strip button:focus-visible {
+  background: var(--bg-muted);
+  outline: none;
+}
+
+.dashboard-period-strip span,
+.dashboard-period-strip strong {
+  display: block;
+  white-space: nowrap;
+}
+
+.dashboard-period-strip span {
+  margin-bottom: .3rem;
+  color: var(--text-4);
+  font-size: .63rem;
+  font-weight: 750;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.dashboard-period-strip strong {
+  font-size: .88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-executive-rail .dashboard-panel {
+  min-height: 0;
+}
+
+.dashboard-alerts-list--rail .dashboard-alert {
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: .78rem 1rem;
+}
+
+.dashboard-alerts-list--rail .dashboard-alert::after {
+  content: '›';
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  color: var(--text-4);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.dashboard-all-clear--rail {
+  margin: 1rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dashboard-all-clear--rail p {
+  color: var(--text-3);
+  font-size: .75rem;
+}
+
+.dashboard-performance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem .6rem;
+  padding: 1rem;
+}
+
+.dashboard-performance-grid > div {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: .45rem;
+  color: var(--text-3);
+  font-size: .67rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.dashboard-performance-grid i {
+  position: relative;
+  display: grid;
+  width: 4.25rem;
+  height: 4.25rem;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(#1685d1 var(--dashboard-progress), var(--bg-muted) 0);
+}
+
+.dashboard-performance-grid i::after {
+  content: '';
+  position: absolute;
+  inset: .45rem;
+  border-radius: inherit;
+  background: var(--surface, #fff);
+}
+
+.dashboard-performance-grid strong {
+  position: relative;
+  z-index: 1;
+  color: var(--text-1);
+  font-size: .78rem;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1120px) {
+  .dashboard-executive-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-executive-rail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-kpi-grid--executive {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-executive-rail,
+  .dashboard-kpi-grid--executive {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-period-strip {
+    grid-template-columns: repeat(5, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .dashboard-executive-rail,
+  .dashboard-kpi-grid--executive {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-weekly-brief {
+    padding: 1rem;
+  }
+
+  .dashboard-weekly-copy {
+    font-size: .76rem;
+  }
+}
