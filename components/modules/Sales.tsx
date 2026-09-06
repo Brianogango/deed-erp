@@ -3003,20 +3003,64 @@ function SalesContent() {
                           </div>
                         )}
                         {detailTab === 'Optional Products' && (
-                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-                            No optional products have been added to this quotation.
-                          </p>
+                          <div className="sp-panel-pad">
+                            {Array.isArray((activeOrder as any).optionalProducts) && (activeOrder as any).optionalProducts.length > 0 ? (
+                              <div className="flex flex-col gap-2">
+                                {(activeOrder as any).optionalProducts.map((item: any) => (
+                                  <div key={item.id || item.productId} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-4 rounded-lg border border-[var(--sp-border)] px-3 py-2 text-xs">
+                                    <strong className="truncate text-[var(--sp-text)]">{item.productName}</strong>
+                                    <span>{item.qty} × {salesKes(item.unitPrice)}</span>
+                                    <strong>{salesKes((Number(item.qty) || 0) * (Number(item.unitPrice) || 0))}</strong>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-[var(--sp-text-3)]">No optional products were included.</p>
+                            )}
+                          </div>
                         )}
 
                         {detailTab === 'Terms and Conditions' && (
-                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-                            Terms and conditions content.
-                          </p>
+                          <div className="sp-panel-pad">
+                            <SalesDocField label="Commercial terms">
+                              <textarea
+                                rows={8}
+                                value={(activeOrder as any).termsAndConditions ?? ''}
+                                readOnly={!isQuotationDraft(activeOrder.status) || !!activeOrder.locked}
+                                onChange={event => updateSaleOrder(activeOrder.id, { termsAndConditions: event.target.value } as any)}
+                                placeholder="No commercial terms recorded."
+                              />
+                            </SalesDocField>
+                          </div>
                         )}
                         {detailTab === 'Attachments' && (
-                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-                            Attachments are managed after the document is saved.
-                          </p>
+                          <div className="sp-panel-pad flex flex-col gap-3">
+                            {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
+                              <label className="btn-outline w-fit cursor-pointer">
+                                {uploadingAttachment ? 'Uploading…' : 'Attach file'}
+                                <input type="file" className="sr-only" disabled={uploadingAttachment} onChange={event => {
+                                  const file = event.target.files?.[0]
+                                  if (file) void uploadSoAttachment(file)
+                                  event.currentTarget.value = ''
+                                }} />
+                              </label>
+                            )}
+                            {soAttachments.length === 0 ? (
+                              <p className="text-xs text-[var(--sp-text-3)]">No files attached.</p>
+                            ) : (
+                              soAttachments.map(file => (
+                                <div key={file.id} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--sp-border)] px-3 py-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-semibold text-[var(--sp-text)]">{file.name}</p>
+                                    <p className="text-[10px] text-[var(--sp-text-3)]">{Math.max(1, Math.round(file.size / 1024))} KB</p>
+                                  </div>
+                                  {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
+                                    <button type="button" className="btn-outline" onClick={() => void deleteSoAttachment(file.id)}>Remove</button>
+                                  )}
+                                </div>
+                              ))
+                            )}
+                          </div>
                         )}
                         {detailTab === 'Delivery and Stock' && (
                           <div className="sp-panel-pad">
