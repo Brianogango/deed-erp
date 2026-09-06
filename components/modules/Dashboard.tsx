@@ -109,7 +109,7 @@ function KpiCard({
       className="dashboard-stat-card text-left"
       style={{
         cursor: onClick ? 'pointer' : 'default',
-        '--stat-accent': color,
+        '--stat-accent': 'var(--primary)',
       } as React.CSSProperties}
     >
       <div className="dashboard-stat-layout">
