@@ -1294,7 +1294,7 @@ function PurchaseContent() {
 
       {/* ── NEW RFQ MODAL ── */}
       {showNewRFQ && (
-        <Modal title="New Request for Quotation" width={980} onClose={resetRfqForm}>
+        <Modal title="New Request for Quotation" subtitle="Create a supplier request with products, quantities and commercial terms" width={980} variant="workspace" onClose={resetRfqForm}>
           <div className="flex flex-col min-h-0">
             <div className="p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
               <div>
