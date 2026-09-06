@@ -30828,3 +30828,75 @@ body:has(.crm-workspace) [role="dialog"] > div {
     max-width: 100% !important;
   }
 }
+
+
+/* Quotation / sales-order identity: one card, matching the shared full-page
+   form pattern. Customer and commercial fields are internal columns, not
+   competing nested cards. */
+.sales-pilot.sales-doc .sales-order-meta-panel--unified {
+  display: block;
+}
+
+.sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-unified-heading {
+  display: flex;
+  min-width: 0;
+  padding: 0 0 0.875rem;
+  margin-bottom: 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--sp-border);
+}
+
+.sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-unified-heading strong {
+  color: var(--sp-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-unified-heading span {
+  color: var(--sp-text-3);
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-meta-column {
+  min-width: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-meta-column--customer {
+  padding-right: 1.5rem !important;
+  border-right: 1px solid var(--sp-border) !important;
+}
+
+.sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-meta-column--commercial {
+  padding-left: 1.5rem !important;
+}
+
+@media (max-width: 767px) {
+  .sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-unified-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-unified-heading span {
+    text-align: left;
+  }
+
+  .sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-meta-column--customer {
+    padding: 0 0 1rem !important;
+    margin-bottom: 1rem;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--sp-border) !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-meta-panel--unified .sales-order-meta-column--commercial {
+    padding-left: 0 !important;
+  }
+}
