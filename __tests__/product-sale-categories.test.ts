@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   ALL_CATEGORIES,
   PRODUCT_CREATION_CATEGORY_OPTIONS,
+  normalizeProductCategorySettings,
+  resolveProductCreationCategoryOptions,
 } from '@/lib/product-categories'
 import {
   categoryDefaultTracking,
@@ -54,6 +56,21 @@ describe('product creation sale categories', () => {
     expect(isSerialOnlyCategory('Printer Consumables')).toBe(false)
     expect(categoryDefaultTracking('Printer Consumables')).toBe('QUANTITY')
   })
+  it('supports settings-managed labels and visibility without changing internal identifiers', () => {
+    const configured = normalizeProductCategorySettings([
+      { value: 'Laptops', label: 'Sale - Notebook Computers', enabled: true },
+      { value: 'Accessories', label: 'Sale - Accessories', enabled: false },
+      { value: 'Not a real category', label: 'Unsafe', enabled: true },
+    ])
+
+    expect(resolveProductCreationCategoryOptions(configured)).toContainEqual({
+      value: 'Laptops',
+      label: 'Sale - Notebook Computers',
+    })
+    expect(resolveProductCreationCategoryOptions(configured).some(option => option.value === 'Accessories')).toBe(false)
+    expect(resolveProductCreationCategoryOptions(configured).some(option => option.label === 'Unsafe')).toBe(false)
+  })
+
   it('maps each new category to the correct pricing band', () => {
     const expected = {
       'Complete Desktops': 'refurb_desktops',
