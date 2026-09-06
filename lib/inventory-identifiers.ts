@@ -4,19 +4,30 @@ export type TrackingMethod = 'NONE' | 'QUANTITY' | 'BATCH' | 'SERIAL'
 export const SERIAL_ONLY_CATEGORIES = [
   'laptops',
   'desktops',
+  'complete desktops',
+  'monitors',
+  'servers',
+  'power backup solutions',
   'printers',
   'networking',
   'mobile devices',
+  'consumer electronics',
 ] as const
 
 const CATEGORY_TRACKING_DEFAULT: Record<string, TrackingMethod> = {
   laptops: 'SERIAL',
   desktops: 'SERIAL',
+  'complete desktops': 'SERIAL',
+  monitors: 'SERIAL',
+  servers: 'SERIAL',
+  'power backup solutions': 'SERIAL',
   printers: 'SERIAL',
   networking: 'SERIAL',
   'mobile devices': 'SERIAL',
+  'consumer electronics': 'SERIAL',
   accessories: 'QUANTITY',
   'parts & components': 'QUANTITY',
+  'printer consumables': 'QUANTITY',
   services: 'NONE',
   'software & licences': 'NONE',
 }
