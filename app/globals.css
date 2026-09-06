@@ -1670,7 +1670,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   padding: 1.75rem 1.5rem 0.875rem;
   align-items: center;
   border-bottom: 1px solid var(--finance-border);
-  background: var(--finance-surface);
+  background: var(--dash-surface);
 }
 
 .finance-workspace[data-finance-tab] > .mod-header::before {
@@ -1678,7 +1678,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   position: absolute;
   top: 0.8rem;
   left: 1.5rem;
-  color: var(--finance-text-3);
+  color: var(--dash-muted);
   font-size: 0.5rem;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -1775,7 +1775,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 .finance-workspace .finance-content-card {
   margin: 0.75rem 1.5rem 1.5rem;
   overflow: hidden;
-  border: 1px solid var(--finance-border);
+  border: 1px solid var(--dash-border);
   border-radius: var(--finance-radius);
   background: var(--finance-surface);
   box-shadow: none;
@@ -1880,7 +1880,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 .finance-cashbook > .card,
 .finance-cashbook > .flex > .card,
 .finance-recon-panel {
-  border: 1px solid var(--finance-border);
+  border: 1px solid var(--dash-border);
   border-radius: var(--finance-radius);
   background: var(--finance-surface);
   box-shadow: none;
@@ -1921,7 +1921,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 .finance-cashbook-accounts .stat-card span {
   background: var(--finance-soft) !important;
   color: var(--finance-text-3) !important;
-  border: 1px solid var(--finance-border);
+  border: 1px solid var(--dash-border);
 }
 
 .finance-cashbook-view-tabs {
@@ -1968,7 +1968,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 .finance-recon-header > .flex:first-child > div:first-child {
   background: var(--finance-soft) !important;
   color: var(--navy) !important;
-  border: 1px solid var(--finance-border);
+  border: 1px solid var(--dash-border);
 }
 
 .finance-recon-metrics > .grid {
@@ -2115,7 +2115,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 .finance-invoice-detail .invoice-detail__info-icon {
   background: var(--finance-soft);
   color: var(--navy);
-  border: 1px solid var(--finance-border);
+  border: 1px solid var(--dash-border);
 }
 
 .finance-invoice-detail .invoice-detail__kpi-card.is-due,
@@ -2212,7 +2212,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     min-height: 6.25rem;
     margin: 0.625rem 0.75rem;
     padding: 0.75rem;
-    border: 1px solid var(--finance-border);
+    border: 1px solid var(--dash-border);
     border-radius: var(--finance-radius);
   }
 
@@ -2549,7 +2549,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     gap: 0.25rem 0.75rem;
     margin-bottom: 0.5rem;
     padding: 0.75rem;
-    border: 1px solid var(--finance-border);
+    border: 1px solid var(--dash-border);
     border-radius: var(--finance-radius);
     background: var(--finance-surface);
   }
@@ -13760,7 +13760,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   grid-template-columns: minmax(15rem, 1.05fr) minmax(27rem, 1.75fr) minmax(13rem, 0.85fr);
   align-items: stretch;
   overflow: hidden;
-  border: 1px solid var(--finance-border);
+  border: 1px solid var(--dash-border);
   border-radius: 0.625rem;
   background: var(--finance-surface);
   box-shadow: none;
@@ -13944,7 +13944,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
 .finance-invoice-detail .invoice-detail__supporting {
   overflow: hidden;
-  border: 1px solid var(--finance-border);
+  border: 1px solid var(--dash-border);
   border-radius: 0.625rem;
   background: var(--finance-surface);
 }
@@ -14651,7 +14651,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
   .finance-workspace--accounts .finance-cashbook-view-tabs {
     margin-inline: 0;
-    border: 1px solid var(--finance-border);
+    border: 1px solid var(--dash-border);
     border-radius: 0.5rem;
   }
 
@@ -30267,7 +30267,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   grid-template-columns: repeat(5, minmax(138px, 1fr));
   overflow-x: auto;
   margin-bottom: 14px;
-  border: 1px solid var(--finance-border);
+  border: 1px solid var(--dash-border);
   border-radius: 20px;
   background: var(--finance-surface);
   box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
@@ -30278,7 +30278,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   min-width: 0;
   padding: 18px 22px;
   border: 0;
-  border-left: 1px solid var(--finance-border);
+  border-left: 1px solid var(--dash-border);
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -30291,7 +30291,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__revenue-periods button:hover,
 .accounting-dashboard__revenue-periods button:focus-visible {
-  background: var(--finance-surface-soft);
+  background: var(--dash-soft);
   outline: none;
 }
 
@@ -30311,7 +30311,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .accounting-dashboard__revenue-periods strong {
-  color: var(--finance-text-1);
+  color: var(--dash-text);
   font-size: clamp(15px, 1.5vw, 20px);
   font-variant-numeric: tabular-nums;
 }
