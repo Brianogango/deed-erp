@@ -26,7 +26,6 @@ import {
 import { useApp, useStoreHydrated, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
-import { formatRoleLabel } from '@/lib/auth/access'
 import {
   canShowDashboardKpi,
   dashboardSectionsForUser,
@@ -198,14 +197,6 @@ function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = 'var
 export function Dashboard() {
   const mounted = useMounted()
   const storeHydrated = useStoreHydrated()
-  const [dashboardClock, setDashboardClock] = useState({ greeting: 'Welcome', date: '' })
-  useEffect(() => {
-    const now = new Date()
-    setDashboardClock({
-      greeting: now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening',
-      date: now.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Nairobi' }),
-    })
-  }, [])
   const {
     saleOrders,
     invoices,
@@ -766,20 +757,6 @@ export function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      <section className="dashboard-hero">
-        <div className="dashboard-hero-heading">
-          <h1 className="dashboard-hero-title">
-            {dashboardClock.greeting}, {currentUser?.name?.split(' ')[0] || 'there'}
-          </h1>
-          <p className="dashboard-hero-context">
-            <span>{formatRoleLabel(role)}</span>
-            <span aria-hidden="true">·</span>
-            <span>{dashboardClock.date}</span>
-          </p>
-        </div>
-        <span className="dashboard-role-pill">{formatRoleLabel(role)}</span>
-      </section>
-
       <OnboardingChecklist
         companySettings={companySettings}
         accounts={accounts}
