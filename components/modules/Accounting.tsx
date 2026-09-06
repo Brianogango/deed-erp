@@ -773,9 +773,7 @@ function AccountingContent() {
         if (
           !q ||
           i.ref.toLowerCase().includes(q) ||
-          i.partnerName.toLowerCase().includes(q) ||
-          sourceReferenceForInvoice(i).toLowerCase().includes(q) ||
-          (i.salespersonName || i.postedByName || '').toLowerCase().includes(q)
+          i.partnerName.toLowerCase().includes(q)
         ) {
           res.push(i)
         }
