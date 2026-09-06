@@ -42,6 +42,13 @@ type DashboardData = {
     generatedAt: string
   }
   kpis: Array<{ id: string; label: string; value: number; change: number | null; tone: string }>
+  revenuePeriods: {
+    today: number
+    yesterday: number
+    thisWeek: number
+    lastMonth: number
+    thisYear: number
+  }
   revenueTrend: Array<{ month: string; label: string; revenue: number; expenses: number; profit: number }>
   cashTrend: Array<{ month: string; label: string; inflows: number; outflows: number; net: number }>
   ageing: {
@@ -391,6 +398,21 @@ export default function AccountingDashboard({ onNavigate }: Props) {
 
       {data ? (
         <>
+          <section className="accounting-dashboard__revenue-periods accounting-dashboard__enter" aria-label="Posted invoice revenue by period">
+            {([
+              ['Today', data.revenuePeriods.today],
+              ['Yesterday', data.revenuePeriods.yesterday],
+              ['This week', data.revenuePeriods.thisWeek],
+              ['Last month', data.revenuePeriods.lastMonth],
+              ['This year', data.revenuePeriods.thisYear],
+            ] as const).map(([label, value]) => (
+              <button type="button" key={label} onClick={() => onNavigate('invoices')}>
+                <span>{label}</span>
+                <strong><AnimatedAmount value={value} /></strong>
+              </button>
+            ))}
+          </section>
+
           <div className="accounting-dashboard__kpis">
             {data.kpis.map((kpi, index) => {
               const Icon = kpiIcons[kpi.id] || Activity
