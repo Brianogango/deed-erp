@@ -172,8 +172,9 @@ export default function ContactFormModal({
 
   return (
     <SlidePanel
-      title={editId ? `Edit ${form.name || 'contact'}` : 'New contact'}
-      subtitle={editId ? 'Update contact information' : 'Capture essentials first. Add more details only when needed.'}
+      variant="workspace"
+      title={editId ? `Edit ${form.name || 'contact'}` : forceVendor ? 'New Vendor' : forceCustomer ? 'New Customer' : 'New Contact'}
+      subtitle={editId ? 'Update contact information' : forceVendor ? 'Add a supplier for purchasing and vendor bills' : forceCustomer ? 'Add a customer for quotations, invoices and service records' : 'Add a person or company to your ERP contacts'}
       onClose={onClose}
     >
       <div className={`contacts-form-sheet contacts-form-sheet--${form.type}`}>

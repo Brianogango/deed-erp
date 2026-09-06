@@ -28,6 +28,7 @@
     /* ── Page / Surface Tokens ───────────────────────────────────────────── */
     --bg: #F1F5F9;
     --bg-page: #F1F5F9;
+    --bg-app: var(--bg-page);
     --bg-surface: #F8FAFC;
     --bg-panel: #E2E8F0;
     --bg-card: #FFFFFF;
@@ -127,6 +128,7 @@
   [data-theme='dark'] {
     --bg: #0F172A;
     --bg-page: #0B1220;
+    --bg-app: var(--bg-page);
     --bg-surface: #111827;
     --bg-panel: #1E293B;
     --bg-card: #151D2E;
@@ -30234,8 +30236,8 @@ body:has(.crm-workspace) [role="dialog"] > div {
   flex: 0 0 auto;
   place-items: center;
   border-radius: .75rem;
-  background: #eef2ff;
-  color: #4f46e5;
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-card));
+  color: var(--primary);
 }
 
 .dashboard-weekly-brief h2 {
@@ -30269,8 +30271,9 @@ body:has(.crm-workspace) [role="dialog"] > div {
   padding: .42rem .72rem;
   border: 0;
   border-radius: 999px;
-  background: #eef2ff;
-  color: #4338ca;
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--border-lt));
+  background: color-mix(in srgb, var(--primary) 7%, var(--bg-card));
+  color: var(--primary);
   font-size: .66rem;
   font-weight: 750;
   cursor: pointer;
@@ -30385,7 +30388,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   height: 4.25rem;
   place-items: center;
   border-radius: 50%;
-  background: conic-gradient(#1685d1 var(--dashboard-progress), var(--bg-muted) 0);
+  background: conic-gradient(var(--primary) var(--dashboard-progress), var(--bg-muted) 0);
 }
 
 .dashboard-performance-grid i::after {
@@ -30789,4 +30792,107 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .app-topbar--dashboard .app-topbar-title p {
     display: none !important;
   }
+}
+
+
+/* Full-page record creation workspace — used for complex ERP forms. */
+.form-workspace-back {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-lt);
+  border-radius: 0.75rem;
+  background: var(--bg-card);
+  color: var(--text-3);
+  font-size: 1.35rem;
+  line-height: 1;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.form-workspace-back:hover {
+  border-color: var(--border);
+  background: var(--bg-muted);
+  color: var(--text-1);
+}
+
+.form-workspace-back:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.form-workspace-body {
+  padding: 1.5rem clamp(1rem, 2vw, 2rem) 6rem;
+  background: var(--bg-app);
+}
+
+.form-workspace-body > * {
+  width: min(100%, 1500px);
+  margin-inline: auto;
+}
+
+.form-workspace-body .contacts-form-sheet {
+  overflow: hidden;
+  border: 1px solid var(--border-lt);
+  border-radius: 1rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.form-workspace-body .contacts-form-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 1rem;
+  border-top: 1px solid var(--border-lt);
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 639px) {
+  .form-workspace-body {
+    padding: 0.75rem 0.75rem 5.5rem;
+  }
+
+  .form-workspace-body .contacts-form-sheet {
+    border-radius: 0.75rem;
+  }
+
+  .form-workspace-body .contacts-form-footer {
+    gap: 0.5rem;
+  }
+
+  .form-workspace-body .contacts-form-footer > button {
+    min-height: 2.75rem;
+    flex: 1 1 0;
+  }
+}
+
+
+/* Dashboard colour discipline: neutral surfaces, one brand accent, semantic colours for alerts only. */
+.dashboard-page .dashboard-stat-card {
+  box-shadow: none;
+}
+
+.dashboard-page .dashboard-stat-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border-lt));
+  box-shadow: none;
+}
+
+.dashboard-page .dashboard-stat-accent {
+  background: var(--primary);
+  opacity: 1;
+}
+
+.dashboard-page .dashboard-weekly-chips button:hover,
+.dashboard-page .dashboard-weekly-chips button:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
+  background: color-mix(in srgb, var(--primary) 11%, var(--bg-card));
+  outline: none;
+}
+
+.dashboard-page .dashboard-performance-grid i {
+  background: conic-gradient(var(--primary) var(--dashboard-progress), var(--bg-muted) 0);
 }

@@ -2488,6 +2488,7 @@ function AccountingContent() {
             title={editingInvId ? `Edit ${tab === 'bills' ? 'Bill' : 'Invoice'}` : (tab === 'bills' ? 'New Vendor Bill' : 'New Invoice')}
             onClose={() => resetInvForm()}
             width={980}
+            variant="workspace"
           >
             <div className="finance-document-editor flex flex-col min-h-[560px]">
               <div className="finance-document-editor__intro p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
