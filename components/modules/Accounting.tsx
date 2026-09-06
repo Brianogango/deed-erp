@@ -1375,6 +1375,7 @@ function AccountingContent() {
           subtitleMode="visible"
           icon={<Fa icon={faBook} />}
           color="var(--success)"
+          className="!min-h-0 !py-2 sm:!py-2.5"
           primaryAction={
             (tab === 'invoices' || tab === 'bills') ? (
               <PrimaryActionButton
