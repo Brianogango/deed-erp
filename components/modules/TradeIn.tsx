@@ -1530,7 +1530,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
       )}
 
       {showNew && (
-        <Modal title="New Client Exchange" onClose={() => { setShowNew(false); reset() }}>
+        <Modal title="New Client Exchange" subtitle="Record the customer device, assessment and agreed exchange value" variant="workspace" onClose={() => { setShowNew(false); reset() }}>
           <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 2 }}>
             <RowGrid>
               <Field label="Customer *">

@@ -705,9 +705,9 @@ export default function CompanyProperty() {
           <Modal
             title={editingId ? `Edit ${selected.ref}` : 'Record property'}
             subtitle="Office furniture and fittings — not trading stock"
+            variant="workspace"
             onClose={() => setShowForm(false)}
             width={720}
-            variant="enterprise"
             footer={
               <div className="flex justify-end gap-2">
                 <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>

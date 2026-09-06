@@ -539,7 +539,7 @@ export default function LeadsPanel({
       })()}
 
       {showForm && (
-        <Modal title="New lead" onClose={() => setShowForm(false)} width={520}>
+        <Modal title="New Lead" subtitle="Capture the prospect and the next sales action" variant="workspace" onClose={() => setShowForm(false)} width={520}>
           <div className="space-y-3">
             <Field label="Name *"><Input value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} /></Field>
             <Field label="Company"><Input value={form.companyName} onChange={v => setForm(f => ({ ...f, companyName: v }))} /></Field>

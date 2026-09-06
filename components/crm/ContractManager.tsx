@@ -215,7 +215,7 @@ export default function ContractManager({
 
       {/* New Contract Modal */}
       {showNewModal && (
-        <Modal title="New Contract" onClose={() => setShowNewModal(false)} width={720}>
+        <Modal title="New Contract" subtitle="Record the customer agreement, commercial terms and renewal dates" variant="workspace" onClose={() => setShowNewModal(false)} width={720}>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Company ID" required>
               <Input value={form.companyId} onChange={v => setForm(p => ({ ...p, companyId: v }))} placeholder="COMP-001" />
