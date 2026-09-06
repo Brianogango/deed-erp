@@ -30516,3 +30516,18 @@ body:has(.crm-workspace) [role="dialog"] > div {
     padding-inline: 9px !important;
   }
 }
+
+
+@media (min-width: 1024px) {
+  .sidebar-shell.sidebar-reference-theme:has(.sidebar-user-card.collapsed) .sidebar-brand-header {
+    height: 58px !important;
+    margin: 9px 7px 4px;
+    padding: 8px !important;
+    border-radius: 13px;
+  }
+
+  .sidebar-shell.sidebar-reference-theme:has(.sidebar-user-card.collapsed) .sidebar-brand-mark {
+    width: 32px !important;
+    height: 32px !important;
+  }
+}
