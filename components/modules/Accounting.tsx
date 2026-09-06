@@ -518,10 +518,6 @@ function AccountingContent() {
     setInvoiceListPageState(1)
     setInvSearchValue(value, { queryPatch: { page: null } })
   }, [setInvSearchValue])
-  const clearInvoiceFilters = useCallback(() => {
-    setInvoiceListPageState(1)
-    patchInvoiceUi({ q: null, filter: null, page: null })
-  }, [patchInvoiceUi])
   const setInvoiceListPage = useCallback((nextPage: number) => {
     const page = parseFinanceListPage(nextPage)
     setInvoiceListPageState(page)
