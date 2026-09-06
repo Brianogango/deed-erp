@@ -708,7 +708,6 @@ export default function CompanyProperty() {
             variant="workspace"
             onClose={() => setShowForm(false)}
             width={720}
-            variant="enterprise"
             footer={
               <div className="flex justify-end gap-2">
                 <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
