@@ -28483,6 +28483,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .accounting-dashboard__legend i.is-blue { background: var(--dash-blue); }
+.accounting-dashboard__legend i.is-cyan { background: #93c5fd; }
 .accounting-dashboard__legend i.is-teal { background: var(--dash-teal); }
 .accounting-dashboard__legend i.is-navy { background: #172554; }
 .accounting-dashboard__legend i.is-green { background: var(--dash-green); }
