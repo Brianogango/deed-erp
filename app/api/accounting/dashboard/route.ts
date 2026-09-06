@@ -94,7 +94,13 @@ export async function GET(request: NextRequest) {
 
     // Fixed calendar snapshots for the dashboard revenue strip. Invoice dates
     // are date-only business dates, so UTC boundaries avoid browser/server drift.
-    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    const kenyaToday = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Nairobi',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now)
+    const todayStart = parseDate(kenyaToday, now)
     const yesterdayStart = addDays(todayStart, -1)
     const weekStart = addDays(todayStart, -((todayStart.getUTCDay() + 6) % 7))
     const currentMonthStart = monthStart(todayStart)
