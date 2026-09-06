@@ -1534,7 +1534,7 @@ function InventoryContent() {
         onChange={e => { const f = e.target.files?.[0]; if (f) handleOpeningImportFile(f); e.target.value = '' }} />
 
       <ModuleHeader
-        title="Operations"
+        title="Inventory"
         subtitle="Inventory, warehouse and stock control"
         icon={<Fa icon={faBoxesStacked} />}
         count={kpis.productMasters}
@@ -1607,11 +1607,11 @@ function InventoryContent() {
         maxVisibleMobile={3}
         maxVisibleTablet={5}
         maxVisibleDesktop={6}
-        ariaLabel="Operations sections"
+        ariaLabel="Inventory sections"
       />
 
       <div className="mod-body">
-      <div className="inventory-pilot-rail operations-summary" aria-label="Operations overview">
+      <div className="inventory-pilot-rail operations-summary" aria-label="Inventory overview">
         <button type="button" className={`inventory-pilot-stat ${tab === 'product_catalog' ? 'is-active' : ''}`} onClick={() => setActiveTab('product_catalog')}>
           <span className="inventory-pilot-stat-label">Active products</span>
           <span className="inventory-pilot-stat-value tabular-nums">{kpis.productMasters.toLocaleString()}</span>

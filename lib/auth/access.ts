@@ -17,7 +17,7 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
   accounting: 'Accounting',
   deposits: 'Deposits & Layby',
   holdovers: 'Device Holdovers',
-  company_property: 'Property',
+  company_property: 'Asset Management',
   hr: 'HR Self-Service',
   outsource: 'Outsource Repairs',
   after_sales: 'After-Sales',

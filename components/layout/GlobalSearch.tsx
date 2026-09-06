@@ -100,7 +100,7 @@ const MODULE_SHORTCUTS: Array<{ id: string; title: string; subtitle: string; hre
   { id: 'mod-outsource', title: 'Outsource', subtitle: 'External repair vendors', href: '/outsource', module: 'outsource', aliases: ['outsource', 'external repair'] },
   { id: 'mod-aftersales', title: 'After-Sales', subtitle: 'Warranties and RMAs', href: '/aftersales', module: 'after_sales', aliases: ['after sales', 'warranty', 'rma'] },
   { id: 'mod-holdovers', title: 'Holdovers', subtitle: 'Device loans and temporary issues', href: '/holdovers', module: 'holdovers', aliases: ['holdovers', 'device loans'] },
-  { id: 'mod-property', title: 'Property', subtitle: 'Office furniture, fittings, and equipment', href: '/property', module: 'company_property', aliases: ['property', 'furniture', 'fittings', 'office assets', 'company property'] },
+  { id: 'mod-property', title: 'Asset Management', subtitle: 'Company assets, furniture, fittings, and equipment', href: '/property', module: 'company_property', aliases: ['property', 'furniture', 'fittings', 'office assets', 'company property'] },
   { id: 'mod-finance', title: 'Finance', subtitle: 'Invoices, bills and accounting', href: '/finance', module: 'accounting', aliases: ['finance', 'accounting', 'invoices', 'bills'] },
   { id: 'mod-deposits', title: 'Deposits', subtitle: 'Customer deposits and layby', href: '/deposits', module: 'deposits', aliases: ['deposits', 'layby'] },
   { id: 'mod-expenses', title: 'Expenses', subtitle: 'Staff expense claims', href: '/expenses', module: 'expenses', aliases: ['expenses', 'claims'] },
