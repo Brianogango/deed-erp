@@ -883,7 +883,6 @@ export function Dashboard() {
         </aside>
       </div>
 
-      <SectionLabel label="Operational overview" />
       {(canSeeInventory || canSeeWorkshop) && (
         <>
           <SectionLabel label="Operational overview" />
