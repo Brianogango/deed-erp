@@ -36,6 +36,7 @@ import { CO } from '@/lib/company'
 import {
   invoiceDocState,
   invoicePaymentStatus,
+  financeListPaymentStatusLabel,
   isInvoiceOverdue,
   isOpenInvoice,
   invoiceResidual,
@@ -1617,17 +1618,17 @@ function AccountingContent() {
                   {
                     key: 'payment_status', label: 'Payment Status', priority: 1 as const, width: '132px',
                     render: (i: Invoice) => {
-                      const state = invoiceDocState(i.status)
-                      if (state !== 'posted') return <Badge status="pending" label="Not available" />
+                      const label = financeListPaymentStatusLabel(i)
+                      if (label === 'Not available') return <Badge status="pending" label={label} />
                       const paymentState = invoicePaymentStatus(i)
                       return (
                         <span className="inline-flex items-center gap-1 flex-wrap">
-                          <Badge status={paymentState === 'paid' ? 'active' : paymentState === 'blocked' ? 'cancelled' : 'pending'} label={PAYMENT_STATUS_LABELS[paymentState]} />
+                          <Badge status={paymentState === 'paid' ? 'active' : paymentState === 'blocked' || paymentState === 'reversed' ? 'cancelled' : 'pending'} label={label} />
                           {isInvoiceOverdue(i) && <Badge status="cancelled" label="Overdue" />}
                         </span>
                       )
                     },
-                    exportValue: (i: Invoice) => invoiceDocState(i.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(i)] : 'Not available',
+                    exportValue: (i: Invoice) => financeListPaymentStatusLabel(i),
                   },
                   {
                     key: 'status', label: 'Status', priority: 1 as const, width: '104px',

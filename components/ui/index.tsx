@@ -2213,6 +2213,7 @@ export function ModuleHeader({
   headingLevel = 1,
   subtitleMode = 'compact',
   color = 'var(--navy)',
+  className,
 }: {
   title: string
   subtitle?: string
@@ -2226,11 +2227,12 @@ export function ModuleHeader({
   /** Compact hides supporting copy on phones; hidden omits it entirely. */
   subtitleMode?: 'compact' | 'visible' | 'hidden'
   color?: string
+  className?: string
 }) {
   const HeadingTag = `h${headingLevel}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
   const hasActions = Boolean(primaryAction || overflowActions || actions)
   return (
-    <header className="mod-header">
+    <header className={className ? `mod-header ${className}` : 'mod-header'}>
       <div className="mod-header__identity flex items-center gap-3 flex-1 min-w-0">
         {icon && (
           <div
