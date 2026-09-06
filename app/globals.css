@@ -30520,3 +30520,79 @@ body:has(.crm-workspace) [role="dialog"] > div {
     display: none !important;
   }
 }
+
+
+/* Full-page record creation workspace — used for complex ERP forms. */
+.form-workspace-back {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-lt);
+  border-radius: 0.75rem;
+  background: var(--bg-card);
+  color: var(--text-3);
+  font-size: 1.35rem;
+  line-height: 1;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.form-workspace-back:hover {
+  border-color: var(--border);
+  background: var(--bg-muted);
+  color: var(--text-1);
+}
+
+.form-workspace-back:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.form-workspace-body {
+  padding: 1.5rem clamp(1rem, 2vw, 2rem) 6rem;
+  background: var(--bg-app);
+}
+
+.form-workspace-body > * {
+  width: min(100%, 1500px);
+  margin-inline: auto;
+}
+
+.form-workspace-body .contacts-form-sheet {
+  overflow: hidden;
+  border: 1px solid var(--border-lt);
+  border-radius: 1rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.form-workspace-body .contacts-form-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 1rem;
+  border-top: 1px solid var(--border-lt);
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 639px) {
+  .form-workspace-body {
+    padding: 0.75rem 0.75rem 5.5rem;
+  }
+
+  .form-workspace-body .contacts-form-sheet {
+    border-radius: 0.75rem;
+  }
+
+  .form-workspace-body .contacts-form-footer {
+    gap: 0.5rem;
+  }
+
+  .form-workspace-body .contacts-form-footer > button {
+    min-height: 2.75rem;
+    flex: 1 1 0;
+  }
+}
