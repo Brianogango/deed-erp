@@ -125,8 +125,8 @@ type FinanceSection = 'overview' | 'money_in' | 'money_out' | 'banking' | 'accou
 
 const FINANCE_SECTIONS: Array<{ id: FinanceSection; label: string; defaultTab: MainTab }> = [
   { id: 'overview', label: 'Overview', defaultTab: 'dashboard' },
-  { id: 'money_in', label: 'Money In', defaultTab: 'invoices' },
-  { id: 'money_out', label: 'Money Out', defaultTab: 'bills' },
+  { id: 'money_in', label: 'Invoices', defaultTab: 'invoices' },
+  { id: 'money_out', label: 'Bills', defaultTab: 'bills' },
   { id: 'banking', label: 'Banking', defaultTab: 'cashbook' },
   { id: 'accounting', label: 'Accounting', defaultTab: 'journals' },
   { id: 'reports', label: 'Reports', defaultTab: 'reports' },
@@ -1535,7 +1535,7 @@ function AccountingContent() {
           ) : tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
               <DataTable
-                tableId={`finance-${tab}-list-v3`}
+                tableId={`finance-${tab}-list-v4`}
                 columns={([
                   {
                     key: 'number', label: 'Number', priority: 1 as const, width: '118px',
@@ -1543,7 +1543,7 @@ function AccountingContent() {
                     accessor: (i: Invoice) => displayDocRef(i.ref),
                   },
                   {
-                    key: 'partner', label: tab === 'invoices' ? 'Invoice Partner Display Name' : 'Bill Partner Display Name', priority: 1 as const, width: 'minmax(12rem, 2fr)',
+                    key: 'partner', label: tab === 'invoices' ? 'Customer' : 'Vendor', priority: 1 as const, width: 'minmax(12rem, 2fr)',
                     render: (i: Invoice) => <span className="text-xs font-semibold text-[var(--text-1)] erp-truncate" title={i.partnerName}>{i.partnerName}</span>,
                     accessor: (i: Invoice) => i.partnerName,
                   },
@@ -1631,7 +1631,7 @@ function AccountingContent() {
                     exportValue: (i: Invoice) => financeListPaymentStatusLabel(i),
                   },
                   {
-                    key: 'status', label: 'Status', priority: 1 as const, width: '104px',
+                    key: 'status', label: 'Document Status', priority: 3 as const, width: '104px',
                     render: (i: Invoice) => {
                       const state = invoiceDocState(i.status)
                       return <Badge status={state === 'posted' ? 'active' : state === 'cancelled' ? 'cancelled' : 'pending'} label={INVOICE_DOC_STATE_LABELS[state]} />
@@ -1639,6 +1639,16 @@ function AccountingContent() {
                     exportValue: (i: Invoice) => INVOICE_DOC_STATE_LABELS[invoiceDocState(i.status)],
                   },
                 ] satisfies ColumnDef<Invoice>[])}
+                defaultVisibleColumnKeys={[
+                  'number',
+                  'partner',
+                  'document_date',
+                  'due',
+                  'total',
+                  'balance',
+                  'payment_status',
+                ]}
+                minTableWidth={960}
                 rows={filteredInvoices}
                 rowKey={i => i.id}
                 searchValue={invSearch}

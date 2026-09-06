@@ -100,6 +100,10 @@ export interface DataTableProps<T> {
   hideColumnFilters?: boolean
   layoutViews?: LayoutViewsConfig
   showColumns?: boolean
+  /** Initial visible desktop/tablet columns before the user saves a preference. */
+  defaultVisibleColumnKeys?: string[]
+  /** Optional horizontal layout floor for wide business tables. */
+  minTableWidth?: number
   /** Saved column/search views — off by default; use layoutViews for table/kanban. */
   showSavedViews?: boolean
   overflowActions?: OverflowAction[]
@@ -163,6 +167,8 @@ export default function DataTable<T>({
   hideColumnFilters,
   layoutViews,
   showColumns,
+  defaultVisibleColumnKeys,
+  minTableWidth,
   showSavedViews = false,
   overflowActions,
   hideToolbar,
@@ -246,20 +252,24 @@ export default function DataTable<T>({
   const eligibleKeys = useMemo(() => new Set(pickableColumns.map(c => c.key)), [pickableColumns])
 
   const visibleColumns = useMemo(() => {
-    if (!prefs.visibleColumnKeys) return eligibleColumns
+    if (!prefs.visibleColumnKeys) {
+      if (!defaultVisibleColumnKeys?.length) return eligibleColumns
+      const defaults = new Set(defaultVisibleColumnKeys)
+      return pickableColumns.filter(column => column.priority === 1 || defaults.has(column.key))
+    }
     const selected = new Set(prefs.visibleColumnKeys)
     // Honour explicit user picks across breakpoints; always keep priority-1 columns.
     return pickableColumns.filter(c => c.priority === 1 || selected.has(c.key))
-  }, [eligibleColumns, pickableColumns, prefs.visibleColumnKeys])
+  }, [defaultVisibleColumnKeys, eligibleColumns, pickableColumns, prefs.visibleColumnKeys])
 
   const visibleKeys = useMemo(() => new Set(visibleColumns.map(c => c.key)), [visibleColumns])
 
   const tableMinWidth = useMemo(
-    () => estimateTableMinWidth(visibleColumns, {
+    () => Math.max(minTableWidth ?? 0, estimateTableMinWidth(visibleColumns, {
       selectable: Boolean(selectable),
       hasRowActions: Boolean(rowActions),
-    }),
-    [visibleColumns, selectable, rowActions],
+    })),
+    [minTableWidth, visibleColumns, selectable, rowActions],
   )
 
   const filteredRows = useMemo(() => {
