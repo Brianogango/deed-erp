@@ -325,7 +325,7 @@ function JobModal({
   }
 
   return (
-    <Modal title="New Delivery Job" onClose={onClose} width={640}>
+    <Modal title="New Delivery Job" subtitle="Plan the delivery, recipient, rider and dispatch details" variant="workspace" onClose={onClose} width={640}>
       <div className="space-y-3">
         <div>
           <label className="text-[11px] font-semibold text-t2 block mb-1.5">Job Type *</label>
