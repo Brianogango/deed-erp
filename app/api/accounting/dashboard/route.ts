@@ -92,6 +92,23 @@ export async function GET(request: NextRequest) {
     const trendStart = monthStart(addMonths(dateTo, -11))
     const cashTrendStart = monthStart(addMonths(dateTo, -5))
 
+    // Fixed calendar snapshots for the dashboard revenue strip. Invoice dates
+    // are date-only business dates, so UTC boundaries avoid browser/server drift.
+    const kenyaToday = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Nairobi',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now)
+    const todayStart = parseDate(kenyaToday, now)
+    const yesterdayStart = addDays(todayStart, -1)
+    const weekStart = addDays(todayStart, -((todayStart.getUTCDay() + 6) % 7))
+    const currentMonthStart = monthStart(todayStart)
+    const lastMonthStart = addMonths(currentMonthStart, -1)
+    const lastMonthEnd = addDays(currentMonthStart, -1)
+    const yearStart = startOfYear(todayStart)
+    const revenueSnapshotStart = lastMonthStart < yearStart ? lastMonthStart : yearStart
+
     const [
       pl,
       previousPl,
@@ -108,6 +125,7 @@ export async function GET(request: NextRequest) {
       latestStatements,
       trendLines,
       cashLines,
+      revenueSnapshotInvoices,
       customerInvoices,
       vendorInvoices,
       recentJournals,
@@ -192,12 +210,27 @@ export async function GET(request: NextRequest) {
         where: {
           documentType: 'customer_invoice',
           postingStatus: 'posted',
+          invoiceDate: { gte: revenueSnapshotStart, lte: todayStart },
+        },
+        select: {
+          invoiceDate: true,
+          totalAmount: true,
+        },
+      }),
+      prisma.invoice.findMany({
+        where: {
+          documentType: 'customer_invoice',
+          postingStatus: 'posted',
           invoiceDate: { gte: dateFrom, lte: dateTo },
         },
         select: {
           clientId: true,
           totalAmount: true,
           client: { select: { name: true } },
+          paymentAllocations: {
+            where: { reversedAt: null, applicationDate: { lte: dateTo } },
+            select: { amount: true },
+          },
         },
       }),
       prisma.invoice.findMany({
@@ -267,6 +300,28 @@ export async function GET(request: NextRequest) {
         },
       }),
     ])
+
+    const revenueBetween = (from: Date, to: Date) => money(
+      revenueSnapshotInvoices
+        .filter(invoice => invoice.invoiceDate >= from && invoice.invoiceDate <= to)
+        .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0),
+    )
+    const revenuePeriods = {
+      today: revenueBetween(todayStart, todayStart),
+      yesterday: revenueBetween(yesterdayStart, yesterdayStart),
+      thisWeek: revenueBetween(weekStart, todayStart),
+      lastMonth: revenueBetween(lastMonthStart, lastMonthEnd),
+      thisYear: revenueBetween(yearStart, todayStart),
+    }
+
+    const selectedInvoiceTotal = customerInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0)
+    const selectedInvoiceCollected = customerInvoices.reduce(
+      (sum, invoice) => sum + invoice.paymentAllocations.reduce((paid, allocation) => paid + Number(allocation.amount || 0), 0),
+      0,
+    )
+    const collectionRate = selectedInvoiceTotal > 0
+      ? Math.min(100, Math.max(0, selectedInvoiceCollected / selectedInvoiceTotal * 100))
+      : 0
 
     const previousGrossProfit = money(previousPl.grossProfit)
     const currentCash = money(cashFlow.closingCash)
@@ -528,6 +583,10 @@ export async function GET(request: NextRequest) {
         generatedAt: new Date().toISOString(),
       },
       kpis,
+      performance: {
+        collectionRate: money(collectionRate),
+      },
+      revenuePeriods,
       revenueTrend,
       cashTrend,
       ageing: {
