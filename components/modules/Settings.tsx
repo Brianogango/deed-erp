@@ -1088,15 +1088,31 @@ export default function Settings() {
                       Choose which categories appear during product creation and edit their display names.
                       Internal identifiers remain protected so stock tracking, accounts and pricing rules continue to work.
                     </p>
-                    <button
-                      type="button"
-                      className="text-[11px] font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 whitespace-nowrap"
-                      onClick={() => saveProductCategorySettings(
-                        PRODUCT_CREATION_CATEGORY_OPTIONS.map(option => ({ ...option, enabled: true })),
-                      )}
-                    >
-                      Restore defaults
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold px-3 py-2 rounded-lg border border-navy-500 bg-navy-500 text-white hover:bg-navy-600 whitespace-nowrap"
+                        onClick={() => saveProductCategorySettings([
+                          ...productCategorySettings,
+                          {
+                            value: `custom:${Date.now().toString(36)}`,
+                            label: 'New category',
+                            enabled: true,
+                          },
+                        ])}
+                      >
+                        Add category
+                      </button>
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                        onClick={() => saveProductCategorySettings(
+                          PRODUCT_CREATION_CATEGORY_OPTIONS.map(option => ({ ...option, enabled: true })),
+                        )}
+                      >
+                        Restore defaults
+                      </button>
+                    </div>
                   </div>
                   {productCategorySettings.map((category, index) => (
                     <div key={category.value} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 items-center rounded-lg border border-gray-200 bg-white px-3 py-2">
@@ -1117,7 +1133,24 @@ export default function Settings() {
                             saveProductCategorySettings(next)
                           }}
                         />
-                        <div className="mt-1 text-[10px] text-gray-400">System mapping: {category.value}</div>
+                        <div className="mt-1 flex items-center justify-between gap-3 text-[10px] text-gray-400">
+                          <span>
+                            {category.value.startsWith('custom:')
+                              ? 'Custom category · Quantity tracking · Manual pricing'
+                              : `System mapping: ${category.value}`}
+                          </span>
+                          {category.value.startsWith('custom:') && (
+                            <button
+                              type="button"
+                              className="text-red-600 hover:text-red-700 font-semibold"
+                              onClick={() => saveProductCategorySettings(
+                                productCategorySettings.filter(item => item.value !== category.value),
+                              )}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
