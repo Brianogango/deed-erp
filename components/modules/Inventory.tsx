@@ -3707,7 +3707,7 @@ function InventoryContent() {
         const exactDup = !editId && !form.parentId && products.find((p: Product) => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
         const archivedDup = !editId && !form.parentId && products.find((p: Product) => !p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
         return (
-        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={closeProductForm} width={920}>
+        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} subtitle="Maintain product identity, category, pricing, stock controls and variants" onClose={closeProductForm} width={920} variant="workspace">
           <div className="flex flex-col gap-5 pb-1">
 
             {!editId && !form.parentId && canEditStock && (
