@@ -92,6 +92,17 @@ export async function GET(request: NextRequest) {
     const trendStart = monthStart(addMonths(dateTo, -11))
     const cashTrendStart = monthStart(addMonths(dateTo, -5))
 
+    // Fixed calendar snapshots for the dashboard revenue strip. Invoice dates
+    // are date-only business dates, so UTC boundaries avoid browser/server drift.
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    const yesterdayStart = addDays(todayStart, -1)
+    const weekStart = addDays(todayStart, -((todayStart.getUTCDay() + 6) % 7))
+    const currentMonthStart = monthStart(todayStart)
+    const lastMonthStart = addMonths(currentMonthStart, -1)
+    const lastMonthEnd = addDays(currentMonthStart, -1)
+    const yearStart = startOfYear(todayStart)
+    const revenueSnapshotStart = lastMonthStart < yearStart ? lastMonthStart : yearStart
+
     const [
       pl,
       previousPl,
@@ -108,6 +119,7 @@ export async function GET(request: NextRequest) {
       latestStatements,
       trendLines,
       cashLines,
+      revenueSnapshotInvoices,
       customerInvoices,
       vendorInvoices,
       recentJournals,
@@ -192,6 +204,17 @@ export async function GET(request: NextRequest) {
         where: {
           documentType: 'customer_invoice',
           postingStatus: 'posted',
+          invoiceDate: { gte: revenueSnapshotStart, lte: todayStart },
+        },
+        select: {
+          invoiceDate: true,
+          totalAmount: true,
+        },
+      }),
+      prisma.invoice.findMany({
+        where: {
+          documentType: 'customer_invoice',
+          postingStatus: 'posted',
           invoiceDate: { gte: dateFrom, lte: dateTo },
         },
         select: {
@@ -267,6 +290,19 @@ export async function GET(request: NextRequest) {
         },
       }),
     ])
+
+    const revenueBetween = (from: Date, to: Date) => money(
+      revenueSnapshotInvoices
+        .filter(invoice => invoice.invoiceDate >= from && invoice.invoiceDate <= to)
+        .reduce((sum, invoice) => sum + Number(invoice.totalAmount || 0), 0),
+    )
+    const revenuePeriods = {
+      today: revenueBetween(todayStart, todayStart),
+      yesterday: revenueBetween(yesterdayStart, yesterdayStart),
+      thisWeek: revenueBetween(weekStart, todayStart),
+      lastMonth: revenueBetween(lastMonthStart, lastMonthEnd),
+      thisYear: revenueBetween(yearStart, todayStart),
+    }
 
     const previousGrossProfit = money(previousPl.grossProfit)
     const currentCash = money(cashFlow.closingCash)
@@ -528,6 +564,7 @@ export async function GET(request: NextRequest) {
         generatedAt: new Date().toISOString(),
       },
       kpis,
+      revenuePeriods,
       revenueTrend,
       cashTrend,
       ageing: {
