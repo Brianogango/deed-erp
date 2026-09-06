@@ -7,6 +7,10 @@ import {
   categoryDefaultTracking,
   isSerialOnlyCategory,
 } from '@/lib/inventory-identifiers'
+import {
+  DEFAULT_PRICING_MARGIN_POLICY,
+  resolvePricingCategoryId,
+} from '@/lib/pricing/margin-policy'
 
 const requestedLabels = [
   'Sale - Laptops',
@@ -49,5 +53,28 @@ describe('product creation sale categories', () => {
 
     expect(isSerialOnlyCategory('Printer Consumables')).toBe(false)
     expect(categoryDefaultTracking('Printer Consumables')).toBe('QUANTITY')
+  })
+  it('maps each new category to the correct pricing band', () => {
+    const expected = {
+      'Complete Desktops': 'refurb_desktops',
+      Monitors: 'monitors',
+      Servers: 'servers',
+      'Power Backup Solutions': 'power_backup',
+      'Printer Consumables': 'printer_consumables',
+      'Consumer Electronics': 'consumer_electronics',
+    }
+
+    for (const [erpCategory, pricingCategoryId] of Object.entries(expected)) {
+      expect(resolvePricingCategoryId({
+        policy: DEFAULT_PRICING_MARGIN_POLICY,
+        erpCategory,
+      })).toBe(pricingCategoryId)
+    }
+
+    expect(resolvePricingCategoryId({
+      policy: DEFAULT_PRICING_MARGIN_POLICY,
+      erpCategory: 'Complete Desktops',
+      productType: 'new',
+    })).toBe('brand_new_pcs')
   })
 })
