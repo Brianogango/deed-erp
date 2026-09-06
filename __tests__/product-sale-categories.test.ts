@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   ALL_CATEGORIES,
   PRODUCT_CREATION_CATEGORY_OPTIONS,
+  defaultProductCreationCategory,
+  inventoryCategoryFilterOptions,
   normalizeProductCategorySettings,
   resolveProductCreationCategoryOptions,
 } from '@/lib/product-categories'
+import { categoryDefaults } from '@/lib/product-accounts'
 import {
   categoryDefaultTracking,
   isSerialOnlyCategory,
@@ -104,5 +107,33 @@ describe('product creation sale categories', () => {
       erpCategory: 'Complete Desktops',
       productType: 'new',
     })).toBe('brand_new_pcs')
+  })
+
+  it('maps new sale categories to their official CoA sale and purchase codes', () => {
+    expect(categoryDefaults('Complete Desktops')).toMatchObject({ saleAccountCode: '5004', costAccountCode: '6104' })
+    expect(categoryDefaults('Monitors')).toMatchObject({ saleAccountCode: '5005', costAccountCode: '6105' })
+    expect(categoryDefaults('Servers')).toMatchObject({ saleAccountCode: '5006', costAccountCode: '6106' })
+    expect(categoryDefaults('Power Backup Solutions')).toMatchObject({ saleAccountCode: '5007', costAccountCode: '6107' })
+    expect(categoryDefaults('Printer Consumables')).toMatchObject({
+      productKind: 'consumable',
+      saleAccountCode: '5011',
+      costAccountCode: '6111',
+    })
+    expect(categoryDefaults('Consumer Electronics')).toMatchObject({ saleAccountCode: '5013', costAccountCode: '6113' })
+  })
+
+  it('defaults new products to the first enabled category, not a hidden Laptops row', () => {
+    expect(defaultProductCreationCategory([
+      { value: 'Laptops', label: 'Sale - Laptops', enabled: false },
+      { value: 'Monitors', label: 'Sale - Monitors', enabled: true },
+    ])).toBe('Monitors')
+  })
+
+  it('keeps custom categories visible in inventory filters', () => {
+    const options = inventoryCategoryFilterOptions([
+      { value: 'custom:projectors', label: 'Sale - Projectors', enabled: true },
+    ])
+    expect(options).toContainEqual({ value: 'custom:projectors', label: 'Sale - Projectors' })
+    expect(options.some(option => option.value === 'Laptops')).toBe(true)
   })
 })

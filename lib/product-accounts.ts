@@ -115,36 +115,71 @@ export const CATEGORY_ACCOUNT_DEFAULTS: Record<string, CategoryAccountDefaults> 
     saleAccountCode: '5101',
     costAccountCode: '6301',
   },
+  'Complete Desktops': {
+    productKind: 'storable',
+    saleAccountCode: '5004',
+    costAccountCode: '6104',
+    inventoryAccountCode: '1200',
+    cogsAccountCode: '6001',
+    adjustmentAccountCode: '6305',
+    writeOffAccountCode: '6306',
+    priceDifferenceAccountCode: '6307',
+  },
+  Monitors: {
+    productKind: 'storable',
+    saleAccountCode: '5005',
+    costAccountCode: '6105',
+    inventoryAccountCode: '1200',
+    cogsAccountCode: '6001',
+    adjustmentAccountCode: '6305',
+    writeOffAccountCode: '6306',
+    priceDifferenceAccountCode: '6307',
+  },
+  Servers: {
+    productKind: 'storable',
+    saleAccountCode: '5006',
+    costAccountCode: '6106',
+    inventoryAccountCode: '1200',
+    cogsAccountCode: '6001',
+    adjustmentAccountCode: '6305',
+    writeOffAccountCode: '6306',
+    priceDifferenceAccountCode: '6307',
+  },
+  'Power Backup Solutions': {
+    productKind: 'storable',
+    saleAccountCode: '5007',
+    costAccountCode: '6107',
+    inventoryAccountCode: '1200',
+    cogsAccountCode: '6001',
+    adjustmentAccountCode: '6305',
+    writeOffAccountCode: '6306',
+    priceDifferenceAccountCode: '6307',
+  },
+  'Printer Consumables': {
+    productKind: 'consumable',
+    saleAccountCode: '5011',
+    costAccountCode: '6111',
+    inventoryAccountCode: '1200',
+    cogsAccountCode: '6001',
+    adjustmentAccountCode: '6305',
+    writeOffAccountCode: '6306',
+    priceDifferenceAccountCode: '6307',
+  },
+  'Consumer Electronics': {
+    productKind: 'storable',
+    saleAccountCode: '5013',
+    costAccountCode: '6113',
+    inventoryAccountCode: '1200',
+    cogsAccountCode: '6001',
+    adjustmentAccountCode: '6305',
+    writeOffAccountCode: '6306',
+    priceDifferenceAccountCode: '6307',
+  },
 }
-
-const CATEGORY_DEFAULT_ALIASES: Record<string, string> = {
-  'Complete Desktops': 'Desktops',
-  'Printer Consumables': 'Printers',
-  'Consumer Electronics': 'Mobile Devices',
-}
-
-const GENERAL_STORABLE_CATEGORIES = new Set([
-  'Monitors',
-  'Servers',
-  'Power Backup Solutions',
-])
 
 export function categoryDefaults(category?: string | null): CategoryAccountDefaults {
   if (!category) return {}
-  const canonical = CATEGORY_DEFAULT_ALIASES[category] || category
-  const configured = CATEGORY_ACCOUNT_DEFAULTS[canonical]
-  if (configured) {
-    return category === 'Printer Consumables'
-      ? { ...configured, productKind: 'consumable' }
-      : configured
-  }
-  if (GENERAL_STORABLE_CATEGORIES.has(category)) {
-    return {
-      productKind: 'storable',
-      ...COMPANY_ACCOUNT_FALLBACKS,
-    }
-  }
-  return {}
+  return CATEGORY_ACCOUNT_DEFAULTS[category] ?? {}
 }
 
 function pickCode(
