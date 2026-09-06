@@ -30234,8 +30234,8 @@ body:has(.crm-workspace) [role="dialog"] > div {
   flex: 0 0 auto;
   place-items: center;
   border-radius: .75rem;
-  background: #eef2ff;
-  color: #4f46e5;
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-card));
+  color: var(--primary);
 }
 
 .dashboard-weekly-brief h2 {
@@ -30269,8 +30269,9 @@ body:has(.crm-workspace) [role="dialog"] > div {
   padding: .42rem .72rem;
   border: 0;
   border-radius: 999px;
-  background: #eef2ff;
-  color: #4338ca;
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--border-lt));
+  background: color-mix(in srgb, var(--primary) 7%, var(--bg-card));
+  color: var(--primary);
   font-size: .66rem;
   font-weight: 750;
   cursor: pointer;
@@ -30385,7 +30386,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   height: 4.25rem;
   place-items: center;
   border-radius: 50%;
-  background: conic-gradient(#1685d1 var(--dashboard-progress), var(--bg-muted) 0);
+  background: conic-gradient(var(--primary) var(--dashboard-progress), var(--bg-muted) 0);
 }
 
 .dashboard-performance-grid i::after {
@@ -30595,4 +30596,31 @@ body:has(.crm-workspace) [role="dialog"] > div {
     min-height: 2.75rem;
     flex: 1 1 0;
   }
+}
+
+
+/* Dashboard colour discipline: neutral surfaces, one brand accent, semantic colours for alerts only. */
+.dashboard-page .dashboard-stat-card {
+  box-shadow: none;
+}
+
+.dashboard-page .dashboard-stat-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border-lt));
+  box-shadow: none;
+}
+
+.dashboard-page .dashboard-stat-accent {
+  background: var(--primary);
+  opacity: 1;
+}
+
+.dashboard-page .dashboard-weekly-chips button:hover,
+.dashboard-page .dashboard-weekly-chips button:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
+  background: color-mix(in srgb, var(--primary) 11%, var(--bg-card));
+  outline: none;
+}
+
+.dashboard-page .dashboard-performance-grid i {
+  background: conic-gradient(var(--primary) var(--dashboard-progress), var(--bg-muted) 0);
 }
