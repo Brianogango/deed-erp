@@ -5350,23 +5350,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
       padding-bottom: 1.25rem;
     }
 
-    .dashboard-hero {
-      padding: 0.1rem 0.15rem 0.05rem;
-    }
-
-    .dashboard-hero-title {
-      font-size: clamp(1.35rem, 6vw, 1.6rem);
-      white-space: normal;
-    }
-
-    .dashboard-role-pill {
-      display: none;
-    }
-
-    .dashboard-hero-context {
-      font-size: 0.78rem;
-    }
-
     .dashboard-setup-strip {
       grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 0.55rem;
