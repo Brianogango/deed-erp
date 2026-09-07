@@ -1006,6 +1006,13 @@
   color: #607087;
 }
 
+.contacts-type-switch-hint {
+  margin: 8px 22px 0;
+  color: #65738a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .contacts-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

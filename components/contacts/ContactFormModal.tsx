@@ -139,8 +139,8 @@ export default function ContactFormModal({
   const [moreDetailsOpen, setMoreDetailsOpen] = useState(() => Boolean(editId))
 
   const companies = useMemo(
-    () => contacts.filter(c => c.type === 'company'),
-    [contacts],
+    () => contacts.filter(c => c.type === 'company' && c.id !== editId),
+    [contacts, editId],
   )
 
   const paymentTermsValue = String(form.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS)
@@ -161,6 +161,7 @@ export default function ContactFormModal({
   }
 
   const switchType = (type: 'company' | 'individual') => {
+    if (type === form.type) return
     const shared = {
       name: form.name,
       email: form.email,
@@ -248,22 +249,25 @@ export default function ContactFormModal({
         <strong>{forceVendor ? 'Vendor' : forceCustomer ? 'Customer' : 'Contact'}</strong>
         <span>{forceVendor ? 'Supplier identity and purchasing details' : 'The display name is used across quotations, invoices and statements'}</span>
       </div>
-      {!editId && (
-        <div className="contacts-type-switch" role="group" aria-label="Contact type">
-          {(['company', 'individual'] as const).map(t => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => switchType(t)}
-              className={form.type === t ? 'is-active' : ''}
-              aria-pressed={form.type === t}
-            >
-              {t === 'individual'
-                ? <><Fa icon={faUser} /> <span><strong>Individual</strong><small>Person / contact</small></span></>
-                : <><Fa icon={faBuilding} /> <span><strong>Business</strong><small>Company / organisation</small></span></>}
-            </button>
-          ))}
-        </div>
+      <div className="contacts-type-switch" role="group" aria-label="Contact type">
+        {(['company', 'individual'] as const).map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => switchType(t)}
+            className={form.type === t ? 'is-active' : ''}
+            aria-pressed={form.type === t}
+          >
+            {t === 'individual'
+              ? <><Fa icon={faUser} /> <span><strong>Individual</strong><small>Person / contact</small></span></>
+              : <><Fa icon={faBuilding} /> <span><strong>Business</strong><small>Company / organisation</small></span></>}
+          </button>
+        ))}
+      </div>
+      {editId && (
+        <p className="contacts-type-switch-hint">
+          Created as the wrong kind? Switch Individual ↔ Business, then Save. Name, email and phone are kept.
+        </p>
       )}
 
       <div className="contacts-form-grid contacts-form-grid--progressive">
