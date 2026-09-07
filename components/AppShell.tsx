@@ -14,7 +14,7 @@ import { hasModuleAccess } from '@/lib/auth/access'
 import { markRouteDataReady, useRouteDataReady } from '@/lib/route-data-ready'
 import { ModuleRenderBoundary } from '@/components/erp'
 import { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
-import { fetchAndApplyStoreKeys, keysAreCached, readDirtyStoreKeys } from '@/lib/client-store-hydrate'
+import { fetchAndApplyStoreKeys, keysAreCached } from '@/lib/client-store-hydrate'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -493,7 +493,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
 
     lastRouteRefreshRef.current = Date.now()
-    const dirtyKeys = readDirtyStoreKeys()
     const controller = new AbortController()
     const paintCap = window.setTimeout(() => markRouteDataReady(route), 10_000)
     const etagCritical = `deed_store_etag_${currentUserId}_${route}`
@@ -514,7 +513,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
           const result = await fetchAndApplyStoreKeys({
             keys: criticalKeys,
             etagStorageKey: etagCritical,
-            dirtyKeys,
             signal: controller.signal,
           })
           if (result === 'error') markRouteDataReady(route)
@@ -526,7 +524,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
           await fetchAndApplyStoreKeys({
             keys: deferredKeys,
             etagStorageKey: etagDeferred,
-            dirtyKeys,
             signal: controller.signal,
           })
         }

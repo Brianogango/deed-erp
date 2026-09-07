@@ -4,7 +4,7 @@
  */
 
 import { criticalAppStateKeysForRoute, deferredAppStateKeysForRoute } from '@/lib/app-state-hydration'
-import { fetchAndApplyStoreKeys, readDirtyStoreKeys } from '@/lib/client-store-hydrate'
+import { fetchAndApplyStoreKeys } from '@/lib/client-store-hydrate'
 import { bootApiGroupsForRoute } from '@/lib/boot-apis'
 
 const warmedRoutes = new Set<string>()
@@ -29,7 +29,6 @@ export function warmRoute(pathname: string, currentUserId?: string | null): void
     const deferredKeys = deferredAppStateKeysForRoute(route)
     if (criticalKeys.length === 0 && deferredKeys.length === 0) return
 
-    const dirtyKeys = readDirtyStoreKeys()
     const etagCritical = currentUserId
       ? `deed_store_etag_${currentUserId}_${route}`
       : `deed_store_etag_${route}`
@@ -40,14 +39,12 @@ export function warmRoute(pathname: string, currentUserId?: string | null): void
         await fetchAndApplyStoreKeys({
           keys: criticalKeys,
           etagStorageKey: etagCritical,
-          dirtyKeys,
         })
       }
       if (deferredKeys.length > 0) {
         await fetchAndApplyStoreKeys({
           keys: deferredKeys,
           etagStorageKey: etagDeferred,
-          dirtyKeys,
         })
       }
       warmedRoutes.add(route)
