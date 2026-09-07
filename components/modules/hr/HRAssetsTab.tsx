@@ -222,7 +222,7 @@ export default function HRAssetsTab() {
       <div className="hr-submodule-toolbar p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)] gap-3">
         <div>
           <h3 className="text-sm font-bold text-[var(--text-1)]">Asset Assignments</h3>
-          <p className="text-[11px] text-[var(--text-4)] mt-0.5">Staff equipment issued from trading stock. Office furniture and fittings are recorded under Property.</p>
+          <p className="text-[11px] text-[var(--text-4)] mt-0.5">Staff equipment issued from trading stock. Office furniture and fittings are recorded under Asset Management.</p>
         </div>
         {isAdmin && (
           <PrimaryActionButton icon={<Fa icon={faPlus} />} hideLabelOnMobile={false} onClick={openAssignModal}>

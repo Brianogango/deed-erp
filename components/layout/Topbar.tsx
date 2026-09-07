@@ -42,7 +42,7 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/cashbook':    { label: 'Cashbook',       desc: 'Cash receipts and payments' },
   '/deposits':    { label: 'Deposits',       desc: 'Customer deposits & layby' },
   '/holdovers':   { label: 'Holdovers',      desc: 'Device loans & temporary issue log' },
-  '/property':    { label: 'Property',       desc: 'Office furniture, fittings & equipment' },
+  '/property':    { label: 'Asset Management', desc: 'Office furniture, fittings & equipment' },
   '/expenses':    { label: 'Expenses',       desc: 'Staff expense claims' },
   '/hr':          { label: 'HR',             desc: 'Employees, payroll & time off' },
   '/documents':   { label: 'My Documents',   desc: 'Policies, standards & personal documents' },

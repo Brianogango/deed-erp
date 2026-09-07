@@ -8554,7 +8554,7 @@ const storeCtx: AppState = {
         return
       }
       const existing = companyAssets.find(a => a.id === id)
-      if (!existing) { showToast('Property item not found', 'error'); return }
+      if (!existing) { showToast('Asset item not found', 'error'); return }
       const error = validateCompanyAssetInput(input, companyAssets, id)
       if (error) { showToast(error, 'error'); return }
       const at = new Date().toISOString()
@@ -8611,7 +8611,7 @@ const storeCtx: AppState = {
       if (!existing.taxWdvKes) next.taxWdvKes = initialTaxWdv(books.costKes)
       next = capitaliseCompanyAsset(next)
       setCompanyAssets(prev => prev.map(a => a.id === id ? next : a))
-      showToast('Property item updated', 'success')
+      showToast('Asset item updated', 'success')
     },
     deleteCompanyAsset: (id) => {
       const user = currentUser()
@@ -8818,7 +8818,7 @@ const storeCtx: AppState = {
         return
       }
       const existing = companyAssets.find(a => a.id === assetId)
-      if (!existing) { showToast('Property item not found', 'error'); return }
+      if (!existing) { showToast('Asset item not found', 'error'); return }
       if (existing.serialId) { showToast('This item already has a trading serial', 'error'); return }
       const serial = serialRef.current.find(s => s.id === serialId)
       if (!serial || serial.status !== 'available') {
