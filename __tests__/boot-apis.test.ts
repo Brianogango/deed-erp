@@ -7,11 +7,9 @@ describe('bootApiGroupsForRoute', () => {
     expect(groups).toEqual(expect.arrayContaining(['employees', 'leave', 'approval_rules']))
   })
 
-  it('scopes sales to contacts + sales + crm + products', () => {
-    const groups = bootApiGroupsForRoute('/sales')
-    expect(groups).toEqual(expect.arrayContaining(['products', 'contacts', 'sales', 'crm']))
-    expect(groups).not.toContain('stock_moves')
-    expect(groups).not.toContain('repairs')
+  it('scopes purchases to catalog + contacts + purchase orders', () => {
+    const groups = bootApiGroupsForRoute('/purchases')
+    expect(groups).toEqual(expect.arrayContaining(['products', 'contacts', 'purchases']))
   })
 
   it('matches nested finance invoice routes by prefix', () => {

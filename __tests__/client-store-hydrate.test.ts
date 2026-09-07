@@ -43,4 +43,10 @@ describe('applyHydratedStoreState', () => {
     applyHydratedStoreState({ deed_serials: [{ id: 'server' }] })
     expect(JSON.parse(window.localStorage.getItem('deed_serials') || '[]')).toEqual([{ id: 'server' }])
   })
+
+  it('does not replace last-known rows with an empty GET payload', () => {
+    window.localStorage.setItem('deed_saleOrders', JSON.stringify([{ id: 'local' }]))
+    applyHydratedStoreState({ deed_saleOrders: [] })
+    expect(JSON.parse(window.localStorage.getItem('deed_saleOrders') || '[]')).toEqual([{ id: 'local' }])
+  })
 })

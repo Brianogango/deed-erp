@@ -1737,7 +1737,7 @@ export function StatusStepper({
 }
 
 /** Lightweight route/module loading UI (no heavy deps). */
-export { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
+export { ModuleSkeleton, ShellChromeSkeleton } from '@/components/ui/ModuleSkeleton'
 
 type StateTone = 'empty' | 'loading' | 'success' | 'error'
 

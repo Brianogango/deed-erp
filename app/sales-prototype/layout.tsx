@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-/** Isolated layout — root layout renders without AppShell when unauthenticated. */
+/** Isolated layout — public demo; AppShell lives in `app/(app)/layout.tsx`. */
 export default function SalesPrototypeLayout({ children }: { children: ReactNode }) {
   return children
 }

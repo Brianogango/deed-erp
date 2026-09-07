@@ -45,6 +45,20 @@ export function applyHydratedStoreState(
       try {
         const parsed = typeof value === 'string' ? JSON.parse(serialized) : value
         if (!Array.isArray(parsed)) continue
+        // Never replace a populated cache with an empty GET — that is the KPI
+        // 0-flash across navigations when a page of the collection 404s or
+        // returns `{ items: [] }` before the real page lands.
+        if (parsed.length === 0) {
+          const existing = window.localStorage.getItem(key)
+          if (existing) {
+            try {
+              const localParsed = JSON.parse(existing)
+              if (Array.isArray(localParsed) && localParsed.length > 0) continue
+            } catch {
+              /* existing blob unreadable — allow empty */
+            }
+          }
+        }
       } catch {
         continue
       }

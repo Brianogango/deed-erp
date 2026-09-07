@@ -205,7 +205,8 @@ import {
   canPayBuyBackCash,
 } from '@/lib/buyback-credit'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
-import { ensureArray, parseStoredState } from '@/lib/safe-local-state'
+import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
+import { nextSseRetryMs, nextSyncRetryMs } from '@/lib/store-sync-retry'
 import { repairOutsourceReadiness, repairHasLoggedDiagnosis } from '@/lib/repair-outsource'
 import { applyLoggedDiagnosis, type DiagnosisLogRepairPatch } from '@/lib/repair-diagnosis-log'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
@@ -4751,6 +4752,10 @@ const seedOutsourcePayments: OutsourcePayment[] = []
 // ─── Server sync (debounced, 500ms) ──────────────────────────────────────────
 const _pendingSync: Record<string, string> = {}
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
+let _syncRetryTimer: ReturnType<typeof setTimeout> | null = null
+let _syncRetryDelayMs = 500
+let _flushInFlight = false
+const _inFlightSyncKeys = new Set<string>()
 let _syncInstalled = false
 let _serverHydrated = false
 export const SYNC_STATUS_EVENT = 'deed_sync_status'
@@ -4930,6 +4935,7 @@ async function flushKeysIndividually(entries: Record<string, string>) {
 }
 
 async function flushServerSync() {
+  if (_flushInFlight) return
   if (Object.keys(_pendingSync).length === 0) return
   const entries = dropUnsyncablePendingKeys({ ..._pendingSync })
   if (Object.keys(entries).length === 0) {
@@ -4937,9 +4943,21 @@ async function flushServerSync() {
     return
   }
   emitSyncStatus('syncing')
+  _flushInFlight = true
+  Object.keys(entries).forEach(k => _inFlightSyncKeys.add(k))
   // Do NOT clear _pendingSync before the fetch resolves — keeping entries here
   // blocks applyRemoteState from overwriting local changes with a stale SSE push
-  // that arrives during the in-flight window.
+  // that arrives during the in-flight window. Other keys not in this batch still
+  // merge from SSE.
+  const scheduleRetry = () => {
+    if (_syncRetryTimer) clearTimeout(_syncRetryTimer)
+    _syncRetryDelayMs = nextSyncRetryMs(_syncRetryDelayMs)
+    _syncRetryTimer = setTimeout(() => { void flushServerSync() }, _syncRetryDelayMs)
+  }
+  const clearInFlight = () => {
+    Object.keys(entries).forEach(k => _inFlightSyncKeys.delete(k))
+    _flushInFlight = false
+  }
   try {
     const res = await fetch('/api/store', {
       method: 'POST',
@@ -4974,6 +4992,11 @@ async function flushServerSync() {
     }
     const payload = await res.json().catch(() => null) as { skippedKeys?: string[]; deniedKeys?: string[] } | null
     markKeysSynced(entries)
+    _syncRetryDelayMs = 500
+    if (_syncRetryTimer) {
+      clearTimeout(_syncRetryTimer)
+      _syncRetryTimer = null
+    }
     const skippedKeys = payload?.skippedKeys ?? []
     if (skippedKeys.length > 0) {
       emitSyncStatus('conflict', {
@@ -4983,9 +5006,15 @@ async function flushServerSync() {
       return
     }
     emitSyncStatus('synced')
+    if (Object.keys(_pendingSync).length > 0) {
+      _syncRetryTimer = setTimeout(() => { void flushServerSync() }, 0)
+    }
   } catch {
-    // offline or failed — entries remain in _pendingSync for retry on next debouncedServerSync call
+    // offline or failed — entries remain in _pendingSync; retry with backoff
     emitSyncStatus('error', { message: 'Unable to sync pending changes. Retry will happen automatically.' })
+    scheduleRetry()
+  } finally {
+    clearInFlight()
   }
 }
 
@@ -4998,6 +5027,11 @@ export function debouncedServerSync(key: string, value: string) {
   _pendingSync[key] = value
   addDirtyKey(key)
   emitSyncStatus('syncing')
+  _syncRetryDelayMs = 500
+  if (_syncRetryTimer) {
+    clearTimeout(_syncRetryTimer)
+    _syncRetryTimer = null
+  }
   if (_syncTimer) clearTimeout(_syncTimer)
   _syncTimer = setTimeout(flushServerSync, 500)
 
@@ -5461,11 +5495,11 @@ export function StoreProvider({
       const dirtyKeys   = getDirtyKeys()
       for (const [k, v] of Object.entries(remoteState)) {
         if (!k.startsWith('deed_')) continue
-        // Skip keys that have an unconfirmed local write — unless local array is stale-empty
-        // and server has non-empty data (recover visibility after backup restores).
+        // Skip THIS key when it has an unconfirmed local write — other keys in
+        // the same SSE payload still apply. One pending key must not freeze the store.
         const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
         const local = window.localStorage.getItem(k)
-        if (pendingKeys.has(k) || dirtyKeys.has(k)) {
+        if (pendingKeys.has(k) || dirtyKeys.has(k) || _inFlightSyncKeys.has(k)) {
           if (k === 'deed_posOrders') {
             const merged = mergeDirtyPosOrdersBlob(local, remoteStr)
             window.localStorage.setItem(k, merged)
@@ -5497,17 +5531,34 @@ export function StoreProvider({
       }
     }
 
-    // 2. SSE stream for real-time store updates
-    const source = new EventSource('/api/store/stream')
+    // 2. SSE stream for real-time store updates — reconnect with backoff so a
+    //    dropped socket cannot freeze every key behind one pending EventSource.
+    let sseRetryMs = 1000
+    let sseTimer: ReturnType<typeof setTimeout> | null = null
+    let source: EventSource | null = null
+    let sseClosed = false
 
-    source.addEventListener('store', (e: Event) => {
-      try {
-        const { state } = JSON.parse((e as MessageEvent).data)
-        if (state) applyRemoteState(state)
-      } catch { /* malformed message — ignore */ }
-    })
-
-    // EventSource reconnects automatically on errors — no extra handling needed
+    const connectSse = () => {
+      if (sseClosed) return
+      try { source?.close() } catch { /* already closed */ }
+      source = new EventSource('/api/store/stream')
+      source.addEventListener('store', (e: Event) => {
+        try {
+          const { state } = JSON.parse((e as MessageEvent).data)
+          if (state) applyRemoteState(state)
+        } catch { /* malformed message — ignore */ }
+      })
+      source.onopen = () => { sseRetryMs = 1000 }
+      source.onerror = () => {
+        try { source?.close() } catch { /* ignore */ }
+        source = null
+        if (sseClosed) return
+        const wait = sseRetryMs
+        sseRetryMs = nextSseRetryMs(sseRetryMs)
+        sseTimer = setTimeout(connectSse, wait)
+      }
+    }
+    connectSse()
 
     // 2b. When the network comes back, immediately flush any queued writes so data
     //     reaches the server without waiting for the next user interaction.
@@ -5532,7 +5583,9 @@ export function StoreProvider({
     const usersId = setInterval(syncUsers, 60_000) // Users change rarely — sync every minute
 
     return () => {
-      source.close()
+      sseClosed = true
+      if (sseTimer) clearTimeout(sseTimer)
+      try { source?.close() } catch { /* already closed */ }
       clearInterval(usersId)
       window.removeEventListener('online', handleOnline)
     }
@@ -5780,44 +5833,59 @@ export function StoreProvider({
           }
           case 'contacts': {
             const results = await Promise.allSettled([
-              fetch('/api/contacts').then(r => r.ok ? r.json() : null),
-              fetch('/api/companies').then(r => r.ok ? r.json() : null),
-              fetch('/api/contact-persons').then(r => r.ok ? r.json() : null),
+              fetchAllCollectionPages('/api/contacts'),
+              fetchAllCollectionPages('/api/companies'),
+              fetchAllCollectionPages('/api/contact-persons'),
             ])
-            const val = (r: PromiseSettledResult<unknown>) =>
-              r.status === 'fulfilled' && r.value != null ? r.value : null
-            const [dc, dco, dcp] = results.map(val) as any[]
-            if (dc) setContacts(Array.isArray(dc) ? dc : (dc.items ?? []))
-            if (dco) setCompanies(Array.isArray(dco) ? dco : (dco.items ?? []))
-            if (dcp) setContactPersons(Array.isArray(dcp) ? dcp : (dcp.items ?? []))
+            const list = (r: PromiseSettledResult<unknown[]>) =>
+              r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : null
+            const dc = list(results[0] as PromiseSettledResult<unknown[]>)
+            const dco = list(results[1] as PromiseSettledResult<unknown[]>)
+            const dcp = list(results[2] as PromiseSettledResult<unknown[]>)
+            if (dc) setContacts(prev => preferExistingArray(prev, dc as typeof prev))
+            if (dco) setCompanies(prev => preferExistingArray(prev, dco as typeof prev))
+            if (dcp) setContactPersons(prev => preferExistingArray(prev, dcp as typeof prev))
             break
           }
           case 'sales': {
             const results = await Promise.allSettled([
-              fetch('/api/quotes').then(r => r.ok ? r.json() : null),
+              fetchAllCollectionPages('/api/quotes'),
               fetchAllCollectionPages('/api/sale-orders'),
+              fetchAllCollectionPages('/api/payments'),
+              fetchAllCollectionPages('/api/deliveries'),
             ])
             const val = (r: PromiseSettledResult<unknown>) =>
               r.status === 'fulfilled' && r.value != null ? r.value : null
             const dq = val(results[0])
             const dso = val(results[1])
-            if (dq) setQuotes(Array.isArray(dq) ? normalizeQuotesForClient(dq) as Quote[] : [])
+            const dpay = val(results[2])
+            const ddel = val(results[3])
+            if (Array.isArray(dq)) {
+              setQuotes(prev => preferExistingArray(prev, normalizeQuotesForClient(dq) as Quote[]))
+            }
             if (Array.isArray(dso) && dso.length > 0) {
               const incoming = normalizeSaleOrdersForClient(dso) as SaleOrder[]
               setSaleOrders(prev => mergeSaleOrdersPreservingDraftEdits(prev, incoming))
+            }
+            if (Array.isArray(dpay)) {
+              setPayments(prev => preferExistingArray(prev, dpay as typeof prev))
+            }
+            if (Array.isArray(ddel)) {
+              setDeliveries(prev => preferExistingArray(prev, ddel as typeof prev))
             }
             break
           }
           case 'crm': {
             const results = await Promise.allSettled([
-              fetch('/api/opportunities').then(r => r.ok ? r.json() : null),
-              fetch('/api/opportunity-activities').then(r => r.ok ? r.json() : null),
+              fetchAllCollectionPages('/api/opportunities'),
+              fetchAllCollectionPages('/api/opportunity-activities'),
             ])
             const val = (r: PromiseSettledResult<unknown>) =>
-              r.status === 'fulfilled' && r.value != null ? r.value : null
-            const [dopp, doa] = results.map(val) as any[]
-            if (dopp) setOpportunities(Array.isArray(dopp) ? normalizeOpportunitiesForClient(dopp) as Opportunity[] : [])
-            if (doa) setOpportunityActivities(Array.isArray(doa) ? doa : [])
+              r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : null
+            const dopp = val(results[0])
+            const doa = val(results[1])
+            if (dopp) setOpportunities(prev => preferExistingArray(prev, normalizeOpportunitiesForClient(dopp) as Opportunity[]))
+            if (doa) setOpportunityActivities(prev => preferExistingArray(prev, doa as typeof prev))
             break
           }
           case 'repairs': {
@@ -5829,9 +5897,23 @@ export function StoreProvider({
             }
             break
           }
+          case 'purchases': {
+            const results = await Promise.allSettled([
+              fetchAllCollectionPages('/api/purchase-orders'),
+              fetchAllCollectionPages('/api/receipts'),
+            ])
+            const val = (r: PromiseSettledResult<unknown>) =>
+              r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : null
+            const dpo = val(results[0])
+            const drc = val(results[1])
+            if (dpo) setPurchaseOrders(prev => preferExistingArray(prev, dpo as typeof prev))
+            if (drc) setReceipts(prev => preferExistingArray(prev, drc as typeof prev))
+            break
+          }
           case 'employees': {
-            const d = await fetch('/api/employees').then(r => r.ok ? r.json() : null)
-            if (d) useHrDomainStore.getState().setEmployees(Array.isArray(d) ? d : (d.items ?? []))
+            const d = await fetchAllCollectionPages('/api/employees')
+            const prev = useHrDomainStore.getState().employees ?? []
+            useHrDomainStore.getState().setEmployees(preferExistingArray(prev, d))
             break
           }
           case 'leave':
@@ -5867,9 +5949,15 @@ export function StoreProvider({
             break
           }
           case 'stock_moves': {
-            const list = await fetchAllCollectionPages('/api/stock-moves')
+            const [list, serialList] = await Promise.all([
+              fetchAllCollectionPages('/api/stock-moves'),
+              fetchAllCollectionPages('/api/serials'),
+            ])
             if (list.length > 0) {
               setStockMoves(prev => mergeCollectionById(prev, list as StockMove[]))
+            }
+            if (serialList.length > 0) {
+              setSerials(prev => preferExistingArray(prev, serialList as typeof prev))
             }
             break
           }

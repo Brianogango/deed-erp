@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   parsePaginationParams,
   paginateArray,
   paginatedResponse,
   parseCollectionPayload,
+  canonicalizeCollectionPath,
+  fetchCollection,
   PAGINATION_DEFAULT_LIMIT,
   PAGINATION_MAX_LIMIT,
 } from '@/lib/api-pagination'
@@ -82,5 +84,39 @@ describe('parseCollectionPayload()', () => {
     expect(parsed.total).toBe(401)
     expect(parsed.page).toBe(2)
     expect(parsed.totalPages).toBe(3)
+  })
+})
+
+describe('canonicalizeCollectionPath', () => {
+  it('rewrites legacy list paths to canonical collection routes', () => {
+    expect(canonicalizeCollectionPath('/api/sales')).toBe('/api/sale-orders')
+    expect(canonicalizeCollectionPath('/api/purchase')).toBe('/api/purchase-orders')
+    expect(canonicalizeCollectionPath('/api/purchases')).toBe('/api/purchase-orders')
+    expect(canonicalizeCollectionPath('/api/activities')).toBe('/api/opportunity-activities')
+    expect(canonicalizeCollectionPath('/api/sale-orders')).toBe('/api/sale-orders')
+  })
+})
+
+describe('fetchCollection', () => {
+  it('unwraps {items}, remaps aliases, and returns [] on 404', async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      if (String(input).startsWith('/api/sale-orders')) {
+        return {
+          ok: true,
+          json: async () => ({ items: [{ id: 'so-1' }], total: 1, page: 1, limit: 50, totalPages: 1 }),
+        }
+      }
+      return { ok: false, status: 404, json: async () => ({}) }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const fromAlias = await fetchCollection('/api/sales')
+      const missing = await fetchCollection('/api/not-a-real-collection')
+      expect(fromAlias).toEqual([{ id: 'so-1' }])
+      expect(missing).toEqual([])
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/api/sale-orders')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

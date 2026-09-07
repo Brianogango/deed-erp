@@ -10,6 +10,7 @@ export type BootApiGroup =
   | 'sales'
   | 'crm'
   | 'repairs'
+  | 'purchases'
   | 'employees'
   | 'leave'
   | 'payroll'
@@ -23,6 +24,7 @@ const ALL_BOOT_API_GROUPS: BootApiGroup[] = [
   'sales',
   'crm',
   'repairs',
+  'purchases',
   'employees',
   'leave',
   'payroll',
@@ -40,8 +42,8 @@ const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
   '/': ['products', 'sales'],
   '/sales': ['products', 'contacts', 'sales', 'crm'],
   '/crm': ['products', 'contacts', 'sales', 'crm'],
-  '/purchases': ['products', 'contacts'],
-  '/purchase': ['products', 'contacts'],
+  '/purchases': ['products', 'contacts', 'purchases'],
+  '/purchase': ['products', 'contacts', 'purchases'],
   '/operations': ['products', 'stock_moves'],
   '/inventory': ['products', 'stock_moves'],
   '/repairs': ['products', 'contacts', 'repairs'],
