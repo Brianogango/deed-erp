@@ -31196,6 +31196,17 @@ body:has(.crm-workspace) [role="dialog"] > div {
   background: #20164d !important;
 }
 
+/* White wordmark on navy at every viewport. The light reference-theme
+   rules still force the dark logo; beat them after the restore block. */
+.sidebar-shell.sidebar-reference-theme .sidebar-logo-inverted,
+.sidebar-shell.sidebar-reference-theme .sidebar-logo-white-user {
+  display: block !important;
+}
+
+.sidebar-shell.sidebar-reference-theme .sidebar-logo-standard {
+  display: none !important;
+}
+
 .sidebar-shell .sidebar-nav-item,
 .sidebar-shell .sidebar-nav-item > div:first-of-type {
   color: var(--sidebar-text);
