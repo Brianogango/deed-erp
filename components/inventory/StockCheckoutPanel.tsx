@@ -33,8 +33,6 @@ export default function StockCheckoutPanel() {
     finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [])
-  const product = data.products.find(p => p.id === form.productId)
-  const eligible = useMemo(() => data.serials.filter(s => s.productId === form.productId && s.location === form.sourceLocation), [data.serials, form.productId, form.sourceLocation])
   const outstanding = (r: Checkout) => r.qty - r.consumedQty - r.returnedQty - r.exceptionQty
   const overdue = (r: Checkout) => Boolean(r.expectedReturnDate && !['completed', 'rejected'].includes(r.status) && r.expectedReturnDate < new Date().toISOString().slice(0, 10))
   const patch = (key: keyof ReturnType<typeof blank>, value: string | string[]) => setForm(v => ({ ...v, [key]: value }))
