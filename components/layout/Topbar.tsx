@@ -26,8 +26,8 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/ecommerce':   { label: 'E-commerce',     desc: 'Online store management' },
   '/kilimall':    { label: 'Kilimall',       desc: 'Kilimall orders & settlements' },
   '/contacts':    { label: 'Contacts',       desc: 'Customers, vendors & staff' },
-  '/operations':  { label: 'Inventory',      desc: 'Products, stock & fulfillment' },
-  '/inventory':   { label: 'Inventory',      desc: 'Products, stock & fulfillment' },
+  '/operations':  { label: 'Operations',     desc: 'Products, stock & fulfillment' },
+  '/inventory':   { label: 'Operations',     desc: 'Products, stock & fulfillment' },
   '/purchase':    { label: 'Purchases',      desc: 'Purchase orders & bills' },
   '/purchases':   { label: 'Purchases',      desc: 'Purchase orders & bills' },
   '/delivery':    { label: 'Delivery',       desc: 'Riders & delivery tracking' },
@@ -42,7 +42,7 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/cashbook':    { label: 'Cashbook',       desc: 'Cash receipts and payments' },
   '/deposits':    { label: 'Deposits',       desc: 'Customer deposits & layby' },
   '/holdovers':   { label: 'Holdovers',      desc: 'Device loans & temporary issue log' },
-  '/property':    { label: 'Asset Management', desc: 'Company assets, furniture, fittings & equipment' },
+  '/property':    { label: 'Property',       desc: 'Office furniture, fittings & equipment' },
   '/expenses':    { label: 'Expenses',       desc: 'Staff expense claims' },
   '/hr':          { label: 'HR',             desc: 'Employees, payroll & time off' },
   '/documents':   { label: 'My Documents',   desc: 'Policies, standards & personal documents' },
@@ -1445,6 +1445,18 @@ export default function Topbar() {
 
         {/* Right Controls */}
         <div className="app-topbar-controls flex items-center gap-1.5 md:gap-2 flex-shrink-0 min-w-0">
+          {/* DIA — Deed Intelligence Assistant */}
+          {hasModuleAccess(currentUser, 'jarvis') && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('jarvis:toggle'))}
+              title="DIA — Deed Intelligence Assistant"
+              aria-label="Ask DIA"
+              className="app-topbar-secondary flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)] shrink-0"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded bg-[var(--primary)] text-[10px] font-extrabold text-white leading-none">DIA</span>
+              <span className="hidden sm:block text-[11px] font-semibold">DIA</span>
+            </button>
+          )}
           {/* Global Search Button */}
           <button
             onClick={() => {

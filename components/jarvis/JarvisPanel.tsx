@@ -383,19 +383,7 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
     }
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => window.dispatchEvent(new CustomEvent('jarvis:toggle'))}
-        title={`${DIA_SHORT_NAME} — ${DIA_FULL_NAME}`}
-        aria-label={`Ask ${DIA_SHORT_NAME}`}
-        className="fixed bottom-5 right-5 z-[190] flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)] text-[11px] font-extrabold tracking-wide text-white shadow-[var(--shadow-lg)] transition-transform hover:scale-[1.03] active:scale-[0.98]"
-      >
-        {DIA_SHORT_NAME}
-      </button>
-    )
-  }
+  if (!open) return null
 
   return (
     <>

@@ -80,7 +80,7 @@ export default function Sidebar() {
     { label: 'E-commerce',    href: '/ecommerce',     id: 'ecommerce',     icon: faGlobe },
     { label: 'Kilimall',      href: '/kilimall',      id: 'kilimall',      icon: faGlobe },
     { label: 'Contacts',      href: '/contacts',      id: 'contacts',      icon: faAddressBook },
-    { label: 'Inventory', href: '/operations', id: 'inventory', icon: faBoxesStacked },
+    { label: role === 'director' ? 'Operations' : 'Inventory', href: '/operations', id: 'inventory', icon: faBoxesStacked },
     { label: 'Purchases',     href: '/purchases',     id: 'purchase',      icon: faCartShopping },
     { label: 'Delivery',      href: '/delivery',      id: 'delivery',      icon: faTruck },
     { label: 'Repairs',       href: '/repairs',       id: 'repair',        icon: faScrewdriverWrench, badge: pendingRepairs },
@@ -89,7 +89,7 @@ export default function Sidebar() {
     { label: 'Outsource',     href: '/outsource',     id: 'outsource',     icon: faArrowsRotate },
     { label: 'After-Sales',   href: '/aftersales',    id: 'after_sales',   icon: faShieldHalved },
     { label: 'Holdovers',     href: '/holdovers',     id: 'holdovers',     icon: faHandHolding },
-    { label: 'Asset Management', href: '/property',      id: 'company_property', icon: faChair },
+    { label: 'Property',      href: '/property',      id: 'company_property', icon: faChair },
     { label: 'Finance',       href: '/finance',       id: 'accounting',    icon: faBuildingColumns },
     { label: 'Deposits',      href: '/deposits',      id: 'deposits',      icon: faMoneyBillWave },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
@@ -201,35 +201,31 @@ export default function Sidebar() {
   }
 
   const groups: NavGroup[] = [
+    ...(pinnedItems.length > 0 ? [{
+      title: 'Pinned',
+      items: pinnedItems,
+    }] : []),
     {
-      title: 'Main',
-      items: visibleItems.filter(i => i.id === 'dashboard'),
+      title: 'Overview',
+      items: visibleItems.filter(i => ['dashboard', 'contacts'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Sales & CRM',
-      items: visibleItems.filter(i => ['crm', 'contacts', 'sales', 'pos', 'ecommerce', 'kilimall'].includes(i.id)),
+      title: 'Sales channels',
+      items: visibleItems.filter(i => ['sales', 'crm', 'pos', 'ecommerce', 'kilimall'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Inventory',
-      items: visibleItems.filter(i => ['inventory', 'purchase', 'delivery', 'company_property'].includes(i.id)),
+      title: 'Stock & fulfillment',
+      items: visibleItems.filter(i => ['inventory', 'purchase', 'delivery'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
       title: 'Service operations',
-      items: visibleItems.filter(i => ['repair', 'refurbishment', 'reconfiguration', 'outsource', 'after_sales', 'holdovers'].includes(i.id)),
+      items: visibleItems.filter(i => ['repair', 'refurbishment', 'reconfiguration', 'outsource', 'after_sales', 'holdovers'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Finance',
-      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses'].includes(i.id)),
+      title: 'Finance & people',
+      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'company_property', 'hr', 'my_documents', 'sops', 'sop_documents', 'settings'].includes(i.id) && !pinnedIds.has(i.id)),
     },
-    {
-      title: 'People',
-      items: visibleItems.filter(i => ['hr', 'my_documents', 'sops', 'sop_documents'].includes(i.id)),
-    },
-    {
-      title: 'Administration',
-      items: visibleItems.filter(i => i.id === 'settings'),
-    },
-  ].filter(group => group.items.length > 0)
+  ].filter(g => g.items.length > 0)
 
   return (
     <aside
@@ -238,7 +234,7 @@ export default function Sidebar() {
       aria-hidden={isOverlay && !sidebarOpen ? true : undefined}
       {...(isOverlay && !sidebarOpen ? { inert: true } : {})}
       className={`
-        sidebar-shell sidebar-reference-theme fixed lg:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
+        sidebar-shell fixed lg:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
         transition-[width,transform,box-shadow] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
         ${sidebarOpen
           ? 'w-[296px] translate-x-0 shadow-2xl lg:w-[252px] lg:shadow-none'
