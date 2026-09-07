@@ -303,6 +303,43 @@ describe('applyReceiptStockMutation() — atomic relational GRN', () => {
     })
   })
 
+  it('bumps qtyReceived when the PO item product id differs but the description is unique', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Bluecom widget', stockQty: 0, requiresSerial: false }],
+      deed_serials: [],
+      deed_bulkStock: [],
+      deed_stockMoves: [],
+    })
+    mockPurchaseOrderFindUnique.mockResolvedValue({
+      id: PO_ID,
+      items: [{
+        id: PO_ITEM_ID,
+        productId: PRISMA_PRODUCT_ID,
+        description: 'Bluecom widget',
+        qtyOrdered: 1,
+        qtyReceived: 0,
+        unitCost: 50000,
+      }],
+    })
+    mockPurchaseOrderItemFindMany.mockResolvedValue([
+      { qtyOrdered: 1, qtyReceived: 1 },
+    ])
+
+    await applyReceiptStockMutation({
+      receiptId: 'rec-1',
+      receiptRef: 'REC/2026/0178',
+      purchaseOrderId: PO_ID,
+      destination: 'warehouse',
+      lines: [{ productId: PRODUCT_ID, productName: 'Bluecom widget', qtyReceived: 1, requiresSerial: false }],
+      userId: 'user-1',
+    })
+
+    expect(mockPurchaseOrderItemUpdate).toHaveBeenCalledWith({
+      where: { id: PO_ITEM_ID },
+      data: { qtyReceived: 1 },
+    })
+  })
+
   it('clamps qtyReceived at qtyOrdered rather than overshooting', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_products: [{ id: PRODUCT_ID, name: 'Widget', stockQty: 0, requiresSerial: false }],

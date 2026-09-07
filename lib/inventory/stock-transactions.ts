@@ -11,6 +11,7 @@ import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifie
 import { isOnHandSerialStatus } from '@/lib/inventory/serial-status'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { isNonStockProduct } from '@/lib/sales/non-stock-line'
+import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -786,7 +787,20 @@ async function applyReceiptRelational(params: {
       resolvedProductIds.set(line.productId, resolved)
       await adjustStockLevel(tx, resolved, { onHand: line.qty })
 
-      const poItem = po?.items.find(i => i.productId === resolved)
+      const poItem = po
+        ? po.items.find(i => i.productId === resolved)
+          ?? po.items.find(i => i.productId === line.productId)
+          ?? (() => {
+            const matched = resolveVendorBillPoItem(po.items, {
+              productId: resolved,
+              description: line.productName,
+            }) ?? resolveVendorBillPoItem(po.items, {
+              productId: line.productId,
+              description: line.productName,
+            })
+            return matched ? po.items.find(i => i.id === matched.id) : undefined
+          })()
+        : undefined
       if (poItem) {
         await tx.purchaseOrderItem.update({
           where: { id: poItem.id },

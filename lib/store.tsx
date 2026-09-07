@@ -13437,7 +13437,7 @@ const storeCtx: AppState = {
       }
       const inv = invRef.current.find(i => i.id === id)
       if (!inv) return
-      if (inv.status === 'posted') {
+      if (inv.status === 'posted' || invoiceDocState(inv.status) === 'posted') {
         showToast(`${inv.ref} is already posted`, 'info'); return
       }
       const gate = canPostOrPayCustomerInvoice({

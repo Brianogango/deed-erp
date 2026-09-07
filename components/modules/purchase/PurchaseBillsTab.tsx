@@ -21,6 +21,7 @@ export default function PurchaseBillsTab() {
   const linkedPORef = (b: VendorBill) => b.purchaseOrderId ? (purchaseOrders.find(p => p.id === b.purchaseOrderId)?.ref ?? '—') : '—'
   const billStatus = (b: VendorBill) => invoiceDocState(b.status) === 'posted' ? invoicePaymentStatus(b) : invoiceDocState(b.status)
   const billStatusLabel = (b: VendorBill) => invoiceDocState(b.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(b)] : undefined
+  const isDraftBill = (b: VendorBill) => invoiceDocState(b.status) === 'draft'
   const openBill = (b: VendorBill) => router.push(financeInvoicePath(b.id))
 
   const columns: ColumnDef<VendorBill>[] = [
@@ -111,7 +112,7 @@ export default function PurchaseBillsTab() {
     const outstanding = b.total - b.amountPaid
     return (
       <>
-        {b.status === 'draft' && canValidateBills && validateAction(b, true)}
+        {isDraftBill(b) && canValidateBills && validateAction(b, true)}
         {invoiceDocState(b.status) === 'posted' && outstanding > 0 && (
           <span className="text-[9px] text-[var(--text-4)] italic">Pay via Finance</span>
         )}
@@ -152,7 +153,7 @@ export default function PurchaseBillsTab() {
                 { label: 'Paid', value: fmtKes(b.amountPaid) },
                 { label: 'Outstanding', value: fmtKes(b.total - b.amountPaid) },
               ]}
-              actions={b.status === 'draft' && canValidateBills ? validateAction(b) : undefined}
+              actions={isDraftBill(b) && canValidateBills ? validateAction(b) : undefined}
             />
           )}
           exportTitle="Vendor Bills"

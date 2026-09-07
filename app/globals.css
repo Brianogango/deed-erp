@@ -21222,6 +21222,10 @@ body:has(.crm-workspace) [role="dialog"] > div {
   background: #f5f7fa;
 }
 
+.purchase-order-detail__tabs {
+  margin: -0.15rem 0 0;
+}
+
 .purchase-order-detail__header {
   position: relative;
   display: flex;

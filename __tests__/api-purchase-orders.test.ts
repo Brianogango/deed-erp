@@ -248,6 +248,41 @@ describe('PATCH /api/purchase-orders/:id', () => {
     expect(updateCall.data.items.create[0].qtyBilled).toBe(4)
   })
 
+  it('preserves qtyReceived when the client line id is not the Prisma item id', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue({
+      ...existingWithItems,
+      items: [{
+        id: ITEM_ID,
+        productId: PRODUCT_ID,
+        description: 'Bluecom widget',
+        qtyOrdered: 10,
+        qtyReceived: 6,
+        qtyBilled: 4,
+      }],
+    })
+    mockPrismaPurchaseOrder.update.mockResolvedValue(dbPo)
+
+    await PATCH(patchReq({
+      lockVersion: 2,
+      lines: [{
+        id: 'aaaaaaaa-bbbb-4ccc-8ddd-111111111111',
+        productId: PRODUCT_ID,
+        productName: 'Bluecom widget',
+        qty: 10,
+        qtyReceived: 0,
+        qtyBilled: 0,
+        unitPrice: 100,
+        taxRate: 16,
+        subtotal: 1000,
+      }],
+    }), { params: { id: PO_ID } })
+
+    const updateCall = mockPrismaPurchaseOrder.update.mock.calls[0][0]
+    expect(updateCall.data.items.create[0].qtyReceived).toBe(6)
+    expect(updateCall.data.items.create[0].qtyBilled).toBe(4)
+    expect(updateCall.data.items.create[0].sourceId).toBeUndefined()
+  })
+
   it('returns 409 on a lockVersion mismatch', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue(existingWithItems)
     const res = await PATCH(patchReq({ lockVersion: 1, notes: 'x' }), { params: { id: PO_ID } })

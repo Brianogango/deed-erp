@@ -136,6 +136,10 @@ vi.mock('@/lib/accounting/sales-commission', () => ({
   postSalesCommissionForInvoice: mockPostSalesCommissionForInvoice,
 }))
 
+vi.mock('@/lib/purchase/reconcile-po-received.server', () => ({
+  reconcilePrismaPoReceivedQty: vi.fn().mockResolvedValue(undefined),
+}))
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 import { GET, POST } from '@/app/api/invoices/route'
 import { GET as GET_ONE, PUT, DELETE } from '@/app/api/invoices/[id]/route'

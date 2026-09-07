@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { usePurchase } from './PurchaseContext'
-import { Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
+import { Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider, TabBar } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { downloadPoPdf, downloadRfqPdf } from '@/lib/purchase-pdf'
@@ -202,9 +202,10 @@ export default function POFormView() {
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const hasBillableQty = activePO.lines.some(line => billableQtyForLine(line) > 0)
     const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-    const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+    const canValidateBill = !!linkedBill && invoiceDocState(linkedBill.status) === 'draft' && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
-    const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
+    const billPosted     = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted'
+    const stepIdx        = billPosted ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
     const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)
     const billsCount     = linkedBill ? 1 : 0
@@ -249,6 +250,11 @@ export default function POFormView() {
     }
 
     const backToList = () => { setSubView('list'); setActiveId(null) }
+    const goToPurchaseTab = (tab: 'orders' | 'receipts' | 'returns' | 'bills') => {
+      setMainView(tab)
+      setSubView('list')
+      setActiveId(null)
+    }
     const receivedValue = activePO.lines.reduce((sum, line) => {
       const receivedQty = Math.min(line.qtyReceived, line.qty)
       return sum + receivedQty * line.unitPrice * (1 + (line.taxRate || 0) / 100)
@@ -301,6 +307,22 @@ export default function POFormView() {
 
     return (
       <div className="purchase-order-detail">
+        <div className="purchase-order-detail__tabs">
+          <TabBar
+            tabs={[
+              { id: 'orders', label: 'Orders' },
+              { id: 'receipts', label: 'Receipts' },
+              { id: 'returns', label: 'Returns' },
+              { id: 'bills', label: 'Bills' },
+            ]}
+            active="orders"
+            onChange={id => goToPurchaseTab(id as 'orders' | 'receipts' | 'returns' | 'bills')}
+            maxVisibleMobile={4}
+            maxVisibleTablet={4}
+            maxVisibleDesktop={4}
+            ariaLabel="Purchase sections"
+          />
+        </div>
         {/* ── Header ── */}
         <div className="purchase-order-detail__header">
           <Breadcrumbs

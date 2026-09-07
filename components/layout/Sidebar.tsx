@@ -388,12 +388,21 @@ interface NavItemProps {
 }
 
 function SidebarNavItem({ item, isActive, isExpanded, isPinned, currentUserId, onNavigate, onTogglePin }: NavItemProps) {
+  const router = useRouter()
   const warm = () => warmRoute(item.href, currentUserId)
   return (
     <div className={`flex items-center ${isExpanded ? 'gap-1' : 'justify-center'}`}>
       <Link
         href={item.href}
-        onClick={onNavigate}
+        onClick={event => {
+          onNavigate()
+          // Same-path Links ignore a leftover `?id=` deep-link, so clicking
+          // Purchases while a PO is open looked like the module was frozen.
+          if (isActive && typeof window !== 'undefined' && window.location.search) {
+            event.preventDefault()
+            router.push(item.href)
+          }
+        }}
         onMouseEnter={warm}
         onFocus={warm}
         aria-current={isActive ? 'page' : undefined}

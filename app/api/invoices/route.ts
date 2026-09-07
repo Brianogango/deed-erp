@@ -11,6 +11,7 @@ import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { isPosInvoiceWrite, POS_INVOICE_WRITE_ROLES, salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
+import { reconcilePrismaPoReceivedQty } from '@/lib/purchase/reconcile-po-received.server'
 import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
@@ -255,6 +256,7 @@ export async function POST(request: Request) {
       }
       const effectivePoId = resolvedPoId ?? purchaseOrderId
       try {
+        await reconcilePrismaPoReceivedQty(effectivePoId)
         invoice = await prisma.$transaction(async tx => {
           const [po, activeBills] = await Promise.all([
             tx.purchaseOrder.findUnique({ where: { id: effectivePoId }, include: { items: true } }),

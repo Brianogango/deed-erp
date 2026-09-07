@@ -1,56 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { optionalUuid } from '@/lib/legacy-compat'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { WRITE_ROLES, mapPOToClient, mirrorPurchaseOrder, computePOTotals } from '@/lib/purchase/po-api-shared'
+import { WRITE_ROLES, mapPOToClient, mirrorPurchaseOrder, computePOTotals, mapPOItemsForUpdate, attachPoItemProgress } from '@/lib/purchase/po-api-shared'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
 
 /** PO statuses that must never be removed from the record (audit FIN-003). */
 const PROTECTED_PO_STATUSES = new Set(['partial', 'received'])
-
-/**
- * Same shape as Sales' mapSaleOrderItems: a full-object PATCH always
- * deletes+recreates line items, so fulfilment progress (qtyReceived /
- * qtyBilled) must be preserved across the cycle by matching against the
- * existing rows — otherwise a stale client PATCH can wipe received/billed
- * counters back to 0.
- */
-function mapPOItemsForUpdate(lines: any[], existingItems: any[]) {
-  return lines
-    .filter((l: any) => Boolean(optionalUuid(l.productId)))
-    .map((l: any) => {
-      const prev =
-        (l.id ? existingItems.find((row: any) => row.id === l.id) : null) ??
-        (l.productId ? existingItems.find((row: any) => row.productId === l.productId) : null)
-
-      const rawQty = Number(l.qty)
-      const rawUnitCost = Number(l.unitPrice)
-      const rawTaxRate = Number(l.taxRate)
-      const qtyOrdered = Number.isFinite(rawQty) ? Math.min(1_000_000, Math.max(0, Math.floor(rawQty))) : 0
-      const unitCost = Number.isFinite(rawUnitCost) ? Math.min(9_999_999_999.99, Math.max(0, rawUnitCost)) : 0
-      const taxRate = Number.isFinite(rawTaxRate) ? Math.min(100, Math.max(0, rawTaxRate)) : 0
-
-      // Receiving and billing counters are controlled by GRN/bill workflows.
-      // A stale or tampered PO edit can preserve progress but can never advance it.
-      const qtyReceived = Math.min(qtyOrdered, Math.max(0, Number(prev?.qtyReceived) || 0))
-      const qtyBilled = Math.min(qtyOrdered, Math.max(0, Number(prev?.qtyBilled) || 0))
-      return {
-        productId: optionalUuid(l.productId),
-        description: l.productName ?? l.description
-          ? String(l.productName ?? l.description).trim().slice(0, 1_000)
-          : null,
-        qtyOrdered,
-        qtyReceived,
-        qtyBilled,
-        unitCost,
-        taxRate,
-        lineTotal: Math.round(qtyOrdered * unitCost * 100) / 100,
-        accountCode: l.accountCode ? String(l.accountCode).trim().slice(0, 80) : null,
-      }
-    })
-}
 
 const CLIENT_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   draft: ['draft', 'sent', 'confirmed', 'cancelled'],
@@ -134,8 +91,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     if (Array.isArray(body.lines)) {
       // Same P2003 guard as PO create: resolve/auto-create missing products.
-      const resolvedLines = await resolvePOLineProducts(mapPOItemsForUpdate(body.lines, existing.items))
-      const safeLines = resolvedLines.filter(l => l.productId)
+      // Match fulfilment progress *after* product resolution so blob line ids
+      // and remapped product UUIDs still copy qtyReceived/qtyBilled.
+      const resolvedLines = await resolvePOLineProducts(mapPOItemsForUpdate(body.lines))
+      const safeLines = attachPoItemProgress(resolvedLines.filter(l => l.productId), existing.items)
       const totals = computePOTotals(safeLines)
       data.items = { deleteMany: {}, create: safeLines }
       // Header money is always derived from the server-validated lines. Client

@@ -323,7 +323,9 @@ export default function DataTable<T>({
   }, [sortKey])
 
   const pageRows = useMemo(() => {
-    const start = (page - 1) * pageSize
+    const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
+    const safePage = Math.min(Math.max(1, Math.floor(Number(page) || 1)), totalPages)
+    const start = (safePage - 1) * pageSize
     return filteredRows.slice(start, start + pageSize)
   }, [filteredRows, page, pageSize])
 

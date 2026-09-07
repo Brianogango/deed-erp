@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { resolveClientId, optionalUuid } from '@/lib/legacy-compat'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
+import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 
 /**
  * Shared helpers for the purchase-order API routes. Next.js route files may
@@ -96,6 +97,78 @@ export function mapPOItemsForCreate(lines: any[]) {
         accountCode: safeShortText(l.accountCode, 80),
       }
     })
+}
+
+/**
+ * Map a client PATCH payload onto Prisma create-rows. Fulfilment counters are
+ * filled in afterwards by `attachPoItemProgress` — the blob line id is often
+ * not the Prisma item id, so matching has to wait until product ids are
+ * resolved.
+ */
+export function mapPOItemsForUpdate(lines: any[]) {
+  return lines
+    .filter((l: any) => Boolean(optionalUuid(l.productId)))
+    .map((l: any) => {
+      const qtyOrdered = safeQty(l.qty)
+      const unitCost = safeMoney(l.unitPrice)
+      const taxRate = safeTaxRate(l.taxRate)
+      return {
+        sourceId: typeof l.id === 'string' ? l.id : undefined,
+        productId: optionalUuid(l.productId),
+        description: safeShortText(l.productName ?? l.description),
+        qtyOrdered,
+        qtyReceived: 0,
+        qtyBilled: 0,
+        unitCost,
+        taxRate,
+        lineTotal: Math.round(qtyOrdered * unitCost * 100) / 100,
+        accountCode: safeShortText(l.accountCode, 80),
+      }
+    })
+}
+
+type ExistingPoItem = {
+  id: string
+  productId: string
+  description?: string | null
+  qtyReceived?: number
+  qtyBilled?: number
+}
+
+/**
+ * Copy qtyReceived/qtyBilled from the previous Prisma rows onto a replacement
+ * line set. Matches by id, then product, then description / single remaining
+ * line — the same fallbacks vendor bills use — so a blob PATCH cannot wipe
+ * GRN/bill progress just because the line UUID changed.
+ */
+export function attachPoItemProgress<T extends {
+  sourceId?: string
+  productId?: string | null
+  description?: string | null
+  qtyOrdered: number
+}>(
+  lines: T[],
+  existingItems: ExistingPoItem[],
+): Array<Omit<T, 'sourceId'> & { qtyReceived: number; qtyBilled: number }> {
+  const remaining = [...existingItems]
+  return lines.map(line => {
+    const { sourceId, ...rest } = line
+    const match = resolveVendorBillPoItem(remaining, {
+      purchaseOrderItemId: sourceId,
+      productId: line.productId,
+      description: line.description,
+    })
+    if (match) {
+      const idx = remaining.findIndex(row => row.id === match.id)
+      if (idx >= 0) remaining.splice(idx, 1)
+    }
+    const qtyOrdered = safeQty(rest.qtyOrdered)
+    return {
+      ...rest,
+      qtyReceived: Math.min(qtyOrdered, Math.max(0, Number(match?.qtyReceived) || 0)),
+      qtyBilled: Math.min(qtyOrdered, Math.max(0, Number(match?.qtyBilled) || 0)),
+    }
+  })
 }
 
 export function computePOTotals(items: Array<{ qtyOrdered?: unknown; unitCost?: unknown; taxRate?: unknown }>) {

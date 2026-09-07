@@ -11,6 +11,7 @@ import { salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { buildInvoiceJournalInput, allocateInvoiceJournalRef } from '@/lib/accounting/invoice-journals'
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
+import { reconcilePrismaPoReceivedQty } from '@/lib/purchase/reconcile-po-received.server'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -248,6 +249,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       const poId = rawPoId ? (await ensurePrismaPurchaseOrder(rawPoId, actor.id)) ?? rawPoId : null
       vendorPoId = poId
       if (willBeVendor && poId) {
+        await reconcilePrismaPoReceivedQty(poId)
         try {
           const { assertVendorBillThreeWayMatchServer } = await import('@/lib/purchase/assert-bill-match.server')
           const billLines = (lines ?? preMirror.lines ?? before.items).map((l: any) => ({
@@ -380,6 +382,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
       if (postingInvoiceType === 'vendor_bill' && postingPurchaseOrderId) {
         const { assertVendorBillThreeWayMatchInTx } = await import('@/lib/purchase/assert-bill-match.server')
+        await reconcilePrismaPoReceivedQty(postingPurchaseOrderId, tx)
         await assertVendorBillThreeWayMatchInTx(tx, {
           purchaseOrderId: postingPurchaseOrderId,
           vendorId: before.clientId,
