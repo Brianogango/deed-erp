@@ -11,6 +11,8 @@ import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
 import JarvisPanel from '@/components/jarvis/JarvisPanel'
 import { hasModuleAccess } from '@/lib/auth/access'
+import { persistClientStoreValue } from '@/lib/client-store-cache'
+import { ModuleRenderBoundary } from '@/components/erp'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -39,7 +41,7 @@ function OfflineBanner() {
       <span
         style={{
           width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-          background: '#FCD34D', boxShadow: '0 0 0 0 rgba(252,211,77,0.6)',
+          background: 'var(--warning-text)', boxShadow: '0 0 0 0 color-mix(in srgb, var(--warning) 60%, transparent)',
           animation: 'offlinePulse 1.8s ease-in-out infinite',
         }}
       />
@@ -525,13 +527,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
           }
           try {
             if (window.localStorage.getItem(key) === serialized) continue
-            // Match useLS: skip oversized payloads so we never leave a partial /
-            // unreadable blob that later crashes the shell on login.
-            if (serialized.length > 512 * 1024) {
-              window.localStorage.removeItem(key)
-            } else {
-              window.localStorage.setItem(key, serialized)
-            }
+            persistClientStoreValue(key, serialized)
           } catch {
             continue
           }
@@ -773,7 +769,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
         >
           <div id="module-workspace-root" className="pointer-events-none absolute inset-0 z-[80]" />
           <div className="min-w-0">
-            {children}
+            <ModuleRenderBoundary pathname={pathname || '/'}>
+              {children}
+            </ModuleRenderBoundary>
           </div>
         </main>
       </div>

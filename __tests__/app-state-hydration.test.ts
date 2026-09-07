@@ -45,6 +45,12 @@ describe('appStateKeysForRoute', () => {
     expect(appStateKeysForRoute('/crm')).toContain('deed_customerCredits')
   })
 
+  it('does not pull serial inventory into Finance hydration', () => {
+    expect(appStateKeysForRoute('/finance')).not.toContain('deed_serials')
+    expect(appStateKeysForRoute('/accounting')).not.toContain('deed_serials')
+    expect(appStateKeysForRoute('/finance')).toContain('deed_products')
+  })
+
   it('loads stock moves on the till so restored receipts can resolve serials', () => {
     const keys = appStateKeysForRoute('/pos')
     expect(keys).toEqual(expect.arrayContaining([
