@@ -80,6 +80,21 @@ export function isNonStockSaleLine(
   return isNonStockProduct(product)
 }
 
+/**
+ * Lines that belong on a Delivery Note. Licences / software catalog products
+ * do not reserve warehouse qty (`isNonStockSaleLine`) but they are still
+ * fulfilled to the customer — invoicing is delivery-first, so they must get a
+ * waiting picking. Skip section headings and unlinked labour/service rows.
+ */
+export function isDeliveryNoteLine(line: NonStockLineInput | null | undefined): boolean {
+  if (!line) return false
+  const lineType = String(line.lineType ?? '').trim().toLowerCase()
+  if (lineType === 'section' || lineType === 'labor' || lineType === 'labour' || lineType === 'service') return false
+  const unit = String(line.unit ?? '').trim().toLowerCase()
+  if (unit === 'service' || unit === 'services' || unit === 'hour' || unit === 'hours') return false
+  return Boolean(String(line.productId ?? '').trim())
+}
+
 export type RepairQuoteLineForSale = {
   type?: string
   productId?: string

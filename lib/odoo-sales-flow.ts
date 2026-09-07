@@ -13,6 +13,8 @@
 // Everything here is pure and unit-tested. The store, API routes and UI all
 // consume these helpers so the vocabulary can never drift between layers.
 
+import { isDeliveryNoteLine } from './sales/non-stock-line'
+
 // ─── Sale order states ───────────────────────────────────────────────────────
 
 export type OdooSaleStatus = 'quotation' | 'quotation_sent' | 'sale' | 'cancelled'
@@ -336,9 +338,12 @@ export const DELIVERY_STATE_LABELS: Record<DeliveryState, string> = {
 }
 
 export function normalizeDeliveryStatus(raw: unknown): DeliveryState {
-  const s = typeof raw === 'string' ? raw.trim() : ''
-  if (['draft', 'waiting', 'ready', 'done', 'cancelled'].includes(s)) return s as DeliveryState
+  const s = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
+  if (s === 'draft' || s === 'waiting' || s === 'ready' || s === 'done' || s === 'cancelled') return s
   if (s === 'pending') return 'waiting'
+  if (s === 'delivered') return 'done'
+  if (s === 'canceled') return 'cancelled'
+  if (!s) return 'waiting'
   return 'ready'
 }
 
@@ -380,7 +385,8 @@ export function deliveriesForSaleOrder<T extends { saleOrderId?: string; status?
 
 /**
  * Remaining undelivered qty per product on a Sales Order (ordered − qtyDelivered).
- * Section lines are ignored. Used to refuse duplicate DNs / empty backorders.
+ * Section / labour / service lines are ignored. Licences still count — they do
+ * not reserve warehouse qty but they ship on a Delivery Note.
  */
 export function remainingUndeliveredByProduct(
   lines: Array<{
@@ -393,12 +399,11 @@ export function remainingUndeliveredByProduct(
 ): Record<string, number> {
   const out: Record<string, number> = {}
   for (const line of lines ?? []) {
-    if (line.lineType === 'section' || line.lineType === 'service' || !line.productId) continue
-    if (String(line.unit ?? '').toLowerCase() === 'service') continue
+    if (!isDeliveryNoteLine(line)) continue
     const demand = Math.max(0, Number(line.qty) || 0)
     const delivered = Math.max(0, Number(line.qtyDelivered) || 0)
     const remaining = Math.max(0, demand - delivered)
-    out[line.productId] = (out[line.productId] ?? 0) + remaining
+    out[line.productId as string] = (out[line.productId as string] ?? 0) + remaining
   }
   return out
 }

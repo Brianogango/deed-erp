@@ -126,6 +126,11 @@ describe('sale order status vocabulary', () => {
       { productId: 'p3', qty: 3, lineType: 'section' },
     ])).toEqual({ p1: 1, p2: 0 })
 
+    expect(remainingUndeliveredByProduct([
+      { productId: 'p-kas', qty: 1, qtyDelivered: 0, unit: 'licence' },
+      { productId: 'p-svc', qty: 1, qtyDelivered: 0, unit: 'service', lineType: 'service' },
+    ])).toEqual({ 'p-kas': 1 })
+
     expect(openDeliveryDemandByProduct([
       { saleOrderId: 'so-1', status: 'waiting', lines: [{ productId: 'p1', qty: 1 }] },
       { saleOrderId: 'so-1', status: 'ready', lines: [{ productId: 'p1', qty: 1 }] },
@@ -263,7 +268,10 @@ describe('delivery states, partial delivery and backorders', () => {
     expect(normalizeDeliveryStatus('cancelled')).toBe('cancelled')
     expect(normalizeDeliveryStatus('pending')).toBe('waiting')
     expect(normalizeDeliveryStatus('waiting')).toBe('waiting')
+    expect(normalizeDeliveryStatus('Waiting')).toBe('waiting')
     expect(normalizeDeliveryStatus('draft')).toBe('draft')
+    expect(normalizeDeliveryStatus('')).toBe('waiting')
+    expect(normalizeDeliveryStatus('delivered')).toBe('done')
   })
 
   it('creates a replacement DN when the only picking was cancelled', () => {

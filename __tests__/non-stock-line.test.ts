@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isDeliveryNoteLine,
   isNonStockProduct,
   isNonStockSaleLine,
   isRepairNonStockQuoteType,
@@ -37,6 +38,32 @@ describe('isNonStockSaleLine', () => {
   it('treats a missing catalog product as non-stock', () => {
     expect(isNonStockSaleLine({ productId: 'gone' }, null)).toBe(true)
     expect(isNonStockProduct(null)).toBe(true)
+  })
+})
+
+describe('isDeliveryNoteLine', () => {
+  it('puts licence / software catalog products on a delivery note', () => {
+    expect(isDeliveryNoteLine({
+      productId: 'p-kas',
+      productName: 'Kaspersky Plus Internet Security 5 users',
+      unit: 'licence',
+    })).toBe(true)
+    expect(isNonStockSaleLine({
+      productId: 'p-kas',
+      unit: 'licence',
+    }, { unit: 'licence', category: 'Software & Licences', trackingMethod: 'NONE' })).toBe(true)
+  })
+
+  it('skips section headings, unlinked labour, and catalog services', () => {
+    expect(isDeliveryNoteLine({ lineType: 'section', productName: 'Parts' })).toBe(false)
+    expect(isDeliveryNoteLine({ lineType: 'labor', productName: 'Service' })).toBe(false)
+    expect(isDeliveryNoteLine({ productId: '', productName: 'Service', unit: 'hour' })).toBe(false)
+    expect(isDeliveryNoteLine({
+      productId: 'p-svc',
+      productName: 'Device Diagnostic Service',
+      unit: 'service',
+      lineType: 'service',
+    })).toBe(false)
   })
 })
 
