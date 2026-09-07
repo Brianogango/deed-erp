@@ -3,7 +3,7 @@
 
 import { useMemo, useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
   faMoneyBillWave,
@@ -26,6 +26,7 @@ import {
 import { useApp, useStoreHydrated, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
+import { useRouteDataReady } from '@/lib/route-data-ready'
 import { formatRoleLabel } from '@/lib/auth/access'
 import {
   canShowDashboardKpi,
@@ -198,6 +199,8 @@ function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = 'var
 export function Dashboard() {
   const mounted = useMounted()
   const storeHydrated = useStoreHydrated()
+  const pathname = usePathname()
+  const routeReady = useRouteDataReady(pathname || '/')
   const [dashboardClock, setDashboardClock] = useState({ greeting: 'Welcome', date: '' })
   useEffect(() => {
     const now = new Date()
@@ -695,9 +698,9 @@ export function Dashboard() {
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8)
   }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, invoices, visibleSalesOrders, stockTransfers, purchaseOrders, kilimallOrders, visibleRepairs, expenses, currentUserId, has])
 
-  // Gate on real data, not just mount: on a cold cache the KPI tiles would
-  // otherwise render zeros for the seconds the boot fetch is in flight.
-  if (!mounted || !storeHydrated) return <ModuleSkeleton />
+  // Gate on the route store GET, not LAST_SYNC_AT: a prior visit can leave a
+  // sync timestamp while this route's collections are still in flight.
+  if (!mounted || !routeReady || !storeHydrated) return <ModuleSkeleton />
 
   return (
     <div className="dashboard-page">
