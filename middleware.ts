@@ -79,7 +79,8 @@ function rateLimitPolicy(pathname: string, method: string): { limit: number; win
   // Batched client syncs + dirty-key recovery can legitimately post several
   // times while a user opens modules; 20/min was forcing 429s and stalled UX.
   if (pathname === '/api/store' && isWriteMethod(method)) return { limit: 60, windowSec: 60, bucket: 'store-migration' }
-  if (HIGH_TRAFFIC_READ_PREFIXES.some(prefix => pathname.startsWith(prefix))) return { limit: 120, windowSec: 60, bucket: 'store-stream' }
+  // EventSource reconnect storms used to 429 at 120/min and freeze sync.
+  if (HIGH_TRAFFIC_READ_PREFIXES.some(prefix => pathname.startsWith(prefix))) return { limit: 360, windowSec: 60, bucket: 'store-stream' }
   if (isWriteMethod(method)) return { limit: 240, windowSec: 60, bucket: 'api-write' }
   return { limit: 1200, windowSec: 60, bucket: 'api-read' }
 }
@@ -135,6 +136,24 @@ export async function middleware(request: NextRequest) {
   // Other public auth/setup endpoints pass through.
   if (PUBLIC_API_PATHS.has(pathname)) {
     return NextResponse.next()
+  }
+
+  // Page-404 beacons carry only { path, status: 404 } — no session required.
+  if (pathname === '/api/metrics/http' && request.method === 'POST') {
+    const ip = getIP(request)
+    const { checkRateLimit } = await import('@/lib/rate-limit')
+    const { success, remaining, resetAt } = await checkRateLimit(`metrics-404:${ip}`, 60, 60)
+    if (!success) {
+      return new NextResponse('Too Many Requests', {
+        status: 429,
+        headers: {
+          'Retry-After': '60',
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(resetAt),
+        },
+      })
+    }
+    return withRateLimitHeaders(NextResponse.next(), remaining, resetAt)
   }
 
   // Partner-facing public API (/api/public/*): no session cookie — the routes

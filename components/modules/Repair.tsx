@@ -37,6 +37,7 @@ import {
   resolveRepairWorkspaceId,
 } from '@/lib/repair-open-record'
 import { DIRTY_KEYS_LS } from '@/lib/store'
+import { startVisiblePoll } from '@/lib/visible-poll'
 import { repairModuleView } from '@/lib/repair-workspace-view'
 
 const RepairDetailView = dynamic(() => import('./repair/RepairDetailView'), {
@@ -307,7 +308,6 @@ function RepairInner() {
     }
     setDetailLookup(localActiveRepairRef.current ? 'idle' : 'loading')
     let cancelled = false
-    let timer = null
 
     const refreshOpenRepair = async () => {
       if (document.visibilityState === 'hidden') return
@@ -340,18 +340,11 @@ function RepairInner() {
       }
     }
 
-    const onFocus = () => { void refreshOpenRepair() }
-    const onVisible = () => { if (document.visibilityState === 'visible') void refreshOpenRepair() }
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisible)
-    timer = window.setInterval(() => { void refreshOpenRepair() }, 8000)
-    void refreshOpenRepair()
+    const stop = startVisiblePoll(() => { void refreshOpenRepair() })
 
     return () => {
       cancelled = true
-      if (timer) window.clearInterval(timer)
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisible)
+      stop()
     }
   }, [activeId, workspaceIdKind])
 

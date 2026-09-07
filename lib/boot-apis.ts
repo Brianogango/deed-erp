@@ -1,7 +1,7 @@
 /**
  * Route-scoped boot API groups.
  * Avoids fetching every Prisma list endpoint on every login — only what the
- * current screen needs immediately; the rest idle-prefetches.
+ * current screen needs immediately. StoreProvider does not idle-prefetch the rest.
  */
 
 export type BootApiGroup =
@@ -93,6 +93,7 @@ export function bootApiGroupsForRoute(pathname: string): BootApiGroup[] {
   return Array.from(new Set([...ALWAYS_BOOT, ...matched]))
 }
 
+/** Remainder helper for tests / future idle warm — StoreProvider no longer idle-prefetches. */
 export function remainingBootApiGroups(immediate: BootApiGroup[]): BootApiGroup[] {
   const have = new Set(immediate)
   return ALL_BOOT_API_GROUPS.filter(g => !have.has(g))

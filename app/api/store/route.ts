@@ -16,6 +16,8 @@ import { mergePosSessionsStoreWrite, reconcileOpenPosSessionFlags } from '@/lib/
 import { appendStoreAudit } from '@/lib/store-audit'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 import { assertSafeStoreValue, InputSecurityError, readSafeJson } from '@/lib/input-security'
+import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
+import { recordHttpMetric } from '@/lib/http-metrics'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -73,13 +75,23 @@ function extractClientVersion(request: Request, body: Record<string, unknown>): 
 }
 
 export async function GET(request: NextRequest) {
+  const t0 = Date.now()
   const session = await getServerSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session) {
+    recordHttpMetric({ path: '/api/store', status: 401, ms: Date.now() - t0 })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const keysParam = request.nextUrl.searchParams.get('keys')
   const keys = keysParam
     ? keysParam.split(',').map(key => key.trim()).filter(key => key.startsWith('deed_'))
     : undefined
+  // Whole-table KV dumps are how transactional ledgers leaked into every tab.
+  // Hydration always names keys; refuse unscoped GET.
+  if (!keys?.length) {
+    recordHttpMetric({ path: '/api/store', status: 400, ms: Date.now() - t0 })
+    return NextResponse.json({ error: 'keys query required' }, { status: 400 })
+  }
 
   // Conditional fetch: the response is fully determined by (requested keys,
   // their updated_at fingerprint, caller identity — role filtering). When the
@@ -92,6 +104,7 @@ export async function GET(request: NextRequest) {
     if (version) {
       etag = buildStoreEtag(session, keys, version)
       if (request.headers.get('if-none-match') === etag) {
+        recordHttpMetric({ path: '/api/store', status: 304, ms: Date.now() - t0 })
         return new NextResponse(null, { status: 304, headers: { ETag: etag } })
       }
     }
@@ -109,6 +122,7 @@ export async function GET(request: NextRequest) {
   }
   // Clients already ignore non-deed_ keys when hydrating; expose version for If-Match writes.
   const payload = version ? { ...state, version } : state
+  recordHttpMetric({ path: '/api/store', status: 200, ms: Date.now() - t0 })
   return NextResponse.json(payload, etag ? { headers: { ETag: etag } } : undefined)
 }
 
@@ -175,6 +189,7 @@ export async function POST(request: Request) {
     for (const [k, v] of Object.entries(rawBody)) {
       if (!k.startsWith('deed_')) continue
       if (CLIENT_IMMUTABLE_STORE_KEYS.has(k)) continue
+      if (isPrismaRestSotStoreKey(k)) continue
       if (!isKnownClientAppStateKey(k)) continue
       assertSafeStoreValue(v, k)
       entries[k] = typeof v === 'string' ? v : JSON.stringify(v)

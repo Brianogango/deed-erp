@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Fa } from '@/components/icons'
 import { faPaperPlane, faSync, faComments, faUser, faClock } from '@fortawesome/free-solid-svg-icons'
 import { fmtDate } from '@/lib/store'
+import { startVisiblePoll } from '@/lib/visible-poll'
 
 interface Message {
   id: string
@@ -32,9 +33,7 @@ export default function MessageThread({ repairRef, staffName }: { repairRef: str
   }
 
   useEffect(() => {
-    fetchMessages()
-    const id = setInterval(fetchMessages, 10000)
-    return () => clearInterval(id)
+    return startVisiblePoll(() => { void fetchMessages() })
   }, [repairRef])
 
   useEffect(() => {
@@ -101,10 +100,10 @@ export default function MessageThread({ repairRef, staffName }: { repairRef: str
                 <p className="font-medium whitespace-pre-wrap">{msg.text}</p>
               </div>
               <div className="flex items-center gap-1.5 px-1 text-[9px] font-bold text-[var(--text-4)] uppercase tracking-tight">
-                <Fa icon={faUser} className="text-[8px] opacity-50" />
+                <Fa icon={faUser} className="text-[10px] opacity-50" />
                 <span>{msg.senderName}</span>
                 <span className="opacity-30">·</span>
-                <Fa icon={faClock} className="text-[8px] opacity-50" />
+                <Fa icon={faClock} className="text-[10px] opacity-50" />
                 <span>{fmtDate(msg.createdAt)}</span>
               </div>
             </div>

@@ -102,11 +102,18 @@ describe('POST /api/store — sensitive key gating', () => {
     expect([200, 400, 403]).toContain(techRes.status)
   })
 
-  it('does not regress unrestricted keys — any authenticated role can still write deed_quotes', async () => {
+  it('does not regress unrestricted keys — any authenticated role can still write deed_saleOrders', async () => {
     mockGetSession.mockResolvedValue(salesSession)
-    const res = await STORE_POST(postReq({ deed_quotes: '[]' }))
+    const res = await STORE_POST(postReq({ deed_saleOrders: '[]' }))
     expect(res.status).toBe(200)
     expect(mockSaveStoreKeys).toHaveBeenCalled()
+  })
+
+  it('drops Prisma REST source-of-truth keys instead of dual-writing them', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const res = await STORE_POST(postReq({ deed_quotes: '[]', deed_contacts: '[]' }))
+    expect(res.status).toBe(400)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 
   it('returns 401 when unauthenticated', async () => {
@@ -126,14 +133,14 @@ describe('POST /api/store — sensitive key gating', () => {
   it('saves permitted keys and drops unknown namespaces from a mixed batch', async () => {
     mockGetSession.mockResolvedValue(directorSession)
     const res = await STORE_POST(postReq({
-      deed_quotes: '[]',
+      deed_saleOrders: '[]',
       deed_notifications: '[]',
       deed_oppActivities: '[]',
     }))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.unknownKeys).toEqual(expect.arrayContaining(['deed_notifications', 'deed_oppActivities']))
-    expect(mockSaveStoreKeys).toHaveBeenCalledWith({ deed_quotes: '[]' })
+    expect(mockSaveStoreKeys).toHaveBeenCalledWith({ deed_saleOrders: '[]' })
   })
 
   it('rejects unexpected top-level request fields', async () => {
@@ -146,7 +153,7 @@ describe('POST /api/store — sensitive key gating', () => {
   it('rejects prototype-pollution fields hidden inside a double-encoded store value', async () => {
     mockGetSession.mockResolvedValue(directorSession)
     const poisoned = '{"0":{"__proto__":{"isAdmin":true}}}'
-    const res = await STORE_POST(postReq({ deed_quotes: poisoned }))
+    const res = await STORE_POST(postReq({ deed_saleOrders: poisoned }))
     expect(res.status).toBe(400)
     expect(await res.json()).toMatchObject({ code: 'prototype_pollution_key' })
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
@@ -158,11 +165,11 @@ describe('POST /api/store — sensitive key gating', () => {
     // every dirty key together, so e.g. a technician's repair diagnosis was
     // thrown away because the same batch carried the director-only audit log.
     mockGetSession.mockResolvedValue(salesSession)
-    const res = await STORE_POST(postReq({ deed_quotes: '[]', deed_journalEntries: '[]' }))
+    const res = await STORE_POST(postReq({ deed_saleOrders: '[]', deed_journalEntries: '[]' }))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.deniedKeys).toEqual(['deed_journalEntries'])
-    expect(mockSaveStoreKeys).toHaveBeenCalledWith({ deed_quotes: '[]' })
+    expect(mockSaveStoreKeys).toHaveBeenCalledWith({ deed_saleOrders: '[]' })
   })
 
   it('still 403s when every key in the batch is restricted', async () => {
@@ -170,7 +177,7 @@ describe('POST /api/store — sensitive key gating', () => {
     const res = await STORE_POST(postReq({ deed_journalEntries: '[]', deed_payrollRuns: '[]' }))
     expect(res.status).toBe(403)
     const body = await res.json()
-    expect(body.deniedKeys).toEqual(['deed_journalEntries', 'deed_payrollRuns'])
+    expect(body.deniedKeys).toEqual(['deed_journalEntries'])
     expect(mockSaveStoreKeys).not.toHaveBeenCalledWith(expect.objectContaining({ deed_journalEntries: '[]' }))
   })
 
@@ -267,7 +274,9 @@ describe('POST /api/store — sensitive key gating', () => {
   it('rejects a sales_rep writing payroll (deed_payrollRuns)', async () => {
     mockGetSession.mockResolvedValue(salesSession)
     const res = await STORE_POST(postReq({ deed_payrollRuns: '[]' }))
-    expect(res.status).toBe(403)
+    // Prisma REST owns payroll — the blob write is dropped (not a 403 ACL).
+    expect(res.status).toBe(400)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 
   it('rejects a technician writing deposits (deed_deposits)', async () => {
@@ -335,8 +344,18 @@ describe('PUT /api/store/[key] — sensitive key gating', () => {
   it('rejects a technician writing leave requests via wholesale sync', async () => {
     mockGetSession.mockResolvedValue(technicianSession)
     const res = await STORE_POST(postReq({ deed_leaveRequests: '[]' }))
-    expect(res.status).toBe(403)
+    expect([400, 403]).toContain(res.status)
     expect(mockSaveStoreKeys).not.toHaveBeenCalledWith(expect.objectContaining({ deed_leaveRequests: expect.anything() }))
+  })
+})
+
+describe('GET /api/store — unscoped dump is refused', () => {
+  it('returns 400 when keys query is missing', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const res = await STORE_GET(new NR('http://localhost/api/store', { method: 'GET' }))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ error: 'keys query required' })
+    expect(mockLoadAppState).not.toHaveBeenCalled()
   })
 })
 

@@ -1,4 +1,9 @@
 // @ts-nocheck
+/**
+ * NOT the ERP source of truth for auth or module routing.
+ * StoreProvider in lib/store.tsx owns currentUser, login, and activeModule.
+ * Do not mount this store in the app shell — a second SoT would fork login state.
+ */
 import { create } from 'zustand'
 import { useLS } from './useLS'
 import type { ModuleId, UserRole, User } from '../lib/store'

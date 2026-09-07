@@ -1,6 +1,11 @@
 
 'use client'
 
+/**
+ * NOT the ERP source of truth for company settings.
+ * lib/store.tsx + /api/settings own VAT, banks, logo, and company identity.
+ * Do not mount this persist store as a second settings SoT.
+ */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { StateCreator } from 'zustand'

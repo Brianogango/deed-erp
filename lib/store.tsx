@@ -19,7 +19,10 @@ import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDeprec
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
-import { bootApiGroupsForRoute, remainingBootApiGroups, type BootApiGroup } from '@/lib/boot-apis'
+import { bootApiGroupsForRoute, type BootApiGroup } from '@/lib/boot-apis'
+import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
+import { useInventoryDomainStore } from '@/hooks/useInventoryDomainStore'
+import { useNotificationStore } from '@/hooks/useNotificationStore'
 import { documentMoneySnapshot, FUNCTIONAL_CURRENCY } from '@/lib/currency'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
 import {
@@ -4877,6 +4880,8 @@ function canQueueStoreSync(key: string) {
   // Keep this list aligned with CLIENT_IMMUTABLE_STORE_KEYS in authorization.ts.
   // Do not import that module here — it is server-only and breaks the client bundle.
   if (key === 'deed_auditLogs' || key === 'deed_audit_timeline_v1') return false
+  // Prisma REST owns these writes; posting a blob shape here drifted SoT.
+  if (isPrismaRestSotStoreKey(key)) return false
   return isKnownClientAppStateKey(key)
 }
 
@@ -5627,17 +5632,23 @@ export function StoreProvider({
 
   // The relational catalog (/api/products) is the source of truth for product
   // identity and commercial fields. Boot merge uses the lite endpoint (no serials).
-  const refreshProductCatalog = useCallback(() => {
-    fetch('/api/products?lite=1')
-      .then(r => (r.ok ? r.json() : null))
-      .then((rows: any[] | null) => {
-        if (!Array.isArray(rows) || rows.length === 0) return
-        setProducts(prev => {
-          const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG, { preserveClientOrder: true })
-          return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged
+  const refreshProductCatalog = useCallback(async () => {
+    try {
+      const rows = await useInventoryDomainStore.getState().refreshProducts()
+      if (!Array.isArray(rows) || rows.length === 0) return 0
+      setProducts(prev => {
+        const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG, { preserveClientOrder: true }) as any[]
+        const healed = merged.map(p => {
+          if (!isSerialOnlyCategory(p.category)) return p
+          if (p.trackingMethod === 'SERIAL' && p.requiresSerial) return p
+          return { ...p, trackingMethod: 'SERIAL' as TrackingMethod, requiresSerial: true }
         })
+        return JSON.stringify(healed) === JSON.stringify(prev) ? prev : healed
       })
-      .catch(() => {})
+      return rows.length
+    } catch {
+      return 0
+    }
   }, [setProducts])
 
   useEffect(() => {
@@ -5812,7 +5823,7 @@ export function StoreProvider({
   const [stockAdjustments, setStockAdjustments] = useLS<StockAdjustment[]>('deed_stockAdjustments', [])
   const [stockReservations, setStockReservations] = useLS<StockReservation[]>('deed_stockReservations', [])
 
-  // Route-scoped Prisma boot + idle prefetch of the rest (cuts cold-start fan-out).
+  // Route-scoped Prisma boot only — idle prefetch of other modules competed with first clicks.
   const bootedApiGroupsRef = useRef<Set<BootApiGroup>>(new Set())
   useEffect(() => {
     if (!initialUser) return
@@ -5972,19 +5983,6 @@ export function StoreProvider({
     void Promise.all(immediate.map(runGroup))
     scheduleCatalogHealOnce()
 
-    // Only warm high-traffic groups in the background — full remainingBoot
-    // fan-out competed with the user's first clicks after login.
-    const PRIORITY_IDLE: BootApiGroup[] = ['products', 'contacts', 'sales', 'crm']
-    const idleGroups = remainingBootApiGroups(immediate).filter(g => PRIORITY_IDLE.includes(g))
-    let idleHandle: number | undefined
-    let idleTimer: ReturnType<typeof setTimeout> | undefined
-    const prefetchIdle = () => { void Promise.all(idleGroups.map(runGroup)) }
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      idleHandle = window.requestIdleCallback(prefetchIdle, { timeout: 12000 })
-    } else {
-      idleTimer = setTimeout(prefetchIdle, 8000)
-    }
-
     // Managers need periodic leave refresh; SSE covers most real-time cases.
     let leaveInterval: ReturnType<typeof setInterval> | undefined
     if (['director', 'admin_officer'].includes(initialUser.role)) {
@@ -5999,8 +5997,6 @@ export function StoreProvider({
     window.addEventListener('deed_route_change', onRoute as EventListener)
 
     return () => {
-      if (idleHandle !== undefined && 'cancelIdleCallback' in window) window.cancelIdleCallback(idleHandle)
-      if (idleTimer) clearTimeout(idleTimer)
       if (leaveInterval) clearInterval(leaveInterval)
       window.removeEventListener('deed_route_change', onRoute as EventListener)
     }
@@ -6113,6 +6109,9 @@ export function StoreProvider({
 
   const showToast = useCallback((msg: string, type: 'success'|'error'|'info' = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
+    // Fan into the Zustand toast slice for domain hooks. AppShell still renders
+    // the Context toast — do not mount a second Toast from this store.
+    useNotificationStore.getState().showToast(msg, type)
   }, [])
 
   // ── Internal notification pusher (single-recipient compat + multi fan-out) ──
@@ -10654,27 +10653,7 @@ const storeCtx: AppState = {
       }
     },
 
-    refreshProductCatalog: async () => {
-      try {
-        const res = await fetch('/api/products?lite=1')
-        if (!res.ok) return 0
-        const rows = await res.json()
-        if (!Array.isArray(rows) || rows.length === 0) return 0
-        // Single state update + stable order — avoids catalog flicker mid-search.
-        setProducts(prev => {
-          const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG, { preserveClientOrder: true }) as any[]
-          const healed = merged.map(p => {
-            if (!isSerialOnlyCategory(p.category)) return p
-            if (p.trackingMethod === 'SERIAL' && p.requiresSerial) return p
-            return { ...p, trackingMethod: 'SERIAL' as TrackingMethod, requiresSerial: true }
-          })
-          return JSON.stringify(healed) === JSON.stringify(prev) ? prev : healed
-        })
-        return rows.length
-      } catch {
-        return 0
-      }
-    },
+    refreshProductCatalog,
 
     normalizeInventoryTags: async () => {
       try {

@@ -59,18 +59,18 @@ beforeEach(() => {
 
 describe('P1-SEC-005 — POST /api/store optimistic concurrency', () => {
   it('behaves as today when no If-Match / _version is supplied (backward compatible)', async () => {
-    const res = await STORE_POST(postReq({ deed_quotes: '[]' }))
+    const res = await STORE_POST(postReq({ deed_saleOrders: '[]' }))
     expect(res.status).toBe(200)
     expect(mockSaveStoreKeys).toHaveBeenCalled()
     const body = await res.json()
     expect(body.ok).toBe(true)
     expect(body.version).toBe(CURRENT_VERSION)
-    expect(res.headers.get('etag')).toBe(expectedEtag(['deed_quotes'], CURRENT_VERSION))
+    expect(res.headers.get('etag')).toBe(expectedEtag(['deed_saleOrders'], CURRENT_VERSION))
   })
 
   it('returns 409 conflict when If-Match header does not match current version', async () => {
     const res = await STORE_POST(postReq(
-      { deed_quotes: '[{"id":"q1"}]' },
+      { deed_saleOrders: '[{"id":"q1"}]' },
       { 'If-Match': 'stale-version:0' },
     ))
     expect(res.status).toBe(409)
@@ -81,7 +81,7 @@ describe('P1-SEC-005 — POST /api/store optimistic concurrency', () => {
 
   it('returns 409 when body._version is stale', async () => {
     const res = await STORE_POST(postReq({
-      deed_quotes: '[]',
+      deed_saleOrders: '[]',
       _version: 'old:1',
     }))
     expect(res.status).toBe(409)
@@ -91,7 +91,7 @@ describe('P1-SEC-005 — POST /api/store optimistic concurrency', () => {
 
   it('returns 409 when body If-Match is stale', async () => {
     const res = await STORE_POST(postReq({
-      deed_quotes: '[]',
+      deed_saleOrders: '[]',
       'If-Match': 'old:1',
     }))
     expect(res.status).toBe(409)
@@ -100,7 +100,7 @@ describe('P1-SEC-005 — POST /api/store optimistic concurrency', () => {
 
   it('saves when If-Match matches the current raw version', async () => {
     const res = await STORE_POST(postReq(
-      { deed_quotes: '[]' },
+      { deed_saleOrders: '[]' },
       { 'If-Match': CURRENT_VERSION },
     ))
     expect(res.status).toBe(200)
@@ -110,9 +110,9 @@ describe('P1-SEC-005 — POST /api/store optimistic concurrency', () => {
   })
 
   it('saves when If-Match matches the weak ETag from GET', async () => {
-    const etag = expectedEtag(['deed_quotes'], CURRENT_VERSION)
+    const etag = expectedEtag(['deed_saleOrders'], CURRENT_VERSION)
     const res = await STORE_POST(postReq(
-      { deed_quotes: '[]' },
+      { deed_saleOrders: '[]' },
       { 'If-Match': etag },
     ))
     expect(res.status).toBe(200)
@@ -121,7 +121,7 @@ describe('P1-SEC-005 — POST /api/store optimistic concurrency', () => {
 
   it('prefers the If-Match header over body._version', async () => {
     const res = await STORE_POST(postReq(
-      { deed_quotes: '[]', _version: 'stale:0' },
+      { deed_saleOrders: '[]', _version: 'stale:0' },
       { 'If-Match': CURRENT_VERSION },
     ))
     expect(res.status).toBe(200)
