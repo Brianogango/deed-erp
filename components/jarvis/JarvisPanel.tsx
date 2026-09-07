@@ -393,7 +393,7 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
         aria-hidden="true"
       />
       <div
-        className="fixed right-0 top-0 z-[201] flex h-screen w-full max-w-md flex-col bg-[var(--bg-card)] shadow-2xl"
+        className="fixed inset-0 z-[201] flex h-[100dvh] w-full max-w-none flex-col overflow-hidden bg-[var(--bg-card)] shadow-2xl md:inset-auto md:right-4 md:top-4 md:bottom-4 md:h-auto md:w-[460px] md:max-w-[calc(100vw-32px)] md:rounded-2xl md:border md:border-[var(--border)]"
         role="dialog"
         aria-label={`${DIA_SHORT_NAME} — ${DIA_FULL_NAME}`}
       >
