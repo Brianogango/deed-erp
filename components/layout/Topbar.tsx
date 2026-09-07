@@ -1093,6 +1093,7 @@ export default function Topbar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useSoundPreference()
   const [dateLabel, setDateLabel] = useState('')
+  const [timeLabel, setTimeLabel] = useState('')
   const [serverNotifs, setServerNotifs] = useState<BellNotification[]>([])
   const [tableDensity, setTableDensity] = useState<'cozy' | 'compact'>('cozy')
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
@@ -1186,14 +1187,24 @@ export default function Topbar() {
   }, [])
 
   useEffect(() => {
-    setDateLabel(
-      new Date().toLocaleDateString('en-KE', {
+    const updateClock = () => {
+      const now = new Date()
+      setDateLabel(now.toLocaleDateString('en-KE', {
         weekday: 'short',
         day: 'numeric',
         month: 'short',
         year: 'numeric',
-      })
-    )
+      }))
+      setTimeLabel(now.toLocaleTimeString('en-KE', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }))
+    }
+    updateClock()
+    const timer = window.setInterval(updateClock, 1000)
+    return () => window.clearInterval(timer)
   }, [])
 
   // Notifications — relational notification ledger is authoritative.
@@ -1443,6 +1454,20 @@ export default function Topbar() {
           </p>
         </div>
 
+        <button
+          type="button"
+          className="app-topbar-clock"
+          onClick={() => window.dispatchEvent(new CustomEvent('jarvis:toggle'))}
+          title="Open DIA voice assistant"
+          aria-label="Open DIA voice assistant"
+        >
+          <span className="app-topbar-clock__dot" aria-hidden="true" />
+          <span><small>{dateLabel}</small><strong>{timeLabel}</strong></span>
+          <span className="app-topbar-clock__mic" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>
+          </span>
+        </button>
+
         {/* Right Controls */}
         <div className="app-topbar-controls flex items-center gap-1.5 md:gap-2 flex-shrink-0 min-w-0">
           {/* Global Search Button */}
@@ -1471,6 +1496,8 @@ export default function Topbar() {
             <span>{tableDensity === 'cozy' ? 'Cozy' : 'Compact'}</span>
           </button>
 
+          <span className="app-topbar-role">{formatRoleLabel(currentUser?.role)}</span>
+          <span className="app-topbar-currency" title="Base currency"><span aria-hidden="true">◎</span> KES</span>
           <ThemeToggle />
 
           {/* Sync state — only surfaced when something needs attention */}
