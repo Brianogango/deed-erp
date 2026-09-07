@@ -140,6 +140,7 @@ import {
   invoiceableQty,
   invoicePaymentStatus,
   isOpenDeliveryStatus,
+  normalizeDeliveryStatus,
   shouldReplaceCancelledDelivery,
   deliveriesForSaleOrder,
   remainingUndeliveredByProduct,
@@ -4525,9 +4526,14 @@ function DeliveryNoteView({
     orderDeliveries[0]
   const existingDelivery = selectedDelivery
   const orderConfirmed = order.status === 'sale' || saleOrderLooksConfirmed(order)
+  const deliveryStatus = normalizeDeliveryStatus(existingDelivery?.status)
+  // Always gate actions on the canonical status. Legacy records may store title-case
+  // or alias values (for example "Waiting"), which previously made both forward
+  // actions disappear even though the status badge correctly showed WAITING.
   // Allow re-prepare on Ready so duplicate-product qty mistakes can be corrected.
-  const canPrepare = orderConfirmed && !!existingDelivery && isOpenDeliveryStatus(existingDelivery.status) && ['draft', 'waiting', 'ready'].includes(existingDelivery.status)
-  const canValidate = orderConfirmed && !!existingDelivery && existingDelivery.status === 'ready' && !!existingDelivery.preparedAt
+  const canPrepare = orderConfirmed && !!existingDelivery && isOpenDeliveryStatus(deliveryStatus)
+    && ['draft', 'waiting', 'ready'].includes(deliveryStatus)
+  const canValidate = orderConfirmed && !!existingDelivery && deliveryStatus === 'ready' && !!existingDelivery.preparedAt
   const [serialScan, setSerialScan] = useState('')
 
   const pickingSummary = useMemo(() => {
@@ -4641,7 +4647,7 @@ function DeliveryNoteView({
 
   const handleValidate = async (opts?: { cancelRemaining?: boolean }) => {
     if (!order.lines.length) { showToast('No line items on this order', 'error'); return }
-    if (!existingDelivery || existingDelivery.status !== 'ready') {
+    if (!existingDelivery || normalizeDeliveryStatus(existingDelivery.status) !== 'ready') {
       showToast('No pending delivery to validate', 'error'); return
     }
     const pairs = pairOrderLinesWithDeliveryLines(order.lines, existingDelivery.lines)
