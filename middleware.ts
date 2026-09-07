@@ -138,6 +138,24 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Page-404 beacons carry only { path, status: 404 } — no session required.
+  if (pathname === '/api/metrics/http' && request.method === 'POST') {
+    const ip = getIP(request)
+    const { checkRateLimit } = await import('@/lib/rate-limit')
+    const { success, remaining, resetAt } = await checkRateLimit(`metrics-404:${ip}`, 60, 60)
+    if (!success) {
+      return new NextResponse('Too Many Requests', {
+        status: 429,
+        headers: {
+          'Retry-After': '60',
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(resetAt),
+        },
+      })
+    }
+    return withRateLimitHeaders(NextResponse.next(), remaining, resetAt)
+  }
+
   // Partner-facing public API (/api/public/*): no session cookie — the routes
   // authenticate with a partner API key themselves. Still rate-limited here,
   // per presented key (falling back to caller IP when no key is sent).
