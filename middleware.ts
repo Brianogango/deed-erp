@@ -290,6 +290,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Page auth ─────────────────────────────────────────────────────────────
+  // Canonicalize aliases before auth/visreg so bookmarks and bypass mode
+  // land on the real module URL (e.g. /operations → /inventory).
+  const canonicalPath = LEGACY_ROUTE_REDIRECTS[pathname]
+  if (canonicalPath) {
+    return redirectTo(canonicalPath, request)
+  }
+
   // Local visual regression runs use the real app shell without a database.
   // Never honor this bypass in production, even if the variable is mis-set.
   const visregBypass =
@@ -337,11 +344,6 @@ export async function middleware(request: NextRequest) {
       url.search = ''
     }
     return NextResponse.redirect(url)
-  }
-
-  const canonicalPath = LEGACY_ROUTE_REDIRECTS[pathname]
-  if (token && canonicalPath) {
-    return redirectTo(canonicalPath, request)
   }
 
   if (token && pathname === '/hr' && request.nextUrl.searchParams.get('tab') === 'system_users') {
