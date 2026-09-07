@@ -47,7 +47,7 @@ export default function InvoicePDF({ invoice, companyName = 'Deed Digital Soluti
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 }}>
           <View>
             <Text style={styles.title}>{companyName}</Text>
-            <Text style={styles.label}>Tax Invoice</Text>
+            <Text style={styles.label}>Invoice</Text>
           </View>
           <View style={{ textAlign: 'right' }}>
             <Text style={{ fontSize: 14, fontWeight: 'bold' }}>{invoice.ref}</Text>
