@@ -203,7 +203,8 @@ export default function ContactFormModal({
         : await addContact(payload)
       const savedContact = contact as Contact
       const validPersons = contactPersons.filter(person => person.firstName.trim() || person.lastName.trim() || person.email.trim())
-      await Promise.all([
+      try {
+        await Promise.all([
         ...validPersons.map(person => fetch(person.id ? `/api/contact-persons/${person.id}` : '/api/contact-persons', {
           method: person.id ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -223,7 +224,10 @@ export default function ContactFormModal({
           if (!res.ok) throw new Error('Could not remove contact person')
           return res
         })),
-      ])
+        ])
+      } catch {
+        showToast('Contact saved, but some contact-person changes could not be applied. Reopen the contact to retry.', 'error')
+      }
       onSaved(savedContact)
     } catch {
       // store helpers already toast
