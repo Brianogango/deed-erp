@@ -47,8 +47,10 @@ const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
   '/repairs': ['products', 'contacts', 'repairs'],
   '/contacts': ['contacts'],
   '/hr': ['employees', 'leave', 'payroll', 'salary_advances'],
-  '/finance': ['products', 'contacts', 'sales', 'payroll'],
-  '/accounting': ['products', 'contacts', 'sales', 'payroll'],
+  // Finance first paint is the store GET (invoices/journals/bank). Catalog and
+  // CRM lists idle-prefetch so they do not compete with that payload.
+  '/finance': ['payroll'],
+  '/accounting': ['payroll'],
   '/finance/invoices': ['contacts', 'sales'],
   '/pos': ['products', 'contacts'],
   '/delivery': ['contacts'],

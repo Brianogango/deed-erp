@@ -18,6 +18,13 @@ import { resolveClientId } from './legacy-compat'
 
 const MIRROR_STATE_KEY = 'repair_mirror_hashes_v1'
 
+let repairsPayloadCache: { at: number; data: any[] } | null = null
+const REPAIRS_PAYLOAD_CACHE_MS = 15_000
+
+export function invalidateRepairsPayloadCache() {
+  repairsPayloadCache = null
+}
+
 // Blob statuses → relational repair_status enum
 const STATUS_MAP: Record<string, string> = {
   pending_verification: 'intake',
@@ -101,6 +108,9 @@ let _mirrorPendingRerun = false
  */
 export async function loadRepairsFromPrisma(): Promise<any[] | null> {
   try {
+    if (repairsPayloadCache && Date.now() - repairsPayloadCache.at < REPAIRS_PAYLOAD_CACHE_MS) {
+      return repairsPayloadCache.data
+    }
     // Deterministic order: an unordered findMany returns rows in physical
     // order, which changes every time the mirror updates a row — the visible
     // list then re-sorted itself mid-click whenever a poll re-hydrated.
@@ -110,7 +120,9 @@ export async function loadRepairsFromPrisma(): Promise<any[] | null> {
     })
     const withPayload = rows.filter(r => r.payload && typeof r.payload === 'object')
     if (!withPayload.length) return null
-    return withPayload.map(r => r.payload)
+    const data = withPayload.map(r => r.payload)
+    repairsPayloadCache = { at: Date.now(), data }
+    return data
   } catch {
     return null
   }
@@ -142,6 +154,7 @@ export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force
   }
   _mirrorRunning = true
   try {
+    invalidateRepairsPayloadCache()
     const repairs: any[] = typeof repairsInput === 'string' ? JSON.parse(repairsInput) : (repairsInput as any[])
     if (!Array.isArray(repairs) || repairs.length === 0) return result
 

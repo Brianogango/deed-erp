@@ -19,6 +19,14 @@ describe('bootApiGroupsForRoute', () => {
     expect(groups).toEqual(expect.arrayContaining(['contacts', 'sales']))
   })
 
+  it('does not boot the catalog on Finance first paint', () => {
+    const groups = bootApiGroupsForRoute('/finance')
+    expect(groups).toEqual(expect.arrayContaining(['payroll', 'employees', 'leave']))
+    expect(groups).not.toContain('products')
+    expect(groups).not.toContain('contacts')
+    expect(groups).not.toContain('sales')
+  })
+
   it('lists idle groups as the remainder', () => {
     const immediate = bootApiGroupsForRoute('/operations')
     const rest = remainingBootApiGroups(immediate)
