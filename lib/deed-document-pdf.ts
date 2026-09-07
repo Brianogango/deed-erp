@@ -147,8 +147,8 @@ const writeValue = (doc: jsPDF, text: string, x: number, y: number, options: Rec
 }
 
 function drawLogo(doc: jsPDF, company: DeedPdfCompany) {
-  const maxW = 118
-  const maxH = 48
+  const maxW = 154
+  const maxH = 56
   if (company.logoDataUrl && company.logoWidth && company.logoHeight) {
     const scale = Math.min(maxW / company.logoWidth, maxH / company.logoHeight)
     try {
@@ -156,7 +156,7 @@ function drawLogo(doc: jsPDF, company: DeedPdfCompany) {
         company.logoDataUrl,
         company.logoFormat || 'PNG',
         MARGIN,
-        22,
+        15,
         company.logoWidth * scale,
         company.logoHeight * scale,
       )
@@ -258,10 +258,8 @@ export function buildDeedDocumentPdf(
   y += 24
   doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...NAVY)
   doc.text(input.ref, MARGIN, y)
-  doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...MUTED)
-  const topDateLabel = kind === 'quotation' || kind === 'proforma' ? `Valid until: ${fmtDate(input.dueDate)}` : `${input.dueLabel || 'Date'}: ${fmtDate(input.dueDate || input.date)}`
-  doc.text(topDateLabel, RIGHT, y, { align: 'right' })
-
+  // Dates are presented once in the document metadata block below. The former
+  // top-right date repeated Due Date / Valid Until and created conflicting facts.
   y += 28
   const leftX = MARGIN + 10
   const splitX = MARGIN + 232
@@ -439,6 +437,10 @@ export function buildDeedDocumentPdf(
     const payment = defaultPaymentLines(input, company, bankAccounts)
     if (payment.length) {
       const paymentH = Math.max(56, Math.ceil(payment.length / 2) * 14 + 30)
+      // Keep payment instructions visually separate from invoice totals. Short
+      // invoices place this block lower on the page; longer invoices still flow
+      // naturally or move to a continuation page through ensureRoom().
+      y = Math.max(y, 540)
       y = ensureRoom(doc, company, input, y, paymentH + 12)
       line(doc, MARGIN, y, RIGHT, BORDER, .55)
       writeLabel(doc, 'Payment instructions', MARGIN, y + 18)
