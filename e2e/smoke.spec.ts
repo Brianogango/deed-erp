@@ -288,6 +288,7 @@ test.describe('responsive target workspaces', () => {
     '/hr',
     '/delivery',
     '/operations',
+    '/inventory',
     '/contacts',
     '/outsource',
     '/reconfiguration',

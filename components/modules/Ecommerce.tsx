@@ -200,7 +200,7 @@ export default function Ecommerce() {
       {/* Quick links */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { icon: faBoxesStacked, title: 'Manage Products',  desc: 'Add, edit, set prices & stock',        action: () => { setModule('inventory'); router.push('/operations'); },  color: 'var(--warning)' },
+          { icon: faBoxesStacked, title: 'Manage Products',  desc: 'Add, edit, set prices & stock',        action: () => { setModule('inventory'); router.push('/inventory'); },  color: 'var(--warning)' },
           { icon: faBriefcase, title: 'Process as Sale',  desc: 'Convert online orders to sale orders', action: () => { setModule('sales'); router.push('/sales'); },      color: 'var(--primary)' },
           { icon: faChartSimple, title: 'View Accounting',  desc: 'Online revenue in accounting',         action: () => { setModule('accounting'); router.push('/finance'); }, color: 'var(--success)' },
         ].map(c => (

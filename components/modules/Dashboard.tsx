@@ -465,7 +465,7 @@ export function Dashboard() {
         { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueInvoices.length} overdue invoices`, color: '#2563EB', icon: <Fa icon={faFileInvoiceDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
         { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} bills pending`, color: '#8B5CF6', icon: <Fa icon={faMoneyCheckDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
         { key: 'open-orders', label: 'Open Sales', value: salesStats.openOrders, sub: `${salesStats.myQuotes.length} quotations active`, color: '#00B0D7', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('sales', '/sales') },
-        { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#F97316', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
+        { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#F97316', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/inventory') },
         { key: 'repairs', label: 'Open Repairs', value: repairStats.active.length, sub: `${repairStats.unassigned.length} waiting assignment${repairStats.aging.length > 0 ? ` · ${repairStats.aging.length} aging 7d+` : ''}`, color: '#16A34A', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
         { key: 'repair-revenue', label: 'Repair Revenue', value: techLeadStats.repairRevenueThisMonth, sub: `This month · actual sales ${fmtKes(techLeadStats.salesRevenueThisMonth)}`, color: '#047857', icon: <Fa icon={faScrewdriverWrench} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
         { key: 'active-users', label: 'Active Users', value: users.filter(u => u.active).length, sub: `${employees.filter(e => e.status === 'active').length} active employees`, color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleRoute('/settings?tab=users') },
@@ -496,18 +496,18 @@ export function Dashboard() {
         { key: 'orders', label: 'Open Sales Orders', value: salesStats.openOrders, sub: 'Commercial workflow queue', color: '#10B981', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('sales', '/sales') },
         { key: 'customers', label: 'Customer Records', value: contacts.length, sub: 'CRM and contact records', color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleNav('contacts', '/contacts') },
         { key: 'purchase', label: 'Purchase Orders', value: inventoryStats.pendingReceipts, sub: 'Sent, confirmed, or partial', color: '#D97706', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('purchase', '/purchases') },
-        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Items needing workflow attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/operations') },
+        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Items needing workflow attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/inventory') },
         { key: 'my-expenses', label: 'My Expenses', value: selfServiceStats.myExpenseClaims.length, sub: 'Your reimbursement requests', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
       ]
     }
 
     if (isInventoryOfficer) {
       return [
-        { key: 'skus', label: 'Active SKUs', value: inventoryStats.activeSkus.length, sub: 'Physical stock items', color: '#1B2762', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
-        { key: 'units', label: 'Units On Hand', value: inventoryStats.totalUnits, sub: 'Across stock locations', color: '#10B981', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('inventory', '/operations') },
-        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Reorder/count attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/operations') },
+        { key: 'skus', label: 'Active SKUs', value: inventoryStats.activeSkus.length, sub: 'Physical stock items', color: '#1B2762', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/inventory') },
+        { key: 'units', label: 'Units On Hand', value: inventoryStats.totalUnits, sub: 'Across stock locations', color: '#10B981', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('inventory', '/inventory') },
+        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Reorder/count attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/inventory') },
         { key: 'receipts', label: 'Goods To Receive', value: inventoryStats.pendingReceipts, sub: 'POs not fully received', color: '#D97706', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('purchase', '/purchases') },
-        { key: 'transfers', label: 'Draft Transfers', value: inventoryStats.draftTransfers, sub: 'Stock movement pending', color: '#8B5CF6', icon: <Fa icon={faArrowsRotate} />, onClick: () => handleNav('inventory', '/operations?tab=transfers') },
+        { key: 'transfers', label: 'Draft Transfers', value: inventoryStats.draftTransfers, sub: 'Stock movement pending', color: '#8B5CF6', icon: <Fa icon={faArrowsRotate} />, onClick: () => handleNav('inventory', '/inventory?tab=transfers') },
         { key: 'my-expenses', label: 'My Expenses', value: selfServiceStats.myExpenseClaims.length, sub: 'Your reimbursement requests', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
       ]
     }
@@ -517,7 +517,7 @@ export function Dashboard() {
         { key: 'pending', label: 'Kilimall Pending', value: kilimallStats.pending.length, sub: 'Orders needing allocation', color: '#F59E0B', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('kilimall', '/kilimall') },
         { key: 'dispatched', label: 'Dispatched', value: kilimallStats.dispatched.length, sub: 'Awaiting delivery confirmation', color: '#3B82F6', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('kilimall', '/kilimall') },
         { key: 'returns', label: 'Returns', value: kilimallStats.returned.length, sub: 'Returned Kilimall orders', color: '#EF4444', icon: <Fa icon={faArrowDown} />, onClick: () => handleNav('kilimall', '/kilimall') },
-        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Availability risk before allocation', color: '#DC2626', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
+        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Availability risk before allocation', color: '#DC2626', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/inventory') },
         { key: 'my-expenses', label: 'My Expenses', value: selfServiceStats.myExpenseClaims.length, sub: 'Your reimbursement requests', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
       ]
     }
@@ -586,7 +586,7 @@ export function Dashboard() {
 
     if (canSeeFinance) actions.unshift({ key: 'finance', title: 'Finance Desk', desc: 'Invoices, bills, payments, and reports', module: 'accounting', path: '/finance', color: '#10B981', icon: <Fa icon={faMoneyBillWave} /> })
     if (canSeeSales) actions.unshift({ key: 'sales', title: isSalesRep ? 'My Sales Pipeline' : 'Sales Pipeline', desc: 'Quotations, sales orders, and customers', module: 'sales', path: '/sales', color: '#3B82F6', icon: <Fa icon={faClipboardList} /> })
-    if (canSeeInventory) actions.unshift({ key: 'inventory', title: 'Stock Control', desc: 'Stock levels, transfers, and counts', module: 'inventory', path: '/operations', color: '#D97706', icon: <Fa icon={faBoxesStacked} /> })
+    if (canSeeInventory) actions.unshift({ key: 'inventory', title: 'Stock Control', desc: 'Stock levels, transfers, and counts', module: 'inventory', path: '/inventory', color: '#D97706', icon: <Fa icon={faBoxesStacked} /> })
     if (canSeeKilimall) actions.unshift({ key: 'kilimall', title: 'Kilimall Orders', desc: 'Allocate stock and manage returns', module: 'kilimall', path: '/kilimall', color: '#F59E0B', icon: <Fa icon={faCartShopping} /> })
 
     return actions.filter(a => !a.module || has(a.module)).slice(0, 6)
@@ -630,10 +630,10 @@ export function Dashboard() {
     if (canSeeInventory) {
       const outOfStock = inventoryStats.lowStockItems.filter(p => p.onHand === 0)
       if (outOfStock.length > 0) {
-        items.push({ key: 'out-of-stock', title: `${outOfStock.length} product${outOfStock.length > 1 ? 's' : ''} out of stock`, sub: outOfStock.slice(0, 3).map(p => p.name).join(', '), tone: 'danger', module: 'inventory', path: '/operations?tab=warehouse_view' })
+        items.push({ key: 'out-of-stock', title: `${outOfStock.length} product${outOfStock.length > 1 ? 's' : ''} out of stock`, sub: outOfStock.slice(0, 3).map(p => p.name).join(', '), tone: 'danger', module: 'inventory', path: '/inventory?tab=warehouse_view' })
       }
       if (isInventoryOfficer || isAdminOfficer) {
-        items.push(...inventoryStats.lowStockItems.filter(p => p.onHand > 0).slice(0, 3).map(p => ({ key: `stock-${p.id}`, title: `${p.name} is low`, sub: `${p.onHand}/${p.minStock} units · ${p.category}`, tone: 'warn', module: 'inventory' as ModuleId, path: '/operations?tab=warehouse_view' })))
+        items.push(...inventoryStats.lowStockItems.filter(p => p.onHand > 0).slice(0, 3).map(p => ({ key: `stock-${p.id}`, title: `${p.name} is low`, sub: `${p.onHand}/${p.minStock} units · ${p.category}`, tone: 'warn', module: 'inventory' as ModuleId, path: '/inventory?tab=warehouse_view' })))
       }
     }
 
@@ -727,7 +727,7 @@ export function Dashboard() {
         onNavigate={path => {
           if (path.startsWith('/settings')) handleRoute(path)
           else if (path.startsWith('/finance')) handleNav('accounting', path)
-          else if (path.startsWith('/operations')) handleNav('inventory', path)
+          else if (path.startsWith('/inventory') || path.startsWith('/operations')) handleNav('inventory', path)
           else if (path.startsWith('/contacts')) handleNav('contacts', path)
           else if (path.startsWith('/sales')) handleNav('sales', path)
           else handleRoute(path)
@@ -783,7 +783,7 @@ export function Dashboard() {
                 <CardHeader
                   title="Stock health"
                   sub="Products below their safe stock level"
-                  action={<button type="button" className="dashboard-card-link" onClick={() => handleNav('inventory', '/operations')}>View all</button>}
+                  action={<button type="button" className="dashboard-card-link" onClick={() => handleNav('inventory', '/inventory')}>View all</button>}
                 />
                 <div className="dashboard-list-rows">
                   {inventoryStats.lowStockItems.slice(0, 4).map(p => {

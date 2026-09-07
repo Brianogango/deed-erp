@@ -275,7 +275,7 @@ function InventoryContent() {
         setTab(requested)
         if (requested === 'movements') setReportTab('movements')
       }
-      // QR deep-link from serialized-device labels: /operations?tab=reports&serial=…
+      // QR deep-link from serialized-device labels: /inventory?tab=reports&serial=…
       const serialQ = params.get('serial')?.trim()
       if (serialQ) {
         setTab('reports')

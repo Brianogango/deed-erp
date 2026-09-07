@@ -13,7 +13,7 @@ Use this guide after you receive a login (or reset a password). Directors own ap
 | Dashboard | `/` | Cross-module snapshot |
 | Sales / CRM / Contacts | `/sales`, `/crm`, `/contacts` | Quotes, orders, pipeline |
 | POS | `/pos` | Till sessions and sales |
-| Purchases / Inventory | `/purchases`, `/operations` | POs, GRNs, stock |
+| Purchases / Inventory | `/purchases`, `/inventory` | POs, GRNs, stock |
 | Delivery / After-Sales | `/delivery`, `/aftersales` | Fulfilment and returns |
 | Repairs / Refurb / Reconfig | `/repairs`, `/refurbishment`, `/reconfiguration` | Workshop oversight |
 | Finance | `/finance` | Invoices, payments, journals, reports |

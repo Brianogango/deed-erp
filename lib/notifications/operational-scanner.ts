@@ -393,7 +393,7 @@ async function scanInventory() {
         entityId: product.id,
         title: `Low stock — ${product.name}`,
         body: `${product.sku}: ${level} on hand; reorder level is ${reorder}.`,
-        actionUrl: `/operations?product=${product.id}`,
+        actionUrl: `/inventory?product=${product.id}`,
         idempotencyKey: '',
         stateVersion: product.stockLevel?.updatedAt || product.updatedAt,
       })) emitted++

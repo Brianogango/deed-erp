@@ -26,8 +26,8 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/ecommerce':   { label: 'E-commerce',     desc: 'Online store management' },
   '/kilimall':    { label: 'Kilimall',       desc: 'Kilimall orders & settlements' },
   '/contacts':    { label: 'Contacts',       desc: 'Customers, vendors & staff' },
-  '/operations':  { label: 'Operations',     desc: 'Products, stock & fulfillment' },
-  '/inventory':   { label: 'Operations',     desc: 'Products, stock & fulfillment' },
+  '/operations':  { label: 'Inventory',      desc: 'Products, stock & fulfillment' },
+  '/inventory':   { label: 'Inventory',      desc: 'Products, stock & fulfillment' },
   '/purchase':    { label: 'Purchases',      desc: 'Purchase orders & bills' },
   '/purchases':   { label: 'Purchases',      desc: 'Purchase orders & bills' },
   '/delivery':    { label: 'Delivery',       desc: 'Riders & delivery tracking' },
@@ -1262,7 +1262,7 @@ export default function Topbar() {
         ? 'Payroll, employees & time off'
         : 'Self service, leave requests & targets'
     }
-    if (pathname?.startsWith('/operations')) {
+    if (pathname?.startsWith('/operations') || pathname?.startsWith('/inventory')) {
       displayTitle.label = 'Inventory'
       displayTitle.desc = 'Products & stock levels'
     }
@@ -1532,8 +1532,8 @@ export default function Topbar() {
                     kilimall: '/kilimall',
                     contacts: '/contacts',
                     after_sales: '/aftersales',
-                    operations: '/operations',
-                    inventory: '/operations',
+                    operations: '/inventory',
+                    inventory: '/inventory',
                     purchase: '/purchases',
                     delivery: '/delivery',
                     repair: '/repairs',

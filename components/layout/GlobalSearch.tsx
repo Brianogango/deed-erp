@@ -45,7 +45,7 @@ const SHORTCUTS: Array<{ label: string; key: string; href: string; module: Modul
   { label: 'New Repair', key: 'R', href: '/repairs?quick=new', module: 'repair', icon: faScrewdriverWrench },
   { label: 'Invoices', key: 'I', href: '/finance?tab=invoices', module: 'accounting', icon: faFileInvoiceDollar },
   { label: 'POS', key: 'P', href: '/pos', module: 'pos', icon: faCashRegister },
-  { label: 'Inventory', key: 'V', href: '/operations', module: 'inventory', icon: faBoxesStacked },
+  { label: 'Inventory', key: 'V', href: '/inventory', module: 'inventory', icon: faBoxesStacked },
 ]
 
 const COMMAND_ACTIONS: Array<Pick<SearchResult, 'id' | 'title' | 'subtitle' | 'href' | 'module'> & { aliases: string[] }> = [
@@ -92,7 +92,7 @@ const MODULE_SHORTCUTS: Array<{ id: string; title: string; subtitle: string; hre
   { id: 'mod-kilimall', title: 'Kilimall', subtitle: 'Marketplace orders and settlements', href: '/kilimall', module: 'kilimall', aliases: ['kilimall', 'marketplace'] },
   { id: 'mod-contacts', title: 'Contacts', subtitle: 'Customers, vendors, and staff', href: '/contacts', module: 'contacts', aliases: ['contacts', 'customers', 'vendors'] },
   { id: 'mod-repairs', title: 'Repairs', subtitle: 'Workshop and service tickets', href: '/repairs', module: 'repair', aliases: ['repair', 'workshop'] },
-  { id: 'mod-operations', title: 'Inventory', subtitle: 'Stock control and transfers', href: '/operations', module: 'inventory', aliases: ['inventory', 'stock', 'operations'] },
+  { id: 'mod-operations', title: 'Inventory', subtitle: 'Stock control and transfers', href: '/inventory', module: 'inventory', aliases: ['inventory', 'stock', 'operations'] },
   { id: 'mod-purchases', title: 'Purchases', subtitle: 'Purchase orders and bills', href: '/purchases', module: 'purchase', aliases: ['purchases', 'procurement', 'vendors'] },
   { id: 'mod-delivery', title: 'Delivery', subtitle: 'Riders and delivery tracking', href: '/delivery', module: 'delivery', aliases: ['delivery', 'riders', 'dispatch'] },
   { id: 'mod-refurbishment', title: 'Refurbishment', subtitle: 'Internal device refurbishment', href: '/refurbishment', module: 'refurbishment', aliases: ['refurbishment', 'refurbish'] },
@@ -223,7 +223,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             subtitle: `${p.category} · SKU: ${p.sku || '—'} · Stock: ${p.stockQty ?? 0}`,
             badge: p.stockQty <= 0 ? 'Out of Stock' : p.stockQty <= (p.minStock ?? 3) ? 'Low Stock' : undefined,
             badgeColor: '#EF4444',
-            href: '/operations',
+            href: '/inventory',
             module: 'inventory',
           })
         }

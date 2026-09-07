@@ -1,6 +1,6 @@
-# Inventory / Operations — page overrides
+# Inventory — page overrides
 
-> Overrides `design-system/MASTER.md` for `/operations`.  
+> Overrides `design-system/MASTER.md` for `/inventory`.  
 > Mirrored at `design-system/deed-erp/pages/inventory.md`.
 
 **Mode:** Operate  
