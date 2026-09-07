@@ -36,7 +36,7 @@ export function ShellChromeSkeleton() {
 export function ModuleSkeleton({ label = 'Loading' }: { label?: string } = {}) {
   return (
     <div className="mod-page" role="status" aria-live="polite" aria-busy="true">
-      <p className="px-1 pb-3 text-sm font-semibold text-[var(--text-2)]">{label}…</p>
+      <p className="px-1 pb-3 text-center text-sm font-semibold text-[var(--text-2)]">{label}…</p>
       <div className="animate-pulse space-y-4">
         <div className="flex justify-between items-center">
           <div className="h-8 w-48 bg-muted rounded-lg" />
