@@ -3,12 +3,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes } from '@/lib/store'
 import { Fa } from '@/components/icons'
-import { faBook } from '@fortawesome/free-solid-svg-icons'
-import { Select } from '@/components/ui'
+import { faBook, faChevronDown, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 
 type GlRow = {
   id: string
+  accountCode: string
+  accountName: string
   entryRef: string
   entryDate: string
   description: string
@@ -37,19 +38,37 @@ export default function GeneralLedgerTab() {
     glAccount, setGlAccount, glDateFrom, setGlDateFrom, glDateTo, setGlDateTo,
   } = useAccounting()
 
+  const initialAccount = accounts.find(a => a.code === glAccount || a.name === glAccount)?.code
+    || (glAccount && /^\d/.test(glAccount) ? glAccount : '')
+  const [selectedAccountCodes, setSelectedAccountCodes] = useState<string[]>(initialAccount ? [initialAccount] : [])
+  const [accountSearch, setAccountSearch] = useState('')
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [source, setSource] = useState<'blob' | 'prisma'>('prisma')
-  const [prismaLines, setPrismaLines] = useState<PrismaGlLine[]>([])
+  const [prismaLines, setPrismaLines] = useState<GlRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const selectedAccount = useMemo(
-    () => accounts.find(a => a.code === glAccount || a.name === glAccount) ?? null,
-    [accounts, glAccount],
+  const selectedAccounts = useMemo(
+    () => selectedAccountCodes.map(code => accounts.find(a => a.code === code)).filter(Boolean) as typeof accounts,
+    [accounts, selectedAccountCodes],
   )
-  const accountCode = selectedAccount?.code || (glAccount && /^\d/.test(glAccount) ? glAccount : '')
+  const filteredAccounts = useMemo(() => {
+    const query = accountSearch.trim().toLowerCase()
+    if (!query) return accounts
+    return accounts.filter(account =>
+      account.code.toLowerCase().includes(query) || account.name.toLowerCase().includes(query),
+    )
+  }, [accounts, accountSearch])
+
+  const updateSelectedAccounts = (codes: string[]) => {
+    const unique = Array.from(new Set(codes))
+    setSelectedAccountCodes(unique)
+    // Preserve the existing shared finance filter contract for links/bookmarks.
+    setGlAccount(unique[0] || '')
+  }
 
   useEffect(() => {
-    if (source !== 'prisma' || !accountCode) {
+    if (source !== 'prisma' || selectedAccountCodes.length === 0) {
       setPrismaLines([])
       setError(null)
       return
@@ -59,13 +78,35 @@ export default function GeneralLedgerTab() {
       setLoading(true)
       setError(null)
       try {
-        const params = new URLSearchParams({ accountCode })
-        if (glDateFrom) params.set('dateFrom', glDateFrom)
-        if (glDateTo) params.set('dateTo', glDateTo)
-        const res = await fetch(`/api/accounting/general-ledger?${params}`)
-        if (!res.ok) throw new Error('Failed to load general ledger')
-        const data = await res.json()
-        if (!cancelled) setPrismaLines(Array.isArray(data.lines) ? data.lines : [])
+        const results = await Promise.all(selectedAccountCodes.map(async accountCode => {
+          const params = new URLSearchParams({ accountCode })
+          if (glDateFrom) params.set('dateFrom', glDateFrom)
+          if (glDateTo) params.set('dateTo', glDateTo)
+          const res = await fetch(`/api/accounting/general-ledger?${params}`)
+          if (!res.ok) throw new Error(`Failed to load account ${accountCode}`)
+          const data = await res.json()
+          const account = accounts.find(item => item.code === accountCode)
+          return (Array.isArray(data.lines) ? data.lines : []).map((line: PrismaGlLine) => ({
+            id: `${accountCode}-${line.id}`,
+            accountCode,
+            accountName: account?.name || accountCode,
+            entryRef: line.entryRef,
+            entryDate: line.entryDate,
+            description: line.label || line.description,
+            entryDesc: line.description,
+            source: line.sourceType,
+            debit: line.debit,
+            credit: line.credit,
+            runningBalance: line.runningBalance,
+          }))
+        }))
+        if (!cancelled) {
+          setPrismaLines(results.flat().sort((a, b) =>
+            a.entryDate.localeCompare(b.entryDate)
+            || a.accountCode.localeCompare(b.accountCode)
+            || a.entryRef.localeCompare(b.entryRef),
+          ))
+        }
       } catch (err) {
         if (!cancelled) {
           setPrismaLines([])
@@ -77,131 +118,177 @@ export default function GeneralLedgerTab() {
     }
     void load()
     return () => { cancelled = true }
-  }, [source, accountCode, glDateFrom, glDateTo])
+  }, [source, selectedAccountCodes, glDateFrom, glDateTo, accounts])
 
-  const blobGlWithBalance = useMemo(() => {
-    if (!glAccount) return [] as GlRow[]
-    const match = glAccount.toLowerCase()
-    const nameMatch = (selectedAccount?.name || '').toLowerCase()
-    let running = 0
-    const res: GlRow[] = []
-    for (const e of journalEntries) {
-      for (const l of e.lines) {
-        const account = String(l.account || '').toLowerCase()
-        if (account.includes(match) || (nameMatch && account.includes(nameMatch))) {
-          running += (l.debit || 0) - (l.credit || 0)
-          res.push({
-            id: `${e.id}-${l.account}-${res.length}`,
-            entryRef: e.ref,
-            entryDate: e.date,
-            description: l.description,
-            entryDesc: e.description,
-            source: e.source,
-            debit: l.debit || 0,
-            credit: l.credit || 0,
-            runningBalance: running,
-          })
-        }
+  const blobRows = useMemo(() => {
+    if (selectedAccountCodes.length === 0) return [] as GlRow[]
+    const selected = selectedAccounts.map(account => ({
+      code: account.code,
+      name: account.name,
+      codeMatch: account.code.toLowerCase(),
+      nameMatch: account.name.toLowerCase(),
+    }))
+    const balances = new Map<string, number>()
+    const rows: GlRow[] = []
+    for (const entry of [...journalEntries].sort((a, b) => a.date.localeCompare(b.date))) {
+      for (const line of entry.lines) {
+        const lineAccount = String(line.account || '').toLowerCase()
+        const account = selected.find(item =>
+          lineAccount.includes(item.codeMatch) || lineAccount.includes(item.nameMatch),
+        )
+        if (!account) continue
+        const runningBalance = (balances.get(account.code) || 0) + (line.debit || 0) - (line.credit || 0)
+        balances.set(account.code, runningBalance)
+        rows.push({
+          id: `${account.code}-${entry.id}-${rows.length}`,
+          accountCode: account.code,
+          accountName: account.name,
+          entryRef: entry.ref,
+          entryDate: entry.date,
+          description: line.description,
+          entryDesc: entry.description,
+          source: entry.source,
+          debit: line.debit || 0,
+          credit: line.credit || 0,
+          runningBalance,
+        })
       }
     }
-    return res
-  }, [glAccount, journalEntries, selectedAccount?.name])
+    return rows.filter(line =>
+      (!glDateFrom || line.entryDate >= glDateFrom) && (!glDateTo || line.entryDate <= glDateTo),
+    )
+  }, [selectedAccountCodes, selectedAccounts, journalEntries, glDateFrom, glDateTo])
 
-  const filteredBlob = useMemo(() =>
-    blobGlWithBalance.filter(l => (!glDateFrom || l.entryDate >= glDateFrom) && (!glDateTo || l.entryDate <= glDateTo)),
-  [blobGlWithBalance, glDateFrom, glDateTo])
-
-  const rows: GlRow[] = source === 'prisma'
-    ? prismaLines.map(l => ({
-        id: l.id,
-        entryRef: l.entryRef,
-        entryDate: l.entryDate,
-        description: l.label || l.description,
-        entryDesc: l.description,
-        source: l.sourceType,
-        debit: l.debit,
-        credit: l.credit,
-        runningBalance: l.runningBalance,
-      }))
-    : filteredBlob
+  const rows = source === 'prisma' ? prismaLines : blobRows
 
   const columns: ColumnDef<GlRow>[] = [
     {
+      key: 'account', label: 'Account', priority: 1, width: '150px',
+      render: line => <span className="text-[11px]"><strong>{line.accountCode}</strong> — {line.accountName}</span>,
+      exportValue: line => `${line.accountCode} — ${line.accountName}`,
+    },
+    {
       key: 'ref', label: 'Journal ref', priority: 1, width: '120px',
-      render: l => <span className="font-mono text-[11px] text-blue-500">{l.entryRef}</span>,
-      exportValue: l => l.entryRef,
+      render: line => <span className="font-mono text-[11px] text-blue-500">{line.entryRef}</span>,
+      exportValue: line => line.entryRef,
     },
     {
       key: 'date', label: 'Date', priority: 2, width: '100px',
-      render: l => <span className="text-[11px] text-t3">{fmtDate(l.entryDate)}</span>,
-      exportValue: l => l.entryDate,
+      render: line => <span className="text-[11px] text-t3">{fmtDate(line.entryDate)}</span>,
+      exportValue: line => line.entryDate,
     },
     {
       key: 'description', label: 'Description', priority: 1, width: '1.4fr',
-      render: l => <span className="text-[11px]">{l.description || l.entryDesc}</span>,
-      exportValue: l => l.description || l.entryDesc,
+      render: line => <span className="text-[11px]">{line.description || line.entryDesc}</span>,
+      exportValue: line => line.description || line.entryDesc,
     },
     {
       key: 'source', label: 'Source', priority: 3, width: '1fr',
-      render: l => <span className="text-[11px] capitalize text-t3">{l.source}</span>,
-      exportValue: l => l.source,
+      render: line => <span className="text-[11px] capitalize text-t3">{line.source}</span>,
+      exportValue: line => line.source,
     },
     {
       key: 'debit', label: 'Debit', priority: 1, width: '100px', align: 'right',
-      render: l => <span className="font-mono text-[11px] text-green-600">{l.debit ? fmtKes(l.debit) : '—'}</span>,
-      exportValue: l => l.debit || '',
+      render: line => <span className="font-mono text-[11px] text-green-600">{line.debit ? fmtKes(line.debit) : '—'}</span>,
+      exportValue: line => line.debit || '',
     },
     {
       key: 'credit', label: 'Credit', priority: 1, width: '100px', align: 'right',
-      render: l => <span className="font-mono text-[11px] text-red-500">{l.credit ? fmtKes(l.credit) : '—'}</span>,
-      exportValue: l => l.credit || '',
+      render: line => <span className="font-mono text-[11px] text-red-500">{line.credit ? fmtKes(line.credit) : '—'}</span>,
+      exportValue: line => line.credit || '',
     },
     {
-      key: 'balance', label: 'Balance', priority: 1, width: '110px', align: 'right',
-      render: l => (
-        <span className={`font-mono text-[11px] font-semibold ${l.runningBalance < 0 ? 'text-red-500' : ''}`}>
-          {fmtKes(l.runningBalance)}
-        </span>
-      ),
-      exportValue: l => l.runningBalance,
+      key: 'balance', label: 'Account balance', priority: 1, width: '120px', align: 'right',
+      render: line => <span className={`font-mono text-[11px] font-semibold ${line.runningBalance < 0 ? 'text-red-500' : ''}`}>{fmtKes(line.runningBalance)}</span>,
+      exportValue: line => line.runningBalance,
     },
   ]
 
-  const accountLabel = selectedAccount
-    ? `${selectedAccount.code} — ${selectedAccount.name}`
-    : glAccount
+  const exportAccountLabel = selectedAccounts.length === 1
+    ? `${selectedAccounts[0].code} — ${selectedAccounts[0].name}`
+    : `${selectedAccounts.length} selected accounts`
+
+  const closingBalances = useMemo(() => {
+    const values = new Map<string, GlRow>()
+    rows.forEach(row => values.set(row.accountCode, row))
+    return Array.from(values.values()).sort((a, b) => a.accountCode.localeCompare(b.accountCode))
+  }, [rows])
 
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-        <Select
-          value={accountCode || glAccount}
-          onChange={setGlAccount}
-          options={[
-            { value: '', label: 'Select an account to view...' },
-            ...accounts.map(a => ({ value: a.code, label: `${a.code} — ${a.name}` })),
-          ]}
-        />
-        <select
-          className="form-select text-[11px] py-1.5"
-          value={source}
-          onChange={e => setSource(e.target.value as 'blob' | 'prisma')}
-          aria-label="General ledger source"
-        >
+        <div className="relative min-w-[260px]">
+          <button
+            type="button"
+            className="form-select w-full text-left flex items-center justify-between gap-2 text-[11px] py-1.5"
+            onClick={() => setAccountPickerOpen(open => !open)}
+            aria-haspopup="listbox"
+            aria-expanded={accountPickerOpen}
+          >
+            <span className="truncate">
+              {selectedAccounts.length === 0
+                ? 'Select or search accounts…'
+                : selectedAccounts.length === 1
+                  ? `${selectedAccounts[0].code} — ${selectedAccounts[0].name}`
+                  : `${selectedAccounts.length} accounts selected`}
+            </span>
+            <Fa icon={faChevronDown} />
+          </button>
+          {accountPickerOpen && (
+            <div className="absolute z-[100] top-full left-0 mt-1 w-[360px] max-w-[90vw] rounded-md border bg-white shadow-lg" style={{ borderColor: 'var(--border)' }}>
+              <div className="p-2 border-b" style={{ borderColor: 'var(--border-lt)' }}>
+                <input
+                  autoFocus
+                  className="form-input w-full text-[11px] py-1.5"
+                  placeholder="Search account code or name…"
+                  value={accountSearch}
+                  onChange={event => setAccountSearch(event.target.value)}
+                />
+              </div>
+              <div className="max-h-64 overflow-y-auto p-1" role="listbox" aria-multiselectable="true">
+                {filteredAccounts.map(account => {
+                  const checked = selectedAccountCodes.includes(account.code)
+                  return (
+                    <label key={account.code} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[var(--bg-muted)] cursor-pointer text-[11px]">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => updateSelectedAccounts(
+                          checked
+                            ? selectedAccountCodes.filter(code => code !== account.code)
+                            : [...selectedAccountCodes, account.code],
+                        )}
+                      />
+                      <span><strong>{account.code}</strong> — {account.name}</span>
+                    </label>
+                  )
+                })}
+                {filteredAccounts.length === 0 && <p className="px-2 py-4 text-center text-[11px] text-t3">No accounts match your search</p>}
+              </div>
+              <div className="flex items-center justify-between gap-2 p-2 border-t" style={{ borderColor: 'var(--border-lt)' }}>
+                <button type="button" className="sp-btn text-[11px]" onClick={() => updateSelectedAccounts([])}>
+                  <Fa icon={faXmark} /> Clear
+                </button>
+                <button type="button" className="sp-btn sp-btn-primary text-[11px]" onClick={() => setAccountPickerOpen(false)}>Done</button>
+              </div>
+            </div>
+          )}
+        </div>
+        <select className="form-select text-[11px] py-1.5" value={source} onChange={event => setSource(event.target.value as 'blob' | 'prisma')} aria-label="General ledger source">
           <option value="prisma">Prisma (KES posted)</option>
           <option value="blob">Client blob</option>
         </select>
-        <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={e => setGlDateFrom(e.target.value)} title="From Date" />
-        <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateTo} onChange={e => setGlDateTo(e.target.value)} title="To Date" />
-        {glAccount && <span className="text-[11px] text-t3">{rows.length} entries</span>}
+        <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={event => setGlDateFrom(event.target.value)} title="From Date" />
+        <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateTo} onChange={event => setGlDateTo(event.target.value)} title="To Date" />
+        {selectedAccountCodes.length > 0 && <span className="text-[11px] text-t3">{rows.length} entries</span>}
         {source === 'prisma' && loading && <span className="text-[11px] text-t3">Loading…</span>}
         {source === 'prisma' && error && <span className="text-[11px] text-red-500">{error}</span>}
       </div>
 
-      {!glAccount ? (
+      {selectedAccountCodes.length === 0 ? (
         <div className="py-16 text-center">
           <Fa icon={faBook} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
-          <p className="text-xs text-t3">Select an account above to view its ledger</p>
+          <p className="text-xs text-t3">Select one or several accounts to view their ledger</p>
         </div>
       ) : (
         <>
@@ -209,17 +296,19 @@ export default function GeneralLedgerTab() {
             tableId="general-ledger"
             columns={columns}
             rows={rows}
-            rowKey={l => l.id}
-            hideSearch
-            emptyMessage={source === 'prisma' ? 'No posted Prisma lines for this account or period' : 'No journal lines found for this account or period'}
-            exportTitle={`General Ledger — ${accountLabel}`}
-            exportFilename={`gl-${String(accountLabel).replace(/\s+/g, '-')}`}
+            rowKey={line => line.id}
+            emptyMessage={source === 'prisma' ? 'No posted Prisma lines for the selected accounts or period' : 'No journal lines found for the selected accounts or period'}
+            exportTitle={`General Ledger — ${exportAccountLabel}`}
+            exportFilename={`general-ledger-${selectedAccountCodes.join('-')}`}
           />
-          {rows.length > 0 && (
-            <div className="px-4 py-2 border-t border-[var(--border-lt)] text-right text-[11px] font-semibold">
-              Closing Balance: <span className="font-mono ml-2 text-purple-600">
-                {fmtKes(rows[rows.length - 1].runningBalance)}
-              </span>
+          {closingBalances.length > 0 && (
+            <div className="px-4 py-2 border-t border-[var(--border-lt)] flex flex-wrap justify-end gap-x-5 gap-y-1 text-[11px]">
+              {closingBalances.map(line => (
+                <span key={line.accountCode}>
+                  <strong>{line.accountCode} closing:</strong>{' '}
+                  <span className={`font-mono font-semibold ${line.runningBalance < 0 ? 'text-red-500' : 'text-purple-600'}`}>{fmtKes(line.runningBalance)}</span>
+                </span>
+              ))}
             </div>
           )}
         </>
