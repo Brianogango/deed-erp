@@ -613,7 +613,7 @@ export default function CompanyProperty() {
           status={STATUS_BADGE[selected.status]}
           statusLabel={STATUS_LABELS[selected.status]}
           onBack={() => setRecordId(null)}
-          backLabel="All property"
+          backLabel="All assets"
           primaryAction={canManage && live ? (
             <PrimaryActionButton onClick={() => { setActionLocation(selected.locationName); setAction('move') }}>
               Move
@@ -703,7 +703,7 @@ export default function CompanyProperty() {
 
         {showForm && (
           <Modal
-            title={editingId ? `Edit ${selected.ref}` : 'Record property'}
+            title={editingId ? `Edit ${selected.ref}` : 'Record asset'}
             subtitle="Office furniture and fittings — not trading stock"
             variant="workspace"
             onClose={() => setShowForm(false)}
@@ -836,7 +836,7 @@ export default function CompanyProperty() {
         count={items.length}
         color="var(--navy)"
         primaryAction={canManage ? (
-          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreate} hideLabelOnMobile={false} aria-label="Record property">
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreate} hideLabelOnMobile={false} aria-label="Record asset">
             Record item
           </PrimaryActionButton>
         ) : canRunDepreciation ? (
@@ -893,7 +893,7 @@ export default function CompanyProperty() {
           primaryFilters={statusFilters}
           onClearFilters={() => patchListUi({ q: null, status: null, page: null })}
           hideColumnFilters
-          emptyMessage={search || filter !== 'all' ? 'No matching property' : 'No company property recorded'}
+          emptyMessage={search || filter !== 'all' ? 'No matching assets' : 'No company assets recorded'}
           emptyAction={!search && filter === 'all' && canManage ? (
             <button type="button" onClick={openCreate} className="mt-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black uppercase tracking-wider hover:bg-blue-700">
               + Record item
@@ -907,7 +907,7 @@ export default function CompanyProperty() {
 
       {showForm && (
         <Modal
-          title="Record property"
+          title="Record asset"
           subtitle="Office furniture and fittings — not trading stock"
           onClose={() => setShowForm(false)}
           width={720}

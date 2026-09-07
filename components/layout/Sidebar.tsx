@@ -89,7 +89,7 @@ export default function Sidebar() {
     { label: 'Outsource',     href: '/outsource',     id: 'outsource',     icon: faArrowsRotate },
     { label: 'After-Sales',   href: '/aftersales',    id: 'after_sales',   icon: faShieldHalved },
     { label: 'Holdovers',     href: '/holdovers',     id: 'holdovers',     icon: faHandHolding },
-    { label: 'Property',      href: '/property',      id: 'company_property', icon: faChair },
+    { label: 'Asset Management', href: '/property',      id: 'company_property', icon: faChair },
     { label: 'Finance',       href: '/finance',       id: 'accounting',    icon: faBuildingColumns },
     { label: 'Deposits',      href: '/deposits',      id: 'deposits',      icon: faMoneyBillWave },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
