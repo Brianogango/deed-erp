@@ -31255,3 +31255,64 @@ body:has(.crm-workspace) [role="dialog"] > div {
   color: var(--navy) !important;
   box-shadow: none !important;
 }
+
+
+/* Consistent action-button sizing.
+   Default: 40px. Dense rows/toolbars: 36px. Touch layouts: 44px. */
+:where(.btn, .btn-primary, .btn-secondary, .btn-outline, .btn-danger, .btn-destructive, .btn-ghost, .btn-tertiary, .sp-btn-primary, .sp-btn-ghost, .acct-save-btn)
+:not(.mod-tab):not(.sp-tab):not(.icon-btn):not(.row-action-btn):not(.mobile-row-toggle) {
+  box-sizing: border-box;
+  min-height: 40px !important;
+  padding: 0.55rem 0.9rem !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem !important;
+  border-radius: 0.625rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  line-height: 1.1 !important;
+  white-space: nowrap;
+}
+:where(.btn, .btn-primary, .btn-secondary, .btn-outline, .btn-danger, .btn-destructive, .btn-ghost, .btn-tertiary, .sp-btn-primary, .sp-btn-ghost, .acct-save-btn)
+:not(.mod-tab):not(.sp-tab):not(.icon-btn):not(.row-action-btn):not(.mobile-row-toggle) > svg {
+  width: 14px !important;
+  height: 14px !important;
+  flex: 0 0 auto;
+}
+:where(.dt-toolbar, .table-row, .data-table-actions, .compact-actions, .section-actions--compact)
+:where(.btn, .btn-primary, .btn-secondary, .btn-outline, .btn-danger, .btn-destructive, .btn-ghost, .btn-tertiary, .sp-btn-primary, .sp-btn-ghost)
+:not(.icon-btn):not(.row-action-btn) {
+  min-height: 36px !important;
+  padding: 0.45rem 0.75rem !important;
+  border-radius: 0.55rem !important;
+  font-size: 0.7rem !important;
+}
+:where(.icon-btn, .row-action-btn) {
+  box-sizing: border-box;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.625rem;
+}
+:where(.icon-btn, .row-action-btn) > svg {
+  width: 16px;
+  height: 16px;
+}
+@media (max-width: 639px) {
+  :where(.btn, .btn-primary, .btn-secondary, .btn-outline, .btn-danger, .btn-destructive, .btn-ghost, .btn-tertiary, .sp-btn-primary, .sp-btn-ghost, .acct-save-btn)
+  :not(.mod-tab):not(.sp-tab):not(.icon-btn):not(.row-action-btn):not(.mobile-row-toggle) {
+    min-height: 44px !important;
+    padding: 0.65rem 0.9rem !important;
+    font-size: 0.78rem !important;
+  }
+  :where(.icon-btn, .row-action-btn) {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+}
