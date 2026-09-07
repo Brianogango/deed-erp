@@ -156,7 +156,7 @@ export default function ComputerAidCustodyPanel() {
                   {rowSerials.map(serial => <label key={serial.id}><input type="checkbox" checked={item.serialIds.includes(serial.id)} onChange={() => patchTransferItem(productId, { serialIds: item.serialIds.includes(serial.id) ? item.serialIds.filter(id => id !== serial.id) : [...item.serialIds, serial.id] })} /><span>{serial.serial}</span></label>)}
                   {!rowSerials.length && <small>No warehouse serials available.</small>}
                 </div>
-              ) : <Input type="number" value={item.qty} onChange={qty => patchTransferItem(productId, { qty })} min="1" />}
+              ) : <Input type="number" value={item.qty} onChange={qty => patchTransferItem(productId, { qty })} />}
               <button type="button" aria-label={`Remove ${rowProduct.name}`} onClick={() => toggleTransferProduct(productId)}>×</button>
             </div>
           })}
