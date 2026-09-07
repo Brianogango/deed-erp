@@ -26,9 +26,5 @@ export function scheduleCatalogHealOnce(): void {
     })()
   }
 
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(run, { timeout: 20_000 })
-  } else {
-    window.setTimeout(run, 8_000)
-  }
+  window.setTimeout(run, 8_000)
 }
