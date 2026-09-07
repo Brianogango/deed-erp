@@ -12,7 +12,9 @@ import Topbar from '@/components/layout/Topbar'
 import JarvisPanel from '@/components/jarvis/JarvisPanel'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { persistClientStoreValue } from '@/lib/client-store-cache'
+import { markRouteDataReady, useRouteDataReady } from '@/lib/route-data-ready'
 import { ModuleRenderBoundary } from '@/components/erp'
+import { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -179,12 +181,15 @@ function AppBootSkeleton() {
   // viewport (the classic "blank page after login" look).
   return (
     <div
-      className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)] animate-pulse"
+      className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)]"
       style={{ background: 'var(--bg-page, #F4F6FB)' }}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
     >
       <aside className="hidden md:flex w-sidebar flex-col border-r border-border-lt bg-card p-4">
-        <div className="h-10 w-32 rounded-xl bg-muted mb-6" />
-        <div className="space-y-3">
+        <div className="h-10 w-32 rounded-xl bg-muted mb-6 animate-pulse" />
+        <div className="space-y-3 animate-pulse">
           {Array.from({ length: 9 }).map((_, i) => (
             <div key={i} className="h-9 rounded-xl bg-muted" style={{ width: `${70 + (i % 3) * 10}%` }} />
           ))}
@@ -192,24 +197,25 @@ function AppBootSkeleton() {
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="h-topbar border-b border-border-lt bg-card px-4 flex items-center justify-between">
-          <div className="h-8 w-40 rounded-xl bg-muted" />
-          <div className="flex gap-2">
+          <div className="h-8 w-40 rounded-xl bg-muted animate-pulse" />
+          <div className="flex gap-2 animate-pulse">
             <div className="h-8 w-8 rounded-full bg-muted" />
             <div className="h-8 w-24 rounded-xl bg-muted" />
           </div>
         </div>
         <main className="flex-1 p-2 md:p-2.5 lg:p-3">
           <div className="mod-page gap-4">
-            <div className="mod-header">
+            <p className="px-1 text-sm font-semibold text-[var(--text-2)]">Loading…</p>
+            <div className="mod-header animate-pulse">
               <div className="h-9 w-56 rounded-xl bg-muted" />
               <div className="h-9 w-28 rounded-xl bg-muted" />
             </div>
-            <div className="stat-grid-4 px-4 py-3">
+            <div className="stat-grid-4 px-4 py-3 animate-pulse">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="h-24 rounded-2xl bg-muted" />
               ))}
             </div>
-            <div className="mx-4 h-80 rounded-2xl bg-muted" />
+            <div className="mx-4 h-80 rounded-2xl bg-muted animate-pulse" />
           </div>
         </main>
       </div>
@@ -252,6 +258,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const hydratedRoutesRef = useRef<Set<string>>(new Set())
   const lastRouteRefreshRef = useRef(0)
   const [routeRefreshTick, setRouteRefreshTick] = useState(0)
+  const routeReady = useRouteDataReady(pathname || '/')
 
   // Topbar dispatches this event on its DIA button click — kept as a
   // window event rather than a prop so Topbar's signature never changes.
@@ -264,6 +271,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
     pathname === '/track' ||
     pathname.startsWith('/track/') ||
     pathname.startsWith('/portal/repair')
+  const showRouteSkeleton = !isPublicRepairTracker && !routeReady
 
   // Legacy module tables do not yet render their compact-card labels
   // declaratively. Keep only this compatibility adapter until those modules
@@ -456,19 +464,37 @@ function AppContent({ children }: { children: React.ReactNode }) {
   // Start app_state hydration as soon as we have a session — do not wait for
   // the mounted skeleton tick. Also notify StoreProvider so Prisma boot APIs
   // for the new route can warm without a full remount.
+  //
+  // Do not mark the route "warmed" until the GET settles — otherwise a fast
+  // re-entry can skip a still-in-flight fetch. Cached keys still fetch with
+  // If-None-Match so the module can paint immediately. Visibility refetch
+  // deletes from hydratedRoutesRef but never from readyRoutes, so an already
+  // shown module is not replaced with a skeleton on tab focus.
   useEffect(() => {
     if (isPublicRepairTracker || !currentUserId) return
     const route = pathname || '/'
     window.dispatchEvent(new CustomEvent('deed_route_change', { detail: { pathname: route } }))
-    if (hydratedRoutesRef.current.has(route)) {
-      markRouteWarmed(route)
-      return
-    }
-    hydratedRoutesRef.current.add(route)
-    lastRouteRefreshRef.current = Date.now()
 
     const keys = appStateKeysForRoute(route)
-    if (keys.length === 0) return
+    if (keys.length === 0) {
+      hydratedRoutesRef.current.add(route)
+      markRouteWarmed(route)
+      markRouteDataReady(route)
+      return
+    }
+
+    const allKeysCached = keys.every(key => {
+      try { return window.localStorage.getItem(key) !== null } catch { return false }
+    })
+    if (allKeysCached) markRouteDataReady(route)
+
+    if (hydratedRoutesRef.current.has(route)) {
+      markRouteWarmed(route)
+      markRouteDataReady(route)
+      return
+    }
+
+    lastRouteRefreshRef.current = Date.now()
 
     const dirtyKeys = (() => {
       try {
@@ -487,9 +513,18 @@ function AppContent({ children }: { children: React.ReactNode }) {
     const storedEtag = (() => {
       try { return window.localStorage.getItem(etagStorageKey) } catch { return null }
     })()
-    const allKeysCached = keys.every(key => window.localStorage.getItem(key) !== null)
+
+    const controller = new AbortController()
+    const paintCap = window.setTimeout(() => markRouteDataReady(route), 10_000)
+
+    const settle = () => {
+      hydratedRoutesRef.current.add(route)
+      markRouteWarmed(route)
+      markRouteDataReady(route)
+    }
 
     fetch(`/api/store?keys=${encodeURIComponent(keys.join(','))}`, {
+      signal: controller.signal,
       headers: storedEtag && allKeysCached ? { 'If-None-Match': storedEtag } : undefined,
     })
       .then(res => {
@@ -503,7 +538,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       })
       .then((state: Record<string, unknown> | null) => {
         if (!state) {
-          markRouteWarmed(route)
+          settle()
           return
         }
         // Collection keys that must be arrays — writing an object/null here is what
@@ -533,11 +568,21 @@ function AppContent({ children }: { children: React.ReactNode }) {
           }
           window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: serialized } }))
         }
-        markRouteWarmed(route)
+        settle()
       })
-      .catch(() => {
-        hydratedRoutesRef.current.delete(route)
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (err instanceof Error && err.name === 'AbortError') return
+        markRouteDataReady(route)
       })
+      .finally(() => {
+        window.clearTimeout(paintCap)
+      })
+
+    return () => {
+      controller.abort()
+      window.clearTimeout(paintCap)
+    }
   }, [pathname, currentUserId, isPublicRepairTracker, routeRefreshTick])
 
   // Patch legacy tables whenever module content mutates (tabs, lazy panels,
@@ -766,11 +811,12 @@ function AppContent({ children }: { children: React.ReactNode }) {
             transition-all duration-200
           "
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+          aria-busy={showRouteSkeleton || undefined}
         >
           <div id="module-workspace-root" className="pointer-events-none absolute inset-0 z-[80]" />
           <div className="min-w-0">
             <ModuleRenderBoundary pathname={pathname || '/'}>
-              {children}
+              {showRouteSkeleton ? <ModuleSkeleton label="Loading" /> : children}
             </ModuleRenderBoundary>
           </div>
         </main>
