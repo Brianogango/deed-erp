@@ -31208,3 +31208,50 @@ body:has(.crm-workspace) [role="dialog"] > div {
     max-width: 112px !important;
   }
 }
+
+
+/* Global primary-action colour: Deed light blue.
+   Excludes controls using btn-primary only as an active-tab marker. */
+:where(.btn-primary, .sp-btn-primary, .acct-save-btn):not(.mod-tab):not(.sp-tab),
+.finance-workspace > .mod-header .section-actions .btn-primary,
+.finance-workspace .btn-primary,
+.finance-invoice-detail .invoice-detail__header-actions .btn-primary,
+.inventory-pilot .mod-header .btn-primary,
+.sales-pilot .mod-header .btn-primary,
+.sales-pilot.sales-doc .sales-workbench .btn-primary,
+.sales-pilot.sales-doc .sales-workbench .sp-btn-primary {
+  border-color: #00AEEF !important;
+  background: #00AEEF !important;
+  color: #06264B !important;
+  box-shadow: 0 4px 12px rgba(0, 174, 239, .20) !important;
+}
+:where(.btn-primary, .sp-btn-primary, .acct-save-btn):not(.mod-tab):not(.sp-tab):hover,
+.finance-workspace > .mod-header .section-actions .btn-primary:hover,
+.finance-workspace .btn-primary:hover,
+.finance-invoice-detail .invoice-detail__header-actions .btn-primary:hover,
+.inventory-pilot .mod-header .btn-primary:hover,
+.sales-pilot .mod-header .btn-primary:hover,
+.sales-pilot.sales-doc .sales-workbench .btn-primary:hover,
+.sales-pilot.sales-doc .sales-workbench .sp-btn-primary:hover {
+  border-color: #0098D4 !important;
+  background: #0098D4 !important;
+  color: #041F42 !important;
+  box-shadow: 0 6px 16px rgba(0, 152, 212, .26) !important;
+}
+:where(.btn-primary, .sp-btn-primary, .acct-save-btn):not(.mod-tab):not(.sp-tab):focus-visible {
+  outline: 3px solid rgba(0, 174, 239, .28) !important;
+  outline-offset: 2px;
+}
+:where(.btn-primary, .sp-btn-primary, .acct-save-btn):not(.mod-tab):not(.sp-tab):disabled,
+:where(.btn-primary, .sp-btn-primary, .acct-save-btn):not(.mod-tab):not(.sp-tab)[aria-disabled='true'] {
+  border-color: #7DD8F7 !important;
+  background: #7DD8F7 !important;
+  color: rgba(6, 38, 75, .62) !important;
+  box-shadow: none !important;
+}
+.finance-cashbook-view-tabs > .btn-primary {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--navy) !important;
+  box-shadow: none !important;
+}
