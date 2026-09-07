@@ -25,11 +25,16 @@ export function keysAreCached(keys: string[]): boolean {
 /** Apply a GET /api/store payload into localStorage and notify the client store. */
 export function applyHydratedStoreState(
   state: Record<string, unknown> | null | undefined,
-  dirtyKeys: Set<string>,
+  dirtyKeys?: Set<string>,
 ): void {
   if (!state) return
+  // Always re-read dirty keys at apply time. The loading gate can release
+  // after the critical GET, so the user may edit a deferred collection while
+  // that second fetch is still in flight.
+  const skip = new Set(dirtyKeys)
+  for (const key of readDirtyStoreKeys()) skip.add(key)
   for (const [key, value] of Object.entries(state)) {
-    if (!key.startsWith('deed_') || dirtyKeys.has(key)) continue
+    if (!key.startsWith('deed_') || skip.has(key)) continue
     let serialized: string
     try {
       serialized = typeof value === 'string' ? value : JSON.stringify(value)
@@ -40,6 +45,20 @@ export function applyHydratedStoreState(
       try {
         const parsed = typeof value === 'string' ? JSON.parse(serialized) : value
         if (!Array.isArray(parsed)) continue
+        // Never replace a populated cache with an empty GET — that is the KPI
+        // 0-flash across navigations when a page of the collection 404s or
+        // returns `{ items: [] }` before the real page lands.
+        if (parsed.length === 0) {
+          const existing = window.localStorage.getItem(key)
+          if (existing) {
+            try {
+              const localParsed = JSON.parse(existing)
+              if (Array.isArray(localParsed) && localParsed.length > 0) continue
+            } catch {
+              /* existing blob unreadable — allow empty */
+            }
+          }
+        }
       } catch {
         continue
       }
@@ -57,10 +76,9 @@ export function applyHydratedStoreState(
 export async function fetchAndApplyStoreKeys(opts: {
   keys: string[]
   etagStorageKey: string
-  dirtyKeys: Set<string>
   signal?: AbortSignal
 }): Promise<'applied' | 'not-modified' | 'error'> {
-  const { keys, etagStorageKey, dirtyKeys, signal } = opts
+  const { keys, etagStorageKey, signal } = opts
   if (keys.length === 0) return 'not-modified'
 
   const storedEtag = (() => {
@@ -79,6 +97,6 @@ export async function fetchAndApplyStoreKeys(opts: {
     if (etag) window.localStorage.setItem(etagStorageKey, etag)
   } catch { /* storage full — conditional fetch just won't apply next time */ }
   const state = await res.json() as Record<string, unknown>
-  applyHydratedStoreState(state, dirtyKeys)
+  applyHydratedStoreState(state)
   return 'applied'
 }

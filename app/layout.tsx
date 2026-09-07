@@ -5,11 +5,6 @@ import '@/components/erp/mobile-chrome.css'
 import '@/components/erp/overlay-stacking.css'
 import '@/components/erp/inventory-stock-row-alignment.css'
 import type { Metadata, Viewport } from 'next'
-import { getServerSession } from '@/lib/auth/server'
-import { listPublicUsers } from '@/lib/auth/users-repository'
-import { PUBLIC_USERS } from '@/lib/auth/public-users'
-import { loadAppState } from '@/lib/server-store'
-import AppShell from '@/components/AppShell'
 import SwRegister from '@/components/SwRegister'
 import ClientStoreShapeGuard from '@/components/ClientStoreShapeGuard'
 import VersionDriftBanner from '@/components/layout/VersionDriftBanner'
@@ -45,46 +40,18 @@ export const viewport: Viewport = {
 const htmlClassName = `${robotoFlex.variable} ${openSans.variable} ${dmMono.variable}`
 const bodyClassName = 'bg-bg text-t1 antialiased overflow-hidden selection:bg-navy-500 selection:text-white'
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession()
-  const visregBypassAuth =
-    process.env.NODE_ENV !== 'production' &&
-    process.env.VISREG_BYPASS_AUTH === 'true'
-
-  if (!session?.user && !visregBypassAuth) {
-    return (
-      <html lang="en" className={htmlClassName}>
-        <body className={bodyClassName} data-build={getServerBuildId()}>
-          <ClientStoreShapeGuard />
-          <SwRegister />
-          {children}
-        </body>
-      </html>
-    )
-  }
-
-  const fallbackUser = PUBLIC_USERS.find(user => user.username === 'brian') ?? PUBLIC_USERS[0]
-  const shellUser = session?.user ?? fallbackUser
-  const bootstrapKeys = [
-    'deed_companySettings',
-    'deed_systemSettings',
-    'deed_profileImages',
-  ]
-  const [users, serverState] = visregBypassAuth
-    ? [PUBLIC_USERS, {}]
-    : await Promise.all([
-        listPublicUsers(),
-        loadAppState(bootstrapKeys),
-      ])
-
+/**
+ * Root layout is a stable html/body shell only. Authenticated chrome lives in
+ * `app/(app)/layout.tsx` so login / track / portal do not remount AppShell,
+ * and module navigations only swap `{children}`.
+ */
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={htmlClassName}>
       <body className={bodyClassName} data-build={getServerBuildId()}>
         <ClientStoreShapeGuard />
         <SwRegister />
-        <AppShell initialUser={shellUser} initialUsers={users} serverState={serverState}>
-          {children}
-        </AppShell>
+        {children}
         <VersionDriftBanner />
       </body>
     </html>

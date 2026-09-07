@@ -39,3 +39,13 @@ export function parseStoredState<T>(raw: string | null, seed: T): { value: T; co
 export function ensureArray<T>(value: unknown, fallback: readonly T[] | T[] = []): T[] {
   return Array.isArray(value) ? (value as T[]) : [...fallback]
 }
+
+/**
+ * Keep last-known rows when a fetch returns empty. Prevents KPI cards flashing
+ * 0 while a boot GET 404s, unwraps badly, or races a navigation.
+ */
+export function preferExistingArray<T>(prev: T[], incoming: T[] | null | undefined): T[] {
+  if (!Array.isArray(incoming)) return prev
+  if (incoming.length === 0 && Array.isArray(prev) && prev.length > 0) return prev
+  return incoming
+}

@@ -13,8 +13,8 @@ import JarvisPanel from '@/components/jarvis/JarvisPanel'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { markRouteDataReady, useRouteDataReady } from '@/lib/route-data-ready'
 import { ModuleRenderBoundary } from '@/components/erp'
-import { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
-import { fetchAndApplyStoreKeys, keysAreCached, readDirtyStoreKeys } from '@/lib/client-store-hydrate'
+import { ModuleSkeleton, ShellChromeSkeleton } from '@/components/ui/ModuleSkeleton'
+import { fetchAndApplyStoreKeys, keysAreCached } from '@/lib/client-store-hydrate'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -173,53 +173,6 @@ function SidebarBackdrop({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] lg:hidden transition-opacity duration-200"
       onClick={onClose}
     />
-  )
-}
-
-function AppBootSkeleton() {
-  // Inline fallback background so a missing CSS chunk never paints a pure white
-  // viewport (the classic "blank page after login" look).
-  return (
-    <div
-      className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)]"
-      style={{ background: 'var(--bg-page, #F4F6FB)' }}
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <aside className="hidden md:flex w-sidebar flex-col border-r border-border-lt bg-card p-4">
-        <div className="h-10 w-32 rounded-xl bg-muted mb-6 animate-pulse" />
-        <div className="space-y-3 animate-pulse">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="h-9 rounded-xl bg-muted" style={{ width: `${70 + (i % 3) * 10}%` }} />
-          ))}
-        </div>
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="h-topbar border-b border-border-lt bg-card px-4 flex items-center justify-between">
-          <div className="h-8 w-40 rounded-xl bg-muted animate-pulse" />
-          <div className="flex gap-2 animate-pulse">
-            <div className="h-8 w-8 rounded-full bg-muted" />
-            <div className="h-8 w-24 rounded-xl bg-muted" />
-          </div>
-        </div>
-        <main className="flex-1 p-2 md:p-2.5 lg:p-3">
-          <div className="mod-page gap-4">
-            <p className="px-1 text-sm font-semibold text-[var(--text-2)]">Loading…</p>
-            <div className="mod-header animate-pulse">
-              <div className="h-9 w-56 rounded-xl bg-muted" />
-              <div className="h-9 w-28 rounded-xl bg-muted" />
-            </div>
-            <div className="stat-grid-4 px-4 py-3 animate-pulse">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-24 rounded-2xl bg-muted" />
-              ))}
-            </div>
-            <div className="mx-4 h-80 rounded-2xl bg-muted animate-pulse" />
-          </div>
-        </main>
-      </div>
-    </div>
   )
 }
 
@@ -493,7 +446,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
 
     lastRouteRefreshRef.current = Date.now()
-    const dirtyKeys = readDirtyStoreKeys()
     const controller = new AbortController()
     const paintCap = window.setTimeout(() => markRouteDataReady(route), 10_000)
     const etagCritical = `deed_store_etag_${currentUserId}_${route}`
@@ -514,7 +466,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
           const result = await fetchAndApplyStoreKeys({
             keys: criticalKeys,
             etagStorageKey: etagCritical,
-            dirtyKeys,
             signal: controller.signal,
           })
           if (result === 'error') markRouteDataReady(route)
@@ -526,7 +477,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
           await fetchAndApplyStoreKeys({
             keys: deferredKeys,
             etagStorageKey: etagDeferred,
-            dirtyKeys,
             signal: controller.signal,
           })
         }
@@ -705,7 +655,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   // Hydration guard
   if (!mounted) {
-    return isPublicRepairTracker ? <PublicPageSkeleton /> : <AppBootSkeleton />
+    return isPublicRepairTracker ? <PublicPageSkeleton /> : <ShellChromeSkeleton />
   }
 
   // Not authenticated

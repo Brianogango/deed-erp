@@ -1,12 +1,21 @@
 'use client'
 
+import { persistClientStoreValue } from '@/lib/client-store-cache'
+import { readDirtyStoreKeys } from '@/lib/client-store-hydrate'
+
 const HEAL_FLAG_LS = 'deed_catalog_healed_v1'
+
+function markHealComplete() {
+  try {
+    window.localStorage.setItem(HEAL_FLAG_LS, new Date().toISOString())
+  } catch { /* ignore */ }
+}
 
 /** One-shot catalog heals — never block first paint or the products boot GET. */
 export function scheduleCatalogHealOnce(): void {
   if (typeof window === 'undefined') return
   try {
-    if (window.sessionStorage.getItem(HEAL_FLAG_LS) || window.localStorage.getItem(HEAL_FLAG_LS)) return
+    if (window.localStorage.getItem(HEAL_FLAG_LS)) return
   } catch {
     return
   }
@@ -14,15 +23,29 @@ export function scheduleCatalogHealOnce(): void {
   const run = () => {
     void (async () => {
       try {
-        await fetch('/api/products/normalize-serial-tracking', { method: 'POST' })
-        await fetch('/api/products/normalize-device-config', { method: 'POST' })
+        const trackingRes = await fetch('/api/products/normalize-serial-tracking', { method: 'POST' })
+        const deviceRes = await fetch('/api/products/normalize-device-config', { method: 'POST' })
+        // 403 = this session cannot heal (non-write role). Do not persist a
+        // browser-wide flag or a later admin login on this machine is skipped.
+        if (!trackingRes.ok || !deviceRes.ok) return
+
+        const healed = await deviceRes.json().catch(() => null) as {
+          serials?: unknown[]
+          serialsUpdated?: number
+        } | null
+        if (
+          Number(healed?.serialsUpdated) > 0
+          && Array.isArray(healed?.serials)
+          && !readDirtyStoreKeys().has('deed_serials')
+        ) {
+          const serialized = JSON.stringify(healed.serials)
+          persistClientStoreValue('deed_serials', serialized)
+          window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: 'deed_serials', value: serialized } }))
+        }
+        markHealComplete()
       } catch {
-        // best-effort; flag anyway so a 403/network blip does not retry every navigation
+        // Network blip: retry on the next full load, do not sticky-skip.
       }
-      try {
-        window.sessionStorage.setItem(HEAL_FLAG_LS, '1')
-        window.localStorage.setItem(HEAL_FLAG_LS, new Date().toISOString())
-      } catch { /* ignore */ }
     })()
   }
 

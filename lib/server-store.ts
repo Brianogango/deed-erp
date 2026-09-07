@@ -207,8 +207,9 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
     const now = new Date().toISOString()
     // Binary payloads go to the filesystem, never into app_state — a 3 MB
     // base64 receipt in the table bloats every sync, poll, and backup.
-    for (const [key, value] of Object.entries(entries).filter(([key]) => isBlobKey(key))) {
-      await writeBlob(key, value)
+    const blobWrites = Object.entries(entries).filter(([key]) => isBlobKey(key))
+    if (blobWrites.length > 0) {
+      await Promise.all(blobWrites.map(([key, value]) => writeBlob(key, value)))
     }
     const pairs = Object.entries(entries).filter(([key]) => !isBlobKey(key))
     if (pairs.length === 0) return

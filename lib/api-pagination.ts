@@ -89,13 +89,48 @@ export function parseCollectionPayload<T>(data: unknown): PaginatedResponse<T> {
 
 const FETCH_ALL_PAGE_CAP = 50
 
+/** Legacy / shorthand list paths → canonical collection routes. */
+export const COLLECTION_PATH_ALIASES: Record<string, string> = {
+  '/api/sales': '/api/sale-orders',
+  '/api/purchase': '/api/purchase-orders',
+  '/api/purchases': '/api/purchase-orders',
+  '/api/activities': '/api/opportunity-activities',
+}
+
+export function canonicalizeCollectionPath(pathname: string): string {
+  const path = (pathname || '').split('?')[0]
+  return COLLECTION_PATH_ALIASES[path] ?? path
+}
+
+function collectionRequestUrl(inputUrl: string): { pathname: string; search: string; url: URL } {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+  const url = new URL(inputUrl, origin)
+  url.pathname = canonicalizeCollectionPath(url.pathname)
+  return { pathname: url.pathname, search: url.search, url }
+}
+
+/**
+ * GET a list endpoint as an array. Unwraps `{ items }`, remaps known aliases,
+ * and treats 404 / non-OK / network failure as `[]` so boot never crashes or
+ * overwrites last-known KPI state with `undefined`.
+ */
+export async function fetchCollection<T>(inputUrl: string): Promise<T[]> {
+  try {
+    const { pathname, search } = collectionRequestUrl(inputUrl)
+    const res = await fetch(`${pathname}${search}`)
+    if (!res.ok) return []
+    return parseCollectionPayload<T>(await res.json().catch(() => null)).items
+  } catch {
+    return []
+  }
+}
+
 /**
  * Walk every page of a paginated collection endpoint.
  * Used for client boot so KPI / list counts are not a 200-row window.
  */
 export async function fetchAllCollectionPages<T>(inputUrl: string): Promise<T[]> {
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
-  const url = new URL(inputUrl, origin)
+  const { url } = collectionRequestUrl(inputUrl)
   url.searchParams.set('limit', String(PAGINATION_MAX_LIMIT))
   const all: T[] = []
   let page = 1
@@ -103,7 +138,7 @@ export async function fetchAllCollectionPages<T>(inputUrl: string): Promise<T[]>
   do {
     url.searchParams.set('page', String(page))
     const res = await fetch(`${url.pathname}${url.search}`)
-    if (!res.ok) break
+    if (res.status === 404 || !res.ok) break
     const parsed = parseCollectionPayload<T>(await res.json().catch(() => null))
     all.push(...parsed.items)
     totalPages = Math.max(1, parsed.totalPages || 1)

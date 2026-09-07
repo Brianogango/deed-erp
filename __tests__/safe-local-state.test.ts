@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ensureArray, parseStoredState } from '@/lib/safe-local-state'
+import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
 
 describe('parseStoredState', () => {
   it('returns seed when storage is empty', () => {
@@ -48,5 +48,24 @@ describe('ensureArray', () => {
   it('replaces non-arrays with fallback', () => {
     expect(ensureArray({ not: 'array' }, [9])).toEqual([9])
     expect(ensureArray(null)).toEqual([])
+  })
+})
+
+describe('preferExistingArray', () => {
+  it('keeps last-known rows when the incoming fetch is empty', () => {
+    const prev = [{ id: 'a' }]
+    expect(preferExistingArray(prev, [])).toEqual(prev)
+    expect(preferExistingArray(prev, null)).toEqual(prev)
+    expect(preferExistingArray(prev, undefined)).toEqual(prev)
+  })
+
+  it('replaces when the fetch returns rows', () => {
+    const prev = [{ id: 'a' }]
+    const next = [{ id: 'b' }]
+    expect(preferExistingArray(prev, next)).toEqual(next)
+  })
+
+  it('accepts an empty fetch when local is also empty', () => {
+    expect(preferExistingArray([], [])).toEqual([])
   })
 })
