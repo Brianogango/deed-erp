@@ -7,7 +7,7 @@ import { Fa } from '@/components/icons'
 import {
   faChartLine, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
   faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt,
-  faChevronRight, faChevronLeft, faChevronDown, faMoneyBillWave, faHandHolding, faBullseye, faFileLines,
+  faChevronDown, faMoneyBillWave, faHandHolding, faBullseye, faFileLines,
   faMicrochip, faChair,
 } from '@fortawesome/free-solid-svg-icons'
 import { useShellStore, ModuleId } from '@/lib/store'
@@ -54,6 +54,7 @@ export default function Sidebar() {
   const router = useRouter()
   const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule, profileImages } = useShellStore()
   const [isOverlay, setIsOverlay] = useState(false)
+  const [navQuery, setNavQuery] = useState('')
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 1023px)')
@@ -210,11 +211,11 @@ export default function Sidebar() {
       items: visibleItems.filter(i => ['dashboard', 'contacts'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Sales channels',
+      title: 'Sales & CRM',
       items: visibleItems.filter(i => ['sales', 'crm', 'pos', 'ecommerce', 'kilimall'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Stock & fulfillment',
+      title: 'Inventory & fulfillment',
       items: visibleItems.filter(i => ['inventory', 'purchase', 'delivery'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
@@ -222,10 +223,18 @@ export default function Sidebar() {
       items: visibleItems.filter(i => ['repair', 'refurbishment', 'reconfiguration', 'outsource', 'after_sales', 'holdovers'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Finance & people',
+      title: 'Finance & admin',
       items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'company_property', 'hr', 'my_documents', 'sops', 'sop_documents', 'settings'].includes(i.id) && !pinnedIds.has(i.id)),
     },
   ].filter(g => g.items.length > 0)
+
+  const displayedGroups = useMemo(() => {
+    const query = navQuery.trim().toLowerCase()
+    if (!query) return groups
+    return groups
+      .map(group => ({ ...group, items: group.items.filter(item => `${item.label} ${group.title}`.toLowerCase().includes(query)) }))
+      .filter(group => group.items.length > 0)
+  }, [groups, navQuery])
 
   return (
     <aside
@@ -237,13 +246,13 @@ export default function Sidebar() {
         sidebar-shell fixed lg:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
         transition-[width,transform,box-shadow] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
         ${sidebarOpen
-          ? 'w-[296px] translate-x-0 shadow-2xl lg:w-[252px] lg:shadow-none'
+          ? 'w-[296px] translate-x-0 shadow-2xl lg:w-[266px] lg:shadow-none'
           : 'w-[296px] -translate-x-full lg:w-[72px] lg:translate-x-0'
         }
       `}
     >
       {/* ── Brand Header ── */}
-      <div className={`sidebar-brand-header sidebar-section-border flex h-[76px] flex-shrink-0 items-center border-b ${sidebarOpen ? 'gap-1.5 px-5 lg:px-2.5' : 'justify-center px-0'} lg:h-[96px]`}>
+      <div className={`sidebar-brand-header flex h-[76px] flex-shrink-0 items-center ${sidebarOpen ? 'justify-center px-5' : 'justify-center px-0'} lg:h-[80px]`}>
         {!sidebarOpen ? (
           <img src="/deed-icon-transparent.png" alt="Deed Technologies" className="sidebar-brand-mark h-9 w-9 object-contain" />
         ) : (
@@ -251,18 +260,6 @@ export default function Sidebar() {
             <img src="/deed-logo-sidebar.png" alt="Deed Technologies" className="sidebar-logo-inverted sidebar-logo-white-user" />
             <img src="/deed-logo.png" alt="Deed Technologies" className="sidebar-logo-standard hidden h-9 w-auto max-w-[155px] object-contain" />
           </div>
-        )}
-
-        {sidebarOpen && (
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="sidebar-header-collapse-btn hidden lg:inline-flex"
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-          >
-            <Fa icon={faChevronLeft} />
-          </button>
         )}
 
         {sidebarOpen && (
@@ -277,9 +274,23 @@ export default function Sidebar() {
         )}
       </div>
 
+      {sidebarOpen && (
+        <div className="sidebar-navigation-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <input
+            type="search"
+            value={navQuery}
+            onChange={event => setNavQuery(event.target.value)}
+            placeholder="Search navigation…"
+            aria-label="Search navigation"
+          />
+          <kbd>Ctrl K</kbd>
+        </div>
+      )}
+
       {/* ── Navigation ── */}
-      <div className="sidebar-nav-scroll flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
-        {groups.map((group, idx) => {
+      <div className="sidebar-nav-scroll flex-1 overflow-y-auto overflow-x-hidden py-3 custom-scrollbar">
+        {displayedGroups.map((group, idx) => {
           const hasActiveItem = group.items.some(item => isNavItemActive(pathname, item))
           // The active module's group cannot be hidden; everything else honours
           // the stored preference. The icon rail always shows every module.
@@ -359,16 +370,6 @@ export default function Sidebar() {
           )}
         </button>
 
-        {!sidebarOpen && (
-          <button
-            onClick={toggleSidebar}
-            className="sidebar-collapse-btn mt-2 hidden lg:flex h-9 w-full items-center justify-center rounded-xl cursor-pointer"
-            aria-label="Expand sidebar"
-            title="Expand sidebar"
-          >
-            <Fa icon={faChevronRight} className="text-xs" />
-          </button>
-        )}
       </div>
     </aside>
   )
