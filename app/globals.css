@@ -31053,3 +31053,151 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .custody-transfer-row { grid-template-columns: minmax(0, 1fr) 2rem; }
   .custody-transfer-row > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
 }
+
+
+/* Approved Deed side navigation — clean grouped enterprise rail. */
+.sidebar-shell {
+  background: #06264b !important;
+  color: #dbeafe;
+}
+.sidebar-brand-header {
+  min-height: 80px;
+  border: 0 !important;
+  background: #06264b !important;
+}
+.sidebar-brand-header .sidebar-logo-inverted {
+  display: block !important;
+  width: 118px !important;
+  max-width: 118px !important;
+  height: 58px !important;
+  margin-inline: auto;
+  object-fit: contain !important;
+}
+.sidebar-brand-header .sidebar-logo-standard { display: none !important; }
+.sidebar-brand-mark {
+  width: 36px !important;
+  height: 44px !important;
+  object-fit: contain !important;
+}
+.sidebar-navigation-search {
+  position: relative;
+  display: flex;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .55rem;
+  margin: 0 .75rem .35rem;
+  border: 1px solid rgba(125, 178, 228, .28);
+  border-radius: .65rem;
+  padding: 0 .65rem;
+  background: rgba(4, 31, 66, .55);
+  color: #9fc4e8;
+}
+.sidebar-navigation-search:focus-within {
+  border-color: rgba(0, 174, 239, .7);
+  box-shadow: 0 0 0 3px rgba(0, 174, 239, .11);
+}
+.sidebar-navigation-search svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+.sidebar-navigation-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font-size: .72rem;
+}
+.sidebar-navigation-search input::placeholder { color: #8fb0d0; }
+.sidebar-navigation-search kbd {
+  flex: 0 0 auto;
+  border: 1px solid rgba(125, 178, 228, .22);
+  border-radius: .35rem;
+  padding: .16rem .36rem;
+  color: #a8c6e4;
+  font-size: .55rem;
+  line-height: 1;
+}
+.sidebar-nav-scroll { scrollbar-width: thin; scrollbar-color: rgba(143,176,208,.45) transparent; }
+.sidebar-group-toggle {
+  min-height: 28px !important;
+  padding: 0 .95rem !important;
+}
+.sidebar-group-label {
+  color: #7fb2df !important;
+  font-size: .57rem !important;
+  letter-spacing: .14em !important;
+}
+.sidebar-group-count,
+.sidebar-group-rule { display: none !important; }
+.sidebar-group-chevron { margin-left: auto; color: #80a8cf !important; }
+.sidebar-nav-item {
+  min-height: 40px;
+  border-radius: .5rem !important;
+  color: #c7daee !important;
+}
+.sidebar-nav-item::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: -12px;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: transparent;
+  content: '';
+}
+.sidebar-nav-item:hover:not(.active) {
+  background: rgba(255,255,255,.055) !important;
+  color: #fff !important;
+}
+.sidebar-nav-item.active {
+  background: #123f74 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+.sidebar-nav-item.active::before { background: #00aeef; }
+.sidebar-nav-item.active svg { color: #20c8ff; }
+.sidebar-footer {
+  border-color: rgba(128, 174, 216, .18) !important;
+  background: #06264b !important;
+}
+.sidebar-user-card {
+  min-height: 48px !important;
+  border: 1px solid rgba(128, 174, 216, .24) !important;
+  border-radius: .7rem !important;
+  background: rgba(255,255,255,.035) !important;
+}
+.sidebar-user-card:hover { background: rgba(255,255,255,.07) !important; }
+.app-topbar-sidebar-toggle {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-lt);
+  border-radius: .55rem;
+  background: var(--bg-card);
+  color: var(--text-3);
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.app-topbar-sidebar-toggle:hover {
+  border-color: var(--border);
+  background: var(--bg-muted);
+  color: var(--text-1);
+}
+.app-topbar-sidebar-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+@media (max-width: 1023px) {
+  .sidebar-brand-header .sidebar-logo-inverted {
+    width: 112px !important;
+    max-width: 112px !important;
+  }
+}
