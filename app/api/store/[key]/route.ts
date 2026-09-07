@@ -1,3 +1,8 @@
+/**
+ * Per-key store GET/PUT — this route is implemented (not an empty stub).
+ * Prefer batched GET /api/store?keys=… for hydration; this path is the
+ * single-key fallback used by useServerStore and recovery tools.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import {
@@ -12,6 +17,7 @@ import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { appendStoreAudit } from '@/lib/store-audit'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
+import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
 import { assertSafeStoreValue, InputSecurityError, readSafeJson } from '@/lib/input-security'
 
 type Params = { params: { key: string } }
@@ -77,6 +83,10 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
   if (CLIENT_IMMUTABLE_STORE_KEYS.has(key)) {
     return NextResponse.json({ error: `Forbidden — ${key} is server-managed and cannot be written by a client` }, { status: 403 })
+  }
+
+  if (isPrismaRestSotStoreKey(key)) {
+    return NextResponse.json({ error: `Forbidden — ${key} is owned by Prisma REST` }, { status: 403 })
   }
 
   if (!canWriteStoreKey(session.user, key)) {

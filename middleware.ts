@@ -79,7 +79,8 @@ function rateLimitPolicy(pathname: string, method: string): { limit: number; win
   // Batched client syncs + dirty-key recovery can legitimately post several
   // times while a user opens modules; 20/min was forcing 429s and stalled UX.
   if (pathname === '/api/store' && isWriteMethod(method)) return { limit: 60, windowSec: 60, bucket: 'store-migration' }
-  if (HIGH_TRAFFIC_READ_PREFIXES.some(prefix => pathname.startsWith(prefix))) return { limit: 120, windowSec: 60, bucket: 'store-stream' }
+  // EventSource reconnect storms used to 429 at 120/min and freeze sync.
+  if (HIGH_TRAFFIC_READ_PREFIXES.some(prefix => pathname.startsWith(prefix))) return { limit: 360, windowSec: 60, bucket: 'store-stream' }
   if (isWriteMethod(method)) return { limit: 240, windowSec: 60, bucket: 'api-write' }
   return { limit: 1200, windowSec: 60, bucket: 'api-read' }
 }

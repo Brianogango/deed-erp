@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth/server'
 import { getLatestAppStateUpdatedAt, loadAppStateChangesSince } from '@/lib/server-store'
 import { subscribeAppStateChanges } from '@/lib/store-notify'
 import { canReadStoreKey, filterStoreValueForRole } from '@/lib/auth/authorization'
+import { pickChangedSseKeys } from '@/lib/store-sse-diff'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
   }
 
   const enc = new TextEncoder()
-  let lastHash = ''
+  const lastKeyHashes: Record<string, string> = {}
   let lastUpdatedAt = ''
 
   const stream = new ReadableStream({
@@ -84,14 +85,13 @@ export async function GET(request: NextRequest) {
           if (!Object.keys(changes).length) return
 
           const lean = toLeanState(changes as Record<string, unknown>)
-          if (!Object.keys(lean).length) {
+          const changedOnly = pickChangedSseKeys(lean, lastKeyHashes, stateHash)
+          if (!Object.keys(changedOnly).length) {
             lastUpdatedAt = latestUpdatedAt
             return
           }
 
-          const hash = stateHash(lean)
-          if (hash !== lastHash) send('store', { state: lean, patch: true })
-          lastHash = hash
+          send('store', { state: changedOnly, patch: true })
           lastUpdatedAt = latestUpdatedAt
         } catch { /* DB error — skip this tick, retry next */ }
       }

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Fa } from '@/components/icons'
 import { faPaperPlane, faSync, faComments, faUser, faClock, faCalendarCheck } from '@fortawesome/free-solid-svg-icons'
 import { fmtDate } from '@/lib/store'
+import { startVisiblePoll } from '@/lib/visible-poll'
 
 type ChatterModel = 'sale_order' | 'purchase_order' | 'invoice' | 'repair' | 'opportunity' | 'contact'
 
@@ -66,9 +67,7 @@ export default function Chatter({
   }, [model, recordId])
 
   useEffect(() => {
-    fetchChatter()
-    const id = setInterval(fetchChatter, 15000)
-    return () => clearInterval(id)
+    return startVisiblePoll(() => { void fetchChatter() })
   }, [fetchChatter])
 
   useEffect(() => {
@@ -127,7 +126,7 @@ export default function Chatter({
 
   return (
     <div
-      className="bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm border-l-4 border-l-violet-500 flex flex-col overflow-hidden"
+      className="bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col overflow-hidden"
       style={{ height }}
     >
       <div className="px-4 sm:px-5 py-3.5 border-b border-[var(--border)] flex items-center justify-between shrink-0 bg-[var(--bg-card)]">
@@ -178,10 +177,10 @@ export default function Chatter({
                 <p className="font-medium whitespace-pre-wrap">{msg.body}</p>
               </div>
               <div className="flex items-center gap-1.5 px-1 text-[9px] font-bold text-[var(--text-4)] uppercase tracking-tight">
-                <Fa icon={faUser} className="text-[8px] opacity-50" />
+                <Fa icon={faUser} className="text-[10px] opacity-50" />
                 <span>{msg.authorName || 'Staff'}</span>
                 <span className="opacity-30">·</span>
-                <Fa icon={faClock} className="text-[8px] opacity-50" />
+                <Fa icon={faClock} className="text-[10px] opacity-50" />
                 <span>{fmtDate(msg.createdAt)}</span>
               </div>
             </div>

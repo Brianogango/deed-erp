@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import type { PortalRepair, PortalRepairStatus, RepairMessage } from '@/lib/portal-repairs'
 import { PortalPageSkeleton } from '@/components/ui'
 import { DiagnosisChargeNotice } from '@/components/portal/DiagnosisChargeNotice'
+import { startVisiblePoll } from '@/lib/visible-poll'
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -112,12 +113,7 @@ export default function RepairTrackDetail() {
   }, [ref])
 
   useEffect(() => { fetchRepair() }, [fetchRepair])
-  useEffect(() => { fetchMessages() }, [fetchMessages])
-  // Poll for new messages every 20 seconds
-  useEffect(() => {
-    const id = setInterval(fetchMessages, 20000)
-    return () => clearInterval(id)
-  }, [fetchMessages])
+  useEffect(() => startVisiblePoll(() => { void fetchMessages() }), [fetchMessages])
 
   const sendMessage = async () => {
     if (!msgText.trim() || !senderName.trim() || sendingMsg) return

@@ -11,6 +11,7 @@ import {
   faRotate,
   faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons'
+import { startVisiblePoll } from '@/lib/visible-poll'
 
 type MessageRow = {
   id: string
@@ -122,11 +123,7 @@ export default function SmsMessageCenter({
     }
   }, [folder, query, selectedId, showToast])
 
-  useEffect(() => { void load() }, [folder])
-  useEffect(() => {
-    const timer = window.setInterval(() => { void load() }, 20000)
-    return () => window.clearInterval(timer)
-  }, [load])
+  useEffect(() => startVisiblePoll(() => { void load() }), [load])
 
   useEffect(() => {
     if (!selectedId) return

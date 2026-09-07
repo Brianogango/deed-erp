@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import type { PortalRepair } from '@/lib/portal-repairs'
 import { PortalPageSkeleton } from '@/components/ui'
 import { DiagnosisChargeNotice } from '@/components/portal/DiagnosisChargeNotice'
+import { startVisiblePoll } from '@/lib/visible-poll'
 
 const STATUS_LABELS: Record<string, string> = {
   received:            'Device Received',
@@ -172,17 +173,8 @@ export default function RepairPortalPage() {
     } catch { /* silent */ }
   }
 
-  useEffect(() => {
-    load()
-    // Poll so status changes made by staff appear without a manual refresh.
-    const id = setInterval(load, 60000)
-    return () => clearInterval(id)
-  }, [ref])
-  useEffect(() => {
-    loadMessages()
-    const id = setInterval(loadMessages, 30000)
-    return () => clearInterval(id)
-  }, [ref])
+  useEffect(() => startVisiblePoll(() => { void load() }), [ref])
+  useEffect(() => startVisiblePoll(() => { void loadMessages() }), [ref])
   useEffect(() => {
     fetch('/api/portal/company-info').then(r => { if (r.ok) r.json().then((d: typeof company) => setCompany(d)) }).catch(() => {})
   }, [])

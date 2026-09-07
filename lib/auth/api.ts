@@ -1,10 +1,12 @@
 import 'server-only'
 
+import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 import type { PublicUser } from './types'
 import { getServerSession } from './server'
 import { assertPermission, isRoleAllowed } from './authorization'
+import { recordHttpMetric } from '@/lib/http-metrics'
 
 export const getRequiredSession = async () => {
   const session = await getServerSession()
@@ -27,6 +29,7 @@ export const requirePermission = async (action: Parameters<typeof assertPermissi
 export const jsonError = (message: string, status = 400) => NextResponse.json({ error: message }, { status })
 
 export const withApiErrorHandling = async <T>(handler: () => Promise<T>) => {
+  const t0 = Date.now()
   try {
     return await handler()
   } catch (error) {
@@ -35,6 +38,14 @@ export const withApiErrorHandling = async <T>(handler: () => Promise<T>) => {
       typeof (error as { status?: unknown }).status === 'number'
         ? (error as { status: number }).status
         : 500
+
+    try {
+      const h = headers()
+      const path = h.get('next-url') || h.get('x-matched-path') || h.get('x-invoke-path') || '/api'
+      recordHttpMetric({ path, status, ms: Date.now() - t0 })
+    } catch {
+      recordHttpMetric({ path: '/api', status, ms: Date.now() - t0 })
+    }
 
     // Always log server-side so the error is visible in deployment logs
     if (status >= 500) {
