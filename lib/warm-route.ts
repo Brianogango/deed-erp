@@ -4,6 +4,7 @@
  */
 
 import { appStateKeysForRoute } from '@/lib/app-state-hydration'
+import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { bootApiGroupsForRoute } from '@/lib/boot-apis'
 
 const warmedRoutes = new Set<string>()
@@ -68,13 +69,10 @@ export function warmRoute(pathname: string, currentUserId?: string | null): void
         } catch {
           continue
         }
-        if (serialized.length > 512 * 1024) continue
         try {
           if (window.localStorage.getItem(key) === serialized) continue
-          window.localStorage.setItem(key, serialized)
-        } catch {
-          continue
-        }
+        } catch { /* ignore */ }
+        persistClientStoreValue(key, serialized)
         window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: serialized } }))
       }
       warmedRoutes.add(route)

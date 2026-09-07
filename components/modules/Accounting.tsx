@@ -46,6 +46,7 @@ import {
 } from '@/lib/odoo-sales-flow'
 import { exportToPDF, exportToExcel, type ExportRow } from '@/lib/export-utils'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
+import { ensureArray } from '@/lib/safe-local-state'
 import {
   Badge,
   Modal,
@@ -898,7 +899,7 @@ function AccountingContent() {
   }, [customerInvoices, vendorBills, accounts, journalEntries, bankAccounts, allCashbookEntries])
 
   const monthlyReport = useMemo(() => {
-    const productById = new Map(products.map((product: any) => [product.id, product]))
+    const productById = new Map(ensureArray(products).map((product: any) => [product.id, product]))
     const categoryRows = new Map<string, { category: string; qty: number; revenue: number; cost: number; profit: number }>()
     const addCategorySale = (category: string, qty: number, revenue: number, cost: number) => {
       const key = category || 'Uncategorised'

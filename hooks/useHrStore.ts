@@ -13,6 +13,7 @@ import {
   type JobPosting, type Candidate, type TrainingProgram, type EmployeeTraining,
   type User, type WorkflowApproval,
 } from '@/lib/store'
+import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { entitlementFor, isLeaveTypeAllowedForGender, noticeDaysGiven, requiredNotice, decemberClosureDays, type StoreLeaveType } from '@/lib/leave-utils'
 
 // ─── localStorage + debounced server sync (mirrors lib/store.tsx's useLS) ───────────────
@@ -29,11 +30,7 @@ function writeLS(key: string, value: unknown) {
   if (typeof window === 'undefined') return
   let serialized: string
   try { serialized = JSON.stringify(value) } catch { return }
-  if (serialized.length <= 512 * 1024) {
-    try { window.localStorage.setItem(key, serialized) } catch { /* quota exceeded */ }
-  } else {
-    try { window.localStorage.removeItem(key) } catch { /* ignore */ }
-  }
+  persistClientStoreValue(key, serialized)
   debouncedServerSync(key, serialized)
 }
 

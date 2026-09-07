@@ -12,6 +12,7 @@ export { isPosBankPayment }
 import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosSessionRef, nextPosTicketRef } from '@/lib/pos-orders-merge'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { allocateDocNumber } from '@/lib/doc-numbers'
+import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
@@ -5102,11 +5103,7 @@ function useLS<T>(
     try { serialized = JSON.stringify(state) } catch { return }
     // Skip localStorage for large values — avoids quota errors and slow reads/writes.
     // The server (app_state) and SSE still keep this data in sync across devices.
-    if (serialized.length <= 512 * 1024) {
-      try { window.localStorage.setItem(key, serialized) } catch { /* quota exceeded */ }
-    } else {
-      try { window.localStorage.removeItem(key) } catch { /* ignore */ }
-    }
+    persistClientStoreValue(key, serialized)
     debouncedServerSync(key, serialized)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
@@ -5203,12 +5200,7 @@ function applyLocalDraftSaleOrder(
       _pendingSync['deed_saleOrders'] = serialized
       addDirtyKey('deed_saleOrders')
       if (typeof window !== 'undefined') {
-        if (serialized.length <= 512 * 1024) {
-          window.localStorage.setItem('deed_saleOrders', serialized)
-        } else {
-          // Drop stale pre-edit blob so sync cannot re-upload old lines.
-          try { window.localStorage.removeItem('deed_saleOrders') } catch { /* ignore */ }
-        }
+        persistClientStoreValue('deed_saleOrders', serialized)
       }
     } catch { /* ignore quota / circular */ }
     return next
@@ -11202,8 +11194,7 @@ const storeCtx: AppState = {
         const next = serialRef.current.map(s => s.id === id ? { ...s, ...patch } : s)
         const serialized = JSON.stringify(next)
         try {
-          if (serialized.length <= 512 * 1024) window.localStorage.setItem('deed_serials', serialized)
-          else window.localStorage.removeItem('deed_serials')
+          persistClientStoreValue('deed_serials', serialized)
         } catch { /* local cache is best-effort */ }
         window.dispatchEvent(new CustomEvent('deed_remote_update', {
           detail: { key: 'deed_serials', value: serialized },
@@ -11503,9 +11494,7 @@ const storeCtx: AppState = {
             rememberSaleOrdersSnapshot(serialized)
             _pendingSync['deed_saleOrders'] = serialized
             addDirtyKey('deed_saleOrders')
-            if (typeof window !== 'undefined' && serialized.length <= 512 * 1024) {
-              window.localStorage.setItem('deed_saleOrders', serialized)
-            }
+            persistClientStoreValue('deed_saleOrders', serialized)
           } catch { /* ignore */ }
           if (softPersist) {
             // Soft sync stays silent. If Save started, do not re-arm draft soft flushes.
@@ -11549,9 +11538,7 @@ const storeCtx: AppState = {
             rememberSaleOrdersSnapshot(serialized)
             _pendingSync['deed_saleOrders'] = serialized
             addDirtyKey('deed_saleOrders')
-            if (typeof window !== 'undefined' && serialized.length <= 512 * 1024) {
-              window.localStorage.setItem('deed_saleOrders', serialized)
-            }
+            persistClientStoreValue('deed_saleOrders', serialized)
           } catch { /* ignore */ }
           // Push the saved snapshot to the blob before dropping the draft lock
           // window; stampSaleOrderPersisted still guards SSE for ~20s.
