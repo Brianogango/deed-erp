@@ -23,6 +23,8 @@ export default function StockCheckoutPanel() {
   const [mode, setMode] = useState<Mode | null>(null)
   const [selected, setSelected] = useState<Checkout | null>(null)
   const [form, setForm] = useState(blank)
+  const [productSearch, setProductSearch] = useState('')
+  const [requestItems, setRequestItems] = useState<Record<string, { qty: string; serialIds: string[] }>>({})
 
   const load = async () => {
     setLoading(true); setError('')
@@ -37,7 +39,29 @@ export default function StockCheckoutPanel() {
   const overdue = (r: Checkout) => Boolean(r.expectedReturnDate && !['completed', 'rejected'].includes(r.status) && r.expectedReturnDate < new Date().toISOString().slice(0, 10))
   const patch = (key: keyof ReturnType<typeof blank>, value: string | string[]) => setForm(v => ({ ...v, [key]: value }))
   const toggle = (id: string) => patch('serialIds', form.serialIds.includes(id) ? form.serialIds.filter(x => x !== id) : [...form.serialIds, id])
-  const open = (next: Mode, row?: Checkout) => { setForm({ ...blank(), qty: row ? String(outstanding(row)) : '1' }); setSelected(row || null); setError(''); setMode(next) }
+  const open = (next: Mode, row?: Checkout) => {
+    setForm({ ...blank(), qty: row ? String(outstanding(row)) : '1' })
+    setProductSearch('')
+    setRequestItems({})
+    setSelected(row || null)
+    setError('')
+    setMode(next)
+  }
+  const filteredProducts = useMemo(() => {
+    const query = productSearch.trim().toLowerCase()
+    if (!query) return data.products
+    return data.products.filter(p => `${p.name} ${p.sku}`.toLowerCase().includes(query))
+  }, [data.products, productSearch])
+  const toggleRequestProduct = (productId: string) => setRequestItems(items => {
+    if (items[productId]) {
+      const next = { ...items }
+      delete next[productId]
+      return next
+    }
+    return { ...items, [productId]: { qty: '1', serialIds: [] } }
+  })
+  const patchRequestItem = (productId: string, value: Partial<{ qty: string; serialIds: string[] }>) =>
+    setRequestItems(items => ({ ...items, [productId]: { ...(items[productId] ?? { qty: '1', serialIds: [] }), ...value } }))
 
   const send = async (action: string, extra: Record<string, unknown> = {}) => {
     setSaving(true); setError('')
@@ -45,7 +69,30 @@ export default function StockCheckoutPanel() {
     catch (e) { setError(e instanceof Error ? e.message : 'Could not update checkout') }
     finally { setSaving(false) }
   }
-  const submitRequest = () => send('request', form)
+  const submitRequest = async () => {
+    const items = Object.entries(requestItems)
+    if (!items.length) return setError('Select at least one product')
+    for (const [productId, item] of items) {
+      const selectedProduct = data.products.find(p => p.id === productId)
+      if (selectedProduct?.serialized && !item.serialIds.length) return setError(`Select serial numbers for ${selectedProduct.name}`)
+      if (!selectedProduct?.serialized && Number(item.qty) < 1) return setError(`Enter a valid quantity for ${selectedProduct?.name || 'each product'}`)
+    }
+    if (!form.receiverName.trim()) return setError('Enter the receiving person or holder')
+    setSaving(true); setError('')
+    try {
+      for (const [productId, item] of items) {
+        const res = await fetch('/api/inventory/stock-checkouts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'request', ...form, productId, qty: item.qty, serialIds: item.serialIds }),
+        })
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(body.error || 'Could not submit checkout request')
+      }
+      setMode(null); setRequestItems({}); await load()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not submit checkout request') }
+    finally { setSaving(false) }
+  }
   const submitClose = () => send('close', { outcome: form.outcome, qty: form.qty, notes: form.notes, serialIds: form.serialIds })
 
   const active = data.checkouts.filter(r => ['pending', 'approved', 'issued', 'partially_closed'].includes(r.status)).length
@@ -61,8 +108,42 @@ export default function StockCheckoutPanel() {
       {!loading && !data.checkouts.length && <tr><td colSpan={6} className="px-3 py-10 text-center text-text-3">No stock checkouts recorded.</td></tr>}
     </tbody></table></div></div>
 
-    {mode === 'request' && <Modal title="Checkout stock" subtitle="Submit for approval before physical issue" onClose={() => setMode(null)} width={760}><div className="space-y-4">{error && <p className="text-xs text-red-700">{error}</p>}<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Product" required><Select value={form.productId} onChange={v => patch('productId', v)} options={[{ value: '', label: 'Select product…' }, ...data.products.map(p => ({ value: p.id, label: `${p.name}${p.sku ? ` · ${p.sku}` : ''}` }))]} /></Field><Field label="Source" required><Select value={form.sourceLocation} onChange={v => patch('sourceLocation', v)} options={locations} /></Field></div>{product?.serialized ? <Field label="Serial numbers" required hint={`${form.serialIds.length} selected`}><div className="max-h-40 overflow-y-auto rounded-lg border border-border-lt divide-y divide-border-lt">{eligible.map(s => <label key={s.id} className="flex items-center gap-3 px-3 py-2"><input type="checkbox" checked={form.serialIds.includes(s.id)} onChange={() => toggle(s.id)} />{s.serial}</label>)}{form.productId && !eligible.length && <p className="p-3 m-0 text-text-3">No eligible serials at this source.</p>}</div></Field> : <Field label="Quantity" required><Input type="number" value={form.qty} onChange={v => patch('qty', v)} /></Field>}<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Receiving person / holder" required><Input value={form.receiverName} onChange={v => patch('receiverName', v)} /></Field><Field label="Purpose" required><Select value={form.purpose} onChange={v => patch('purpose', v)} options={purposes} /></Field><Field label="Related job"><Input value={form.relatedJob} onChange={v => patch('relatedJob', v)} /></Field><Field label="Expected return"><Input type="date" value={form.expectedReturnDate} onChange={v => patch('expectedReturnDate', v)} /></Field><Field label="Offline job / device reference"><Input value={form.deviceRef} onChange={v => patch('deviceRef', v)} /></Field><Field label="Device serial"><Input value={form.deviceSerial} onChange={v => patch('deviceSerial', v)} /></Field></div><Field label="Notes"><Textarea value={form.notes} onChange={v => patch('notes', v)} rows={3} /></Field><p className="text-[11px] text-text-3">Approval reserves the stock. Confirm issue performs the deduction. No invoice, delivery, or revenue is created.</p><div className="flex justify-end gap-2"><button className="btn-secondary px-4" onClick={() => setMode(null)}>Cancel</button><button className="btn-primary px-5" disabled={saving} onClick={() => void submitRequest()}>{saving ? 'Submitting…' : 'Submit request'}</button></div></div></Modal>}
-    {mode === 'reject' && selected && <Modal title={`Reject ${selected.ref}`} onClose={() => setMode(null)}><div className="space-y-4">{error && <p className="text-xs text-red-700">{error}</p>}<Field label="Reason" required><Textarea value={form.reason} onChange={v => patch('reason', v)} rows={3} /></Field><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => setMode(null)}>Cancel</button><button className="btn-primary" disabled={saving || !form.reason.trim()} onClick={() => void send('reject', { reason: form.reason })}>Reject request</button></div></div></Modal>}
+    {mode === 'request' && <Modal title="Checkout stock" subtitle="Submit for approval before physical issue" onClose={() => setMode(null)} width={760}><div className="space-y-4">
+      {error && <p className="text-xs text-red-700">{error}</p>}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Products" required hint={`${Object.keys(requestItems).length} selected`}>
+          <div className="custody-product-picker">
+            <Input value={productSearch} onChange={setProductSearch} placeholder="Search by product name or SKU…" />
+            <div className="custody-product-picker__list">
+              {filteredProducts.map(p => <label key={p.id}>
+                <input type="checkbox" checked={Boolean(requestItems[p.id])} onChange={() => toggleRequestProduct(p.id)} />
+                <span><strong>{p.name}</strong><small>{p.sku || 'No SKU'}{p.serialized ? ' · Serial tracked' : ''}</small></span>
+              </label>)}
+              {!filteredProducts.length && <p>No matching products.</p>}
+            </div>
+          </div>
+        </Field>
+        <Field label="Source" required><Select value={form.sourceLocation} onChange={v => { patch('sourceLocation', v); setRequestItems(items => Object.fromEntries(Object.entries(items).map(([id, item]) => [id, { ...item, serialIds: [] }])) ) }} options={locations} /></Field>
+      </div>
+      {Object.entries(requestItems).map(([productId, item]) => {
+        const rowProduct = data.products.find(p => p.id === productId)
+        if (!rowProduct) return null
+        const rowSerials = data.serials.filter(s => s.productId === productId && s.location === form.sourceLocation)
+        return <div key={productId} className="custody-transfer-row">
+          <div><strong>{rowProduct.name}</strong><small>{rowProduct.sku || 'No SKU'}</small></div>
+          {rowProduct.serialized ? <div className="custody-transfer-serials">
+            {rowSerials.map(serial => <label key={serial.id}><input type="checkbox" checked={item.serialIds.includes(serial.id)} onChange={() => patchRequestItem(productId, { serialIds: item.serialIds.includes(serial.id) ? item.serialIds.filter(id => id !== serial.id) : [...item.serialIds, serial.id] })} /><span>{serial.serial}</span></label>)}
+            {!rowSerials.length && <small>No serials available at this source.</small>}
+          </div> : <Input type="number" value={item.qty} onChange={qty => patchRequestItem(productId, { qty })} />}
+          <button type="button" aria-label={`Remove ${rowProduct.name}`} onClick={() => toggleRequestProduct(productId)}>×</button>
+        </div>
+      })}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Receiving person / holder" required><Input value={form.receiverName} onChange={v => patch('receiverName', v)} /></Field><Field label="Purpose" required><Select value={form.purpose} onChange={v => patch('purpose', v)} options={purposes} /></Field><Field label="Related job"><Input value={form.relatedJob} onChange={v => patch('relatedJob', v)} /></Field><Field label="Expected return"><Input type="date" value={form.expectedReturnDate} onChange={v => patch('expectedReturnDate', v)} /></Field><Field label="Offline job / device reference"><Input value={form.deviceRef} onChange={v => patch('deviceRef', v)} /></Field><Field label="Device serial"><Input value={form.deviceSerial} onChange={v => patch('deviceSerial', v)} /></Field></div>
+      <Field label="Notes"><Textarea value={form.notes} onChange={v => patch('notes', v)} rows={3} /></Field>
+      <p className="text-[11px] text-text-3">Each selected product creates its own approval request. Stock is only deducted after issue confirmation.</p>
+      <div className="flex justify-end gap-2"><button className="btn-secondary px-4" onClick={() => setMode(null)}>Cancel</button><button className="btn-primary px-5" disabled={saving} onClick={() => void submitRequest()}>{saving ? 'Submitting…' : `Submit ${Object.keys(requestItems).length || ''} request${Object.keys(requestItems).length === 1 ? '' : 's'}`}</button></div>
+    </div></Modal>}
+        {mode === 'reject' && selected && <Modal title={`Reject ${selected.ref}`} onClose={() => setMode(null)}><div className="space-y-4">{error && <p className="text-xs text-red-700">{error}</p>}<Field label="Reason" required><Textarea value={form.reason} onChange={v => patch('reason', v)} rows={3} /></Field><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => setMode(null)}>Cancel</button><button className="btn-primary" disabled={saving || !form.reason.trim()} onClick={() => void send('reject', { reason: form.reason })}>Reject request</button></div></div></Modal>}
     {mode === 'close' && selected && <Modal title={`Close stock · ${selected.ref}`} subtitle={`${outstanding(selected)} unit(s) outstanding`} onClose={() => setMode(null)} width={640}><div className="space-y-4">{error && <p className="text-xs text-red-700">{error}</p>}<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Outcome" required><Select value={form.outcome} onChange={v => patch('outcome', v)} options={[{ value: 'consumed', label: 'Consumed / installed' }, { value: 'returned', label: 'Returned to source' }, { value: 'exception', label: 'Missing / damaged / exception' }]} /></Field><Field label="Quantity" required><Input type="number" value={form.qty} onChange={v => patch('qty', v)} /></Field></div>{selected.serialIds.length > 0 && <Field label="Serials to close" required hint={`${form.serialIds.length} selected`}><div className="max-h-36 overflow-y-auto rounded-lg border border-border-lt divide-y divide-border-lt">{selected.serialIds.map((id, i) => <label key={id} className="flex items-center gap-3 px-3 py-2"><input type="checkbox" checked={form.serialIds.includes(id)} onChange={() => toggle(id)} />{selected.serialNumbers[i] || id}</label>)}</div></Field>}<Field label="Closure notes"><Textarea value={form.notes} onChange={v => patch('notes', v)} rows={3} /></Field><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => setMode(null)}>Cancel</button><button className="btn-primary" disabled={saving} onClick={() => void submitClose()}>{saving ? 'Saving…' : 'Record outcome'}</button></div></div></Modal>}
   </section>
 }
