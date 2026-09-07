@@ -4744,9 +4744,55 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     padding-bottom: var(--space-8);
   }
 
+  .dashboard-hero {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.2rem 0 0.1rem;
+  }
 
+  .dashboard-hero-heading {
+    min-width: 0;
+  }
 
+  .dashboard-hero-title {
+    overflow: hidden;
+    color: var(--text-1);
+    font-size: clamp(1.35rem, 1.15rem + 0.65vw, 1.8rem);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
+  .dashboard-hero-context {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.3rem;
+    color: var(--text-3);
+    font-size: clamp(0.75rem, 0.72rem + 0.08vw, 0.82rem);
+    font-weight: 500;
+  }
+
+  .dashboard-role-pill {
+    display: inline-flex;
+    min-height: 2.25rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 0.45rem;
+    padding: 0.45rem 0.8rem;
+    background: var(--bg-card);
+    color: var(--text-2);
+    font-size: 0.78rem;
+    font-weight: 700;
+    box-shadow: var(--shadow-xs);
+  }
 
 
   .dashboard-setup-strip {
@@ -5350,6 +5396,23 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     .dashboard-page {
       gap: 0.72rem;
       padding-bottom: 1.25rem;
+    }
+
+    .dashboard-hero {
+      padding: 0.1rem 0.15rem 0.05rem;
+    }
+
+    .dashboard-hero-title {
+      font-size: clamp(1.35rem, 6vw, 1.6rem);
+      white-space: normal;
+    }
+
+    .dashboard-role-pill {
+      display: none;
+    }
+
+    .dashboard-hero-context {
+      font-size: 0.78rem;
     }
 
     .dashboard-setup-strip {
@@ -30882,8 +30945,8 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .dashboard-page .dashboard-stat-accent {
-  background: var(--primary);
-  opacity: 1;
+  background: var(--stat-accent, var(--primary));
+  opacity: 0.95;
 }
 
 .dashboard-page .dashboard-weekly-chips button:hover,
