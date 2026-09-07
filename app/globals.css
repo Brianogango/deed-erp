@@ -30947,3 +30947,60 @@ body:has(.crm-workspace) [role="dialog"] > div {
     transition: none;
   }
 }
+
+
+/* Reference topbar: centered live clock and compact status controls. */
+.app-topbar { position: relative; }
+.app-topbar-clock {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  min-width: 14rem;
+  align-items: center;
+  justify-content: center;
+  gap: .65rem;
+  padding: .45rem .7rem .45rem .9rem;
+  border: 1px solid var(--border-lt);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-2);
+  box-shadow: var(--shadow-xs);
+  transform: translate(-50%, -50%);
+}
+.app-topbar-clock:hover { background: var(--bg-muted); }
+.app-topbar-clock__dot { width: .35rem; height: .35rem; border-radius: 50%; background: var(--text-4); }
+.app-topbar-clock span:nth-child(2) { display: grid; min-width: 6.8rem; text-align: left; }
+.app-topbar-clock small { color: var(--text-3); font-size: .58rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.app-topbar-clock strong { color: var(--text-1); font-family: var(--font-mono), ui-monospace, monospace; font-size: .82rem; line-height: 1.15; }
+.app-topbar-clock__mic { display: grid; width: 1.8rem; height: 1.8rem; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--primary) 9%, var(--bg-card)); color: var(--primary); }
+.app-topbar-role { max-width: 8rem; overflow: hidden; border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border-lt)); border-radius: 999px; padding: .25rem .65rem; background: color-mix(in srgb, var(--primary) 8%, var(--bg-card)); color: var(--primary); font-size: .65rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.app-topbar-currency { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid var(--border-lt); border-radius: .7rem; padding: .45rem .65rem; background: var(--bg-card); color: var(--text-2); font-size: .7rem; font-weight: 800; }
+
+/* Contacts reference: tabs and repeatable related-person editor. */
+.contacts-details-tabs { grid-column: 1 / -1; min-width: 0; }
+.contacts-details-tabs__nav { display: flex; gap: .35rem; overflow-x: auto; border: 1px solid var(--border-lt); border-radius: .9rem; padding: .3rem; background: var(--bg-surface); }
+.contacts-details-tabs__nav button { display: inline-flex; min-height: 2.35rem; align-items: center; gap: .45rem; border-radius: .65rem; padding: .45rem 1rem; color: var(--text-3); font-size: .78rem; font-weight: 750; white-space: nowrap; }
+.contacts-details-tabs__nav button:hover, .contacts-details-tabs__nav button.is-active { background: var(--bg-card); color: var(--primary); box-shadow: var(--shadow-xs); }
+.contacts-details-tabs__nav button span { display: grid; min-width: 1.25rem; height: 1.25rem; place-items: center; border-radius: 999px; background: color-mix(in srgb, var(--primary) 11%, transparent); font-size: .62rem; }
+.contacts-details-tabs__panel { margin-top: .75rem; border: 1px solid var(--border-lt); border-radius: 1.25rem; padding: clamp(1rem, 2.2vw, 1.75rem); background: color-mix(in srgb, var(--bg-surface) 72%, var(--bg-card)); }
+.contacts-persons-editor { display: grid; gap: 1rem; }
+.contacts-persons-editor > header { display: grid; gap: .2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-lt); }
+.contacts-persons-editor > header strong { color: var(--text-1); font-size: .9rem; }
+.contacts-persons-editor > header span { color: var(--text-4); font-size: .75rem; }
+.contacts-person-card { display: grid; grid-template-columns: minmax(8rem,.65fr) repeat(2,minmax(10rem,1fr)); gap: .75rem; border: 1px solid var(--border-lt); border-radius: 1rem; padding: 1rem; background: var(--bg-card); }
+.contacts-person-remove { justify-self: end; border-radius: .55rem; padding: .45rem .7rem; background: var(--danger-bg); color: var(--danger); font-size: .7rem; font-weight: 800; }
+.contacts-person-add { justify-self: start; }
+.contacts-documents-empty { display: grid; min-height: 9rem; place-content: center; gap: .35rem; color: var(--text-4); text-align: center; }
+.contacts-documents-empty strong { color: var(--text-2); }
+
+@media (max-width: 1180px) {
+  .app-topbar-clock { position: static; min-width: 10rem; transform: none; }
+  .app-topbar-search, .app-topbar-controls > button[title^="Switch to"] { display: none; }
+}
+@media (max-width: 767px) {
+  .app-topbar-clock { min-width: 0; padding-inline: .55rem; }
+  .app-topbar-clock span:nth-child(2), .app-topbar-role, .app-topbar-currency { display: none; }
+  .contacts-person-card { grid-template-columns: 1fr; }
+  .contacts-person-remove { justify-self: stretch; }
+}
