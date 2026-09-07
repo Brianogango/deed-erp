@@ -149,7 +149,7 @@ import {
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
 import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
-import { isNonStockSaleLine } from '@/lib/sales/non-stock-line'
+import { isNonStockSaleLine, isDeliveryNoteLine } from '@/lib/sales/non-stock-line'
 import { sumUnappliedDownPayments } from '@/lib/sales/down-payment'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 
@@ -905,7 +905,7 @@ function SalesContent() {
     ? saleOrderFulfilmentStatus(activeOrder.status, (activeOrder.lines ?? []).map((l: any) => ({
         qty: Number(l.qty) || 0,
         qtyDelivered: Number(l.qtyDelivered) || 0,
-        needsDelivery: !isNonStockSaleLine(l, products.find(p => p.id === l.productId) ?? null),
+        needsDelivery: isDeliveryNoteLine(l),
       })))
     : 'nothing'
   const activeOperationallyComplete = activeOrder
@@ -1887,6 +1887,7 @@ function SalesContent() {
                   updateDelivery={updateDelivery}
                   showToast={showToast}
                   onBack={() => { setFocusDeliveryId(null); setView('form'); if (activeOrder) syncOrderUrl(activeOrder.id, 'form') }}
+                  ensureWaitingDeliveryForSO={ensureWaitingDeliveryForSO}
                   dnRecipientName={dnRecipientName}
                   setDnRecipientName={setDnRecipientName}
                   dnRecipientPhone={dnRecipientPhone}
@@ -4487,7 +4488,7 @@ function NewQuotationForm({
 function DeliveryNoteView({
   order, deliveries, contacts = [], focusDeliveryId, serials, products, companySettings, bankAccounts, deliveryQtys, setDeliveryQtys, savingDelivery,
   setSavingDelivery, prepareDelivery, validateDelivery, markDeliveryNoteGenerated, assignSerialsToSOLine, unassignSerialFromSOLine,
-  updateDelivery, showToast, onBack,
+  updateDelivery, showToast, onBack, ensureWaitingDeliveryForSO,
   dnRecipientName, setDnRecipientName, dnRecipientPhone, setDnRecipientPhone,
   dnRecipientId, setDnRecipientId, dnAddress, setDnAddress, dnNotes, setDnNotes,
 }: {
@@ -4503,6 +4504,7 @@ function DeliveryNoteView({
   unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
   updateDelivery: (id: string, p: any) => void
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void; onBack: () => void
+  ensureWaitingDeliveryForSO: (id: string) => Promise<any>
   dnRecipientName: string; setDnRecipientName: (v: string) => void
   dnRecipientPhone: string; setDnRecipientPhone: (v: string) => void
   dnRecipientId: string; setDnRecipientId: (v: string) => void
@@ -4534,7 +4536,18 @@ function DeliveryNoteView({
   const canPrepare = orderConfirmed && !!existingDelivery && isOpenDeliveryStatus(deliveryStatus)
     && ['draft', 'waiting', 'ready'].includes(deliveryStatus)
   const canValidate = orderConfirmed && !!existingDelivery && deliveryStatus === 'ready' && !!existingDelivery.preparedAt
+  const canCreateDelivery = orderConfirmed && !existingDelivery && (order.lines ?? []).some((l: any) => isDeliveryNoteLine(l))
   const [serialScan, setSerialScan] = useState('')
+  const [creatingDelivery, setCreatingDelivery] = useState(false)
+  const autoCreateAttemptedFor = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!canCreateDelivery) return
+    if (autoCreateAttemptedFor.current === order.id) return
+    autoCreateAttemptedFor.current = order.id
+    setCreatingDelivery(true)
+    void ensureWaitingDeliveryForSO(order.id).finally(() => setCreatingDelivery(false))
+  }, [canCreateDelivery, ensureWaitingDeliveryForSO, order.id])
 
   const pickingSummary = useMemo(() => {
     const pairs = pairOrderLinesWithDeliveryLines(order.lines, existingDelivery?.lines ?? [])
@@ -4542,7 +4555,7 @@ function DeliveryNoteView({
     let picked = 0
     for (const { orderLine: l, deliveryLine: delLine } of pairs) {
       if ((l as any).lineType === 'section') continue
-      if (isNonStockSaleLine(l, products.find(p => p.id === l.productId) ?? null)) continue
+      if (!isDeliveryNoteLine(l)) continue
       const demand = Math.max(0, Number(l.qty) || 0)
       required += demand
       const serialCount = Array.isArray(l.serialIds) ? l.serialIds.length : 0
@@ -4560,7 +4573,7 @@ function DeliveryNoteView({
     const remaining = Math.max(0, required - picked)
     const pct = required > 0 ? Math.round((picked / required) * 100) : 0
     return { required, picked, remaining, pct }
-  }, [order.lines, existingDelivery, deliveryQtys, canPrepare, products])
+  }, [order.lines, existingDelivery, deliveryQtys, canPrepare])
 
   const handleSerialScan = (e: FormEvent) => {
     e.preventDefault()
@@ -4636,6 +4649,17 @@ function DeliveryNoteView({
       quantities[line.productId] = (quantities[line.productId] ?? 0) + qty
     })
     return quantities
+  }
+
+  const handleCreateDelivery = async () => {
+    if (!canCreateDelivery || creatingDelivery) return
+    setCreatingDelivery(true)
+    try {
+      const created = await ensureWaitingDeliveryForSO(order.id)
+      if (!created) showToast('Could not create a delivery for this order', 'error')
+    } finally {
+      setCreatingDelivery(false)
+    }
   }
 
   const handlePrepare = () => {
@@ -4803,6 +4827,11 @@ function DeliveryNoteView({
               {savingDelivery ? 'Saving…' : 'Mark as delivered'}
             </button>
           )}
+          {canCreateDelivery && (
+            <button type="button" className="sp-btn sp-btn-primary" onClick={() => void handleCreateDelivery()} disabled={creatingDelivery}>
+              {creatingDelivery ? 'Creating…' : 'Create delivery'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -4811,21 +4840,21 @@ function DeliveryNoteView({
           {
             key: 'waiting',
             label: 'Waiting',
-            state: ['ready', 'done'].includes(String(existingDelivery?.status)) ? 'done' : 'current',
+            state: ['ready', 'done'].includes(deliveryStatus) ? 'done' : 'current',
           },
           {
             key: 'ready',
             label: 'Ready',
-            state: existingDelivery?.status === 'done'
+            state: deliveryStatus === 'done'
               ? 'done'
-              : existingDelivery?.status === 'ready'
+              : deliveryStatus === 'ready'
                 ? 'current'
                 : 'todo',
           },
           {
             key: 'done',
             label: 'Done',
-            state: existingDelivery?.status === 'done' ? 'current' : 'todo',
+            state: deliveryStatus === 'done' ? 'current' : 'todo',
           },
           {
             key: 'backorder',
@@ -4876,7 +4905,7 @@ function DeliveryNoteView({
         </dl>
         <div className="sales-delivery-summary__next">
           <span>Next action</span>
-          <strong>{canPrepare ? 'Reserve stock' : canValidate ? 'Validate delivery' : 'Delivery complete'}</strong>
+          <strong>{canCreateDelivery ? 'Create delivery' : canPrepare ? 'Reserve stock' : canValidate ? 'Validate delivery' : 'Delivery complete'}</strong>
         </div>
       </section>
 
@@ -4969,11 +4998,9 @@ function DeliveryNoteView({
                     qtyDone: delLine?.qtyDone,
                     serialIds: delLine?.serialIds?.length ? delLine.serialIds : l.serialIds,
                   })
-                  const delivered = Math.max(
-                    Number(deliveryQtys[l.id]) || 0,
-                    Number(l.qtyDelivered) || 0,
-                    effectiveDone,
-                  )
+                  const delivered = canPrepare
+                    ? Math.min(l.qty, Math.max(Number(deliveryQtys[l.id]) || 0, Number(l.qtyDelivered) || 0, effectiveDone))
+                    : Math.max(Number(l.qtyDelivered) || 0, effectiveDone)
                   const preparedQty = effectiveDone
                   const isFullyDelivered = delivered >= l.qty
                   const isPartial = delivered > 0 && delivered < l.qty
@@ -5067,6 +5094,11 @@ function DeliveryNoteView({
           </div>
           <div className="sales-proto-actions">
             <button type="button" className="sp-btn" onClick={onBack}>Back</button>
+            {canCreateDelivery && (
+              <button type="button" className="sp-btn sp-btn-primary" onClick={() => void handleCreateDelivery()} disabled={creatingDelivery}>
+                {creatingDelivery ? 'Creating…' : 'Create delivery'}
+              </button>
+            )}
             {canPrepare && (
               <button type="button" className="sp-btn sp-btn-primary" onClick={handlePrepare} disabled={savingDelivery}>
                 {savingDelivery ? 'Saving…' : 'Complete picking'}

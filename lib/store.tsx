@@ -144,6 +144,7 @@ import {
   invoiceResidual,
   hasValidatedDeliveryForInvoice,
   isOpenDeliveryStatus,
+  normalizeDeliveryStatus,
   remainingUndeliveredByProduct,
   openDeliveryDemandByProduct,
   saleOrderLooksConfirmed,
@@ -162,7 +163,7 @@ import {
   planPrepareDeliveryLines,
   sumQtyByProductId,
 } from '@/lib/delivery-prepare'
-import { isNonStockSaleLine, saleLineFieldsForRepairQuoteLine } from '@/lib/sales/non-stock-line'
+import { isNonStockSaleLine, isDeliveryNoteLine, saleLineFieldsForRepairQuoteLine } from '@/lib/sales/non-stock-line'
 import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
 import {
   normalizeDocumentPaymentDetails,
@@ -12167,18 +12168,16 @@ const storeCtx: AppState = {
         const serverRef = String(confirmPayload?.orderNumber ?? confirmPayload?.ref ?? orderRef)
         const serverLock = confirmPayload?.lockVersion
 
-        const stockableLines = orderLines.filter(l =>
-          !isNonStockSaleLine(l, prodRef.current.find(p => p.id === l.productId) ?? null),
-        )
+        const deliveryNoteLines = orderLines.filter(l => isDeliveryNoteLine(l))
 
         let del = reuseDelivery
-        if (!del && stockableLines.length > 0) {
+        if (!del && deliveryNoteLines.length > 0) {
           const dnRef = await storeCtxRef.current!.allocateDocRef('DN')
           del = {
             id: uid(), ref: dnRef, saleOrderId: id, saleOrderRef: serverRef,
             customerId: so.customerId, customerName: so.customerName,
             status: 'waiting', date: now(),
-            lines: stockableLines.map(l => {
+            lines: deliveryNoteLines.map(l => {
               const prod = prodRef.current.find(p => p.id === l.productId)
               const selectedSource = (so.lines.find(line => line.id === l.id) as (SaleOrderLine & { sourceLocation?: LocationId }) | undefined)?.sourceLocation
               let sourceLocation
@@ -12308,10 +12307,7 @@ const storeCtx: AppState = {
       const anyActive = delRef.current.find(d => d.saleOrderId === id && d.status !== 'cancelled')
       if (anyActive) return anyActive
 
-      const orderLines = so.lines.filter((line: any) =>
-        line.lineType !== 'section'
-        && !isNonStockSaleLine(line, prodRef.current.find(p => p.id === line.productId) ?? null),
-      )
+      const orderLines = so.lines.filter((line: any) => isDeliveryNoteLine(line))
       if (!orderLines.length) {
         return null
       }
@@ -12424,7 +12420,7 @@ const storeCtx: AppState = {
         return false
       }
       const del = delRef.current.find(d => d.id === deliveryId)
-      if (!del || !['draft', 'waiting', 'ready'].includes(del.status)) {
+      if (!del || !['draft', 'waiting', 'ready'].includes(normalizeDeliveryStatus(del.status))) {
         showToast('No pending delivery available to prepare', 'error')
         return false
       }
@@ -19184,9 +19180,8 @@ const storeCtx: AppState = {
       const remaining = remainingUndeliveredByProduct(so.lines)
       const lines = (so.lines ?? [])
         .filter(line =>
-          (line as any).lineType !== 'section'
+          isDeliveryNoteLine(line)
           && remaining[line.productId] > 0
-          && !isNonStockSaleLine(line, prodRef.current.find(p => p.id === line.productId) ?? null),
         )
         .map(line => {
           const prod = prodRef.current.find(p => p.id === line.productId)
@@ -19222,12 +19217,9 @@ const storeCtx: AppState = {
           }
         })
       if (lines.length === 0) {
-        const hasStockable = (so.lines ?? []).some((line: any) =>
-          line.lineType !== 'section'
-          && !isNonStockSaleLine(line, prodRef.current.find(p => p.id === line.productId) ?? null),
-        )
+        const hasFulfillmentLines = (so.lines ?? []).some((line: any) => isDeliveryNoteLine(line))
         showToast(
-          hasStockable
+          hasFulfillmentLines
             ? `${so.ref} is fully delivered — no new delivery needed`
             : `${so.ref} has no stockable lines — create an invoice from ordered quantities`,
           'info',

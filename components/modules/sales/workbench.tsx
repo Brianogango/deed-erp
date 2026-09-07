@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { FormField, WorkflowStageBar } from '@/components/erp'
+import { normalizeDeliveryStatus } from '@/lib/odoo-sales-flow'
 import '@/components/sales-prototype/sales-prototype.css'
 import '@/components/modules/odoo-record-designs.css'
 
@@ -139,7 +140,7 @@ export function saleStatusPill(status: string): { label: string; tone: SalesDocP
 }
 
 export function deliveryStatusPill(status: string): { label: string; tone: SalesDocPillTone } {
-  switch (status) {
+  switch (normalizeDeliveryStatus(status)) {
     case 'draft':
     case 'waiting':
       return { label: 'Waiting', tone: 'warning' }
