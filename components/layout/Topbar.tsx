@@ -925,7 +925,22 @@ function AccountPanel({
   return (
     <>
       <div className="acct-backdrop" onClick={onClose} />
-      <aside className="acct-panel" role="dialog" aria-modal="true" aria-label="Account Settings">
+      <aside
+        className="acct-panel max-md:!inset-0 max-md:!h-[100dvh] max-md:!w-full max-md:!max-w-none max-md:!rounded-none max-md:!border-0"
+        style={{
+          top: '16px',
+          right: '16px',
+          bottom: '16px',
+          width: 'min(500px, calc(100vw - 32px))',
+          maxWidth: 'calc(100vw - 32px)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          boxShadow: '0 24px 64px rgba(15, 23, 42, 0.24)',
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Account Settings"
+      >
         <header className="acct-panel-header">
           <div className="acct-header-icon" aria-hidden="true">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
