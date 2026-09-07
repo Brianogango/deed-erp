@@ -198,7 +198,7 @@ function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = 'var
 
 export function Dashboard() {
   const mounted = useMounted()
-  const storeHydrated = useStoreHydrated()
+  useStoreHydrated()
   const pathname = usePathname()
   const routeReady = useRouteDataReady(pathname || '/')
   const [dashboardClock, setDashboardClock] = useState({ greeting: 'Welcome', date: '' })
@@ -700,7 +700,7 @@ export function Dashboard() {
 
   // Gate on the route store GET, not LAST_SYNC_AT: a prior visit can leave a
   // sync timestamp while this route's collections are still in flight.
-  if (!mounted || !routeReady || !storeHydrated) return <ModuleSkeleton />
+  if (!mounted || !routeReady) return <ModuleSkeleton />
 
   return (
     <div className="dashboard-page">
