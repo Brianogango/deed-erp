@@ -38,7 +38,7 @@ const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
 export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
   '/dashboard': '/',
   '/purchase': '/purchases',
-  '/inventory': '/operations',
+  '/operations': '/inventory',
   '/accounting': '/finance',
   '/after_sales': '/aftersales',
   '/hr/documents': '/documents',

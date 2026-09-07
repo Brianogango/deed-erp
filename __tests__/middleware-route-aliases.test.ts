@@ -33,6 +33,26 @@ describe('legacy ERP route aliases', () => {
     )
   })
 
+  it('sends the retired operations URL to inventory without dropping query params', async () => {
+    const response = await middleware(
+      new NextRequest('https://erp.example.test/operations?tab=reports&serial=ABC'),
+    )
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe(
+      'https://erp.example.test/inventory?tab=reports&serial=ABC',
+    )
+  })
+
+  it('does not bounce the canonical inventory route', async () => {
+    const response = await middleware(
+      new NextRequest('https://erp.example.test/inventory?tab=transfers'),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-middleware-next')).toBe('1')
+  })
+
   it('does not redirect an already canonical route', async () => {
     const response = await middleware(
       new NextRequest('https://erp.example.test/purchases?status=draft'),

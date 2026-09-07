@@ -10,7 +10,7 @@
 |------|-------|-------------|
 | Finance | `/finance` | Invoices, bills, payments, journals, reports |
 | Sales / CRM / Contacts | `/sales`, `/crm`, `/contacts` | Quotes, SOs, customer master |
-| Purchases / Inventory | `/purchases`, `/operations` | POs, stock visibility for costing |
+| Purchases / Inventory | `/purchases`, `/inventory` | POs, stock visibility for costing |
 | Kilimall / E-commerce | `/kilimall`, `/ecommerce` | Marketplace settlement context |
 | Deposits / Reconfiguration | `/deposits`, `/reconfiguration` | Deposit accounting, rebuild costing |
 | Dashboard | `/` | Cash and AR cues |

@@ -26,10 +26,14 @@ describe('bootApiGroupsForRoute', () => {
   })
 
   it('lists idle groups as the remainder', () => {
-    const immediate = bootApiGroupsForRoute('/operations')
+    const immediate = bootApiGroupsForRoute('/inventory')
     const rest = remainingBootApiGroups(immediate)
     expect(rest).toContain('crm')
     expect(rest).not.toContain('products')
     expect(rest).not.toContain('stock_moves')
+  })
+
+  it('keeps the operations alias on the same boot groups as inventory', () => {
+    expect(bootApiGroupsForRoute('/operations')).toEqual(bootApiGroupsForRoute('/inventory'))
   })
 })

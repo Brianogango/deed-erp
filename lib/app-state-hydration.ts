@@ -70,7 +70,7 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   ],
   '/purchases': ['deed_products', 'deed_purchaseOrders', 'deed_receipts', 'deed_invoices', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock', 'deed_serials'],
   '/purchase': ['deed_products', 'deed_purchaseOrders', 'deed_receipts', 'deed_invoices', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock', 'deed_serials'],
-  '/operations': ['deed_products', 'deed_bulkStock', 'deed_stockTransfers', 'deed_stockAdjustments', 'deed_stockReservations', 'deed_openingStockPosted', 'deed_serials', 'deed_receipts', 'deed_refurbishmentJobs', 'deed_purchaseOrders', 'deed_stockMoves'],
+  '/operations': ['deed_products', 'deed_productPriceHistory', 'deed_bulkStock', 'deed_stockTransfers', 'deed_stockAdjustments', 'deed_stockReservations', 'deed_openingStockPosted', 'deed_serials', 'deed_receipts', 'deed_refurbishmentJobs', 'deed_purchaseOrders', 'deed_stockMoves'],
   '/inventory': ['deed_products', 'deed_productPriceHistory', 'deed_bulkStock', 'deed_stockTransfers', 'deed_stockAdjustments', 'deed_stockReservations', 'deed_openingStockPosted', 'deed_serials', 'deed_receipts', 'deed_refurbishmentJobs', 'deed_purchaseOrders', 'deed_stockMoves'],
   '/repairs': ['deed_repairs_v2', 'deed_contacts', 'deed_products', 'deed_invoices', 'deed_serials', 'deed_refurbishmentJobs', 'deed_warranties', 'deed_outboundReleases', 'deed_outsourceJobs', 'deed_outsourceVendors'],
   '/contacts': ['deed_contacts', 'deed_customerCredits'],

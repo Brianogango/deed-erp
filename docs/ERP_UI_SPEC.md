@@ -93,7 +93,7 @@ Baseline screenshots are stored under:
 Required routes:
 - `/` (dashboard)
 - `/sales`
-- `/operations`
+- `/inventory`
 - `/finance`
 - `/hr`
 - `/repairs`

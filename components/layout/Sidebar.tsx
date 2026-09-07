@@ -80,7 +80,7 @@ export default function Sidebar() {
     { label: 'E-commerce',    href: '/ecommerce',     id: 'ecommerce',     icon: faGlobe },
     { label: 'Kilimall',      href: '/kilimall',      id: 'kilimall',      icon: faGlobe },
     { label: 'Contacts',      href: '/contacts',      id: 'contacts',      icon: faAddressBook },
-    { label: role === 'director' ? 'Operations' : 'Inventory', href: '/operations', id: 'inventory', icon: faBoxesStacked },
+    { label: 'Inventory', href: '/inventory', id: 'inventory', icon: faBoxesStacked },
     { label: 'Purchases',     href: '/purchases',     id: 'purchase',      icon: faCartShopping },
     { label: 'Delivery',      href: '/delivery',      id: 'delivery',      icon: faTruck },
     { label: 'Repairs',       href: '/repairs',       id: 'repair',        icon: faScrewdriverWrench, badge: pendingRepairs },

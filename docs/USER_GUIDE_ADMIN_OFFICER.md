@@ -12,7 +12,7 @@ You run day-to-day commercial and ops workflows. You do **not** manage system us
 |------|-------|-------------|
 | Dashboard | `/` | Work queue |
 | Sales / CRM / Contacts | `/sales`, `/crm`, `/contacts` | Quotes, SOs, customers |
-| Purchases / Inventory | `/purchases`, `/operations` | POs, receipts, stock |
+| Purchases / Inventory | `/purchases`, `/inventory` | POs, receipts, stock |
 | Delivery / After-Sales | `/delivery`, `/aftersales` | Shipments and returns |
 | Deposits / Holdovers | `/deposits`, `/holdovers` | Customer deposits, holdovers |
 | Reconfiguration | `/reconfiguration` | Device rebuild jobs |

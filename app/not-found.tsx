@@ -52,7 +52,7 @@ export default function NotFound() {
             {[
               { label: 'Sales', href: '/sales' },
               { label: 'Repairs', href: '/repairs' },
-              { label: 'Inventory', href: '/operations' },
+              { label: 'Inventory', href: '/inventory' },
               { label: 'Finance', href: '/finance' },
               { label: 'HR', href: '/hr' },
               { label: 'Settings', href: '/settings' },

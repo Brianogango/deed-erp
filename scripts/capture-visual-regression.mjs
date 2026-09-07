@@ -23,7 +23,7 @@ const viewports = [
 const routes = [
   { slug: 'dashboard', path: '/' },
   { slug: 'sales', path: '/sales' },
-  { slug: 'operations', path: '/operations' },
+  { slug: 'inventory', path: '/inventory' },
   { slug: 'finance', path: '/finance' },
   { slug: 'hr-employees', path: '/hr?tab=employees' },
   { slug: 'hr-recruitment', path: '/hr?tab=recruitment' },

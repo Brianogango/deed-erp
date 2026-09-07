@@ -61,7 +61,7 @@ export function useOnboardingState({
       id: 'product',
       label: 'First product created',
       done: products.length > 0,
-      path: '/operations?tab=products',
+      path: '/inventory?tab=products',
     },
     {
       id: 'contact',
