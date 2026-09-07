@@ -13,6 +13,7 @@ import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosSessionRef, 
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { allocateDocNumber } from '@/lib/doc-numbers'
 import { persistClientStoreValue } from '@/lib/client-store-cache'
+import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
@@ -5774,14 +5775,6 @@ export function StoreProvider({
       try {
         switch (group) {
           case 'products': {
-            await fetch('/api/products/normalize-serial-tracking', { method: 'POST' }).catch(() => null)
-            const deviceConfigRes = await fetch('/api/products/normalize-device-config', { method: 'POST' }).catch(() => null)
-            if (deviceConfigRes?.ok) {
-              const healed = await deviceConfigRes.json().catch(() => null) as { serials?: SerialNumber[]; serialsUpdated?: number } | null
-              if (Number(healed?.serialsUpdated) > 0 && Array.isArray(healed?.serials)) {
-                setSerials(healed.serials as SerialNumber[])
-              }
-            }
             refreshProductCatalog()
             break
           }
@@ -5889,6 +5882,7 @@ export function StoreProvider({
     const path = typeof window !== 'undefined' ? (window.location.pathname || '/') : '/'
     const immediate = bootApiGroupsForRoute(path)
     void Promise.all(immediate.map(runGroup))
+    scheduleCatalogHealOnce()
 
     // Only warm high-traffic groups in the background — full remainingBoot
     // fan-out competed with the user's first clicks after login.
@@ -10574,19 +10568,6 @@ const storeCtx: AppState = {
 
     refreshProductCatalog: async () => {
       try {
-        // Idempotent: force SERIAL on all Laptops / machine-category products.
-        await fetch('/api/products/normalize-serial-tracking', { method: 'POST' }).catch(() => null)
-        // Idempotent: copy RAM/SSD from existing product names onto catalog specs
-        // and blank serial.specs so already-received units match new intake.
-        const deviceConfigRes = await fetch('/api/products/normalize-device-config', { method: 'POST' }).catch(() => null)
-        if (deviceConfigRes?.ok) {
-          const healed = await deviceConfigRes.json().catch(() => null) as { serials?: SerialNumber[]; serialsUpdated?: number } | null
-          if (Number(healed?.serialsUpdated) > 0 && Array.isArray(healed?.serials)) {
-            setSerials(healed.serials as SerialNumber[])
-          }
-        }
-        // Idempotent: rewrite legacy INV-* tags to manufacturer serial.
-        await storeCtxRef.current!.normalizeInventoryTags().catch(() => 0)
         const res = await fetch('/api/products?lite=1')
         if (!res.ok) return 0
         const rows = await res.json()

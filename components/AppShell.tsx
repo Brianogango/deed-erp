@@ -4,17 +4,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
 import { AppProvider, useShellStore, User } from '@/lib/store'
-import { appStateKeysForRoute } from '@/lib/app-state-hydration'
+import { criticalAppStateKeysForRoute, deferredAppStateKeysForRoute } from '@/lib/app-state-hydration'
 import { markRouteWarmed } from '@/lib/warm-route'
 import { Toast } from '@/components/ui'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
 import JarvisPanel from '@/components/jarvis/JarvisPanel'
 import { hasModuleAccess } from '@/lib/auth/access'
-import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { markRouteDataReady, useRouteDataReady } from '@/lib/route-data-ready'
 import { ModuleRenderBoundary } from '@/components/erp'
 import { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
+import { fetchAndApplyStoreKeys, keysAreCached, readDirtyStoreKeys } from '@/lib/client-store-hydrate'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -465,28 +465,26 @@ function AppContent({ children }: { children: React.ReactNode }) {
   // the mounted skeleton tick. Also notify StoreProvider so Prisma boot APIs
   // for the new route can warm without a full remount.
   //
-  // Do not mark the route "warmed" until the GET settles — otherwise a fast
-  // re-entry can skip a still-in-flight fetch. Cached keys still fetch with
-  // If-None-Match so the module can paint immediately. Visibility refetch
-  // deletes from hydratedRoutesRef but never from readyRoutes, so an already
-  // shown module is not replaced with a skeleton on tab focus.
+  // First GET is the critical key set so the loading gate can release. A second
+  // GET fills deferred collections (journals, serials, catalog extras) without
+  // blocking the module. Visibility refetch deletes from hydratedRoutesRef but
+  // never from readyRoutes, so an already-shown module is not skeletoned.
   useEffect(() => {
     if (isPublicRepairTracker || !currentUserId) return
     const route = pathname || '/'
     window.dispatchEvent(new CustomEvent('deed_route_change', { detail: { pathname: route } }))
 
-    const keys = appStateKeysForRoute(route)
-    if (keys.length === 0) {
+    const criticalKeys = criticalAppStateKeysForRoute(route)
+    const deferredKeys = deferredAppStateKeysForRoute(route)
+    if (criticalKeys.length === 0 && deferredKeys.length === 0) {
       hydratedRoutesRef.current.add(route)
       markRouteWarmed(route)
       markRouteDataReady(route)
       return
     }
 
-    const allKeysCached = keys.every(key => {
-      try { return window.localStorage.getItem(key) !== null } catch { return false }
-    })
-    if (allKeysCached) markRouteDataReady(route)
+    const criticalCached = keysAreCached(criticalKeys)
+    if (criticalCached) markRouteDataReady(route)
 
     if (hydratedRoutesRef.current.has(route)) {
       markRouteWarmed(route)
@@ -495,89 +493,52 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
 
     lastRouteRefreshRef.current = Date.now()
-
-    const dirtyKeys = (() => {
-      try {
-        const raw = window.localStorage.getItem('deed_dirty_keys')
-        return new Set<string>(raw ? JSON.parse(raw) : [])
-      } catch {
-        return new Set<string>()
-      }
-    })()
-
-    // Conditional fetch: when localStorage already holds every key for this
-    // route, send the stored ETag — an unchanged dataset answers 304 with no
-    // payload, so screens hydrate instantly from the local cache instead of
-    // re-downloading hundreds of KB after every login / full page load.
-    const etagStorageKey = `deed_store_etag_${currentUserId}_${route}`
-    const storedEtag = (() => {
-      try { return window.localStorage.getItem(etagStorageKey) } catch { return null }
-    })()
-
+    const dirtyKeys = readDirtyStoreKeys()
     const controller = new AbortController()
     const paintCap = window.setTimeout(() => markRouteDataReady(route), 10_000)
+    const etagCritical = `deed_store_etag_${currentUserId}_${route}`
+    const etagDeferred = `deed_store_etag_${currentUserId}_${route}_deferred`
 
-    const settle = () => {
-      hydratedRoutesRef.current.add(route)
+    const settlePaint = () => {
       markRouteWarmed(route)
       markRouteDataReady(route)
     }
+    const settleAll = () => {
+      hydratedRoutesRef.current.add(route)
+      settlePaint()
+    }
 
-    fetch(`/api/store?keys=${encodeURIComponent(keys.join(','))}`, {
-      signal: controller.signal,
-      headers: storedEtag && allKeysCached ? { 'If-None-Match': storedEtag } : undefined,
-    })
-      .then(res => {
-        if (res.status === 304) return null // local cache is current
-        if (!res.ok) return null
-        const etag = res.headers.get('etag')
-        try {
-          if (etag) window.localStorage.setItem(etagStorageKey, etag)
-        } catch { /* storage full — conditional fetch just won't apply next time */ }
-        return res.json()
-      })
-      .then((state: Record<string, unknown> | null) => {
-        if (!state) {
-          settle()
-          return
+    ;(async () => {
+      try {
+        if (criticalKeys.length > 0) {
+          const result = await fetchAndApplyStoreKeys({
+            keys: criticalKeys,
+            etagStorageKey: etagCritical,
+            dirtyKeys,
+            signal: controller.signal,
+          })
+          if (result === 'error') markRouteDataReady(route)
+          else settlePaint()
+        } else {
+          settlePaint()
         }
-        // Collection keys that must be arrays — writing an object/null here is what
-        // used to crash Sidebar/Topbar with a blank page after login.
-        const arrayKeys = /^(deed_repairs_v2|deed_products|deed_invoices|deed_saleOrders|deed_contacts|deed_employees|deed_expenses|deed_purchaseOrders|deed_stockTransfers|deed_serials|deed_accounts|deed_posOrders|deed_deliveries|deed_journalEntries|deed_leaveRequests|deed_opportunities|deed_companies|deed_quotes|deed_holdovers|deed_companyAssets|deed_deposits|deed_buyBacks|deed_warranties|deed_outsourceJobs|deed_outsourceVendors|deed_outsourcePayments|deed_bankAccounts|deed_receipts|deed_customerCredits|deed_workflowApprovals|deed_contracts|deed_customerContracts|deed_employeeAssets|deed_kilimallOrders|deed_payrollRuns)$/
-        for (const [key, value] of Object.entries(state)) {
-          if (!key.startsWith('deed_') || dirtyKeys.has(key)) continue
-          let serialized: string
-          try {
-            serialized = typeof value === 'string' ? value : JSON.stringify(value)
-          } catch {
-            continue
-          }
-          if (arrayKeys.test(key)) {
-            try {
-              const parsed = typeof value === 'string' ? JSON.parse(serialized) : value
-              if (!Array.isArray(parsed)) continue
-            } catch {
-              continue
-            }
-          }
-          try {
-            if (window.localStorage.getItem(key) === serialized) continue
-            persistClientStoreValue(key, serialized)
-          } catch {
-            continue
-          }
-          window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: serialized } }))
+        if (deferredKeys.length > 0 && !controller.signal.aborted) {
+          await fetchAndApplyStoreKeys({
+            keys: deferredKeys,
+            etagStorageKey: etagDeferred,
+            dirtyKeys,
+            signal: controller.signal,
+          })
         }
-        settle()
-      })
-      .catch((err: unknown) => {
+        if (!controller.signal.aborted) settleAll()
+      } catch (err: unknown) {
         if (err instanceof DOMException && err.name === 'AbortError') return
         if (err instanceof Error && err.name === 'AbortError') return
         markRouteDataReady(route)
-      })
-      .finally(() => {
+      } finally {
         window.clearTimeout(paintCap)
-      })
+      }
+    })()
 
     return () => {
       controller.abort()

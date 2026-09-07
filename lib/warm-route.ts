@@ -3,8 +3,8 @@
  * Safe to call on sidebar hover / focus; dedupes in-flight work.
  */
 
-import { appStateKeysForRoute } from '@/lib/app-state-hydration'
-import { persistClientStoreValue } from '@/lib/client-store-cache'
+import { criticalAppStateKeysForRoute, deferredAppStateKeysForRoute } from '@/lib/app-state-hydration'
+import { fetchAndApplyStoreKeys, readDirtyStoreKeys } from '@/lib/client-store-hydrate'
 import { bootApiGroupsForRoute } from '@/lib/boot-apis'
 
 const warmedRoutes = new Set<string>()
@@ -23,60 +23,34 @@ export function warmRoute(pathname: string, currentUserId?: string | null): void
   if (!route || warmedRoutes.has(route) || inFlight.has(route)) return
 
   const work = (async () => {
-    // Kick Prisma boot groups for this route (StoreProvider listens).
     window.dispatchEvent(new CustomEvent('deed_route_change', { detail: { pathname: route } }))
 
-    const keys = appStateKeysForRoute(route)
-    if (keys.length === 0) return
+    const criticalKeys = criticalAppStateKeysForRoute(route)
+    const deferredKeys = deferredAppStateKeysForRoute(route)
+    if (criticalKeys.length === 0 && deferredKeys.length === 0) return
 
-    const dirtyKeys = (() => {
-      try {
-        const raw = window.localStorage.getItem('deed_dirty_keys')
-        return new Set<string>(raw ? JSON.parse(raw) : [])
-      } catch {
-        return new Set<string>()
-      }
-    })()
-
-    const etagStorageKey = currentUserId
+    const dirtyKeys = readDirtyStoreKeys()
+    const etagCritical = currentUserId
       ? `deed_store_etag_${currentUserId}_${route}`
       : `deed_store_etag_${route}`
-    const storedEtag = (() => {
-      try { return window.localStorage.getItem(etagStorageKey) } catch { return null }
-    })()
-    const allKeysCached = keys.every(key => window.localStorage.getItem(key) !== null)
+    const etagDeferred = `${etagCritical}_deferred`
 
     try {
-      const res = await fetch(`/api/store?keys=${encodeURIComponent(keys.join(','))}`, {
-        headers: storedEtag && allKeysCached ? { 'If-None-Match': storedEtag } : undefined,
-      })
-      if (res.status === 304) {
-        warmedRoutes.add(route)
-        return
+      if (criticalKeys.length > 0) {
+        await fetchAndApplyStoreKeys({
+          keys: criticalKeys,
+          etagStorageKey: etagCritical,
+          dirtyKeys,
+        })
       }
-      if (!res.ok) return
-      const etag = res.headers.get('etag')
-      try {
-        if (etag) window.localStorage.setItem(etagStorageKey, etag)
-      } catch { /* ignore */ }
-
-      const state = await res.json() as Record<string, unknown>
-      for (const [key, value] of Object.entries(state || {})) {
-        if (!key.startsWith('deed_') || dirtyKeys.has(key)) continue
-        let serialized: string
-        try {
-          serialized = typeof value === 'string' ? value : JSON.stringify(value)
-        } catch {
-          continue
-        }
-        try {
-          if (window.localStorage.getItem(key) === serialized) continue
-        } catch { /* ignore */ }
-        persistClientStoreValue(key, serialized)
-        window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: serialized } }))
+      if (deferredKeys.length > 0) {
+        await fetchAndApplyStoreKeys({
+          keys: deferredKeys,
+          etagStorageKey: etagDeferred,
+          dirtyKeys,
+        })
       }
       warmedRoutes.add(route)
-      // Tip Next.js to prefetch the page JS too when possible.
       void bootApiGroupsForRoute(route)
     } catch {
       // best-effort warm

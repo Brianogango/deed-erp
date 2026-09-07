@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { appStateKeysForRoute } from '@/lib/app-state-hydration'
+import { criticalAppStateKeysForRoute } from '@/lib/app-state-hydration'
 
 function normalizeRoute(pathname: string) {
   const clean = (pathname || '/').split('?')[0].split('#')[0]
@@ -18,7 +18,7 @@ function emit() {
 
 export function routeHasLocalCache(pathname: string): boolean {
   if (typeof window === 'undefined') return false
-  const keys = appStateKeysForRoute(pathname)
+  const keys = criticalAppStateKeysForRoute(pathname)
   if (keys.length === 0) return true
   try {
     return keys.every(key => window.localStorage.getItem(key) !== null)

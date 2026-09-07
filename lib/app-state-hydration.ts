@@ -137,3 +137,81 @@ export function appStateKeysForRoute(pathname: string) {
   if (route === '/') matched = ROUTE_APP_STATE_KEYS['/'] ?? []
   return Array.from(new Set([...COMMON_APP_STATE_KEYS, ...matched]))
 }
+
+/**
+ * Heavy collections that secondary widgets need, but that must not block the
+ * first paint of the module. Fetched in a second /api/store GET after the
+ * loading gate releases.
+ *
+ * Longest-prefix match, same as appStateKeysForRoute. An explicit empty list
+ * on a nested route (e.g. /finance/invoices) overrides the parent.
+ */
+const DEFERRED_ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
+  '/': [
+    'deed_serials',
+    'deed_journalEntries',
+    'deed_bankStatementLines',
+    'deed_payrollRuns',
+    'deed_stockTransfers',
+    'deed_kilimallOrders',
+    'deed_outsourceJobs',
+    'deed_refurbishmentJobs',
+  ],
+  '/finance': [
+    'deed_products',
+    'deed_contacts',
+    'deed_payrollRuns',
+    'deed_posOrders',
+    'deed_purchaseOrders',
+    'deed_deliveries',
+    'deed_deliveryJobs',
+    'deed_riders',
+  ],
+  '/accounting': [
+    'deed_products',
+    'deed_contacts',
+    'deed_payrollRuns',
+    'deed_posOrders',
+    'deed_purchaseOrders',
+    'deed_deliveries',
+    'deed_customerCredits',
+  ],
+  '/finance/invoices': ['deed_deliveryJobs', 'deed_riders'],
+  '/sales': [
+    'deed_serials',
+    'deed_warranties',
+    'deed_bulkStock',
+    'deed_stockReservations',
+    'deed_approvalRequests',
+    'deed_documentPaymentDetails',
+    'deed_deliveries',
+    'deed_bankAccounts',
+  ],
+  '/pos': ['deed_journalEntries', 'deed_stockMoves'],
+}
+
+function matchRouteKeyList(pathname: string, table: Record<string, string[]>): string[] {
+  const route = normalizeRoute(pathname)
+  let matched: string[] | undefined
+  let matchedLen = -1
+  for (const [key, keys] of Object.entries(table)) {
+    if (route === key || (key !== '/' && route.startsWith(`${key}/`))) {
+      if (key.length > matchedLen) {
+        matched = keys
+        matchedLen = key.length
+      }
+    }
+  }
+  if (route === '/') matched = table['/'] ?? []
+  return matched ?? []
+}
+
+export function deferredAppStateKeysForRoute(pathname: string): string[] {
+  const all = new Set(appStateKeysForRoute(pathname))
+  return matchRouteKeyList(pathname, DEFERRED_ROUTE_APP_STATE_KEYS).filter(key => all.has(key))
+}
+
+export function criticalAppStateKeysForRoute(pathname: string): string[] {
+  const deferred = new Set(deferredAppStateKeysForRoute(pathname))
+  return appStateKeysForRoute(pathname).filter(key => !deferred.has(key))
+}

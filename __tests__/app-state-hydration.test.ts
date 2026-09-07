@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { appStateKeysForRoute } from '@/lib/app-state-hydration'
+import {
+  appStateKeysForRoute,
+  criticalAppStateKeysForRoute,
+  deferredAppStateKeysForRoute,
+} from '@/lib/app-state-hydration'
 
 describe('appStateKeysForRoute', () => {
   it('always includes common settings keys', () => {
@@ -80,6 +84,36 @@ describe('appStateKeysForRoute', () => {
     ]))
     expect(keys).not.toContain('deed_stockReservations')
     expect(keys).not.toContain('deed_outboundReleases')
+  })
+
+  it('defers heavy dashboard and finance collections off the first-paint GET', () => {
+    const dashCritical = criticalAppStateKeysForRoute('/')
+    const dashDeferred = deferredAppStateKeysForRoute('/')
+    expect(dashCritical).toEqual(expect.arrayContaining([
+      'deed_invoices',
+      'deed_saleOrders',
+      'deed_products',
+      'deed_repairs_v2',
+    ]))
+    expect(dashCritical).not.toContain('deed_serials')
+    expect(dashCritical).not.toContain('deed_journalEntries')
+    expect(dashDeferred).toEqual(expect.arrayContaining([
+      'deed_serials',
+      'deed_journalEntries',
+      'deed_bankStatementLines',
+    ]))
+
+    const financeCritical = criticalAppStateKeysForRoute('/finance')
+    expect(financeCritical).toEqual(expect.arrayContaining([
+      'deed_invoices',
+      'deed_journalEntries',
+      'deed_accounts',
+    ]))
+    expect(financeCritical).not.toContain('deed_products')
+    expect(deferredAppStateKeysForRoute('/finance')).toContain('deed_products')
+
+    expect(criticalAppStateKeysForRoute('/finance/invoices')).toContain('deed_contacts')
+    expect(criticalAppStateKeysForRoute('/finance/invoices')).toContain('deed_saleOrders')
   })
 
   it('hydrates stock moves on operations and inventory', () => {
