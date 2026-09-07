@@ -30618,3 +30618,52 @@ body:has(.crm-workspace) [role="dialog"] > div {
     padding-left: 0 !important;
   }
 }
+
+
+/* Finance header collision fix: reserve a real row for the breadcrumb and let
+   long titles/subtitles wrap instead of occupying the same line box. */
+.finance-workspace[data-finance-tab] > .mod-header {
+  min-height: 6.75rem !important;
+  padding-top: 2rem !important;
+  padding-bottom: 0.875rem !important;
+}
+
+.finance-workspace[data-finance-tab] > .mod-header::before {
+  top: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.finance-workspace > .mod-header .mod-header__identity {
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.finance-workspace > .mod-header .mod-header__identity > div:last-child {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  row-gap: 0.25rem;
+}
+
+.finance-workspace > .mod-header .erp-module-title,
+.finance-workspace > .mod-header .mod-header-subtitle {
+  max-width: 100%;
+  margin: 0;
+  overflow: visible;
+  line-height: 1.2;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .finance-workspace[data-finance-tab] > .mod-header {
+    min-height: 7.5rem !important;
+    padding-top: 2rem !important;
+  }
+
+  .finance-workspace > .mod-header .erp-module-title {
+    font-size: 1.25rem;
+  }
+}

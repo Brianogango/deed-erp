@@ -26,9 +26,9 @@ export function invoicePdfInput(
   const isCustomerInvoice = inv.type === 'customer_invoice'
   const paymentCommunication = isCustomerInvoice && invoiceDocState(inv.status) === 'posted'
   const base: CommercialPdfInput = {
-    title: isCustomerInvoice
-      ? ((Number(inv.taxTotal) > 0 || inv.lines.some(line => Number(line.taxRate) > 0)) ? 'Tax Invoice' : 'Invoice')
-      : 'Bill',
+    // VAT remains itemised in the totals, but the customer-facing document
+    // name is consistently "Invoice" rather than switching to "Tax Invoice".
+    title: isCustomerInvoice ? 'Invoice' : 'Bill',
     ref: displayDocRef(inv.ref),
     date: inv.date,
     dueLabel: 'Due Date',
