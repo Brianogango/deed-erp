@@ -23,6 +23,8 @@ export default function ComputerAidCustodyPanel() {
   const [action, setAction] = useState<Action | null>(null)
   const [history, setHistory] = useState(false)
   const [form, setForm] = useState(fresh)
+  const [productSearch, setProductSearch] = useState('')
+  const [transferItems, setTransferItems] = useState<Record<string, { qty: string; serialIds: string[] }>>({})
 
   const load = async () => {
     setLoading(true); setError('')
@@ -40,11 +42,57 @@ export default function ComputerAidCustodyPanel() {
   const source = action === 'transfer_in' ? 'warehouse' : 'computer_aid'
   const eligible = useMemo(() => data.serials.filter(s => s.productId === form.productId && s.location === source), [data.serials, form.productId, source])
   const patch = (key: keyof ReturnType<typeof fresh>, value: string | string[]) => setForm(v => ({ ...v, [key]: value }))
-  const open = (next: Action) => { setForm(fresh()); setError(''); setAction(next) }
+  const open = (next: Action) => {
+    setForm(fresh())
+    setProductSearch('')
+    setTransferItems({})
+    setError('')
+    setAction(next)
+  }
+  const filteredProducts = useMemo(() => {
+    const query = productSearch.trim().toLowerCase()
+    if (!query) return data.products
+    return data.products.filter(p => `${p.name} ${p.sku}`.toLowerCase().includes(query))
+  }, [data.products, productSearch])
+  const toggleTransferProduct = (productId: string) => setTransferItems(items => {
+    if (items[productId]) {
+      const next = { ...items }
+      delete next[productId]
+      return next
+    }
+    return { ...items, [productId]: { qty: '1', serialIds: [] } }
+  })
+  const patchTransferItem = (productId: string, patchValue: Partial<{ qty: string; serialIds: string[] }>) =>
+    setTransferItems(items => ({ ...items, [productId]: { ...(items[productId] ?? { qty: '1', serialIds: [] }), ...patchValue } }))
   const toggle = (id: string) => setForm(v => ({ ...v, serialIds: v.serialIds.includes(id) ? v.serialIds.filter(x => x !== id) : [...v.serialIds, id] }))
 
   const submit = async () => {
-    if (!action || !form.productId) return setError('Select a product')
+    if (!action) return
+    if (action === 'transfer_in') {
+      const selected = Object.entries(transferItems)
+      if (!selected.length) return setError('Select at least one product')
+      for (const [productId, item] of selected) {
+        const selectedProduct = data.products.find(p => p.id === productId)
+        if (selectedProduct?.requiresSerial && !item.serialIds.length) return setError(`Select serial numbers for ${selectedProduct.name}`)
+        if (!selectedProduct?.requiresSerial && Number(item.qty) < 1) return setError(`Enter a valid quantity for ${selectedProduct?.name || 'each product'}`)
+      }
+      setSaving(true); setError('')
+      try {
+        for (const [productId, item] of selected) {
+          const res = await fetch('/api/inventory/computer-aid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, ...form, productId, qty: item.qty, serialIds: item.serialIds }),
+          })
+          const body = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(body.error || 'Could not save movement')
+        }
+        setAction(null); setForm(fresh()); setTransferItems({}); await load()
+      } catch (e) { setError(e instanceof Error ? e.message : 'Could not save movement') }
+      finally { setSaving(false) }
+      return
+    }
+    if (!form.productId) return setError('Select a product')
     if (product?.requiresSerial && action === 'direct_entry' && !form.serialNumbers.trim()) return setError('Enter at least one serial number')
     if (product?.requiresSerial && action !== 'direct_entry' && !form.serialIds.length) return setError('Select at least one serial number')
     setSaving(true); setError('')
@@ -80,8 +128,43 @@ export default function ComputerAidCustodyPanel() {
 
     {action && <Modal title={TITLES[action]} subtitle="Computer Aid custody stock" onClose={() => setAction(null)} width={760}><div className="space-y-4">
       {error && <div role="alert" className="p-3 rounded-lg bg-red-50 border border-red-100 text-xs text-red-700">{error}</div>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Product" required><Select value={form.productId} onChange={v => patch('productId', v)} options={[{ value: '', label: 'Select product…' }, ...data.products.map(p => ({ value: p.id, label: `${p.name}${p.sku ? ` · ${p.sku}` : ''}` }))]} /></Field><Field label="Movement date" required><Input type="date" value={form.date} onChange={v => patch('date', v)} /></Field></div>
-      {product?.requiresSerial ? action === 'direct_entry' ? <Field label="Serial numbers" required hint="One per line or separated by commas"><Textarea value={form.serialNumbers} onChange={v => patch('serialNumbers', v)} rows={4} /></Field> : <Field label={action === 'transfer_in' ? 'Warehouse serials' : 'Computer Aid serials'} required hint={`${form.serialIds.length} selected`}><div className="max-h-44 overflow-y-auto rounded-lg border border-border-lt divide-y divide-border-lt">{eligible.map(s => <label key={s.id} className="flex items-center gap-3 px-3 py-2"><input type="checkbox" checked={form.serialIds.includes(s.id)} onChange={() => toggle(s.id)} /><span className="font-semibold">{s.serial}</span></label>)}{form.productId && !eligible.length && <p className="p-3 text-xs text-text-3 m-0">No eligible serials at this location.</p>}</div></Field> : <Field label="Quantity" required><Input type="number" value={form.qty} onChange={v => patch('qty', v)} /></Field>}
+      {action === 'transfer_in' ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Products" required hint={`${Object.keys(transferItems).length} selected`}>
+              <div className="custody-product-picker">
+                <Input value={productSearch} onChange={setProductSearch} placeholder="Search by product name or SKU…" />
+                <div className="custody-product-picker__list">
+                  {filteredProducts.map(p => <label key={p.id}>
+                    <input type="checkbox" checked={Boolean(transferItems[p.id])} onChange={() => toggleTransferProduct(p.id)} />
+                    <span><strong>{p.name}</strong><small>{p.sku || 'No SKU'}{p.requiresSerial ? ' · Serial tracked' : ''}</small></span>
+                  </label>)}
+                  {!filteredProducts.length && <p>No matching products.</p>}
+                </div>
+              </div>
+            </Field>
+            <Field label="Movement date" required><Input type="date" value={form.date} onChange={v => patch('date', v)} /></Field>
+          </div>
+          {Object.entries(transferItems).map(([productId, item]) => {
+            const rowProduct = data.products.find(p => p.id === productId)
+            if (!rowProduct) return null
+            const rowSerials = data.serials.filter(s => s.productId === productId && s.location === 'warehouse')
+            return <div key={productId} className="custody-transfer-row">
+              <div><strong>{rowProduct.name}</strong><small>{rowProduct.sku || 'No SKU'}</small></div>
+              {rowProduct.requiresSerial ? (
+                <div className="custody-transfer-serials">
+                  {rowSerials.map(serial => <label key={serial.id}><input type="checkbox" checked={item.serialIds.includes(serial.id)} onChange={() => patchTransferItem(productId, { serialIds: item.serialIds.includes(serial.id) ? item.serialIds.filter(id => id !== serial.id) : [...item.serialIds, serial.id] })} /><span>{serial.serial}</span></label>)}
+                  {!rowSerials.length && <small>No warehouse serials available.</small>}
+                </div>
+              ) : <Input type="number" value={item.qty} onChange={qty => patchTransferItem(productId, { qty })} min="1" />}
+              <button type="button" aria-label={`Remove ${rowProduct.name}`} onClick={() => toggleTransferProduct(productId)}>×</button>
+            </div>
+          })}
+        </div>
+      ) : <>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Product" required><Select value={form.productId} onChange={v => patch('productId', v)} options={[{ value: '', label: 'Select product…' }, ...data.products.map(p => ({ value: p.id, label: `${p.name}${p.sku ? ` · ${p.sku}` : ''}` }))]} /></Field><Field label="Movement date" required><Input type="date" value={form.date} onChange={v => patch('date', v)} /></Field></div>
+        {product?.requiresSerial ? action === 'direct_entry' ? <Field label="Serial numbers" required hint="One per line or separated by commas"><Textarea value={form.serialNumbers} onChange={v => patch('serialNumbers', v)} rows={4} /></Field> : <Field label="Computer Aid serials" required hint={`${form.serialIds.length} selected`}><div className="max-h-44 overflow-y-auto rounded-lg border border-border-lt divide-y divide-border-lt">{eligible.map(s => <label key={s.id} className="flex items-center gap-3 px-3 py-2"><input type="checkbox" checked={form.serialIds.includes(s.id)} onChange={() => toggle(s.id)} /><span className="font-semibold">{s.serial}</span></label>)}{form.productId && !eligible.length && <p className="p-3 text-xs text-text-3 m-0">No eligible serials at this location.</p>}</div></Field> : <Field label="Quantity" required><Input type="number" value={form.qty} onChange={v => patch('qty', v)} /></Field>}
+      </>}
       {(action === 'direct_entry' || action === 'transfer_in') && <><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Computer Aid project / programme"><Input value={form.project} onChange={v => patch('project', v)} /></Field><Field label="Supplier / source"><Input value={form.source} onChange={v => patch('source', v)} /></Field><Field label="Delivery note / reference"><Input value={form.deliveryRef} onChange={v => patch('deliveryRef', v)} /></Field><Field label="Condition"><Input value={form.condition} onChange={v => patch('condition', v)} /></Field><Field label="Storage location / bin"><Input value={form.storageBin} onChange={v => patch('storageBin', v)} /></Field><Field label="Received by"><Input value={form.receivedBy} onChange={v => patch('receivedBy', v)} /></Field><Field label="Computer Aid contact"><Input value={form.computerAidContact} onChange={v => patch('computerAidContact', v)} /></Field><Field label="Supporting document"><input type="file" className="form-input w-full" onChange={e => patch('supportingDocumentName', e.target.files?.[0]?.name || '')} /></Field></div><Field label="Specifications"><Textarea value={form.specifications} onChange={v => patch('specifications', v)} rows={2} /></Field></>}
       {action === 'collection' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Collector's name" required><Input value={form.collectorName} onChange={v => patch('collectorName', v)} /></Field><Field label="Collector ID"><Input value={form.collectorId} onChange={v => patch('collectorId', v)} /></Field><Field label="Collector phone"><Input value={form.collectorPhone} onChange={v => patch('collectorPhone', v)} /></Field><Field label="Vehicle / dispatch details"><Input value={form.vehicleDetails} onChange={v => patch('vehicleDetails', v)} /></Field><Field label="Destination / beneficiary project" required><Input value={form.destination} onChange={v => patch('destination', v)} /></Field><Field label="Released by" required><Input value={form.releasedBy} onChange={v => patch('releasedBy', v)} /></Field></div>}
       {action === 'issue' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Exception type" required><Select value={form.exceptionType} onChange={v => patch('exceptionType', v)} options={[{ value: '', label: 'Select exception…' }, { value: 'damaged', label: 'Damaged' }, { value: 'missing', label: 'Missing' }, { value: 'rejected', label: 'Rejected' }, { value: 'wrong_allocation', label: 'Wrong allocation' }, { value: 'other', label: 'Other' }]} /></Field><Field label="Responsible person"><Input value={form.responsiblePerson} onChange={v => patch('responsiblePerson', v)} /></Field><Field label="Resolution / next action"><Input value={form.resolution} onChange={v => patch('resolution', v)} /></Field></div>}
