@@ -9,7 +9,6 @@ import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/
 import { usePathname, useRouter } from 'next/navigation'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { trackUxEvent } from '@/lib/ux-telemetry'
-import { ThemeToggle } from '@/components/theme/ThemeToggle'
 
 const GlobalSearch = dynamic(() => import('./GlobalSearch'), { ssr: false })
 
@@ -1488,17 +1487,7 @@ export default function Topbar() {
             <span className="hidden sm:block text-[11px] font-semibold">Search</span>
             <kbd className="hidden md:flex items-center px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[9px] font-bold text-[var(--text-4)]">⌘K</kbd>
           </button>
-          <button
-            onClick={toggleTableDensity}
-            title={`Switch to ${tableDensity === 'cozy' ? 'compact' : 'cozy'} density`}
-            className="hidden sm:flex items-center gap-1.5 px-2 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors text-[11px] font-semibold text-[var(--text-3)]"
-          >
-            <span>{tableDensity === 'cozy' ? 'Cozy' : 'Compact'}</span>
-          </button>
 
-          <span className="app-topbar-role">{formatRoleLabel(currentUser?.role)}</span>
-          <span className="app-topbar-currency" title="Base currency"><span aria-hidden="true">◎</span> KES</span>
-          <ThemeToggle />
 
           {/* Sync state — only surfaced when something needs attention */}
           {syncBadge && (
@@ -1506,9 +1495,6 @@ export default function Topbar() {
               {syncBadge.label}
             </div>
           )}
-
-          {/* Date */}
-          <div className="text-[10px] hidden md:block text-[var(--text-4)]">{dateLabel}</div>
 
           {/* Notifications Bell */}
           <div className="relative">
