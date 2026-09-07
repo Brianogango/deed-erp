@@ -736,9 +736,26 @@ function AppContent({ children }: { children: React.ReactNode }) {
       {/* Toast Notifications */}
       <Toast toast={toast} />
 
-      {/* DIA — Deed Intelligence Assistant overlay, gated by module access like any other module */}
+      {/* DIA — floating assistant launcher and overlay */}
       {hasModuleAccess(currentUser, 'jarvis') && (
-        <JarvisPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} pathname={pathname} />
+        <>
+          {!jarvisOpen && (
+            <button
+              type="button"
+              className="dia-floating-launcher"
+              onClick={() => setJarvisOpen(true)}
+              aria-label="Open DIA — Deed Intelligence Assistant"
+              title="DIA — Deed Intelligence Assistant"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 2.75c.55 4.95 4.3 8.7 9.25 9.25-4.95.55-8.7 4.3-9.25 9.25C11.45 16.3 7.7 12.55 2.75 12 7.7 11.45 11.45 7.7 12 2.75Z" fill="currentColor" />
+                <circle cx="18.5" cy="5.5" r="1.7" fill="currentColor" opacity=".9" />
+              </svg>
+              <span className="sr-only">DIA</span>
+            </button>
+          )}
+          <JarvisPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} pathname={pathname} />
+        </>
       )}
     </div>
   )

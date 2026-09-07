@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
 import type { Contact } from '@/lib/store'
 import { useCrmStore } from '@/lib/store'
@@ -95,6 +95,45 @@ export default function ContactFormModal({
     ...(forceVendor ? { isVendor: true } : {}),
   }))
   const [saving, setSaving] = useState(false)
+  const [activeDetailsTab, setActiveDetailsTab] = useState<'other' | 'address' | 'persons' | 'remarks' | 'documents'>('other')
+  type PersonDraft = { id?: string; salutation: string; firstName: string; lastName: string; email: string; phone: string; mobile: string; position: string }
+  const blankPerson = (): PersonDraft => ({ salutation: '', firstName: '', lastName: '', email: '', phone: '', mobile: '', position: '' })
+  const [contactPersons, setContactPersons] = useState<PersonDraft[]>([])
+  const [deletedPersonIds, setDeletedPersonIds] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!editId) return
+    let cancelled = false
+    fetch('/api/contact-persons', { cache: 'no-store' })
+      .then(res => res.ok ? res.json() : [])
+      .then((rows: any[]) => {
+        if (cancelled) return
+        setContactPersons(rows.filter(row => row.clientId === editId).map(row => ({
+          id: row.id,
+          salutation: row.salutation ?? '',
+          firstName: row.firstName ?? '',
+          lastName: row.lastName ?? '',
+          email: row.email ?? '',
+          phone: row.phone ?? '',
+          mobile: row.mobile ?? '',
+          position: row.position ?? '',
+        })))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [editId])
+
+  const updatePerson = (index: number, key: keyof PersonDraft, value: string) => {
+    setContactPersons(rows => rows.map((row, i) => i === index ? { ...row, [key]: value } : row))
+  }
+
+  const removePerson = (index: number) => {
+    setContactPersons(rows => {
+      const person = rows[index]
+      if (person?.id) setDeletedPersonIds(ids => [...ids, person.id!])
+      return rows.filter((_, i) => i !== index)
+    })
+  }
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name', string>>>({})
   // React 18's DetailsHTMLAttributes has `open`/`onToggle` but not `defaultOpen`.
   const [moreDetailsOpen, setMoreDetailsOpen] = useState(() => Boolean(editId))
@@ -162,7 +201,34 @@ export default function ContactFormModal({
       const contact = editId
         ? await updateContact(editId, payload)
         : await addContact(payload)
-      onSaved(contact as Contact)
+      const savedContact = contact as Contact
+      const validPersons = contactPersons.filter(person => person.firstName.trim() || person.lastName.trim() || person.email.trim())
+      try {
+        await Promise.all([
+        ...validPersons.map(person => fetch(person.id ? `/api/contact-persons/${person.id}` : '/api/contact-persons', {
+          method: person.id ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: savedContact.id,
+            firstName: [person.salutation, person.firstName].filter(Boolean).join(' ').trim(),
+            lastName: person.lastName.trim(),
+            email: person.email.trim() || null,
+            phone: person.phone.trim() || person.mobile.trim() || null,
+            position: person.position.trim() || null,
+          }),
+        }).then(res => {
+          if (!res.ok) throw new Error('Could not save contact person')
+          return res
+        })),
+        ...deletedPersonIds.map(id => fetch(`/api/contact-persons/${id}`, { method: 'DELETE' }).then(res => {
+          if (!res.ok) throw new Error('Could not remove contact person')
+          return res
+        })),
+        ])
+      } catch {
+        showToast('Contact saved, but some contact-person changes could not be applied. Reopen the contact to retry.', 'error')
+      }
+      onSaved(savedContact)
     } catch {
       // store helpers already toast
     } finally {
@@ -289,140 +355,94 @@ export default function ContactFormModal({
           </div>
         </div>
 
-        <details
-          className="contacts-form-optional contacts-form-more"
-          open={moreDetailsOpen}
-          onToggle={event => setMoreDetailsOpen(event.currentTarget.open)}
-        >
-          <summary>
-            <div>
-              <strong>More details</strong>
-              <small>
-                {form.type === 'company'
-                  ? 'Trading name, registration, address, terms, banking and notes'
-                  : 'ID, KRA PIN, address, terms, banking and notes'}
-              </small>
-            </div>
-            <span>Optional</span>
-          </summary>
+        <section className="contacts-details-tabs">
+          <nav className="contacts-details-tabs__nav" aria-label="Additional contact details">
+            {([
+              ['other', 'Other Details'],
+              ['address', 'Address'],
+              ['persons', 'Contact Persons'],
+              ['remarks', 'Remarks'],
+              ['documents', 'Documents'],
+            ] as const).map(([id, label]) => (
+              <button key={id} type="button" className={activeDetailsTab === id ? 'is-active' : ''} onClick={() => setActiveDetailsTab(id)}>
+                {label}{id === 'persons' && contactPersons.length > 0 ? <span>{contactPersons.length}</span> : null}
+              </button>
+            ))}
+          </nav>
 
-          <div className="contacts-form-more__content">
-            {form.type === 'company' ? (
-              <section className="contacts-form-more__section">
-                <div className="contacts-form-more__heading">
-                  <strong>Company details</strong>
-                  <span>Additional legal and contact information</span>
-                </div>
-                <div className="contacts-form-optional__grid">
+          <div className="contacts-details-tabs__panel">
+            {activeDetailsTab === 'other' && (
+              <div className="contacts-form-optional__grid">
+                {form.type === 'company' && <>
+                  <Field label="Company ID / Registration No." hint="Shown on official records">
+                    <Input value={form.registrationNumber ?? ''} onChange={f('registrationNumber')} placeholder="CPR/2026/1234" />
+                  </Field>
                   <Field label="Trading Name">
-                    <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="e.g. Acme (if different)" />
+                    <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="Business name (if different)" />
                   </Field>
-                  <Field label="Registration Number">
-                    <Input value={form.registrationNumber ?? ''} onChange={f('registrationNumber')} placeholder="e.g. CPR/2024/1234" />
-                  </Field>
-                  <Field label="Mobile">
-                    <Input value={form.mobile ?? ''} onChange={f('mobile')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
-                  </Field>
-                  <Field label="Website">
-                    <Input value={form.website ?? ''} onChange={f('website')} placeholder="https://example.com" />
-                  </Field>
-                </div>
-              </section>
-            ) : (
-              <section className="contacts-form-more__section">
-                <div className="contacts-form-more__heading">
-                  <strong>Identity & tax</strong>
-                  <span>Only add when required</span>
-                </div>
-                <div className="contacts-form-optional__grid">
-                  <Field label="National ID / Passport No.">
-                    <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="e.g. 12345678" />
-                  </Field>
-                  <Field label="KRA PIN">
-                    <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. A123456789B" />
+                </>}
+                <Field label="Company ID / KRA PIN" hint="Shown on invoices for tax purposes">
+                  <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="P051234567X" />
+                </Field>
+                <Field label="Currency" hint="Defaults to your base currency">
+                  <Input value="KES — Kenyan Shilling" onChange={() => {}} disabled />
+                </Field>
+                <Field label="Credit limit (KES)" hint="Maximum approved account exposure">
+                  <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="0.00" />
+                </Field>
+                <Field label="Payment terms" hint="Used to calculate invoice due dates">
+                  <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(Number(v))} options={paymentTermsOptions} />
+                </Field>
+                <div className="contacts-form-wide">
+                  <Field label="Reporting tags" hint="Press Enter or use commas to separate tags">
+                    <Input value={(form.tags ?? []).join(', ')} onChange={v => f('tags')(String(v).split(',').map(tag => tag.trim()).filter(Boolean))} placeholder="vip, wholesale..." />
                   </Field>
                 </div>
-              </section>
+              </div>
             )}
 
-            <section className="contacts-form-more__section">
-              <div className="contacts-form-more__heading">
-                <strong>Address</strong>
-                <span>Physical and location details</span>
-              </div>
+            {activeDetailsTab === 'address' && (
               <div className="contacts-form-optional__grid">
-                <div className="contacts-form-wide">
-                  <Field label="Physical Address">
-                    <Input value={form.address} onChange={f('address')} placeholder="Street / Building, Area" />
-                  </Field>
-                </div>
-                {form.type === 'company' && (
-                  <Field label="Postal Address">
-                    <Input value={form.postalAddress ?? ''} onChange={f('postalAddress')} placeholder="P.O. Box 00000-00100" />
-                  </Field>
-                )}
-                <Field label="City">
-                  <Input value={form.city ?? ''} onChange={f('city')} placeholder="e.g. Nairobi" />
-                </Field>
-                <Field label="Country">
-                  <Input value={form.country ?? ''} onChange={f('country')} placeholder="e.g. Kenya" />
-                </Field>
+                <div className="contacts-form-wide"><Field label="Physical Address"><Input value={form.address} onChange={f('address')} placeholder="Street / Building, Area" /></Field></div>
+                {form.type === 'company' && <Field label="Postal Address"><Input value={form.postalAddress ?? ''} onChange={f('postalAddress')} placeholder="P.O. Box 00000-00100" /></Field>}
+                <Field label="City"><Input value={form.city ?? ''} onChange={f('city')} placeholder="e.g. Nairobi" /></Field>
+                <Field label="Country"><Input value={form.country ?? ''} onChange={f('country')} placeholder="e.g. Kenya" /></Field>
               </div>
-            </section>
+            )}
 
-            <section className="contacts-form-more__section">
-              <div className="contacts-form-more__heading">
-                <strong>Commercial settings</strong>
-                <span>Invoice terms and account controls</span>
+            {activeDetailsTab === 'persons' && (
+              <div className="contacts-persons-editor">
+                <header><strong>Contact Persons</strong><span>Additional people at this customer you may deal with</span></header>
+                {contactPersons.map((person, index) => (
+                  <div className="contacts-person-card" key={person.id ?? index}>
+                    <Select value={person.salutation} onChange={v => updatePerson(index, 'salutation', String(v))} options={[{value:'',label:'Salutation'},{value:'Mr',label:'Mr'},{value:'Ms',label:'Ms'},{value:'Mrs',label:'Mrs'},{value:'Dr',label:'Dr'}]} />
+                    <Input value={person.firstName} onChange={v => updatePerson(index, 'firstName', String(v))} placeholder="First name" />
+                    <Input value={person.lastName} onChange={v => updatePerson(index, 'lastName', String(v))} placeholder="Last name" />
+                    <Input value={person.email} onChange={v => updatePerson(index, 'email', String(v))} type="email" placeholder="Email" />
+                    <Input value={person.phone} onChange={v => updatePerson(index, 'phone', String(v))} type="tel" placeholder="Work phone" />
+                    <Input value={person.mobile} onChange={v => updatePerson(index, 'mobile', String(v))} type="tel" placeholder="Mobile" />
+                    <Input value={person.position} onChange={v => updatePerson(index, 'position', String(v))} placeholder="Designation (e.g. Accountant)" />
+                    <button type="button" className="contacts-person-remove" onClick={() => removePerson(index)}>Remove</button>
+                  </div>
+                ))}
+                <button type="button" className="btn-outline contacts-person-add" onClick={() => setContactPersons(rows => [...rows, blankPerson()])}>+ Add contact person</button>
               </div>
-              <div className="contacts-form-optional__grid">
-                <Field
-                  label="Payment Terms (days)"
-                  hint="Determines when this customer's invoices are marked overdue."
-                >
-                  <Select
-                    value={paymentTermsValue}
-                    onChange={v => f('paymentTermsDays')(Number(v))}
-                    options={paymentTermsOptions}
-                  />
-                </Field>
-                <Field label="Credit Limit (KES)">
-                  <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="e.g. 500000" />
-                </Field>
-              </div>
-            </section>
+            )}
 
-            <section className="contacts-form-more__section">
-              <div className="contacts-form-more__heading">
-                <strong>Banking details</strong>
-                <span>Optional settlement information</span>
-              </div>
-              <div className="contacts-form-optional__grid">
-                <Field label="Bank Name">
-                  <Input value={form.bankName ?? ''} onChange={f('bankName')} placeholder="e.g. Equity Bank" />
-                </Field>
-                <Field label="Account Number">
-                  <Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 0110123456" />
-                </Field>
-                <div className="contacts-form-wide">
-                  <Field label="Branch">
-                    <Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. Westlands Branch" />
-                  </Field>
-                </div>
-              </div>
-            </section>
+            {activeDetailsTab === 'remarks' && (
+              <Field label="Internal remarks" hint="Preferences, context or useful information for your team">
+                <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Add internal notes..." rows={6} />
+              </Field>
+            )}
 
-            <section className="contacts-form-more__section contacts-form-more__section--last">
-              <div className="contacts-form-more__heading">
-                <strong>Internal notes</strong>
-                <span>Preferences, context or other useful information</span>
+            {activeDetailsTab === 'documents' && (
+              <div className="contacts-documents-empty">
+                <strong>Documents</strong>
+                <span>Save this contact, then attach documents from the contact record.</span>
               </div>
-              <div className="contacts-form-optional__body">
-                <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Add internal notes..." rows={3} />
-              </div>
-            </section>
+            )}
           </div>
-        </details>
+        </section>
       </div>
 
       <div className="contacts-form-footer">
