@@ -1302,7 +1302,9 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             </div>
             {(() => {
               type ReconRow = BankAccount & { bookBal: number; stmtBal: number | null; diff: number | null; reconStatus: string }
-              const reconRows: ReconRow[] = bankAccounts.filter(a => a.active).map(acc => {
+              const reconRows: ReconRow[] = bankAccounts
+                .filter(a => a.active && (filterAccount === 'all' || a.id === filterAccount))
+                .map(acc => {
                 const bookBal = closingByAccount[acc.id] ?? 0
                 const saved = bankRecons.find(r => r.bankAccountId === acc.id && r.month === activeMonth)
                 return {
