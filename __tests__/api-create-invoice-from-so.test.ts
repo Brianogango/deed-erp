@@ -211,6 +211,85 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     expect(mockPrisma.saleOrder.update).not.toHaveBeenCalled()
   })
 
+  it('confirms a Ready repair quotation then invoices without a warehouse DN', async () => {
+    const quotation = {
+      ...saleOrder,
+      status: 'quotation',
+      orderNumber: 'QUO/2026/0294',
+      quotationRef: 'QUO/2026/0294',
+      confirmedAt: null,
+      notes: 'Repair quote — REP/0294 — Hp 1030 G3',
+      items: [{ ...saleOrder.items[0], qtyDelivered: 0 }],
+    }
+    const confirmed = { ...quotation, status: 'sale', confirmedAt: new Date('2026-09-08T12:00:00.000Z') }
+    mockPrisma.saleOrder.findUnique.mockResolvedValue(quotation)
+    mockPrisma.saleOrder.update.mockResolvedValue(confirmed)
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [],
+      deed_deliveries: [],
+      deed_repairs_v2: [{
+        id: REPAIR_ID,
+        ref: 'REP/0294',
+        saleOrderId: ORDER_ID,
+        status: 'ready',
+      }],
+    })
+    mockPrisma.repair.findUnique.mockResolvedValue({ id: REPAIR_ID })
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+      saleOrder: { findUnique: vi.fn().mockResolvedValue(confirmed) },
+      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+      invoice: { create: mockPrisma.invoice.create },
+      repair: { update: mockPrisma.repair.update },
+    }))
+
+    const res = await POST(
+      new NextRequest('http://localhost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'regular', source: 'repair' }),
+      }),
+      { params: { id: ORDER_ID } },
+    )
+    expect(res.status).toBe(200)
+    expect(mockPrisma.saleOrder.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: ORDER_ID },
+      data: expect.objectContaining({ status: 'sale' }),
+    }))
+    expect(mockPrisma.$transaction).toHaveBeenCalled()
+  })
+
+  it('does not confirm a repair quotation that is still in the workshop', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [],
+      deed_deliveries: [],
+      deed_repairs_v2: [{
+        id: REPAIR_ID,
+        ref: 'REP/0294',
+        saleOrderId: ORDER_ID,
+        status: 'in_repair',
+      }],
+    })
+    mockPrisma.saleOrder.findUnique.mockResolvedValue({
+      ...saleOrder,
+      status: 'quotation',
+      orderNumber: 'QUO/2026/0294',
+      confirmedAt: null,
+      notes: 'Repair quote — REP/0294 — Hp 1030 G3',
+    })
+    const res = await POST(
+      new NextRequest('http://localhost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'regular', source: 'repair' }),
+      }),
+      { params: { id: ORDER_ID } },
+    )
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/Only a confirmed Sales Order can be invoiced/i)
+    expect(mockPrisma.saleOrder.update).not.toHaveBeenCalled()
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
   it('rejects invoicing before the delivery is validated (Done)', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_invoices: [],
