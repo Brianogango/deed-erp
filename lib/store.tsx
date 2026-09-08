@@ -209,6 +209,7 @@ import {
   canPayBuyBackCash,
 } from '@/lib/buyback-credit'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
+import { evaluateCustomerCreditGate } from '@/lib/customer-credit-gate'
 import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
 import { nextSseRetryMs, nextSyncRetryMs } from '@/lib/store-sync-retry'
 import { repairOutsourceReadiness, repairHasLoggedDiagnosis } from '@/lib/repair-outsource'
@@ -3263,7 +3264,7 @@ export interface AppState {
   getCustomerCreditBalance: (customerId: string) => number
   applyCustomerCreditToInvoice: (invoiceId: string, amount?: number) => void | Promise<void>
   checkCreditLimit: (customerId: string, orderTotal: number) => { ok: boolean; message?: string; requiresApproval?: boolean; creditAvailable?: number }
-  getCustomerCreditStatus: (customerId: string, newOrderTotal?: number) => {
+  getCustomerCreditStatus: (customerId: string, newOrderTotal?: number, opts?: { document?: 'quote' | 'order' | 'invoice' }) => {
     ok: boolean
     isLocked: boolean
     creditLimitExceeded: boolean
@@ -19525,7 +19526,7 @@ const storeCtx: AppState = {
       return { ok: true, creditAvailable }
     },
 
-    getCustomerCreditStatus: (customerId, newOrderTotal = 0) => {
+    getCustomerCreditStatus: (customerId, newOrderTotal = 0, opts) => {
       const contact = contacts.find(c => c.id === customerId)
       const today = now()
 
@@ -19542,21 +19543,28 @@ const storeCtx: AppState = {
       const overdueInvoices = unpaidInvoices.filter(inv => inv.dueDate < today)
       const overdueBalance = Math.max(0, overdueInvoices.reduce((s, inv) => s + Math.max(0, inv.total - inv.amountPaid), 0) - availableCredits)
       const overdueCount = overdueInvoices.length
-
-      const isLocked = overdueBalance > 0
-
       const creditLimit = contact?.creditLimit ?? 0
-      const creditAvailable = creditLimit > 0 ? Math.max(0, creditLimit - outstandingBalance) : -1
-      const creditLimitExceeded = creditLimit > 0 && (outstandingBalance + newOrderTotal) > creditLimit
+      const gate = evaluateCustomerCreditGate({
+        overdueBalance,
+        overdueCount,
+        creditLimit,
+        outstandingBalance,
+        newOrderTotal,
+        document: opts?.document ?? 'order',
+        formatMoney: fmtKes,
+      })
 
-      let message = ''
-      if (isLocked) {
-        message = `Account locked — ${overdueCount} overdue invoice${overdueCount > 1 ? 's' : ''} totalling ${fmtKes(overdueBalance)}. Clear outstanding bills to unlock.`
-      } else if (creditLimitExceeded) {
-        message = `Credit limit of ${fmtKes(creditLimit)} exceeded. Available: ${fmtKes(creditAvailable)}. Outstanding after credits: ${fmtKes(outstandingBalance)}.`
+      return {
+        ok: gate.ok,
+        isLocked: gate.isLocked,
+        creditLimitExceeded: gate.creditLimitExceeded,
+        outstandingBalance,
+        overdueBalance,
+        overdueCount,
+        creditLimit,
+        creditAvailable: gate.creditAvailable,
+        message: gate.message,
       }
-
-      return { ok: !isLocked && !creditLimitExceeded, isLocked, creditLimitExceeded, outstandingBalance, overdueBalance, overdueCount, creditLimit, creditAvailable, message }
     },
 
     issueCreditNoteFromSaleOrder: async (saleOrderId, amount, reason) => {
