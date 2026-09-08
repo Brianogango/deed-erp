@@ -44,6 +44,7 @@ export default function IntegrityDashboard() {
   const [certifying, setCertifying] = useState(false)
 
   const refresh = useCallback(async () => {
+    setSelectedGate(null)
     setLoading(true)
     setError(null)
     try {
@@ -182,7 +183,7 @@ export default function IntegrityDashboard() {
             <label className="flex min-w-[150px] flex-col gap-1">
               <span className="text-[9px] font-semibold uppercase tracking-wide text-t4">Result</span>
               <select className="form-select text-[11px]" value={gateStatus} onChange={event => setGateStatus(event.target.value)}>
-                <option value="failed">Failed first</option>
+                <option value="failed">Failed only</option>
                 <option value="all">All controls</option>
                 <option value="passed">Passed</option>
               </select>
