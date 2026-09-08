@@ -600,6 +600,7 @@ function AccountingContent() {
   const migrationFileRef = useRef<HTMLInputElement>(null)
   const [migrationImporting, setMigrationImporting] = useState(false)
   const [migrationSummary, setMigrationSummary] = useState<string | null>(null)
+  const [pendingMigrationFile, setPendingMigrationFile] = useState<File | null>(null)
 
   // ── Journal state ───────────────────────────────────────────────────────────
   const [viewJournal, setViewJournal] = useState<JournalEntry | null>(null)
@@ -1179,6 +1180,17 @@ function AccountingContent() {
     ws['!cols'] = headers.map(() => ({ wch: 24 }))
     XLSX.utils.book_append_sheet(wb, ws, 'Migration')
     XLSX.writeFile(wb, 'deed_erp_migration_template.xlsx')
+  }
+
+  const selectMigrationFile = (file: File | null) => {
+    if (!file) return
+    try {
+      guardSpreadsheetFile(file)
+      setPendingMigrationFile(file)
+    } catch (err) {
+      showToast(err instanceof SpreadsheetGuardError ? err.message : 'File too large', 'error')
+      if (migrationFileRef.current) migrationFileRef.current.value = ''
+    }
   }
 
   const handleMigrationFile = (file: File | null) => {
@@ -1764,60 +1776,146 @@ function AccountingContent() {
           ) : tab === 'partner_ledger' ? (
             <div className="finance-subview finance-subview--partner-ledger"><PartnerLedgerTab /></div>
           ) : tab === 'migration' ? (
-            <div className="finance-subview finance-subview--migration p-4 sm:p-6 space-y-5">
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                <p className="text-[10px] uppercase tracking-widest font-black text-blue-700">Old system migration</p>
-                <h2 className="text-base font-extrabold text-blue-950 mt-1">Import contacts, invoices, bills, and opening balances</h2>
-                <p className="text-xs text-blue-800 mt-2 max-w-3xl">
-                  Each spreadsheet row creates or reuses a contact. If an opening balance is supplied, it becomes a posted customer invoice
-                  for receivables or a posted vendor bill for payables.
+            <div className="finance-subview finance-subview--migration space-y-5 p-4 sm:p-6">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary-600">Old system migration</p>
+                <h2 className="mt-1 text-lg font-extrabold text-text-1">Import contacts and opening balances</h2>
+                <p className="mt-1 max-w-3xl text-xs text-text-3">
+                  Use the controlled spreadsheet import to create or reuse contacts and bring forward customer receivables and supplier payables.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2 rounded-2xl border border-border-lt bg-card p-4 space-y-4">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-text-1">Spreadsheet columns</h3>
-                    <p className="text-xs text-text-3 mt-1">Required: Kind, Name. Optional: Email, Phone, Address, VAT Number, Opening Balance, Reference, Date, Due Date, Notes.</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="rounded-xl bg-surface border border-border-lt p-3">
-                      <p className="font-bold text-text-1">Kind = customer</p>
-                      <p className="text-text-3 mt-1">Creates a customer contact. Opening Balance becomes a posted customer invoice.</p>
+              <WorkflowStageBar
+                stages={[
+                  { id: 'prepare', label: 'Prepare file', description: 'Use the template and clean the source data' },
+                  { id: 'review', label: 'Review selection', description: 'Confirm the chosen spreadsheet before import' },
+                  { id: 'import', label: 'Import records', description: 'Validate rows and create opening documents' },
+                ]}
+                current={migrationImporting || migrationSummary ? 'import' : pendingMigrationFile ? 'review' : 'prepare'}
+                blocker={migrationImporting ? 'The migration is running. Keep this page open until it completes.' : null}
+              />
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
+                <div className="rounded-2xl border border-border-lt bg-card p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-lt pb-4">
+                    <div>
+                      <h3 className="text-sm font-extrabold text-text-1">1. Download and prepare the spreadsheet</h3>
+                      <p className="mt-1 text-xs text-text-3">Keep the column headings unchanged. Kind and Name are required.</p>
                     </div>
-                    <div className="rounded-xl bg-surface border border-border-lt p-3">
-                      <p className="font-bold text-text-1">Kind = vendor / supplier</p>
-                      <p className="text-text-3 mt-1">Creates a supplier contact. Opening Balance becomes a posted vendor bill.</p>
+                    <button type="button" className="btn-secondary text-[11px]" onClick={downloadMigrationTemplate}>Download template</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-2">
+                    <div className="rounded-xl border border-border-lt bg-surface p-3">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-primary-600">Customer row</p>
+                      <p className="mt-1 text-xs font-semibold text-text-1">Kind = customer</p>
+                      <p className="mt-1 text-[11px] text-text-3">Creates or reuses a customer. A positive opening balance becomes a posted customer invoice.</p>
+                    </div>
+                    <div className="rounded-xl border border-border-lt bg-surface p-3">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-primary-600">Supplier row</p>
+                      <p className="mt-1 text-xs font-semibold text-text-1">Kind = vendor or supplier</p>
+                      <p className="mt-1 text-[11px] text-text-3">Creates or reuses a supplier. A positive opening balance becomes a posted vendor bill.</p>
                     </div>
                   </div>
-                  {migrationSummary && (
-                    <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-xs font-semibold text-green-800">{migrationSummary}</div>
-                  )}
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button className="btn-secondary" onClick={downloadMigrationTemplate}>Download template</button>
-                    <button className="btn-primary" disabled={migrationImporting} onClick={() => migrationFileRef.current?.click()}>
-                      {migrationImporting ? 'Importing...' : 'Upload migration file'}
-                    </button>
-                    <input
-                      ref={migrationFileRef}
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      className="hidden"
-                      onChange={event => handleMigrationFile(event.target.files?.[0] ?? null)}
-                    />
+
+                  <div className="rounded-xl border border-border-lt bg-surface p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-text-3">Accepted columns</p>
+                    <p className="mt-1 text-[11px] leading-5 text-text-2">
+                      <strong>Required:</strong> Kind, Name. <strong>Optional:</strong> Email, Phone, Address, VAT Number, Opening Balance, Reference, Date, Due Date, Notes.
+                    </p>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
-                  <p className="font-extrabold mb-2">Before importing</p>
-                  <ul className="list-disc pl-4 space-y-1">
-                    <li>Clean duplicate customer/supplier names in the old app export.</li>
-                    <li>Use positive balances only; payments can be recorded after import.</li>
-                    <li>Put old document numbers in Reference for traceability.</li>
-                    <li>Import a small sample first if the file is large.</li>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950">
+                  <p className="font-extrabold">Review before selecting a file</p>
+                  <ul className="mt-3 list-disc space-y-2 pl-4">
+                    <li>Remove duplicate customer and supplier names from the old-system export.</li>
+                    <li>Use positive opening balances only; payments are recorded after import.</li>
+                    <li>Put the original document number in Reference for traceability.</li>
+                    <li>Opening balances create <strong>posted</strong> documents, so test with a small sample first.</li>
                   </ul>
                 </div>
               </div>
+
+              <div className="rounded-2xl border border-border-lt bg-card p-4">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-text-1">2. Select the completed file</h3>
+                    <p className="mt-1 text-xs text-text-3">Accepted formats: XLSX, XLS, and CSV. You will review the filename before the import begins.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={migrationImporting}
+                    onClick={() => migrationFileRef.current?.click()}
+                  >
+                    {migrationImporting ? 'Importing…' : 'Select migration file'}
+                  </button>
+                  <input
+                    ref={migrationFileRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                    onChange={event => selectMigrationFile(event.target.files?.[0] ?? null)}
+                  />
+                </div>
+                {migrationSummary && (
+                  <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-xs font-semibold text-green-800">{migrationSummary}</div>
+                )}
+              </div>
+
+              {pendingMigrationFile && (
+                <Modal
+                  title="Confirm migration import"
+                  subtitle="Review the selected file before records are created"
+                  onClose={() => {
+                    setPendingMigrationFile(null)
+                    if (migrationFileRef.current) migrationFileRef.current.value = ''
+                  }}
+                  width={620}
+                >
+                  <div className="flex flex-col gap-4">
+                    <div className="rounded-xl border border-border-lt bg-surface p-3">
+                      <p className="text-[9px] font-semibold uppercase tracking-wide text-text-3">Selected file</p>
+                      <p className="mt-1 break-all text-sm font-semibold text-text-1">{pendingMigrationFile.name}</p>
+                      <p className="mt-1 text-[11px] text-text-3">{Math.max(1, Math.ceil(pendingMigrationFile.size / 1024)).toLocaleString()} KB</p>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+                      Importing validates every row, creates or reuses contacts, and creates posted opening-balance invoices or bills where a positive balance is supplied.
+                    </div>
+
+                    <p className="text-[11px] text-text-3">
+                      This confirmation does not alter the migration rules. Invalid rows will still be rejected by the existing validation.
+                    </p>
+
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary text-[11px]"
+                        onClick={() => {
+                          setPendingMigrationFile(null)
+                          if (migrationFileRef.current) migrationFileRef.current.value = ''
+                        }}
+                      >
+                        Choose another file
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-primary text-[11px]"
+                        disabled={migrationImporting}
+                        onClick={() => {
+                          const file = pendingMigrationFile
+                          setPendingMigrationFile(null)
+                          handleMigrationFile(file)
+                        }}
+                      >
+                        Confirm and import
+                      </button>
+                    </div>
+                  </div>
+                </Modal>
+              )}
             </div>
           ) : activeTab === 'financial_report' ? (
             <div className="finance-subview finance-subview--financial-report"><FinancialReportTab /></div>
