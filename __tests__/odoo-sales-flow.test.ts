@@ -477,9 +477,10 @@ describe('saleTransitionError role gates', () => {
     expect(saleTransitionError('sale', 'quotation', 'admin_officer')).toBeNull()
   })
 
-  it('allows sales staff to cancel quotations', () => {
-    expect(saleTransitionError('quotation', 'cancelled', 'sales_rep')).toBeNull()
-    expect(saleTransitionError('quotation_sent', 'quotation', 'sales_rep')).toBeNull()
+  it('allows technical lead and finance to confirm a repair-linked quotation', () => {
+    expect(saleTransitionError('quotation', 'sale', 'technical_lead', { repairLinked: true })).toBeNull()
+    expect(saleTransitionError('quotation', 'sale', 'finance_officer', { repairLinked: true })).toBeNull()
+    expect(saleTransitionError('quotation', 'sale', 'technical_lead')).toMatch(/cannot confirm/i)
   })
 
   it('blocks sales_rep from resetting a cancelled-but-previously-confirmed order', () => {

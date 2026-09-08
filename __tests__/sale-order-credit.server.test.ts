@@ -12,6 +12,10 @@ describe('assertQuoteNotExpired', () => {
     if (!res.ok) expect(res.error).toMatch(/expired/i)
   })
 
+  it('skips expiry when the quotation is a workshop repair', () => {
+    expect(assertQuoteNotExpired('2020-01-01', { skip: true }).ok).toBe(true)
+  })
+
   it('allows today and future dates', () => {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)

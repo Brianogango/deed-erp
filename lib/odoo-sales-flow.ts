@@ -103,6 +103,13 @@ export function saleOrderLooksConfirmed(order: {
 /** Roles allowed to confirm a quotation into a Sales Order. */
 export const SALE_CONFIRM_ROLES = ['director', 'sales_rep', 'admin_officer']
 
+/** Workshop billing: tech/finance confirm the repair-linked quotation without the Sales desk. */
+export const REPAIR_SALE_CONFIRM_ROLES = [
+  ...SALE_CONFIRM_ROLES,
+  'finance_officer',
+  'technical_lead',
+] as const
+
 /** Roles allowed to cancel or reset a confirmed Sales Order. */
 export const SALE_REVERSE_CONFIRMED_ROLES = ['director', 'finance_officer', 'admin_officer'] as const
 
@@ -121,7 +128,7 @@ export function saleTransitionError(
   from: OdooSaleStatus,
   to: OdooSaleStatus,
   role: string,
-  opts?: { previouslyConfirmed?: boolean },
+  opts?: { previouslyConfirmed?: boolean; repairLinked?: boolean },
 ): string | null {
   if (from === to) return null
   switch (to) {
@@ -131,7 +138,8 @@ export function saleTransitionError(
         : `Cannot mark a ${SALE_STATUS_LABELS[from]} as Quotation Sent`
     case 'sale':
       if (!isQuotationStage(from)) return `Cannot confirm a ${SALE_STATUS_LABELS[from]}`
-      if (!SALE_CONFIRM_ROLES.includes(role)) return 'Your role cannot confirm Sales Orders'
+      const confirmRoles = opts?.repairLinked ? REPAIR_SALE_CONFIRM_ROLES : SALE_CONFIRM_ROLES
+      if (!(confirmRoles as readonly string[]).includes(role)) return 'Your role cannot confirm Sales Orders'
       return null
     case 'cancelled':
       // Quotations may always be cancelled. Cancelling a confirmed Sales

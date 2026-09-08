@@ -21,6 +21,7 @@ import { buildSaleOrderItemsNestedWrite } from '@/lib/sale-order-items-write'
 import { saleOrderLinesFromBody } from '@/lib/sale-order-body-lines'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
+import { extractRepairRefFromText } from '@/lib/repair/sale-order-link'
 import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
 import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
 import { canTrimFulfillmentQty, isFulfillmentQtyTrim } from '@/lib/sales/fulfillment-trim'
@@ -47,8 +48,14 @@ const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep'
 // Repair module; those syncs must not be rejected or the SO goes stale.
 const REPAIR_WRITE_ROLES = [...WRITE_ROLES]
 
-function isRepairLinked(body: any) {
-  return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
+function isRepairLinked(record: any) {
+  return Boolean(
+    record?.repairId
+    || record?.repairRef
+    || record?.source === 'repair'
+    || extractRepairRefFromText(record?.notes)
+    || /repair/i.test(String(record?.notes ?? '')),
+  )
 }
 
 function normalizeSaleOrderStatus(status: unknown) {
@@ -305,6 +312,7 @@ async function enforceSaleWorkflow(
   if (to !== from) {
     const transitionError = saleTransitionError(from, to, session.user.role, {
       previouslyConfirmed: Boolean(existing.confirmedAt),
+      repairLinked: isRepairLinked(existing) || isRepairLinked(body),
     })
     if (transitionError) {
       return NextResponse.json({ error: transitionError }, { status: 409 })
@@ -519,7 +527,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const confirming = to === 'sale' && from !== 'sale'
     if (confirming) {
-      const expiry = assertQuoteNotExpired(body.validUntil ?? existing.validUntil)
+      const repairLinked = isRepairLinked(body) || isRepairLinked(existing)
+      const expiry = assertQuoteNotExpired(body.validUntil ?? existing.validUntil, { skip: repairLinked })
       if (!expiry.ok) {
         return NextResponse.json({ error: expiry.error }, { status: expiry.status })
       }
@@ -537,7 +546,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       // Odoo "At Confirmation" vs "Manually": client may pass reserveStock:false
       // ("Confirm without reservation"). Default remains true so Confirm and
       // Reserve / single Confirm still allocate stock before the status flip.
-      const shouldReserve = body.reserveStock !== false
+      // Repair billing is post-work invoicing — parts were already consumed
+      // in the workshop, so do not reserve unless the client asks.
+      const shouldReserve = repairLinked ? body.reserveStock === true : body.reserveStock !== false
       if (shouldReserve) {
         // Reserve stock BEFORE persisting the status flip (not after). If the
         // process crashes between these two steps, the order is left as an

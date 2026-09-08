@@ -234,7 +234,7 @@ import {
   startableStatusesWhenBillingExempt,
   type BillingExemptReason,
 } from '@/lib/repair-billing-exempt'
-import { applyRepairHandover, canCloseRepairAfterHandover } from '@/lib/repair-handover'
+import { applyRepairHandover, canCloseRepairAfterHandover, repairHasInvoiceLink } from '@/lib/repair-handover'
 import { resolveWarrantyMonths, addWarrantyMonths } from '@/lib/warranty-period'
 import {
   ensureDiagnosisFeeInQuoteLines,
@@ -252,6 +252,7 @@ import {
 import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { isAssignableTechnician, isRepairTechActor } from '@/lib/repair/assignable-technicians'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
+import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
 import {
   buildDefaultRepairQcItems,
   prepareRepairQcItemsForRound,
@@ -3748,7 +3749,7 @@ export interface AppState {
   markRepairReady: (repairId: string) => void
   scheduleDelivery: (repairId: string, method: 'pickup' | 'delivery' | 'courier', scheduledDate: string, address?: string, riderId?: string, riderName?: string) => Promise<boolean>
   deliverRepair: (repairId: string, recipientName: string, recipientPhone: string, isRep?: boolean, repRelationship?: string, repIdNumber?: string, closeAfter?: boolean) => void
-  closeRepairJob: (repairId: string) => void
+  closeRepairJob: (repairId: string) => void | Promise<void>
   createInvoiceFromRepair: (repairId: string, applyVat?: boolean) => Invoice | null
   // Finance review of a customer-submitted portal payment confirmation.
   // Confirm registers the payment against the linked invoice; reject flags it.
@@ -11984,7 +11985,7 @@ const storeCtx: AppState = {
           showToast(creditStatus.message || 'Customer credit check failed — cannot confirm', 'error')
           return
         }
-        if (so.validUntil) {
+        if (so.validUntil && !isRepairLinkedSaleOrder(so)) {
           const until = new Date(so.validUntil)
           until.setHours(23, 59, 59, 999)
           if (!Number.isNaN(until.getTime()) && until.getTime() < Date.now()) {
@@ -15464,7 +15465,7 @@ const storeCtx: AppState = {
         subtotal,
         tax,
         total: subtotal + tax,
-        validUntil: addDays(now(), 7),
+        validUntil: '',
         sentDate: now(),
         diagnosisRevision: repair.diagnosis?.revision,
         diagnosisFaultSummary: repair.diagnosis?.faultDescription,
@@ -15524,6 +15525,9 @@ const storeCtx: AppState = {
 
       if (linkedSaleOrderId) {
         const soPatch = {
+          ...(isNoCharge || isDirectRepair
+            ? { status: 'sale' as const, confirmedAt: linkedSaleOrder?.confirmedAt ?? new Date().toISOString(), reserveStock: false }
+            : {}),
           lines: soLines,
           subtotal: quote.subtotal,
           taxAmount: quote.tax,
@@ -15541,11 +15545,13 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${linkedSaleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
       } else if (chargeTotal >= 1) {
         const soId = uid()
-        const soRef = await storeCtxRef.current!.allocateDocRef('QUO')
+        const autoConfirm = isNoCharge || isDirectRepair
+        const soRef = await storeCtxRef.current!.allocateDocRef(autoConfirm ? 'SO' : 'QUO')
         const saleOrderRecord = {
-          id: soId, ref: soRef, status: 'quotation' as const,
+          id: soId, ref: soRef, status: autoConfirm ? 'sale' as const : 'quotation' as const,
+          ...(autoConfirm ? { confirmedAt: new Date().toISOString() } : {}),
           customerId: repair.customerId, customerName: repair.customerName,
-          date: now(), validUntil: addDays(now(), 7),
+          date: now(),
           lines: soLines, subtotal: quote.subtotal, taxTotal: quote.tax, total: chargeTotal,
           notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
           source: 'repair',
@@ -15598,7 +15604,7 @@ const storeCtx: AppState = {
         opportunityName: `Repair — ${repair.ref}`,
         ownerId: user.id,
         ownerName: user.name,
-        status: isFullWarranty || isBillingExempt ? 'accepted' : 'sent',
+        status: isFullWarranty || isBillingExempt || isDirectRepair ? 'accepted' : 'sent',
         source: 'repair',
         repairId: repair.id,
         repairRef: repair.ref,
@@ -15727,7 +15733,7 @@ const storeCtx: AppState = {
         customerBillingType: repair.customerBillingType ?? resolvedFee.customerType,
         deviceTier: resolvedFee.tier ?? repair.deviceTier,
         status: quoteStatus,
-        quoteApprovalDeadline: (isNoCharge || isDirectRepair) ? undefined : quote.validUntil,
+        quoteApprovalDeadline: undefined,
         ...(linkedSaleOrderId ? { saleOrderId: linkedSaleOrderId, saleOrderRef: linkedSaleOrderRef } : {}),
         ...(salesQuoteId ? { salesQuoteId, salesQuoteRef } : {}),
         ...(invoiceIdToUpdate ? { invoiceId: invoiceIdToUpdate } : {}),
@@ -15778,7 +15784,7 @@ const storeCtx: AppState = {
           : isUpdate
             ? `Quote revised — new total KES ${chargeTotal.toLocaleString('en-KE')}. Please review and re-approve.`
             : 'Quote sent — awaiting your approval'
-        syncRepairToPortal({ ...repair, quote, laborCost: derivedLaborCost, logisticsCost: derivedLogisticsCost, total: chargeTotal, status: 'awaiting_approval', quoteApprovalDeadline: quote.validUntil }, portalMsg)
+        syncRepairToPortal({ ...repair, quote, laborCost: derivedLaborCost, logisticsCost: derivedLogisticsCost, total: chargeTotal, status: 'awaiting_approval' }, portalMsg)
         const auditDetail = isUpdate && changeSummary
           ? `Quote revised: KES ${prevQuote?.total ?? 0} → KES ${quote.total}\n${changeSummary}`
           : `Quote ${isUpdate ? 'updated' : 'generated'}${coverageLabel}: KES ${quote.total}`
@@ -16038,9 +16044,9 @@ const storeCtx: AppState = {
           awaitingSoId = uid()
           awaitingSoRef = await storeCtxRef.current!.allocateDocRef('SO')
           const awaitingSo: SaleOrder = {
-            id: awaitingSoId, ref: awaitingSoRef, status: 'sale', confirmedAt: new Date().toISOString(),
-            customerId: repair.customerId, customerName: repair.customerName,
-            date: now(), validUntil: addDays(now(), 30),
+          id: awaitingSoId, ref: awaitingSoRef, status: 'sale', confirmedAt: new Date().toISOString(),
+          customerId: repair.customerId, customerName: repair.customerName,
+          date: now(),
             lines: approvedSoLines,
             subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
             notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
@@ -16053,6 +16059,7 @@ const storeCtx: AppState = {
           const soPatch = {
             status: 'sale' as const,
             confirmedAt: linkedAwaitingSo?.confirmedAt ?? new Date().toISOString(),
+            reserveStock: false,
             lines: approvedSoLines,
             subtotal: repair.quote.subtotal,
             taxAmount: repair.quote.tax,
@@ -16178,6 +16185,7 @@ const storeCtx: AppState = {
         const soPatch = {
           status: 'sale' as const,
           confirmedAt: linkedApprovedSo?.confirmedAt ?? new Date().toISOString(),
+          reserveStock: false,
           lines: soLines,
           subtotal: repair.quote.subtotal,
           taxAmount: repair.quote.tax,
@@ -16197,7 +16205,7 @@ const storeCtx: AppState = {
         const newSo: SaleOrder = {
           id: soId, ref: soRef, status: 'sale', confirmedAt: new Date().toISOString(),
           customerId: repair.customerId, customerName: repair.customerName,
-          date: now(), validUntil: addDays(now(), 30),
+          date: now(),
           lines: soLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
           notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
           source: 'repair', repairId: repair.id, repairRef: repair.ref,
@@ -16491,7 +16499,7 @@ const storeCtx: AppState = {
           sync(`/api/sale-orders/${readySaleOrder.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'sale', confirmedAt, invoiceId: linkedInvoice.id }),
+            body: JSON.stringify({ status: 'sale', confirmedAt, invoiceId: linkedInvoice.id, reserveStock: false }),
           })
         }
         const readySalesQuote = findSalesQuoteForRepair(quotes, repair)
@@ -16505,6 +16513,10 @@ const storeCtx: AppState = {
             if (updated) sync(`/api/quotes/${readySalesQuote.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
             return next
           })
+        }
+
+        if (!isRepairNoCharge(repair) && !repair.invoiceId && !(repair as any).linkedInvoiceId && !linkedInvoice) {
+          void storeCtxRef.current!.createInvoiceFromRepair(repairId)
         }
 
         notifyUsers({
@@ -16717,9 +16729,13 @@ const storeCtx: AppState = {
             : s
           )
           const updated = next.find(s => s.id === repair.saleOrderId)
-          if (updated?.status === 'sale') sync(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          if (updated?.status === 'sale') sync(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...updated, reserveStock: false }) })
           return next
         })
+      }
+
+      if (!isRepairNoCharge(repair) && !repair.invoiceId && !(repair as any).linkedInvoiceId) {
+        void storeCtxRef.current!.createInvoiceFromRepair(repairId)
       }
 
       if (repair?.assignedTechnicianId) {
@@ -16838,7 +16854,7 @@ const storeCtx: AppState = {
       }
     },
     
-    closeRepairJob: (repairId) => {
+    closeRepairJob: async (repairId) => {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
       if (blockIfOutsourced(repairId, 'close this repair')) return
@@ -16847,14 +16863,30 @@ const storeCtx: AppState = {
         showToast('Device must be delivered or collected before closing the repair', 'error')
         return
       }
-      
-      if (!isRepairNoCharge(repair) && !repair.invoiceId) {
-        showToast('Generate invoice before closing', 'error')
-        return
+
+      if (!isRepairNoCharge(repair) && !repairHasInvoiceLink(repair)) {
+        const existing = invRef.current.find(inv =>
+          inv.status !== 'cancelled'
+          && (
+            inv.repairId === repairId
+            || (!!repair.saleOrderId && inv.saleOrderId === repair.saleOrderId)
+            || (!!repair.ref && inv.notes?.includes(repair.ref))
+          ),
+        )
+        if (existing) {
+          setRepairs(p => p.map(r => r.id === repairId ? { ...r, invoiceId: existing.id, invoiceDate: r.invoiceDate ?? now() } : r))
+        } else {
+          const created = await storeCtxRef.current!.createInvoiceFromRepair(repairId)
+          if (!created?.id) {
+            showToast('Generate invoice before closing', 'error')
+            return
+          }
+        }
       }
-      
+
+      const latest = repairsRef.current.find(r => r.id === repairId) ?? repair
       const closedRepair = {
-        ...repair,
+        ...latest,
         status: 'closed' as RepairStatus,
         closedDate: now(),
       }
@@ -16946,7 +16978,7 @@ const storeCtx: AppState = {
         const newSo = {
           id: soId, ref: soRefValue, status: 'sale' as const, confirmedAt: new Date().toISOString(),
           customerId: repair.customerId, customerName: repair.customerName,
-          date: now(), validUntil: addDays(now(), 30),
+          date: now(),
           lines: soLines, subtotal: repair.quote?.subtotal ?? subtotal,
           taxAmount: repair.quote?.tax ?? taxTotal,
           taxTotal: repair.quote?.tax ?? taxTotal,
@@ -17119,7 +17151,9 @@ const storeCtx: AppState = {
         ...r,
         invoiceId: invoice!.id,
         invoiceDate: r.invoiceDate ?? now(),
-        status: 'invoiced',
+        status: ['delivered', 'collected', 'closed', 'verified_released'].includes(r.status)
+          ? r.status
+          : 'invoiced',
         ...(soId ? { saleOrderId: soId, saleOrderRef: soRefValue } : {}),
         ...(linkedSalesQuote ? { salesQuoteId: linkedSalesQuote.id, salesQuoteRef: linkedSalesQuote.ref ?? linkedSalesQuote.quoteNumber } : {}),
         diagnosisFeeStatus: (() => {
