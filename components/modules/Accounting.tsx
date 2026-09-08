@@ -64,7 +64,7 @@ import {
   TabBar,
   StatePanel,
 } from '@/components/ui'
-import { PrimaryActionButton } from '@/components/erp'
+import { PrimaryActionButton, WorkflowStageBar } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
