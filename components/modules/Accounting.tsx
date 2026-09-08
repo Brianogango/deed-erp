@@ -609,9 +609,9 @@ function AccountingContent() {
   const [glDateTo, setGlDateTo] = useState('')
 
   // ── Partner Ledger state ────────────────────────────────────────────────────
-  const [plPartner, setPlPartner] = useState('')
-  const [plDateFrom, setPlDateFrom] = useState('')
-  const [plDateTo, setPlDateTo] = useState('')
+  const [plPartner, setPlPartner] = useUrlUiState('partner', '')
+  const [plDateFrom, setPlDateFrom] = useUrlUiState('partnerFrom', '')
+  const [plDateTo, setPlDateTo] = useUrlUiState('partnerTo', '')
   const [monthlyReportMonth, setMonthlyReportMonth] = useState(today().slice(0, 7))
 
   // ── Derived data ────────────────────────────────────────────────────────────
