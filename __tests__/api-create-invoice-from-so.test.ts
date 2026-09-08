@@ -23,6 +23,9 @@ const {
     product: {
       findMany: vi.fn(),
     },
+    client: {
+      findUnique: vi.fn(),
+    },
     invoice: {
       create: vi.fn(),
       findMany: vi.fn(),
@@ -111,6 +114,8 @@ beforeEach(() => {
   mockWriteFinancialAudit.mockResolvedValue(undefined)
   mockPrisma.saleOrder.findUnique.mockResolvedValue(saleOrder)
   mockPrisma.saleOrder.findMany.mockResolvedValue([saleOrder])
+  mockPrisma.client.findUnique.mockResolvedValue({ creditLimit: 0, name: 'Acme Ltd' })
+  mockPrisma.invoice.findMany.mockResolvedValue([])
   mockPrisma.repair.findUnique.mockResolvedValue(null)
   mockPrisma.repair.update.mockResolvedValue({ id: REPAIR_ID })
   // Default stockable products to delivered-qty policy (hardware-safe).

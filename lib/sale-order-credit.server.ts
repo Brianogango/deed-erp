@@ -2,6 +2,7 @@ import 'server-only'
 import prisma from '@/lib/prisma'
 import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
 import { loadAppState } from '@/lib/server-store'
+import { evaluateCustomerCreditGate, type CreditSalesDocument } from '@/lib/customer-credit-gate'
 
 export { assertQuoteNotExpired }
 
@@ -23,14 +24,15 @@ export type SaleOrderCreditCheck =
   | { ok: false; status: 403 | 409; error: string }
 
 /**
- * Hard gate for quotation → sale confirmation.
- * - Overdue open invoices: blocked unless Finance/Director
- * - Credit limit exceeded: blocked unless Finance/Director
+ * Hard gate for sale-order confirm and customer-invoice create.
+ * Overdue invoices do not block quotation create/save.
+ * Credit-limit overage still blocks every document type unless Finance/Director.
  */
 export async function assertSaleOrderCreditOnConfirm(opts: {
   clientId: string | null | undefined
   orderTotal: number
   role: string
+  document?: CreditSalesDocument
 }): Promise<SaleOrderCreditCheck> {
   const clientId = opts.clientId
   if (!clientId) return { ok: true }
@@ -68,14 +70,6 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
     }
   }
 
-  if (overdueBalance > 0 && !canOverride) {
-    return {
-      ok: false,
-      status: 409,
-      error: `Account locked — ${overdueCount} overdue invoice${overdueCount > 1 ? 's' : ''} totalling KES ${overdueBalance.toLocaleString('en-KE')}. Clear overdue invoices or ask Finance/Director to confirm.`,
-    }
-  }
-
   // Net available/partially-used store credit against outstanding before
   // comparing to the limit — the client-side check already does this, and
   // without it the server can reject an order the customer's real balance
@@ -86,18 +80,23 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
     .filter(c => c?.customerId === clientId && ['available', 'partially_used'].includes(c?.status))
     .reduce((sum, c) => sum + Math.max(0, Number(c?.balance) || 0), 0)
   outstanding = Math.max(0, outstanding - availableCredit)
+  overdueBalance = Math.max(0, overdueBalance - availableCredit)
 
-  const creditLimit = Number(client.creditLimit ?? 0)
-  if (creditLimit > 0) {
-    const projected = outstanding + Math.max(0, Number(opts.orderTotal) || 0)
-    if (projected > creditLimit && !canOverride) {
-      const available = Math.max(0, creditLimit - outstanding)
-      return {
-        ok: false,
-        status: 409,
-        error: `Credit limit of KES ${creditLimit.toLocaleString('en-KE')} exceeded (available KES ${available.toLocaleString('en-KE')}). Ask Finance/Director to confirm, or reduce the order.`,
-      }
-    }
+  const gate = evaluateCustomerCreditGate({
+    overdueBalance,
+    overdueCount: overdueBalance > 0 ? overdueCount : 0,
+    creditLimit: Number(client.creditLimit ?? 0),
+    outstandingBalance: outstanding,
+    newOrderTotal: opts.orderTotal,
+    document: opts.document ?? 'order',
+  })
+
+  if (!gate.ok && !canOverride) {
+    const action = opts.document === 'invoice' ? 'invoice' : 'confirm'
+    const error = gate.isLocked && (opts.document ?? 'order') !== 'quote'
+      ? `${gate.message.replace(/Clear outstanding bills to unlock\.$/, `Clear overdue invoices or ask Finance/Director to ${action}.`)}`
+      : `${gate.message.replace(/\.$/, '')}. Ask Finance/Director to ${action}, or reduce the order.`
+    return { ok: false, status: 409, error }
   }
 
   return { ok: true }

@@ -24,6 +24,7 @@ import {
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
+import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import {
   findRepairForSaleOrder,
   stampInvoiceOnMatchingRepair,
@@ -83,6 +84,16 @@ export async function POST(
     }
 
     const confirmed = order
+
+    const credit = await assertSaleOrderCreditOnConfirm({
+      clientId: confirmed.clientId,
+      orderTotal: Number(confirmed.totalAmount ?? 0),
+      role: actor.role,
+      document: 'invoice',
+    })
+    if (!credit.ok) {
+      return NextResponse.json({ error: credit.error }, { status: credit.status })
+    }
 
     const state = await loadAppState(['deed_invoices', 'deed_deliveries', 'deed_repairs_v2'])
     const blobInvoices = Array.isArray(state.deed_invoices) ? (state.deed_invoices as any[]) : []

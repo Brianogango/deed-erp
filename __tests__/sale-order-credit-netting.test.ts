@@ -65,4 +65,30 @@ describe('assertSaleOrderCreditOnConfirm — customer credit netting', () => {
     const res = await assertSaleOrderCreditOnConfirm({ clientId: CLIENT_ID, orderTotal: 5000, role: 'director' })
     expect(res.ok).toBe(true)
   })
+
+  it('lets a quotation be created when the customer only has overdue invoices', async () => {
+    mockInvoiceFindMany.mockResolvedValue([{ totalAmount: 9000, amountPaid: 0, dueDate: '2020-01-01', status: 'approved' }])
+    const res = await assertSaleOrderCreditOnConfirm({
+      clientId: CLIENT_ID,
+      orderTotal: 1000,
+      role: 'sales_rep',
+      document: 'quote',
+    })
+    expect(res.ok).toBe(true)
+  })
+
+  it('blocks sale-order confirm and invoice create when invoices are overdue', async () => {
+    mockInvoiceFindMany.mockResolvedValue([{ totalAmount: 9000, amountPaid: 0, dueDate: '2020-01-01', status: 'approved' }])
+    const confirm = await assertSaleOrderCreditOnConfirm({ clientId: CLIENT_ID, orderTotal: 1000, role: 'sales_rep' })
+    const invoice = await assertSaleOrderCreditOnConfirm({
+      clientId: CLIENT_ID,
+      orderTotal: 1000,
+      role: 'sales_rep',
+      document: 'invoice',
+    })
+    expect(confirm.ok).toBe(false)
+    expect(invoice.ok).toBe(false)
+    if (!confirm.ok) expect(confirm.error).toMatch(/overdue/i)
+    if (!invoice.ok) expect(invoice.error).toMatch(/overdue/i)
+  })
 })

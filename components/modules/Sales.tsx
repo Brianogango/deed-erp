@@ -1538,8 +1538,11 @@ function SalesContent() {
     const selectedCustomer = contacts.find(contact => contact.id === newCustomer.id)
     const paymentTermsDays = quotationPaymentTermsDays(selectedCustomer)
     const draftTotalEstimate = newDraftLines.reduce((sum, l) => sum + calcDraftLineTotal(l), 0)
-    const creditStatus = getCustomerCreditStatus(newCustomer.id, draftTotalEstimate)
+    const creditStatus = getCustomerCreditStatus(newCustomer.id, draftTotalEstimate, { document: 'quote' })
     if (!creditStatus.ok) { showToast(creditStatus.message, 'error'); return }
+    if (creditStatus.isLocked && creditStatus.message) {
+      showToast(creditStatus.message, 'info')
+    }
     savingNewQuoteRef.current = true
     setSavingNewQuote(true)
     try {
