@@ -614,6 +614,7 @@ function AccountingContent() {
   const [plDateTo, setPlDateTo] = useState('')
   const [monthlyReportMonth, setMonthlyReportMonth] = useUrlUiState('monthlyPeriod', today().slice(0, 7))
   const [monthlyReportView, setMonthlyReportView] = useUrlUiState('monthlyView', 'overview')
+  const activeMonthlyReportView = ['overview', 'sales', 'costs'].includes(monthlyReportView) ? monthlyReportView : 'overview'
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -1895,7 +1896,7 @@ function AccountingContent() {
                   <button
                     key={view.id}
                     type="button"
-                    className={monthlyReportView === view.id ? 'btn-primary text-[11px]' : 'btn-secondary text-[11px]'}
+                    className={activeMonthlyReportView === view.id ? 'btn-primary text-[11px]' : 'btn-secondary text-[11px]'}
                     onClick={() => setMonthlyReportView(view.id)}
                   >
                     {view.label}
@@ -1903,7 +1904,7 @@ function AccountingContent() {
                 ))}
               </div>
 
-              {monthlyReportView === 'overview' ? (
+              {activeMonthlyReportView === 'overview' ? (
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                   <div className="card p-4">
                     <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-[var(--text-4)]">Revenue mix</p>
@@ -1930,7 +1931,7 @@ function AccountingContent() {
                     </div>
                   </div>
                 </div>
-              ) : monthlyReportView === 'sales' ? (
+              ) : activeMonthlyReportView === 'sales' ? (
                 <div>
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
