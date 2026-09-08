@@ -95,7 +95,8 @@ export default function ContactFormModal({
     ...(forceVendor ? { isVendor: true } : {}),
   }))
   const [saving, setSaving] = useState(false)
-  const [activeDetailsTab, setActiveDetailsTab] = useState<'other' | 'address' | 'persons' | 'remarks' | 'documents'>('other')
+  type DetailsTab = 'other' | 'address' | 'persons' | 'remarks' | 'documents'
+  const [activeDetailsTab, setActiveDetailsTab] = useState<DetailsTab>('other')
   type PersonDraft = { id?: string; salutation: string; firstName: string; lastName: string; email: string; phone: string; mobile: string; position: string }
   const blankPerson = (): PersonDraft => ({ salutation: '', firstName: '', lastName: '', email: '', phone: '', mobile: '', position: '' })
   const [contactPersons, setContactPersons] = useState<PersonDraft[]>([])
@@ -143,6 +144,29 @@ export default function ContactFormModal({
     [contacts, editId],
   )
 
+  const detailsTabs = useMemo<readonly (readonly [DetailsTab, string])[]>(() => (
+    form.type === 'company'
+      ? [
+          ['other', 'Business Details'],
+          ['address', 'Address'],
+          ['persons', 'Contact Persons'],
+          ['remarks', 'Remarks'],
+          ['documents', 'Company Documents'],
+        ]
+      : [
+          ['other', 'Personal Details'],
+          ['address', 'Address'],
+          ['remarks', 'Remarks'],
+          ['documents', 'Identity Documents'],
+        ]
+  ), [form.type])
+
+  useEffect(() => {
+    if (form.type === 'individual' && activeDetailsTab === 'persons') {
+      setActiveDetailsTab('other')
+    }
+  }, [form.type, activeDetailsTab])
+
   const paymentTermsValue = String(form.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS)
   const paymentTermsOptions = useMemo(() => {
     const base: Array<{ value: string; label: string }> = PAYMENT_TERMS_DAY_OPTIONS.map(o => ({
@@ -170,7 +194,6 @@ export default function ContactFormModal({
       address: form.address,
       city: form.city,
       country: form.country,
-      vatNumber: form.vatNumber,
       notes: form.notes,
       isCustomer: forceCustomer ? true : form.isCustomer,
       isVendor: forceVendor ? true : form.isVendor,
@@ -203,9 +226,11 @@ export default function ContactFormModal({
         ? await updateContact(editId, payload)
         : await addContact(payload)
       const savedContact = contact as Contact
-      const validPersons = contactPersons.filter(person => person.firstName.trim() || person.lastName.trim() || person.email.trim())
+      const validPersons = form.type === 'company'
+        ? contactPersons.filter(person => person.firstName.trim() || person.lastName.trim() || person.email.trim())
+        : []
       try {
-        await Promise.all([
+        if (form.type === 'company') await Promise.all([
         ...validPersons.map(person => fetch(person.id ? `/api/contact-persons/${person.id}` : '/api/contact-persons', {
           method: person.id ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -361,13 +386,7 @@ export default function ContactFormModal({
 
         <section className="contacts-details-tabs">
           <nav className="contacts-details-tabs__nav" aria-label="Additional contact details">
-            {([
-              ['other', 'Other Details'],
-              ['address', 'Address'],
-              ['persons', 'Contact Persons'],
-              ['remarks', 'Remarks'],
-              ['documents', 'Documents'],
-            ] as const).map(([id, label]) => (
+            {detailsTabs.map(([id, label]) => (
               <button key={id} type="button" className={activeDetailsTab === id ? 'is-active' : ''} onClick={() => setActiveDetailsTab(id)}>
                 {label}{id === 'persons' && contactPersons.length > 0 ? <span>{contactPersons.length}</span> : null}
               </button>
@@ -377,29 +396,40 @@ export default function ContactFormModal({
           <div className="contacts-details-tabs__panel">
             {activeDetailsTab === 'other' && (
               <div className="contacts-form-optional__grid">
-                {form.type === 'company' && <>
-                  <Field label="Company ID / Registration No." hint="Shown on official records">
-                    <Input value={form.registrationNumber ?? ''} onChange={f('registrationNumber')} placeholder="CPR/2026/1234" />
-                  </Field>
-                  <Field label="Trading Name">
-                    <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="Business name (if different)" />
-                  </Field>
-                </>}
-                <Field label="Company ID / KRA PIN" hint="Shown on invoices for tax purposes">
-                  <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="P051234567X" />
-                </Field>
-                <Field label="Currency" hint="Defaults to your base currency">
-                  <Input value="KES — Kenyan Shilling" onChange={() => {}} disabled />
-                </Field>
-                <Field label="Credit limit (KES)" hint="Maximum approved account exposure">
-                  <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="0.00" />
-                </Field>
-                <Field label="Payment terms" hint="Used to calculate invoice due dates">
-                  <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(Number(v))} options={paymentTermsOptions} />
-                </Field>
+                {form.type === 'company' ? (
+                  <>
+                    <Field label="Registration Number" hint="As shown on the certificate of incorporation">
+                      <Input value={form.registrationNumber ?? ''} onChange={f('registrationNumber')} placeholder="e.g. PVT-ABCD123" />
+                    </Field>
+                    <Field label="Trading Name">
+                      <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="Business name (if different)" />
+                    </Field>
+                    <Field label="KRA PIN" hint="Shown on invoices and tax documents">
+                      <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. P051234567X" />
+                    </Field>
+                    <Field label="Currency" hint="Defaults to your base currency">
+                      <Input value="KES — Kenyan Shilling" onChange={() => {}} disabled />
+                    </Field>
+                    <Field label="Credit limit (KES)" hint="Maximum approved account exposure">
+                      <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="0.00" />
+                    </Field>
+                    <Field label="Payment terms" hint="Used to calculate invoice due dates">
+                      <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(Number(v))} options={paymentTermsOptions} />
+                    </Field>
+                  </>
+                ) : (
+                  <>
+                    <Field label="National ID / Passport Number" hint="For identification where required">
+                      <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="National ID or passport number" />
+                    </Field>
+                    <Field label="Payment terms" hint="Used when this individual buys on account">
+                      <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(Number(v))} options={paymentTermsOptions} />
+                    </Field>
+                  </>
+                )}
                 <div className="contacts-form-wide">
                   <Field label="Reporting tags" hint="Press Enter or use commas to separate tags">
-                    <Input value={(form.tags ?? []).join(', ')} onChange={v => f('tags')(String(v).split(',').map(tag => tag.trim()).filter(Boolean))} placeholder="vip, wholesale..." />
+                    <Input value={(form.tags ?? []).join(', ')} onChange={v => f('tags')(String(v).split(',').map(tag => tag.trim()).filter(Boolean))} placeholder={form.type === 'company' ? 'vip, wholesale...' : 'vip, retail...'} />
                   </Field>
                 </div>
               </div>
@@ -416,7 +446,7 @@ export default function ContactFormModal({
 
             {activeDetailsTab === 'persons' && (
               <div className="contacts-persons-editor">
-                <header><strong>Contact Persons</strong><span>Additional people at this customer you may deal with</span></header>
+                <header><strong>Contact Persons</strong><span>People authorised to represent or transact for this company</span></header>
                 {contactPersons.map((person, index) => (
                   <div className="contacts-person-card" key={person.id ?? index}>
                     <Select value={person.salutation} onChange={v => updatePerson(index, 'salutation', String(v))} options={[{value:'',label:'Salutation'},{value:'Mr',label:'Mr'},{value:'Ms',label:'Ms'},{value:'Mrs',label:'Mrs'},{value:'Dr',label:'Dr'}]} />
@@ -441,8 +471,12 @@ export default function ContactFormModal({
 
             {activeDetailsTab === 'documents' && (
               <div className="contacts-documents-empty">
-                <strong>Documents</strong>
-                <span>Save this contact, then attach documents from the contact record.</span>
+                <strong>{form.type === 'company' ? 'Company Documents' : 'Identity Documents'}</strong>
+                <span>
+                  {form.type === 'company'
+                    ? 'Save the company, then attach its CR12, certificate of incorporation, KRA PIN certificate and other compliance documents from the contact record.'
+                    : 'Save the individual, then attach a National ID or passport only when identification is required.'}
+                </span>
               </div>
             )}
           </div>
