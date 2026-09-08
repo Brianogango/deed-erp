@@ -604,9 +604,9 @@ function AccountingContent() {
   })
 
   // ── General Ledger state ────────────────────────────────────────────────────
-  const [glAccount, setGlAccount] = useState('')
-  const [glDateFrom, setGlDateFrom] = useState('')
-  const [glDateTo, setGlDateTo] = useState('')
+  const [glAccount, setGlAccount] = useUrlUiState('glAccount', '')
+  const [glDateFrom, setGlDateFrom] = useUrlUiState('glFrom', '')
+  const [glDateTo, setGlDateTo] = useUrlUiState('glTo', '')
 
   // ── Partner Ledger state ────────────────────────────────────────────────────
   const [plPartner, setPlPartner] = useState('')
