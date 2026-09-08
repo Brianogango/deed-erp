@@ -611,7 +611,7 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
                 type="button"
                 className={
                   listening
-                    ? 'btn-primary px-3 py-2 text-xs bg-[var(--danger)] border-[var(--danger)]'
+                    ? 'btn-danger px-3 py-2 text-xs'
                     : mode === 'voice'
                       ? 'btn-primary px-3 py-2 text-xs'
                       : 'btn-secondary px-3 py-2 text-xs'
