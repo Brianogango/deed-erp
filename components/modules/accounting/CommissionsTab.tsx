@@ -67,6 +67,8 @@ export default function CommissionsTab() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    setSelectedCloser(null)
+    setSelectedCommission(null)
     const params = new URLSearchParams({
       summary: '1',
       periodYear: year,
