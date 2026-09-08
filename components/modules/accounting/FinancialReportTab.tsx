@@ -1,9 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { exportToExcel } from '@/lib/export-utils'
 import { Fa } from '@/components/icons'
 import { faDownload, faPrint, faScaleBalanced, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 
 type Preset = 'today' | 'this_week' | 'this_month' | 'this_year' | 'custom'
 
@@ -78,12 +80,16 @@ const PRESETS: Array<{ id: Preset; label: string }> = [
 ]
 
 export default function FinancialReportTab() {
-  const [preset, setPreset] = useState<Preset>('this_month')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
+  const router = useRouter()
+  const [presetValue, setPresetValue] = useUrlUiState('reportPeriod', 'this_month')
+  const preset: Preset = PRESETS.some(option => option.id === presetValue) ? presetValue as Preset : 'this_month'
+  const setPreset = (next: Preset) => setPresetValue(next)
+  const [customFrom, setCustomFrom] = useUrlUiState('reportFrom', '')
+  const [customTo, setCustomTo] = useUrlUiState('reportTo', '')
   const [report, setReport] = useState<Report | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const range = useMemo(() => presetRange(preset, customFrom, customTo), [preset, customFrom, customTo])
 
@@ -108,7 +114,8 @@ export default function FinancialReportTab() {
   useEffect(() => { void load() }, [load])
 
   const exportExcel = useCallback(async () => {
-    if (!report) return
+    if (!report || exporting) return
+    setExporting(true)
     const pl = report.profitLoss
     const rows: Array<Array<string | number>> = [
       ['FINANCIAL REPORT', `${report.period.dateFrom} → ${report.period.dateTo}`],
@@ -146,17 +153,32 @@ export default function FinancialReportTab() {
       ['EXPENSES BY ACCOUNT', ''],
       ...[...pl.cogs, ...pl.operatingExpenses, ...pl.financeCosts].map(r => [`${r.code} ${r.name}`, r.amount]),
     ]
-    await exportToExcel(
-      `Financial Report — ${report.period.dateFrom} to ${report.period.dateTo}`,
-      ['Item', 'Amount (KES)'],
-      rows.map(r => r.map(c => c ?? '')),
-      `Financial_Report_${report.period.dateFrom}_${report.period.dateTo}`,
-    )
-  }, [report])
+    try {
+      await exportToExcel(
+        `Financial Report — ${report.period.dateFrom} to ${report.period.dateTo}`,
+        ['Item', 'Amount (KES)'],
+        rows.map(r => r.map(c => c ?? '')),
+        `Financial_Report_${report.period.dateFrom}_${report.period.dateTo}`,
+      )
+    } finally {
+      setExporting(false)
+    }
+  }, [exporting, report])
 
   const pl = report?.profitLoss
   const bs = report?.balanceSheet
   const cf = report?.cashFlow
+
+  const openAccountLedger = (accountCode: string) => {
+    const params = new URLSearchParams({
+      tab: 'gl',
+      glAccount: accountCode,
+      glAccounts: accountCode,
+      glFrom: range.dateFrom,
+      glTo: range.dateTo,
+    })
+    router.push(`/finance?${params.toString()}`)
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -186,8 +208,8 @@ export default function FinancialReportTab() {
               <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="form-input text-[11px]" />
             </>
           )}
-          <button type="button" className="btn-secondary flex items-center gap-2" onClick={() => void exportExcel()} disabled={!report}>
-            <Fa icon={faDownload} /> Export
+          <button type="button" className="btn-secondary flex items-center gap-2" onClick={() => void exportExcel()} disabled={!report || exporting}>
+            <Fa icon={faDownload} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
           <button type="button" className="btn-secondary flex items-center gap-2" onClick={() => window.print()} disabled={!report}>
             <Fa icon={faPrint} /> Print
@@ -196,7 +218,15 @@ export default function FinancialReportTab() {
       </div>
 
       {loading && <div className="card p-8 text-center text-xs text-[var(--text-4)]">Building the report from posted journals…</div>}
-      {error && <div className="card p-4 text-xs text-[var(--danger)]">{error}</div>}
+      {error && (
+        <div className="card p-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-[var(--danger)]">The report could not be loaded.</p>
+            <p className="text-[11px] text-[var(--text-3)] mt-0.5">{error}</p>
+          </div>
+          <button type="button" className="btn-primary text-[11px]" onClick={() => void load()}>Try again</button>
+        </div>
+      )}
 
       {report && pl && bs && cf && (
         <>
@@ -289,10 +319,14 @@ export default function FinancialReportTab() {
               <div className="space-y-1.5 text-xs">
                 {pl.revenue.length === 0 && <p className="text-[var(--text-4)]">No revenue posted in this period.</p>}
                 {pl.revenue.map(r => (
-                  <div key={r.code} className="flex justify-between"><span>{r.code} · {r.name}</span><span className="font-mono font-bold">{fmtKes(r.amount)}</span></div>
+                  <button key={r.code} type="button" className="w-full flex justify-between gap-3 text-left hover:text-[var(--primary)]" onClick={() => openAccountLedger(r.code)} title="Open supporting General Ledger">
+                    <span>{r.code} · {r.name}</span><span className="font-mono font-bold">{fmtKes(r.amount)}</span>
+                  </button>
                 ))}
                 {pl.otherIncome.map(r => (
-                  <div key={r.code} className="flex justify-between"><span>{r.code} · {r.name}</span><span className="font-mono font-bold">{fmtKes(r.amount)}</span></div>
+                  <button key={r.code} type="button" className="w-full flex justify-between gap-3 text-left hover:text-[var(--primary)]" onClick={() => openAccountLedger(r.code)} title="Open supporting General Ledger">
+                    <span>{r.code} · {r.name}</span><span className="font-mono font-bold">{fmtKes(r.amount)}</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -301,7 +335,9 @@ export default function FinancialReportTab() {
               <div className="space-y-1.5 text-xs">
                 {[...pl.cogs, ...pl.operatingExpenses, ...pl.financeCosts].length === 0 && <p className="text-[var(--text-4)]">No expenses posted in this period.</p>}
                 {[...pl.cogs, ...pl.operatingExpenses, ...pl.financeCosts].map(r => (
-                  <div key={r.code} className="flex justify-between"><span>{r.code} · {r.name}</span><span className="font-mono font-bold">{fmtKes(r.amount)}</span></div>
+                  <button key={r.code} type="button" className="w-full flex justify-between gap-3 text-left hover:text-[var(--primary)]" onClick={() => openAccountLedger(r.code)} title="Open supporting General Ledger">
+                    <span>{r.code} · {r.name}</span><span className="font-mono font-bold">{fmtKes(r.amount)}</span>
+                  </button>
                 ))}
               </div>
             </div>
