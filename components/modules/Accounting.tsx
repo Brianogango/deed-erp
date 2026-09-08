@@ -607,8 +607,12 @@ function AccountingContent() {
   const [journalRef, setJournalRef] = useUrlUiState('journalQ', '')
 
   // ── Chart of Accounts state ─────────────────────────────────────────────────
-  const [coaSearch, setCoaSearch] = useState('')
-  const [coaTypeFilter, setCoaTypeFilter] = useState<'all' | Account['type']>('all')
+  const [coaSearch, setCoaSearch] = useUrlUiState('accountQ', '')
+  const [coaTypeFilterValue, setCoaTypeFilterValue] = useUrlUiState('accountType', 'all')
+  const coaTypeFilter: 'all' | Account['type'] = ['asset', 'liability', 'equity', 'revenue', 'expense'].includes(coaTypeFilterValue)
+    ? coaTypeFilterValue as Account['type']
+    : 'all'
+  const setCoaTypeFilter = (next: 'all' | Account['type']) => setCoaTypeFilterValue(next)
   const [showAccountForm, setShowAccountForm] = useState(false)
   const [editAccountId, setEditAccountId] = useState<string | null>(null)
   const [accountForm, setAccountForm] = useState<Omit<Account, 'id'>>({

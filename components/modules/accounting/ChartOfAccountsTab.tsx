@@ -6,6 +6,8 @@ import { fmtKes, type Account, type AccountType, type BankAccount } from '@/lib/
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Modal, Field, Input, Select } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useRouter } from 'next/navigation'
 
 const TYPE_OPTIONS: { value: AccountType | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -98,10 +100,10 @@ export default function ChartOfAccountsTab() {
     coaSearch, setCoaSearch, coaTypeFilter, setCoaTypeFilter,
     showAccountForm, setShowAccountForm, editAccountId, setEditAccountId,
     accountForm, setAccountForm, addAccount, updateAccount, addBankAccount, showToast,
-    setTab,
   } = useAccounting()
 
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const router = useRouter()
+  const [selectedId, setSelectedId] = useUrlRecordId({ param: 'accountId' })
   const [showBankForm, setShowBankForm] = useState(false)
   const [bankForm, setBankForm] = useState<BankForm>(EMPTY_BANK)
 
@@ -329,6 +331,21 @@ export default function ChartOfAccountsTab() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {(coaSearch || coaTypeFilter !== 'all') && (
+            <button
+              type="button"
+              className="btn-outline text-[11px]"
+              onClick={() => {
+                setCoaSearch('')
+                setCoaTypeFilter('all')
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+          <span className="text-[10px] text-t3 whitespace-nowrap">
+            {filteredAccounts.length} account{filteredAccounts.length === 1 ? '' : 's'}
+          </span>
           <button type="button" className="btn-outline text-[11px]" onClick={openAddBank}>
             Add bank
           </button>
@@ -342,23 +359,36 @@ export default function ChartOfAccountsTab() {
 
       {selected && (
         <div className="mx-4 mb-2 px-3 py-2.5 rounded-lg border border-[var(--border-lt)] bg-[var(--bg-card)] flex flex-wrap items-center gap-3 justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Selected account</p>
-            <p className="text-sm font-semibold text-t1 truncate">
-              <span className="font-mono text-t3 mr-2">{selected.code}</span>
-              {selected.name}
-            </p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Account details</p>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p className="text-sm font-semibold text-t1 truncate">
+                <span className="font-mono text-t3 mr-2">{selected.code}</span>
+                {selected.name}
+              </p>
+              <p className={`font-mono text-sm font-bold ${getLiveBalance(selected) < 0 ? 'text-[var(--danger)]' : 'text-t1'}`}>
+                {fmtKes(getLiveBalance(selected))}
+              </p>
+            </div>
             <p className="text-[11px] text-t3">
               {selected.type === 'revenue' ? 'Income' : selected.type}
               {' · '}
               {selected.group}
+              {selected.subGroup ? ` · ${selected.subGroup}` : ''}
               {linkedBank ? ` · Wallet: ${linkedBank.name}` : ''}
+              {selected.isDynamic ? ' · Computed balance' : ''}
+              {' · '}
+              {selected.isActive ? 'Active' : 'Inactive'}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {linkedBank && (
-              <button type="button" className="btn-outline text-[11px]" onClick={() => setTab('cashbook')}>
-                Open cashbook
+              <button
+                type="button"
+                className="btn-outline text-[11px]"
+                onClick={() => router.push(`/finance?tab=cashbook&bankAccount=${encodeURIComponent(linkedBank.id)}`)}
+              >
+                Open in Banking
               </button>
             )}
             <button type="button" className="btn-outline text-[11px]" onClick={() => setSelectedId(null)}>
@@ -377,7 +407,7 @@ export default function ChartOfAccountsTab() {
         rows={filteredAccounts}
         rowKey={a => a.id}
         hideSearch
-        emptyMessage="No accounts found"
+        emptyMessage={coaSearch || coaTypeFilter !== 'all' ? 'No accounts match these filters' : 'No accounts found'}
         onRowClick={a => setSelectedId(a.id)}
         rowLabel={a => `${a.code} ${a.name}`}
         rowClassName={a => (a.id === selectedId ? 'bg-[var(--info-bg)]' : '')}
@@ -387,10 +417,10 @@ export default function ChartOfAccountsTab() {
             className="btn-outline text-[10px] py-1 px-2"
             onClick={e => {
               e.stopPropagation()
-              openEditAccount(a)
+              setSelectedId(a.id)
             }}
           >
-            Open
+            View details
           </button>
         )}
         exportTitle="Chart of Accounts"
@@ -399,7 +429,7 @@ export default function ChartOfAccountsTab() {
 
       {showAccountForm && (
         <Modal
-          title={editAccountId ? 'Account' : 'New account'}
+          title={editAccountId ? 'Edit account' : 'New account'}
           onClose={() => setShowAccountForm(false)}
           width={560}
         >
