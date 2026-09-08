@@ -539,6 +539,28 @@ export default function InvoiceDetail() {
       : dueDays === 0
         ? 'Due today'
         : `${dueDays} day${dueDays === 1 ? '' : 's'}`
+  const journeyNotice = !canManageFinance
+    ? {
+        title: 'View-only access.',
+        message: `You can review this ${docLabel.toLowerCase()} and its history, but only Finance, Administration or a Director can confirm, edit or record payments.`,
+      }
+    : docState === 'cancelled'
+      ? {
+          title: `${docLabel} cancelled.`,
+          message: 'No further payments can be recorded. Use History to review what happened.',
+        }
+      : payState === 'blocked'
+        ? {
+            title: 'Payment is blocked.',
+            message: 'Release the payment block from More actions before recording a payment.',
+          }
+        : docState === 'posted' && payState === 'paid'
+          ? {
+              title: `${docLabel} fully settled.`,
+              message: 'Open Payments to review the recorded allocation or History to review the document journey.',
+            }
+          : null
+
   const moreActions = [
     {
       id: 'download',
@@ -697,10 +719,10 @@ export default function InvoiceDetail() {
           </div>
         </div>
 
-        {!canManageFinance && (
+        {journeyNotice && (
           <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3 text-xs text-[var(--text-3)]" role="note">
-            <strong className="text-[var(--text-1)]">View-only access.</strong>{' '}
-            You can review this {docLabel.toLowerCase()} and its history, but only Finance, Administration or a Director can confirm, edit or record payments.
+            <strong className="text-[var(--text-1)]">{journeyNotice.title}</strong>{' '}
+            {journeyNotice.message}
           </div>
         )}
 
