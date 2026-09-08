@@ -49,6 +49,7 @@ export default function InvoiceDetail() {
   const listPage = parseFinanceListPage(searchParams.get('listPage') ?? searchParams.get('page'))
   const listSearch = searchParams.get('listQ') ?? ''
   const listFilter = searchParams.get('listFilter') ?? 'all'
+  const listScroll = Math.max(0, Math.floor(Number(searchParams.get('listScroll')) || 0))
   const goToDocumentList = (type?: string | null) => {
     const params = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search)
@@ -58,6 +59,7 @@ export default function InvoiceDetail() {
       page: livePage,
       search: params.get('listQ') ?? '',
       filter: params.get('listFilter') ?? 'all',
+      scroll: Math.max(0, Math.floor(Number(params.get('listScroll')) || 0)),
     })
     router.push(path)
   }
@@ -257,6 +259,7 @@ export default function InvoiceDetail() {
     page: listPage,
     search: listSearch,
     filter: listFilter,
+    scroll: listScroll,
   })
   const balance = Math.max(0, invoice.total - invoice.amountPaid)
   const pct = invoice.total > 0 ? Math.min(100, (invoice.amountPaid / invoice.total) * 100) : 0
@@ -292,13 +295,57 @@ export default function InvoiceDetail() {
       { key: 'paid', label: invoice.type === 'customer_invoice' ? 'Received' : 'Paid', state: isPaid ? 'current' : 'todo' },
     ] as Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>
   })()
+  const focusDetailTab = (nextTab: 'payments' | 'notes' | 'activity' | 'instructions') => {
+    setDetailTab(nextTab)
+    window.requestAnimationFrame(() => {
+      document.getElementById('invoice-supporting-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
   const invoiceSmartButtons = [
-    { key: 'customer', label: invoice.type === 'customer_invoice' ? 'Customer' : 'Vendor', value: invoice.partnerName || 'Not set' },
-    { key: 'payments', label: 'Payments', value: String((invoice.payments || []).length) },
-    { key: 'sales-order', label: 'Sales Order', value: linkedSaleOrder ? '1' : '0' },
-    { key: 'delivery', label: 'Delivery', value: linkedDeliveryJob ? '1' : '0' },
-    { key: 'credit-notes', label: 'Credit Notes', value: '0' },
-    { key: 'activities', label: 'History', value: 'View' },
+    {
+      key: 'customer',
+      label: invoice.type === 'customer_invoice' ? 'Customer' : 'Vendor',
+      value: invoice.partnerName || 'Not set',
+      onClick: () => router.push(`/contacts?id=${encodeURIComponent(invoice.partnerId)}`),
+      hint: `Open ${invoice.partnerName || 'contact'}`,
+    },
+    {
+      key: 'payments',
+      label: 'Payments',
+      value: String((invoice.payments || []).length),
+      onClick: () => focusDetailTab('payments'),
+      hint: (invoice.payments || []).length > 0 ? 'View receipt and payment allocations' : 'No payments recorded yet',
+    },
+    {
+      key: 'sales-order',
+      label: 'Sales Order',
+      value: linkedSaleOrder ? '1' : '0',
+      onClick: linkedSaleOrder ? () => router.push(`/sales?id=${encodeURIComponent(linkedSaleOrder.id)}`) : undefined,
+      disabled: !linkedSaleOrder,
+      hint: linkedSaleOrder ? `Open ${linkedSaleOrder.ref || 'linked sales order'}` : 'No sales order is linked to this document',
+    },
+    {
+      key: 'delivery',
+      label: 'Delivery',
+      value: linkedDeliveryJob ? '1' : '0',
+      onClick: linkedDeliveryJob ? () => router.push('/delivery') : undefined,
+      disabled: !linkedDeliveryJob,
+      hint: linkedDeliveryJob ? 'Open Delivery to review the linked job' : 'No delivery is linked to this document',
+    },
+    {
+      key: 'credit-notes',
+      label: 'Credit Notes',
+      value: '0',
+      disabled: true,
+      hint: 'No credit notes are linked to this document',
+    },
+    {
+      key: 'activities',
+      label: 'History',
+      value: 'View',
+      onClick: () => focusDetailTab('activity'),
+      hint: 'View document history and internal activity',
+    },
   ]
 
   const documentHistory = [
@@ -338,6 +385,7 @@ export default function InvoiceDetail() {
     if (payMethod === 'bank_transfer' && !payBankAccountId) { showToast('Select a bank account for bank transfer payments', 'error'); return }
     registerPayment(invoice.id, financePaymentPreview(payAmount, balance).applied, payMethod, payBankAccountId || undefined, payReference, payDate)
     setShowPayModal(false)
+    focusDetailTab('payments')
     setPayAmount('')
     setPayReference('')
     setPayDate(today())
@@ -629,7 +677,7 @@ export default function InvoiceDetail() {
                 <PrimaryActionButton
                   icon={<Fa icon={faPencil} />}
                   variant="secondary"
-                  onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
+                  onClick={() => router.push(`${documentListPath}&edit=${encodeURIComponent(invoice.id)}`)}
                   hideLabelOnMobile={false}
                 >
                   Edit
@@ -652,7 +700,7 @@ export default function InvoiceDetail() {
         {!canManageFinance && (
           <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3 text-xs text-[var(--text-3)]" role="note">
             <strong className="text-[var(--text-1)]">View-only access.</strong>{' '}
-            You can review this ${docLabel.toLowerCase()} and its history, but only Finance, Administration or a Director can confirm, edit or record payments.
+            You can review this {docLabel.toLowerCase()} and its history, but only Finance, Administration or a Director can confirm, edit or record payments.
           </div>
         )}
 
@@ -672,7 +720,15 @@ export default function InvoiceDetail() {
 
         <div className="invoice-detail__smart-row" aria-label="Related invoice records">
           {invoiceSmartButtons.map(item => (
-            <button key={item.key} type="button" className="invoice-detail__smart-button">
+            <button
+              key={item.key}
+              type="button"
+              className="invoice-detail__smart-button"
+              onClick={item.onClick}
+              disabled={item.disabled}
+              title={item.hint}
+              aria-label={`${item.label}: ${item.value}. ${item.hint}`}
+            >
               <span>{item.label}</span>
               <strong>{item.value}</strong>
             </button>
@@ -734,7 +790,7 @@ export default function InvoiceDetail() {
                 <button
                   type="button"
                   className="invoice-detail__text-btn invoice-detail__text-btn--accent"
-                  onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
+                  onClick={() => router.push(`${documentListPath}&edit=${encodeURIComponent(invoice.id)}`)}
                 >
                   <Fa icon={faPencil} className="text-[10px]" /> Edit lines
                 </button>
@@ -877,7 +933,7 @@ export default function InvoiceDetail() {
                   type="button"
                   className="invoice-detail__icon-edit"
                   aria-label="Edit customer addresses"
-                  onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
+                  onClick={() => router.push(`${documentListPath}&edit=${encodeURIComponent(invoice.id)}`)}
                 >
                   <Fa icon={faPencil} />
                 </button>
@@ -971,7 +1027,7 @@ export default function InvoiceDetail() {
           </section>
         </details>
 
-        <section className="invoice-detail__tabs-card" aria-label="Notes payments and activity">
+        <section id="invoice-supporting-details" className="invoice-detail__tabs-card" aria-label="Notes payments and activity">
           <div className="invoice-detail__tabs" role="tablist">
             {([
               ['payments', 'Payments'],
