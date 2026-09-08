@@ -117,6 +117,7 @@ export function financeInvoicePath(
     listPage?: number | string | null
     listSearch?: string | null
     listFilter?: string | null
+    listScroll?: number | string | null
   },
 ): string {
   const params = new URLSearchParams()
@@ -126,6 +127,8 @@ export function financeInvoicePath(
   const filter = String(opts?.listFilter ?? '').trim()
   if (search) params.set('listQ', search)
   if (filter && filter !== 'all') params.set('listFilter', filter)
+  const scroll = Math.max(0, Math.floor(Number(opts?.listScroll) || 0))
+  if (scroll > 0) params.set('listScroll', String(scroll))
   const qs = params.toString()
   return qs ? `/finance/invoices/${id}?${qs}` : `/finance/invoices/${id}`
 }
@@ -137,6 +140,7 @@ export function financeInvoiceListPath(
     page?: number | string | null
     search?: string | null
     filter?: string | null
+    scroll?: number | string | null
   },
 ): string {
   const params = new URLSearchParams()
@@ -147,6 +151,8 @@ export function financeInvoiceListPath(
   const filter = String(opts?.filter ?? '').trim()
   if (search) params.set('q', search)
   if (filter && filter !== 'all') params.set('filter', filter)
+  const scroll = Math.max(0, Math.floor(Number(opts?.scroll) || 0))
+  if (scroll > 0) params.set('scroll', String(scroll))
   return `/finance?${params.toString()}`
 }
 

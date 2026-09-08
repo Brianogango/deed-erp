@@ -349,6 +349,21 @@ describe('invoice editor navigation', () => {
     })).toBe('/finance?tab=bills')
   })
 
+  it('carries list scroll position through the record and restores it on return', () => {
+    expect(financeInvoicePath('inv-1', {
+      listPage: 2,
+      listScroll: 864,
+    })).toBe('/finance/invoices/inv-1?listPage=2&listScroll=864')
+
+    expect(financeInvoiceListPath('customer_invoice', {
+      page: 2,
+      scroll: 864,
+    })).toBe('/finance?tab=invoices&page=2&scroll=864')
+
+    expect(financeInvoicePath('inv-1', { listScroll: -20 })).toBe('/finance/invoices/inv-1')
+    expect(financeInvoiceListPath('vendor_bill', { scroll: 'invalid' })).toBe('/finance?tab=bills')
+  })
+
   it('applies a new edit query once, then ignores it until the id changes', () => {
     expect(shouldApplyInvoiceEditQuery('inv-1', null)).toBe(true)
     expect(shouldApplyInvoiceEditQuery('inv-1', 'inv-1')).toBe(false)

@@ -403,6 +403,24 @@ function AccountingContent() {
     setInvoiceListPageState(urlInvoiceListPage)
   }, [urlInvoiceListPage])
 
+  const restoredInvoiceScrollRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (tab !== 'invoices' && tab !== 'bills') return
+    const rawScroll = searchParams.get('scroll')
+    const scrollTop = Math.max(0, Math.floor(Number(rawScroll) || 0))
+    if (scrollTop <= 0) return
+    const restoreKey = `${tab}:${scrollTop}`
+    if (restoredInvoiceScrollRef.current === restoreKey) return
+    restoredInvoiceScrollRef.current = restoreKey
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollTop, behavior: 'auto' })
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('scroll')
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [pathname, router, searchParams, tab])
+
   const setTab = (newTab: MainTab) => {
     const nextTab = isReportTabId(newTab) ? 'reports' : newTab
     if (nextTab === tab && !(isReportTabId(newTab) && newTab !== reportTab)) return
@@ -538,6 +556,7 @@ function AccountingContent() {
       listPage: invoiceListPage,
       listSearch: invSearch,
       listFilter: invFilter,
+      listScroll: typeof window !== 'undefined' ? window.scrollY : 0,
     }))
   }, [invoiceListPage, invSearch, invFilter, router])
   const [selectedInvIds, setSelectedInvIds] = useState<Set<string>>(new Set())

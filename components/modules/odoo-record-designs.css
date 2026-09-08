@@ -468,6 +468,25 @@ main#main-content:has(.finance-invoice-detail) {
   border-right: 0;
 }
 
+.finance-invoice-detail .invoice-detail__smart-button:not(:disabled) {
+  cursor: pointer;
+}
+
+.finance-invoice-detail .invoice-detail__smart-button:not(:disabled):hover,
+.finance-invoice-detail .invoice-detail__smart-button:not(:disabled):focus-visible {
+  background: #eef9fe;
+}
+
+.finance-invoice-detail .invoice-detail__smart-button:focus-visible {
+  outline: 2px solid #08aeea;
+  outline-offset: -2px;
+}
+
+.finance-invoice-detail .invoice-detail__smart-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .finance-invoice-detail .invoice-detail__smart-button span {
   color: var(--odoo-muted);
   font-size: 10px;
