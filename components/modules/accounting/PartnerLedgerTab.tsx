@@ -1,14 +1,18 @@
 'use client'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { Fa } from '@/components/icons'
 import { faSearch, faUsers } from '@fortawesome/free-solid-svg-icons'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { Badge, Modal } from '@/components/ui'
+import { useRouter } from 'next/navigation'
+import { financeInvoicePath } from '@/lib/finance-invoice'
 
 type PartnerTxn = {
   id: string
+  documentId: string
   documentRef: string
   transactionRef: string
   date: string
@@ -54,6 +58,8 @@ export default function PartnerLedgerTab() {
     plPartner, setPlPartner, plDateFrom, setPlDateFrom, plDateTo, setPlDateTo,
   } = useAccounting()
   const { customerCredits } = useFinanceStore()
+  const router = useRouter()
+  const [selectedTransaction, setSelectedTransaction] = useState<PartnerTxn | null>(null)
 
   const partnerNames = useMemo(
     () => Array.from(new Set(allInvoices.map(invoice => invoice.partnerName).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
@@ -71,6 +77,7 @@ export default function PartnerLedgerTab() {
         const isCustomer = invoice.type === 'customer_invoice'
         raw.push({
           id: `document-${invoice.id}`,
+          documentId: invoice.id,
           documentRef: invoice.ref,
           transactionRef: invoice.ref,
           date: invoice.date,
@@ -91,7 +98,8 @@ export default function PartnerLedgerTab() {
           detailedPaid += amount
           raw.push({
             id: `payment-${invoice.id}-${payment.id || index}`,
-            documentRef: invoice.ref,
+            documentId: invoice.id,
+          documentRef: invoice.ref,
             transactionRef: payment.reference || payment.id || `PAY-${index + 1}`,
             date: payment.date || invoice.date,
             type: isCustomer ? 'customer_payment' : 'supplier_payment',
@@ -110,7 +118,8 @@ export default function PartnerLedgerTab() {
         if (legacyRemainder > 0.005) {
           raw.push({
             id: `payment-legacy-${invoice.id}`,
-            documentRef: invoice.ref,
+            documentId: invoice.id,
+          documentRef: invoice.ref,
             transactionRef: `PAID-${invoice.ref}`,
             date: invoice.date,
             type: isCustomer ? 'customer_payment' : 'supplier_payment',
@@ -209,6 +218,11 @@ export default function PartnerLedgerTab() {
     )
   }, [allInvoices, plPartner])
 
+  const selectedDocument = selectedTransaction
+    ? allInvoices.find(invoice => invoice.id === selectedTransaction.documentId) ?? null
+    : null
+  const hasPeriodFilter = Boolean(plDateFrom || plDateTo)
+
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
@@ -228,6 +242,23 @@ export default function PartnerLedgerTab() {
         </div>
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={plDateFrom} onChange={event => setPlDateFrom(event.target.value)} title="From Date" />
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={plDateTo} onChange={event => setPlDateTo(event.target.value)} title="To Date" />
+        {hasPeriodFilter && (
+          <button
+            type="button"
+            className="btn-secondary text-[11px]"
+            onClick={() => {
+              setPlDateFrom('')
+              setPlDateTo('')
+            }}
+          >
+            Clear period
+          </button>
+        )}
+        {plPartner && (
+          <button type="button" className="btn-secondary text-[11px]" onClick={() => setPlPartner('')}>
+            Change partner
+          </button>
+        )}
         {plPartner && <span className="text-[11px] text-t3">{filteredPartnerTransactions.length} ledger lines</span>}
       </div>
 
@@ -269,10 +300,77 @@ export default function PartnerLedgerTab() {
             columns={columns}
             rows={filteredPartnerTransactions}
             rowKey={transaction => transaction.id}
+            onRowClick={transaction => setSelectedTransaction(transaction)}
+            rowLabel={transaction => `${transactionLabel(transaction.type)} ${transaction.transactionRef} ${transaction.description}`}
             emptyMessage="No invoice, bill or payment lines found for this partner or period"
             exportTitle={`Partner Ledger — ${plPartner}`}
             exportFilename={`partner-ledger-${plPartner.replace(/\s+/g, '-')}`}
           />
+
+          {selectedTransaction && selectedDocument && (
+            <Modal
+              title={`${transactionLabel(selectedTransaction.type)} · ${selectedTransaction.transactionRef}`}
+              subtitle={`${fmtDate(selectedTransaction.date)} · ${selectedDocument.partnerName}`}
+              onClose={() => setSelectedTransaction(null)}
+              width={680}
+            >
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 border border-[var(--border-lt)] rounded-lg overflow-hidden">
+                  <div className="p-3 bg-[var(--bg-surface)]">
+                    <p className="text-[9px] uppercase tracking-wide text-t4">Status</p>
+                    <div className="mt-1"><Badge status={selectedTransaction.status} /></div>
+                  </div>
+                  <div className="p-3 border-l border-[var(--border-lt)]">
+                    <p className="text-[9px] uppercase tracking-wide text-t4">Debit</p>
+                    <p className="mt-1 text-xs font-mono font-semibold">{selectedTransaction.debit ? fmtKes(selectedTransaction.debit) : '—'}</p>
+                  </div>
+                  <div className="p-3 border-t sm:border-t-0 sm:border-l border-[var(--border-lt)]">
+                    <p className="text-[9px] uppercase tracking-wide text-t4">Credit</p>
+                    <p className="mt-1 text-xs font-mono font-semibold">{selectedTransaction.credit ? fmtKes(selectedTransaction.credit) : '—'}</p>
+                  </div>
+                  <div className="p-3 border-t border-l sm:border-t-0 border-[var(--border-lt)]">
+                    <p className="text-[9px] uppercase tracking-wide text-t4">Ledger balance</p>
+                    <p className="mt-1 text-xs font-mono font-semibold">{fmtKes(selectedTransaction.movingBalance)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide font-semibold text-t4 mb-1">Transaction description</p>
+                  <p className="text-xs text-t1">{selectedTransaction.description}</p>
+                </div>
+
+                <div className="rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-wide font-semibold text-t4">Applied document</p>
+                  <div className="mt-1 flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold text-t1">{selectedTransaction.documentRef}</p>
+                      <p className="text-[11px] text-t3">
+                        Total {fmtKes(selectedDocument.total)} · Paid {fmtKes(selectedDocument.amountPaid)} · Balance {fmtKes(Math.max(0, selectedDocument.total - selectedDocument.amountPaid))}
+                      </p>
+                    </div>
+                    {selectedTransaction.outstanding != null && (
+                      <span className="text-[11px] font-mono font-semibold text-t1">
+                        Due {fmtKes(selectedTransaction.outstanding)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button type="button" className="btn-secondary text-[11px]" onClick={() => setSelectedTransaction(null)}>
+                    Back to ledger
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary text-[11px]"
+                    onClick={() => router.push(financeInvoicePath(selectedDocument.id))}
+                  >
+                    Open source {selectedDocument.type === 'customer_invoice' ? 'invoice' : 'bill'}
+                  </button>
+                </div>
+              </div>
+            </Modal>
+          )}
         </>
       )}
     </>
