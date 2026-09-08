@@ -9,6 +9,7 @@ import type { Account } from '@/lib/store'
 import { invoicePaymentStatus } from '@/lib/odoo-sales-flow'
 import { computeCashbookTotals } from '@/lib/finance-alerts'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export function monthLabel(ym: string) {
@@ -956,7 +957,7 @@ function ReconRow({ label, amount, bold, indent, negative, highlight, note }: {
 // ── Main Cash Book tab component ──────────────────────────────────────────────
 export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   const appState  = useFinanceStore()
-  const { bankAccounts, bankRecons, saveBankRecon, systemSettings } = appState
+  const { bankAccounts, bankRecons, saveBankRecon, systemSettings, showToast } = appState
   const reconEnabled = systemSettings.accReconciliation !== false
 
   const allEntries = useMemo(
@@ -972,12 +973,15 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
     return Array.from(months).sort().reverse()
   }, [allEntries])
 
-  const [activeMonth, setActiveMonth] = useState(() => {
+  const currentMonth = (() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  })
-  const [activeTab,    setActiveTab]    = useState<'cashbook' | 'reconcile'>('cashbook')
-  const [filterAccount, setFilterAccount] = useState<string>('all')
+  })()
+  const [activeMonth, setActiveMonth] = useUrlUiState('bankMonth', currentMonth)
+  const [activeTabValue, setActiveTabValue] = useUrlQueryState('bankView', 'cashbook')
+  const activeTab: 'cashbook' | 'reconcile' = activeTabValue === 'reconcile' ? 'reconcile' : 'cashbook'
+  const setActiveTab = (next: 'cashbook' | 'reconcile') => setActiveTabValue(next)
+  const [filterAccount, setFilterAccount] = useUrlUiState('bankAccount', 'all')
 
   // Honor Settings → Accounting → Bank reconciliation toggle.
   const visibleTab = !reconEnabled && activeTab === 'reconcile' ? 'cashbook' : activeTab
@@ -1088,7 +1092,13 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
           const color   = ACCT_COLOR[acc.id] ?? 'var(--text-4)'
           return (
             <button key={acc.id} className="stat-card text-left"
-              onClick={() => { setFilterAccount(p => p === acc.id ? 'all' : acc.id); setActiveTab('cashbook') }}
+              onClick={() => {
+                const nextAccount = filterAccount === acc.id ? 'all' : acc.id
+                setFilterAccount(nextAccount)
+                setActiveTab('cashbook')
+              }}
+              title={filterAccount === acc.id ? 'Show transactions for all accounts' : `View ${bankAccountLabel(acc)} transactions`}
+              aria-pressed={filterAccount === acc.id}
               style={{ borderColor: filterAccount === acc.id ? color : undefined }}>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[9px] uppercase tracking-wide font-medium truncate" style={{ color: 'var(--text-4)', maxWidth: 140 }}>{bankAccountLabel(acc)}</p>
@@ -1109,7 +1119,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
           <button key={t}
             className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-medium transition-all ${visibleTab === t ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab(t)}>
-            {t === 'cashbook' ? 'Cash Book' : 'Bank Reconciliation'}
+            {t === 'cashbook' ? 'Transactions' : 'Reconcile accounts'}
           </button>
         ))}
       </div>
@@ -1260,7 +1270,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             Any difference indicates outstanding deposits, unpresented cheques, or bank charges not yet posted.
           </div>
 
-          {bankAccounts.filter(a => a.active).map(acc => {
+          {bankAccounts.filter(a => a.active && (filterAccount === 'all' || a.id === filterAccount)).map(acc => {
             const accEntries = monthEntries.filter(e => e.bankAccountId === acc.id)
             const bookBal    = closingByAccount[acc.id] ?? 0
             const saved      = bankRecons.find(r => r.bankAccountId === acc.id && r.month === activeMonth)
@@ -1269,11 +1279,16 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                 month={activeMonth} bookBalance={bookBal} savedRecon={saved}
                 onSave={(stmtBal, stmtDate, notes, statusOverride) => {
                   const diff = bookBal - stmtBal
+                  const nextStatus = statusOverride ?? (Math.abs(diff) < 0.01 ? 'reconciled' : 'discrepancy')
                   saveBankRecon({
                     bankAccountId: acc.id, month: activeMonth,
                     statementBalance: stmtBal, statementDate: stmtDate, notes,
-                    status: statusOverride ?? (Math.abs(diff) < 0.01 ? 'reconciled' : 'discrepancy'),
+                    status: nextStatus,
                   })
+                  showToast(
+                    `${bankAccountLabel(acc, { withAccountNo: false })} reconciliation saved — ${nextStatus === 'reconciled' ? 'balances agree' : nextStatus === 'discrepancy' ? 'difference remains' : 'review pending'}.`,
+                    nextStatus === 'reconciled' ? 'success' : nextStatus === 'discrepancy' ? 'error' : 'info',
+                  )
                 }} />
             )
           })}
@@ -1282,7 +1297,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-lt)' }}>
               <p className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>
-                Reconciliation Summary — {monthLabel(activeMonth)}
+                Reconciliation summary — {monthLabel(activeMonth)} · {filterAccountName}
               </p>
             </div>
             {(() => {
