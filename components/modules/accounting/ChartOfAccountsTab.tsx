@@ -6,7 +6,8 @@ import { fmtKes, type Account, type AccountType, type BankAccount } from '@/lib/
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Modal, Field, Input, Select } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
-import { useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { useRouter } from 'next/navigation'
 
 const TYPE_OPTIONS: { value: AccountType | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -102,8 +103,8 @@ export default function ChartOfAccountsTab() {
     setTab,
   } = useAccounting()
 
+  const router = useRouter()
   const [selectedId, setSelectedId] = useUrlRecordId({ param: 'accountId' })
-  const [, setBankAccountContext] = useUrlUiState('bankAccount', 'all')
   const [showBankForm, setShowBankForm] = useState(false)
   const [bankForm, setBankForm] = useState<BankForm>(EMPTY_BANK)
 
@@ -386,10 +387,7 @@ export default function ChartOfAccountsTab() {
               <button
                 type="button"
                 className="btn-outline text-[11px]"
-                onClick={() => {
-                  setBankAccountContext(linkedBank.id)
-                  setTab('cashbook')
-                }}
+                onClick={() => router.push(`/finance?tab=cashbook&bankAccount=${encodeURIComponent(linkedBank.id)}`)}
               >
                 Open in Banking
               </button>
