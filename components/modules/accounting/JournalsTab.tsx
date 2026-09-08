@@ -4,9 +4,10 @@ import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes, type JournalEntry } from '@/lib/store'
 import { downloadPdf } from '@/lib/pdf'
 import type { PdfLine } from '@/lib/pdf'
-import { Badge } from '@/components/ui'
+import { Badge, Modal } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { usePrismaAccountingReports } from '@/hooks/usePrismaAccountingReports'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 
 type DraftLine = { account: string; description: string; debit: string; credit: string }
 
@@ -14,12 +15,15 @@ const emptyLine = (): DraftLine => ({ account: '', description: '', debit: '', c
 
 export default function JournalsTab() {
   const {
-    journalEntries, invFilter, journalDate, setJournalDate,
+    journalEntries, journalDate, setJournalDate,
     journalSource, setJournalSource, journalRef, setJournalRef,
-    setViewJournal, canViewJournals, hdr, showToast,
+    viewJournal, setViewJournal, canViewJournals, hdr, showToast,
   } = useAccounting()
 
-  const [source, setSource] = useState<'blob' | 'prisma'>('prisma')
+  const [sourceValue, setSourceValue] = useUrlUiState('journalBook', 'prisma')
+  const source: 'blob' | 'prisma' = sourceValue === 'blob' ? 'blob' : 'prisma'
+  const setSource = (next: 'blob' | 'prisma') => setSourceValue(next)
+  const [journalStatus, setJournalStatus] = useUrlUiState('journalStatus', 'all')
   const [showManual, setShowManual] = useState(false)
   const [saving, setSaving] = useState(false)
   const [manualRef, setManualRef] = useState('')
@@ -33,13 +37,13 @@ export default function JournalsTab() {
   const filteredJournals = useMemo(() => {
     const q = journalRef.toLowerCase()
     return activeJournals.filter(e => {
-      if (invFilter !== 'all' && e.status !== invFilter) return false
+      if (journalStatus !== 'all' && e.status !== journalStatus) return false
       if (journalDate && e.date !== journalDate) return false
       if (journalSource !== 'all' && e.source !== journalSource) return false
       if (q && !e.ref.toLowerCase().includes(q)) return false
       return true
     })
-  }, [activeJournals, invFilter, journalDate, journalSource, journalRef])
+  }, [activeJournals, journalStatus, journalDate, journalSource, journalRef])
 
   const buildJournalPdf = (e: JournalEntry): PdfLine[] => hdr([
     { text: `Reference: ${e.ref}`,          x: 40, y: 710, size: 10, bold: true },
@@ -165,7 +169,16 @@ export default function JournalsTab() {
         <input className="form-input text-[11px] py-1.5" style={{ width: 140 }} type="date"
           value={journalDate} onChange={e => setJournalDate(e.target.value)} />
         <select className="form-select text-[11px] py-1.5" style={{ width: 130 }}
-          value={journalSource} onChange={e => setJournalSource(e.target.value)}>
+          value={journalStatus} onChange={e => setJournalStatus(e.target.value)}
+          aria-label="Entry status">
+          <option value="all">All statuses</option>
+          <option value="posted">Posted</option>
+          <option value="draft">Draft</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <select className="form-select text-[11px] py-1.5" style={{ width: 130 }}
+          value={journalSource} onChange={e => setJournalSource(e.target.value)}
+          aria-label="Entry source">
           <option value="all">All sources</option>
           <option value="payroll">Payroll</option>
           <option value="refund">Refund</option>
@@ -180,6 +193,20 @@ export default function JournalsTab() {
         </select>
         <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Filter by reference..." value={journalRef} onChange={e => setJournalRef(e.target.value)} />
+        {(journalDate || journalSource !== 'all' || journalStatus !== 'all' || journalRef) && (
+          <button
+            type="button"
+            className="btn-secondary text-[11px] py-1.5 px-3"
+            onClick={() => {
+              setJournalDate('')
+              setJournalSource('all')
+              setJournalStatus('all')
+              setJournalRef('')
+            }}
+          >
+            Clear filters
+          </button>
+        )}
         <button
           type="button"
           className="btn-primary text-[11px] py-1.5 px-3 ml-auto"
@@ -194,9 +221,10 @@ export default function JournalsTab() {
           <span className="text-[11px] text-red-500">{prismaReports.error}</span>
         )}
       </div>
-      <p className="px-4 py-2 text-[11px] text-t3 border-b" style={{ borderColor: 'var(--border-lt)' }}>
-        Official books use Prisma posted journals. Client blob is a legacy mirror for migration — do not treat it as the source of truth.
-      </p>
+      <div className="px-4 py-2 text-[11px] text-t3 border-b flex items-center justify-between gap-3 flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
+        <p>Official books use Prisma posted journals. Client blob is a legacy mirror for migration — do not treat it as the source of truth.</p>
+        <strong className="text-t2">{filteredJournals.length} entr{filteredJournals.length === 1 ? 'y' : 'ies'} shown</strong>
+      </div>
       <DataTable
         tableId="journal-entries"
         columns={columns}
@@ -216,6 +244,68 @@ export default function JournalsTab() {
         exportTitle="Journal Entries"
         exportFilename="journals"
       />
+
+      {viewJournal && (
+        <Modal
+          title={`Accounting entry ${viewJournal.ref}`}
+          subtitle={`${fmtDate(viewJournal.date)} · ${viewJournal.source}`}
+          onClose={() => setViewJournal(null)}
+          width={760}
+        >
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 border border-[var(--border-lt)] rounded-lg overflow-hidden">
+              <div className="p-3 bg-[var(--bg-surface)]">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Status</p>
+                <div className="mt-1"><Badge status={viewJournal.status} /></div>
+              </div>
+              <div className="p-3 border-t sm:border-t-0 sm:border-l border-[var(--border-lt)]">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Total debit</p>
+                <p className="mt-1 text-sm font-bold font-mono text-t1">{fmtKes(viewJournal.totalDebit)}</p>
+              </div>
+              <div className="p-3 border-t sm:border-t-0 sm:border-l border-[var(--border-lt)]">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Total credit</p>
+                <p className="mt-1 text-sm font-bold font-mono text-t1">{fmtKes(viewJournal.totalCredit)}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] uppercase tracking-wide font-semibold text-t4 mb-1">Description</p>
+              <p className="text-xs text-t1">{viewJournal.description || 'No description'}</p>
+            </div>
+
+            <div className="border border-[var(--border-lt)] rounded-lg overflow-hidden">
+              <div className="grid grid-cols-[minmax(0,1fr)_110px_110px] gap-3 px-3 py-2 bg-[var(--bg-surface)] text-[9px] uppercase tracking-wide font-semibold text-t4">
+                <span>Account and description</span>
+                <span className="text-right">Debit</span>
+                <span className="text-right">Credit</span>
+              </div>
+              <div className="divide-y divide-[var(--border-lt)]">
+                {viewJournal.lines.map((line, index) => (
+                  <div key={`${line.account}-${index}`} className="grid grid-cols-[minmax(0,1fr)_110px_110px] gap-3 px-3 py-2.5 text-[11px]">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-t1 truncate" title={line.account}>{line.account}</p>
+                      <p className="text-t3 truncate" title={line.description}>{line.description || '—'}</p>
+                    </div>
+                    <span className="text-right font-mono text-t1">{line.debit ? fmtKes(line.debit) : '—'}</span>
+                    <span className="text-right font-mono text-t1">{line.credit ? fmtKes(line.credit) : '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary text-[11px]" onClick={() => setViewJournal(null)}>Back to entries</button>
+              <button
+                type="button"
+                className="btn-primary text-[11px]"
+                onClick={() => downloadPdf(`${viewJournal.ref.replaceAll('/', '-')}.pdf`, buildJournalPdf(viewJournal))}
+              >
+                Download PDF
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {showManual && (
         <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4" onClick={() => !saving && setShowManual(false)}>
