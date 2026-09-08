@@ -612,7 +612,8 @@ function AccountingContent() {
   const [plPartner, setPlPartner] = useState('')
   const [plDateFrom, setPlDateFrom] = useState('')
   const [plDateTo, setPlDateTo] = useState('')
-  const [monthlyReportMonth, setMonthlyReportMonth] = useState(today().slice(0, 7))
+  const [monthlyReportMonth, setMonthlyReportMonth] = useUrlUiState('monthlyPeriod', today().slice(0, 7))
+  const [monthlyReportView, setMonthlyReportView] = useUrlUiState('monthlyView', 'overview')
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -1825,21 +1826,23 @@ function AccountingContent() {
           ) : activeTab === 'financial_report' ? (
             <div className="finance-subview finance-subview--financial-report"><FinancialReportTab /></div>
           ) : activeTab === 'monthly' ? (
-            <div className="p-4 sm:p-6 space-y-6">
-              <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            <div className="space-y-5 p-4 sm:p-6">
+              <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
                 <div>
-                  <h2 className="text-lg font-bold text-[var(--text-1)]">Monthly Management Report</h2>
-                  <p className="text-xs text-[var(--text-3)] mt-1">
-                    Operational estimate from invoices / POS / expenses. Official books: Accounting → P&amp;L (Prisma).
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary-600">Operational management view</p>
+                  <h2 className="mt-1 text-lg font-bold text-[var(--text-1)]">Monthly Management Report</h2>
+                  <p className="mt-1 max-w-3xl text-xs text-[var(--text-3)]">
+                    An operational estimate from invoices, POS, repairs, expenses, and supplier bills. Use the official posted-ledger P&amp;L for statutory accounting.
                   </p>
-                  <p className="text-xs text-[var(--text-3)] mt-1">Sales by category, estimated profit, expenses, supplier bills, and collections.</p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-                  <Field label="Report Month">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <Field label="Report month">
                     <Select value={monthlyReportMonth} onChange={setMonthlyReportMonth} options={reportMonthOptions.map(value => ({ value, label: monthLabel(value) }))} />
                   </Field>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" className="btn-secondary" onClick={() => setTab('pl')}>Open official P&amp;L</button>
                     <button
+                      type="button"
                       className="btn-secondary flex items-center gap-2"
                       onClick={() => { void exportToExcel(
                         `Monthly Management Report — ${monthlyReport.label}`,
@@ -1861,42 +1864,79 @@ function AccountingContent() {
                     >
                       <Fa icon={faDownload} /> Export
                     </button>
-                    <button className="btn-secondary flex items-center gap-2" onClick={() => window.print()}><Fa icon={faPrint} /> Print</button>
+                    <button type="button" className="btn-secondary flex items-center gap-2" onClick={() => window.print()}>
+                      <Fa icon={faPrint} /> Print
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="card p-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] mb-3">Revenue Mix</p>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between"><span>Invoices</span><span className="font-mono font-bold">{fmtKes(monthlyReport.invoiceRevenue)}</span></div>
-                    <div className="flex justify-between"><span>POS Sales</span><span className="font-mono font-bold">{fmtKes(monthlyReport.posRevenue)}</span></div>
-                    <div className="flex justify-between"><span>Repairs</span><span className="font-mono font-bold">{fmtKes(monthlyReport.repairRevenue)}</span></div>
+              <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-[var(--border-lt)] bg-card sm:grid-cols-3 xl:grid-cols-5">
+                {[
+                  { label: 'Revenue', value: monthlyReport.totalRevenue, tone: 'text-text-1' },
+                  { label: 'Gross profit', value: monthlyReport.grossProfit, tone: monthlyReport.grossProfit >= 0 ? 'text-emerald-600' : 'text-red-600' },
+                  { label: 'Operating expenses', value: monthlyReport.operatingExpenses, tone: 'text-text-1' },
+                  { label: 'Net profit', value: monthlyReport.netProfit, tone: monthlyReport.netProfit >= 0 ? 'text-emerald-600' : 'text-red-600' },
+                  { label: 'Cash collected', value: monthlyReport.cashCollected, tone: 'text-text-1' },
+                ].map((item, index) => (
+                  <div key={item.label} className={`p-3 sm:p-4 ${index ? 'border-l border-[var(--border-lt)]' : ''}`}>
+                    <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{item.label}</p>
+                    <p className={`mt-1 font-mono text-sm font-bold sm:text-base ${item.tone}`}>{fmtKes(item.value)}</p>
                   </div>
-                </div>
-                <div className="card p-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] mb-3">Margin</p>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between"><span>Revenue</span><span className="font-mono font-bold">{fmtKes(monthlyReport.totalRevenue)}</span></div>
-                    <div className="flex justify-between"><span>Estimated COGS</span><span className="font-mono font-bold text-red-600">{fmtKes(monthlyReport.estimatedCost)}</span></div>
-                    <div className="flex justify-between border-t pt-2 border-[var(--border-lt)]"><span>Gross Margin</span><span className="font-mono font-black">{monthlyReport.totalRevenue > 0 ? `${Math.round((monthlyReport.grossProfit / monthlyReport.totalRevenue) * 100)}%` : '—'}</span></div>
-                  </div>
-                </div>
-                <div className="card p-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] mb-3">Activity</p>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between"><span>Invoices</span><span className="font-mono font-bold">{monthlyReport.invoicesCount}</span></div>
-                    <div className="flex justify-between"><span>POS Transactions</span><span className="font-mono font-bold">{monthlyReport.posCount}</span></div>
-                    <div className="flex justify-between"><span>Expense Claims</span><span className="font-mono font-bold">{monthlyReport.expensesCount}</span></div>
-                  </div>
-                </div>
+                ))}
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="flex flex-wrap gap-2 border-b border-[var(--border-lt)] pb-3">
+                {[
+                  { id: 'overview', label: 'Overview' },
+                  { id: 'sales', label: 'Sales analysis' },
+                  { id: 'costs', label: 'Costs and expenses' },
+                ].map(view => (
+                  <button
+                    key={view.id}
+                    type="button"
+                    className={monthlyReportView === view.id ? 'btn-primary text-[11px]' : 'btn-secondary text-[11px]'}
+                    onClick={() => setMonthlyReportView(view.id)}
+                  >
+                    {view.label}
+                  </button>
+                ))}
+              </div>
+
+              {monthlyReportView === 'overview' ? (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="card p-4">
+                    <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-[var(--text-4)]">Revenue mix</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between gap-3"><span>Invoices</span><span className="font-mono font-bold">{fmtKes(monthlyReport.invoiceRevenue)}</span></div>
+                      <div className="flex justify-between gap-3"><span>POS sales</span><span className="font-mono font-bold">{fmtKes(monthlyReport.posRevenue)}</span></div>
+                      <div className="flex justify-between gap-3"><span>Repairs</span><span className="font-mono font-bold">{fmtKes(monthlyReport.repairRevenue)}</span></div>
+                    </div>
+                  </div>
+                  <div className="card p-4">
+                    <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-[var(--text-4)]">Margin</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between gap-3"><span>Revenue</span><span className="font-mono font-bold">{fmtKes(monthlyReport.totalRevenue)}</span></div>
+                      <div className="flex justify-between gap-3"><span>Estimated COGS</span><span className="font-mono font-bold text-red-600">{fmtKes(monthlyReport.estimatedCost)}</span></div>
+                      <div className="flex justify-between gap-3 border-t border-[var(--border-lt)] pt-2"><span>Gross margin</span><span className="font-mono font-black">{monthlyReport.totalRevenue > 0 ? `${Math.round((monthlyReport.grossProfit / monthlyReport.totalRevenue) * 100)}%` : '—'}</span></div>
+                    </div>
+                  </div>
+                  <div className="card p-4">
+                    <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-[var(--text-4)]">Activity</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between gap-3"><span>Invoices</span><span className="font-mono font-bold">{monthlyReport.invoicesCount}</span></div>
+                      <div className="flex justify-between gap-3"><span>POS transactions</span><span className="font-mono font-bold">{monthlyReport.posCount}</span></div>
+                      <div className="flex justify-between gap-3"><span>Expense claims</span><span className="font-mono font-bold">{monthlyReport.expensesCount}</span></div>
+                    </div>
+                  </div>
+                </div>
+              ) : monthlyReportView === 'sales' ? (
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-[var(--text-1)]">Sales by Product Category</h3>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-[var(--text-1)]">Sales by product category</h3>
+                      <p className="mt-0.5 text-[11px] text-[var(--text-3)]">Quantity, revenue, and estimated profit for {monthlyReport.label}.</p>
+                    </div>
                     <span className="text-xs font-bold text-[var(--text-3)]">{monthlyReport.categorySummary.length} categories</span>
                   </div>
                   <DataTable
@@ -1914,11 +1954,14 @@ function AccountingContent() {
                     ]}
                   />
                 </div>
-
+              ) : (
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-[var(--text-1)]">Expenses by Category</h3>
-                    <span className="text-xs font-bold text-[var(--text-3)]">{monthlyReport.expenseSummary.length} categories</span>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-[var(--text-1)]">Costs and expenses by category</h3>
+                      <p className="mt-0.5 text-[11px] text-[var(--text-3)]">Approved operating expenses plus supplier bills for {monthlyReport.label}.</p>
+                    </div>
+                    <span className="text-xs font-bold text-[var(--text-3)]">{monthlyReport.expenseSummary.length} expense categories</span>
                   </div>
                   <DataTable
                     tableId="finance-monthly-expenses"
@@ -1941,7 +1984,7 @@ function AccountingContent() {
                     ]}
                   />
                 </div>
-              </div>
+              )}
             </div>
           ) : activeTab === 'pl' ? (
             <div className="p-6">
