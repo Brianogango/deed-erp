@@ -5,6 +5,8 @@ import { fmtDate, fmtKes } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import { faBook, faChevronDown, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { Badge, Modal } from '@/components/ui'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 
 type GlRow = {
   id: string
@@ -40,10 +42,17 @@ export default function GeneralLedgerTab() {
 
   const initialAccount = accounts.find(a => a.code === glAccount || a.name === glAccount)?.code
     || (glAccount && /^\d/.test(glAccount) ? glAccount : '')
-  const [selectedAccountCodes, setSelectedAccountCodes] = useState<string[]>(initialAccount ? [initialAccount] : [])
+  const [selectedAccountParam, setSelectedAccountParam] = useUrlUiState('glAccounts', initialAccount)
+  const selectedAccountCodes = useMemo(
+    () => Array.from(new Set(selectedAccountParam.split(',').map(code => code.trim()).filter(Boolean))),
+    [selectedAccountParam],
+  )
   const [accountSearch, setAccountSearch] = useState('')
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
-  const [source, setSource] = useState<'blob' | 'prisma'>('prisma')
+  const [sourceValue, setSourceValue] = useUrlUiState('glBook', 'prisma')
+  const source: 'blob' | 'prisma' = sourceValue === 'blob' ? 'blob' : 'prisma'
+  const setSource = (next: 'blob' | 'prisma') => setSourceValue(next)
+  const [selectedLine, setSelectedLine] = useState<GlRow | null>(null)
   const [prismaLines, setPrismaLines] = useState<GlRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,17 +71,17 @@ export default function GeneralLedgerTab() {
 
   const updateSelectedAccounts = (codes: string[]) => {
     const unique = Array.from(new Set(codes))
-    setSelectedAccountCodes(unique)
-    // Preserve the existing shared finance filter contract for links/bookmarks.
+    setSelectedAccountParam(unique.join(','))
+    // Preserve the existing shared finance filter contract for older links/bookmarks.
     setGlAccount(unique[0] || '')
   }
 
   useEffect(() => {
-    if (selectedAccountCodes.length > 0) return
-    const code = accounts.find(a => a.code === glAccount || a.name === glAccount)?.code
+    if (selectedAccountParam) return
+    const code = accounts.find(account => account.code === glAccount || account.name === glAccount)?.code
       || (glAccount && /^\d/.test(glAccount) ? glAccount : '')
-    if (code) setSelectedAccountCodes([code])
-  }, [accounts, glAccount, selectedAccountCodes.length])
+    if (code) setSelectedAccountParam(code)
+  }, [accounts, glAccount, selectedAccountParam, setSelectedAccountParam])
 
   useEffect(() => {
     if (source !== 'prisma' || selectedAccountCodes.length === 0) {
@@ -221,6 +230,11 @@ export default function GeneralLedgerTab() {
     return Array.from(values.values()).sort((a, b) => a.accountCode.localeCompare(b.accountCode))
   }, [rows])
 
+  const selectedJournal = selectedLine
+    ? journalEntries.find(entry => entry.ref === selectedLine.entryRef) ?? null
+    : null
+  const hasPeriodFilter = Boolean(glDateFrom || glDateTo)
+
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
@@ -287,6 +301,18 @@ export default function GeneralLedgerTab() {
         </select>
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={event => setGlDateFrom(event.target.value)} title="From Date" />
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateTo} onChange={event => setGlDateTo(event.target.value)} title="To Date" />
+        {hasPeriodFilter && (
+          <button
+            type="button"
+            className="btn-secondary text-[11px]"
+            onClick={() => {
+              setGlDateFrom('')
+              setGlDateTo('')
+            }}
+          >
+            Clear period
+          </button>
+        )}
         {selectedAccountCodes.length > 0 && <span className="text-[11px] text-t3">{rows.length} entries</span>}
         {source === 'prisma' && loading && <span className="text-[11px] text-t3">Loading…</span>}
         {source === 'prisma' && error && <span className="text-[11px] text-red-500">{error}</span>}
@@ -304,10 +330,83 @@ export default function GeneralLedgerTab() {
             columns={columns}
             rows={rows}
             rowKey={line => line.id}
+            onRowClick={line => setSelectedLine(line)}
+            rowLabel={line => `${line.entryRef} ${line.accountCode} ${line.description || line.entryDesc}`}
             emptyMessage={source === 'prisma' ? 'No posted Prisma lines for the selected accounts or period' : 'No journal lines found for the selected accounts or period'}
             exportTitle={`General Ledger — ${exportAccountLabel}`}
             exportFilename={`general-ledger-${selectedAccountCodes.join('-')}`}
           />
+          {selectedLine && (
+            <Modal
+              title={`Ledger movement ${selectedLine.entryRef}`}
+              subtitle={`${fmtDate(selectedLine.entryDate)} · ${selectedLine.accountCode} — ${selectedLine.accountName}`}
+              onClose={() => setSelectedLine(null)}
+              width={760}
+            >
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 border border-[var(--border-lt)] rounded-lg overflow-hidden">
+                  <div className="p-3 bg-[var(--bg-surface)]">
+                    <p className="text-[9px] uppercase tracking-wide text-t4">Source</p>
+                    <p className="mt-1 text-xs font-semibold capitalize text-t1">{selectedLine.source}</p>
+                  </div>
+                  <div className="p-3 border-t sm:border-t-0 sm:border-l border-[var(--border-lt)]">
+                    <p className="text-[9px] uppercase tracking-wide text-t4">Debit / Credit</p>
+                    <p className="mt-1 text-xs font-mono text-t1">
+                      {selectedLine.debit ? fmtKes(selectedLine.debit) : '—'} / {selectedLine.credit ? fmtKes(selectedLine.credit) : '—'}
+                    </p>
+                  </div>
+                  <div className="p-3 border-t sm:border-t-0 sm:border-l border-[var(--border-lt)]">
+                    <p className="text-[9px] uppercase tracking-wide text-t4">Running balance</p>
+                    <p className={`mt-1 text-xs font-bold font-mono ${selectedLine.runningBalance < 0 ? 'text-red-500' : 'text-t1'}`}>
+                      {fmtKes(selectedLine.runningBalance)}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide font-semibold text-t4 mb-1">Movement description</p>
+                  <p className="text-xs text-t1">{selectedLine.description || selectedLine.entryDesc || 'No description'}</p>
+                </div>
+
+                {selectedJournal && (
+                  <div className="border border-[var(--border-lt)] rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between gap-3 px-3 py-2 bg-[var(--bg-surface)]">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide font-semibold text-t4">Originating accounting entry</p>
+                        <p className="text-xs text-t1">{selectedJournal.description}</p>
+                      </div>
+                      <Badge status={selectedJournal.status} />
+                    </div>
+                    <div className="divide-y divide-[var(--border-lt)]">
+                      {selectedJournal.lines.map((line, index) => (
+                        <div key={`${line.account}-${index}`} className="grid grid-cols-[minmax(0,1fr)_100px_100px] gap-3 px-3 py-2 text-[11px]">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-t1 truncate">{line.account}</p>
+                            <p className="text-t3 truncate">{line.description || '—'}</p>
+                          </div>
+                          <span className="text-right font-mono">{line.debit ? fmtKes(line.debit) : '—'}</span>
+                          <span className="text-right font-mono">{line.credit ? fmtKes(line.credit) : '—'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!selectedJournal && (
+                  <p className="rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-[11px] text-t3">
+                    This movement is from the official ledger. Its reference and source are shown above; the legacy mirror has no additional entry detail.
+                  </p>
+                )}
+
+                <div className="flex justify-end">
+                  <button type="button" className="btn-primary text-[11px]" onClick={() => setSelectedLine(null)}>
+                    Back to ledger
+                  </button>
+                </div>
+              </div>
+            </Modal>
+          )}
+
           {closingBalances.length > 0 && (
             <div className="px-4 py-2 border-t border-[var(--border-lt)] flex flex-wrap justify-end gap-x-5 gap-y-1 text-[11px]">
               {closingBalances.map(line => (
