@@ -6,6 +6,7 @@ import {
   findRepairForSaleOrder,
   findSaleOrderForRepair,
   findSalesQuoteForRepair,
+  isRepairFulfillmentReady,
   stampInvoiceOnMatchingRepair,
 } from '@/lib/repair/sale-order-link'
 
@@ -165,5 +166,19 @@ describe('findSalesQuoteForRepair', () => {
       [quote],
       { id: 'repair-310', ref: 'REP/0310' },
     )?.id).toBe('quote-1')
+  })
+})
+
+describe('isRepairFulfillmentReady', () => {
+  it('treats Ready and later workshop statuses as invoiceable without a DN', () => {
+    expect(isRepairFulfillmentReady('ready')).toBe(true)
+    expect(isRepairFulfillmentReady('invoiced')).toBe(true)
+    expect(isRepairFulfillmentReady('collected')).toBe(true)
+  })
+
+  it('rejects jobs still in the workshop', () => {
+    expect(isRepairFulfillmentReady('in_repair')).toBe(false)
+    expect(isRepairFulfillmentReady('qc')).toBe(false)
+    expect(isRepairFulfillmentReady(undefined)).toBe(false)
   })
 })

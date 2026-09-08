@@ -16961,6 +16961,9 @@ const storeCtx: AppState = {
         const soPatch = {
           status: 'sale' as const,
           confirmedAt,
+          // Repair billing is post-work invoicing. Do not reserve stock via the
+          // Sales confirm path — create-invoice confirms the workshop quotation.
+          reserveStock: false,
           lines: soLines.length ? soLines : linkedSaleOrder.lines,
           subtotal: repair.quote?.subtotal ?? linkedSaleOrder.subtotal,
           taxAmount: repair.quote?.tax ?? linkedSaleOrder.taxAmount,
@@ -16969,7 +16972,11 @@ const storeCtx: AppState = {
           total: repair.quote?.total ?? linkedSaleOrder.total,
         }
         setSaleOrders(p => p.map(s => s.id === soId ? { ...s, ...soPatch } : s))
-        sync(`/api/sale-orders/${soId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
+        await fetch(`/api/sale-orders/${soId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(soPatch),
+        }).catch(() => {})
       }
 
       const invoiceNotes = `Repair invoice for ${repair.ref}${

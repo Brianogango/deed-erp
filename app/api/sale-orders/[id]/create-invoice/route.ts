@@ -23,10 +23,14 @@ import {
 } from '@/lib/sales/down-payment'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
+import {
+  confirmRepairLinkedQuotationForInvoice,
+  ensureConfirmedSaleOrderForFulfillment,
+} from '@/lib/sale-order-confirm-heal.server'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import {
   findRepairForSaleOrder,
+  isRepairFulfillmentReady,
   stampInvoiceOnMatchingRepair,
 } from '@/lib/repair/sale-order-link'
 
@@ -46,12 +50,15 @@ export async function POST(
     const orderId = params.id
 
     // Optional body:
-    //   { mode, percent?, amount?, lines?: [{ itemId, qty }] }
+    //   { mode, percent?, amount?, source?: 'repair', lines?: [{ itemId, qty }] }
     // mode: regular | down_payment_percent | down_payment_fixed | final
+    // source: 'repair' is accepted from workshop billing; confirmation still
+    // requires a Ready (or later) repair linked to this sale order.
     const body = await request.json().catch(() => null) as {
       mode?: string
       percent?: number
       amount?: number
+      source?: string
       lines?: Array<{ itemId?: string; qty?: number }>
     } | null
     const mode: CreateInvoiceMode = normalizeCreateInvoiceMode(body?.mode)
@@ -72,12 +79,18 @@ export async function POST(
     })
     if (!order) return NextResponse.json({ error: 'Sale order not found' }, { status: 404 })
 
+    const state = await loadAppState(['deed_invoices', 'deed_deliveries', 'deed_repairs_v2'])
+    const blobInvoices = Array.isArray(state.deed_invoices) ? (state.deed_invoices as any[]) : []
+    const blobRepairs = Array.isArray(state.deed_repairs_v2) ? (state.deed_repairs_v2 as any[]) : []
+
     if (normalizeSaleStatus(order.status) !== 'sale') {
       const healed = await ensureConfirmedSaleOrderForFulfillment(order)
-      if (!healed) {
+      const repairConfirmed = healed
+        ?? await confirmRepairLinkedQuotationForInvoice(order, blobRepairs)
+      if (!repairConfirmed) {
         return NextResponse.json({ error: 'Only a confirmed Sales Order can be invoiced' }, { status: 409 })
       }
-      order = healed
+      order = repairConfirmed
     }
     if (normalizeSaleStatus(order.status) !== 'sale') {
       return NextResponse.json({ error: 'Only a confirmed Sales Order can be invoiced' }, { status: 409 })
@@ -95,9 +108,6 @@ export async function POST(
       return NextResponse.json({ error: credit.error }, { status: credit.status })
     }
 
-    const state = await loadAppState(['deed_invoices', 'deed_deliveries', 'deed_repairs_v2'])
-    const blobInvoices = Array.isArray(state.deed_invoices) ? (state.deed_invoices as any[]) : []
-    const blobRepairs = Array.isArray(state.deed_repairs_v2) ? (state.deed_repairs_v2 as any[]) : []
     const linkedRepair = findRepairForSaleOrder(blobRepairs, {
       id: confirmed.id,
       ref: confirmed.orderNumber,
@@ -115,9 +125,7 @@ export async function POST(
       }
     }
     const blobRepairId = linkedRepair?.id ? String(linkedRepair.id) : undefined
-    const repairFulfillmentReady = !!linkedRepair && [
-      'ready', 'invoiced', 'verified_released', 'delivered', 'collected', 'closed',
-    ].includes(String((linkedRepair as any).status ?? '').toLowerCase())
+    const repairFulfillmentReady = isRepairFulfillmentReady(linkedRepair?.status)
     const priorDownPayments = sumUnappliedDownPayments(
       [
         ...blobInvoices,

@@ -14,6 +14,23 @@ export type RepairSaleOrderLink = {
   linkedSaleOrderRef?: string | null
   ref?: string | null
   invoiceId?: string | null
+  status?: string | null
+}
+
+/** Workshop jobs that may be invoiced without a warehouse delivery note. */
+export const REPAIR_FULFILLMENT_READY_STATUSES = [
+  'ready',
+  'invoiced',
+  'verified_released',
+  'delivered',
+  'collected',
+  'closed',
+] as const
+
+export function isRepairFulfillmentReady(status?: string | null): boolean {
+  return (REPAIR_FULFILLMENT_READY_STATUSES as readonly string[]).includes(
+    String(status ?? '').toLowerCase(),
+  )
 }
 
 export type SaleOrderRepairHint = {
