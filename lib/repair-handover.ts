@@ -3,6 +3,7 @@ import type { DeliveryMethod } from '@/lib/repair-types'
 
 export type RepairHandoverInput = BillingExemptRepair & {
   invoiceId?: string | null
+  linkedInvoiceId?: string | null
   deliveryMethod?: DeliveryMethod | string | null
 }
 
@@ -50,7 +51,15 @@ export function collectActionAvailable(opts: {
 
 export function canCloseRepairAfterHandover(repair: RepairHandoverInput | null | undefined): boolean {
   if (!repair) return false
-  return isRepairNoCharge(repair) || !!repair.invoiceId
+  return isRepairNoCharge(repair) || repairHasInvoiceLink(repair)
+}
+
+export function repairHasInvoiceLink(repair: {
+  invoiceId?: string | null
+  linkedInvoiceId?: string | null
+} | null | undefined): boolean {
+  if (!repair) return false
+  return Boolean(String(repair.invoiceId ?? '').trim() || String(repair.linkedInvoiceId ?? '').trim())
 }
 
 export function shouldDefaultCloseAfterHandover(repair: RepairHandoverInput | null | undefined): boolean {

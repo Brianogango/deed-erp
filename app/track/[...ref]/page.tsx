@@ -196,7 +196,7 @@ export default function RepairTrackDetail() {
   const currentIdx = stepIndex(repair.status as PortalRepairStatus)
   const isAwaitingApproval = repair.status === 'awaiting_approval'
   const quoteValid = repair.quote && repair.status === 'awaiting_approval'
-    ? new Date(repair.quote.validUntil) >= new Date()
+    ? !repair.quote.validUntil || new Date(repair.quote.validUntil) >= new Date()
     : true
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -325,7 +325,7 @@ export default function RepairTrackDetail() {
               <div>
                 <p className="font-semibold text-white text-sm">Repair Quote</p>
                 <p style={{ fontSize: 11, color: '#555A73' }}>
-                  Sent {fmt(repair.quote.sentDate)} · Valid until {fmt(repair.quote.validUntil)}
+                  Sent {fmt(repair.quote.sentDate)}{repair.quote.validUntil ? ` · Valid until ${fmt(repair.quote.validUntil)}` : ''}
                 </p>
               </div>
               <div className="text-right">

@@ -147,6 +147,16 @@ describe('applyRepairHandover', () => {
     expect(next.closedDate).toBe('2026-08-26')
   })
 
+  it('closes a billed job linked by linkedInvoiceId', () => {
+    expect(canCloseRepairAfterHandover({ linkedInvoiceId: 'INV-9' })).toBe(true)
+    const next = applyRepairHandover({ linkedInvoiceId: 'INV-9' }, {
+      recipientName: 'Client',
+      closeAfter: true,
+      now: '2026-08-26',
+    })
+    expect(next.status).toBe('closed')
+  })
+
   it('records representative details only on the rep path', () => {
     const next = applyRepairHandover(noChargeReady, {
       recipientName: 'Driver Joe',

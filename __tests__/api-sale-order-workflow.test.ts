@@ -149,9 +149,37 @@ describe('sale-order workflow enforcement (server-side)', () => {
 
   it('rejects confirmation by a role without confirm rights', async () => {
     mockGetSession.mockResolvedValue(sessionFor('technical_lead'))
-    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, notes: 'Repair order' })
-    const res = await PUT(putReq({ status: 'sale', notes: 'Repair order' }), params)
+    mockPrismaSO.findUnique.mockResolvedValue(baseOrder)
+    const res = await PUT(putReq({ status: 'sale' }), params)
     expect(res.status).toBe(409)
+    expect(mockPrismaSO.update).not.toHaveBeenCalled()
+  })
+
+  it('lets a technical lead confirm a repair-linked quotation without reserving stock', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('technical_lead'))
+    mockPrismaSO.findUnique.mockResolvedValue({
+      ...baseOrder,
+      notes: 'Repair quote — REP/0303 — DELL LAT 7490',
+      validUntil: new Date('2020-01-01'),
+    })
+    const res = await PUT(putReq({
+      status: 'sale',
+      notes: 'Repair quote — REP/0303 — DELL LAT 7490',
+    }), params)
+    expect(res.status).toBe(200)
+    expect(mockPrismaSO.update).toHaveBeenCalled()
+    expect(mockReserveStock).not.toHaveBeenCalled()
+  })
+
+  it('still rejects an expired walk-in quotation', async () => {
+    mockPrismaSO.findUnique.mockResolvedValue({
+      ...baseOrder,
+      notes: 'Walk-in laptop sale',
+      validUntil: new Date('2020-01-01'),
+    })
+    const res = await PUT(putReq({ status: 'sale' }), params)
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/expired/i)
     expect(mockPrismaSO.update).not.toHaveBeenCalled()
   })
 

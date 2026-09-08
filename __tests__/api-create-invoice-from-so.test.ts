@@ -219,6 +219,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       quotationRef: 'QUO/2026/0294',
       confirmedAt: null,
       notes: 'Repair quote — REP/0294 — Hp 1030 G3',
+      validUntil: new Date('2020-01-01'),
       items: [{ ...saleOrder.items[0], qtyDelivered: 0 }],
     }
     const confirmed = { ...quotation, status: 'sale', confirmedAt: new Date('2026-09-08T12:00:00.000Z') }
