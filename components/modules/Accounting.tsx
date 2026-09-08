@@ -583,9 +583,9 @@ function AccountingContent() {
 
   // ── Journal state ───────────────────────────────────────────────────────────
   const [viewJournal, setViewJournal] = useState<JournalEntry | null>(null)
-  const [journalDate, setJournalDate] = useState('')
-  const [journalSource, setJournalSource] = useState('all')
-  const [journalRef, setJournalRef] = useState('')
+  const [journalDate, setJournalDate] = useUrlUiState('journalDate', '')
+  const [journalSource, setJournalSource] = useUrlUiState('journalSource', 'all')
+  const [journalRef, setJournalRef] = useUrlUiState('journalQ', '')
 
   // ── Chart of Accounts state ─────────────────────────────────────────────────
   const [coaSearch, setCoaSearch] = useState('')
