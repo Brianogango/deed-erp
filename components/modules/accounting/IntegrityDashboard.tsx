@@ -1,7 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DataTable } from '@/components/data-table'
+import { Modal } from '@/components/ui'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   AsyncActionButton,
   EmptyState,
@@ -32,7 +34,10 @@ type IntegrityReport = {
 }
 
 export default function IntegrityDashboard() {
-  const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10))
+  const [asOf, setAsOf] = useUrlUiState('integrityAsOf', new Date().toISOString().slice(0, 10))
+  const [gateSearch, setGateSearch] = useUrlUiState('integrityQ', '')
+  const [gateStatus, setGateStatus] = useUrlUiState('integrityStatus', 'failed')
+  const [selectedGate, setSelectedGate] = useState<Gate | null>(null)
   const [report, setReport] = useState<IntegrityReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,6 +78,23 @@ export default function IntegrityDashboard() {
     } finally {
       setCertifying(false)
     }
+  }
+
+  const visibleGates = useMemo(() => {
+    const query = gateSearch.trim().toLowerCase()
+    return [...(report?.gates ?? [])]
+      .filter(gate => {
+        if (gateStatus === 'failed' && gate.passed) return false
+        if (gateStatus === 'passed' && !gate.passed) return false
+        if (!query) return true
+        return [gate.name, gate.detail, gate.id].some(value => String(value || '').toLowerCase().includes(query))
+      })
+      .sort((a, b) => Number(a.passed) - Number(b.passed))
+  }, [gateSearch, gateStatus, report])
+
+  const clearGateFilters = () => {
+    setGateSearch('')
+    setGateStatus('all')
   }
 
   const workflowCurrent = !report ? 'run' : report.allPassed ? 'certify' : 'resolve'
@@ -136,16 +158,41 @@ export default function IntegrityDashboard() {
       )}
 
       {report && (
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge
-            status={report.allPassed ? 'done' : 'cancelled'}
-            label={report.allPassed ? 'All gates passed' : `${report.failedCount} gate(s) failed`}
-            size="sm"
-          />
-          <span className="text-xs text-[var(--text-3)]">
-            {report.passedCount}/{report.gates.length} controls passed as of {report.asOf}
-          </span>
-        </div>
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge
+              status={report.allPassed ? 'done' : 'cancelled'}
+              label={report.allPassed ? 'All gates passed' : `${report.failedCount} gate(s) failed`}
+              size="sm"
+            />
+            <span className="text-xs text-[var(--text-3)]">
+              {report.passedCount}/{report.gates.length} controls passed as of {report.asOf}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-end gap-2 rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
+            <label className="flex min-w-[240px] flex-1 flex-col gap-1">
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-t4">Find a control</span>
+              <input
+                className="form-input text-[11px]"
+                value={gateSearch}
+                onChange={event => setGateSearch(event.target.value)}
+                placeholder="Search control name or explanation…"
+              />
+            </label>
+            <label className="flex min-w-[150px] flex-col gap-1">
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-t4">Result</span>
+              <select className="form-select text-[11px]" value={gateStatus} onChange={event => setGateStatus(event.target.value)}>
+                <option value="failed">Failed first</option>
+                <option value="all">All controls</option>
+                <option value="passed">Passed</option>
+              </select>
+            </label>
+            {(gateSearch || gateStatus !== 'all') && (
+              <button type="button" className="btn-secondary text-[11px]" onClick={clearGateFilters}>Clear filters</button>
+            )}
+            <span className="ml-auto self-center text-[10px] text-t3">{visibleGates.length} control{visibleGates.length === 1 ? '' : 's'} shown</span>
+          </div>
+        </>
       )}
 
       {!report && !loading ? (
@@ -163,9 +210,11 @@ export default function IntegrityDashboard() {
           tableId="finance-integrity-gates"
           hideSearch
           perPage={20}
-          emptyMessage={loading ? 'Running integrity suite…' : 'No gate results yet'}
+          emptyMessage={loading ? 'Running integrity suite…' : report?.gates.length ? 'No controls match these filters' : 'No gate results yet'}
           rowKey={r => r.id}
-          rows={report?.gates ?? []}
+          rows={visibleGates}
+          onRowClick={gate => setSelectedGate(gate)}
+          rowLabel={gate => `${gate.name}: ${gate.passed ? 'passed' : 'failed'}`}
           columns={[
             {
               key: 'status', label: '', priority: 1, width: '88px', render: r => (
@@ -191,6 +240,58 @@ export default function IntegrityDashboard() {
           exportTitle="Finance integrity gates"
           exportFilename="finance-integrity"
         />
+      )}
+
+      {selectedGate && (
+        <Modal
+          title={selectedGate.name}
+          subtitle="Finance integrity control"
+          onClose={() => setSelectedGate(null)}
+          width={640}
+        >
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 overflow-hidden rounded-lg border border-[var(--border-lt)] sm:grid-cols-3">
+              <div className="bg-[var(--bg-surface)] p-3">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Result</p>
+                <div className="mt-1">
+                  <StatusBadge status={selectedGate.passed ? 'done' : 'cancelled'} label={selectedGate.passed ? 'Pass' : 'Fail'} size="xs" />
+                </div>
+              </div>
+              <div className="border-t border-[var(--border-lt)] p-3 sm:border-l sm:border-t-0">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Difference</p>
+                <p className={`mt-1 font-mono text-sm font-semibold ${Math.abs(selectedGate.difference) > 1 ? 'text-[var(--danger)]' : ''}`}>{fmtKes(selectedGate.difference)}</p>
+              </div>
+              <div className="border-t border-[var(--border-lt)] p-3 sm:border-l sm:border-t-0">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Population</p>
+                <p className="mt-1 text-sm font-semibold">{selectedGate.populationCount}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-t4">What this check found</p>
+              <p className="mt-1 text-xs text-t2">{selectedGate.detail || (selectedGate.passed ? 'The ledger and supporting records agree for this control.' : 'The ledger and supporting records do not agree for this control.')}</p>
+            </div>
+
+            <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-[var(--border-lt)]">
+              <div className="p-3">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Ledger</p>
+                <p className="mt-1 font-mono text-sm font-semibold">{fmtKes(selectedGate.ledgerAmount)}</p>
+              </div>
+              <div className="border-l border-[var(--border-lt)] p-3">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Subledger</p>
+                <p className="mt-1 font-mono text-sm font-semibold">{fmtKes(selectedGate.subledgerAmount)}</p>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-t3">
+              This view explains the exception only. Corrections must be made in the originating transaction or accounting workflow, then the gates should be run again.
+            </p>
+
+            <div className="flex justify-end">
+              <button type="button" className="btn-primary text-[11px]" onClick={() => setSelectedGate(null)}>Back to controls</button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )
