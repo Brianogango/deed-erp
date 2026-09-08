@@ -100,7 +100,6 @@ export default function ChartOfAccountsTab() {
     coaSearch, setCoaSearch, coaTypeFilter, setCoaTypeFilter,
     showAccountForm, setShowAccountForm, editAccountId, setEditAccountId,
     accountForm, setAccountForm, addAccount, updateAccount, addBankAccount, showToast,
-    setTab,
   } = useAccounting()
 
   const router = useRouter()
