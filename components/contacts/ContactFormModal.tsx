@@ -103,7 +103,11 @@ export default function ContactFormModal({
   const [deletedPersonIds, setDeletedPersonIds] = useState<string[]>([])
 
   useEffect(() => {
-    if (!editId) return
+    if (!editId || form.type !== 'company') {
+      setContactPersons([])
+      setDeletedPersonIds([])
+      return
+    }
     let cancelled = false
     fetch('/api/contact-persons', { cache: 'no-store' })
       .then(res => res.ok ? res.json() : [])
@@ -122,7 +126,7 @@ export default function ContactFormModal({
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [editId])
+  }, [editId, form.type])
 
   const updatePerson = (index: number, key: keyof PersonDraft, value: string) => {
     setContactPersons(rows => rows.map((row, i) => i === index ? { ...row, [key]: value } : row))
@@ -221,6 +225,20 @@ export default function ContactFormModal({
         name: form.name.trim(),
         ...(forceCustomer ? { isCustomer: true } : {}),
         ...(forceVendor ? { isVendor: true } : {}),
+      }
+      if (form.type === 'individual') {
+        payload.tradingName = undefined
+        payload.registrationNumber = undefined
+        payload.industry = undefined
+        payload.postalAddress = undefined
+        payload.vatNumber = undefined
+        payload.bankName = undefined
+        payload.bankAccount = undefined
+        payload.bankBranch = undefined
+      } else {
+        payload.jobTitle = undefined
+        payload.idNumber = undefined
+        payload.companyId = undefined
       }
       const contact = editId
         ? await updateContact(editId, payload)
