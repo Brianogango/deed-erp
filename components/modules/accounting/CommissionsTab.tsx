@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Badge, Field, Select } from '@/components/ui'
+import { Badge, Field, Modal, Select } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { CompactInfoNotice, OperationalSummary, TablePageLayout } from '@/components/erp'
-import { fmtKes } from '@/lib/store'
+import { fmtDate, fmtKes } from '@/lib/store'
+import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   summarizeCommissions,
   type CommissionPeriodSummary,
@@ -51,9 +52,12 @@ function yearOptions() {
 
 export default function CommissionsTab() {
   const now = currentPeriod()
-  const [year, setYear] = useState(String(now.year))
-  const [month, setMonth] = useState(String(now.month))
-  const [paidFilter, setPaidFilter] = useState<'all' | 'accrued' | 'paid'>('all')
+  const [year, setYear] = useUrlUiState('commissionYear', String(now.year))
+  const [month, setMonth] = useUrlUiState('commissionMonth', String(now.month))
+  const [paidFilterValue, setPaidFilter] = useUrlUiState('commissionStatus', 'all')
+  const paidFilter = (['all', 'accrued', 'paid'].includes(paidFilterValue) ? paidFilterValue : 'all') as 'all' | 'accrued' | 'paid'
+  const [selectedCloser, setSelectedCloser] = useState<CloserSalesRow | null>(null)
+  const [selectedCommission, setSelectedCommission] = useState<CommissionRowView | null>(null)
   const [items, setItems] = useState<CommissionRowView[]>([])
   const [summary, setSummary] = useState<CommissionPeriodSummary | null>(null)
   const [closers, setClosers] = useState<CloserSalesRow[]>([])
@@ -107,6 +111,11 @@ export default function CommissionsTab() {
       .finally(() => setLoading(false))
   }, [year, month, paidFilter])
 
+  const visibleSaleLines = useMemo(
+    () => selectedCloser ? saleLines.filter(line => line.closerId === selectedCloser.closerId) : saleLines,
+    [saleLines, selectedCloser],
+  )
+
   const columns: ColumnDef<CommissionRowView>[] = [
     {
       key: 'employee', label: 'Salesperson', priority: 1, width: 'minmax(8rem, 1.3fr)',
@@ -116,7 +125,7 @@ export default function CommissionsTab() {
     {
       key: 'invoice', label: 'Invoice', priority: 1, width: '120px',
       render: row => row.invoiceId ? (
-        <Link className="font-mono text-[11px] font-semibold text-primary-600" href={`/finance/invoices/${row.invoiceId}`}>
+        <Link className="font-mono text-[11px] font-semibold text-primary-600" href={`/finance/invoices/${row.invoiceId}`} onClick={event => event.stopPropagation()}>
           {row.invoiceRef || 'Invoice'}
         </Link>
       ) : <span className="text-[11px] text-[var(--text-3)]">—</span>,
@@ -188,6 +197,13 @@ export default function CommissionsTab() {
           <Select value={year} onChange={setYear} options={yearOptions()} />
         </Field>
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-lt)] px-4 pb-2 pt-4">
+        <div>
+          <h3 className="text-sm font-semibold text-t1">Salespeople overview</h3>
+          <p className="text-[11px] text-t3">Select a salesperson to focus the sales records below.</p>
+        </div>
+        <span className="text-[10px] text-t3">{closers.length} salesperson{closers.length === 1 ? '' : 's'}</span>
+      </div>
       <DataTable
         tableId="finance-salesperson-totals"
         columns={[
@@ -214,6 +230,8 @@ export default function CommissionsTab() {
         ] as ColumnDef<CloserSalesRow>[]}
         rows={closers}
         rowKey={row => row.closerId}
+        onRowClick={row => setSelectedCloser(row)}
+        rowLabel={row => `${row.closerName}: ${row.salesCount} sales, ${fmtKes(row.commissionAmount)} commission`}
         isLoading={loading}
         error={error}
         emptyMessage="No POS or sale-order sales for this period"
@@ -222,6 +240,19 @@ export default function CommissionsTab() {
         exportTitle="Sales by salesperson"
         exportFilename="salesperson-sales"
       />
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-lt)] px-4 pb-2 pt-4">
+        <div>
+          <h3 className="text-sm font-semibold text-t1">{selectedCloser ? `${selectedCloser.closerName}'s sales` : 'Sales records'}</h3>
+          <p className="text-[11px] text-t3">
+            {selectedCloser ? `${visibleSaleLines.length} record${visibleSaleLines.length === 1 ? '' : 's'} for the selected salesperson.` : 'Every POS ticket and confirmed sale order attributed to a closer.'}
+          </p>
+        </div>
+        {selectedCloser && (
+          <button type="button" className="btn-secondary text-[11px]" onClick={() => setSelectedCloser(null)}>
+            Show all salespeople
+          </button>
+        )}
+      </div>
       <DataTable
         tableId="finance-salesperson-lines"
         columns={[
@@ -256,7 +287,7 @@ export default function CommissionsTab() {
             exportValue: row => row.total,
           },
         ] as ColumnDef<CloserSaleLine>[]}
-        rows={saleLines}
+        rows={visibleSaleLines}
         rowKey={row => row.id}
         isLoading={loading}
         emptyMessage="No sales lines this period"
@@ -265,11 +296,20 @@ export default function CommissionsTab() {
         exportTitle="Salesperson sale lines"
         exportFilename="salesperson-sale-lines"
       />
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-lt)] px-4 pb-2 pt-4">
+        <div>
+          <h3 className="text-sm font-semibold text-t1">Posted commission records</h3>
+          <p className="text-[11px] text-t3">Commission earned from posted customer invoices for the selected period.</p>
+        </div>
+        <span className="text-[10px] text-t3">{items.length} record{items.length === 1 ? '' : 's'}</span>
+      </div>
       <DataTable
         tableId="finance-commissions"
         columns={columns}
         rows={items}
         rowKey={row => row.id}
+        onRowClick={row => setSelectedCommission(row)}
+        rowLabel={row => `${row.employeeName} ${row.invoiceRef || ''} ${row.isPaid ? 'paid' : 'accrued'}`}
         isLoading={loading}
         emptyMessage="No commission posted this period — sales above still count"
         searchPlaceholder="Search salesperson or invoice…"
@@ -278,6 +318,68 @@ export default function CommissionsTab() {
         exportTitle="Sales commissions"
         exportFilename="sales-commissions"
       />
+
+      {selectedCommission && (
+        <Modal
+          title="Commission record"
+          subtitle={selectedCommission.invoiceRef || selectedCommission.employeeName}
+          onClose={() => setSelectedCommission(null)}
+          width={620}
+        >
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 overflow-hidden rounded-lg border border-[var(--border-lt)] sm:grid-cols-3">
+              <div className="bg-[var(--bg-surface)] p-3">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Commission</p>
+                <p className="mt-1 font-mono text-sm font-semibold">{fmtKes(selectedCommission.commissionAmount)}</p>
+              </div>
+              <div className="border-t border-[var(--border-lt)] p-3 sm:border-l sm:border-t-0">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Sale amount</p>
+                <p className="mt-1 font-mono text-sm font-semibold">{fmtKes(selectedCommission.saleAmount)}</p>
+              </div>
+              <div className="border-t border-[var(--border-lt)] p-3 sm:border-l sm:border-t-0">
+                <p className="text-[9px] uppercase tracking-wide text-t4">Status</p>
+                <div className="mt-1">
+                  <Badge status={selectedCommission.isPaid ? 'paid' : 'pending'} label={selectedCommission.isPaid ? 'paid' : 'accrued'} size="xs" />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-3 text-xs">
+              <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2">
+                <dt className="text-t3">Salesperson</dt>
+                <dd className="font-medium text-t1">{selectedCommission.employeeName}</dd>
+                <dt className="text-t3">Invoice</dt>
+                <dd className="font-mono text-t1">{selectedCommission.invoiceRef || '—'}</dd>
+                <dt className="text-t3">Rate</dt>
+                <dd className="text-t1">{selectedCommission.commissionRate}%</dd>
+                <dt className="text-t3">Period</dt>
+                <dd className="text-t1">{monthOptions()[selectedCommission.periodMonth - 1]?.label || selectedCommission.periodMonth} {selectedCommission.periodYear}</dd>
+                {selectedCommission.createdAt && (
+                  <>
+                    <dt className="text-t3">Posted</dt>
+                    <dd className="text-t1">{fmtDate(selectedCommission.createdAt)}</dd>
+                  </>
+                )}
+              </dl>
+            </div>
+
+            <p className="text-[11px] text-t3">
+              This detail is read-only. Commission calculation, payment status, posting and approval remain in their existing workflows.
+            </p>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              {selectedCommission.invoiceId && (
+                <Link className="btn-primary text-[11px]" href={`/finance/invoices/${selectedCommission.invoiceId}`}>
+                  Open invoice
+                </Link>
+              )}
+              <button type="button" className={selectedCommission.invoiceId ? 'btn-secondary text-[11px]' : 'btn-primary text-[11px]'} onClick={() => setSelectedCommission(null)}>
+                Back to commissions
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </TablePageLayout>
   )
 }
