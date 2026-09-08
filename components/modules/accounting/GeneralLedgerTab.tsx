@@ -77,6 +77,13 @@ export default function GeneralLedgerTab() {
   }
 
   useEffect(() => {
+    if (selectedAccountParam) return
+    const code = accounts.find(account => account.code === glAccount || account.name === glAccount)?.code
+      || (glAccount && /^\d/.test(glAccount) ? glAccount : '')
+    if (code) setSelectedAccountParam(code)
+  }, [accounts, glAccount, selectedAccountParam, setSelectedAccountParam])
+
+  useEffect(() => {
     if (source !== 'prisma' || selectedAccountCodes.length === 0) {
       setPrismaLines([])
       setError(null)
