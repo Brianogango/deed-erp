@@ -77,6 +77,7 @@ import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
 import GeneralLedgerTab from './accounting/GeneralLedgerTab'
 import PartnerLedgerTab from './accounting/PartnerLedgerTab'
 import CustomerCreditsTab from './accounting/CustomerCreditsTab'
+import RefundsTab from './accounting/RefundsTab'
 import CommissionsTab from './accounting/CommissionsTab'
 import AgeingTab from './accounting/AgeingTab'
 import IntegrityDashboard from './accounting/IntegrityDashboard'
@@ -1726,34 +1727,7 @@ function AccountingContent() {
               />
             </div>
           ) : tab === 'refunds' ? (
-            <div className="flex flex-col">
-              <DataTable
-                tableId="finance-refunds"
-                columns={[
-                  { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: rp => <span className="font-mono text-xs font-semibold text-primary-600 erp-truncate" title={rp.ref}>{rp.ref}</span>, accessor: rp => rp.ref },
-                  { key: 'date', label: 'Date', priority: 2, width: '110px', render: rp => <span className="text-xs tabular-nums">{rp.paymentDate}</span>, exportValue: rp => rp.paymentDate },
-                  { key: 'rma', label: 'RMA', priority: 2, width: '110px', render: rp => <span className="text-xs text-[var(--text-2)] erp-truncate" title={rp.rmaRef}>{rp.rmaRef}</span>, accessor: rp => rp.rmaRef },
-                  { key: 'customer', label: 'Customer', priority: 1, width: 'minmax(12rem, 1.4fr)', render: rp => <span className="text-sm font-medium erp-truncate" title={rp.customerName}>{rp.customerName}</span>, accessor: rp => rp.customerName },
-                  { key: 'amount', label: 'Amount', priority: 1, width: '120px', align: 'right', render: rp => <span className="text-sm font-semibold text-red-500 tabular-nums">{fmtKes(rp.amount)}</span>, exportValue: rp => rp.amount },
-                  {
-                    key: 'method', label: 'Method', priority: 3, width: '120px',
-                    render: rp => (
-                      <span className={`chip text-xs ${rp.paymentMethod === 'cash' ? 'chip-yellow' : rp.paymentMethod === 'mpesa' ? 'chip-green' : 'chip-blue'}`}>
-                        {rp.paymentMethod === 'mpesa' ? 'M-Pesa' : rp.paymentMethod === 'bank_transfer' ? 'Bank transfer' : 'Cash'}
-                      </span>
-                    ),
-                    exportValue: rp => rp.paymentMethod,
-                  },
-                  { key: 'notes', label: 'Notes', priority: 3, width: '1fr', render: rp => <span className="text-xs text-[var(--text-3)] truncate">{rp.notes ?? '—'}</span>, exportValue: rp => rp.notes ?? '' },
-                ]}
-                rows={refundPayments}
-                rowKey={rp => rp.id}
-                emptyMessage="No refunds recorded"
-                searchPlaceholder="Search refunds…"
-                exportTitle="Refund payments"
-                exportFilename="refunds"
-              />
-            </div>
+            <div className="finance-subview finance-subview--refunds"><RefundsTab /></div>
           ) : tab === 'credits' ? (
             <div className="finance-subview finance-subview--credits"><CustomerCreditsTab /></div>
           ) : tab === 'commissions' ? (
