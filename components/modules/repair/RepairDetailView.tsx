@@ -290,6 +290,18 @@ export default function RepairDetailView() {
   const hasProc      = (r.procurementRequests?.length ?? 0) > 0
   const hasPartsUsed = (r.partsUsed?.length ?? 0) > 0
 
+  const quoteDecisionTotals = (r.quote?.lines ?? []).reduce((totals, line) => {
+    const amount = Number(line.subtotal ?? 0)
+    if (line.decision === 'approved') totals.approved += amount
+    if (line.decision === 'declined') totals.declined += amount
+    if (line.decision === 'deferred') totals.deferred += amount
+    return totals
+  }, { approved: 0, declined: 0, deferred: 0 })
+  const quotedDecisionTotal = Number(r.quote?.total ?? 0)
+  const approvedDecisionTotal = quoteDecisionTotals.approved || Number(r.quote?.approvedTotal ?? 0)
+  const declinedDecisionTotal = quoteDecisionTotals.declined || (isQuoteDeclinedReopenable(r.status) ? quotedDecisionTotal : 0)
+  const hasApprovedQuoteLines = approvedDecisionTotal > 0
+
   const nextActionHint = pendingOutsourceJob ? `Device is at ${pendingOutsourceJob.vendorName} via ${pendingOutsourceJob.ref}. Mark it returned in Outsource before continuing.`
     : isQuoteDeclinedReopenable(r.status) ? 'Customer declined this quote — revise and re-send, or return the device'
     : canDiagnose ? 'Log your technical diagnosis to proceed'
@@ -542,7 +554,7 @@ export default function RepairDetailView() {
             {primaryActionId === 'diagnose' && (
               <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope} label={canUpdateDiagnosis && !canDiagnose ? 'Update diagnosis' : 'Log diagnosis'} color="bg-blue-600 hover:bg-blue-700" shadow="shadow-blue-100" pulse={canDiagnose} />
             )}
-            {primaryActionId === 'quote' && (
+            {primaryActionId === 'quote' && !isQuoteDeclinedReopenable(r.status) && (
               <ActionBtn
                 onClick={() => setShowQuoteModal(true)}
                 icon={faFileInvoiceDollar}
@@ -599,36 +611,6 @@ export default function RepairDetailView() {
           </div>
         </div>
 
-        {/* Declined quote — always show next-step banner (not only for assigned tech) */}
-        {isQuoteDeclinedReopenable(r.status) && (
-          <div className="max-w-[1600px] mx-auto mt-2.5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl bg-[rgba(239,68,68,0.06)] border border-red-500/25">
-              <div className="flex items-start gap-2.5 min-w-0">
-                <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <Fa icon={faArrowRight} className="text-white text-[8px]" />
-                </div>
-                <p className="text-[11px] font-bold text-[var(--text-2)] m-0">
-                  <span className="font-black text-red-600">Quote declined. </span>
-                  Revise and re-send a new quote, or return the device
-                  {r.quote?.rejectionReason ? <> — “{r.quote.rejectionReason}”</> : null}.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {canQuote && (
-                  <button type="button" className="btn-primary text-[11px] px-3 py-1.5" onClick={() => setShowQuoteModal(true)}>
-                    Revise quote
-                  </button>
-                )}
-                {canReturnDevice && (
-                  <button type="button" className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setShowReturnModal(true)}>
-                    Return device
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Next-action hint for assigned tech or QA performer */}
         {(isMyRepair || canPerformQA) && nextActionHint && !isQuoteDeclinedReopenable(r.status) && (
           <div className="max-w-[1600px] mx-auto mt-2.5">
@@ -671,6 +653,100 @@ export default function RepairDetailView() {
           </div>
         )}
       </section>
+
+      {isQuoteDeclinedReopenable(r.status) && (
+        <section className="mx-auto mt-3 w-[min(1600px,calc(100%-1.5rem))] overflow-hidden rounded-2xl border border-red-200 bg-[var(--bg-card)]" aria-labelledby="declined-quote-title">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="min-w-0">
+              <div className="border-b border-red-200 bg-red-50/70 px-4 py-4 sm:px-5">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
+                    <Fa icon={faBan} className="text-[13px]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="mb-1 text-[9px] font-black uppercase tracking-[0.18em] text-red-600">Customer decision</p>
+                    <h2 id="declined-quote-title" className="m-0 text-[16px] font-black text-[var(--text-1)] sm:text-[18px]">Customer declined the quotation</h2>
+                    <p className="mt-1 text-[11px] font-semibold leading-5 text-[var(--text-3)]">
+                      This repair remains open. Revise the quotation or record the device handover outcome.
+                    </p>
+                    {r.quote?.rejectionReason && (
+                      <p className="mt-2 rounded-lg border border-red-200 bg-white/80 px-3 py-2 text-[11px] font-bold text-[var(--text-2)]">
+                        <span className="text-red-600">Reason:</span> {r.quote.rejectionReason}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 border-b border-[var(--border-lt)] sm:grid-cols-4">
+                <div className="border-b border-r border-[var(--border-lt)] px-4 py-3 sm:border-b-0"><span className="block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)]">Quoted</span><strong className="mt-1 block text-[15px] font-black text-[var(--text-1)]">{fmtKes(quotedDecisionTotal)}</strong></div>
+                <div className="border-b border-[var(--border-lt)] px-4 py-3 sm:border-b-0 sm:border-r"><span className="block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)]">Approved</span><strong className="mt-1 block text-[15px] font-black text-emerald-600">{fmtKes(approvedDecisionTotal)}</strong></div>
+                <div className="border-r border-[var(--border-lt)] px-4 py-3"><span className="block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)]">Declined</span><strong className="mt-1 block text-[15px] font-black text-red-600">{fmtKes(declinedDecisionTotal)}</strong></div>
+                <div className="px-4 py-3"><span className="block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)]">Deferred</span><strong className="mt-1 block text-[15px] font-black text-amber-600">{fmtKes(quoteDecisionTotals.deferred)}</strong></div>
+              </div>
+
+              {(r.quote?.lines?.length ?? 0) > 0 && (
+                <div className="px-4 py-4 sm:px-5">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <h3 className="m-0 text-[12px] font-black text-[var(--text-1)]">Quotation and customer decisions</h3>
+                    <button type="button" onClick={() => scrollToRepairSection('repair-diagnosis-financials')} className="text-[10px] font-black text-sky-600 hover:text-sky-700">View full quote</button>
+                  </div>
+                  <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+                    {(r.quote?.lines ?? []).map((line, index) => (
+                      <div key={index} className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 bg-[var(--bg-card)] px-3 py-2.5 ${index ? 'border-t border-[var(--border-lt)]' : ''}`}>
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] font-bold text-[var(--text-2)]">{line.description}</p>
+                          <p className="mt-0.5 text-[9px] capitalize text-[var(--text-4)]">{line.type} · qty {line.qty}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <strong className="text-[11px] font-black text-[var(--text-1)]">{fmtKes(line.subtotal)}</strong>
+                          <span className={`min-w-[68px] rounded-full border px-2 py-1 text-center text-[8px] font-black uppercase tracking-wider ${
+                            line.decision === 'approved'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : line.decision === 'deferred'
+                                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                : 'border-red-200 bg-red-50 text-red-700'
+                          }`}>{line.decision || 'Declined'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <aside className="border-t border-[var(--border)] bg-[var(--bg-surface)] p-4 xl:border-l xl:border-t-0 sm:p-5" aria-label="Declined quote next actions">
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-sky-600">Next action</p>
+              <h3 className="mt-1 text-[15px] font-black text-[var(--text-1)]">{hasApprovedQuoteLines ? 'Resolve the quotation scope' : 'Choose how to continue'}</h3>
+              <p className="mt-1 text-[10px] leading-4 text-[var(--text-4)]">Nothing happens automatically after a decline. Select and record the appropriate outcome.</p>
+
+              <div className="mt-4 space-y-2">
+                {canQuote && (
+                  <button type="button" className="btn-primary flex min-h-10 w-full items-center justify-center gap-2 px-4 text-[11px]" onClick={() => setShowQuoteModal(true)}>
+                    <Fa icon={faSync} className="text-[10px]" /> Revise &amp; re-send quote
+                  </button>
+                )}
+                {canReturnDevice && (
+                  <button type="button" className="btn-secondary flex min-h-10 w-full items-center justify-center gap-2 px-4 text-[11px]" onClick={() => setShowReturnModal(true)}>
+                    <Fa icon={faUndo} className="text-[10px]" /> Arrange device return
+                  </button>
+                )}
+                {canTradeInFromRepair && (
+                  <button type="button" className="btn-secondary flex min-h-10 w-full items-center justify-center gap-2 px-4 text-[11px]" onClick={openTradeIn}>
+                    <Fa icon={faSync} className="text-[10px]" /> Trade-in evaluation
+                  </button>
+                )}
+              </div>
+
+              <ol className="mt-5 space-y-3 border-t border-[var(--border)] pt-4">
+                <li className="flex gap-2.5"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500 text-[9px] font-black text-white">1</span><div><strong className="block text-[10px] text-[var(--text-2)]">Review the customer decision</strong><span className="text-[9px] text-[var(--text-4)]">Check declined and deferred lines.</span></div></li>
+                <li className="flex gap-2.5"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-muted)] text-[9px] font-black text-[var(--text-3)]">2</span><div><strong className="block text-[10px] text-[var(--text-2)]">Record one outcome</strong><span className="text-[9px] text-[var(--text-4)]">Revise, return, or evaluate trade-in.</span></div></li>
+                <li className="flex gap-2.5"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-muted)] text-[9px] font-black text-[var(--text-3)]">3</span><div><strong className="block text-[10px] text-[var(--text-2)]">Continue from the new state</strong><span className="text-[9px] text-[var(--text-4)]">The existing repair workflow resumes.</span></div></li>
+              </ol>
+            </aside>
+          </div>
+        </section>
+      )}
 
       <section className="repair-detail__summary" aria-label="Repair summary">
         <div><span>Next action</span><strong>{nextActionHint || 'Review job activity'}</strong></div>
