@@ -1494,7 +1494,7 @@ export default function RepairDetailView() {
                   <p className="text-[9px] font-black uppercase tracking-[0.18em] text-sky-600">Next action</p>
                   <h3 className="mt-1 text-[13px] font-black leading-snug text-[var(--text-1)]">{nextActionHint || 'Review job activity'}</h3>
                 </div>
-                <div className="p-3">
+                <div className="p-3 [&_.repair-action-btn]:min-h-10 [&_.repair-action-btn]:w-full [&_.repair-action-btn]:justify-center [&_.repair-action-btn]:rounded-lg [&_.repair-action-btn]:px-4 [&_.repair-action-btn]:text-[11px]">
                   {primaryActionId === 'verify' && <ActionBtn onClick={handleVerify} icon={faUserCheck} label="Verify intake" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
                   {primaryActionId === 'assign' && <ActionBtn onClick={() => setShowAssignModal(true)} icon={faUserPlus} label={r.assignedTechnicianId ? 'Reassign' : 'Assign technician'} color="bg-sky-500 hover:bg-sky-600" shadow="" />}
                   {primaryActionId === 'diagnose' && <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope} label={canUpdateDiagnosis && !canDiagnose ? 'Update diagnosis' : 'Log diagnosis'} color="bg-sky-500 hover:bg-sky-600" shadow="" />}
