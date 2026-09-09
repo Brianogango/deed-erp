@@ -464,7 +464,10 @@ export default function RepairDetailView() {
     })
   }
   const tabButtonClass = (tab: typeof activeRepairTab) =>
-    `repair-detail__tab ${activeRepairTab === tab ? 'repair-detail__tab--active' : ''}`
+    `repair-detail__tab border transition-colors ${activeRepairTab === tab
+      ? 'repair-detail__tab--active border-sky-200 bg-sky-50 text-sky-700'
+      : 'border-transparent text-[var(--text-3)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-1)]'
+    }`
 
   return (
     <div className="repair-detail bg-[var(--bg-page)] pb-8" style={{ animation: 'fadeIn 0.3s ease both' }}>
@@ -1486,7 +1489,7 @@ export default function RepairDetailView() {
           {/* ═══ Right Column ═══ */}
           <aside className={`repair-detail__aside ${['quote', 'handover', 'activity'].includes(activeRepairTab) ? 'lg:col-span-12 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start' : 'lg:col-span-4'}`}>
             {!isQuoteDeclinedReopenable(r.status) && (
-              <section className="repair-section-card repair-detail__next-action border border-sky-200 bg-[var(--bg-card)] lg:sticky lg:top-[9.5rem]">
+              <section className="repair-section-card repair-detail__next-action border border-sky-200 bg-[var(--bg-card)] lg:sticky lg:top-[9.5rem] lg:col-start-2 lg:row-start-1">
                 <div className="border-b border-[var(--border-lt)] bg-sky-50/70 px-4 py-3">
                   <p className="text-[9px] font-black uppercase tracking-[0.18em] text-sky-600">Next action</p>
                   <h3 className="mt-1 text-[13px] font-black leading-snug text-[var(--text-1)]">{nextActionHint || 'Review job activity'}</h3>
