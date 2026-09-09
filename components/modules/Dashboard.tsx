@@ -36,7 +36,7 @@ import {
   visibleDashboardSalesOrders,
 } from '@/lib/dashboard-priority'
 import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
-import { saleOrderInvoiceStatus, invoicePaymentStatus, isOpenInvoice, invoiceResidual, isInvoiceOverdue } from '@/lib/odoo-sales-flow'
+import { saleOrderInvoiceStatus, invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, isInvoiceOverdue } from '@/lib/odoo-sales-flow'
 import { onHandQtyAtStockLocations } from '@/lib/business-logic'
 import { isStockTracked, inferTrackingMethod } from '@/lib/inventory-identifiers'
 import { computeLowStockItems } from '@/lib/kpi-stock'
@@ -380,10 +380,14 @@ export function Dashboard() {
     return { active, awaitingParts, inQc, ready, urgent, unassigned, aging }
   }, [visibleRepairs])
 
-  // Six-month paid-revenue trend, split between the repair workshop (invoices
-  // linked to a repair job) and actual sales (all other customer invoices).
+  // Repair intelligence is a read-only dashboard projection. Existing paid
+  // revenue remains unchanged; the added fields distinguish posted invoice
+  // value, recorded collections, residuals and recorded execution costs.
   const techLeadStats = useMemo(() => {
     const now = new Date()
+    const visibleRepairIds = new Set(visibleRepairs.map(repair => repair.id))
+    const productCostById = new Map(products.map(product => [product.id, Number(product.costPrice) || 0]))
+    const repairById = new Map(visibleRepairs.map(repair => [repair.id, repair]))
     const months = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
       return {
@@ -394,36 +398,140 @@ export function Dashboard() {
         salesRevenue: 0,
         count: 0,
         salesCount: 0,
+        repairInvoiced: 0,
+        repairCollected: 0,
+        repairOutstanding: 0,
       }
     })
+    const currentRepairInvoices: any[] = []
 
     for (const inv of invoices) {
-      if (inv.type === 'vendor_bill' || invoicePaymentStatus(inv) !== 'paid') continue
+      if (inv.type === 'vendor_bill') continue
       const d = new Date(inv.date)
-      const slot = months.find(m => m.year === d.getFullYear() && m.month === d.getMonth())
+      const slot = months.find(month => month.year === d.getFullYear() && month.month === d.getMonth())
       if (!slot) continue
-      if ((inv as any).repairId) { slot.revenue += inv.total; slot.count++ }
-      else { slot.salesRevenue += inv.total; slot.salesCount++ }
+
+      const repairId = String((inv as any).repairId || '')
+      const isVisibleRepairInvoice = repairId && visibleRepairIds.has(repairId)
+      if (isVisibleRepairInvoice) {
+        if (invoiceDocState(inv.status) === 'posted') {
+          const total = Number(inv.total) || 0
+          const collected = Math.min(total, Math.max(0, Number(inv.amountPaid) || 0))
+          slot.repairInvoiced += total
+          slot.repairCollected += collected
+          slot.repairOutstanding += Math.max(0, total - collected)
+          if (slot === months[5]) currentRepairInvoices.push(inv)
+        }
+        if (invoicePaymentStatus(inv) === 'paid') {
+          slot.revenue += Number(inv.total) || 0
+          slot.count++
+        }
+      } else if (invoicePaymentStatus(inv) === 'paid') {
+        slot.salesRevenue += Number(inv.total) || 0
+        slot.salesCount++
+      }
     }
 
     const repairRevenueThisMonth = months[5].revenue
     const repairRevenueLastMonth = months[4].revenue
     const salesRevenueThisMonth = months[5].salesRevenue
+    const repairInvoicedThisMonth = months[5].repairInvoiced
+    const repairCollectedThisMonth = months[5].repairCollected
+    const repairOutstandingThisMonth = months[5].repairOutstanding
     const revenueChange = repairRevenueLastMonth > 0
       ? ((repairRevenueThisMonth - repairRevenueLastMonth) / repairRevenueLastMonth) * 100
       : repairRevenueThisMonth > 0 ? 100 : 0
-    const maxMonthlyRevenue = Math.max(...months.map(m => Math.max(m.revenue, m.salesRevenue)), 1)
+    const maxMonthlyRevenue = Math.max(...months.map(month => Math.max(month.repairInvoiced, month.repairCollected)), 1)
     const totalThisMonth = repairRevenueThisMonth + salesRevenueThisMonth
     const repairShareThisMonth = totalThisMonth > 0
       ? Math.round((repairRevenueThisMonth / totalThisMonth) * 100)
       : 0
 
+    const currentRepairRecords = currentRepairInvoices
+      .map(invoice => repairById.get(String(invoice.repairId)))
+      .filter(Boolean)
+    const currentRepairRecordIds = new Set(currentRepairRecords.map(repair => repair.id))
+    const recordedCostThisMonth = currentRepairRecords.reduce((sum, repair) => {
+      const partsCost = (repair.partsUsed || []).reduce((partsSum, part) => {
+        return partsSum + (productCostById.get(part.productId) || 0) * (Number(part.qty) || 0)
+      }, 0)
+      return sum + partsCost + (Number(repair.laborCost) || 0) + (Number(repair.logisticsCost) || 0)
+    }, 0)
+    const repairGrossProfitThisMonth = repairInvoicedThisMonth - recordedCostThisMonth
+
+    const serviceTotals = new Map<string, number>()
+    for (const repair of currentRepairRecords) {
+      for (const line of repair.quote?.lines || []) {
+        const label = line.type === 'part' ? 'Parts'
+          : line.type === 'labor' ? 'Labour'
+          : line.type === 'software' ? 'Software'
+          : line.type === 'license' ? 'Licences'
+          : line.type === 'logistics' ? 'Logistics'
+          : 'Service'
+        serviceTotals.set(label, (serviceTotals.get(label) || 0) + (Number(line.subtotal) || 0))
+      }
+    }
+    const serviceRevenue = [...serviceTotals.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5)
+    const maxServiceRevenue = Math.max(...serviceRevenue.map(item => item.value), 1)
+
+    const technicianMap = new Map<string, { name: string; jobs: Set<string>; invoiced: number; turnaroundDays: number[] }>()
+    for (const invoice of currentRepairInvoices) {
+      const repair = repairById.get(String(invoice.repairId))
+      if (!repair) continue
+      const key = repair.assignedTechnicianId || repair.assignedTechnicianName || 'unassigned'
+      const entry = technicianMap.get(key) || {
+        name: repair.assignedTechnicianName || 'Unassigned',
+        jobs: new Set<string>(),
+        invoiced: 0,
+        turnaroundDays: [],
+      }
+      entry.jobs.add(repair.id)
+      entry.invoiced += Number(invoice.total) || 0
+      if (repair.intakeDate && repair.repairCompletedDate) {
+        const start = new Date(repair.intakeDate).getTime()
+        const finish = new Date(repair.repairCompletedDate).getTime()
+        if (Number.isFinite(start) && Number.isFinite(finish) && finish >= start) {
+          entry.turnaroundDays.push((finish - start) / 86400000)
+        }
+      }
+      technicianMap.set(key, entry)
+    }
+    const technicianPerformance = [...technicianMap.values()]
+      .map(entry => ({
+        name: entry.name,
+        jobs: entry.jobs.size,
+        revenue: entry.invoiced,
+        turnaround: entry.turnaroundDays.length
+          ? entry.turnaroundDays.reduce((sum, days) => sum + days, 0) / entry.turnaroundDays.length
+          : null,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5)
+
+    const thisMonthRepairs = visibleRepairs.filter(repair => {
+      const date = new Date(repair.intakeDate || repair.createdDate)
+      return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
+    })
+    const downstreamApprovalStatuses = new Set(['approved', 'awaiting_parts', 'in_repair', 'qc', 'ready', 'verified_released', 'invoiced', 'delivered', 'collected', 'closed'])
+    const funnel = {
+      quoted: thisMonthRepairs.filter(repair => Boolean(repair.quote)).length,
+      approved: thisMonthRepairs.filter(repair => Boolean(repair.quote?.approvedDate) || downstreamApprovalStatuses.has(repair.status)).length,
+      invoiced: thisMonthRepairs.filter(repair => Boolean(repair.invoiceId) || currentRepairRecordIds.has(repair.id)).length,
+      collected: thisMonthRepairs.filter(repair => ['collected', 'closed', 'delivered'].includes(repair.status)).length,
+    }
+
     return {
       monthlyRepairRevenue: months,
       repairRevenueThisMonth, repairRevenueLastMonth, revenueChange,
       salesRevenueThisMonth, repairShareThisMonth, maxMonthlyRevenue,
+      repairInvoicedThisMonth, repairCollectedThisMonth, repairOutstandingThisMonth,
+      recordedCostThisMonth, repairGrossProfitThisMonth,
+      serviceRevenue, maxServiceRevenue, technicianPerformance, funnel,
     }
-  }, [invoices])
+  }, [invoices, products, visibleRepairs])
 
   const kilimallStats = useMemo(() => ({
     pending: kilimallOrders.filter(o => o.status === 'pending'),
@@ -910,8 +1018,156 @@ export function Dashboard() {
         </>
       )}
 
+      {sections.repairRevenue && (
+        <>
+          <SectionLabel label="Repairs intelligence" />
+          <section className="dashboard-panel overflow-hidden">
+            <CardHeader
+              title="Repairs intelligence"
+              sub="Revenue, collections and workshop performance · this month"
+              action={<button type="button" className="btn-primary text-[11px]" onClick={() => handleNav('repair', '/repairs')}>Open repairs</button>}
+            />
+
+            <div className="grid grid-cols-2 border-b border-[var(--border-lt)] lg:grid-cols-4">
+              {[
+                { label: 'Invoiced', value: techLeadStats.repairInvoicedThisMonth, note: 'Posted repair invoices', color: '#0EA5E9' },
+                { label: 'Collected', value: techLeadStats.repairCollectedThisMonth, note: 'Recorded against invoices', color: '#047857' },
+                { label: 'Outstanding', value: techLeadStats.repairOutstandingThisMonth, note: 'Still to collect', color: techLeadStats.repairOutstandingThisMonth > 0 ? '#D97706' : '#047857' },
+                { label: 'Gross profit', value: techLeadStats.repairGrossProfitThisMonth, note: 'Invoiced less recorded costs', color: techLeadStats.repairGrossProfitThisMonth >= 0 ? '#047857' : '#B91C1C' },
+              ].map((metric, index) => (
+                <div key={metric.label} className={`p-3 sm:p-4 ${index % 2 ? 'border-l' : ''} ${index > 1 ? 'border-t lg:border-t-0' : ''} lg:border-l border-[var(--border-lt)] first:border-l-0`}>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">{metric.label}</p>
+                  <p className="mt-1 font-mono text-base font-extrabold" style={{ color: metric.color }}>{fmtKes(metric.value)}</p>
+                  <p className="mt-0.5 text-[10px] text-[var(--text-4)]">{metric.note}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 border-b border-[var(--border-lt)] xl:grid-cols-[1.7fr_1fr]">
+              <div className="p-4 xl:border-r xl:border-[var(--border-lt)]">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold text-[var(--text-1)]">Repair revenue &amp; collections</h3>
+                    <p className="text-[10px] text-[var(--text-4)]">Posted repair invoices versus recorded collections · six months</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-[10px] font-semibold text-[var(--text-3)]">
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#38BDF8]" />Invoiced</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#1B2762]" />Collected</span>
+                  </div>
+                </div>
+                <div className="grid h-44 grid-cols-6 items-end gap-2 sm:gap-4">
+                  {techLeadStats.monthlyRepairRevenue.map(month => (
+                    <div key={month.label} className="flex h-full min-w-0 flex-col justify-end">
+                      <div className="flex flex-1 items-end justify-center gap-1 border-b border-[var(--border-lt)]">
+                        <div
+                          className="w-[38%] min-w-[5px] rounded-t-sm bg-[#38BDF8]"
+                          style={{ height: `${Math.max(month.repairInvoiced > 0 ? 4 : 0, (month.repairInvoiced / techLeadStats.maxMonthlyRevenue) * 100)}%` }}
+                          title={`Invoiced ${fmtKes(month.repairInvoiced)}`}
+                        />
+                        <div
+                          className="w-[38%] min-w-[5px] rounded-t-sm bg-[#1B2762]"
+                          style={{ height: `${Math.max(month.repairCollected > 0 ? 4 : 0, (month.repairCollected / techLeadStats.maxMonthlyRevenue) * 100)}%` }}
+                          title={`Collected ${fmtKes(month.repairCollected)}`}
+                        />
+                      </div>
+                      <p className="mt-2 truncate text-center text-[9px] font-semibold text-[var(--text-3)]">{month.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--border-lt)] p-4 xl:border-t-0">
+                <h3 className="text-xs font-bold text-[var(--text-1)]">Repair funnel</h3>
+                <p className="mb-4 text-[10px] text-[var(--text-4)]">Jobs received this month</p>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Quoted', value: techLeadStats.funnel.quoted, color: '#7DD3FC' },
+                    { label: 'Approved', value: techLeadStats.funnel.approved, color: '#38BDF8' },
+                    { label: 'Invoiced', value: techLeadStats.funnel.invoiced, color: '#0EA5E9' },
+                    { label: 'Collected', value: techLeadStats.funnel.collected, color: '#1B2762' },
+                  ].map(stage => {
+                    const base = Math.max(techLeadStats.funnel.quoted, 1)
+                    const percentage = Math.min(100, Math.round((stage.value / base) * 100))
+                    return (
+                      <div key={stage.label} className="grid grid-cols-[64px_1fr_54px] items-center gap-2">
+                        <span className="text-[10px] font-semibold text-[var(--text-2)]">{stage.label}</span>
+                        <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-muted)]">
+                          <div className="h-full rounded-full" style={{ width: `${percentage}%`, background: stage.color }} />
+                        </div>
+                        <span className="text-right font-mono text-[10px] font-bold text-[var(--text-1)]">{stage.value} · {percentage}%</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3">
+              <div className="p-4 xl:border-r xl:border-[var(--border-lt)]">
+                <h3 className="text-xs font-bold text-[var(--text-1)]">Value by service</h3>
+                <p className="mb-3 text-[10px] text-[var(--text-4)]">Quoted line value on this month&apos;s invoiced repairs</p>
+                <div className="space-y-3">
+                  {techLeadStats.serviceRevenue.map(item => (
+                    <div key={item.label} className="grid grid-cols-[64px_1fr_78px] items-center gap-2">
+                      <span className="truncate text-[10px] font-semibold text-[var(--text-2)]">{item.label}</span>
+                      <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-muted)]">
+                        <div className="h-full rounded-full bg-[#0EA5E9]" style={{ width: `${(item.value / techLeadStats.maxServiceRevenue) * 100}%` }} />
+                      </div>
+                      <span className="text-right font-mono text-[10px] font-bold">{fmtKes(item.value)}</span>
+                    </div>
+                  ))}
+                  {techLeadStats.serviceRevenue.length === 0 && <EmptyState message="No quoted service lines on this month’s invoiced repairs" />}
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--border-lt)] p-4 xl:border-r xl:border-t-0 xl:border-[var(--border-lt)]">
+                <h3 className="text-xs font-bold text-[var(--text-1)]">Technician performance</h3>
+                <p className="mb-3 text-[10px] text-[var(--text-4)]">Invoiced repairs and recorded turnaround</p>
+                <div className="overflow-hidden rounded-lg border border-[var(--border-lt)]">
+                  <div className="grid grid-cols-[1fr_38px_82px_70px] gap-2 bg-[var(--bg-surface)] px-2 py-1.5 text-[9px] font-bold uppercase tracking-wide text-[var(--text-4)]">
+                    <span>Technician</span><span className="text-right">Jobs</span><span className="text-right">Revenue</span><span className="text-right">Avg days</span>
+                  </div>
+                  {techLeadStats.technicianPerformance.map(tech => (
+                    <div key={tech.name} className="grid grid-cols-[1fr_38px_82px_70px] gap-2 border-t border-[var(--border-lt)] px-2 py-2 text-[10px]">
+                      <span className="truncate font-semibold text-[var(--text-1)]">{tech.name}</span>
+                      <span className="text-right font-mono">{tech.jobs}</span>
+                      <span className="text-right font-mono font-semibold">{fmtKes(tech.revenue)}</span>
+                      <span className="text-right font-mono">{tech.turnaround == null ? '—' : tech.turnaround.toFixed(1)}</span>
+                    </div>
+                  ))}
+                  {techLeadStats.technicianPerformance.length === 0 && <div className="p-3 text-center text-[10px] text-[var(--text-4)]">No invoiced technician work this month</div>}
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--border-lt)] p-4 xl:border-t-0">
+                <h3 className="text-xs font-bold text-[var(--text-1)]">Workshop bottlenecks</h3>
+                <p className="mb-2 text-[10px] text-[var(--text-4)]">Select an item to continue in Repairs</p>
+                <div className="divide-y divide-[var(--border-lt)]">
+                  {[
+                    { label: 'Awaiting approval', value: repairStats.active.filter(repair => repair.status === 'awaiting_approval').length, path: '/repairs?status=awaiting_approval', tone: '#D97706' },
+                    { label: 'Awaiting parts', value: repairStats.awaitingParts.length, path: '/repairs?status=awaiting_parts', tone: '#B91C1C' },
+                    { label: 'Aging 7d+', value: repairStats.aging.length, path: '/repairs', tone: '#B91C1C' },
+                    { label: 'Ready uncollected', value: repairStats.ready.length, path: '/repairs?status=ready', tone: '#D97706' },
+                  ].map(item => (
+                    <button
+                      type="button"
+                      key={item.label}
+                      onClick={() => handleNav('repair', item.path)}
+                      className="flex w-full items-center justify-between gap-3 py-2 text-left"
+                    >
+                      <span className="text-[11px] font-semibold text-[var(--text-2)]">{item.label}</span>
+                      <span className="font-mono text-sm font-extrabold" style={{ color: item.value ? item.tone : '#047857' }}>{item.value}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
       {/* ── P3 · Trends & analytics (progressive disclosure) ─────────────── */}
-      {(sections.salesAnalytics || sections.inventoryOverview || sections.repairRevenue) && (
+      {(sections.salesAnalytics || sections.inventoryOverview) && (
         <>
           <SectionLabel label="Trends & analytics" />
           <div className="dashboard-analytics-grid">
@@ -947,70 +1203,7 @@ export function Dashboard() {
               </CollapsibleSection>
             )}
 
-            {sections.repairRevenue && (
-              <CollapsibleSection id="repair_revenue" title="Revenue split · Sales vs repairs" sub={`Paid invoices, last 6 months · Repair MoM ${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`} accent="#047857" icon={<Fa icon={faMoneyBillWave} />}>
-                <div className="p-5 flex flex-col gap-4">
-                  {/* High-contrast legend: deep blue for sales, deep green for repairs */}
-                  <div className="flex items-center gap-5 flex-wrap">
-                    {[
-                      { label: 'Actual sales', color: '#1D4ED8' },
-                      { label: 'Repair revenue', color: '#047857' },
-                    ].map(item => (
-                      <span key={item.label} className="flex items-center gap-2 text-xs font-bold text-[var(--text-1)]">
-                        <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0" style={{ background: item.color }} />
-                        {item.label}
-                      </span>
-                    ))}
-                  </div>
-                  {techLeadStats.monthlyRepairRevenue.map((m, i) => {
-                    const isCurrent = i === 5
-                    const rows = [
-                      { key: 'sales', value: m.salesRevenue, count: m.salesCount, color: isCurrent ? '#1E40AF' : '#1D4ED8' },
-                      { key: 'repair', value: m.revenue, count: m.count, color: isCurrent ? '#065F46' : '#047857' },
-                    ]
-                    return (
-                      <div key={m.label}>
-                        <div className="flex justify-between mb-1.5 text-xs">
-                          <span className="font-extrabold text-[var(--text-1)]">
-                            {m.label}{isCurrent ? ' · current' : ''}
-                          </span>
-                          <span className="font-bold font-mono text-[var(--text-1)]">{fmtKes(m.salesRevenue + m.revenue)}</span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          {rows.map(row => (
-                            <div key={row.key} className="flex items-center gap-2">
-                              <div className="h-2.5 flex-1 bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-[width] duration-500 ease-out"
-                                  style={{
-                                    width: `${Math.min(100, (row.value / techLeadStats.maxMonthlyRevenue) * 100)}%`,
-                                    background: row.color,
-                                  }}
-                                />
-                              </div>
-                              <span className="w-28 text-right font-mono text-xs font-bold" style={{ color: row.color }}>{fmtKes(row.value)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-1 pt-3 border-t border-[var(--border-lt)]">
-                    {[
-                      { label: 'Sales this month', value: fmtKes(techLeadStats.salesRevenueThisMonth), color: '#1D4ED8' },
-                      { label: 'Repairs this month', value: fmtKes(techLeadStats.repairRevenueThisMonth), color: '#047857' },
-                      { label: 'Repair share', value: `${techLeadStats.repairShareThisMonth}%`, color: 'var(--text-1)' },
-                      { label: 'Repair MoM', value: `${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`, color: techLeadStats.revenueChange >= 0 ? '#047857' : '#B91C1C' },
-                    ].map(item => (
-                      <div key={item.label} className="dashboard-category-card">
-                        <p className="text-[11px] font-bold text-[var(--text-3)] uppercase tracking-wide">{item.label}</p>
-                        <p className="text-base font-extrabold mt-1" style={{ color: item.color }}>{item.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CollapsibleSection>
-            )}
+
           </div>
         </>
       )}
