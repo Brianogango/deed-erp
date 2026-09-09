@@ -343,6 +343,146 @@ export function Dashboard() {
     }
   }, [visibleSalesOrders])
 
+  const salesIntelligenceStats = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth()
+    const startOfToday = new Date(currentYear, currentMonth, now.getDate()).getTime()
+    const sevenDaysFromNow = startOfToday + 7 * 86400000
+    const sevenDaysAgo = startOfToday - 7 * 86400000
+    const visibleOrderIds = new Set(visibleSalesOrders.map(order => order.id))
+    const isThisMonth = (value?: string) => {
+      const date = new Date(value || '')
+      return Number.isFinite(date.getTime()) && date.getFullYear() === currentYear && date.getMonth() === currentMonth
+    }
+    const currentOrders = visibleSalesOrders.filter(order => isThisMonth(order.date))
+    const currentCustomerInvoices = invoices.filter(invoice =>
+      invoice.type === 'customer_invoice'
+      && !(invoice as any).repairId
+      && invoice.saleOrderId
+      && visibleOrderIds.has(invoice.saleOrderId)
+      && invoiceDocState(invoice.status) === 'posted'
+      && isThisMonth(invoice.date),
+    )
+    const quotedOrders = currentOrders.filter(order => order.status === 'quotation' || order.status === 'quotation_sent')
+    const confirmedOrders = currentOrders.filter(order => order.status === 'sale')
+    const quotedValue = quotedOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
+    const confirmedValue = confirmedOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
+    const invoicedValue = currentCustomerInvoices.reduce((sum, invoice) => sum + (Number(invoice.total) || 0), 0)
+    const collectedValue = currentCustomerInvoices.reduce((sum, invoice) => {
+      return sum + Math.min(Number(invoice.total) || 0, Math.max(0, Number(invoice.amountPaid) || 0))
+    }, 0)
+    const openPipelineValue = currentOrders
+      .filter(order => order.status !== 'cancelled' && !['invoiced', 'upselling'].includes(saleOrderInvoiceStatus(order.status, order.lines || [])))
+      .reduce((sum, order) => sum + (Number(order.total) || 0), 0)
+    const conversionBase = quotedOrders.length + confirmedOrders.length
+    const conversionRate = conversionBase > 0 ? Math.round((confirmedOrders.length / conversionBase) * 100) : 0
+
+    const months = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(currentYear, currentMonth - (5 - index), 1)
+      return {
+        year: date.getFullYear(),
+        month: date.getMonth(),
+        label: date.toLocaleDateString('en-KE', { month: 'short', year: '2-digit' }),
+        quoted: 0,
+        confirmed: 0,
+        collected: 0,
+      }
+    })
+    for (const order of visibleSalesOrders) {
+      if (order.status === 'cancelled') continue
+      const date = new Date(order.date)
+      const bucket = months.find(month => month.year === date.getFullYear() && month.month === date.getMonth())
+      if (!bucket) continue
+      if (order.status === 'quotation' || order.status === 'quotation_sent') bucket.quoted += Number(order.total) || 0
+      if (order.status === 'sale') bucket.confirmed += Number(order.total) || 0
+    }
+    for (const invoice of invoices) {
+      if (
+        invoice.type !== 'customer_invoice'
+        || (invoice as any).repairId
+        || !invoice.saleOrderId
+        || !visibleOrderIds.has(invoice.saleOrderId)
+        || invoiceDocState(invoice.status) !== 'posted'
+      ) continue
+      const date = new Date(invoice.date)
+      const bucket = months.find(month => month.year === date.getFullYear() && month.month === date.getMonth())
+      if (!bucket) continue
+      bucket.collected += Math.min(Number(invoice.total) || 0, Math.max(0, Number(invoice.amountPaid) || 0))
+    }
+    const maxTrendValue = Math.max(...months.flatMap(month => [month.quoted, month.confirmed, month.collected]), 1)
+
+    const invoicedOrderIds = new Set(currentCustomerInvoices.map(invoice => invoice.saleOrderId).filter(Boolean))
+    const paidOrderIds = new Set(
+      currentCustomerInvoices
+        .filter(invoice => invoicePaymentStatus(invoice) === 'paid')
+        .map(invoice => invoice.saleOrderId)
+        .filter(Boolean),
+    )
+    const funnel = {
+      quotations: quotedOrders.length,
+      confirmed: confirmedOrders.length,
+      invoiced: invoicedOrderIds.size,
+      paid: paidOrderIds.size,
+    }
+
+    const repMap = new Map<string, { name: string; quotes: number; won: number; revenue: number }>()
+    for (const order of currentOrders) {
+      if (order.status === 'cancelled') continue
+      const id = order.salespersonId || order.createdByUserId || order.salespersonName || order.createdByName || 'unassigned'
+      const entry = repMap.get(id) || {
+        name: order.salespersonName || order.createdByName || users.find(user => user.id === id)?.name || 'Unassigned',
+        quotes: 0,
+        won: 0,
+        revenue: 0,
+      }
+      if (order.status === 'quotation' || order.status === 'quotation_sent') entry.quotes++
+      if (order.status === 'sale') {
+        entry.won++
+        entry.revenue += Number(order.total) || 0
+      }
+      repMap.set(id, entry)
+    }
+    const repPerformance = [...repMap.values()]
+      .map(rep => ({
+        ...rep,
+        conversion: rep.quotes + rep.won > 0 ? Math.round((rep.won / (rep.quotes + rep.won)) * 100) : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5)
+
+    const customerMap = new Map<string, number>()
+    for (const order of confirmedOrders) {
+      const customer = order.customerName || 'Unnamed customer'
+      customerMap.set(customer, (customerMap.get(customer) || 0) + (Number(order.total) || 0))
+    }
+    const topCustomers = [...customerMap.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5)
+
+    const quoteActions = {
+      expiringSoon: quotedOrders.filter(order => {
+        const expiry = new Date(order.validUntil || '').getTime()
+        return Number.isFinite(expiry) && expiry >= startOfToday && expiry <= sevenDaysFromNow
+      }).length,
+      agingDrafts: visibleSalesOrders.filter(order => {
+        const date = new Date(order.date || '').getTime()
+        return order.status === 'quotation' && Number.isFinite(date) && date < sevenDaysAgo
+      }).length,
+      approvedNotInvoiced: visibleSalesOrders.filter(order =>
+        order.status === 'sale'
+        && !['invoiced', 'upselling'].includes(saleOrderInvoiceStatus(order.status, order.lines || [])),
+      ).length,
+      lostThisMonth: visibleSalesOrders.filter(order => order.status === 'cancelled' && isThisMonth(order.date)).length,
+    }
+
+    return {
+      quotedValue, confirmedValue, invoicedValue, collectedValue, openPipelineValue, conversionRate,
+      months, maxTrendValue, funnel, repPerformance, topCustomers, quoteActions,
+    }
+  }, [invoices, users, visibleSalesOrders])
+
   const inventoryStats = useMemo(() => {
     // Same input contract as the Operations/Inventory module: stock-tracked,
     // active products only. Passing the raw catalog counted discontinued and
@@ -1019,6 +1159,165 @@ export function Dashboard() {
               </section>
             )}
           </div>
+        </>
+      )}
+
+      {sections.salesAnalytics && has('sales') && (
+        <>
+          <SectionLabel label="Sales intelligence" />
+          <section className="dashboard-panel overflow-hidden">
+            <CardHeader
+              title="Sales intelligence"
+              sub="Pipeline, revenue and salesperson performance · this month"
+              action={<button type="button" className="btn-primary text-[11px]" onClick={() => handleNav('sales', '/sales')}>Open sales</button>}
+            />
+
+            <div className="grid grid-cols-2 border-b border-[var(--border-lt)] md:grid-cols-3 xl:grid-cols-6">
+              {[
+                { label: 'Quoted value', value: fmtKes(salesIntelligenceStats.quotedValue), note: 'Open quotations', color: '#0EA5E9' },
+                { label: 'Confirmed sales', value: fmtKes(salesIntelligenceStats.confirmedValue), note: 'Sales orders', color: '#2563EB' },
+                { label: 'Invoiced', value: fmtKes(salesIntelligenceStats.invoicedValue), note: 'Posted sales invoices', color: '#1B2762' },
+                { label: 'Collected', value: fmtKes(salesIntelligenceStats.collectedValue), note: 'Recorded collections', color: '#047857' },
+                { label: 'Open pipeline', value: fmtKes(salesIntelligenceStats.openPipelineValue), note: 'Not fully invoiced', color: '#D97706' },
+                { label: 'Conversion', value: `${salesIntelligenceStats.conversionRate}%`, note: 'Confirmed share', color: '#7C3AED' },
+              ].map((metric, index) => (
+                <div key={metric.label} className={`border-[var(--border-lt)] p-3 ${index % 2 ? 'border-l' : ''} ${index > 1 ? 'border-t md:border-t-0' : ''} md:border-l md:first:border-l-0`}>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">{metric.label}</p>
+                  <p className="mt-1 truncate font-mono text-sm font-extrabold" style={{ color: metric.color }} title={metric.value}>{metric.value}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-[var(--text-4)]">{metric.note}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 border-b border-[var(--border-lt)] xl:grid-cols-[1.7fr_1fr]">
+              <div className="p-4 xl:border-r xl:border-[var(--border-lt)]">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold text-[var(--text-1)]">Sales pipeline &amp; revenue</h3>
+                    <p className="text-[10px] text-[var(--text-4)]">Quotation, confirmed sales and recorded collections · six months</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 text-[10px] font-semibold text-[var(--text-3)]">
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#7DD3FC]" />Quoted</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#2563EB]" />Confirmed</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#1B2762]" />Collected</span>
+                  </div>
+                </div>
+                <div className="grid h-44 grid-cols-6 items-end gap-2 sm:gap-4">
+                  {salesIntelligenceStats.months.map(month => (
+                    <div key={month.label} className="flex h-full min-w-0 flex-col justify-end">
+                      <div className="flex flex-1 items-end justify-center gap-0.5 border-b border-[var(--border-lt)]">
+                        {[
+                          { label: 'Quoted', value: month.quoted, color: '#7DD3FC' },
+                          { label: 'Confirmed', value: month.confirmed, color: '#2563EB' },
+                          { label: 'Collected', value: month.collected, color: '#1B2762' },
+                        ].map(series => (
+                          <div
+                            key={series.label}
+                            className="w-[27%] min-w-[4px] rounded-t-sm"
+                            style={{
+                              height: `${Math.max(series.value > 0 ? 4 : 0, (series.value / salesIntelligenceStats.maxTrendValue) * 100)}%`,
+                              background: series.color,
+                            }}
+                            title={`${series.label} ${fmtKes(series.value)}`}
+                          />
+                        ))}
+                      </div>
+                      <p className="mt-2 truncate text-center text-[9px] font-semibold text-[var(--text-3)]">{month.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--border-lt)] p-4 xl:border-t-0">
+                <h3 className="text-xs font-bold text-[var(--text-1)]">Sales funnel</h3>
+                <p className="mb-4 text-[10px] text-[var(--text-4)]">Records dated this month</p>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Quotations', value: salesIntelligenceStats.funnel.quotations, color: '#7DD3FC' },
+                    { label: 'Confirmed', value: salesIntelligenceStats.funnel.confirmed, color: '#38BDF8' },
+                    { label: 'Invoiced', value: salesIntelligenceStats.funnel.invoiced, color: '#2563EB' },
+                    { label: 'Paid', value: salesIntelligenceStats.funnel.paid, color: '#1B2762' },
+                  ].map(stage => {
+                    const base = Math.max(salesIntelligenceStats.funnel.quotations, salesIntelligenceStats.funnel.confirmed, 1)
+                    const percentage = Math.min(100, Math.round((stage.value / base) * 100))
+                    return (
+                      <div key={stage.label} className="grid grid-cols-[70px_1fr_54px] items-center gap-2">
+                        <span className="text-[10px] font-semibold text-[var(--text-2)]">{stage.label}</span>
+                        <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-muted)]">
+                          <div className="h-full rounded-full" style={{ width: `${percentage}%`, background: stage.color }} />
+                        </div>
+                        <span className="text-right font-mono text-[10px] font-bold text-[var(--text-1)]">{stage.value} · {percentage}%</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_.85fr_.85fr]">
+              <div className="p-4 xl:border-r xl:border-[var(--border-lt)]">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold text-[var(--text-1)]">Salesperson performance</h3>
+                    <p className="text-[10px] text-[var(--text-4)]">Visible quotations and confirmed sales this month</p>
+                  </div>
+                  <button type="button" className="dashboard-card-link" onClick={() => handleNav('sales', '/sales')}>View sales</button>
+                </div>
+                <div className="overflow-hidden rounded-lg border border-[var(--border-lt)]">
+                  <div className="grid grid-cols-[1fr_42px_38px_82px_64px] gap-2 bg-[var(--bg-surface)] px-2 py-1.5 text-[9px] font-bold uppercase tracking-wide text-[var(--text-4)]">
+                    <span>Salesperson</span><span className="text-right">Quotes</span><span className="text-right">Won</span><span className="text-right">Revenue</span><span className="text-right">Convert</span>
+                  </div>
+                  {salesIntelligenceStats.repPerformance.map(rep => (
+                    <div key={rep.name} className="grid grid-cols-[1fr_42px_38px_82px_64px] gap-2 border-t border-[var(--border-lt)] px-2 py-2 text-[10px]">
+                      <span className="truncate font-semibold text-[var(--text-1)]">{rep.name}</span>
+                      <span className="text-right font-mono">{rep.quotes}</span>
+                      <span className="text-right font-mono">{rep.won}</span>
+                      <span className="text-right font-mono font-semibold">{fmtKes(rep.revenue)}</span>
+                      <span className="text-right font-mono">{rep.conversion}%</span>
+                    </div>
+                  ))}
+                  {salesIntelligenceStats.repPerformance.length === 0 && <div className="p-3 text-center text-[10px] text-[var(--text-4)]">No salesperson activity this month</div>}
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--border-lt)] p-4 xl:border-r xl:border-t-0 xl:border-[var(--border-lt)]">
+                <h3 className="text-xs font-bold text-[var(--text-1)]">Top customers</h3>
+                <p className="mb-2 text-[10px] text-[var(--text-4)]">Confirmed sales value this month</p>
+                <div className="divide-y divide-[var(--border-lt)]">
+                  {salesIntelligenceStats.topCustomers.map(customer => (
+                    <div key={customer.name} className="flex items-center justify-between gap-3 py-2">
+                      <span className="truncate text-[10px] font-semibold text-[var(--text-2)]">{customer.name}</span>
+                      <span className="shrink-0 font-mono text-[10px] font-bold">{fmtKes(customer.value)}</span>
+                    </div>
+                  ))}
+                  {salesIntelligenceStats.topCustomers.length === 0 && <EmptyState message="No confirmed customer sales this month" />}
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--border-lt)] p-4 xl:border-t-0">
+                <h3 className="text-xs font-bold text-[var(--text-1)]">Quotes requiring action</h3>
+                <p className="mb-2 text-[10px] text-[var(--text-4)]">Select an item to continue in Sales</p>
+                <div className="divide-y divide-[var(--border-lt)]">
+                  {[
+                    { label: 'Expiring in 7 days', value: salesIntelligenceStats.quoteActions.expiringSoon, tone: '#D97706' },
+                    { label: 'Draft over 7 days', value: salesIntelligenceStats.quoteActions.agingDrafts, tone: '#B91C1C' },
+                    { label: 'Approved not invoiced', value: salesIntelligenceStats.quoteActions.approvedNotInvoiced, tone: '#D97706' },
+                    { label: 'Lost this month', value: salesIntelligenceStats.quoteActions.lostThisMonth, tone: '#6B7280' },
+                  ].map(item => (
+                    <button
+                      type="button"
+                      key={item.label}
+                      onClick={() => handleNav('sales', '/sales')}
+                      className="flex w-full items-center justify-between gap-3 py-2 text-left"
+                    >
+                      <span className="text-[11px] font-semibold text-[var(--text-2)]">{item.label}</span>
+                      <span className="font-mono text-sm font-extrabold" style={{ color: item.value ? item.tone : '#047857' }}>{item.value}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
         </>
       )}
 
