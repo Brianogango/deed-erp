@@ -447,9 +447,12 @@ export function Dashboard() {
       ? Math.round((repairRevenueThisMonth / totalThisMonth) * 100)
       : 0
 
-    const currentRepairRecords = currentRepairInvoices
-      .map(invoice => repairById.get(String(invoice.repairId)))
-      .filter(Boolean)
+    const currentRepairRecords = [...new Map(
+      currentRepairInvoices
+        .map(invoice => repairById.get(String(invoice.repairId)))
+        .filter(Boolean)
+        .map(repair => [repair.id, repair]),
+    ).values()]
     const currentRepairRecordIds = new Set(currentRepairRecords.map(repair => repair.id))
     const recordedCostThisMonth = currentRepairRecords.reduce((sum, repair) => {
       const partsCost = (repair.partsUsed || []).reduce((partsSum, part) => {
@@ -457,7 +460,8 @@ export function Dashboard() {
       }, 0)
       return sum + partsCost + (Number(repair.laborCost) || 0) + (Number(repair.logisticsCost) || 0)
     }, 0)
-    const repairGrossProfitThisMonth = repairInvoicedThisMonth - recordedCostThisMonth
+    const repairNetRevenueThisMonth = currentRepairInvoices.reduce((sum, invoice) => sum + (Number(invoice.subtotal) || 0), 0)
+    const repairGrossProfitThisMonth = repairNetRevenueThisMonth - recordedCostThisMonth
 
     const serviceTotals = new Map<string, number>()
     for (const repair of currentRepairRecords) {
@@ -1033,7 +1037,7 @@ export function Dashboard() {
                 { label: 'Invoiced', value: techLeadStats.repairInvoicedThisMonth, note: 'Posted repair invoices', color: '#0EA5E9' },
                 { label: 'Collected', value: techLeadStats.repairCollectedThisMonth, note: 'Recorded against invoices', color: '#047857' },
                 { label: 'Outstanding', value: techLeadStats.repairOutstandingThisMonth, note: 'Still to collect', color: techLeadStats.repairOutstandingThisMonth > 0 ? '#D97706' : '#047857' },
-                { label: 'Gross profit', value: techLeadStats.repairGrossProfitThisMonth, note: 'Invoiced less recorded costs', color: techLeadStats.repairGrossProfitThisMonth >= 0 ? '#047857' : '#B91C1C' },
+                { label: 'Gross profit', value: techLeadStats.repairGrossProfitThisMonth, note: 'Pre-tax revenue less recorded costs', color: techLeadStats.repairGrossProfitThisMonth >= 0 ? '#047857' : '#B91C1C' },
               ].map((metric, index) => (
                 <div key={metric.label} className={`p-3 sm:p-4 ${index % 2 ? 'border-l' : ''} ${index > 1 ? 'border-t lg:border-t-0' : ''} lg:border-l border-[var(--border-lt)] first:border-l-0`}>
                   <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">{metric.label}</p>
