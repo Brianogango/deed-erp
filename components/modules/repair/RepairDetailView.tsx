@@ -127,6 +127,7 @@ export default function RepairDetailView() {
   const { invoices, quotes, saleOrders, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid, markRepairNoCharge } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
+  const [activeRepairTab, setActiveRepairTab] = useState<'overview' | 'diagnosis' | 'quote' | 'parts' | 'work' | 'handover' | 'activity'>('overview')
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
   const [paymentRejectReason, setPaymentRejectReason] = useState('')
   const [waiveFeeReason, setWaiveFeeReason] = useState('')
@@ -447,8 +448,26 @@ export default function RepairDetailView() {
     ? Math.max(0, Math.floor((Date.now() - intakeTimestamp) / 86400000))
     : 0
   const scrollToRepairSection = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const sectionTabs: Record<string, typeof activeRepairTab> = {
+      'repair-overview': 'overview',
+      'repair-diagnosis': 'diagnosis',
+      'repair-diagnosis-financials': 'quote',
+      'repair-parts': 'parts',
+      'repair-qc': 'work',
+      'repair-delivery': 'handover',
+      'repair-history': 'activity',
+    }
+    const nextTab = sectionTabs[id]
+    if (nextTab) setActiveRepairTab(nextTab)
+    requestAnimationFrame(() => {
+      document.querySelector('.repair-detail__tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }
+  const tabButtonClass = (tab: typeof activeRepairTab) =>
+    `repair-detail__tab border transition-colors ${activeRepairTab === tab
+      ? 'repair-detail__tab--active border-sky-200 bg-sky-50 text-sky-700'
+      : 'border-transparent text-[var(--text-3)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-1)]'
+    }`
 
   return (
     <div className="repair-detail bg-[var(--bg-page)] pb-8" style={{ animation: 'fadeIn 0.3s ease both' }}>
@@ -544,7 +563,7 @@ export default function RepairDetailView() {
             </div>
 
             <div className="repair-detail__action-controls" data-has-primary={Boolean(primaryActionId)}>
-              <div className="repair-detail__primary-action">
+              <div className="repair-detail__primary-action hidden">
                 {primaryActionId === 'verify' && (
               <ActionBtn onClick={handleVerify} icon={faUserCheck} label="Verify intake" color="bg-emerald-600 hover:bg-emerald-700" shadow="shadow-emerald-100" />
             )}
@@ -756,24 +775,13 @@ export default function RepairDetailView() {
       </section>
 
       <nav className="repair-detail__tabs" aria-label="Repair record sections">
-        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-overview')}>Overview</button>
-        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-diagnosis')}>Diagnosis</button>
-        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-parts')}>Repair &amp; Parts</button>
-        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-qc')}>QC</button>
-        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-delivery')}>Handover</button>
-        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-history')}>History</button>
-        <div className="repair-detail__tab-overflow">
-          <SecondaryActionMenu
-            label="More"
-            ariaLabel="More repair sections"
-            mobilePresentation="anchored"
-            actions={[
-              { id: 'qc', label: 'Quality check', onClick: () => scrollToRepairSection('repair-qc') },
-              { id: 'delivery', label: 'Handover', onClick: () => scrollToRepairSection('repair-delivery') },
-              { id: 'history', label: 'History', onClick: () => scrollToRepairSection('repair-history') },
-            ]}
-          />
-        </div>
+        <button className={tabButtonClass('overview')} type="button" onClick={() => setActiveRepairTab('overview')}>Overview</button>
+        <button className={tabButtonClass('diagnosis')} type="button" onClick={() => setActiveRepairTab('diagnosis')}>Diagnosis</button>
+        <button className={tabButtonClass('quote')} type="button" onClick={() => setActiveRepairTab('quote')}>Quote</button>
+        <button className={tabButtonClass('parts')} type="button" onClick={() => setActiveRepairTab('parts')}>Parts</button>
+        <button className={tabButtonClass('work')} type="button" onClick={() => setActiveRepairTab('work')}>Work &amp; QC</button>
+        <button className={tabButtonClass('handover')} type="button" onClick={() => setActiveRepairTab('handover')}>Handover</button>
+        <button className={tabButtonClass('activity')} type="button" onClick={() => setActiveRepairTab('activity')}>Activity</button>
       </nav>
 
       {/* ── Body ── */}
@@ -781,10 +789,10 @@ export default function RepairDetailView() {
         <div className="repair-detail__grid grid grid-cols-1 lg:grid-cols-12">
 
           {/* ═══ Left Column ═══ */}
-          <div className="repair-detail__main lg:col-span-8">
+          <div className={`repair-detail__main lg:col-span-8 ${['quote', 'handover', 'activity'].includes(activeRepairTab) ? 'hidden' : ''}`}>
 
             {/* Device & Client */}
-            <SectionCard delay={60} id="repair-overview">
+            <SectionCard delay={60} id="repair-overview" className={activeRepairTab === 'overview' ? '' : 'hidden'}>
               <SectionHeader
                 icon={faMicrochip}
                 iconBg="bg-slate-800"
@@ -945,7 +953,7 @@ export default function RepairDetailView() {
             </SectionCard>
 
             {/* Reported Issue */}
-            <SectionCard delay={130}>
+            <SectionCard delay={130} className={activeRepairTab === 'overview' ? '' : 'hidden'}>
               <SectionHeader
                 icon={faCircleExclamation}
                 iconBg="bg-amber-500"
@@ -1042,7 +1050,7 @@ export default function RepairDetailView() {
 
             {/* ── Diagnosis & Technical Assessment ── */}
             {hasDiagnosis && (
-              <SectionCard delay={200} id="repair-diagnosis">
+              <SectionCard delay={200} id="repair-diagnosis" className={activeRepairTab === 'diagnosis' ? '' : 'hidden'}>
                 <SectionHeader
                   icon={faStethoscope}
                   iconBg="bg-blue-600"
@@ -1202,7 +1210,7 @@ export default function RepairDetailView() {
 
             {/* ── Retained device convert ── */}
             {r.status === 'retained' && (
-              <SectionCard delay={50}>
+              <SectionCard delay={50} className={activeRepairTab === 'work' ? '' : 'hidden'}>
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-stone-700"
@@ -1268,7 +1276,7 @@ export default function RepairDetailView() {
 
             {/* ── QC Fail Results (visible to tech after rework) ── */}
             {showQcFailPanel && (
-              <SectionCard delay={70} id="repair-qc">
+              <SectionCard delay={70} id="repair-qc" className={activeRepairTab === 'work' ? '' : 'hidden'}>
                 <SectionHeader
                   icon={faExclamationTriangle}
                   iconBg="bg-amber-600"
@@ -1302,7 +1310,7 @@ export default function RepairDetailView() {
 
             {/* ── QC Report Attachment ── */}
             {hasQcReport && (
-              <SectionCard delay={270} id={!showQcFailPanel ? 'repair-qc' : undefined}>
+              <SectionCard delay={270} id={!showQcFailPanel ? 'repair-qc' : undefined} className={activeRepairTab === 'work' ? '' : 'hidden'}>
                 <SectionHeader
                   icon={faShieldAlt}
                   iconBg="bg-emerald-500"
@@ -1338,7 +1346,7 @@ export default function RepairDetailView() {
             )}
 
             {!showQcFailPanel && !hasQcReport && (
-              <SectionCard delay={270} id="repair-qc">
+              <SectionCard delay={270} id="repair-qc" className={activeRepairTab === 'work' ? '' : 'hidden'}>
                 <SectionHeader
                   icon={faShieldAlt}
                   iconBg="bg-slate-500"
@@ -1364,7 +1372,7 @@ export default function RepairDetailView() {
                    scrolls here, and the header's Parts actions (Request parts /
                    Mark parts arrived) must be reachable before the first part
                    is logged. ── */}
-            <SectionCard delay={260} id="repair-parts">
+            <SectionCard delay={260} id="repair-parts" className={activeRepairTab === 'parts' ? '' : 'hidden'}>
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
@@ -1426,7 +1434,7 @@ export default function RepairDetailView() {
 
 
             {/* Issue Photos */}
-            <SectionCard delay={380}>
+            <SectionCard delay={380} className={activeRepairTab === 'overview' ? '' : 'hidden'}>
               <SectionHeader
                 icon={faCamera}
                 iconBg="bg-indigo-600"
@@ -1479,8 +1487,31 @@ export default function RepairDetailView() {
           </div>
 
           {/* ═══ Right Column ═══ */}
-          <aside className="repair-detail__aside lg:col-span-4">
-            <SectionCard delay={80} id="repair-delivery">
+          <aside className={`repair-detail__aside ${['quote', 'handover', 'activity'].includes(activeRepairTab) ? 'lg:col-span-12 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start' : 'lg:col-span-4'}`}>
+            {!isQuoteDeclinedReopenable(r.status) && (
+              <section className="repair-section-card repair-detail__next-action border border-sky-200 bg-[var(--bg-card)] lg:sticky lg:top-[9.5rem] lg:col-start-2 lg:row-start-1">
+                <div className="border-b border-[var(--border-lt)] bg-sky-50/70 px-4 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-sky-600">Next action</p>
+                  <h3 className="mt-1 text-[13px] font-black leading-snug text-[var(--text-1)]">{nextActionHint || 'Review job activity'}</h3>
+                </div>
+                <div className="p-3 [&_.repair-action-btn]:min-h-10 [&_.repair-action-btn]:w-full [&_.repair-action-btn]:justify-center [&_.repair-action-btn]:rounded-lg [&_.repair-action-btn]:px-4 [&_.repair-action-btn]:text-[11px]">
+                  {primaryActionId === 'verify' && <ActionBtn onClick={handleVerify} icon={faUserCheck} label="Verify intake" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'assign' && <ActionBtn onClick={() => setShowAssignModal(true)} icon={faUserPlus} label={r.assignedTechnicianId ? 'Reassign' : 'Assign technician'} color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'diagnose' && <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope} label={canUpdateDiagnosis && !canDiagnose ? 'Update diagnosis' : 'Log diagnosis'} color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'quote' && <ActionBtn onClick={() => setShowQuoteModal(true)} icon={faFileInvoiceDollar} label={r.quote ? 'Update quote' : 'Generate quote'} color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'start' && <ActionBtn onClick={() => startRepair(r.id)} icon={faPlay} label="Start repair" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'complete' && <ActionBtn onClick={() => markRepairComplete(r.id)} icon={faCheckCircle} label="Mark complete" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'qc' && <ActionBtn onClick={() => setShowQAModal(true)} icon={faStar} label="Perform QC" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'parts_arrived' && <ActionBtn onClick={() => markPartsArrived(r.id)} icon={faBoxOpen} label="Mark parts arrived" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'invoice' && <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice'} color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'prepare_release' && <ActionBtn onClick={openPrepareRelease} icon={faBoxOpen} label="Prepare release" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'collect' && <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark collected" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {primaryActionId === 'close' && <ActionBtn onClick={() => closeRepairJob(r.id)} icon={faCheckCircle} label="Close job" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {!primaryActionId && <p className="rounded-lg bg-[var(--bg-surface)] px-3 py-2 text-[10px] font-semibold text-[var(--text-3)]">No workflow action is required at this stage.</p>}
+                </div>
+              </section>
+            )}
+            <SectionCard delay={80} id="repair-delivery" className={activeRepairTab === 'handover' ? '' : 'hidden'}>
               <SectionHeader
                 icon={faTruck}
                 iconBg="bg-teal-600"
@@ -1589,7 +1620,7 @@ export default function RepairDetailView() {
             </div>
 
             {/* Financials */}
-            <SectionCard delay={100} id={!hasDiagnosis ? 'repair-diagnosis' : undefined}>
+            <SectionCard delay={100} id={!hasDiagnosis ? 'repair-diagnosis' : undefined} className={activeRepairTab === 'quote' ? '' : 'hidden'}>
               <SectionHeader
                 id="repair-diagnosis-financials"
                 icon={faQuoteRight}
@@ -1807,7 +1838,7 @@ export default function RepairDetailView() {
 
             {/* Parts & Procurement */}
             {hasProc ? (
-              <SectionCard delay={180}>
+              <SectionCard delay={180} className={activeRepairTab === 'parts' ? '' : 'hidden'}>
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
@@ -1870,7 +1901,7 @@ export default function RepairDetailView() {
                 </div>
               </SectionCard>
             ) : canProcure ? (
-              <SectionCard delay={180}>
+              <SectionCard delay={180} className={activeRepairTab === 'parts' ? '' : 'hidden'}>
                 <div className="px-4 sm:px-6 py-5 flex flex-col items-center gap-3">
                   <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center">
                     <Fa icon={faBoxOpen} className="text-orange-400 text-base" />
@@ -1887,7 +1918,7 @@ export default function RepairDetailView() {
                 </div>
               </SectionCard>
             ) : !hasPartsUsed ? (
-              <SectionCard delay={180}>
+              <SectionCard delay={180} className={activeRepairTab === 'parts' ? '' : 'hidden'}>
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-slate-500"
@@ -1913,7 +1944,7 @@ export default function RepairDetailView() {
             ) : null}
 
             {/* Work Notes */}
-            <SectionCard delay={160} id="repair-history">
+            <SectionCard delay={160} id="repair-history" className={activeRepairTab === 'activity' ? '' : 'hidden'}>
               <SectionHeader
                 icon={faStickyNote}
                 iconBg="bg-navy-500"
@@ -2007,17 +2038,21 @@ export default function RepairDetailView() {
               </div>
             </SectionCard>
 
-            {/* Customer Chat */}
-            <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
+            {activeRepairTab === 'activity' && (
+              <>
+                {/* Customer Chat */}
+                <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
 
-            {/* Internal staff notes / activities (DocumentMessage) */}
-            <Chatter
-              model="repair"
-              recordId={r.id}
-              staffName={currentUser?.name || 'Staff'}
-              title="Internal Notes & Activities"
-              compact
-            />
+                {/* Internal staff notes / activities (DocumentMessage) */}
+                <Chatter
+                  model="repair"
+                  recordId={r.id}
+                  staffName={currentUser?.name || 'Staff'}
+                  title="Internal Notes & Activities"
+                  compact
+                />
+              </>
+            )}
 
 
           </aside>
