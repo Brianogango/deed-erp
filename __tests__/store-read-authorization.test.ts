@@ -92,4 +92,28 @@ describe('collaborative wholesale store read authorization', () => {
     expect(filterStoreValueForRole(user('finance_officer', ['sales']), 'deed_saleOrders', orders)).toEqual(orders)
     expect(hasFullStoreContentAccess(user('technical_lead', ['repair']), 'deed_repairs_v2')).toBe(true)
   })
+
+  it('keeps the full repair ledger for desk roles even when they also act as technicians', () => {
+    const directorTech = { id: 'd1', role: 'director' as const, modules: ['repair'], actsAsTechnician: true }
+    const adminTech = { id: 'a1', role: 'admin_officer' as const, modules: ['repair'], actsAsTechnician: true }
+    const repairs = [
+      { id: 'mine', assignedTechnicianId: 'd1' },
+      { id: 'other', assignedTechnicianId: 'tech-2' },
+      { id: 'unassigned' },
+    ]
+    expect(hasFullStoreContentAccess(directorTech, 'deed_repairs_v2')).toBe(true)
+    expect(hasFullStoreContentAccess(adminTech, 'deed_repairs_v2')).toBe(true)
+    expect(filterStoreValueForRole(directorTech, 'deed_repairs_v2', repairs)).toEqual(repairs)
+    expect(filterStoreValueForRole(adminTech, 'deed_repairs_v2', repairs)).toEqual(repairs)
+  })
+
+  it('lets a technician see jobs they booked as well as jobs assigned to them', () => {
+    const repairs = [
+      { id: 'assigned', assignedTechnicianId: 'tech-1' },
+      { id: 'booked', createdByUserId: 'tech-1', assignedTechnicianId: 'tech-2' },
+      { id: 'other', assignedTechnicianId: 'tech-2' },
+    ]
+    const result = filterStoreValueForRole(user('technician', ['repair'], 'tech-1'), 'deed_repairs_v2', repairs) as any[]
+    expect(result.map(repair => repair.id).sort()).toEqual(['assigned', 'booked'])
+  })
 })

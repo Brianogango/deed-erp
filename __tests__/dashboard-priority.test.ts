@@ -129,14 +129,15 @@ describe('dashboard role + per-user module gating', () => {
     expect(visibleDashboardSalesOrders(user('sales_rep', ['dashboard'], 'rep-1'), orders)).toEqual([])
   })
 
-  it('filters a technician repair dashboard to assigned work', () => {
+  it('filters a technician repair dashboard to assigned or self-booked work', () => {
     const technician = user('technician', ['repair'], 'tech-1')
     const repairs = [
       { id: 'mine', assignedTechnicianId: 'tech-1' },
+      { id: 'booked', createdByUserId: 'tech-1', assignedTechnicianId: 'tech-2' },
       { id: 'other', assignedTechnicianId: 'tech-2' },
       { id: 'unassigned' },
     ]
-    expect(visibleDashboardRepairs(technician, repairs).map(repair => repair.id)).toEqual(['mine'])
+    expect(visibleDashboardRepairs(technician, repairs).map(repair => repair.id)).toEqual(['mine', 'booked'])
   })
 
   it('gates P2 KPI cards by their owning module', () => {

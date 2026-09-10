@@ -238,6 +238,7 @@ export interface RepairOrder {
   communications: RepairCommunication[]
   
   // Metadata
+  createdByUserId?: string
   createdBy: string
   createdDate: string
   closedDate?: string

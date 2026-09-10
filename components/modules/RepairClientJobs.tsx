@@ -6,6 +6,7 @@ import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 import { fmtKes, fmtDateTime } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
 import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
+import { inNairobiDateRange, nairobiDateKey } from '@/lib/workspace-integrity'
 import { StatusBadge } from '@/components/erp'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { Fa } from '@/components/icons'
@@ -236,7 +237,9 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
         (r.customerPhone && r.customerPhone.toLowerCase().includes(q)) ||
         (r.serialNumber && r.serialNumber.toLowerCase().includes(q)) ||
         (r.assignedTechnicianName && r.assignedTechnicianName.toLowerCase().includes(q)) ||
-        (r.issueDescription && r.issueDescription.toLowerCase().includes(q))
+        (r.issueDescription && r.issueDescription.toLowerCase().includes(q)) ||
+        (r.intakeDate && nairobiDateKey(r.intakeDate).includes(q)) ||
+        (r.intakeDate && fmtDateTime(r.intakeDate).toLowerCase().includes(q))
       )
     }
     if (statusFilter === 'pending_group') list = list.filter(r => ['pending_verification','received','assigned'].includes(r.status))
@@ -246,8 +249,9 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     if (pathFilter === 'direct_repair') list = list.filter(r => r.repairPath === 'direct_repair')
     else if (pathFilter === 'diagnosis_first') list = list.filter(r => r.repairPath !== 'direct_repair')
     if (priorityFilter !== 'all') list = list.filter(r => r.priority === priorityFilter)
-    if (dateFrom) list = list.filter(r => new Date(r.intakeDate) >= new Date(dateFrom))
-    if (dateTo)   list = list.filter(r => new Date(r.intakeDate) <= new Date(dateTo + 'T23:59:59'))
+    if (dateFrom || dateTo) {
+      list = list.filter(r => inNairobiDateRange(r.intakeDate || r.createdDate, dateFrom, dateTo))
+    }
     // Always newest-first before DataTable pagination — survives cleared column sort.
     return sortRepairsNewestFirst(list)
   }, [visibleRepairs, searchQuery, statusFilter, techFilter, pathFilter, priorityFilter, dateFrom, dateTo])
@@ -479,7 +483,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
         {/* ── Table / Card list ── */}
         <div className="repair-directory-table flex-1 overflow-hidden bg-[var(--bg-card)] border border-[var(--border)] flex flex-col min-h-0">
           <DataTable
-            tableId="repair_client_jobs_v2"
+            tableId="repair_client_jobs_v3"
             columns={repairColumns}
             rows={filteredRepairs}
             rowKey={r => r.id}

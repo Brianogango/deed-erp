@@ -68,4 +68,13 @@ describe('sortRepairsNewestFirst', () => {
     ])
     expect(sorted.map(r => r.ref)).toEqual(['REP-3', 'REP-2', 'REP-1', 'REP-4'])
   })
+
+  it('puts 8 Sep 2026 Nairobi bookings above older workshop jobs', () => {
+    const sorted = sortRepairsNewestFirst([
+      { ref: 'REP-OLD', intakeDate: '2026-06-24T08:00:00.000Z' },
+      { ref: 'REP-4YRXCWJW', intakeDate: '2026-09-08T14:18:08.614Z' },
+      { ref: 'REP-YHSHJWA9', intakeDate: '2026-09-07T10:00:00.000Z' },
+    ])
+    expect(sorted.map(r => r.ref)).toEqual(['REP-4YRXCWJW', 'REP-YHSHJWA9', 'REP-OLD'])
+  })
 })

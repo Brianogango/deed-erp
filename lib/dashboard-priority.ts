@@ -181,13 +181,15 @@ export function visibleDashboardRepUsers<T extends { id: string }>(
   return [...reps]
 }
 
-export function visibleDashboardRepairs<T extends { assignedTechnicianId?: string }>(
+export function visibleDashboardRepairs<T extends { assignedTechnicianId?: string; createdByUserId?: string }>(
   user: DashboardUser | null | undefined,
   repairs: readonly T[],
 ): T[] {
   if (!dashboardSectionsForUser(user).workshop) return []
   const list = Array.isArray(repairs) ? repairs : []
-  if (user?.role === 'technician') return list.filter(repair => repair.assignedTechnicianId === user.id)
+  if (user?.role === 'technician') {
+    return list.filter(repair => repair.assignedTechnicianId === user.id || repair.createdByUserId === user.id)
+  }
   return [...list]
 }
 

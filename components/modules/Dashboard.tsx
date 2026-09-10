@@ -41,6 +41,7 @@ import { onHandQtyAtStockLocations } from '@/lib/business-logic'
 import { isStockTracked, inferTrackingMethod } from '@/lib/inventory-identifiers'
 import { computeLowStockItems } from '@/lib/kpi-stock'
 import { isOpenRepairJob } from '@/lib/repair-progress'
+import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
 import { Fa } from '@/components/icons'
 import { OnboardingChecklist } from '@/components/erp/OnboardingChecklist'
@@ -983,30 +984,33 @@ export function Dashboard() {
 
   const activity = useMemo<ActivityItem[]>(() => {
     const list: ActivityItem[] = []
+    const takeNewest = (items, n, dateOf) => [...items]
+      .sort((a, b) => new Date(dateOf(b) || 0).getTime() - new Date(dateOf(a) || 0).getTime())
+      .slice(0, n)
 
     if (canSeeFinance) {
-      invoices.slice(-5).forEach(i => list.push({ title: `${i.type === 'vendor_bill' ? 'Bill' : 'Invoice'} ${i.ref}`, sub: `${i.partnerName} · ${fmtKes(i.total)}`, date: i.date, color: '#10B981', icon: <Fa icon={faFileInvoiceDollar} /> }))
+      takeNewest(invoices, 5, i => i.date).forEach(i => list.push({ title: `${i.type === 'vendor_bill' ? 'Bill' : 'Invoice'} ${i.ref}`, sub: `${i.partnerName} · ${fmtKes(i.total)}`, date: i.date, color: '#10B981', icon: <Fa icon={faFileInvoiceDollar} /> }))
     }
 
     if (canSeeSales) {
-      visibleSalesOrders.slice(-5).forEach(s => list.push({ title: `Order ${s.ref}`, sub: `${s.customerName} · ${s.status.replace(/_/g, ' ')}`, date: s.date, color: '#3B82F6', icon: <Fa icon={faClipboardList} /> }))
+      takeNewest(visibleSalesOrders, 5, s => s.date).forEach(s => list.push({ title: `Order ${s.ref}`, sub: `${s.customerName} · ${s.status.replace(/_/g, ' ')}`, date: s.date, color: '#3B82F6', icon: <Fa icon={faClipboardList} /> }))
     }
 
     if (canSeeInventory) {
-      stockTransfers.slice(-4).forEach(t => list.push({ title: `Transfer ${t.ref}`, sub: `${t.fromLocation} → ${t.toLocation} · ${t.status}`, date: t.date, color: '#D97706', icon: <Fa icon={faArrowsRotate} /> }))
-      purchaseOrders.slice(-4).forEach(po => list.push({ title: `PO ${po.ref}`, sub: `${po.vendorName} · ${po.status}`, date: po.date, color: '#F59E0B', icon: <Fa icon={faBoxesStacked} /> }))
+      takeNewest(stockTransfers, 4, t => t.date).forEach(t => list.push({ title: `Transfer ${t.ref}`, sub: `${t.fromLocation} → ${t.toLocation} · ${t.status}`, date: t.date, color: '#D97706', icon: <Fa icon={faArrowsRotate} /> }))
+      takeNewest(purchaseOrders, 4, po => po.date).forEach(po => list.push({ title: `PO ${po.ref}`, sub: `${po.vendorName} · ${po.status}`, date: po.date, color: '#F59E0B', icon: <Fa icon={faBoxesStacked} /> }))
     }
 
     if (canSeeKilimall) {
-      kilimallOrders.slice(-5).forEach(o => list.push({ title: `Kilimall ${o.kilimallRef}`, sub: `${o.productName} · ${o.status}`, date: o.orderDate, color: '#F59E0B', icon: <Fa icon={faCartShopping} /> }))
+      takeNewest(kilimallOrders, 5, o => o.orderDate).forEach(o => list.push({ title: `Kilimall ${o.kilimallRef}`, sub: `${o.productName} · ${o.status}`, date: o.orderDate, color: '#F59E0B', icon: <Fa icon={faCartShopping} /> }))
     }
 
     if (canSeeWorkshop) {
-      visibleRepairs.slice(-5).forEach(r => list.push({ title: `Repair ${r.ref}`, sub: `${r.customerName} · ${r.status.replace(/_/g, ' ')}`, date: r.intakeDate, color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} /> }))
+      sortRepairsNewestFirst(visibleRepairs).slice(0, 5).forEach(r => list.push({ title: `Repair ${r.ref}`, sub: `${r.customerName} · ${r.status.replace(/_/g, ' ')}`, date: r.intakeDate, color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} /> }))
     }
 
     if (has('expenses')) {
-      expenses.filter(e => e.submittedByUserId === currentUserId).slice(-3).forEach(e => list.push({ title: `My expense ${e.ref}`, sub: `${fmtKes(e.amount)} · ${e.status}`, date: e.submittedDate, color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} /> }))
+      takeNewest(expenses.filter(e => e.submittedByUserId === currentUserId), 3, e => e.submittedDate).forEach(e => list.push({ title: `My expense ${e.ref}`, sub: `${fmtKes(e.amount)} · ${e.status}`, date: e.submittedDate, color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} /> }))
     }
 
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8)
@@ -1142,7 +1146,7 @@ export function Dashboard() {
                   action={<button type="button" className="dashboard-card-link" onClick={() => handleNav('repair', '/repairs')}>View all</button>}
                 />
                 <div className="dashboard-list-rows">
-                  {repairStats.active.slice(0, 4).map(r => (
+                  {sortRepairsNewestFirst(repairStats.active).slice(0, 4).map(r => (
                     <button type="button" key={r.id} onClick={() => handleNav('repair', '/repairs')} className="dashboard-list-row text-left">
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <div className="dashboard-row-symbol is-repair"><Fa icon={faScrewdriverWrench} /></div>
