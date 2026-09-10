@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   currentTargetPeriodKey,
   holdoverOverdueDays,
+  inNairobiDateRange,
   previousTargetPeriodKeys,
   resolveHoldoverStatus,
   targetMetricProgress,
@@ -51,5 +52,17 @@ describe('workspace integrity helpers', () => {
       { actual: 15, target: 20, direction: 'min' },
       { actual: 36, target: 40, direction: 'min' },
     ])).toBe(79)
+  })
+
+  it('filters intake timestamps by Nairobi calendar day, not UTC midnight', () => {
+    const eighthAfternoonUtc = '2026-09-08T14:18:08.614Z' // 17:18 Nairobi 8 Sep
+    const ninthJustAfterMidnightNbo = '2026-09-08T21:30:00.000Z' // 00:30 Nairobi 9 Sep
+    expect(inNairobiDateRange(eighthAfternoonUtc, '2026-09-08', '2026-09-08')).toBe(true)
+    expect(inNairobiDateRange(eighthAfternoonUtc, '2026-09-09', '2026-09-09')).toBe(false)
+    expect(inNairobiDateRange(ninthJustAfterMidnightNbo, '2026-09-08', '2026-09-08')).toBe(false)
+    expect(inNairobiDateRange(ninthJustAfterMidnightNbo, '2026-09-09', '2026-09-09')).toBe(true)
+    expect(inNairobiDateRange(eighthAfternoonUtc, '2026-09-08', '2026-09-09')).toBe(true)
+    expect(inNairobiDateRange('', '2026-09-08', '2026-09-09')).toBe(false)
+    expect(inNairobiDateRange(eighthAfternoonUtc, '', '')).toBe(true)
   })
 })

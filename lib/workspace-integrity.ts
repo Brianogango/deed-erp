@@ -27,6 +27,22 @@ export function nairobiDateKey(value: string | Date = new Date()): string {
   return Number.isNaN(date.getTime()) ? '' : formatZonedDate(date)
 }
 
+/** Inclusive YYYY-MM-DD range against the Nairobi calendar day of `value`. */
+export function inNairobiDateRange(
+  value: string | Date | null | undefined,
+  from?: string | null,
+  to?: string | null,
+): boolean {
+  const fromKey = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : ''
+  const toKey = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? to : ''
+  if (!fromKey && !toKey) return true
+  const key = nairobiDateKey(value ?? '')
+  if (!key) return false
+  if (fromKey && key < fromKey) return false
+  if (toKey && key > toKey) return false
+  return true
+}
+
 /** Preserve the calendar day selected in a date input, including legacy midnight ISO values. */
 export function storedDateKey(value?: string | null): string {
   const match = String(value ?? '').match(/^(\d{4}-\d{2}-\d{2})/)

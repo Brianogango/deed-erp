@@ -312,7 +312,15 @@ export const hasFullStoreContentAccess = (
   // writes still merge — a stale tab with a partial cache cannot wipe the
   // rest of the ledger.
   if (key === 'deed_saleOrders') return role !== 'sales_rep'
-  if (key === 'deed_repairs_v2') return role !== 'technician' && !user?.actsAsTechnician
+  // Workshop oversight keeps the full ledger even when the user also
+  // actsAsTechnician (otherwise assigning a job to someone else hid it
+  // from the director/admin who booked it).
+  if (key === 'deed_repairs_v2') {
+    return role === 'director'
+      || role === 'admin_officer'
+      || role === 'finance_officer'
+      || role === 'technical_lead'
+  }
   if (key === 'deed_opportunities') return role !== 'sales_rep'
   return true
 }
@@ -336,7 +344,10 @@ export function filterStoreValueForRole(
   }
   if (key === 'deed_saleOrders') return value
   if (key === 'deed_repairs_v2') {
-    return (value as StoreRow[]).filter(repair => !!user?.id && repair.assignedTechnicianId === user.id)
+    return (value as StoreRow[]).filter(repair => {
+      if (!user?.id) return false
+      return repair.assignedTechnicianId === user.id || repair.createdByUserId === user.id
+    })
   }
   if (key === 'deed_opportunities') {
     if (role !== 'sales_rep') return value

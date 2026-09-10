@@ -17237,14 +17237,14 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) return false
       
-      if (['director', 'finance_officer', 'technical_lead'].includes(user.role)) return true
+      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(user.role)) return true
 
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return false
 
       // Functional Firewall: Technicians (and actsAsTechnician users) only see assigned repairs
       if (isRepairTechActor(user)) {
-        return repair.assignedTechnicianId === user.id
+        return repair.assignedTechnicianId === user.id || repair.createdByUserId === user.id
       }
 
       return true
@@ -17255,15 +17255,16 @@ const storeCtx: AppState = {
       if (!user) return []
       const list = ensureArray<RepairOrder>(repairs)
 
-      // Full visibility: admin, finance, lead techs see every repair
-      if (['director', 'finance_officer', 'technical_lead'].includes(user.role)) return list
+      // Full visibility: desk + finance + lead techs see every repair, even
+      // when the same login also actsAsTechnician for shop-floor assignment.
+      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(user.role)) return list
 
       // Functional Firewall: Technicians / actsAsTechnician see assigned jobs + QC pool (role technicians only for peer QC)
       if (isRepairTechActor(user)) {
         if (user.role === 'technician') {
-          return list.filter(r => r.assignedTechnicianId === user.id || (r.status === 'qc' && r.assignedTechnicianId !== user.id))
+          return list.filter(r => r.assignedTechnicianId === user.id || r.createdByUserId === user.id || (r.status === 'qc' && r.assignedTechnicianId !== user.id))
         }
-        return list.filter(r => r.assignedTechnicianId === user.id)
+        return list.filter(r => r.assignedTechnicianId === user.id || r.createdByUserId === user.id)
       }
 
       return list
