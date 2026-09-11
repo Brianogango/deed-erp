@@ -5,6 +5,7 @@ import { Fa } from '@/components/icons'
 import { faUserPlus } from '@fortawesome/free-solid-svg-icons'
 import { useRepair } from './RepairContext'
 import { STEPPER_STEPS, STATUS_LABELS } from '../repair-config'
+import { normalizeClientRole } from '@/lib/auth/access'
 
 interface HistoryEntry {
   status: string
@@ -70,8 +71,9 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
     ? `This repair workflow ended as ${resolvedLabels[currentStatus as keyof typeof resolvedLabels] ?? currentStatus.replace(/_/g, ' ')}.`
     : undefined
 
-  const canManageTechnician = currentUser?.role === 'technical_lead'
-    || (currentUser?.role === 'director' && Boolean(systemSettings?.repAdminAssignsJobs))
+  const managerRole = normalizeClientRole(currentUser?.role)
+  const canManageTechnician = managerRole === 'technical_lead'
+    || (managerRole === 'director' && Boolean(systemSettings?.repAdminAssignsJobs))
   const pendingOutsource = Boolean(activeRepair && outsourceJobs?.some(job => job.repairOrderId === activeRepair.id && job.status === 'sent'))
   const assignmentLocked = !activeRepair
     || ASSIGNMENT_LOCKED.includes(currentStatus)
