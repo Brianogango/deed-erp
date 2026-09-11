@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignableTechnicians, isAssignableTechnician, isRepairTechActor } from '@/lib/repair/assignable-technicians'
+import { assignableTechnicians, isAssignableTechnician, isRepairTechActor, isRepairAssignerRole } from '@/lib/repair/assignable-technicians'
 import {
   canReadStoreKey,
   hasFullStoreContentAccess,
@@ -42,6 +42,30 @@ describe('assignableTechnicians', () => {
     expect(isAssignableTechnician({
       id: 'x', name: 'X', role: 'kilimall_officer', active: false, actsAsTechnician: true,
     })).toBe(false)
+  })
+})
+
+describe('isRepairAssignerRole', () => {
+  it('lets the technical lead assign under either role alias', () => {
+    // Regression: the raw-role check skipped `lead_tech`, silently blocking
+    // Technical Leads stored under the legacy alias from assigning jobs.
+    expect(isRepairAssignerRole('technical_lead')).toBe(true)
+    expect(isRepairAssignerRole('lead_tech')).toBe(true)
+  })
+
+  it('lets directors (and director aliases) assign', () => {
+    expect(isRepairAssignerRole('director')).toBe(true)
+    expect(isRepairAssignerRole('admin')).toBe(true)
+    expect(isRepairAssignerRole('super_admin')).toBe(true)
+  })
+
+  it('rejects technicians and other non-lead roles', () => {
+    expect(isRepairAssignerRole('technician')).toBe(false)
+    expect(isRepairAssignerRole('repair_tech')).toBe(false)
+    expect(isRepairAssignerRole('sales_rep')).toBe(false)
+    expect(isRepairAssignerRole('')).toBe(false)
+    expect(isRepairAssignerRole(null)).toBe(false)
+    expect(isRepairAssignerRole(undefined)).toBe(false)
   })
 })
 

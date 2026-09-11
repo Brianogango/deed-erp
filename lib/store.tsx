@@ -250,7 +250,7 @@ import {
   diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
 import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
-import { isAssignableTechnician, isRepairTechActor } from '@/lib/repair/assignable-technicians'
+import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole } from '@/lib/repair/assignable-technicians'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
 import {
@@ -15183,7 +15183,7 @@ const storeCtx: AppState = {
 
     assignTechnicianToRepair: (repairId, technicianId) => {
       const actor = currentUser()
-      if (!actor || !['technical_lead', 'director'].includes(actor.role)) {
+      if (!actor || !isRepairAssignerRole(actor.role)) {
         showToast('Only the Technical Lead can assign repairs', 'error'); return
       }
       const tech = users.find(u => u.id === technicianId)
