@@ -9,7 +9,10 @@
 -- (6400/6410/6415/6420/6440/6450, 6102 'Services Purchases') are removed,
 -- guarded by NOT EXISTS on journal lines.
 --
--- No deletes of posted accounts, no balance changes. Safe to re-run.
+-- No deletes of posted accounts, no balance changes. Safe to re-run:
+-- each dest-code UPDATE is a no-op when that official code already exists
+-- (production already applied this alignment; a second deploy must not
+-- collide on account_codes_code_key).
 
 BEGIN;
 
@@ -20,39 +23,39 @@ WHERE a.code IN ('6400', '6410', '6415', '6420', '6440', '6450', '6102')
 
 -- ── 1. Renumber existing accounts onto official codes ────────────────────────
 -- Payroll employment expenses → 66xx (6201-6213 become Import Purchases).
-UPDATE account_codes SET code = '6601', name = 'Salaries', account_group = 'Employment Expenses', sub_group = 'Employment Expenses', updated_at = CURRENT_TIMESTAMP WHERE code = '6201';
-UPDATE account_codes SET code = '6606', name = 'Contribution to Pension Fund (NSSF)', account_group = 'Employment Expenses', sub_group = 'Employment Expenses', updated_at = CURRENT_TIMESTAMP WHERE code = '6202';
-UPDATE account_codes SET code = '6609', name = 'Affordable Housing Levy (Employer)', account_group = 'Employment Expenses', sub_group = 'Employment Expenses', updated_at = CURRENT_TIMESTAMP WHERE code = '6203';
+UPDATE account_codes SET code = '6601', name = 'Salaries', account_group = 'Employment Expenses', sub_group = 'Employment Expenses', updated_at = CURRENT_TIMESTAMP WHERE code = '6201' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6601');
+UPDATE account_codes SET code = '6606', name = 'Contribution to Pension Fund (NSSF)', account_group = 'Employment Expenses', sub_group = 'Employment Expenses', updated_at = CURRENT_TIMESTAMP WHERE code = '6202' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6606');
+UPDATE account_codes SET code = '6609', name = 'Affordable Housing Levy (Employer)', account_group = 'Employment Expenses', sub_group = 'Employment Expenses', updated_at = CURRENT_TIMESTAMP WHERE code = '6203' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6609');
 -- Inventory variance accounts → direct-cost extensions (62xx is Import Purchases).
-UPDATE account_codes SET code = '6305', name = 'Inventory Adjustment', account_group = 'Direct Expenses', sub_group = 'Inventory', updated_at = CURRENT_TIMESTAMP WHERE code = '6200';
-UPDATE account_codes SET code = '6306', name = 'Inventory Write-off', account_group = 'Direct Expenses', sub_group = 'Inventory', updated_at = CURRENT_TIMESTAMP WHERE code = '6205';
-UPDATE account_codes SET code = '6307', name = 'Purchase Price Difference', account_group = 'Direct Expenses', sub_group = 'Inventory', updated_at = CURRENT_TIMESTAMP WHERE code = '6210';
+UPDATE account_codes SET code = '6305', name = 'Inventory Adjustment', account_group = 'Direct Expenses', sub_group = 'Inventory', updated_at = CURRENT_TIMESTAMP WHERE code = '6200' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6305');
+UPDATE account_codes SET code = '6306', name = 'Inventory Write-off', account_group = 'Direct Expenses', sub_group = 'Inventory', updated_at = CURRENT_TIMESTAMP WHERE code = '6205' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6306');
+UPDATE account_codes SET code = '6307', name = 'Purchase Price Difference', account_group = 'Direct Expenses', sub_group = 'Inventory', updated_at = CURRENT_TIMESTAMP WHERE code = '6210' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6307');
 -- Bank charges → financial expenses (6401 becomes Selling and Delivery).
-UPDATE account_codes SET code = '6703', name = 'Bank Charges', account_group = 'Financial Expenses', sub_group = 'Financial Expenses', updated_at = CURRENT_TIMESTAMP WHERE code = '6401';
+UPDATE account_codes SET code = '6703', name = 'Bank Charges', account_group = 'Financial Expenses', sub_group = 'Financial Expenses', updated_at = CURRENT_TIMESTAMP WHERE code = '6401' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6703');
 -- Operating expenses onto the official 65xx block.
-UPDATE account_codes SET code = '6518', name = 'Office Expenses', account_group = 'Operating Expenses', sub_group = 'Operating and Administrative', updated_at = CURRENT_TIMESTAMP WHERE code = '6405';
-UPDATE account_codes SET code = '6511', name = 'Subsistence and Accommodation', account_group = 'Operating Expenses', sub_group = 'Operating and Administrative', updated_at = CURRENT_TIMESTAMP WHERE code = '6430';
-UPDATE account_codes SET code = '6595', name = 'Cash Over/Short', account_group = 'Operating Expenses', sub_group = 'Operating and Administrative', updated_at = CURRENT_TIMESTAMP WHERE code = '6495';
-UPDATE account_codes SET code = '6599', name = 'Other Operating Expenses', account_group = 'Operating Expenses', sub_group = 'Operating and Administrative', updated_at = CURRENT_TIMESTAMP WHERE code = '6499';
+UPDATE account_codes SET code = '6518', name = 'Office Expenses', account_group = 'Operating Expenses', sub_group = 'Operating and Administrative', updated_at = CURRENT_TIMESTAMP WHERE code = '6405' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6518');
+UPDATE account_codes SET code = '6511', name = 'Subsistence and Accommodation', account_group = 'Operating Expenses', sub_group = 'Operating and Administrative', updated_at = CURRENT_TIMESTAMP WHERE code = '6430' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6511');
+UPDATE account_codes SET code = '6595', name = 'Cash Over/Short', account_group = 'Operating Expenses', sub_group = 'Operating and Administrative', updated_at = CURRENT_TIMESTAMP WHERE code = '6495' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6595');
+UPDATE account_codes SET code = '6599', name = 'Other Operating Expenses', account_group = 'Operating Expenses', sub_group = 'Operating and Administrative', updated_at = CURRENT_TIMESTAMP WHERE code = '6499' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6599');
 -- Statutory liabilities onto official 3302-3304, then payroll extensions.
-UPDATE account_codes SET code = '3302', name = 'PAYE Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3305';
-UPDATE account_codes SET code = '3303', name = 'NSSF Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3306';
-UPDATE account_codes SET code = '3304', name = 'NHIF / SHIF Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3307';
-UPDATE account_codes SET code = '3305', name = 'Affordable Housing Levy Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3308';
-UPDATE account_codes SET code = '3306', name = 'Pension Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3309';
+UPDATE account_codes SET code = '3302', name = 'PAYE Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3305' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '3302');
+UPDATE account_codes SET code = '3303', name = 'NSSF Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3306' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '3303');
+UPDATE account_codes SET code = '3304', name = 'NHIF / SHIF Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3307' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '3304');
+UPDATE account_codes SET code = '3305', name = 'Affordable Housing Levy Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3308' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '3305');
+UPDATE account_codes SET code = '3306', name = 'Pension Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3309' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '3306');
 -- Payroll/credit clearing accounts out of the official payables grid.
-UPDATE account_codes SET code = '3310', name = 'Net Payroll Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3110';
-UPDATE account_codes SET code = '3312', name = 'Employee Reimbursements Payable', account_type = 'liability', updated_at = CURRENT_TIMESTAMP WHERE code = '3105';
-UPDATE account_codes SET code = '3313', name = 'Customer Credits', updated_at = CURRENT_TIMESTAMP WHERE code = '3102';
-UPDATE account_codes SET code = '3202', name = 'Outstanding Payments', updated_at = CURRENT_TIMESTAMP WHERE code = '3005';
+UPDATE account_codes SET code = '3310', name = 'Net Payroll Payable', updated_at = CURRENT_TIMESTAMP WHERE code = '3110' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '3310');
+UPDATE account_codes SET code = '3312', name = 'Employee Reimbursements Payable', account_type = 'liability', updated_at = CURRENT_TIMESTAMP WHERE code = '3105' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '3312');
+UPDATE account_codes SET code = '3313', name = 'Customer Credits', updated_at = CURRENT_TIMESTAMP WHERE code = '3102' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '3313');
+UPDATE account_codes SET code = '3202', name = 'Outstanding Payments', updated_at = CURRENT_TIMESTAMP WHERE code = '3005' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '3202');
 -- Receivables clearing out of the official product grid; advances onto 1931.
-UPDATE account_codes SET code = '1933', name = 'Outstanding Receipts', account_group = 'Receivables - Other', sub_group = 'Other Debtors', updated_at = CURRENT_TIMESTAMP WHERE code = '1805';
-UPDATE account_codes SET code = '1931', name = 'Employee Salary Advances', account_group = 'Receivables - Other', sub_group = 'Other Debtors', updated_at = CURRENT_TIMESTAMP WHERE code = '1810';
+UPDATE account_codes SET code = '1933', name = 'Outstanding Receipts', account_group = 'Receivables - Other', sub_group = 'Other Debtors', updated_at = CURRENT_TIMESTAMP WHERE code = '1805' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '1933');
+UPDATE account_codes SET code = '1931', name = 'Employee Salary Advances', account_group = 'Receivables - Other', sub_group = 'Other Debtors', updated_at = CURRENT_TIMESTAMP WHERE code = '1810' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '1931');
 -- Services revenue onto the solutions block; interest onto other income.
-UPDATE account_codes SET code = '5101', name = 'On-Demand IT', account_group = 'Revenue - Services', sub_group = 'Solutions and Services', updated_at = CURRENT_TIMESTAMP WHERE code = '5003';
-UPDATE account_codes SET code = '5201', name = 'Dividends and Interest', account_group = 'Other Income', sub_group = 'Other Income', updated_at = CURRENT_TIMESTAMP WHERE code = '5105';
+UPDATE account_codes SET code = '5101', name = 'On-Demand IT', account_group = 'Revenue - Services', sub_group = 'Solutions and Services', updated_at = CURRENT_TIMESTAMP WHERE code = '5003' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '5101');
+UPDATE account_codes SET code = '5201', name = 'Dividends and Interest', account_group = 'Other Income', sub_group = 'Other Income', updated_at = CURRENT_TIMESTAMP WHERE code = '5105' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '5201');
 -- Trade-in out of 6108 (official: Local Purchases — Printers).
-UPDATE account_codes SET code = '6114', name = 'Trade-in Purchases', account_group = 'Local Purchases', sub_group = 'Trade-in', updated_at = CURRENT_TIMESTAMP WHERE code = '6108';
+UPDATE account_codes SET code = '6114', name = 'Trade-in Purchases', account_group = 'Local Purchases', sub_group = 'Trade-in', updated_at = CURRENT_TIMESTAMP WHERE code = '6108' AND NOT EXISTS (SELECT 1 FROM account_codes WHERE code = '6114');
 
 -- ── 2. Official names on retained rows ───────────────────────────────────────
 UPDATE account_codes SET name = 'Laptops', updated_at = CURRENT_TIMESTAMP WHERE code = '5001';
