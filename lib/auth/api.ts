@@ -40,7 +40,7 @@ export const withApiErrorHandling = async <T>(handler: () => Promise<T>) => {
         : 500
 
     try {
-      const h = headers()
+      const h = await headers()
       const path = h.get('next-url') || h.get('x-matched-path') || h.get('x-invoke-path') || '/api'
       recordHttpMetric({ path, status, ms: Date.now() - t0 })
     } catch {
