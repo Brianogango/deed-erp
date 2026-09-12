@@ -179,8 +179,9 @@ export async function GET(request: Request) {
 
     const where = {
       ...(status ? { status } : {}),
-      ...(q ? searchFilter : {}),
-      ...ownershipFilter,
+      ...(q || role === 'sales_rep'
+        ? { AND: [q ? searchFilter : {}, ownershipFilter] }
+        : {}),
     }
 
     const [total, orders] = await Promise.all([
