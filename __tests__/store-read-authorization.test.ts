@@ -94,8 +94,8 @@ describe('collaborative wholesale store read authorization', () => {
   })
 
   it('keeps the full repair ledger for desk roles even when they also act as technicians', () => {
-    const directorTech = { id: 'd1', role: 'director' as const, modules: ['repair'], actsAsTechnician: true }
-    const adminTech = { id: 'a1', role: 'admin_officer' as const, modules: ['repair'], actsAsTechnician: true }
+    const directorTech = { id: 'd1', role: 'director' as const, modules: ['repair'] as Array<'repair'>, actsAsTechnician: true }
+    const adminTech = { id: 'a1', role: 'admin_officer' as const, modules: ['repair'] as Array<'repair'>, actsAsTechnician: true }
     const repairs = [
       { id: 'mine', assignedTechnicianId: 'd1' },
       { id: 'other', assignedTechnicianId: 'tech-2' },
