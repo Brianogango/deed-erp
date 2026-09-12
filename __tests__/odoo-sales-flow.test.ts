@@ -617,4 +617,68 @@ describe('sales order invoice primary action', () => {
       invoiceStatus: 'to_invoice',
     })).toEqual({ kind: 'create' })
   })
+
+  it('routes a fully-covered posted unpaid invoice to payment', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{
+        id: 'inv-posted-unpaid',
+        ref: 'INV/2026/0141',
+        status: 'posted',
+        total: 35_000,
+        amountPaid: 0,
+        type: 'customer_invoice',
+      }],
+      orderTotal: 35_000,
+      canCreateInvoiceNow: false,
+      invoiceStatus: 'invoiced',
+    })).toEqual({ kind: 'payment', invoiceId: 'inv-posted-unpaid' })
+  })
+
+  it('never offers Confirm when a stale mirror says draft but an official invoice ref proves posting', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{
+        id: 'inv-stale-mirror',
+        ref: 'INV/2026/0141',
+        status: 'draft',
+        total: 35_000,
+        amountPaid: 0,
+        type: 'customer_invoice',
+      }],
+      orderTotal: 35_000,
+      canCreateInvoiceNow: false,
+      invoiceStatus: 'invoiced',
+    })).toEqual({ kind: 'payment', invoiceId: 'inv-stale-mirror' })
+  })
+
+  it('keeps Confirm for a genuine draft invoice placeholder', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{
+        id: 'inv-genuine-draft',
+        ref: 'DRAFT/INV/abc123',
+        status: 'draft',
+        total: 27_000,
+        amountPaid: 0,
+        type: 'customer_invoice',
+      }],
+      orderTotal: 27_000,
+      canCreateInvoiceNow: false,
+      invoiceStatus: 'invoiced',
+    })).toEqual({ kind: 'confirm', invoiceId: 'inv-genuine-draft' })
+  })
+
+  it('shows View invoice once the posted invoice is fully paid', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{
+        id: 'inv-paid',
+        ref: 'INV/2026/0141',
+        status: 'paid',
+        total: 35_000,
+        amountPaid: 35_000,
+        type: 'customer_invoice',
+      }],
+      orderTotal: 35_000,
+      canCreateInvoiceNow: false,
+      invoiceStatus: 'invoiced',
+    })).toEqual({ kind: 'view', invoiceId: 'inv-paid' })
+  })
 })
