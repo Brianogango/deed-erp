@@ -15993,30 +15993,8 @@ const storeCtx: AppState = {
             ...r, procurementRequests: [...(r.procurementRequests ?? []), newProc],
           } : r))
 
-          // Auto-create a draft PO (no vendor — admin assigns later)
-          const autoPo: PurchaseOrder = {
-            id: uid(), ref: await storeCtxRef.current!.allocateDocRef('PO'), status: 'draft',
-            vendorId: '', vendorName: '',
-            date: now(), expectedDate: addDays(now(), 7),
-            lines: missingItems
-              .filter(item => item.productId)
-              .map(item => {
-                const prod = prodRef.current.find(p => p.id === item.productId)
-                const catCfg = prod ? (CATEGORY_CONFIG[prod.category as CategoryId] ?? { serialRequired: false }) : { serialRequired: false }
-                return {
-                  id: uid(), productId: item.productId ?? '', productName: item.productName,
-                  qty: item.qty, qtyReceived: 0, unitPrice: 0, taxRate: prod?.taxRate ?? 0,
-                  subtotal: 0, requiresSerial: catCfg.serialRequired,
-                }
-              }),
-            subtotal: 0, taxTotal: 0, total: 0,
-            notes: `Auto-created — parts for approved quote on repair ${repair.ref}`,
-            receiptIds: [],
-            repairId, repairRef: repair.ref, procurementRequestId: newProc.id,
-          }
-          setPurchaseOrders(p => [autoPo, ...p])
-          sync('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(autoPo) })
-          addAuditLog('create_po', autoPo.ref, `Draft PO auto-created for repair ${repair.ref} — assign vendor in Purchase`)
+          // Repair records demand only. Procurement owns supplier selection
+          // and Purchase Order creation from this approved request.
 
           notifyUsers({
             recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], currentUserId),
@@ -17382,37 +17360,9 @@ const storeCtx: AppState = {
         })),
       }
 
-      // Auto-create a draft PO (no vendor yet — admin will assign and process)
-      const draftPo: PurchaseOrder = {
-        id: uid(), ref: await storeCtxRef.current!.allocateDocRef('PO'), status: 'draft',
-        vendorId: '', vendorName: '',
-        date: now(), expectedDate: addDays(now(), 7),
-        lines: [], subtotal: 0, taxTotal: 0, total: 0,
-        notes: `Auto-created from repair procurement request ${newRequest.id} (${repair.ref})`,
-        receiptIds: [],
-        repairId, repairRef: repair.ref, procurementRequestId: newRequest.id,
-      }
-      // Add a line for each requested product
-      const draftPoWithLines = { ...draftPo }
-      const poLines: POLine[] = items
-        .filter((i: any) => i.productId)
-        .map((i: any) => {
-          const prod = prodRef.current.find(p => p.id === i.productId)
-          const catCfg = prod ? (CATEGORY_CONFIG[prod.category as CategoryId] ?? { serialRequired: false }) : { serialRequired: false }
-          const unitPrice = parseFloat(i.estimatedCost || '0')
-          const qty = parseInt(String(i.qty ?? 1), 10)
-          const subtotal = unitPrice * qty
-          return {
-            id: uid(), productId: i.productId, productName: i.productName || i.name || 'Unknown',
-            qty, qtyReceived: 0, unitPrice, taxRate: prod?.taxRate ?? 0,
-            subtotal, requiresSerial: catCfg.serialRequired,
-          }
-        })
-      const poTotals = calcPO(poLines)
-      const finalDraftPo: PurchaseOrder = { ...draftPoWithLines, lines: poLines, ...poTotals }
-      setPurchaseOrders(p => [finalDraftPo, ...p])
-      sync('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(finalDraftPo) })
-      addAuditLog('create_po', finalDraftPo.ref, `Draft PO auto-created from repair procurement request for ${repair.ref}`)
+      // Repair records the request; Procurement/Purchase owns the PO.
+      // This avoids creating incomplete vendor-less financial documents as a
+      // hidden consequence of a workshop action.
 
       // Update repair status to awaiting parts and save the request
       setRepairs(p => p.map(r => r.id === repairId ? {
