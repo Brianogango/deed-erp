@@ -230,9 +230,7 @@ export interface SaleOrderLinkedInvoiceInput {
 
 export type SaleOrderInvoicePrimaryAction =
   | { kind: 'create' }
-  | { kind: 'confirm'; invoiceId: string }
-  | { kind: 'payment'; invoiceId: string }
-  | { kind: 'view'; invoiceId: string }
+  | { kind: 'view'; invoiceId: string; invoiceState: InvoiceDocState }
 
 /**
  * Resolve linked-invoice document state defensively.
@@ -272,8 +270,11 @@ export function saleOrderInvoicePrimaryAction(args: {
     && inv.type !== 'vendor_bill'
     && saleOrderLinkedInvoiceDocState(inv) !== 'cancelled'
   )
+  // Module boundary: Sales creates the accounting document, then hands it
+  // off to the Invoice module. Posting, payment, credit notes and reversals
+  // are Invoice-module actions; Sales must never execute them directly.
   const draft = regular.find(inv => saleOrderLinkedInvoiceDocState(inv) === 'draft')
-  if (draft) return { kind: 'confirm', invoiceId: draft.id }
+  if (draft) return { kind: 'view', invoiceId: draft.id, invoiceState: 'draft' }
 
   const posted = regular.filter(inv => saleOrderLinkedInvoiceDocState(inv) === 'posted')
   const covered = posted.reduce((sum, inv) => sum + Math.max(0, Number(inv.total) || 0), 0)
@@ -284,12 +285,7 @@ export function saleOrderInvoicePrimaryAction(args: {
     || (orderTotal > 0 && covered + 0.5 >= orderTotal)
 
   if (fullyCovered && posted.length > 0) {
-    const unpaid = posted.find(inv =>
-      !inv.paymentBlocked
-      && Math.max(0, Number(inv.total) || 0) - Math.max(0, Number(inv.amountPaid) || 0) > 0.5
-    )
-    if (unpaid) return { kind: 'payment', invoiceId: unpaid.id }
-    return { kind: 'view', invoiceId: posted[0].id }
+    return { kind: 'view', invoiceId: posted[0].id, invoiceState: 'posted' }
   }
   return { kind: 'create' }
 }
