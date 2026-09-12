@@ -29,10 +29,10 @@ import { PUT as STORE_KEY_PUT, GET as STORE_KEY_GET } from '@/app/api/store/[key
 import { NextRequest as NR } from 'next/server'
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
-const salesSession = { user: { id: 'u1', name: 'Sales Rep', username: 'sales', role: 'sales_rep', modules: ['sales', 'contacts'] } }
+const salesSession = { user: { id: 'u1', name: 'Sales Rep', username: 'sales', role: 'sales_rep', modules: ['sales', 'contacts', 'pos', 'after_sales'] } }
 const directorSession = { user: { id: 'u2', name: 'Director', username: 'director', role: 'director', modules: ['dashboard', 'sales', 'repair', 'contacts', 'inventory', 'accounting', 'hr'] } }
-const financeSession = { user: { id: 'u3', name: 'Finance Officer', username: 'finance', role: 'finance_officer', modules: ['accounting', 'sales', 'contacts', 'inventory'] } }
-const technicianSession = { user: { id: 'u4', name: 'Technician', username: 'tech', role: 'technician', modules: ['repair'] } }
+const financeSession = { user: { id: 'u3', name: 'Finance Officer', username: 'finance', role: 'finance_officer', modules: ['accounting', 'sales', 'contacts', 'inventory', 'pos', 'after_sales'] } }
+const technicianSession = { user: { id: 'u4', name: 'Technician', username: 'tech', role: 'technician', modules: ['repair', 'expenses'] } }
 const technicalLeadSession = { user: { id: 'u5', name: 'Technical Lead', username: 'lead', role: 'technical_lead', modules: ['repair', 'inventory'] } }
 
 function postReq(body: unknown): Request {
@@ -402,14 +402,14 @@ describe('GET /api/store — sensitive key READ gating', () => {
     expect(techBody.deed_companyAssets).toBeUndefined()
   })
 
-  it('403s a technician reading deed_payslips by key', async () => {
+  it('rejects the retired payslip app-state key', async () => {
     mockGetSession.mockResolvedValue(technicianSession)
     mockLoadAppState.mockResolvedValue({ deed_payslips: [{ id: 'p1' }] })
     const res = await STORE_KEY_GET(
       new NR('http://localhost/api/store/deed_payslips', { method: 'GET' }),
       { params: { key: 'deed_payslips' } },
     )
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(400)
   })
 })
 
