@@ -1,34 +1,48 @@
-# Sales Order Workflow
+# Sales Order and Invoice Workflow
 
-This is the canonical, binding workflow reference for Sales, Delivery, Inventory, Invoice and Payment changes.
+This is the canonical, binding workflow reference for the Sales, Delivery, Inventory and Invoice modules.
+
+## Module ownership
+
+| Module | Owns | Must not do |
+|---|---|---|
+| Sales | Quotation, Sales Order, stock reservation request, delivery journey, creation of a linked draft invoice, document lineage | Post invoices, register payments, reconcile payments, issue accounting reversals |
+| Invoice | Review/edit a draft invoice, post invoice, register/reconcile payment, credit/debit notes, reversals | Reserve stock, validate delivery, change delivered quantities or serial availability |
+| Inventory/Delivery | Reservation, picking, validated stock movement, serial consumption, returns/backorders | Create/post invoices or register payments |
+
+The handoff is explicit: **Sales creates the draft invoice and opens it in the Invoice module.** All subsequent invoice and payment actions happen in the Invoice module.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    UI["Sales Order UI"]
-    CMD["Explicit server commands"]
-    RULES["Workflow rules and authorization"]
-    SALES["Sales domain"]
-    STOCK["Inventory domain"]
-    FIN["Accounting and payment domain"]
+    SALESUI["Sales module UI"]
+    SALESCMD["Sales commands"]
+    STOCK["Inventory and Delivery"]
+    CREATEDRAFT["Create linked draft invoice"]
+    INVUI["Invoice module UI"]
+    INVCMD["Invoice and payment commands"]
+    DB["Prisma/PostgreSQL"]
     AUDIT["Append-only audit"]
 
-    UI --> CMD
-    CMD --> RULES
-    RULES --> SALES
-    RULES --> STOCK
-    RULES --> FIN
-    CMD --> AUDIT
+    SALESUI --> SALESCMD
+    SALESCMD --> STOCK
+    STOCK --> CREATEDRAFT
+    CREATEDRAFT --> INVUI
+    INVUI --> INVCMD
+    SALESCMD --> DB
+    INVCMD --> DB
+    SALESCMD --> AUDIT
+    INVCMD --> AUDIT
 ```
 
-Commands are explicit: confirm order, reserve stock, validate delivery, create draft invoice, post invoice, register payment, reverse/correct. A generic “advance status” command is forbidden.
+Commands are explicit. A generic “advance status” command is forbidden.
 
 ## Commercial document continuity
 
-Confirmation changes the accepted quotation into the same Sales Order record. Preserve the lineage:
+Confirmation changes the accepted quotation into the same Sales Order record. Preserve:
 
-`Quotation → Sales Order → Delivery/stock moves/serials → Invoice → Payment`
+`Quotation → Sales Order → Delivery/stock moves/serials → Draft Invoice → Posted Invoice → Payment`
 
 Never manufacture an unrelated replacement Sales Order during confirmation.
 
@@ -36,16 +50,22 @@ Never manufacture an unrelated replacement Sales Order during confirmation.
 
 ```mermaid
 flowchart TD
-    Q["Draft quotation"] --> C["Confirmed Sales Order"]
-    C --> R["Reserve stock"]
-    R --> D["Validate delivery"]
-    D --> I["Create draft invoice"]
-    I --> P["Review and post invoice"]
-    P --> M["Register and reconcile payment"]
-    M --> X["Complete"]
-    D -->|Partial| B["Preserve backorder"]
-    B --> D
-    P -->|Correction| V["Credit/debit note or reversal"]
+    subgraph S["Sales module"]
+      Q["Draft quotation"] --> C["Confirmed Sales Order"]
+      C --> R["Reserve stock"]
+      R --> D["Validate delivery"]
+      D --> I["Create linked draft invoice"]
+      D -->|Partial| B["Preserve backorder"]
+      B --> D
+    end
+
+    subgraph F["Invoice module"]
+      O["Open/review draft invoice"] --> P["Post invoice"]
+      P --> M["Register and reconcile payment"]
+      P -->|Correction| V["Credit/debit note or reversal"]
+    end
+
+    I --> O
 ```
 
 Physical stock sales are delivery-first. Creating an invoice reads validated delivery evidence; it never repeats delivery.
@@ -62,39 +82,49 @@ Physical stock sales are delivery-first. Creating an invoice reads validated del
 
 Never overwrite one dimension from another. Payment cannot change delivery status. Invoice posting cannot change delivered quantity.
 
-## Next-action decision table
+## Sales-module next actions
 
-| Authoritative condition | Primary action |
+| Authoritative condition | Sales primary action |
 |---|---|
 | Confirmed; delivery not validated | Prepare/Validate delivery |
 | Partial delivery | Continue delivery/backorder |
 | Fully delivered; no invoice | Create invoice |
-| Genuine draft invoice (`DRAFT/INV/...`) | Confirm invoice |
+| Linked draft invoice | Open draft invoice in Invoice module |
+| Linked posted invoice | View invoice in Invoice module |
+| Sales fulfilment and invoicing complete | Sales complete — continue in Invoices |
+
+The Sales module must never expose a button that directly posts/confirms an invoice or registers a payment.
+
+## Invoice-module next actions
+
+| Authoritative condition | Invoice primary action |
+|---|---|
+| Draft invoice | Review/Edit or Post invoice |
 | Posted invoice with residual | Register payment |
-| Posted invoice fully paid | View invoice / Complete |
+| Posted invoice fully paid | View/Close |
 | Posted invoice needs correction | Credit/debit note or reversal |
 
-The server state is authoritative. During mirror propagation, a non-draft official `INV/...` reference is durable evidence that an invoice is posted and must never be offered for confirmation.
+The server state is authoritative. During mirror propagation, a non-draft official `INV/...` reference is durable evidence that an invoice is posted and must never be treated as a draft.
 
 ## Inventory invariants
 
 - Reservation allocates but does not reduce physical on-hand stock.
 - Delivery validation atomically posts stock movement.
 - Delivered quantities derive from validated stock movements.
-- A delivery and a serial cannot be consumed twice.
+- A delivery and serial cannot be consumed twice.
 - Partial delivery preserves remaining demand/backorder.
 - Invoice creation never reserves stock, validates delivery, changes serial availability, or posts stock.
 - Corrections use returns/reversals, never deletion or history rewriting.
 
 ## Invoice and payment invariants
 
-- Draft invoices may be edited within permissions.
+- Draft invoices may be edited within permissions in the Invoice module.
 - Posted invoices are immutable.
 - Posted corrections use credit/debit notes, cancellation/reversal and replacement documents.
-- Invoiceable quantity cannot exceed the configured eligible quantity.
+- Invoiceable quantity cannot exceed eligible quantity.
 - Invoice creation is transactional and idempotent under retries/concurrency.
 - Payment is registered against a posted invoice and reconciled independently.
-- Fiscal locks, journal numbering, tax and ledger rules are not bypassed by Sales UI actions.
+- Fiscal locks, journal numbering, tax and ledger rules are not bypassed by Sales actions.
 
 ## Permissions and security
 
@@ -102,22 +132,23 @@ Every transition is checked server-side. Hidden buttons are not authorization. C
 
 ## Error guidance
 
-- Stock/serial availability errors belong to reservation or delivery validation.
+- Stock/serial availability errors belong only to reservation or delivery validation.
 - Invoice creation may report missing validated delivery evidence or nothing invoiceable.
-- Invoice confirmation may report immutable posted state only for a direct stale/invalid request; the normal UI must resolve that invoice to Register payment/View.
-- Do not suppress errors or weaken domain guards to make a UI action succeed.
+- The Sales module only navigates to existing invoices; it does not call invoice posting/payment mutations.
+- Posted-invoice immutability must never be weakened to accommodate stale UI state.
+- Do not suppress errors or weaken domain guards.
 
 ## Regression matrix
 
 | Scenario | Required result |
 |---|---|
-| Fully delivered; no invoice | Create draft invoice from validated delivered quantities |
-| Delivered serial is now sold/delivered | Invoice succeeds; no availability recheck |
+| Fully delivered; no invoice | Sales creates draft invoice from validated delivery |
+| Delivered serial is now sold/delivered | Invoice creation succeeds; no availability recheck |
 | Repeated create request | No duplicate invoice or stock move |
-| Genuine draft invoice | Confirm invoice |
-| Stale mirror says draft but ref is official | Treat as posted; never confirm |
-| Posted unpaid invoice | Register payment |
-| Posted paid invoice | View/Complete |
+| Linked genuine draft invoice | Sales opens it in Invoice module; Invoice module may post |
+| Stale mirror says draft but ref is official | Treat as posted; Sales opens it, never confirms |
+| Posted unpaid invoice | Sales opens it; Invoice module offers Register payment |
+| Posted paid invoice | Sales opens it; Invoice module shows paid/close state |
 | Partial delivery | Invoice eligible delivered quantity; preserve backorder |
 | Payment update | Delivery unchanged |
 | Invoice posting | Delivered quantities unchanged |
