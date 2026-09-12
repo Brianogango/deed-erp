@@ -1,4 +1,4 @@
-import sharp from 'sharp'
+import sharp, { type Metadata } from 'sharp'
 
 export type ServerImageGuardOptions = {
   allowedTypes?: string[]
