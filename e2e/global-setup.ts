@@ -128,31 +128,33 @@ export default async function globalSetup() {
     // Accounting routes deliberately reject unknown journals/accounts. Seed the
     // same minimum approved ledger used by these business workflows so E2E
     // exercises real posting instead of bypassing financial validation.
+    // prisma db push does not install DB defaults for @default(uuid()) / @updatedAt,
+    // so E2E inserts must supply ids and timestamps.
     await pool.query(`
-      INSERT INTO journals (code, name, journal_type)
+      INSERT INTO journals (id, code, name, journal_type, is_active, created_at)
       VALUES
-        ('SAL', 'Sales Journal', 'sale'),
-        ('PUR', 'Purchase Journal', 'purchase'),
-        ('BNK', 'Bank Journal', 'bank'),
-        ('CSH', 'Cash Journal', 'cash'),
-        ('STK', 'Stock Journal', 'stock'),
-        ('GEN', 'Miscellaneous', 'general')
+        (gen_random_uuid(), 'SAL', 'Sales Journal', 'sale', TRUE, NOW()),
+        (gen_random_uuid(), 'PUR', 'Purchase Journal', 'purchase', TRUE, NOW()),
+        (gen_random_uuid(), 'BNK', 'Bank Journal', 'bank', TRUE, NOW()),
+        (gen_random_uuid(), 'CSH', 'Cash Journal', 'cash', TRUE, NOW()),
+        (gen_random_uuid(), 'STK', 'Stock Journal', 'stock', TRUE, NOW()),
+        (gen_random_uuid(), 'GEN', 'Miscellaneous', 'general', TRUE, NOW())
       ON CONFLICT (code) DO UPDATE SET is_active = TRUE
     `)
     await pool.query(`
-      INSERT INTO account_codes (code, name, account_type, is_active)
+      INSERT INTO account_codes (id, code, name, account_type, is_active, created_at, updated_at)
       VALUES
-        ('1150', 'VAT Input', 'asset', TRUE),
-        ('1200', 'Inventory', 'asset', TRUE),
-        ('1800', 'Accounts Receivable', 'asset', TRUE),
-        ('2201', 'ABSA Bank', 'asset', TRUE),
-        ('2211', 'Petty Cash / Mobile Money', 'asset', TRUE),
-        ('3000', 'Accounts Payable', 'liability', TRUE),
-        ('3201', 'Accruals', 'liability', TRUE),
-        ('3301', 'Output VAT Payable', 'liability', TRUE),
-        ('5000', 'Sales Revenue', 'income', TRUE),
-        ('5121', 'Hardware Support', 'income', TRUE),
-        ('6001', 'Cost of Goods Sold', 'expense', TRUE)
+        (gen_random_uuid(), '1150', 'VAT Input', 'asset', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '1200', 'Inventory', 'asset', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '1800', 'Accounts Receivable', 'asset', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '2201', 'ABSA Bank', 'asset', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '2211', 'Petty Cash / Mobile Money', 'asset', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '3000', 'Accounts Payable', 'liability', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '3201', 'Accruals', 'liability', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '3301', 'Output VAT Payable', 'liability', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '5000', 'Sales Revenue', 'income', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '5121', 'Hardware Support', 'income', TRUE, NOW(), NOW()),
+        (gen_random_uuid(), '6001', 'Cost of Goods Sold', 'expense', TRUE, NOW(), NOW())
       ON CONFLICT (code) DO UPDATE SET is_active = TRUE
     `)
   } finally {
