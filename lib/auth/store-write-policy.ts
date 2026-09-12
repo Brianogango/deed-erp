@@ -73,7 +73,7 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
 
   deed_saleOrders: policy(SALES, ['sales']),
   deed_quotes: policy(SALES, ['sales', 'crm']),
-  deed_invoices: policy([...FINANCE, 'technical_lead', 'lead_tech'], ['sales', 'accounting', 'repair']),
+  deed_invoices: policy([...FINANCE, 'sales_rep', 'technical_lead', 'lead_tech'], ['sales', 'accounting', 'repair']),
   deed_payments: policy(FINANCE, ['accounting', 'sales']),
   deed_deliveries: policy([...INVENTORY, 'sales_rep'], ['delivery', 'sales']),
   deed_warranties: policy([...SALES, 'technician'], ['sales', 'repair', 'after_sales']),
