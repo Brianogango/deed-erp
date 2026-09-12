@@ -188,6 +188,16 @@ jobs:
             rm -f -- .env.bak-mailbox-*
             # Stale previous-build dir is excluded from dirty checks but can confuse operators.
             rm -rf -- .next-staging
+            # `next build` rewrites these tracked files; the installed
+            # /usr/local/bin/deed-erp-deploy.sh dirty-check otherwise refuses
+            # to pull after a successful swap.
+            for generated_path in next-env.d.ts tsconfig.json; do
+              if git ls-files --error-unmatch "$generated_path" >/dev/null 2>&1; then
+                git restore --source=HEAD --worktree --staged -- "$generated_path" 2>/dev/null \
+                  || git checkout HEAD -- "$generated_path" 2>/dev/null \
+                  || true
+              fi
+            done
             git status --porcelain || true
 
       - name: Deploy via SSH

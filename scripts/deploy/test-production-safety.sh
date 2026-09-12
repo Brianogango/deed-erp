@@ -225,6 +225,8 @@ make_deploy_fixture() {
   git -C "$fixture/seed" config user.email test@example.invalid
   printf '.env\n.next/\n.next-*\n' >"$fixture/seed/.gitignore"
   printf 'old\n' >"$fixture/seed/version.txt"
+  printf 'reference next\n' >"$fixture/seed/next-env.d.ts"
+  printf '{}\n' >"$fixture/seed/tsconfig.json"
   printf 'module.exports = {}\n' >"$fixture/seed/ecosystem.config.js"
   git -C "$fixture/seed" add .
   git -C "$fixture/seed" commit -qm old
@@ -303,7 +305,31 @@ test_deploy_rollback() {
   assert_file_not_contains "$fixture/deploy.log" "postgresql://user:"
 }
 
+test_deploy_restores_next_generated_dirt() {
+  local fixture="$TMP_ROOT/deploy-next-dirt"
+  make_deploy_fixture "$fixture"
+  printf 'rewritten by next build\n' >"$fixture/app/next-env.d.ts"
+  printf '{"include":[".next-staging/types/**/*.ts"]}\n' >"$fixture/app/tsconfig.json"
+  mkdir -p "$fixture/app/.next-previous"
+  printf 'previous build\n' >"$fixture/app/.next-previous/build.txt"
+
+  if TEST_DEPLOY_FIXTURE="$fixture" TEST_FAILURE_MODE=health \
+    PATH="$fixture/bin:$PATH" APP_DIR="$fixture/app" \
+    ENV_FILE="$fixture/app/.env" BACKUP_COMMAND="$fixture/bin/backup" \
+    DEPLOY_LOG="$fixture/deploy.log" ROLLBACK_STATE_DIR="$fixture/rollback" \
+    HEALTH_ATTEMPTS=1 HEALTH_INTERVAL=1 \
+    "$ROOT/scripts/deploy/deed-erp-deploy.sh" >/dev/null 2>&1; then
+    fail "health-failure deploy unexpectedly succeeded"
+  fi
+
+  assert_file_not_contains "$fixture/deploy.log" "refusing to overwrite local changes"
+  assert_file_contains "$fixture/deploy.log" "=== Deploy started"
+  assert_file_contains "$fixture/app/next-env.d.ts" "reference next"
+  assert_file_contains "$fixture/app/tsconfig.json" "{}"
+}
+
 test_backup_and_verifier
 test_deploy_rollback reload
 test_deploy_rollback health
+test_deploy_restores_next_generated_dirt
 printf 'Production safety tests passed\n'

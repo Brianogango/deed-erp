@@ -77,6 +77,13 @@ jobs:
             # Mailbox SMTP ops leave timestamped .env backups; never touch live .env.
             rm -f -- .env.bak-mailbox-*
             rm -rf -- .next-staging
+            for generated_path in next-env.d.ts tsconfig.json; do
+              if git ls-files --error-unmatch "$generated_path" >/dev/null 2>&1; then
+                git restore --source=HEAD --worktree --staged -- "$generated_path" 2>/dev/null \
+                  || git checkout HEAD -- "$generated_path" 2>/dev/null \
+                  || true
+              fi
+            done
             echo "After:"
             git status --porcelain || true
             if [ -n "$(git status --porcelain --untracked-files=normal -- . \

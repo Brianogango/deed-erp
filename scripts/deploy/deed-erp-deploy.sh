@@ -199,6 +199,16 @@ done
 # Mailbox SMTP ops leave timestamped .env backups; never touch live .env.
 rm -f -- .env.bak-mailbox-*
 rm -rf -- "$STAGED_BUILD_PATH"
+# `next build` rewrites these tracked files (Next 15 also touches tsconfig
+# include). Restore HEAD so a previous deploy cannot block the next one.
+# Never restore .env or other unlisted paths.
+for generated_path in next-env.d.ts tsconfig.json; do
+  if git ls-files --error-unmatch "$generated_path" >/dev/null 2>&1; then
+    git restore --source=HEAD --worktree --staged -- "$generated_path" 2>/dev/null \
+      || git checkout HEAD -- "$generated_path" 2>/dev/null \
+      || true
+  fi
+done
 [[ -z "$(git status --porcelain --untracked-files=normal -- . \
   ':(exclude).next-previous' ':(exclude).next-staging')" ]] || {
   log "Application worktree is dirty; refusing to overwrite local changes"

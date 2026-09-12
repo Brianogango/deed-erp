@@ -1,6 +1,7 @@
 node_modules/
 .next/
 .next-staging/
+.next-previous/
 .next-old/
 .env
 .env.local
