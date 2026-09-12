@@ -67,8 +67,8 @@ export async function issueSessionResponse(
     const userAgent = request.headers.get('user-agent')?.slice(0, 500) || null
     const expiresAt = new Date(issuedAt.getTime() + SESSION_AGE * 1000)
     await sql`
-      INSERT INTO user_sessions (user_id, token_hash, ip_address, user_agent, expires_at, created_at)
-      VALUES (${user.id}, ${tokenHash}, ${ipAddress}, ${userAgent}, ${expiresAt}, ${issuedAt})
+      INSERT INTO user_sessions (id, user_id, token_hash, ip_address, user_agent, expires_at, created_at)
+      VALUES (gen_random_uuid(), ${user.id}, ${tokenHash}, ${ipAddress}, ${userAgent}, ${expiresAt}, ${issuedAt})
       ON CONFLICT (token_hash) DO UPDATE SET
         ip_address = EXCLUDED.ip_address,
         user_agent = EXCLUDED.user_agent,
