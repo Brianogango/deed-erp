@@ -2366,6 +2366,14 @@ function SalesContent() {
                             >
                               {postingInvoiceId === invoicePrimaryAction.invoiceId ? 'Confirming…' : 'Confirm invoice'}
                             </button>
+                          ) : invoicePrimaryAction.kind === 'payment' ? (
+                            <button
+                              type="button"
+                              className="sp-btn sp-btn-primary sales-action-primary"
+                              onClick={() => router.push(financeInvoicePath(invoicePrimaryAction.invoiceId))}
+                            >
+                              Register payment
+                            </button>
                           ) : invoicePrimaryAction.kind === 'view' ? (
                             <button
                               type="button"
