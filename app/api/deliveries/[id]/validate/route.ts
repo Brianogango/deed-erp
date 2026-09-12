@@ -9,10 +9,12 @@ import {
   deliveryFulfillmentWriteError,
   effectiveDeliveryLineQty,
 } from '@/lib/odoo-sales-flow'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { id } = await resolveRouteParams(params)
 
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
@@ -24,7 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const outcome = await withAppStateKeyLock('deed_deliveries', async () => {
     const state = await loadAppState(['deed_deliveries'])
     const deliveries: any[] = Array.isArray(state['deed_deliveries']) ? state['deed_deliveries'] as any[] : []
-    const idx = deliveries.findIndex(d => d.id === params.id)
+    const idx = deliveries.findIndex(d => d.id === id)
     if (idx === -1) return { status: 404 as const, error: 'Delivery not found' }
 
     const previous = deliveries[idx]
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const next = {
       ...previous,
       ...body,
-      id: params.id,
+      id,
       status: nextStatus,
       lines: healedLines,
     }
@@ -75,8 +77,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
 
       const stockResult = await applyDeliveryStockMutation({
-        deliveryId: params.id,
-        deliveryRef: String(previous?.ref || params.id),
+        deliveryId: id,
+        deliveryRef: String(previous?.ref || id),
         saleOrderId: String(previous?.saleOrderId ?? body.saleOrderId ?? ''),
         lines: doneLines,
         userId: session.user?.id,
@@ -88,14 +90,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       let valuation: Awaited<ReturnType<typeof postDeliveryValuationFromPayload>>
       try {
         valuation = await postDeliveryValuationFromPayload({
-          deliveryRef: String(previous?.ref || params.id),
+          deliveryRef: String(previous?.ref || id),
           lines: healedLines,
           userId: session.user?.id,
         })
       } catch (err) {
         await reverseDeliveryStockMutation({
-          deliveryId: params.id,
-          deliveryRef: String(previous?.ref || params.id),
+          deliveryId: id,
+          deliveryRef: String(previous?.ref || id),
           saleOrderId: String(previous?.saleOrderId ?? body.saleOrderId ?? ''),
           lines: doneLines,
         })
@@ -106,8 +108,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
       if (!valuation.ok) {
         await reverseDeliveryStockMutation({
-          deliveryId: params.id,
-          deliveryRef: String(previous?.ref || params.id),
+          deliveryId: id,
+          deliveryRef: String(previous?.ref || id),
           saleOrderId: String(previous?.saleOrderId ?? body.saleOrderId ?? ''),
           lines: doneLines,
         })

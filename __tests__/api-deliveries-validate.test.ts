@@ -69,6 +69,11 @@ beforeEach(() => {
 })
 
 describe('POST /api/deliveries/:id/validate', () => {
+  it('accepts Next 15 promise params', async () => {
+    const res = await POST(postReq({ status: 'done' }), { params: Promise.resolve({ id: DELIVERY_ID }) })
+    expect(res.status).toBe(200)
+  })
+
   it('serializes the read-modify-write and stock mutation under the deed_deliveries lock', async () => {
     const res = await POST(postReq({ status: 'done' }), params)
     expect(res.status).toBe(200)

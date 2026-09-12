@@ -5,6 +5,7 @@ import { isRoleAllowed } from './auth/authorization'
 import type { PublicUser } from './auth/types'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from './server-store'
 import { parsePaginationParams, paginateArray } from './api-pagination'
+import { resolveRouteParams, type RouteParams } from './route-params'
 
 type AnyRecord = Record<string, unknown>
 
@@ -179,23 +180,24 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
  * Returns a PATCH handler for `/api/<resource>/[id]`.
  */
 export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
-  return async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  return async function PATCH(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
     const { session, error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
 
+    const { id } = await resolveRouteParams(params)
     const body = await parseBody(request)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
     const run = async () => {
       const items = await readCollection<T>(config.storeKey)
-      const idx = items.findIndex(i => (i as AnyRecord)['id'] === params.id)
+      const idx = items.findIndex(i => (i as AnyRecord)['id'] === id)
       if (idx === -1) return { notFound: true as const }
 
       const previous = items[idx]
       if (config.recordAccess && (!session || !config.recordAccess(session.user, previous, 'patch'))) {
         return { forbidden: true as const }
       }
-      const next = { ...previous, ...body, id: params.id } as T
+      const next = { ...previous, ...body, id } as T
       if (config.validateWrite) {
         const writeError = config.validateWrite(next, previous)
         if (writeError) return { error: writeError }
@@ -220,12 +222,13 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
  * Returns a DELETE handler for `/api/<resource>/[id]`.
  */
 export function makeDeleteHandler<T extends object>(config: CrudConfig<T>) {
-  return async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+  return async function DELETE(_: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
     const { session, error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
 
+    const { id } = await resolveRouteParams(params)
     const items = await readCollection<T>(config.storeKey)
-    const existing = items.find(i => (i as AnyRecord)['id'] === params.id)
+    const existing = items.find(i => (i as AnyRecord)['id'] === id)
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (config.recordAccess && (!session || !config.recordAccess(session.user, existing, 'delete'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -235,7 +238,7 @@ export function makeDeleteHandler<T extends object>(config: CrudConfig<T>) {
       if (deleteError) return NextResponse.json({ error: deleteError }, { status: 409 })
     }
 
-    const filtered = items.filter(i => (i as AnyRecord)['id'] !== params.id)
+    const filtered = items.filter(i => (i as AnyRecord)['id'] !== id)
     await writeCollection(config.storeKey, filtered)
     return NextResponse.json({ ok: true })
   }

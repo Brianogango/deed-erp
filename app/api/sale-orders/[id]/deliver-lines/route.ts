@@ -13,6 +13,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 const DELIVER_ROLES = ['director', 'admin_officer', 'inventory_officer', 'sales_rep']
 
@@ -51,12 +52,13 @@ async function broadcastSaleOrders() {
   } catch {}
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!DELIVER_ROLES.includes(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+    const { id } = await resolveRouteParams(params)
 
     const body = await request.json()
     const lineUpdates: Array<{ id: string; qtyDelivered: number }> = body.lines ?? []
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Fetch the order and verify it is a confirmed Sales Order
     let order = await prisma.saleOrder.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { items: true },
     })
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -107,7 +109,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Report whether all lines are fully delivered; the SO status itself
     // stays "sale" — delivery state is tracked on the delivery records.
     const updatedItems = await prisma.saleOrderItem.findMany({
-      where: { saleOrderId: params.id },
+      where: { saleOrderId: id },
     })
     const allDelivered = updatedItems.every(item => item.qtyDelivered >= item.qty)
 

@@ -111,6 +111,7 @@ import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
+import { fulfillmentSaleOrderPatch } from '@/lib/sales/fulfillment-sale-order-patch'
 import { omitLockVersion, readLockVersionFromResponse } from '@/lib/optimistic-lock'
 import { resolveAddSaleOrderLineTaxRate } from '@/lib/sale-order-line-tax'
 import {
@@ -12809,10 +12810,10 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${s.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...updated,
-            fulfillmentTrim: cancelRemaining && trimmed.changed,
-          }),
+          body: JSON.stringify(fulfillmentSaleOrderPatch(
+            updated as unknown as Record<string, unknown>,
+            { cancelRemaining, trimmedChanged: trimmed.changed },
+          )),
         })
         return updated
       }))

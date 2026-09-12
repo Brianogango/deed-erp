@@ -98,6 +98,22 @@ describe('onWritten dual-write hook opt-in', () => {
     expect(onWritten).toHaveBeenCalledWith({ id: '1', name: 'b' }, 'patch')
   })
 
+  it('resolves Next 15 promise params on PATCH', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_widgets: [{ id: '1', name: 'a' }] })
+    const { PATCH } = makeDetailHandlers<{ id: string; name: string }>({
+      storeKey: 'deed_widgets',
+      build: () => 'unused' as any,
+    })
+    const req = new NextRequest('http://localhost/api/widgets/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'b' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const res = await PATCH(req, { params: Promise.resolve({ id: '1' }) })
+    expect(res.status).toBe(200)
+    expect((await res.json()).item).toEqual({ id: '1', name: 'b' })
+  })
+
   it('never fails the request when onWritten rejects', async () => {
     mockLoadAppState.mockResolvedValue({ deed_widgets: [] })
     const onWritten = vi.fn().mockRejectedValue(new Error('mirror boom'))
