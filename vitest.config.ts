@@ -3,8 +3,8 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
-  esbuild: {
-    jsx: 'automatic',
+  oxc: {
+    jsx: { runtime: 'automatic' },
   },
   test: {
     environment: 'node',
