@@ -40,6 +40,11 @@ const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
  * Atomic SO → draft customer invoice.
  * Locks line qtyInvoiced on the Prisma sale order items in the same transaction
  * (except down-payment invoices, which do not consume product qtyInvoiced).
+ *
+ * DOMAIN BOUNDARY: this command reads validated delivery evidence to calculate
+ * invoiceable quantity. It must never reserve stock, validate a delivery,
+ * mutate serial availability, or post another stock movement.
+ * See docs/domain/SALES_ORDER_WORKFLOW.md.
  */
 export async function POST(
   request: NextRequest,
