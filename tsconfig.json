@@ -33,12 +33,12 @@
     "**/*.ts",
     "**/*.tsx",
     "**/*.d.ts",
-    ".next/types/**/*.ts",
-    ".next-staging/types/**/*.ts"
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "backups",
-    ".next"
+    ".next",
+    ".next-staging"
   ]
 }

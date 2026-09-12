@@ -245,6 +245,10 @@ pnpm install --frozen-lockfile
 
 log "--- Building into staging while current .next remains live"
 rm -rf -- "$STAGED_BUILD_PATH"
+# Live .next/types stay in tsconfig include. If they sit next to a
+# NEXT_DIST_DIR=.next-staging typecheck, Next 15 PageProps (Promise)
+# fail against the previous build's generated validators.
+rm -rf -- "$APP_DIR/.next/types"
 # Node's default old-space cap (~2 GiB on this 8 GiB host) OOM-kills
 # `next build`; raise it for the build only, keeping headroom for the live
 # PM2 workers. An operator-supplied NODE_OPTIONS always wins, and the

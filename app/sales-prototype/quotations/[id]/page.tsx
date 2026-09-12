@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { use, useMemo, useState } from 'react'
 import {
   DEMO_CUSTOMER,
   DEMO_QUOTE_LINES,
@@ -20,8 +20,9 @@ import {
   useProtoToast,
 } from '@/components/sales-prototype/shell'
 
-export default function QuotationDetailPrototype({ params }: { params: { id: string } }) {
-  const quote = DEMO_QUOTATIONS.find(q => q.id === params.id) ?? DEMO_QUOTATIONS[0]
+export default function QuotationDetailPrototype({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+  const quote = DEMO_QUOTATIONS.find(q => q.id === id) ?? DEMO_QUOTATIONS[0]
   const [tab, setTab] = useState('Order Lines')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const totals = useMemo(() => quoteTotals(), [])

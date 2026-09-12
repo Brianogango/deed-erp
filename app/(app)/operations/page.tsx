@@ -17,10 +17,11 @@ function toQuery(searchParams?: SearchParams) {
 }
 
 /** Legacy alias — canonical inventory lives at /inventory. */
-export default function OperationsAliasPage({
+export default async function OperationsAliasPage({
   searchParams,
 }: {
-  searchParams?: SearchParams
+  searchParams?: Promise<SearchParams>
 }) {
-  redirect(`/inventory${toQuery(searchParams)}`)
+  const resolved = searchParams ? await searchParams : undefined
+  redirect(`/inventory${toQuery(resolved)}`)
 }
