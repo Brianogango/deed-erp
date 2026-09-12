@@ -168,9 +168,19 @@ export async function GET(request: Request) {
         }
       : {}
 
+    const ownershipFilter = role === 'sales_rep'
+      ? {
+          OR: [
+            { createdById: session.user.id },
+            { salespersonId: session.user.id },
+          ],
+        }
+      : {}
+
     const where = {
       ...(status ? { status } : {}),
       ...(q ? searchFilter : {}),
+      ...ownershipFilter,
     }
 
     const [total, orders] = await Promise.all([
