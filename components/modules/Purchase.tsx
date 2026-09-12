@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react'
 import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import {
   Fa, faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint,
@@ -20,7 +20,7 @@ import PurchaseReturnsTab from './purchase/PurchaseReturnsTab'
 import POFormView from './purchase/POFormView'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 import { ScanInputRow } from '@/components/BarcodeScanner'
-import { parseScanPayload } from '@/lib/barcode-scan'
+import { describeGrnSerialMerge, mergeGrnSerials, parseGrnSerialList } from '@/lib/purchase/grn-serials'
 import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   filterPurchaseOrders,
@@ -210,6 +210,7 @@ function PurchaseContent() {
   const [grnLines,             setGrnLines]             = useState<Receipt['lines']>([])
   const [destLocation,         setDestLocation]         = useState<LocationId>('warehouse')
   const [serialInputs,         setSerialInputs]         = useState<Record<number, string>>({})
+  const [bulkSerialInputs,     setBulkSerialInputs]     = useState<Record<number, string>>({})
   // accessories per serial string: { 'SN001': ['Charger','Bag'] }
   const [serialAccessories,    setSerialAccessories]    = useState<Record<string, string[]>>({})
   const [serialAccessoryNotes, setSerialAccessoryNotes] = useState<Record<string, string>>({})
@@ -554,6 +555,7 @@ function PurchaseContent() {
     setGrnLines(preLines)
     setDestLocation(draft.destinationLocation)
     setSerialInputs({})
+    setBulkSerialInputs({})
     setSerialSpecs(preSpecs)
     setSubView('receive')
   }
@@ -613,19 +615,20 @@ function PurchaseContent() {
     hydrateReceive(draft)
   }
 
-  const addSerial = (lineIdx: number, serial: string) => {
-    const parsed = parseScanPayload(serial)
-    // At GRN we capture manufacturer serials; prefer SERIAL field from QR, else raw.
-    const val = (parsed.serial || parsed.normalized).toUpperCase()
-    if (!val) return
-    setGrnLines(prev => prev.map((l, i) => {
-      if (i !== lineIdx) return l
-      if (l.serials.includes(val))        { showToast(`${val} already added`, 'error'); return l }
-      if (l.serials.length >= l.qtyReceived) { showToast('All serials entered for this line', 'error'); return l }
-      return { ...l, serials: [...l.serials, val] }
-    }))
+  const addSerials = (lineIdx: number, raw: string) => {
+    const incoming = parseGrnSerialList(raw)
+    if (!incoming.length) return false
+    const line = grnLines[lineIdx]
+    if (!line) return false
+    const merged = mergeGrnSerials({ existing: line.serials, incoming, qtyReceived: line.qtyReceived })
+    if (merged.added.length) {
+      setGrnLines(prev => prev.map((l, i) => i !== lineIdx ? l : { ...l, serials: merged.next }))
+    }
+    const notice = describeGrnSerialMerge(merged)
+    if (notice) showToast(notice.message, notice.kind)
     setSerialInputs(p => ({ ...p, [lineIdx]: '' }))
     serialRefs.current[lineIdx]?.focus()
+    return merged.added.length > 0
   }
 
   const removeSerial = (lineIdx: number, serial: string) => {
@@ -929,7 +932,7 @@ function PurchaseContent() {
           </div>
           <div className="flex-1 p-3 rounded-lg text-xs" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
             <p className="font-semibold mb-1.5 text-t1"><Fa icon={faClipboardList} /> Receiving Instructions</p>
-            <p className="text-t3">• Serialized products require every serial to be scanned before validation</p>
+            <p className="text-t3">• Serialized products need every serial before validation — scan one-by-one or paste a list</p>
             <p className="text-t3 mt-0.5">• Serials imported from CSV are pre-filled — verify and correct if needed</p>
             <p className="text-t3 mt-0.5">• Flag units received with issues to route them to the refurbishment queue</p>
             <p className="text-t3 mt-0.5">• Stock only updates after GRN validation</p>
@@ -939,6 +942,7 @@ function PurchaseContent() {
         {grnLines.map((line, idx) => {
           const prod = products.find(p => p.id === line.productId)
           const isComplete = !line.requiresSerial || line.serials.length >= line.qtyReceived
+          const pastedSerials = parseGrnSerialList(bulkSerialInputs[idx] ?? '')
           return (
             <div key={idx} className="card overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--bg-muted)' }}>
@@ -964,8 +968,9 @@ function PurchaseContent() {
                         if (val > line.qtyExpected) {
                           showToast(`Cannot receive more than ${line.qtyExpected} units for ${line.productName}`, 'error')
                         }
+                        const qtyReceived = Math.min(val, line.qtyExpected)
                         setGrnLines(prev => prev.map((l, i) =>
-                          i !== idx ? l : { ...l, qtyReceived: Math.min(val, l.qtyExpected), serials: [] }
+                          i !== idx ? l : { ...l, qtyReceived, serials: l.serials.slice(0, qtyReceived) }
                         ))
                       }} />
                   </div>
@@ -981,14 +986,54 @@ function PurchaseContent() {
                     <ScanInputRow
                       value={serialInputs[idx] ?? ''}
                       onChange={v => setSerialInputs(p => ({ ...p, [idx]: v.toUpperCase() }))}
-                      onSubmit={v => addSerial(idx, v)}
-                      onCameraScan={code => addSerial(idx, code)}
+                      onSubmit={v => addSerials(idx, v)}
+                      onCameraScan={code => addSerials(idx, code)}
+                      onPasteText={text => {
+                        if (parseGrnSerialList(text).length < 2) return false
+                        addSerials(idx, text)
+                        return true
+                      }}
                       placeholder="Scan or type serial number…"
                       continuous
                       cameraTitle={`Scan serials — ${line.productName}`}
                       inputRef={el => { serialRefs.current[idx] = el }}
                     />
                   </div>
+                  {line.qtyReceived > 1 && (
+                    <div className="mb-3 rounded-lg border p-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-1.5">
+                        Paste serials
+                      </p>
+                      <Textarea
+                        value={bulkSerialInputs[idx] ?? ''}
+                        onChange={v => setBulkSerialInputs(p => ({ ...p, [idx]: v }))}
+                        rows={Math.min(8, Math.max(3, line.qtyReceived - line.serials.length + 1))}
+                        placeholder={'One per line, or comma-separated\nSN001\nSN002'}
+                      />
+                      <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+                        <p className="text-[10px] text-t3">
+                          {pastedSerials.length} unique in paste
+                          {line.serials.length < line.qtyReceived
+                            ? ` · ${line.qtyReceived - line.serials.length} still needed`
+                            : ' · line is full'}
+                        </p>
+                        <button
+                          type="button"
+                          className="btn-outline px-3 py-1.5 text-[11px]"
+                          disabled={
+                            pastedSerials.length === 0
+                            || line.serials.length >= line.qtyReceived
+                          }
+                          onClick={() => {
+                            const added = addSerials(idx, bulkSerialInputs[idx] ?? '')
+                            if (added) setBulkSerialInputs(p => ({ ...p, [idx]: '' }))
+                          }}
+                        >
+                          Add pasted serials
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {line.serials.length > 0 ? (
                     <div className="flex flex-col gap-2">
                       {line.serials.map(s => {

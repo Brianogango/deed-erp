@@ -153,6 +153,8 @@ type ScanInputRowProps = {
   inputRef?: React.Ref<HTMLInputElement>
   /** Called when camera decodes a code (parent usually submits). */
   onCameraScan?: (code: string) => void
+  /** Return true when the paste was handled (e.g. a multi-serial list). */
+  onPasteText?: (text: string) => boolean
   cameraTitle?: string
   continuous?: boolean
   className?: string
@@ -168,6 +170,7 @@ export function ScanInputRow({
   disabled,
   inputRef,
   onCameraScan,
+  onPasteText,
   cameraTitle,
   continuous = false,
   className = '',
@@ -203,6 +206,12 @@ export function ScanInputRow({
           disabled={disabled}
           autoComplete="off"
           onChange={e => onChange(e.target.value)}
+          onPaste={e => {
+            const text = e.clipboardData.getData('text')
+            if (text && onPasteText?.(text)) {
+              e.preventDefault()
+            }
+          }}
           onKeyDown={e => {
             if (e.key === 'Enter') {
               e.preventDefault()
