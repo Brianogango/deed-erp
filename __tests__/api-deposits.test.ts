@@ -142,10 +142,10 @@ describe('POST /api/deposits', () => {
     })
   })
 
-  it('keeps a client-supplied reference when present', async () => {
+  it('uses a server-generated reference when the client supplies one', async () => {
     await POST(postReq({ ...minValidBody, ref: 'DEP/CUSTOM-1' }))
-    expect(mockCreateDepositWithReceipt).toHaveBeenCalledWith(expect.objectContaining({ ref: 'DEP/CUSTOM-1' }))
-    expect(mockGetNextDepositRef).not.toHaveBeenCalled()
+    expect(mockCreateDepositWithReceipt).toHaveBeenCalledWith(expect.objectContaining({ ref: 'DEP/0002' }))
+    expect(mockGetNextDepositRef).toHaveBeenCalledOnce()
   })
 
   it('returns 422 when customerId is missing', async () => {
