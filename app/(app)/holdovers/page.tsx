@@ -1,3 +1,5 @@
+'use client'
+
 import dynamic from 'next/dynamic'
 import { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
 const Holdovers = dynamic(() => import('@/components/modules/Holdovers'), { loading: () => <ModuleSkeleton />, ssr: false })
