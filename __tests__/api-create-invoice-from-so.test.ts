@@ -186,6 +186,35 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     expect(body.invoice.total).toBe(11600)
   })
 
+  it('creates an invoice from validated delivery evidence without rechecking delivered serial availability', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [],
+      deed_deliveries: [{
+        id: 'delivery-1',
+        saleOrderId: ORDER_ID,
+        status: 'done',
+        lines: [{
+          productId: 'prod-1',
+          qty: 1,
+          qtyDone: 1,
+          // This serial has already left available stock. The invoice command
+          // consumes the validated delivery evidence, never the live stock pool.
+          serialIds: ['serial-already-delivered'],
+        }],
+      }],
+    })
+
+    const res = await POST(
+      new NextRequest('http://localhost/api/sale-orders/' + ORDER_ID + '/create-invoice', { method: 'POST' }),
+      { params: { id: ORDER_ID } },
+    )
+
+    expect(res.status).toBe(200)
+    expect((await res.json()).invoice.id).toBe(INVOICE_ID)
+    expect(mockPrisma.invoice.create).toHaveBeenCalledOnce()
+    expect(mockPrisma.saleOrderItem.updateMany).toHaveBeenCalledOnce()
+  })
+
   it('mirrors pretax line subtotals into deed_invoices (not tax-inclusive lineTotal)', async () => {
     await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     const mirrorCall = mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)
