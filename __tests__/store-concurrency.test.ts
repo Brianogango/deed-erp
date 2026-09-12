@@ -28,7 +28,7 @@ const financeSession = {
     name: 'Finance Officer',
     username: 'finance',
     role: 'finance_officer',
-    modules: ['accounting', 'sales', 'contacts', 'inventory'],
+    modules: ['accounting', 'sales', 'contacts', 'inventory', 'pos'],
   },
 }
 
