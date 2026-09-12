@@ -10,7 +10,7 @@ import { saleOrderPersistBody } from '@/lib/sale-order-persist'
 export function fulfillmentSaleOrderPatch(
   order: Record<string, unknown>,
   opts?: { cancelRemaining?: boolean; trimmedChanged?: boolean },
-) {
+): Record<string, unknown> & { fulfillmentTrim: boolean } {
   return {
     ...saleOrderPersistBody(order),
     fulfillmentTrim: Boolean(opts?.cancelRemaining && opts?.trimmedChanged),
