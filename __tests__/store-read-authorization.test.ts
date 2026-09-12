@@ -42,7 +42,7 @@ describe('collaborative wholesale store read authorization', () => {
     ])
   })
 
-  it('returns every sale order to a sales rep', () => {
+  it('returns only owned or assigned sale orders to a sales rep', () => {
     const orders = [
       { id: 'mine', createdByUserId: 'rep-1' },
       { id: 'assigned', salespersonId: 'rep-1' },
@@ -50,7 +50,7 @@ describe('collaborative wholesale store read authorization', () => {
       { id: 'legacy-without-owner' },
     ]
     const result = filterStoreValueForRole(user('sales_rep', ['sales'], 'rep-1'), 'deed_saleOrders', orders) as any[]
-    expect(result.map(order => order.id)).toEqual(['mine', 'assigned', 'other', 'legacy-without-owner'])
+    expect(result.map(order => order.id)).toEqual(['mine', 'assigned'])
     // Writes still merge so a stale partial cache cannot wipe the ledger.
     expect(hasFullStoreContentAccess(user('sales_rep', ['sales']), 'deed_saleOrders')).toBe(false)
   })
@@ -66,10 +66,10 @@ describe('collaborative wholesale store read authorization', () => {
     expect(hasFullStoreContentAccess(user('sales_rep', ['crm']), 'deed_opportunities')).toBe(false)
   })
 
-  it('canAccessRecord lets a sales rep open any sale order but still owns opportunities', () => {
+  it('canAccessRecord limits sales reps to their sale orders and opportunities', () => {
     expect(canAccessRecord('sales_rep', 'sale_order', { createdByUserId: 'rep-1' }, 'rep-1')).toBe(true)
     expect(canAccessRecord('sales_rep', 'sale_order', { salespersonId: 'rep-1' }, 'rep-1')).toBe(true)
-    expect(canAccessRecord('sales_rep', 'sale_order', { createdByUserId: 'rep-2' }, 'rep-1')).toBe(true)
+    expect(canAccessRecord('sales_rep', 'sale_order', { createdByUserId: 'rep-2' }, 'rep-1')).toBe(false)
     expect(canAccessRecord('finance_officer', 'sale_order', { createdByUserId: 'rep-2' }, 'rep-1')).toBe(true)
     expect(canAccessRecord('technician', 'sale_order', { createdByUserId: 'rep-1' }, 'tech-1')).toBe(false)
     expect(canAccessRecord('sales_rep', 'opportunity', { ownerId: 'rep-1' }, 'rep-1')).toBe(true)
