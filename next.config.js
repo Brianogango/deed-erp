@@ -17,7 +17,10 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  // Next.js webpack/Fast Refresh evaluates module factories in the browser.
+  process.env.NODE_ENV === 'production'
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
@@ -26,7 +29,7 @@ const CONTENT_SECURITY_POLICY = [
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "media-src 'self' blob: https:",
-  "upgrade-insecure-requests",
+  ...(process.env.NODE_ENV === 'production' ? ["upgrade-insecure-requests"] : []),
 ].join('; ')
 
 const SECURITY_HEADERS = [
