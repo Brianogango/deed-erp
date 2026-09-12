@@ -216,6 +216,7 @@ import { nextSseRetryMs, nextSyncRetryMs } from '@/lib/store-sync-retry'
 import { repairOutsourceReadiness, repairHasLoggedDiagnosis } from '@/lib/repair-outsource'
 import { applyLoggedDiagnosis, type DiagnosisLogRepairPatch } from '@/lib/repair-diagnosis-log'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
+import { evaluateRepairTransition } from '@/lib/repair-transition-policy'
 import { assertFiniteSequenceNext, repairDatesWriteError } from '@/lib/data-validation'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 import { EXCHANGE_RETURN_LOCATION } from '@/lib/aftersales/exchange-stock'
@@ -17203,6 +17204,12 @@ const storeCtx: AppState = {
         return
       }
 
+      const transition = evaluateRepairTransition(repair.status, newStatus)
+      if (!transition.allowed) {
+        showToast(transition.reason, 'error')
+        return
+      }
+
       const blockedStatuses: RepairStatus[] = ['in_repair', 'qc', 'ready', 'invoiced', 'verified_released', 'delivered', 'collected', 'closed']
       if (blockedStatuses.includes(newStatus) && blockIfOutsourced(repairId, `set status to ${newStatus}`)) {
         return
@@ -17221,9 +17228,8 @@ const storeCtx: AppState = {
           return updated
         }))
         }
-        if (repair.invoiceId) {
-          setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
-        }
+      // Linked invoices are immutable here. Finance handles cancellation or
+      // credit/debit notes explicitly in the Invoice module.
       }
 
       // Update repair status
@@ -17704,9 +17710,8 @@ const storeCtx: AppState = {
             return updated
           }))
       }
-      if (repair.invoiceId) {
-        setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
-      }
+      // Linked invoices are immutable here. Finance handles cancellation or
+      // credit/debit notes explicitly in the Invoice module.
 
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
@@ -17853,9 +17858,8 @@ const storeCtx: AppState = {
           return updated
         }))
       }
-      if (repair.invoiceId) {
-        setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
-      }
+      // Linked invoices are immutable here. Finance handles cancellation or
+      // credit/debit notes explicitly in the Invoice module.
 
       let buyBackId: string | undefined
       let buyBackRef: string | undefined
@@ -18102,11 +18106,8 @@ const storeCtx: AppState = {
             return updated
           }))
         }
-        if (repair.invoiceId) {
-          setInvoices(p => p.map(inv => inv.id === repair.invoiceId && inv.status !== 'cancelled'
-            ? { ...inv, status: 'cancelled' }
-            : inv))
-        }
+      // Linked invoices are immutable here. Finance handles cancellation or
+      // credit/debit notes explicitly in the Invoice module.
       }
 
       const bb: BuyBack = {
