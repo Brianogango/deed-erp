@@ -356,7 +356,7 @@ function SalesContent() {
     approvalRequests,
     createSaleOrder, updateSaleOrder, confirmSO, ensureWaitingDeliveryForSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine, moveSOLine, addSOSection,
-    assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, postInvoice, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
+    assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO, createNewSOVersion,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
@@ -506,7 +506,6 @@ function SalesContent() {
   const [invoiceWizardPercent, setInvoiceWizardPercent] = useState('30')
   const [invoiceWizardAmount, setInvoiceWizardAmount] = useState('')
   const [creatingWizardInvoice, setCreatingWizardInvoice] = useState(false)
-  const [postingInvoiceId, setPostingInvoiceId] = useState<string | null>(null)
   const [partialInvoiceQtys, setPartialInvoiceQtys] = useState<Record<string, string>>({})
   const [creatingPartialInvoice, setCreatingPartialInvoice] = useState(false)
   const [creatingNewVersion, setCreatingNewVersion] = useState(false)
