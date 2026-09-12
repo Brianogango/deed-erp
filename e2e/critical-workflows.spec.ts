@@ -227,13 +227,59 @@ test.describe('4. POS session → transaction → close session', () => {
     productId = product.id
     const vendor = await createE2eVendor(api, `E2E POS Vendor ${tag}`)
 
-    // Seed 3 units into warehouse so POS can deduct.
+    // Receive stock through the real PO → GRN chain. The validation route
+    // intentionally rejects detached receipts, so this setup preserves that
+    // production control while giving POS legitimate on-hand stock.
+    const poRes = await api.post('/api/purchase-orders', {
+      data: {
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+        lines: [{
+          productId: product.id,
+          productName: product.name,
+          qty: 3,
+          qtyReceived: 0,
+          unitPrice: 100,
+          taxRate: 16,
+          requiresSerial: false,
+        }],
+      },
+    })
+    const poBody = await jsonOrThrow(poRes, 'create POS stock PO')
+    const po = poBody.item ?? poBody
+    const confirm = await api.patch(`/api/purchase-orders/${po.id}`, { data: { status: 'confirmed' } })
+    await jsonOrThrow(confirm, 'confirm POS stock PO')
+
+    const receiptId = `rec_${tag}`
+    const grnRes = await api.post('/api/receipts', {
+      data: {
+        id: receiptId,
+        poId: po.id,
+        poRef: po.ref,
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+        status: 'draft',
+        date: new Date().toISOString().slice(0, 10),
+        destinationLocation: 'warehouse',
+        lines: [{
+          productId: product.id,
+          productName: product.name,
+          qtyExpected: 3,
+          qtyReceived: 0,
+          requiresSerial: false,
+          serials: [],
+        }],
+      },
+    })
+    const grnBody = await jsonOrThrow(grnRes, 'create POS stock GRN')
+    const grn = grnBody.item ?? grnBody
     const receive = await api.post('/api/inventory/validate-receipt', {
       data: {
         applyStock: true,
         destination: 'warehouse',
-        receiptId: `rec_${tag}`,
-        receiptRef: `REC/${tag}`,
+        receiptId,
+        receiptRef: grn.ref,
+        purchaseOrderId: po.id,
         lines: [{
           productId: product.id,
           productName: product.name,
@@ -245,7 +291,6 @@ test.describe('4. POS session → transaction → close session', () => {
     })
     const stocked = await jsonOrThrow(receive, 'seed POS stock')
     expect(stocked.stockApplied).toBe(true)
-    void vendor
 
     const openedAt = new Date().toISOString()
     const open = await api.post('/api/store', {
@@ -405,7 +450,7 @@ test.describe('5. Inventory receipt (GRN) → stock level update', () => {
       },
     })
     const poBody = await jsonOrThrow(poRes, 'create PO')
-    const po = poBody.item
+    const po = poBody.item ?? poBody
     expect(po.id).toBeTruthy()
     expect(po.ref).toBeTruthy()
 
