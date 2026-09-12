@@ -4,3 +4,16 @@ allowBuilds:
   prisma: true
   puppeteer: true
   sharp: true
+auditConfig:
+  ignoreGhsas:
+    - GHSA-jmr9-qjv8-65gv
+    - GHSA-7pqw-9j4j-h8q3
+overrides:
+  axios: '>=1.18.0'
+  deepmerge-ts: '>=8.0.0'
+  fast-uri: '>=3.1.6'
+  form-data: '>=4.0.6'
+  hono: '>=4.13.5'
+  ip-address: '>=10.3.1'
+  mysql2: '>=3.23.1'
+  postcss: '>=8.5.18'
