@@ -25,8 +25,9 @@ Treat the documented invariants as binding:
 1. Do not change unrelated financial, accounting, inventory or commercial logic to solve a UI problem.
 2. Never make a posted invoice mutable.
 3. Keep Sales, Delivery, Invoice and Payment as independent state dimensions.
-4. Invoice creation may read validated delivery evidence but may not reserve, validate or repost delivery/stock.
-5. Derive actions from server-authoritative state. An official `INV/...` ref overrides a stale client `draft` mirror.
-6. Preserve quotation-to-Sales-Order identity and downstream lineage.
-7. Add/update regression tests and these documents with every approved workflow change.
-8. If the requested implementation conflicts with the canonical flow, stop and report the conflict instead of silently changing business logic.
+4. Sales may create and open a linked draft invoice, but only the Invoice module may post invoices, register/reconcile payments, or create accounting corrections.
+5. Invoice creation may read validated delivery evidence but may not reserve, validate or repost delivery/stock.
+6. Derive actions from server-authoritative state. An official `INV/...` ref overrides a stale client `draft` mirror.
+7. Preserve quotation-to-Sales-Order identity and downstream lineage.
+8. Add/update regression tests and these documents with every approved workflow change.
+9. If the requested implementation conflicts with the canonical flow, stop and report the conflict instead of silently changing business logic.
