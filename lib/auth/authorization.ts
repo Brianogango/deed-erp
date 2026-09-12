@@ -342,7 +342,13 @@ export function filterStoreValueForRole(
     // Everyone keeps their own claims (self-service submissions/tracking).
     return (value as StoreRow[]).filter(e => !!e?.submittedByUserId && e.submittedByUserId === user?.id)
   }
-  if (key === 'deed_saleOrders') return value
+  if (key === 'deed_saleOrders') {
+    if (role !== 'sales_rep') return value
+    return (value as StoreRow[]).filter(order => {
+      if (!user?.id) return false
+      return order.createdByUserId === user.id || order.salespersonId === user.id
+    })
+  }
   if (key === 'deed_repairs_v2') {
     return (value as StoreRow[]).filter(repair => {
       if (!user?.id) return false
@@ -394,7 +400,11 @@ export function canAccessRecord(
 
   switch (model) {
     case 'sale_order':
-      return ['director', 'admin_officer', 'finance_officer', 'technical_lead', 'sales_rep'].includes(normalizedRole)
+      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(normalizedRole)) return true
+      if (normalizedRole === 'sales_rep') {
+        return record.createdByUserId === userId || record.salespersonId === userId
+      }
+      return false
     case 'opportunity':
       if (['director', 'admin_officer', 'finance_officer', 'kilimall_officer', 'technical_lead'].includes(normalizedRole)) return true
       if (normalizedRole === 'sales_rep') return opportunityOwnedByUser(record, userId)
