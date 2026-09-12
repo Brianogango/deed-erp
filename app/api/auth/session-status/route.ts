@@ -148,8 +148,8 @@ export async function POST(request: NextRequest) {
 
     if (updatedRows.length === 0) {
       await sql`
-        INSERT INTO user_sessions (user_id, token_hash, ip_address, user_agent, expires_at, created_at)
-        VALUES (${session.user.id}, ${newHash}, ${ipAddress}, ${userAgent}, ${expiresAtDate}, NOW())
+        INSERT INTO user_sessions (id, user_id, token_hash, ip_address, user_agent, expires_at, created_at)
+        VALUES (gen_random_uuid(), ${session.user.id}, ${newHash}, ${ipAddress}, ${userAgent}, ${expiresAtDate}, NOW())
         ON CONFLICT (token_hash) DO UPDATE SET
           ip_address = EXCLUDED.ip_address,
           user_agent = EXCLUDED.user_agent,
