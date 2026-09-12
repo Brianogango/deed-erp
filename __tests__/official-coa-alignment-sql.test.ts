@@ -52,4 +52,11 @@ describe('migration 20260828_official_coa_alignment_safe.sql', () => {
   it('inserts official accounts only when the code is missing', () => {
     expect(sql).toMatch(/WHERE NOT EXISTS \(\s*SELECT 1 FROM account_codes a WHERE a\.code = v\.code\s*\)/)
   })
+
+  it('inserts dest codes so a second apply cannot steal newly seeded official sources', () => {
+    const insertBlock = sql.slice(sql.indexOf('INSERT INTO account_codes'))
+    for (const { to } of RENUMBER_UPDATES) {
+      expect(insertBlock, `missing INSERT for dest ${to}`).toContain(`('${to}',`)
+    }
+  })
 })

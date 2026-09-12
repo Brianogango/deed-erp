@@ -73,6 +73,19 @@ FROM (
   VALUES
     -- PPE / intangibles
     ('1705', 'Goodwill', 'asset', 'PPE - Cost', 'Cost'),
+    -- Receivables clearing / advances (also arrive via 1805/1810 rename)
+    ('1931', 'Employee Salary Advances', 'asset', 'Receivables - Other', 'Other Debtors'),
+    ('1933', 'Outstanding Receipts', 'asset', 'Receivables - Other', 'Other Debtors'),
+    -- Statutory / payroll payables (also arrive via 33xx/31xx rename)
+    ('3202', 'Outstanding Payments', 'liability', 'Current Liabilities', 'Payables'),
+    ('3302', 'PAYE Payable', 'liability', 'Current Liabilities', 'Statutory'),
+    ('3303', 'NSSF Payable', 'liability', 'Current Liabilities', 'Statutory'),
+    ('3304', 'NHIF / SHIF Payable', 'liability', 'Current Liabilities', 'Statutory'),
+    ('3305', 'Affordable Housing Levy Payable', 'liability', 'Current Liabilities', 'Statutory'),
+    ('3306', 'Pension Payable', 'liability', 'Current Liabilities', 'Statutory'),
+    ('3310', 'Net Payroll Payable', 'liability', 'Current Liabilities', 'Payroll'),
+    ('3312', 'Employee Reimbursements Payable', 'liability', 'Current Liabilities', 'Payroll'),
+    ('3313', 'Customer Credits', 'liability', 'Current Liabilities', 'Payables'),
     -- Non-current liabilities
     ('3401', 'Bank Loan', 'liability', 'Non-Current Liabilities', 'Non-Current Liabilities'),
     ('3402', 'Directors Account', 'liability', 'Non-Current Liabilities', 'Non-Current Liabilities'),
@@ -88,7 +101,8 @@ FROM (
     ('5011', 'Printer Consumables', 'revenue', 'Revenue - Products', 'Product'),
     ('5012', 'Networking Equipment', 'revenue', 'Revenue - Products', 'Product'),
     ('5013', 'Consumer Electronics', 'revenue', 'Revenue - Products', 'Product'),
-    -- Revenue — solutions & repair
+    -- Revenue — solutions & repair (5101 also arrives via 5003 rename)
+    ('5101', 'On-Demand IT', 'revenue', 'Revenue - Services', 'Solutions and Services'),
     ('5102', 'IT Consultancy', 'revenue', 'Revenue - Services', 'Solutions and Services'),
     ('5103', 'Managed IT Infrastructure', 'revenue', 'Revenue - Services', 'Solutions and Services'),
     ('5104', 'Server Administration', 'revenue', 'Revenue - Services', 'Solutions and Services'),
@@ -100,7 +114,8 @@ FROM (
     ('5110', 'Security Solutions', 'revenue', 'Revenue - Services', 'Solutions and Services'),
     ('5121', 'Hardware Support', 'revenue', 'Revenue - Services', 'Expert Repair Services'),
     ('5122', 'Software Support', 'revenue', 'Revenue - Services', 'Expert Repair Services'),
-    -- Other income (5201 from 5105; 5200/5203/5206 already present)
+    -- Other income (5201 also arrives via 5105 rename; 5200/5203/5206 already present)
+    ('5201', 'Dividends and Interest', 'revenue', 'Other Income', 'Other Income'),
     ('5202', 'Commission', 'revenue', 'Other Income', 'Other Income'),
     ('5204', 'Bad Debts Recovered', 'revenue', 'Other Income', 'Other Income'),
     ('5205', 'Discount Received', 'revenue', 'Other Income', 'Other Income'),
@@ -117,6 +132,7 @@ FROM (
     ('6111', 'Printer Consumables', 'expense', 'Local Purchases', 'Local Purchases'),
     ('6112', 'Networking Equipment', 'expense', 'Local Purchases', 'Local Purchases'),
     ('6113', 'Consumer Electronics', 'expense', 'Local Purchases', 'Local Purchases'),
+    ('6114', 'Trade-in Purchases', 'expense', 'Local Purchases', 'Trade-in'),
     -- Import purchases product grid
     ('6201', 'Laptops (Import)', 'expense', 'Import Purchases', 'Import Purchases'),
     ('6202', 'Accessories (Import)', 'expense', 'Import Purchases', 'Import Purchases'),
@@ -131,11 +147,14 @@ FROM (
     ('6211', 'Printer Consumables (Import)', 'expense', 'Import Purchases', 'Import Purchases'),
     ('6212', 'Networking Equipment (Import)', 'expense', 'Import Purchases', 'Import Purchases'),
     ('6213', 'Consumer Electronics (Import)', 'expense', 'Import Purchases', 'Import Purchases'),
-    -- Direct expenses (6305-6307 = inventory variance family)
+    -- Direct expenses (6305-6307 also arrive via rename; insert if missing)
     ('6301', 'Solutions and Expert Repair Services'' Costs', 'expense', 'Direct Expenses', 'Direct Expenses'),
     ('6302', 'Direct Salaries', 'expense', 'Direct Expenses', 'Direct Expenses'),
     ('6303', 'Direct Wages', 'expense', 'Direct Expenses', 'Direct Expenses'),
     ('6304', 'Direct Commission', 'expense', 'Direct Expenses', 'Direct Expenses'),
+    ('6305', 'Inventory Adjustment', 'expense', 'Direct Expenses', 'Inventory'),
+    ('6306', 'Inventory Write-off', 'expense', 'Direct Expenses', 'Inventory'),
+    ('6307', 'Purchase Price Difference', 'expense', 'Direct Expenses', 'Inventory'),
     -- Other direct expenses
     ('6401', 'Selling and Delivery', 'expense', 'Other Direct Expenses', 'Other Direct Expenses'),
     ('6402', 'Packaging Expenses', 'expense', 'Other Direct Expenses', 'Other Direct Expenses'),
@@ -150,22 +169,30 @@ FROM (
     ('6508', 'Rent and Service Charge', 'expense', 'Operating Expenses', 'Operating and Administrative'),
     ('6509', 'Legal Expenses', 'expense', 'Operating Expenses', 'Operating and Administrative'),
     ('6510', 'Telephone and Internet', 'expense', 'Operating Expenses', 'Operating and Administrative'),
+    ('6511', 'Subsistence and Accommodation', 'expense', 'Operating Expenses', 'Operating and Administrative'),
     ('6512', 'Bad Debts Written Off', 'expense', 'Operating Expenses', 'Operating and Administrative'),
     ('6513', 'Provision for Bad and Doubtful Debts', 'expense', 'Operating Expenses', 'Operating and Administrative'),
     ('6514', 'Gifts and Donations', 'expense', 'Operating Expenses', 'Operating and Administrative'),
     ('6516', 'Management Fees', 'expense', 'Operating Expenses', 'Operating and Administrative'),
+    ('6518', 'Office Expenses', 'expense', 'Operating Expenses', 'Operating and Administrative'),
     ('6519', 'Courier and Delivery', 'expense', 'Operating Expenses', 'Operating and Administrative'),
     ('6520', 'Discount Allowed', 'expense', 'Operating Expenses', 'Operating and Administrative'),
-    -- Employment expenses (6601/6606/6609 renumbered in)
+    ('6595', 'Cash Over/Short', 'expense', 'Operating Expenses', 'Operating and Administrative'),
+    ('6599', 'Other Operating Expenses', 'expense', 'Operating Expenses', 'Operating and Administrative'),
+    -- Employment expenses (also arrive via 62xx rename)
+    ('6601', 'Salaries', 'expense', 'Employment Expenses', 'Employment Expenses'),
     ('6602', 'Wages', 'expense', 'Employment Expenses', 'Employment Expenses'),
     ('6603', 'Commission', 'expense', 'Employment Expenses', 'Employment Expenses'),
     ('6604', 'Staff Bonus', 'expense', 'Employment Expenses', 'Employment Expenses'),
     ('6605', 'Training Expenses', 'expense', 'Employment Expenses', 'Employment Expenses'),
+    ('6606', 'Contribution to Pension Fund (NSSF)', 'expense', 'Employment Expenses', 'Employment Expenses'),
     ('6607', 'Leave Encashment', 'expense', 'Employment Expenses', 'Employment Expenses'),
     ('6608', 'Any Other Employment Costs', 'expense', 'Employment Expenses', 'Employment Expenses'),
-    -- Financial expenses (6703 renumbered in; 6705 already present)
+    ('6609', 'Affordable Housing Levy (Employer)', 'expense', 'Employment Expenses', 'Employment Expenses'),
+    -- Financial expenses (6703 also arrives via 6401 rename; 6705 already present)
     ('6701', 'Interest Expense', 'expense', 'Financial Expenses', 'Financial Expenses'),
     ('6702', 'Commitment Fees', 'expense', 'Financial Expenses', 'Financial Expenses'),
+    ('6703', 'Bank Charges', 'expense', 'Financial Expenses', 'Financial Expenses'),
     ('6704', 'Insurance', 'expense', 'Financial Expenses', 'Financial Expenses')
 ) AS v(code, name, account_type, account_group, sub_group)
 WHERE NOT EXISTS (
