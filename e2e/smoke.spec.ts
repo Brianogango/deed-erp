@@ -180,26 +180,30 @@ test.describe('repair → quote → invoice money path', () => {
     await expect(page.locator('.repair-detail__mobile-meta').getByText(repairRef)).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole('button', { name: 'Back to repair list' })).toBeVisible()
 
-    const primary = page.locator('.repair-detail__primary-action .repair-action-btn')
-    const moreActions = page.getByRole('button', { name: 'More repair actions' })
+    // The redesigned workspace keeps the single workflow action inside the
+    // "Next action" panel and the record admin actions behind an overflow menu.
+    const primary = page.locator('.repair-detail__next-action .repair-action-btn')
+    const adminMenu = page.getByRole('button', { name: 'Repair record administration' })
     await expect(primary).toBeVisible()
-    await expect(moreActions).toBeVisible()
+    await expect(adminMenu).toBeVisible()
 
+    const viewport = page.viewportSize()
     const primaryBox = await primary.boundingBox()
-    const moreBox = await moreActions.boundingBox()
+    const moreBox = await adminMenu.boundingBox()
     expect(primaryBox).not.toBeNull()
     expect(moreBox).not.toBeNull()
-    expect(Math.abs((primaryBox?.y ?? 0) - (moreBox?.y ?? 0))).toBeLessThan(4)
-    expect((primaryBox?.x ?? 0) + (primaryBox?.width ?? 0)).toBeLessThanOrEqual(moreBox?.x ?? 0)
+    expect((primaryBox?.x ?? 0) + (primaryBox?.width ?? 0)).toBeLessThanOrEqual((viewport?.width ?? 390) + 1)
+    expect((moreBox?.x ?? 0) + (moreBox?.width ?? 0)).toBeLessThanOrEqual((viewport?.width ?? 390) + 1)
 
-    await moreActions.click()
-    await expect(page.getByRole('menu', { name: 'More repair actions' })).toBeVisible()
+    await adminMenu.click()
+    await expect(page.getByRole('menu', { name: 'Repair record administration' })).toBeVisible()
     await page.keyboard.press('Escape')
 
-    const moreSections = page.getByRole('button', { name: 'More repair sections' })
-    await expect(moreSections).toBeVisible()
-    await moreSections.click()
-    await expect(page.getByRole('menu', { name: 'More repair sections' })).toBeVisible()
+    const tabs = page.getByRole('navigation', { name: 'Repair record sections' })
+    await expect(tabs).toBeVisible()
+    const diagnosisTab = tabs.getByRole('button', { name: 'Diagnosis', exact: true })
+    await diagnosisTab.click()
+    await expect(diagnosisTab).toHaveClass(/repair-detail__tab--active/)
 
     await context.close()
   })
