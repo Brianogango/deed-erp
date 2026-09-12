@@ -158,9 +158,26 @@ test.describe('repair → quote → invoice money path', () => {
     const context = await loginViaApi(browser)
     const page = await context.newPage()
     await page.setViewportSize({ width: 390, height: 844 })
+
+    // Retries re-run this test alone, so mint a repair if earlier tests did not.
+    if (!repairId || !repairRef) {
+      const res = await api.post('/api/repairs', {
+        data: {
+          customerName: 'E2E Customer',
+          customerPhone: '0712000111',
+          productName: 'Lenovo ThinkPad X1',
+          issueDescription: 'Does not power on',
+        },
+      })
+      expect(res.status()).toBe(201)
+      const repair = await res.json()
+      repairRef = repair.ref
+      repairId = repair.id
+    }
+
     await page.goto(`/repairs?id=${encodeURIComponent(repairId)}`)
 
-    await expect(page.getByText(repairRef).first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.repair-detail__mobile-meta').getByText(repairRef)).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole('button', { name: 'Back to repair list' })).toBeVisible()
 
     const primary = page.locator('.repair-detail__primary-action .repair-action-btn')

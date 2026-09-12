@@ -85,6 +85,7 @@ const baseOrder = {
   id: ORDER_ID,
   orderNumber: 'QUO/2026/0001',
   clientId: CLIENT_ID,
+  createdById: '11111111-2222-3333-4444-555555555555',
   status: 'quotation',
   locked: false,
   subtotal: 8400,

@@ -455,7 +455,8 @@ test.describe('5. Inventory receipt (GRN) → stock level update', () => {
     expect(po.ref).toBeTruthy()
 
     const confirm = await api.patch(`/api/purchase-orders/${po.id}`, { data: { status: 'confirmed' } })
-    expect((await jsonOrThrow(confirm, 'confirm PO')).item.status).toBe('confirmed')
+    const confirmed = await jsonOrThrow(confirm, 'confirm PO')
+    expect((confirmed.item ?? confirmed).status).toBe('confirmed')
 
     const receiptId = `rec_${tag}`
     const grnRes = await api.post('/api/receipts', {
@@ -479,8 +480,9 @@ test.describe('5. Inventory receipt (GRN) → stock level update', () => {
       },
     })
     const grn = await jsonOrThrow(grnRes, 'create GRN')
-    expect(grn.item.id).toBe(receiptId)
-    const receiptRef = grn.item.ref || `REC/${tag}`
+    const grnItem = grn.item ?? grn
+    expect(grnItem.id).toBe(receiptId)
+    const receiptRef = grnItem.ref || `REC/${tag}`
 
     const validate = await api.post('/api/inventory/validate-receipt', {
       data: {

@@ -157,7 +157,8 @@ describe('GET /api/sale-orders', () => {
     mockPrismaSO.count.mockResolvedValue(0)
     await GET(getReq('?q=ACME'))
     const callArg = mockPrismaSO.findMany.mock.calls[0][0]
-    expect(callArg.where.OR).toBeDefined()
+    expect(JSON.stringify(callArg.where)).toContain('ACME')
+    expect(JSON.stringify(callArg.where)).toContain('orderNumber')
   })
 
   it('caps limit at 200', async () => {
@@ -175,7 +176,7 @@ describe('GET /api/sale-orders', () => {
     expect(res.status).toBe(401)
   })
 
-  it('does not scope a sales_rep list to created-by or salesperson', async () => {
+  it('scopes a sales_rep list to created-by or salesperson', async () => {
     mockGetSession.mockResolvedValue({
       user: { id: USER_ID, name: 'Joseph', username: 'joseph', role: 'sales_rep' },
     })
@@ -184,9 +185,9 @@ describe('GET /api/sale-orders', () => {
     const res = await GET(getReq())
     expect(res.status).toBe(200)
     const callArg = mockPrismaSO.findMany.mock.calls[0][0]
-    expect(callArg.where.OR).toBeUndefined()
-    expect(JSON.stringify(callArg.where)).not.toContain('createdById')
-    expect(JSON.stringify(callArg.where)).not.toContain('salespersonId')
+    expect(JSON.stringify(callArg.where)).toContain('createdById')
+    expect(JSON.stringify(callArg.where)).toContain('salespersonId')
+    expect(JSON.stringify(callArg.where)).toContain(USER_ID)
   })
 })
 
