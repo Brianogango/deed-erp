@@ -124,6 +124,37 @@ export default async function globalSetup() {
         [user.id, user.username, `${user.username}@deed.test`, user.name, user.role, modulesJson, hash],
       )
     }
+
+    // Accounting routes deliberately reject unknown journals/accounts. Seed the
+    // same minimum approved ledger used by these business workflows so E2E
+    // exercises real posting instead of bypassing financial validation.
+    await pool.query(`
+      INSERT INTO journals (code, name, journal_type)
+      VALUES
+        ('SAL', 'Sales Journal', 'sale'),
+        ('PUR', 'Purchase Journal', 'purchase'),
+        ('BNK', 'Bank Journal', 'bank'),
+        ('CSH', 'Cash Journal', 'cash'),
+        ('STK', 'Stock Journal', 'stock'),
+        ('GEN', 'Miscellaneous', 'general')
+      ON CONFLICT (code) DO UPDATE SET is_active = TRUE
+    `)
+    await pool.query(`
+      INSERT INTO account_codes (code, name, account_type, is_active)
+      VALUES
+        ('1150', 'VAT Input', 'asset', TRUE),
+        ('1200', 'Inventory', 'asset', TRUE),
+        ('1800', 'Accounts Receivable', 'asset', TRUE),
+        ('2201', 'ABSA Bank', 'asset', TRUE),
+        ('2211', 'Petty Cash / Mobile Money', 'asset', TRUE),
+        ('3000', 'Accounts Payable', 'liability', TRUE),
+        ('3201', 'Accruals', 'liability', TRUE),
+        ('3301', 'Output VAT Payable', 'liability', TRUE),
+        ('5000', 'Sales Revenue', 'income', TRUE),
+        ('5121', 'Hardware Support', 'income', TRUE),
+        ('6001', 'Cost of Goods Sold', 'expense', TRUE)
+      ON CONFLICT (code) DO UPDATE SET is_active = TRUE
+    `)
   } finally {
     await pool.end()
   }
