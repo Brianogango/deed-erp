@@ -12,7 +12,7 @@ const { mockPrisma, mockCreateJournal } = vi.hoisted(() => {
     accountCode: { findUnique: vi.fn() },
     auditLog: { create: vi.fn() },
     journal: { findUnique: vi.fn().mockResolvedValue({ id: 'jnl-1' }) },
-    journalEntry: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'je-1' }) },
+    journalEntry: { findUnique: vi.fn().mockResolvedValue(null), findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'je-1' }) },
     financialAuditEvent: { create: vi.fn() },
     fiscalLock: { findFirst: vi.fn().mockResolvedValue(null) },
     fiscalPeriod: { findFirst: vi.fn().mockResolvedValue({ state: 'open' }) },
@@ -51,6 +51,7 @@ beforeEach(() => {
   mockPrisma.deposit.update.mockResolvedValue({})
   mockPrisma.journal.findUnique.mockResolvedValue({ id: 'jnl-1' })
   mockPrisma.journalEntry.findUnique.mockResolvedValue(null)
+  mockPrisma.journalEntry.findFirst.mockResolvedValue(null)
   mockPrisma.journalEntry.create.mockResolvedValue({ id: 'je-1' })
   mockPrisma.accountCode.findUnique.mockImplementation(({ where }: any) =>
     Promise.resolve({ id: `acct-${where.code}`, isActive: true }))
