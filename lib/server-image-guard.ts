@@ -85,7 +85,7 @@ export async function guardImageBase64Upload(
     throw new ServerImageGuardError(`${label} is too large. Maximum size is ${formatBytes(maxBytes)}.`, 413)
   }
 
-  let metadata: sharp.Metadata
+  let metadata: Metadata
   try {
     metadata = await sharp(buffer, { failOn: 'none', limitInputPixels: maxPixels }).metadata()
   } catch {
