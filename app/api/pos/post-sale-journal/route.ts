@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { writeFinancialAudit } from '@/lib/finance-audit'
+import { writeFinancialAuditInTx } from '@/lib/finance-audit'
+import prisma from '@/lib/prisma'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { postPosSale } from '@/lib/accounting/posting-service'
 import { roundMoney } from '@/lib/accounting/money'
@@ -43,12 +44,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'orderId, orderRef, total, and subtotal are required' }, { status: 400 })
     }
 
-    const date = body.date ? String(body.date) : undefined
-    if (date) {
-      const lock = await checkFiscalLock(new Date(date.includes('T') ? date : `${date}T00:00:00Z`))
-      if (!lock.ok) {
-        return NextResponse.json({ error: lock.error }, { status: lock.status })
-      }
+    const date = String(body.date || '').trim()
+    if (!date) {
+      return NextResponse.json({ error: 'POS posting date is required' }, { status: 422 })
+    }
+    const parsedDate = new Date(date.includes('T') ? date : `${date}T00:00:00Z`)
+    if (Number.isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: 'POS posting date is invalid' }, { status: 422 })
+    }
+    const lock = await checkFiscalLock(parsedDate)
+    if (!lock.ok) {
+      return NextResponse.json({ error: lock.error }, { status: lock.status })
     }
 
     const revenueLines = Array.isArray(body.revenueLines)
@@ -60,34 +66,39 @@ export async function POST(request: NextRequest) {
           .filter((r: { account: string; amount: number }) => r.account && r.amount > 0)
       : undefined
 
-    const journal = await postPosSale({
-      orderId,
-      orderRef,
-      invoiceId: body.invoiceId ? String(body.invoiceId) : undefined,
-      total,
-      subtotal,
-      tax,
-      pointsRedeemed: roundMoney(body.pointsRedeemed),
-      customerCreditAmount: roundMoney(body.customerCreditAmount),
-      paymentMethod: body.paymentMethod ? String(body.paymentMethod) : undefined,
-      bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
-      customerName: body.customerName ? String(body.customerName) : undefined,
-      revenueLines,
-      date,
-      createdById: actor.id,
-    })
-
-    await writeFinancialAudit({
-      userId: actor.id,
-      action: 'post_pos_sale_engine',
-      entityType: 'pos_order',
-      entityId: orderId,
-      newValues: {
+    const journal = await prisma.$transaction(async tx => {
+      const posted = await postPosSale({
+        orderId,
         orderRef,
+        invoiceId: body.invoiceId ? String(body.invoiceId) : undefined,
         total,
-        journalRef: journal && 'ref' in journal ? journal.ref : null,
-      },
-    })
+        subtotal,
+        tax,
+        pointsRedeemed: roundMoney(body.pointsRedeemed),
+        customerCreditAmount: roundMoney(body.customerCreditAmount),
+        paymentMethod: body.paymentMethod ? String(body.paymentMethod) : undefined,
+        bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
+        customerName: body.customerName ? String(body.customerName) : undefined,
+        revenueLines,
+        date,
+        createdById: actor.id,
+        tx,
+      })
+
+      await writeFinancialAuditInTx(tx, {
+        userId: actor.id,
+        action: 'post_pos_sale_engine',
+        entityType: 'pos_order',
+        entityId: orderId,
+        relatedJournalId: posted && 'id' in posted ? String(posted.id) : null,
+        newValues: {
+          orderRef,
+          total,
+          journalRef: posted && 'ref' in posted ? posted.ref : null,
+        },
+      })
+      return posted
+    }, { isolationLevel: 'Serializable' })
 
     return NextResponse.json({ journal, skipped: false })
   })

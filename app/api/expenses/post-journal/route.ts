@@ -47,12 +47,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'expenseId, ref, and positive amount are required' }, { status: 400 })
     }
 
-    const date = body.date ? String(body.date) : undefined
-    if (date) {
-      const lock = await checkFiscalLock(new Date(date.includes('T') ? date : `${date}T00:00:00Z`))
-      if (!lock.ok) {
-        return NextResponse.json({ error: lock.error }, { status: lock.status })
-      }
+    const date = String(body.date || '').trim()
+    if (!date) {
+      return NextResponse.json({ error: 'Expense posting date is required' }, { status: 422 })
+    }
+    const parsedDate = new Date(date.includes('T') ? date : `${date}T00:00:00Z`)
+    if (Number.isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: 'Expense posting date is invalid' }, { status: 422 })
+    }
+    const lock = await checkFiscalLock(parsedDate)
+    if (!lock.ok) {
+      return NextResponse.json({ error: lock.error }, { status: lock.status })
     }
 
     const journal = await prisma.$transaction(async tx => {

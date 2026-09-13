@@ -110,7 +110,7 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 |------|--------|----------|
 | Accrual / GRNI account in use | **HAVE** | Role `grni` → **3201**; valuation + vendor-bill-perpetual |
 | Dedicated GRNI + 3-way match | **PARTIAL** | Server 3-way on bill post (`assert-bill-match.server`); PO still blob_sot; GRNI stays **3201** (mapped) |
-| Vendor bill perpetual helper | **HAVE** | `vendor-bill-perpetual.ts` + `postVendorBill` when engine on |
+| Vendor bill perpetual posting | **HAVE** | Posted-at-create and draft→posted paths both commit AP/GRNI/Input VAT through the canonical journal service |
 | Input VAT role | **HAVE** | `input_vat` → **1150** |
 
 ### Phase 4 — Inventory valuation & COGS
@@ -146,8 +146,8 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 
 | Item | Status | Evidence |
 |------|--------|----------|
-| Expense journals in store | **PARTIAL** | Blob builders + engine dual-write (`postExpense*`) when flagged |
-| POS journals | **PARTIAL** | Blob-first + `postPosSale` / `/api/pos/post-sale-journal` when flagged |
+| Expense approval/payment/reimbursement posting | **HAVE** | Required-date, fiscal-locked Prisma posting with atomic journal + audit |
+| POS journals | **HAVE** | Required-date Prisma posting; journal + audit use one serializable transaction |
 | Buy-back / aftersales GL completeness | **PARTIAL** | Deferred |
 
 ### Phase 8 — Analytics / management accounts

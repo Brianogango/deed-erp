@@ -1,6 +1,6 @@
 # Finance Phase 7 — Expenses / POS edge GL
 
-**Status:** Expense approve/reimburse and POS sale dual-write through the posting engine when flagged. Blob journals remain SoT. Buy-back / trade-in deferred. No Cashbook or POS UI rewrite.
+**Status:** Expense approval/payment/reimbursement and POS sale post to the Prisma GL through the central posting service. Posting is no longer skipped when the legacy feature flag is off. POS journal and audit commit atomically. Blob retirement remains a separate certified cutover.
 
 ## What this adds
 
@@ -15,8 +15,10 @@
 
 ## Behaviour
 
-- **Flag OFF:** blob expense/POS journals only; APIs return `{ skipped: true }`.
-- **Flag ON:** same refs/lines as blob → engine (`commitPosting`) → Prisma GL (idempotent on ref). Approvals credit **3105** (reimbursement) or bank; reimbursements Dr **3105** / Cr bank; POS Dr tender (+ loyalty) / Cr revenue (+ **3301** VAT).
+- The APIs always commit to Prisma GL through `commitPosting`; they never return a feature-flag skip.
+- All postings require an explicit valid date and pass the fiscal lock.
+- Expense approval credits **3105** for reimbursements or outstanding payments for company-funded claims; payment clears the payable to bank.
+- POS posts Dr tender/customer credit (+ loyalty discount) and Cr revenue (+ **3301** VAT) in the same transaction as its financial audit.
 - Expense UI and POS session/cart flow unchanged.
 
 ## Tests
@@ -28,6 +30,6 @@ npm test -- --run __tests__/expense-pos-posting.test.ts __tests__/accounting-pos
 ## Not in this phase
 
 - Buy-back / trade-in GL completeness
-- Migrating `deed_expenses` / POS orders off blob
-- Cashbook SoT rewrite
+- Retiring the archived blob journal key before certified parity
+- Analytic dimensions, which are delivered separately
 - Analytic tags on expense lines (Phase 8)
