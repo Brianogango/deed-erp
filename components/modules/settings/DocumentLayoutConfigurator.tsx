@@ -105,11 +105,9 @@ function DocumentPreview({ draft, company }: { draft: Draft; company: CompanySet
         className={`relative w-full max-w-[520px] overflow-hidden bg-white shadow-xl ${paperClass}`}
         style={{ fontFamily: fontFamily[draft.printFont] }}
       >
-        {draft.printBackground === 'demo_logo' && (
+        {draft.printBackground === 'demo_logo' && draft.logoUrl && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.045]">
-            {draft.logoUrl
-              ? <img src={draft.logoUrl} alt="" className="w-2/3 object-contain" />
-              : <span className="text-7xl font-black" style={{ color: draft.printPrimaryColor }}>DEED</span>}
+            <img src={draft.logoUrl} alt="" className="w-2/3 object-contain" />
           </div>
         )}
         <div
@@ -131,46 +129,50 @@ function DocumentPreview({ draft, company }: { draft: Draft; company: CompanySet
           <div className="flex items-start justify-between">
             {draft.logoUrl
               ? <img src={draft.logoUrl} alt="Company logo preview" className="h-9 max-w-[130px] object-contain" />
-              : <span className="text-lg font-black" style={{ color: draft.printTemplate === 'bold' ? '#fff' : draft.printPrimaryColor }}>{company.name}</span>}
-            <span className="max-w-[190px] text-right text-[8px] leading-relaxed">
-              {draft.address}<br />{company.phone}<br />{company.email}
+              : company.name && <span className="text-lg font-black" style={{ color: draft.printTemplate === 'bold' ? '#fff' : draft.printPrimaryColor }}>{company.name}</span>}
+            <span className="max-w-[190px] whitespace-pre-line text-right text-[8px] leading-relaxed">
+              {[draft.address, company.phone, company.email].filter(Boolean).join('\n')}
             </span>
           </div>
         </div>
         <div className="relative px-7 pt-4 text-[9px] text-gray-700">
           <div className="mb-4 flex items-end justify-between border-b pb-3" style={{ borderColor: draft.printSecondaryColor }}>
-            <div>
-              <div className="text-[20px] font-bold" style={{ color: draft.printPrimaryColor }}>INVOICE</div>
-              <div>INV/2026/0001</div>
+            <div className="h-5 w-28 rounded" style={{ backgroundColor: `${draft.printPrimaryColor}18` }} />
+            <div className="space-y-1">
+              <div className="h-2 w-24 rounded bg-gray-100" />
+              <div className="h-2 w-20 rounded bg-gray-100" />
             </div>
-            <div className="text-right">Invoice date: 13 Sep 2026<br />Due date: 13 Oct 2026</div>
           </div>
           {draft.printTagline && <div className="mb-3 text-[10px] italic" style={{ color: draft.printSecondaryColor }}>{draft.printTagline}</div>}
           <div className={`mb-4 grid grid-cols-2 gap-4 p-3 ${draft.printTemplate === 'boxed' ? 'rounded border' : draft.printTemplate === 'bubble' ? 'rounded-2xl' : ''}`} style={{ borderColor: draft.printPrimaryColor, backgroundColor: draft.printTemplate === 'bubble' ? `${draft.printSecondaryColor}10` : undefined }}>
-            <div><strong>Invoice address</strong><br />Sample Customer<br />Nairobi, Kenya</div>
-            <div><strong>Payment reference</strong><br />INV/2026/0001<br />Currency: KES</div>
-          </div>
-          <div className="overflow-hidden rounded border border-gray-200">
-            <div className="grid grid-cols-[1fr_55px_80px] px-3 py-2 font-bold text-white" style={{ backgroundColor: draft.printPrimaryColor }}>
-              <span>Description</span><span>Qty</span><span className="text-right">Amount</span>
-            </div>
-            {[0, 1, 2].map(row => (
-              <div key={row} className="grid grid-cols-[1fr_55px_80px] border-t border-gray-100 px-3 py-2" style={{ backgroundColor: row % 2 ? lineFill : '#fff' }}>
-                <span>{row === 0 ? 'Professional services' : row === 1 ? 'Equipment supply' : 'Delivery'}</span>
-                <span>{row + 1}</span>
-                <span className="text-right">{['25,000.00', '35,000.00', '2,500.00'][row]}</span>
+            {[0, 1].map(column => (
+              <div key={column} className="space-y-1.5">
+                <div className="h-2 w-20 rounded" style={{ backgroundColor: `${draft.printPrimaryColor}24` }} />
+                <div className="h-2 w-full rounded bg-gray-100" />
+                <div className="h-2 w-3/4 rounded bg-gray-100" />
               </div>
             ))}
           </div>
-          <div className="ml-auto mt-4 w-48 space-y-1.5">
-            <div className="flex justify-between"><span>Subtotal</span><span>KES 62,500.00</span></div>
-            <div className="flex justify-between"><span>VAT</span><span>KES 10,000.00</span></div>
-            <div className="flex justify-between border-t pt-2 text-[11px] font-bold" style={{ borderColor: draft.printPrimaryColor, color: draft.printPrimaryColor }}><span>Total</span><span>KES 72,500.00</span></div>
+          <div className="overflow-hidden rounded border border-gray-200">
+            <div className="grid grid-cols-[1fr_55px_80px] px-3 py-2" style={{ backgroundColor: draft.printPrimaryColor }}>
+              <span className="h-2 w-24 rounded bg-white/70" /><span className="h-2 w-7 rounded bg-white/70" /><span className="ml-auto h-2 w-12 rounded bg-white/70" />
+            </div>
+            {[0, 1, 2].map(row => (
+              <div key={row} className="grid grid-cols-[1fr_55px_80px] border-t border-gray-100 px-3 py-2" style={{ backgroundColor: row % 2 ? lineFill : '#fff' }}>
+                <span className="h-2 w-2/3 rounded bg-gray-100" /><span className="h-2 w-5 rounded bg-gray-100" /><span className="ml-auto h-2 w-14 rounded bg-gray-100" />
+              </div>
+            ))}
           </div>
+          <div className="ml-auto mt-4 w-48 space-y-2">
+            {[0, 1, 2].map(row => <div key={row} className="ml-auto h-2 rounded bg-gray-100" style={{ width: row === 2 ? '100%' : '78%' }} />)}
+          </div>
+          <p className="mt-8 text-center text-[9px] text-gray-400">Document values appear only after they are entered on the document.</p>
         </div>
-        <div className="absolute inset-x-7 bottom-5 border-t pt-2 text-center text-[8px] text-gray-500" style={{ borderColor: draft.printSecondaryColor }}>
-          {draft.invoiceFooter || 'Thank you for your business.'}
-        </div>
+        {draft.invoiceFooter && (
+          <div className="absolute inset-x-7 bottom-5 border-t pt-2 text-center text-[8px] text-gray-500" style={{ borderColor: draft.printSecondaryColor }}>
+            {draft.invoiceFooter}
+          </div>
+        )}
       </div>
     </div>
   )
