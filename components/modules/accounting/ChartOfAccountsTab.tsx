@@ -88,7 +88,7 @@ const EMPTY_BANK: BankForm = {
   accountNo: '',
   currency: 'KES',
   openingBalance: '0',
-  openingDate: new Date().toISOString().slice(0, 10),
+  openingDate: '',
   kind: 'bank',
   mpesaPaybill: '',
   mpesaAccount: '',
@@ -195,16 +195,13 @@ export default function ChartOfAccountsTab() {
   }
 
   const openAddBank = () => {
-    setBankForm({
-      ...EMPTY_BANK,
-      openingDate: new Date().toISOString().slice(0, 10),
-    })
+    setBankForm({ ...EMPTY_BANK })
     setShowBankForm(true)
   }
 
   const saveBank = () => {
-    if (!bankForm.name.trim() || !bankForm.accountNo.trim()) {
-      showToast('Account name and number are required', 'error')
+    if (!bankForm.name.trim() || !bankForm.accountNo.trim() || !bankForm.openingDate) {
+      showToast('Account name, number, and opening date are required', 'error')
       return
     }
     const code = suggestNextBankCode(accounts, bankForm.kind)
