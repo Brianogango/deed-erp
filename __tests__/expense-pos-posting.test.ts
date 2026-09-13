@@ -17,18 +17,21 @@ import {
 } from '@/lib/accounting/expense-pos-accounts'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 
-const { mockPersist } = vi.hoisted(() => ({
+const { mockPersist, mockPersistInTx } = vi.hoisted(() => ({
   mockPersist: vi.fn(),
+  mockPersistInTx: vi.fn(),
 }))
 
 vi.mock('@/lib/accounting/journal-service', () => ({
   persistStoreJournalEntry: mockPersist,
+  persistStoreJournalEntryInTx: mockPersistInTx,
   reverseJournalEntry: vi.fn(),
 }))
 
 beforeEach(() => {
   vi.clearAllMocks()
   mockPersist.mockResolvedValue({ id: 'je-1', ref: 'JRN/EXP/EXP-1' })
+  mockPersistInTx.mockResolvedValue({ id: 'je-tx', ref: 'JRN/POS-TX' })
 })
 
 describe('expense-pos account helpers', () => {
@@ -224,6 +227,26 @@ describe('expense / POS post helpers', () => {
       expect.objectContaining({ ref: 'JRN/RIM/EXP-1', source: 'expense' }),
       expect.objectContaining({ journalCode: 'MISC' }),
     )
+  })
+
+  it('uses the supplied transaction for an atomic POS journal', async () => {
+    const tx = { journalEntry: {} } as any
+    await postPosSale({
+      orderId: 'pos-tx',
+      orderRef: 'POS-TX',
+      total: 1160,
+      subtotal: 1000,
+      tax: 160,
+      paymentMethod: 'mpesa',
+      date: '2026-09-13',
+      tx,
+    })
+    expect(mockPersistInTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ ref: 'JRN/POS-TX', source: 'pos' }),
+      expect.objectContaining({ journalCode: 'BNK' }),
+    )
+    expect(mockPersist).not.toHaveBeenCalled()
   })
 
   it('posts POS sale via BNK journal', async () => {
