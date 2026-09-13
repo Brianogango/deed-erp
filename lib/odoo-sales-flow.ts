@@ -219,15 +219,38 @@ export const SO_INVOICE_STATUS_LABELS: Record<SoInvoiceStatus, string> = {
 export interface SaleOrderLinkedInvoiceInput {
   id: string
   status?: unknown
+  /** Draft refs start DRAFT/INV; an official INV ref is durable posting evidence. */
+  ref?: string
   total?: number
+  amountPaid?: number
   type?: string
   isDownPayment?: boolean
+  paymentBlocked?: boolean
 }
 
 export type SaleOrderInvoicePrimaryAction =
   | { kind: 'create' }
-  | { kind: 'confirm'; invoiceId: string }
-  | { kind: 'view'; invoiceId: string }
+  | { kind: 'view'; invoiceId: string; invoiceState: InvoiceDocState }
+
+/**
+ * Resolve linked-invoice document state defensively.
+ *
+ * The Sales screen is hydrated from a legacy client mirror as well as Prisma.
+ * During propagation the mirror can retain status=draft after the server has
+ * posted the invoice. An official, non-DRAFT invoice number is durable posting
+ * evidence and must win: offering Confirm in that state attempts to mutate an
+ * immutable posted invoice.
+ *
+ * See docs/domain/SALES_ORDER_WORKFLOW.md.
+ */
+export function saleOrderLinkedInvoiceDocState(
+  invoice: Pick<SaleOrderLinkedInvoiceInput, 'status' | 'ref'>,
+): InvoiceDocState {
+  const state = invoiceDocState(invoice.status)
+  const ref = String(invoice.ref ?? '').trim()
+  if (state === 'draft' && ref && !/^DRAFT\/INV\//i.test(ref)) return 'posted'
+  return state
+}
 
 /**
  * Main Sales Order invoice CTA. A draft regular invoice must be confirmed
@@ -245,12 +268,15 @@ export function saleOrderInvoicePrimaryAction(args: {
     !inv.isDownPayment
     && inv.type !== 'customer_credit'
     && inv.type !== 'vendor_bill'
-    && invoiceDocState(inv.status) !== 'cancelled'
+    && saleOrderLinkedInvoiceDocState(inv) !== 'cancelled'
   )
-  const draft = regular.find(inv => invoiceDocState(inv.status) === 'draft')
-  if (draft) return { kind: 'confirm', invoiceId: draft.id }
+  // Module boundary: Sales creates the accounting document, then hands it
+  // off to the Invoice module. Posting, payment, credit notes and reversals
+  // are Invoice-module actions; Sales must never execute them directly.
+  const draft = regular.find(inv => saleOrderLinkedInvoiceDocState(inv) === 'draft')
+  if (draft) return { kind: 'view', invoiceId: draft.id, invoiceState: 'draft' }
 
-  const posted = regular.filter(inv => invoiceDocState(inv.status) === 'posted')
+  const posted = regular.filter(inv => saleOrderLinkedInvoiceDocState(inv) === 'posted')
   const covered = posted.reduce((sum, inv) => sum + Math.max(0, Number(inv.total) || 0), 0)
   const orderTotal = Math.max(0, Number(args.orderTotal) || 0)
   const fullyCovered =
@@ -258,7 +284,9 @@ export function saleOrderInvoicePrimaryAction(args: {
     || (!args.canCreateInvoiceNow && posted.length > 0)
     || (orderTotal > 0 && covered + 0.5 >= orderTotal)
 
-  if (fullyCovered && posted.length > 0) return { kind: 'view', invoiceId: posted[0].id }
+  if (fullyCovered && posted.length > 0) {
+    return { kind: 'view', invoiceId: posted[0].id, invoiceState: 'posted' }
+  }
   return { kind: 'create' }
 }
 

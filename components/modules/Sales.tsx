@@ -356,7 +356,7 @@ function SalesContent() {
     approvalRequests,
     createSaleOrder, updateSaleOrder, confirmSO, ensureWaitingDeliveryForSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine, moveSOLine, addSOSection,
-    assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, postInvoice, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
+    assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO, createNewSOVersion,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
@@ -506,7 +506,6 @@ function SalesContent() {
   const [invoiceWizardPercent, setInvoiceWizardPercent] = useState('30')
   const [invoiceWizardAmount, setInvoiceWizardAmount] = useState('')
   const [creatingWizardInvoice, setCreatingWizardInvoice] = useState(false)
-  const [postingInvoiceId, setPostingInvoiceId] = useState<string | null>(null)
   const [partialInvoiceQtys, setPartialInvoiceQtys] = useState<Record<string, string>>({})
   const [creatingPartialInvoice, setCreatingPartialInvoice] = useState(false)
   const [creatingNewVersion, setCreatingNewVersion] = useState(false)
@@ -2350,29 +2349,13 @@ function SalesContent() {
                           ]}
                         />
                         {canInvoiceFromSO && activeOrder.status === 'sale' ? (
-                          invoicePrimaryAction.kind === 'confirm' ? (
-                            <button
-                              type="button"
-                              className="sp-btn sp-btn-primary sales-action-primary"
-                              disabled={postingInvoiceId === invoicePrimaryAction.invoiceId}
-                              onClick={() => void (async () => {
-                                setPostingInvoiceId(invoicePrimaryAction.invoiceId)
-                                try {
-                                  await Promise.resolve(postInvoice(invoicePrimaryAction.invoiceId))
-                                } finally {
-                                  setPostingInvoiceId(null)
-                                }
-                              })()}
-                            >
-                              {postingInvoiceId === invoicePrimaryAction.invoiceId ? 'Confirming…' : 'Confirm invoice'}
-                            </button>
-                          ) : invoicePrimaryAction.kind === 'view' ? (
+                          invoicePrimaryAction.kind === 'view' ? (
                             <button
                               type="button"
                               className="sp-btn sp-btn-primary sales-action-primary"
                               onClick={() => router.push(financeInvoicePath(invoicePrimaryAction.invoiceId))}
                             >
-                              View invoice
+                              {invoicePrimaryAction.invoiceState === 'draft' ? 'Open draft invoice' : 'View invoice'}
                             </button>
                           ) : (
                             <button
@@ -2462,12 +2445,12 @@ function SalesContent() {
                               : saleOrderIsAccepted(activeOrder)
                                 ? 'Confirm quotation'
                                 : 'Record customer response'
-                          : invoicePrimaryAction.kind === 'confirm'
-                            ? 'Confirm invoice'
-                            : activeOperationallyComplete
-                              ? 'Order complete'
-                              : invoicePrimaryAction.kind === 'view'
-                                ? 'View invoice'
+                          : activeOperationallyComplete
+                            ? 'Sales complete — continue in Invoices'
+                            : invoicePrimaryAction.kind === 'view'
+                              ? invoicePrimaryAction.invoiceState === 'draft'
+                                ? 'Review draft in Invoices'
+                                : 'View invoice'
                                 : visibleDeliveries.length === 0
                                   ? 'Create delivery'
                                   : activeFulfilmentStatus === 'delivered'

@@ -582,13 +582,13 @@ describe('list filters', () => {
 
 
 describe('sales order invoice primary action', () => {
-  it('shows Confirm invoice when a regular draft invoice already exists', () => {
+  it('hands an existing draft invoice to the Invoice module', () => {
     expect(saleOrderInvoicePrimaryAction({
       invoices: [{ id: 'inv-draft', status: 'draft', total: 1000, type: 'customer_invoice' }],
       orderTotal: 1000,
       canCreateInvoiceNow: true,
       invoiceStatus: 'to_invoice',
-    })).toEqual({ kind: 'confirm', invoiceId: 'inv-draft' })
+    })).toEqual({ kind: 'view', invoiceId: 'inv-draft', invoiceState: 'draft' })
   })
 
   it('shows View invoice for a posted full-value invoice even when qty counters are stale', () => {
@@ -597,7 +597,7 @@ describe('sales order invoice primary action', () => {
       orderTotal: 314360,
       canCreateInvoiceNow: true,
       invoiceStatus: 'to_invoice',
-    })).toEqual({ kind: 'view', invoiceId: 'inv-posted' })
+    })).toEqual({ kind: 'view', invoiceId: 'inv-posted', invoiceState: 'posted' })
   })
 
   it('still allows another invoice after a posted partial invoice', () => {
@@ -616,5 +616,69 @@ describe('sales order invoice primary action', () => {
       canCreateInvoiceNow: true,
       invoiceStatus: 'to_invoice',
     })).toEqual({ kind: 'create' })
+  })
+
+  it('hands a fully-covered posted unpaid invoice to the Invoice module', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{
+        id: 'inv-posted-unpaid',
+        ref: 'INV/2026/0141',
+        status: 'posted',
+        total: 35_000,
+        amountPaid: 0,
+        type: 'customer_invoice',
+      }],
+      orderTotal: 35_000,
+      canCreateInvoiceNow: false,
+      invoiceStatus: 'invoiced',
+    })).toEqual({ kind: 'view', invoiceId: 'inv-posted-unpaid', invoiceState: 'posted' })
+  })
+
+  it('never offers Confirm when a stale mirror says draft but an official invoice ref proves posting', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{
+        id: 'inv-stale-mirror',
+        ref: 'INV/2026/0141',
+        status: 'draft',
+        total: 35_000,
+        amountPaid: 0,
+        type: 'customer_invoice',
+      }],
+      orderTotal: 35_000,
+      canCreateInvoiceNow: false,
+      invoiceStatus: 'invoiced',
+    })).toEqual({ kind: 'view', invoiceId: 'inv-stale-mirror', invoiceState: 'posted' })
+  })
+
+  it('opens a genuine draft invoice in the Invoice module', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{
+        id: 'inv-genuine-draft',
+        ref: 'DRAFT/INV/abc123',
+        status: 'draft',
+        total: 27_000,
+        amountPaid: 0,
+        type: 'customer_invoice',
+      }],
+      orderTotal: 27_000,
+      canCreateInvoiceNow: false,
+      invoiceStatus: 'invoiced',
+    })).toEqual({ kind: 'view', invoiceId: 'inv-genuine-draft', invoiceState: 'draft' })
+  })
+
+  it('shows View invoice once the posted invoice is fully paid', () => {
+    expect(saleOrderInvoicePrimaryAction({
+      invoices: [{
+        id: 'inv-paid',
+        ref: 'INV/2026/0141',
+        status: 'paid',
+        total: 35_000,
+        amountPaid: 35_000,
+        type: 'customer_invoice',
+      }],
+      orderTotal: 35_000,
+      canCreateInvoiceNow: false,
+      invoiceStatus: 'invoiced',
+    })).toEqual({ kind: 'view', invoiceId: 'inv-paid', invoiceState: 'posted' })
   })
 })
