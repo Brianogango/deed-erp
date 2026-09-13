@@ -903,6 +903,7 @@ export async function postPosSale(params: {
   revenueLines?: Array<{ account: string; amount: number }>
   date?: string
   createdById?: string
+  tx?: Prisma.TransactionClient
 }) {
   const lines = buildPosSaleLines({
     total: params.total,
@@ -930,6 +931,7 @@ export async function postPosSale(params: {
     journalCode: tenderTotal <= 0 && credit > 0
       ? 'SAL'
       : (method === 'cash' || method === 'petty_cash' ? 'CSH' : 'BNK'),
+    tx: params.tx,
   })
 }
 
