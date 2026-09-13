@@ -33,7 +33,7 @@ export const CO = {
 // Reads companySettings from localStorage and merges with CO defaults.
 // Use this in utility/lib files that cannot call React hooks.
 export function getStoredCompanyData() {
-  let stored: Partial<typeof CO & { logoUrl: string; invoiceFooter: string }> = {}
+  let stored: Partial<typeof CO & { logoUrl: string; invoiceFooter: string; printTemplate: string }> = {}
   if (typeof window !== 'undefined') {
     try {
       const raw = window.localStorage.getItem('deed_companySettings')
@@ -53,6 +53,7 @@ export function getStoredCompanyData() {
     mpesaAccount: stored.mpesaAccount ?? CO.mpesaAccount,
     logoUrl:      stored.logoUrl      ?? '',
     invoiceFooter: (stored as any).invoiceFooter ?? '',
+    printTemplate: (stored as any).printTemplate ?? 'light',
     navy:         CO.navy,
     cyan:         CO.cyan,
   }

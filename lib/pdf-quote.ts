@@ -3,6 +3,7 @@
 import { downloadCommercialPdf } from './commercial-pdf'
 import { getStoredCompanyData, getStoredBankAccounts } from './company'
 import type { Quote } from './store'
+import { normalizeDocumentLayout } from './document-layout'
 
 /** Download a CRM quote using the shared Deed commercial document template. */
 export const downloadQuotePdf = async (quote: Quote) => {
@@ -60,6 +61,7 @@ export const downloadQuotePdf = async (quote: Quote) => {
       logoUrl: co.logoUrl,
       currency: quote.currencyCode || 'KES',
       invoiceFooter: co.invoiceFooter || 'Thank you for your business.',
+      printTemplate: normalizeDocumentLayout(co.printTemplate),
     },
     banks as any,
     `Quotation - ${quote.ref}.pdf`,
