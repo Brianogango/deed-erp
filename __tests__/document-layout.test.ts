@@ -36,8 +36,8 @@ describe('Odoo document layout configuration', () => {
     expect(normalizeDocumentBackground('remote-url')).toBe('blank')
     expect(normalizePaperFormat('letter')).toBe('letter')
     expect(normalizePaperFormat('unknown')).toBe('a4')
-    expect(normalizeHexColor('#123abc', '#714B67')).toBe('#123ABC')
-    expect(normalizeHexColor('red', '#714B67')).toBe('#714B67')
+    expect(normalizeHexColor('#123abc', '#1B2762')).toBe('#123ABC')
+    expect(normalizeHexColor('red', '#1B2762')).toBe('#1B2762')
   })
 
   it.each(DOCUMENT_LAYOUT_IDS)('renders a valid %s branded PDF', layout => {
@@ -59,8 +59,8 @@ describe('Odoo document layout configuration', () => {
         printTemplate: layout,
         printFont: 'lato',
         printBackground: 'demo_logo',
-        printPrimaryColor: '#714B67',
-        printSecondaryColor: '#017E84',
+        printPrimaryColor: '#1B2762',
+        printSecondaryColor: '#00AEEF',
         printTagline: 'Technology that works for you',
         printPaperFormat: 'a4',
       },
