@@ -9,6 +9,7 @@ export default function AnalyticBudgetsTab() {
   const [analytics, setAnalytics] = useState<Analytic[]>([])
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [message, setMessage] = useState('')
+  const [actualReport, setActualReport] = useState<null | { budget: { name: string; dateFrom: string; dateTo: string }; lines: Array<{ id: string; analyticAccount: { code: string; name: string }; accountCode: string; planned: number; actual: number; variance: number; achievementPct: number | null }> }>(null)
   const [account, setAccount] = useState({ code: '', name: '' })
   const [budget, setBudget] = useState({ name: '', dateFrom: '', dateTo: '', analyticAccountId: '', accountCode: '', plannedAmount: '' })
 
@@ -18,6 +19,14 @@ export default function AnalyticBudgetsTab() {
     if (b.ok) setBudgets((await b.json()).budgets || [])
   }
   useEffect(() => { void load() }, [])
+
+  async function loadActuals(budgetId: string) {
+    setMessage('')
+    const res = await fetch(`/api/accounting/budget-vs-actual?budgetId=${encodeURIComponent(budgetId)}`)
+    const data = await res.json()
+    if (!res.ok) return setMessage(data.error || 'Unable to load actuals')
+    setActualReport(data)
+  }
 
   async function createAccount(e: React.FormEvent) {
     e.preventDefault(); setMessage('')
@@ -59,6 +68,11 @@ export default function AnalyticBudgetsTab() {
         <button className="btn-primary" type="submit">Create budget</button>
       </form>
     </div>
-    <div className="card overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left"><th className="p-3">Budget</th><th>Period</th><th>Dimension</th><th>GL account</th><th className="text-right p-3">Planned</th></tr></thead><tbody>{budgets.flatMap(b=>b.lines.map((l,i)=><tr key={b.id+String(i)} className="border-t border-[var(--border-lt)]"><td className="p-3 font-bold">{b.name}</td><td>{String(b.dateFrom).slice(0,10)} – {String(b.dateTo).slice(0,10)}</td><td>{l.analyticAccount.code} — {l.analyticAccount.name}</td><td>{l.accountCode}</td><td className="p-3 text-right font-mono">KES {Number(l.plannedAmount).toLocaleString()}</td></tr>))}</tbody></table></div>
+    <div className="card overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left"><th className="p-3">Budget</th><th>Period</th><th>Dimension</th><th>GL account</th><th className="text-right">Planned</th><th className="p-3 text-right">Report</th></tr></thead><tbody>{budgets.flatMap(b=>b.lines.map((l,i)=><tr key={b.id+String(i)} className="border-t border-[var(--border-lt)]"><td className="p-3 font-bold">{b.name}</td><td>{String(b.dateFrom).slice(0,10)} – {String(b.dateTo).slice(0,10)}</td><td>{l.analyticAccount.code} — {l.analyticAccount.name}</td><td>{l.accountCode}</td><td className="text-right font-mono">KES {Number(l.plannedAmount).toLocaleString()}</td><td className="p-3 text-right"><button type="button" className="btn-outline text-xs" onClick={()=>void loadActuals(b.id)}>Actuals</button></td></tr>))}</tbody></table></div>
+    {actualReport && <div className="card overflow-x-auto">
+      <div className="p-4"><h3 className="font-bold">{actualReport.budget.name}: budget vs actual</h3><p className="text-xs text-[var(--text-3)]">{actualReport.budget.dateFrom} – {actualReport.budget.dateTo}</p></div>
+      <table className="w-full text-xs"><thead><tr className="text-left"><th className="p-3">Dimension</th><th>GL account</th><th className="text-right">Planned</th><th className="text-right">Actual</th><th className="text-right">Remaining</th><th className="p-3 text-right">Used</th></tr></thead>
+      <tbody>{actualReport.lines.map(line=><tr key={line.id} className="border-t border-[var(--border-lt)]"><td className="p-3">{line.analyticAccount.code} — {line.analyticAccount.name}</td><td>{line.accountCode}</td><td className="text-right font-mono">{line.planned.toLocaleString()}</td><td className="text-right font-mono">{line.actual.toLocaleString()}</td><td className="text-right font-mono">{line.variance.toLocaleString()}</td><td className="p-3 text-right font-mono">{line.achievementPct == null ? '—' : `${line.achievementPct}%`}</td></tr>)}</tbody></table>
+    </div>}
   </div>
 }
