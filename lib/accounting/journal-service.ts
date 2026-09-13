@@ -147,6 +147,14 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
   for (let i = 0; i < params.lines.length; i++) {
     const line = params.lines[i]
     const accountId = await resolveAccountId(db, line.accountLabel)
+    if (line.analyticAccountId) {
+      const analytic = await db.analyticAccount.findUnique({
+        where: { id: line.analyticAccountId },
+        select: { id: true, isActive: true },
+      })
+      if (!analytic) throw postingError(`Unknown analytic account: ${line.analyticAccountId}`, 422)
+      if (!analytic.isActive) throw postingError(`Inactive analytic account cannot receive postings: ${line.analyticAccountId}`, 422)
+    }
     lineCreates.push({
       accountId,
       accountLabel: String(line.accountLabel).slice(0, 200),
