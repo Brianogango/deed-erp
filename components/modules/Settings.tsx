@@ -31,7 +31,7 @@ import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 import { normalizeProductCategorySettings, PRODUCT_CREATION_CATEGORY_OPTIONS, type ProductCategorySetting } from '@/lib/product-categories'
 import { DocumentLayoutConfigurator } from './settings/DocumentLayoutConfigurator'
 type Section =
-  | 'general' | 'banks' | 'access' | 'email'
+  | 'general' | 'document_layout' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
   | 'accounting' | 'hr_config' | 'pos' | 'notifications' | 'security' | 'partner_api' | 'data_cutover'
 
@@ -456,6 +456,7 @@ export default function Settings() {
 
   const nav: { id: Section; label: string; icon: any; group?: string }[] = [
     { id: 'general',    label: 'General',       icon: faBuilding,        group: 'Company' },
+    { id: 'document_layout', label: 'Document Layout', icon: faCog, group: 'Company' },
     ...(canManageBanks ? [{ id: 'banks' as Section, label: 'Bank Accounts', icon: faLandmark, group: 'Company' }] : []),
     ...(canManageSystemUsers ? [{ id: 'access' as Section, label: 'User Access', icon: faUsers, group: 'Company' }] : []),
     { id: 'email',      label: 'Email / SMTP',  icon: faEnvelope,        group: 'Company' },
@@ -675,14 +676,6 @@ export default function Settings() {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Document Layout">
-                <DocumentLayoutConfigurator
-                  company={companySettings}
-                  updateCompany={updateCompanySettings}
-                  showToast={showToast}
-                />
-              </SectionCard>
-
               <SectionCard title="System Access">
                 <SettingRow label="Multi-User Roles" desc="Allow multiple roles with different permissions per user"><Toggle on={ss.multiUserRoles} onChange={v => updateSystemSettings({ multiUserRoles: v })} /></SettingRow>
                 <SettingRow label="Enforce Department Access" desc="Restrict data visibility based on employee department"><Toggle on={ss.enforceDeptAccess} onChange={v => updateSystemSettings({ enforceDeptAccess: v })} /></SettingRow>
@@ -727,6 +720,17 @@ export default function Settings() {
               </aside>
               </div>
             </>
+          )}
+
+          {/* ════ DOCUMENT LAYOUT ════ */}
+          {section === 'document_layout' && (
+            <SectionCard title="Company Document Layout">
+              <DocumentLayoutConfigurator
+                company={companySettings}
+                updateCompany={updateCompanySettings}
+                showToast={showToast}
+              />
+            </SectionCard>
           )}
 
           {/* ════ BANKS ════ */}

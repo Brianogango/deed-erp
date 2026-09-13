@@ -938,8 +938,8 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   printTemplate: 'standard',
   printFont: 'lato',
   printBackground: 'blank',
-  printPrimaryColor: '#714B67',
-  printSecondaryColor: '#017E84',
+  printPrimaryColor: '#1B2762',
+  printSecondaryColor: '#00AEEF',
   printTagline: '',
   printPaperFormat: 'a4',
   partnerHiddenCategories: [],
@@ -5748,6 +5748,22 @@ export function StoreProvider({
   )
   const [companySettings, setCompanySettings] = useLS<CompanySettings>('deed_companySettings', DEFAULT_COMPANY_SETTINGS)
   const [systemSettings, setSystemSettings] = useLS<SystemSettings>('deed_systemSettings', DEFAULT_SYSTEM_SETTINGS)
+
+  // Replace the temporary Odoo demo palette shipped by the first layout pass.
+  // Preserve any genuinely custom colours selected later.
+  useEffect(() => {
+    const primary = String(companySettings.printPrimaryColor || '').toUpperCase()
+    const secondary = String(companySettings.printSecondaryColor || '').toUpperCase()
+    const hasOdooDemoPalette = (!primary || primary === '#714B67') && (!secondary || secondary === '#017E84')
+    if (hasOdooDemoPalette) {
+      setCompanySettings(previous => ({
+        ...previous,
+        printPrimaryColor: '#1B2762',
+        printSecondaryColor: '#00AEEF',
+      }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [dbApprovalRules, setDbApprovalRules] = useState<Array<{ approvalType: string; thresholds: { maxValue: number; requiredRoles: string[] }[]; isActive: boolean }>>([])
   // One-time bump: previous default was 100_000 with no settings UI; raise stored value to 1_000_000.
   useEffect(() => {

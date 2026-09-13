@@ -209,7 +209,7 @@ export function resolveSalesTab(_param: string | null | undefined): SalesTab {
 // Settings selects sections with local state; these aliases let ?tab= deep
 // links (e.g. the dashboard's Active Users card) land on the right section.
 export const SETTINGS_SECTIONS = [
-  'general', 'banks', 'access', 'email', 'crm', 'sales', 'inventory', 'purchase',
+  'general', 'document_layout', 'banks', 'access', 'email', 'crm', 'sales', 'inventory', 'purchase',
   'repair', 'accounting', 'hr_config', 'pos', 'security', 'partner_api', 'data_cutover',
 ] as const
 export type SettingsSection = typeof SETTINGS_SECTIONS[number]
@@ -218,6 +218,8 @@ const SETTINGS_ALIASES: Record<string, SettingsSection> = {
   users: 'access',
   account: 'general',
   company: 'general',
+  documents: 'document_layout',
+  document_layouts: 'document_layout',
   hr: 'hr_config',
   smtp: 'email',
   mail: 'email',

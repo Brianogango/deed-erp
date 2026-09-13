@@ -1,3 +1,6 @@
+export const DEED_DOCUMENT_PRIMARY = '#1B2762'
+export const DEED_DOCUMENT_SECONDARY = '#00AEEF'
+
 export const DOCUMENT_LAYOUT_IDS = [
   'standard',
   'boxed',
