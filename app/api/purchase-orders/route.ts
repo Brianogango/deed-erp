@@ -61,10 +61,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'vendorName is required' }, { status: 400 })
     }
     const clientId = await resolveVendorClientId(body)
+
+    // The SPA reserves the document reference before POST and optimistically
+    // inserts the same UUID. Honour both values: allocating a second id/ref
+    // here created a duplicate Prisma RFQ beside the client PO.
+    const requestedId = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id)
+      ? body.id
+      : undefined
+    if (requestedId) {
+      const existing = await prisma.purchaseOrder.findUnique({
+        where: { id: requestedId },
+        include: { vendor: true, items: { include: { product: true } } },
+      })
+      if (existing) {
+        return NextResponse.json(mapPOToClient(existing), { status: 200 })
+      }
+    }
+
     // Auto-create catalog products missing from Prisma instead of dying on a
     // P2003 FK violation — a blob-only product must not orphan the whole PO.
     const items = await resolvePOLineProducts(mapPOItemsForCreate(Array.isArray(body.lines) ? body.lines : []))
-    const poNumber = await getNextDocNumber('purchase_order')
+    const requestedRef = typeof body.ref === 'string' && /^PO\/\d{4}\/\d{4,}$/i.test(body.ref.trim())
+      ? body.ref.trim()
+      : undefined
+    const poNumber = requestedRef ?? await getNextDocNumber('purchase_order')
     const totals = computePOTotals(items)
     const notes = body.notes == null ? null : String(body.notes).trim().slice(0, 5_000)
 
@@ -76,6 +96,7 @@ export async function POST(request: NextRequest) {
 
     const created = await prisma.purchaseOrder.create({
       data: {
+        ...(requestedId ? { id: requestedId } : {}),
         poNumber,
         clientId,
         // Creation always starts as draft. Confirmation/receipt status changes
