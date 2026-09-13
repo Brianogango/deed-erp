@@ -47,6 +47,8 @@ export interface CrudConfig<T extends object> {
   redact?: (keyof T)[]
   /** Optional: async mutation of POST body before build (e.g. server-side ref allocation). */
   prepareCreate?: (body: AnyRecord) => Promise<AnyRecord | string>
+  /** Optional async mutation of a PATCH body after the current row is loaded. */
+  preparePatch?: (body: AnyRecord, previous: T) => Promise<AnyRecord | string>
   /**
    * Optional write guard after merge/build. Return an error string to reject
    * with 422. For PATCH, `previous` is the existing row; for POST it is undefined.
@@ -197,7 +199,13 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
       if (config.recordAccess && (!session || !config.recordAccess(session.user, previous, 'patch'))) {
         return { forbidden: true as const }
       }
-      const next = { ...previous, ...body, id } as T
+      let preparedBody = body
+      if (config.preparePatch) {
+        const prepared = await config.preparePatch(body, previous)
+        if (typeof prepared === 'string') return { error: prepared }
+        preparedBody = prepared
+      }
+      const next = { ...previous, ...preparedBody, id } as T
       if (config.validateWrite) {
         const writeError = config.validateWrite(next, previous)
         if (writeError) return { error: writeError }

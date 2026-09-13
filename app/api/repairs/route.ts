@@ -13,6 +13,7 @@ import { loadRepairsFromPrisma } from '@/lib/repair-mirror'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { resolveDiagnosisFee, normalizeDeviceTier } from '@/lib/diagnosis-fee'
 import { publishNotificationEvent } from '@/lib/notifications/service'
+import { findOpenRepairWithSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -150,6 +151,27 @@ export async function POST(request: NextRequest) {
     const existingIdx = repairs.findIndex(r => r.id === repairId)
     const existing = existingIdx >= 0 ? repairs[existingIdx] : null
     const existingByRef = repairs.find(r => r.ref.toLowerCase() === requestedRef.toLowerCase())
+    const submittedSerial = (
+      'serialNumber' in body ? String(body.serialNumber ?? '') : String(existing?.serialNumber ?? '')
+    ).normalize('NFKC').trim().slice(0, 160)
+    const serialWarrantyException = body.serialWarrantyException === true
+      || (!('serialWarrantyException' in body) && existing?.serialWarrantyException === true)
+    const clientCausedDamage = body.clientCausedDamage === true
+      || (!('clientCausedDamage' in body) && existing?.clientCausedDamage === true)
+    const warranties = Array.isArray(state.deed_warranties) ? state.deed_warranties as any[] : []
+    const warrantyDecision = resolveRepairWarranty(warranties, submittedSerial, {
+      serialException: serialWarrantyException,
+      clientCausedDamage,
+    })
+    const warrantyPatch = warrantyPatchFromDecision(warrantyDecision)
+    const duplicate = findOpenRepairWithSerial(repairs, submittedSerial, repairId)
+    if (duplicate) {
+      return NextResponse.json({
+        error: `This device already has an open repair: ${duplicate.ref}`,
+        repairId: duplicate.id,
+        repairRef: duplicate.ref,
+      }, { status: 409 })
+    }
 
     // Never replace an official ticket, and never mint a second number on retry.
     const keepExisting = existing && isOfficialRepairRef(existing.ref) ? existing.ref : null
@@ -184,14 +206,6 @@ export async function POST(request: NextRequest) {
       : []
     const repairPath = body.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first'
     const waiverAccepted = repairPath === 'direct_repair' && body.liabilityWaiverAccepted === true
-    const warrantyCoverage = ['full', 'partial', 'void'].includes(String(body.warrantyCoverage))
-      ? body.warrantyCoverage as RepairOrder['warrantyCoverage']
-      : undefined
-    const warrantyVerificationStatus = [
-      'not_checked', 'verified', 'pending_manual_review', 'excluded_client_damage',
-    ].includes(String(body.warrantyVerificationStatus))
-      ? body.warrantyVerificationStatus as RepairOrder['warrantyVerificationStatus']
-      : undefined
     const serialWarrantyExceptionReason = [
       'device_cannot_power_on', 'label_unreadable', 'sticker_missing', 'customer_unable_to_confirm', 'other',
     ].includes(String(body.serialWarrantyExceptionReason))
@@ -216,7 +230,7 @@ export async function POST(request: NextRequest) {
       contactPersonTitle: optionalText(body.contactPersonTitle, 120),
       productId: cleanText(body.productId, 80),
       productName: cleanText(body.productName, 240),
-      serialNumber: cleanText(body.serialNumber, 160),
+      serialNumber: submittedSerial,
       serialId: optionalText(body.serialId, 80),
       deviceCondition: ['good', 'fair', 'poor', 'damaged'].includes(String(body.deviceCondition))
         ? body.deviceCondition as RepairOrder['deviceCondition']
@@ -243,14 +257,11 @@ export async function POST(request: NextRequest) {
       deviceBrand: optionalText(body.deviceBrand, 120),
       deviceModel: optionalText(body.deviceModel, 160),
       customerBillingType: body.customerBillingType === 'corporate' ? 'corporate' : 'walk_in',
-      underWarranty: body.underWarranty === true,
-      warrantyId: optionalText(body.warrantyId, 80),
-      warrantyCoverage,
-      warrantyVerificationStatus,
-      serialWarrantyException: body.serialWarrantyException === true,
+      ...warrantyPatch,
+      serialWarrantyException,
       serialWarrantyExceptionReason,
       serialWarrantyExceptionNotes: optionalText(body.serialWarrantyExceptionNotes, 2_000),
-      clientCausedDamage: body.clientCausedDamage === true,
+      clientCausedDamage,
       clientDamageReason: optionalText(body.clientDamageReason, 2_000),
       estimatedCompletionDate: optionalText(body.estimatedCompletionDate, 40),
       partsUsed: [] as RepairOrder['partsUsed'],
@@ -299,10 +310,6 @@ export async function POST(request: NextRequest) {
       ...(!incomingHasPath && existing
         ? {
             repairPath: existing.repairPath,
-            underWarranty: existing.underWarranty,
-            warrantyCoverage: existing.warrantyCoverage,
-            warrantyId: existing.warrantyId,
-            warrantyVerificationStatus: existing.warrantyVerificationStatus,
             serialWarrantyException: existing.serialWarrantyException,
             serialWarrantyExceptionReason: existing.serialWarrantyExceptionReason,
             serialWarrantyExceptionNotes: existing.serialWarrantyExceptionNotes,
