@@ -7,11 +7,44 @@ import { repairDatesWriteError } from '@/lib/data-validation'
 import { canAccessRecord, filterStoreValueForRole, normalizePermissionRole } from '@/lib/auth/authorization'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { repairHardDeleteBlocker } from '@/lib/repair-delete'
+import { findOpenRepairWithSerial, normalizeRepairSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
 
 const config = {
   storeKey: 'deed_repairs_v2',
   allowedWriteRoles: ['director', 'admin_officer', 'technical_lead', 'technician'],
   build: () => '' as unknown as RepairOrder,
+  lockKey: 'deed_repairs_v2',
+  preparePatch: async (body: Record<string, unknown>, previous: RepairOrder) => {
+    const identityChanged = [
+      'serialNumber', 'serialWarrantyException', 'clientCausedDamage', 'underWarranty', 'warrantyId',
+    ].some(key => key in body)
+    if (!identityChanged) return body
+
+    const state = await loadAppState(['deed_warranties', 'deed_repairs_v2'])
+    const serial = ('serialNumber' in body ? String(body.serialNumber ?? '') : previous.serialNumber ?? '')
+      .normalize('NFKC').trim().slice(0, 160)
+    const repairs = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as RepairOrder[] : []
+    const duplicate = findOpenRepairWithSerial(repairs, serial, previous.id)
+    if (duplicate) return `This device already has an open repair: ${duplicate.ref}`
+
+    const serialChanged = normalizeRepairSerial(serial) !== normalizeRepairSerial(previous.serialNumber)
+    const serialException = serialChanged && normalizeRepairSerial(serial).length >= 4
+      ? false
+      : ('serialWarrantyException' in body ? body.serialWarrantyException === true : previous.serialWarrantyException === true)
+    const clientCausedDamage = 'clientCausedDamage' in body
+      ? body.clientCausedDamage === true
+      : previous.clientCausedDamage === true
+    const warranties = Array.isArray(state.deed_warranties) ? state.deed_warranties as any[] : []
+    const decision = resolveRepairWarranty(warranties, serial, { serialException, clientCausedDamage })
+
+    return {
+      ...body,
+      serialNumber: serial,
+      serialWarrantyException: serialException,
+      ...(serialChanged ? { warrantyClaimId: undefined } : {}),
+      ...warrantyPatchFromDecision(decision),
+    }
+  },
   validateWrite: (next: RepairOrder, previous?: RepairOrder) => repairDatesWriteError(next, new Date(), previous),
   validateDelete: (repair: RepairOrder) => repairHardDeleteBlocker(repair as any),
   recordAccess: (user: any, repair: RepairOrder, action: 'patch' | 'delete') => {

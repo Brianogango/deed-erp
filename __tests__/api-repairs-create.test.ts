@@ -38,7 +38,13 @@ beforeEach(() => {
   mockGetServerSession.mockResolvedValue({
     user: { id: 'u1', role: 'technical_lead', name: 'Lead' },
   })
-  mockLoadAppState.mockResolvedValue({ deed_repairs_v2: [] })
+  mockLoadAppState.mockResolvedValue({
+    deed_repairs_v2: [],
+    deed_warranties: [{
+      id: 'war_1', ref: 'WAR/2099/0001', serialNumber: 'SN ABC 1234',
+      startDate: '2020-01-01', endDate: '2099-12-31', status: 'active',
+    }],
+  })
   mockSaveStoreKeys.mockResolvedValue(undefined)
   mockGetNextRepairRef.mockResolvedValue('REP/2099/0001')
 })
@@ -78,8 +84,12 @@ describe('POST /api/repairs — intake fields', () => {
     }))
   })
 
-  it('merges with an existing same-id draft instead of clobbering path/warranty', async () => {
+  it('preserves the path but keeps a serial exception in manual review on retry', async () => {
     mockLoadAppState.mockResolvedValue({
+      deed_warranties: [{
+        id: 'war_1', ref: 'WAR/2099/0001', serialNumber: 'SN-ABC-1234',
+        startDate: '2020-01-01', endDate: '2099-12-31', status: 'active',
+      }],
       deed_repairs_v2: [{
         id: 'rep_intake_2',
         ref: 'TEMP',
@@ -108,11 +118,51 @@ describe('POST /api/repairs — intake fields', () => {
       id: 'rep_intake_2',
       ref: 'REP/2099/0001',
       repairPath: 'direct_repair',
-      underWarranty: true,
-      warrantyCoverage: 'full',
+      underWarranty: false,
+      warrantyVerificationStatus: 'pending_manual_review',
       serialWarrantyException: true,
       serialWarrantyExceptionReason: 'label_unreadable',
     }))
+  })
+
+  it('ignores spoofed warranty flags when the serial warranty is expired', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_repairs_v2: [],
+      deed_warranties: [{
+        id: 'expired', ref: 'WAR/2020/0001', serialNumber: 'EXP-1234',
+        startDate: '2020-01-01', endDate: '2020-12-31', status: 'active',
+      }],
+    })
+    const res = await POST(makeReq({
+      id: 'rep_expired', customerName: 'Jane Doe', productName: 'HP EliteBook',
+      serialNumber: 'EXP-1234', underWarranty: true, warrantyId: 'expired',
+      warrantyCoverage: 'full', warrantyVerificationStatus: 'verified',
+    }))
+    expect(res.status).toBe(201)
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_repairs_v2)
+    expect(saved[0]).toEqual(expect.objectContaining({
+      underWarranty: false, warrantyVerificationStatus: 'not_checked',
+    }))
+    expect(saved[0].warrantyId).toBeUndefined()
+    expect(saved[0].warrantyCoverage).toBeUndefined()
+  })
+
+  it('rejects a second open repair for the same normalized serial', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_warranties: [],
+      deed_repairs_v2: [{
+        id: 'existing', ref: 'REP/2026/0100', status: 'in_repair', serialNumber: '5CG-123 ABC',
+      }],
+    })
+    const res = await POST(makeReq({
+      id: 'duplicate', customerName: 'Jane Doe', productName: 'HP EliteBook', serialNumber: '5cg123abc',
+    }))
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual(expect.objectContaining({
+      repairId: 'existing', repairRef: 'REP/2026/0100',
+    }))
+    expect(mockGetNextRepairRef).not.toHaveBeenCalled()
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 
   it('keeps an already-allocated sequential ticket instead of minting another', async () => {

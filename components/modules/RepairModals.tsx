@@ -6,6 +6,7 @@ import { useRepairStore, RepairOrder, fmtKes, type RepairQAItem } from '@/lib/st
 import { useHrStore } from '@/hooks/useHrStore'
 import { assignableTechnicians } from '@/lib/repair/assignable-technicians'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
+import { findOpenRepairWithSerial, normalizeRepairSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
 import { isRepairNoCharge } from '@/lib/repair-billing-exempt'
 import { shouldDefaultCloseAfterHandover } from '@/lib/repair-handover'
 import { buildRepairInvoiceCharges, repairBillingNeedsSync } from '@/lib/repair-invoice'
@@ -1302,7 +1303,7 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
  * can correct intake/customer/device details after booking.
  */
 export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { updateRepair, appendRepairHistory, showToast, currentUserId, users, systemSettings } = useRepairStore()
+  const { updateRepair, appendRepairHistory, showToast, currentUserId, users, systemSettings, repairs, warranties } = useRepairStore()
   const actor = users.find(u => u.id === currentUserId)
   const feeLocked = repair.diagnosisFeeStatus === 'invoiced' || repair.diagnosisFeeStatus === 'waived'
   const [form, setForm] = useState({
@@ -1331,6 +1332,28 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
       showToast('Customer signature and terms agreement required when switching to Direct Repair', 'error')
       return
     }
+    const serialChanged = normalizeRepairSerial(form.serialNumber) !== normalizeRepairSerial(repair.serialNumber)
+    const duplicate = findOpenRepairWithSerial(repairs, form.serialNumber, repair.id)
+    if (duplicate) {
+      showToast(`This device already has an open repair: ${duplicate.ref}`, 'error')
+      return
+    }
+    const warrantyDecision = serialChanged
+      ? resolveRepairWarranty(warranties, form.serialNumber, {
+          serialException: false,
+          clientCausedDamage: repair.clientCausedDamage,
+        })
+      : null
+    const warrantyPatch = warrantyDecision
+      ? {
+          ...warrantyPatchFromDecision(warrantyDecision),
+          serialWarrantyException: false,
+          serialWarrantyExceptionReason: undefined,
+          serialWarrantyExceptionNotes: undefined,
+          warrantyClaimId: undefined,
+        }
+      : {}
+
     const nowIso = new Date().toISOString()
     const pathPatch = pathChanging
       ? form.repairPath === 'direct_repair'
@@ -1395,6 +1418,7 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
       description: form.issueDescription.trim(),
       ...pathPatch,
       ...feePatch,
+      ...warrantyPatch,
     })
     if (pathChanging && appendRepairHistory) {
       appendRepairHistory(repair.id, {

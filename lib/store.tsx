@@ -238,6 +238,7 @@ import {
 } from '@/lib/repair-billing-exempt'
 import { applyRepairHandover, canCloseRepairAfterHandover, repairHasInvoiceLink } from '@/lib/repair-handover'
 import { resolveWarrantyMonths, addWarrantyMonths } from '@/lib/warranty-period'
+import { resolveRepairWarranty } from '@/lib/repair-warranty'
 import {
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
@@ -15127,8 +15128,9 @@ const storeCtx: AppState = {
       return true
     },
     checkWarrantyForRepair: (repairId, serial) => {
-      const war = warRef.current.find(w => w.serialNumber === serial && w.status === 'active')
-      if (war) {
+      const decision = resolveRepairWarranty(warRef.current, serial)
+      const war = decision.warranty
+      if (decision.covered && war) {
         setRepairs(p => p.map(r => r.id === repairId ? { ...r, warrantyId: war.id, underWarranty: true, laborCost: 0, total: 0 } : r))
         addAuditLog('warranty_check', repairId, `Active warranty ${war.ref} applied`)
         showToast(`✓ Active warranty ${war.ref} — repair is FREE`, 'info')

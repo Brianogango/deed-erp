@@ -19,6 +19,7 @@ import {
   buildWhatsAppShareUrl,
 } from '@/lib/whatsapp-share'
 import { useFormDraft } from '@/hooks/useFormDraft'
+import { findOpenRepairWithSerial, resolveRepairWarranty } from '@/lib/repair-warranty'
 
 const CYAN  = '#00AEEF'
 const NAVY  = '#1A1F5E'
@@ -209,28 +210,15 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   }
 
   // ── Warranty + duplicate via serial ───────────────────────────────────────
-  const matchedWarranty = device.serial.trim().length >= 4
-    ? warranties.find(w =>
-        w.serialNumber.toLowerCase() === device.serial.trim().toLowerCase() &&
-        w.status === 'active'
-      )
-    : undefined
+  const warrantyDecision = resolveRepairWarranty(warranties, device.serial, {
+    serialException: device.serialWarrantyException,
+    clientCausedDamage: device.clientCausedDamage,
+  })
+  const matchedWarranty = warrantyDecision.warranty
+  const duplicateRepair = findOpenRepairWithSerial(repairs, device.serial)
 
-  const duplicateRepair = device.serial.trim().length >= 4
-    ? repairs.find(r =>
-        r.serialNumber?.toLowerCase() === device.serial.trim().toLowerCase() &&
-        !['delivered', 'closed', 'cancelled', 'returned'].includes(r.status)
-      )
-    : undefined
-
-  const intakeUnderWarranty = !!matchedWarranty && !device.clientCausedDamage && !device.serialWarrantyException
-  const warrantyVerificationStatus = device.serialWarrantyException
-    ? 'pending_manual_review'
-    : device.clientCausedDamage
-      ? 'excluded_client_damage'
-      : matchedWarranty
-        ? 'verified'
-        : 'not_checked'
+  const intakeUnderWarranty = warrantyDecision.covered
+  const warrantyVerificationStatus = warrantyDecision.verificationStatus
 
   // ── Phone lookup for individual ────────────────────────────────────────────
   const handleIndvPhoneChange = (phone: string) => {
@@ -462,7 +450,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         bookedAt: rep.intakeDate,
       })
     } catch (err) {
-      showToast('Failed to create repair job', 'error')
+      showToast(err instanceof Error ? err.message : 'Failed to create repair job', 'error')
     } finally {
       setLoading(false)
     }
