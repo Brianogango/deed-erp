@@ -129,6 +129,7 @@ export async function buildCommercialPdf(
       mpesaPaybill: company.mpesaPaybill,
       mpesaAccount: company.mpesaAccount,
       invoiceFooter: company.invoiceFooter,
+      printTemplate: company.printTemplate,
       logoDataUrl: logo?.dataUrl,
       logoWidth: logo?.width,
       logoHeight: logo?.height,
