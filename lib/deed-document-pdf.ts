@@ -7,6 +7,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
+import { normalizeDocumentLayout, type DocumentLayoutId } from '@/lib/document-layout'
 
 export interface DeedPdfLine {
   lineType?: 'item' | 'section'
@@ -32,6 +33,7 @@ export interface DeedPdfCompany {
   mpesaPaybill?: string
   mpesaAccount?: string
   invoiceFooter?: string
+  printTemplate?: DocumentLayoutId | 'classic' | 'modern' | 'compact'
   logoDataUrl?: string
   logoWidth?: number
   logoHeight?: number
@@ -97,6 +99,12 @@ const BORDER: [number, number, number] = [205, 219, 232]
 const SOFT: [number, number, number] = [246, 250, 253]
 const AMBER: [number, number, number] = [188, 101, 0]
 const AMBER_SOFT: [number, number, number] = [255, 247, 232]
+const ODOO_PURPLE: [number, number, number] = [113, 75, 103]
+const ODOO_TEAL: [number, number, number] = [1, 126, 132]
+
+function layoutAccent(layout: DocumentLayoutId): [number, number, number] {
+  return layout === 'bold' || layout === 'bubble' ? ODOO_TEAL : ODOO_PURPLE
+}
 
 const money = (value: number) =>
   Number(value || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -172,6 +180,21 @@ function drawLogo(doc: jsPDF, company: DeedPdfCompany) {
 }
 
 function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: string) {
+  const layout = normalizeDocumentLayout(company.printTemplate)
+  const accent = layoutAccent(layout)
+
+  if (layout === 'bold') {
+    doc.setFillColor(...accent).rect(0, 0, PAGE_W, 82, 'F')
+  } else if (layout === 'boxed') {
+    doc.setDrawColor(...accent).setLineWidth(1).roundedRect(MARGIN - 8, 14, CONTENT_W + 16, 60, 3, 3, 'S')
+  } else if (layout === 'bubble') {
+    doc.setFillColor(...accent).circle(PAGE_W - 18, 12, 54, 'F')
+    doc.setFillColor(235, 246, 246).circle(PAGE_W - 82, 7, 24, 'F')
+  } else if (layout === 'wave') {
+    doc.setFillColor(...accent)
+    doc.lines([[145, 0], [80, 12], [112, -8], [150, 12], [108, -16]], 0, 0, [1, 1], 'F', true)
+  }
+
   drawLogo(doc, company)
   const details = [
     [company.address, company.city].filter(Boolean).join(', '),
@@ -180,9 +203,15 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
     company.email,
   ].filter(Boolean) as string[]
 
-  doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...INK)
+  const headerText = layout === 'bold' ? ([255, 255, 255] as [number, number, number]) : INK
+  doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...headerText)
   details.slice(0, 4).forEach((item, index) => doc.text(item, RIGHT, 27 + index * 11, { align: 'right' }))
-  line(doc, MARGIN, 76, RIGHT, CYAN, 1.2)
+  if (layout === 'striped') {
+    line(doc, MARGIN, 73, RIGHT, accent, 3.2)
+    line(doc, MARGIN, 78, RIGHT, ODOO_TEAL, 1.2)
+  } else if (layout !== 'bold' && layout !== 'boxed') {
+    line(doc, MARGIN, 76, RIGHT, accent, layout === 'light' ? 1.2 : 2)
+  }
 
   if (continuation) {
     doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...NAVY)
@@ -191,7 +220,13 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
 }
 
 function drawFooter(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, page: number, pages: number) {
-  line(doc, MARGIN, PAGE_H - 38, RIGHT, CYAN, .9)
+  const layout = normalizeDocumentLayout(company.printTemplate)
+  const accent = layoutAccent(layout)
+  if (layout === 'wave') {
+    doc.setFillColor(...accent)
+    doc.lines([[145, 0], [80, -12], [112, 8], [150, -12], [108, 16]], 0, PAGE_H, [1, 1], 'F', true)
+  }
+  line(doc, MARGIN, PAGE_H - 38, RIGHT, accent, layout === 'bold' ? 2 : .9)
   doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
   doc.text(`Page ${page} of ${pages}`, MARGIN, PAGE_H - 22)
   doc.text(company.invoiceFooter || 'Thank you for your business.', PAGE_W / 2, PAGE_H - 22, { align: 'center' })
@@ -248,12 +283,19 @@ export function buildDeedDocumentPdf(
   const showAmounts = !input.hideAmounts
   const currency = company.currency || 'KES'
   const customerLabel = partyLabelFor(input)
+  const layout = normalizeDocumentLayout(company.printTemplate)
+  const accent = layoutAccent(layout)
 
   drawLetterhead(doc, company)
 
   let y = 112
-  doc.setFont('helvetica', 'bold').setFontSize(21).setTextColor(...NAVY)
-  doc.text(input.title.toUpperCase(), MARGIN, y)
+  if (layout === 'bold') {
+    doc.setFillColor(...accent).roundedRect(MARGIN, y - 22, CONTENT_W, 34, 3, 3, 'F')
+    doc.setFont('helvetica', 'bold').setFontSize(19).setTextColor(255, 255, 255)
+  } else {
+    doc.setFont('helvetica', 'bold').setFontSize(21).setTextColor(...accent)
+  }
+  doc.text(input.title.toUpperCase(), MARGIN + (layout === 'bold' ? 10 : 0), y)
 
   y += 24
   doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...NAVY)
@@ -264,6 +306,10 @@ export function buildDeedDocumentPdf(
   const leftX = MARGIN + 10
   const splitX = MARGIN + 232
   const rightX = splitX + 18
+  if (layout === 'boxed' || layout === 'bubble') {
+    doc.setFillColor(...(layout === 'bubble' ? [242, 249, 249] as [number, number, number] : SOFT))
+    doc.setDrawColor(...accent).setLineWidth(.55).roundedRect(MARGIN, y - 10, CONTENT_W, 112, layout === 'bubble' ? 12 : 3, layout === 'bubble' ? 12 : 3, 'FD')
+  }
   writeLabel(doc, customerLabel, leftX, y)
   doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...INK)
   doc.text(input.customerName || 'Customer', leftX, y + 17, { maxWidth: 195 })
@@ -340,26 +386,26 @@ export function buildDeedDocumentPdf(
     margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
     head: delivery ? deliveryHead : commercialHead,
     body: body as any,
-    theme: 'grid',
+    theme: layout === 'light' ? 'plain' : 'grid',
     styles: {
       font: 'helvetica',
       fontSize: 7.8,
       textColor: INK,
-      lineColor: BORDER,
-      lineWidth: .45,
+      lineColor: layout === 'boxed' ? accent : BORDER,
+      lineWidth: layout === 'boxed' ? .65 : .45,
       cellPadding: { top: 7, right: 6, bottom: 7, left: 6 },
       valign: 'middle',
       overflow: 'linebreak',
     },
     headStyles: {
-      fillColor: SOFT,
-      textColor: NAVY,
+      fillColor: layout === 'light' ? [255, 255, 255] : accent,
+      textColor: layout === 'light' ? accent : [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 6.8,
       minCellHeight: 24,
       halign: 'center',
     },
-    alternateRowStyles: { fillColor: [252, 253, 255] },
+    alternateRowStyles: { fillColor: layout === 'striped' ? [244, 237, 242] : [252, 253, 255] },
     columnStyles: delivery
       ? {
           0: { cellWidth: 24, halign: 'center' },
