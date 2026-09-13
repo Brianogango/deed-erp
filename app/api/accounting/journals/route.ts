@@ -19,6 +19,7 @@ const manualJournalSchema = z.object({
     label: z.string().trim().max(300).optional(),
     debit: z.coerce.number().finite().nonnegative().max(9_999_999_999.99).default(0),
     credit: z.coerce.number().finite().nonnegative().max(9_999_999_999.99).default(0),
+    analyticAccountId: z.string().uuid().nullable().optional(),
   }).strict()).min(2).max(500),
 }).strict()
 
@@ -72,6 +73,7 @@ export async function GET(request: NextRequest) {
           description: l.label || '',
           debit: Number(l.debit),
           credit: Number(l.credit),
+          analyticAccountId: l.analyticAccountId,
         })),
       }))
 
@@ -128,6 +130,7 @@ export async function POST(request: NextRequest) {
         label: l.description || l.label || undefined,
         debit: l.debit,
         credit: l.credit,
+        analyticAccountId: l.analyticAccountId || null,
       })),
     })
 

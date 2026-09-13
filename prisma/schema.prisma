@@ -2579,15 +2579,68 @@ model JournalEntryLine {
   rateDate DateTime? @map("rate_date") @db.Date
   rateSource String? @map("rate_source") @db.VarChar(80)
   partnerId      String?  @map("partner_id") @db.Uuid
+  analyticAccountId String? @map("analytic_account_id") @db.Uuid
   sortOrder      Int      @default(0) @map("sort_order")
   createdAt      DateTime @default(now()) @map("created_at")
 
   journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
   account      AccountCode? @relation(fields: [accountId], references: [id])
+  analyticAccount AnalyticAccount? @relation(fields: [analyticAccountId], references: [id], onDelete: Restrict)
 
   @@index([journalEntryId], map: "idx_jel_entry")
   @@index([accountId], map: "idx_jel_account")
+  @@index([analyticAccountId], map: "idx_jel_analytic_account")
   @@map("journal_entry_lines")
+}
+
+model AnalyticAccount {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(40)
+  name        String   @db.VarChar(160)
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  journalLines JournalEntryLine[]
+  budgetLines  AnalyticBudgetLine[]
+
+  @@map("analytic_accounts")
+}
+
+model AnalyticBudget {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(160)
+  dateFrom  DateTime @map("date_from") @db.Date
+  dateTo    DateTime @map("date_to") @db.Date
+  state     String   @default("draft") @db.VarChar(20)
+  currency  String   @default("KES") @db.VarChar(3)
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lines AnalyticBudgetLine[]
+
+  @@index([dateFrom, dateTo], map: "idx_analytic_budgets_period")
+  @@map("analytic_budgets")
+}
+
+model AnalyticBudgetLine {
+  id                String   @id @default(uuid()) @db.Uuid
+  budgetId          String   @map("budget_id") @db.Uuid
+  analyticAccountId String   @map("analytic_account_id") @db.Uuid
+  accountCode       String   @map("account_code") @db.VarChar(20)
+  plannedAmount     Decimal  @map("planned_amount") @db.Decimal(14, 2)
+  notes             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  budget          AnalyticBudget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  analyticAccount AnalyticAccount @relation(fields: [analyticAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([budgetId, analyticAccountId, accountCode], map: "uq_analytic_budget_dimension")
+  @@index([analyticAccountId], map: "idx_analytic_budget_lines_account")
+  @@map("analytic_budget_lines")
 }
 
 model ProductValuation {

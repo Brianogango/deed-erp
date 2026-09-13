@@ -10,6 +10,7 @@ export type JournalLineInput = {
   debit: number
   credit: number
   partnerId?: string | null
+  analyticAccountId?: string | null
 }
 
 export type CreateJournalEntryInput = {
@@ -146,6 +147,14 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
   for (let i = 0; i < params.lines.length; i++) {
     const line = params.lines[i]
     const accountId = await resolveAccountId(db, line.accountLabel)
+    if (line.analyticAccountId) {
+      const analytic = await db.analyticAccount.findUnique({
+        where: { id: line.analyticAccountId },
+        select: { id: true, isActive: true },
+      })
+      if (!analytic) throw postingError(`Unknown analytic account: ${line.analyticAccountId}`, 422)
+      if (!analytic.isActive) throw postingError(`Inactive analytic account cannot receive postings: ${line.analyticAccountId}`, 422)
+    }
     lineCreates.push({
       accountId,
       accountLabel: String(line.accountLabel).slice(0, 200),
@@ -153,6 +162,7 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
       debit: round2(line.debit),
       credit: round2(line.credit),
       partnerId: line.partnerId || null,
+      analyticAccountId: line.analyticAccountId || null,
       sortOrder: i,
     })
   }
@@ -212,7 +222,7 @@ export async function persistStoreJournalEntryInTx(
     description?: string
     invoiceId?: string
     paymentId?: string
-    lines: Array<{ account: string; description?: string; debit: number; credit: number }>
+    lines: Array<{ account: string; description?: string; debit: number; credit: number; analyticAccountId?: string | null }>
     totalDebit?: number
     totalCredit?: number
   },
@@ -243,6 +253,7 @@ export async function persistStoreJournalEntryInTx(
       label: l.description,
       debit: Number(l.debit || 0),
       credit: Number(l.credit || 0),
+      analyticAccountId: l.analyticAccountId || null,
     })),
   })
 }
@@ -255,7 +266,7 @@ export async function persistStoreJournalEntry(entry: {
   description?: string
   invoiceId?: string
   paymentId?: string
-  lines: Array<{ account: string; description?: string; debit: number; credit: number }>
+  lines: Array<{ account: string; description?: string; debit: number; credit: number; analyticAccountId?: string | null }>
   totalDebit?: number
   totalCredit?: number
 }, opts?: { createdById?: string; journalCode?: string }) {
@@ -286,6 +297,7 @@ export async function reverseJournalEntry(ref: string, userId?: string) {
         label: `Reversal: ${l.label ?? ''}`,
         debit: Number(l.credit),
         credit: Number(l.debit),
+        analyticAccountId: l.analyticAccountId,
       })),
     })
     await tx.journalEntry.update({ where: { id: original.id }, data: { isReversed: true } })
