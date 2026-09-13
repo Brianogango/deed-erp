@@ -261,7 +261,7 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
     line(doc, MARGIN, 73, right(doc), accent, 3.2)
     line(doc, MARGIN, 78, right(doc), layoutSecondary(company), 1.2)
   } else if (layout !== 'bold' && layout !== 'boxed') {
-    line(doc, MARGIN, 76, right(doc), accent, layout === 'light' ? 1.2 : 2)
+    line(doc, MARGIN, 76, right(doc), accent, layout === 'standard' ? 1.2 : 2)
   }
 
   if (continuation) {
@@ -442,7 +442,7 @@ export function buildDeedDocumentPdf(
     margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
     head: delivery ? deliveryHead : commercialHead,
     body: body as any,
-    theme: layout === 'light' ? 'plain' : 'grid',
+    theme: layout === 'standard' ? 'plain' : 'grid',
     styles: {
       font: 'helvetica',
       fontSize: 7.8,
@@ -454,8 +454,8 @@ export function buildDeedDocumentPdf(
       overflow: 'linebreak',
     },
     headStyles: {
-      fillColor: layout === 'light' ? [255, 255, 255] : accent,
-      textColor: layout === 'light' ? accent : [255, 255, 255],
+      fillColor: layout === 'standard' ? [255, 255, 255] : accent,
+      textColor: layout === 'standard' ? accent : [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 6.8,
       minCellHeight: 24,
