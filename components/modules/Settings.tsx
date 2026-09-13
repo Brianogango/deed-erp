@@ -164,7 +164,7 @@ export default function Settings() {
     setSectionValue(next, opts)
   }, [setSectionValue])
 
-  const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
+  const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: '' })
   const [editingBankId, setEditingBankId] = useState<string | null>(null)
   const [showBankModal, setShowBankModal] = useState(false)
 
@@ -255,7 +255,7 @@ export default function Settings() {
       showToast('Only Finance or the Director can manage bank accounts.', 'error')
       return
     }
-    setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
+    setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: '' })
     setEditingBankId(null); setShowBankModal(true)
   }
   const openEditBank = (id: string) => {
@@ -274,8 +274,8 @@ export default function Settings() {
       return
     }
     const openingBalance = Number(bankForm.openingBalance)
-    if (!bankForm.name.trim() || !bankForm.bankName.trim() || !bankForm.accountNo.trim() || !Number.isFinite(openingBalance)) {
-      showToast('Complete the account name, bank, account number, and opening balance.', 'error')
+    if (!bankForm.name.trim() || !bankForm.bankName.trim() || !bankForm.accountNo.trim() || !bankForm.openingDate || !Number.isFinite(openingBalance)) {
+      showToast('Complete the account name, bank, account number, opening balance, and opening date.', 'error')
       return
     }
     const data = {
