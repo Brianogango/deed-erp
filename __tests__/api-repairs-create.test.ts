@@ -84,7 +84,7 @@ describe('POST /api/repairs — intake fields', () => {
     }))
   })
 
-  it('merges with an existing same-id draft instead of clobbering path/warranty', async () => {
+  it('preserves the path but keeps a serial exception in manual review on retry', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_warranties: [{
         id: 'war_1', ref: 'WAR/2099/0001', serialNumber: 'SN-ABC-1234',
@@ -118,8 +118,8 @@ describe('POST /api/repairs — intake fields', () => {
       id: 'rep_intake_2',
       ref: 'REP/2099/0001',
       repairPath: 'direct_repair',
-      underWarranty: true,
-      warrantyCoverage: 'full',
+      underWarranty: false,
+      warrantyVerificationStatus: 'pending_manual_review',
       serialWarrantyException: true,
       serialWarrantyExceptionReason: 'label_unreadable',
     }))
