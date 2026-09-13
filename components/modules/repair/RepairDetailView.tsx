@@ -311,8 +311,8 @@ export default function RepairDetailView() {
     : canComplete  ? 'Mark repair complete to submit for QA'
     : canPerformQA ? 'Perform QC check — repair is ready for testing'
     : canInvoice   ? (billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen
-      ? 'Rebuild the invoice from the approved quote and convert the quotation'
-      : 'Generate the customer invoice before release')
+      ? 'Align the draft invoice with the approved quote'
+      : 'Create a draft invoice for Finance review')
     : canQuote && !r.quote ? 'Generate a repair quote'
     : canQuote && r.quote ? 'Update or re-send the quote to move forward'
     : canCloseJob  ? 'Close the job after collection'
@@ -596,7 +596,7 @@ export default function RepairDetailView() {
               <ActionBtn onClick={() => markPartsArrived(r.id)} icon={faBoxOpen} label="Mark parts arrived" color="bg-orange-600 hover:bg-orange-700" shadow="shadow-orange-100" pulse />
             )}
             {primaryActionId === 'invoice' && (
-              <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice'} color="bg-amber-600 hover:bg-amber-700" shadow="shadow-amber-100" pulse />
+              <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align draft invoice' : 'Create draft invoice'} color="bg-amber-600 hover:bg-amber-700" shadow="shadow-amber-100" pulse />
             )}
             {primaryActionId === 'prepare_release' && (
               <ActionBtn

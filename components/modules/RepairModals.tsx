@@ -1047,8 +1047,8 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
       return { title: 'No Invoice Needed',    btn: 'Done',              icon: faCheckCircle,      accent: '#059669', grad: 'linear-gradient(135deg,#047857,#059669)', shadow: '0 8px 24px rgba(5,150,105,0.4)' }
     if (canBillFromQuote)
       return {
-        title: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align Invoice with Quote' : 'Create Invoice',
-        btn: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Update from Quote' : 'Generate Invoice',
+        title: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align Draft Invoice with Quote' : 'Create Draft Invoice',
+        btn: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Update Draft from Quote' : 'Create Draft Invoice',
         icon: faFileInvoiceDollar, accent: '#D97706', grad: 'linear-gradient(135deg,#B45309,#D97706)', shadow: '0 8px 24px rgba(217,119,6,0.4)',
       }
     return   { title: 'Update Progress',      btn: 'Update',            icon: faHistory,           accent: '#475569', grad: 'linear-gradient(135deg,#334155,#475569)', shadow: '0 8px 24px rgba(71,85,105,0.35)' }
@@ -1061,7 +1061,7 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
       : 'Full warranty — no customer invoice. Prepare release / mark collected.')
     : null
   const billingHint = canBillFromQuote && (billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen)
-    ? 'Uses the approved quote lines, converts the quotation, and posts one invoice.'
+    ? 'Uses the approved quote lines and creates or aligns one draft invoice. Confirmation remains in the Invoice module.'
     : null
 
   return (

@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      # Next's production type/lint pass exceeds Node's ~2 GB default heap.
+      NODE_OPTIONS: --max-old-space-size=4096
       DATABASE_URL: postgresql://deed_ci:deed_ci@127.0.0.1:5432/deed_ci
       POSTGRES_URL: postgresql://deed_ci:deed_ci@127.0.0.1:5432/deed_ci
       AUTH_SECRET: ci-auth-secret-ci-auth-secret-ci

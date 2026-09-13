@@ -216,6 +216,7 @@ import { nextSseRetryMs, nextSyncRetryMs } from '@/lib/store-sync-retry'
 import { repairOutsourceReadiness, repairHasLoggedDiagnosis } from '@/lib/repair-outsource'
 import { applyLoggedDiagnosis, type DiagnosisLogRepairPatch } from '@/lib/repair-diagnosis-log'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
+import { evaluateRepairTransition } from '@/lib/repair-transition-policy'
 import { assertFiniteSequenceNext, repairDatesWriteError } from '@/lib/data-validation'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 import { EXCHANGE_RETURN_LOCATION } from '@/lib/aftersales/exchange-stock'
@@ -15993,30 +15994,8 @@ const storeCtx: AppState = {
             ...r, procurementRequests: [...(r.procurementRequests ?? []), newProc],
           } : r))
 
-          // Auto-create a draft PO (no vendor — admin assigns later)
-          const autoPo: PurchaseOrder = {
-            id: uid(), ref: await storeCtxRef.current!.allocateDocRef('PO'), status: 'draft',
-            vendorId: '', vendorName: '',
-            date: now(), expectedDate: addDays(now(), 7),
-            lines: missingItems
-              .filter(item => item.productId)
-              .map(item => {
-                const prod = prodRef.current.find(p => p.id === item.productId)
-                const catCfg = prod ? (CATEGORY_CONFIG[prod.category as CategoryId] ?? { serialRequired: false }) : { serialRequired: false }
-                return {
-                  id: uid(), productId: item.productId ?? '', productName: item.productName,
-                  qty: item.qty, qtyReceived: 0, unitPrice: 0, taxRate: prod?.taxRate ?? 0,
-                  subtotal: 0, requiresSerial: catCfg.serialRequired,
-                }
-              }),
-            subtotal: 0, taxTotal: 0, total: 0,
-            notes: `Auto-created — parts for approved quote on repair ${repair.ref}`,
-            receiptIds: [],
-            repairId, repairRef: repair.ref, procurementRequestId: newProc.id,
-          }
-          setPurchaseOrders(p => [autoPo, ...p])
-          sync('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(autoPo) })
-          addAuditLog('create_po', autoPo.ref, `Draft PO auto-created for repair ${repair.ref} — assign vendor in Purchase`)
+          // Repair records demand only. Procurement owns supplier selection
+          // and Purchase Order creation from this approved request.
 
           notifyUsers({
             recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], currentUserId),
@@ -16481,44 +16460,8 @@ const storeCtx: AppState = {
         setRepairs(p => p.map(r => r.id === repairId ? passedRepair : r))
         syncRepairToPortal(passedRepair, 'Device ready for collection')
 
-        // A draft invoice created at quote-approval time (Path B procurement
-        // flow) must post when the job passes QC — the old auto-post lived in
-        // markRepairReady, which no UI calls, so those drafts never posted
-        // and AR/revenue never reached the books.
-        const linkedInvoice = repair.invoiceId ? invRef.current.find(i => i.id === repair.invoiceId) : null
-        if (linkedInvoice && linkedInvoice.status === 'draft' && linkedInvoice.lines.length > 0) {
-          void storeCtxRef.current!.postInvoice(linkedInvoice.id)
-          addAuditLog('post_invoice', linkedInvoice.ref, `Auto-posted on QC pass — ${repair.ref}`)
-        }
-
-        const readySaleOrder = findSaleOrderForRepair(soRef.current, repair)
-        if (linkedInvoice && readySaleOrder && (readySaleOrder.status === 'quotation' || readySaleOrder.status === 'quotation_sent')) {
-          const confirmedAt = readySaleOrder.confirmedAt ?? new Date().toISOString()
-          setSaleOrders(prev => prev.map(s => s.id === readySaleOrder.id
-            ? { ...s, status: 'sale' as const, confirmedAt, invoiceId: linkedInvoice.id }
-            : s))
-          sync(`/api/sale-orders/${readySaleOrder.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'sale', confirmedAt, invoiceId: linkedInvoice.id, reserveStock: false }),
-          })
-        }
-        const readySalesQuote = findSalesQuoteForRepair(quotes, repair)
-        if (linkedInvoice && readySalesQuote && readySalesQuote.status !== 'accepted') {
-          setQuotes(p => {
-            const next = p.map(q => q.id === readySalesQuote.id ? {
-              ...q, status: 'accepted' as const, invoiceId: linkedInvoice.id, saleOrderId: readySaleOrder?.id ?? q.saleOrderId,
-              acceptedDate: q.acceptedDate ?? now(), convertedDate: q.convertedDate ?? now(),
-            } : q)
-            const updated = next.find(q => q.id === readySalesQuote.id)
-            if (updated) sync(`/api/quotes/${readySalesQuote.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-            return next
-          })
-        }
-
-        if (!isRepairNoCharge(repair) && !repair.invoiceId && !(repair as any).linkedInvoiceId && !linkedInvoice) {
-          void storeCtxRef.current!.createInvoiceFromRepair(repairId)
-        }
+        // QC owns workshop quality only. Billing remains independent: becoming
+        // Ready must never create, confirm, post, or rewrite an invoice.
 
         notifyUsers({
           recipients: [
@@ -16865,24 +16808,11 @@ const storeCtx: AppState = {
         return
       }
 
+      // Close validates Repair state only and never manufactures a financial
+      // document. Chargeable jobs must be linked explicitly from Invoice.
       if (!isRepairNoCharge(repair) && !repairHasInvoiceLink(repair)) {
-        const existing = invRef.current.find(inv =>
-          inv.status !== 'cancelled'
-          && (
-            inv.repairId === repairId
-            || (!!repair.saleOrderId && inv.saleOrderId === repair.saleOrderId)
-            || (!!repair.ref && inv.notes?.includes(repair.ref))
-          ),
-        )
-        if (existing) {
-          setRepairs(p => p.map(r => r.id === repairId ? { ...r, invoiceId: existing.id, invoiceDate: r.invoiceDate ?? now() } : r))
-        } else {
-          const created = await storeCtxRef.current!.createInvoiceFromRepair(repairId)
-          if (!created?.id) {
-            showToast('Generate invoice before closing', 'error')
-            return
-          }
-        }
+        showToast('Link an invoice from the Invoice module before closing', 'error')
+        return
       }
 
       const latest = repairsRef.current.find(r => r.id === repairId) ?? repair
@@ -16947,8 +16877,10 @@ const storeCtx: AppState = {
       let existingInvoice = resolveExistingInvoice(repair)
       if (existingInvoice?.status === 'cancelled') existingInvoice = undefined
 
-      if (existingInvoice && Number(existingInvoice.amountPaid) > 0 && !invoiceMatchesRepairCharges(existingInvoice, chargeLines)) {
-        showToast(`${existingInvoice.ref} already has payments — cannot rebuild it from the quote. Issue a credit note.`, 'error')
+      // Posted invoices are immutable even when unpaid. Corrections belong to
+      // the Invoice module's credit/debit-note workflow.
+      if (existingInvoice && existingInvoice.status !== 'draft' && !invoiceMatchesRepairCharges(existingInvoice, chargeLines)) {
+        showToast(`${existingInvoice.ref} is posted and immutable — issue a credit/debit note in the Invoice module.`, 'error')
         return existingInvoice
       }
 
@@ -17048,24 +16980,9 @@ const storeCtx: AppState = {
           }
           return { res, data }
         }
-        if (invoice.status === 'posted') {
-          const actor = currentUser()
-          if (!canCancelOrResetInvoice(actor?.role)) {
-            showToast('Only Finance, Admin Officer, or Director can rebuild a posted invoice from the quote', 'error')
-            return invoice
-          }
-          const { res: resetRes, data: resetBody } = await putInvoice(invoice.id, { status: 'draft' })
-          if (!resetRes.ok) {
-            showToast((resetBody as { error?: string } | null)?.error || `Could not reset ${invoice.ref} to draft`, 'error')
-            return invoice
-          }
-          const resetLock = readLockVersionFromResponse(resetBody)
-          invoice = {
-            ...invoice,
-            status: 'draft',
-            ...(resetLock !== undefined ? { lockVersion: resetLock } : {}),
-          }
-          commitInvoice(invoice)
+        if (invoice.status !== 'draft') {
+          showToast(`${invoice.ref} is immutable — issue a credit/debit note in the Invoice module.`, 'error')
+          return invoice
         }
         const patched: Invoice = {
           ...invoice,
@@ -17089,10 +17006,8 @@ const storeCtx: AppState = {
           ...(rewriteLock !== undefined ? { lockVersion: rewriteLock } : {}),
         }
         commitInvoice(invoice)
-        if (invoice.status !== 'posted') {
-          await storeCtxRef.current!.postInvoice(invoice.id)
-        }
-        invoice = invRef.current.find(inv => inv.id === invoice!.id) ?? { ...invoice, status: 'posted' }
+        // Alignment may update a draft, but confirmation/posting is owned by
+        // the Invoice module and must be an explicit Finance action.
         rebuilt = true
       } else if (!invoice) {
         const freshRepair = repairsRef.current.find(r => r.id === repairId)
@@ -17152,9 +17067,8 @@ const storeCtx: AppState = {
         ...r,
         invoiceId: invoice!.id,
         invoiceDate: r.invoiceDate ?? now(),
-        status: ['delivered', 'collected', 'closed', 'verified_released'].includes(r.status)
-          ? r.status
-          : 'invoiced',
+        // Invoice state is orthogonal to workshop progress.
+        status: r.status,
         ...(soId ? { saleOrderId: soId, saleOrderRef: soRefValue } : {}),
         ...(linkedSalesQuote ? { salesQuoteId: linkedSalesQuote.id, salesQuoteRef: linkedSalesQuote.ref ?? linkedSalesQuote.quoteNumber } : {}),
         diagnosisFeeStatus: (() => {
@@ -17290,6 +17204,12 @@ const storeCtx: AppState = {
         return
       }
 
+      const transition = evaluateRepairTransition(repair.status, newStatus)
+      if (!transition.allowed) {
+        showToast(transition.reason, 'error')
+        return
+      }
+
       const blockedStatuses: RepairStatus[] = ['in_repair', 'qc', 'ready', 'invoiced', 'verified_released', 'delivered', 'collected', 'closed']
       if (blockedStatuses.includes(newStatus) && blockIfOutsourced(repairId, `set status to ${newStatus}`)) {
         return
@@ -17308,9 +17228,8 @@ const storeCtx: AppState = {
           return updated
         }))
         }
-        if (repair.invoiceId) {
-          setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
-        }
+      // Linked invoices are immutable here. Finance handles cancellation or
+      // credit/debit notes explicitly in the Invoice module.
       }
 
       // Update repair status
@@ -17447,37 +17366,9 @@ const storeCtx: AppState = {
         })),
       }
 
-      // Auto-create a draft PO (no vendor yet — admin will assign and process)
-      const draftPo: PurchaseOrder = {
-        id: uid(), ref: await storeCtxRef.current!.allocateDocRef('PO'), status: 'draft',
-        vendorId: '', vendorName: '',
-        date: now(), expectedDate: addDays(now(), 7),
-        lines: [], subtotal: 0, taxTotal: 0, total: 0,
-        notes: `Auto-created from repair procurement request ${newRequest.id} (${repair.ref})`,
-        receiptIds: [],
-        repairId, repairRef: repair.ref, procurementRequestId: newRequest.id,
-      }
-      // Add a line for each requested product
-      const draftPoWithLines = { ...draftPo }
-      const poLines: POLine[] = items
-        .filter((i: any) => i.productId)
-        .map((i: any) => {
-          const prod = prodRef.current.find(p => p.id === i.productId)
-          const catCfg = prod ? (CATEGORY_CONFIG[prod.category as CategoryId] ?? { serialRequired: false }) : { serialRequired: false }
-          const unitPrice = parseFloat(i.estimatedCost || '0')
-          const qty = parseInt(String(i.qty ?? 1), 10)
-          const subtotal = unitPrice * qty
-          return {
-            id: uid(), productId: i.productId, productName: i.productName || i.name || 'Unknown',
-            qty, qtyReceived: 0, unitPrice, taxRate: prod?.taxRate ?? 0,
-            subtotal, requiresSerial: catCfg.serialRequired,
-          }
-        })
-      const poTotals = calcPO(poLines)
-      const finalDraftPo: PurchaseOrder = { ...draftPoWithLines, lines: poLines, ...poTotals }
-      setPurchaseOrders(p => [finalDraftPo, ...p])
-      sync('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(finalDraftPo) })
-      addAuditLog('create_po', finalDraftPo.ref, `Draft PO auto-created from repair procurement request for ${repair.ref}`)
+      // Repair records the request; Procurement/Purchase owns the PO.
+      // This avoids creating incomplete vendor-less financial documents as a
+      // hidden consequence of a workshop action.
 
       // Update repair status to awaiting parts and save the request
       setRepairs(p => p.map(r => r.id === repairId ? {
@@ -17819,9 +17710,8 @@ const storeCtx: AppState = {
             return updated
           }))
       }
-      if (repair.invoiceId) {
-        setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
-      }
+      // Linked invoices are immutable here. Finance handles cancellation or
+      // credit/debit notes explicitly in the Invoice module.
 
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
@@ -17968,9 +17858,8 @@ const storeCtx: AppState = {
           return updated
         }))
       }
-      if (repair.invoiceId) {
-        setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
-      }
+      // Linked invoices are immutable here. Finance handles cancellation or
+      // credit/debit notes explicitly in the Invoice module.
 
       let buyBackId: string | undefined
       let buyBackRef: string | undefined
@@ -18217,11 +18106,8 @@ const storeCtx: AppState = {
             return updated
           }))
         }
-        if (repair.invoiceId) {
-          setInvoices(p => p.map(inv => inv.id === repair.invoiceId && inv.status !== 'cancelled'
-            ? { ...inv, status: 'cancelled' }
-            : inv))
-        }
+      // Linked invoices are immutable here. Finance handles cancellation or
+      // credit/debit notes explicitly in the Invoice module.
       }
 
       const bb: BuyBack = {
