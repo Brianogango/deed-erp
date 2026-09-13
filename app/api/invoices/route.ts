@@ -352,9 +352,10 @@ export async function POST(request: Request) {
 
     // An invoice created already-posted (repair billing, SO fast-path) must
     // post its GL journal here — it never passes through the PUT posting
-    // path. POS invoices are excluded: their tender journal posts via
+    // path. This includes vendor bills so AP/GRNI/Input VAT cannot be skipped.
+    // POS invoices are excluded: their tender journal posts via
     // /api/pos/post-sale-journal (Dr bank / Cr revenue, no AR).
-    if (createdPosted && !isVendor && !invoice.isPosInvoice) {
+    if (createdPosted && !invoice.isPosInvoice) {
       try {
         const { buildInvoiceJournalInput, allocateInvoiceJournalRef } = await import('@/lib/accounting/invoice-journals')
         const { createJournalEntry } = await import('@/lib/accounting/journal-service')
