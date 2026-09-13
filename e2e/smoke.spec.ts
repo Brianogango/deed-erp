@@ -118,6 +118,8 @@ test.describe('repair → quote → invoice money path', () => {
         subtotal: 5000,
         taxTotal: 800,
         status: 'posted',
+        date: '2026-09-13',
+        dueDate: '2026-10-13',
         lines: [{ description: 'Mainboard repair', qty: 1, unitPrice: 5000, subtotal: 5000 }],
       },
     })
@@ -257,6 +259,8 @@ test.describe('odoo sales workflow enforcement', () => {
         partnerName: 'E2E Workflow Customer',
         saleOrderId: soId,
         status: 'posted',
+        date: '2026-09-13',
+        dueDate: '2026-10-13',
         total: 4000,
         subtotal: 4000,
         lines: [{ description: 'Router', qty: 1, unitPrice: 4000, subtotal: 4000 }],
