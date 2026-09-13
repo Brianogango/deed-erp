@@ -7,7 +7,17 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
-import { normalizeDocumentLayout, type DocumentLayoutId } from '@/lib/document-layout'
+import {
+  normalizeDocumentBackground,
+  normalizeDocumentFont,
+  normalizeDocumentLayout,
+  normalizeHexColor,
+  normalizePaperFormat,
+  type DocumentBackgroundId,
+  type DocumentFontId,
+  type DocumentLayoutId,
+  type DocumentPaperFormat,
+} from '@/lib/document-layout'
 
 export interface DeedPdfLine {
   lineType?: 'item' | 'section'
@@ -33,7 +43,13 @@ export interface DeedPdfCompany {
   mpesaPaybill?: string
   mpesaAccount?: string
   invoiceFooter?: string
-  printTemplate?: DocumentLayoutId | 'classic' | 'modern' | 'compact'
+  printTemplate?: DocumentLayoutId | 'classic' | 'light' | 'modern' | 'compact'
+  printFont?: DocumentFontId
+  printBackground?: DocumentBackgroundId
+  printPrimaryColor?: string
+  printSecondaryColor?: string
+  printTagline?: string
+  printPaperFormat?: DocumentPaperFormat
   logoDataUrl?: string
   logoWidth?: number
   logoHeight?: number
@@ -83,12 +99,12 @@ export interface DeedPdfInput {
   paymentDetailLines?: string[]
 }
 
-const PAGE_W = 595.28
-const PAGE_H = 841.89
 const MARGIN = 34
-const RIGHT = PAGE_W - MARGIN
-const CONTENT_W = PAGE_W - MARGIN * 2
-const BODY_BOTTOM = PAGE_H - 54
+const pageW = (doc: jsPDF) => doc.internal.pageSize.getWidth()
+const pageH = (doc: jsPDF) => doc.internal.pageSize.getHeight()
+const right = (doc: jsPDF) => pageW(doc) - MARGIN
+const contentW = (doc: jsPDF) => pageW(doc) - MARGIN * 2
+const bodyBottom = (doc: jsPDF) => pageH(doc) - 54
 
 const NAVY: [number, number, number] = [32, 22, 77]
 const INK: [number, number, number] = [7, 22, 76]
@@ -99,11 +115,38 @@ const BORDER: [number, number, number] = [205, 219, 232]
 const SOFT: [number, number, number] = [246, 250, 253]
 const AMBER: [number, number, number] = [188, 101, 0]
 const AMBER_SOFT: [number, number, number] = [255, 247, 232]
-const ODOO_PURPLE: [number, number, number] = [113, 75, 103]
-const ODOO_TEAL: [number, number, number] = [1, 126, 132]
+function hexRgb(value: unknown, fallback: string): [number, number, number] {
+  const color = normalizeHexColor(value, fallback)
+  return [
+    Number.parseInt(color.slice(1, 3), 16),
+    Number.parseInt(color.slice(3, 5), 16),
+    Number.parseInt(color.slice(5, 7), 16),
+  ]
+}
 
-function layoutAccent(layout: DocumentLayoutId): [number, number, number] {
-  return layout === 'bold' || layout === 'bubble' ? ODOO_TEAL : ODOO_PURPLE
+function layoutAccent(layout: DocumentLayoutId, company: DeedPdfCompany): [number, number, number] {
+  const primary = hexRgb(company.printPrimaryColor, '#714B67')
+  const secondary = hexRgb(company.printSecondaryColor, '#017E84')
+  return layout === 'bold' || layout === 'bubble' ? secondary : primary
+}
+
+function layoutSecondary(company: DeedPdfCompany): [number, number, number] {
+  return hexRgb(company.printSecondaryColor, '#017E84')
+}
+
+function pdfFont(value: unknown): 'helvetica' | 'times' | 'courier' {
+  const font = normalizeDocumentFont(value)
+  if (font === 'times') return 'times'
+  if (font === 'courier') return 'courier'
+  return 'helvetica'
+}
+
+function drawDocumentBackground(doc: jsPDF, company: DeedPdfCompany) {
+  if (normalizeDocumentBackground(company.printBackground) !== 'demo_logo') return
+  const primary = hexRgb(company.printPrimaryColor, '#714B67')
+  const pale = primary.map(channel => Math.round(channel + (255 - channel) * .92)) as [number, number, number]
+  doc.setFont(pdfFont(company.printFont), 'bold').setFontSize(58).setTextColor(...pale)
+  doc.text(company.name || 'COMPANY', pageW(doc) / 2, pageH(doc) / 2, { align: 'center', angle: 32 })
 }
 
 const money = (value: number) =>
@@ -181,18 +224,21 @@ function drawLogo(doc: jsPDF, company: DeedPdfCompany) {
 
 function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: string) {
   const layout = normalizeDocumentLayout(company.printTemplate)
-  const accent = layoutAccent(layout)
+  const accent = layoutAccent(layout, company)
 
   if (layout === 'bold') {
-    doc.setFillColor(...accent).rect(0, 0, PAGE_W, 82, 'F')
+    doc.setFillColor(...accent).rect(0, 0, pageW(doc), 82, 'F')
   } else if (layout === 'boxed') {
-    doc.setDrawColor(...accent).setLineWidth(1).roundedRect(MARGIN - 8, 14, CONTENT_W + 16, 60, 3, 3, 'S')
+    doc.setDrawColor(...accent).setLineWidth(1).roundedRect(MARGIN - 8, 14, contentW(doc) + 16, 60, 3, 3, 'S')
   } else if (layout === 'bubble') {
-    doc.setFillColor(...accent).circle(PAGE_W - 18, 12, 54, 'F')
-    doc.setFillColor(235, 246, 246).circle(PAGE_W - 82, 7, 24, 'F')
+    doc.setFillColor(...accent).circle(pageW(doc) - 18, 12, 54, 'F')
+    doc.setFillColor(235, 246, 246).circle(pageW(doc) - 82, 7, 24, 'F')
   } else if (layout === 'wave') {
     doc.setFillColor(...accent)
     doc.lines([[145, 0], [80, 12], [112, -8], [150, 12], [108, -16]], 0, 0, [1, 1], 'F', true)
+  } else if (layout === 'folder') {
+    doc.setFillColor(...accent).roundedRect(0, 0, pageW(doc) * .42, 82, 0, 10, 'F')
+    doc.setFillColor(...layoutSecondary(company)).rect(pageW(doc) * .4, 18, pageW(doc) * .6, 64, 'F')
   }
 
   drawLogo(doc, company)
@@ -203,14 +249,19 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
     company.email,
   ].filter(Boolean) as string[]
 
+  if (company.printTagline) {
+    doc.setFont(pdfFont(company.printFont), 'italic').setFontSize(7).setTextColor(...accent)
+    doc.text(company.printTagline, MARGIN, 70, { maxWidth: 240 })
+  }
+
   const headerText = layout === 'bold' ? ([255, 255, 255] as [number, number, number]) : INK
   doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...headerText)
-  details.slice(0, 4).forEach((item, index) => doc.text(item, RIGHT, 27 + index * 11, { align: 'right' }))
+  details.slice(0, 4).forEach((item, index) => doc.text(item, right(doc), 27 + index * 11, { align: 'right' }))
   if (layout === 'striped') {
-    line(doc, MARGIN, 73, RIGHT, accent, 3.2)
-    line(doc, MARGIN, 78, RIGHT, ODOO_TEAL, 1.2)
+    line(doc, MARGIN, 73, right(doc), accent, 3.2)
+    line(doc, MARGIN, 78, right(doc), layoutSecondary(company), 1.2)
   } else if (layout !== 'bold' && layout !== 'boxed') {
-    line(doc, MARGIN, 76, RIGHT, accent, layout === 'light' ? 1.2 : 2)
+    line(doc, MARGIN, 76, right(doc), accent, layout === 'light' ? 1.2 : 2)
   }
 
   if (continuation) {
@@ -221,29 +272,30 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
 
 function drawFooter(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, page: number, pages: number) {
   const layout = normalizeDocumentLayout(company.printTemplate)
-  const accent = layoutAccent(layout)
+  const accent = layoutAccent(layout, company)
   if (layout === 'wave') {
     doc.setFillColor(...accent)
-    doc.lines([[145, 0], [80, -12], [112, 8], [150, -12], [108, 16]], 0, PAGE_H, [1, 1], 'F', true)
+    doc.lines([[145, 0], [80, -12], [112, 8], [150, -12], [108, 16]], 0, pageH(doc), [1, 1], 'F', true)
   }
-  line(doc, MARGIN, PAGE_H - 38, RIGHT, accent, layout === 'bold' ? 2 : .9)
+  line(doc, MARGIN, pageH(doc) - 38, right(doc), accent, layout === 'bold' ? 2 : .9)
   doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
-  doc.text(`Page ${page} of ${pages}`, MARGIN, PAGE_H - 22)
-  doc.text(company.invoiceFooter || 'Thank you for your business.', PAGE_W / 2, PAGE_H - 22, { align: 'center' })
+  doc.text(`Page ${page} of ${pages}`, MARGIN, pageH(doc) - 22)
+  doc.text(company.invoiceFooter || 'Thank you for your business.', pageW(doc) / 2, pageH(doc) - 22, { align: 'center' })
   const stamp = new Date().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
-  doc.text(`Generated: ${stamp}`, RIGHT, PAGE_H - 22, { align: 'right' })
+  doc.text(`Generated: ${stamp}`, right(doc), pageH(doc) - 22, { align: 'right' })
   doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(...NAVY)
-  doc.text(`${input.ref} · ${cleanWebsite(company.website)}`, RIGHT, PAGE_H - 10, { align: 'right' })
+  doc.text(`${input.ref} · ${cleanWebsite(company.website)}`, right(doc), pageH(doc) - 10, { align: 'right' })
 }
 
 function pageBreak(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput) {
   doc.addPage()
+  drawDocumentBackground(doc, company)
   drawLetterhead(doc, company, `${input.title.toUpperCase()} · ${input.ref}`)
   return 108
 }
 
 function ensureRoom(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, y: number, needed: number) {
-  return y + needed > BODY_BOTTOM ? pageBreak(doc, company, input) : y
+  return y + needed > bodyBottom(doc) ? pageBreak(doc, company, input) : y
 }
 
 function drawMetaRow(doc: jsPDF, label: string, value: string, x: number, y: number, labelW = 82) {
@@ -277,20 +329,24 @@ export function buildDeedDocumentPdf(
   company: DeedPdfCompany,
   bankAccounts: DeedPdfBank[] = [],
 ): jsPDF {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const doc = new jsPDF({ unit: 'pt', format: normalizePaperFormat(company.printPaperFormat) })
+  const selectedFont = pdfFont(company.printFont)
+  const originalSetFont = doc.setFont.bind(doc)
+  doc.setFont = ((_: string, style?: string) => originalSetFont(selectedFont, style)) as typeof doc.setFont
   const kind = titleKind(input.title)
   const delivery = Boolean(input.deliveryNoteLayout) || kind === 'delivery'
   const showAmounts = !input.hideAmounts
   const currency = company.currency || 'KES'
   const customerLabel = partyLabelFor(input)
   const layout = normalizeDocumentLayout(company.printTemplate)
-  const accent = layoutAccent(layout)
+  const accent = layoutAccent(layout, company)
 
+  drawDocumentBackground(doc, company)
   drawLetterhead(doc, company)
 
   let y = 112
   if (layout === 'bold') {
-    doc.setFillColor(...accent).roundedRect(MARGIN, y - 22, CONTENT_W, 34, 3, 3, 'F')
+    doc.setFillColor(...accent).roundedRect(MARGIN, y - 22, contentW(doc), 34, 3, 3, 'F')
     doc.setFont('helvetica', 'bold').setFontSize(19).setTextColor(255, 255, 255)
   } else {
     doc.setFont('helvetica', 'bold').setFontSize(21).setTextColor(...accent)
@@ -306,9 +362,9 @@ export function buildDeedDocumentPdf(
   const leftX = MARGIN + 10
   const splitX = MARGIN + 232
   const rightX = splitX + 18
-  if (layout === 'boxed' || layout === 'bubble') {
+  if (layout === 'boxed' || layout === 'bubble' || layout === 'folder') {
     doc.setFillColor(...(layout === 'bubble' ? [242, 249, 249] as [number, number, number] : SOFT))
-    doc.setDrawColor(...accent).setLineWidth(.55).roundedRect(MARGIN, y - 10, CONTENT_W, 112, layout === 'bubble' ? 12 : 3, layout === 'bubble' ? 12 : 3, 'FD')
+    doc.setDrawColor(...accent).setLineWidth(.55).roundedRect(MARGIN, y - 10, contentW(doc), 112, layout === 'bubble' ? 12 : 3, layout === 'bubble' ? 12 : 3, 'FD')
   }
   writeLabel(doc, customerLabel, leftX, y)
   doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...INK)
@@ -342,7 +398,7 @@ export function buildDeedDocumentPdf(
 
   if (kind === 'proforma') {
     doc.setFillColor(...AMBER_SOFT).setDrawColor(238, 177, 92).setLineWidth(.6)
-    doc.roundedRect(MARGIN, y, CONTENT_W, 28, 4, 4, 'FD')
+    doc.roundedRect(MARGIN, y, contentW(doc), 28, 4, 4, 'FD')
     doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...AMBER)
     doc.text('!  This is a proforma invoice and not a tax invoice.', MARGIN + 12, y + 18)
     y += 40
@@ -457,21 +513,21 @@ export function buildDeedDocumentPdf(
       doc.text(notesLines, MARGIN, y + 27)
     }
 
-    const totalsX = RIGHT - 220
+    const totalsX = right(doc) - 220
     totalRows.forEach((item, index) => {
       const rowY = y + 14 + index * 19
       if (item[2]) {
         doc.setFillColor(...SOFT)
         doc.rect(totalsX - 8, rowY - 13, 228, 19, 'F')
       }
-      if (item[2] && index > 0) line(doc, totalsX - 8, rowY - 13, RIGHT, BORDER, .55)
+      if (item[2] && index > 0) line(doc, totalsX - 8, rowY - 13, right(doc), BORDER, .55)
       doc.setFont('helvetica', item[2] ? 'bold' : 'normal').setFontSize(item[2] ? 9.5 : 8).setTextColor(...INK)
       doc.text(item[0], totalsX, rowY)
-      doc.text(item[1], RIGHT - 6, rowY, { align: 'right' })
+      doc.text(item[1], right(doc) - 6, rowY, { align: 'right' })
     })
     y += Math.max(totalH, notesH) + 12
   } else if (notes) {
-    const wrapped = doc.splitTextToSize(notes, CONTENT_W - 10) as string[]
+    const wrapped = doc.splitTextToSize(notes, contentW(doc) - 10) as string[]
     y = ensureRoom(doc, company, input, y, wrapped.length * 10 + 34)
     writeLabel(doc, 'Delivery notes', MARGIN, y + 10)
     doc.setFont('helvetica', 'normal').setFontSize(7.8).setTextColor(...INK)
@@ -488,17 +544,17 @@ export function buildDeedDocumentPdf(
       // naturally or move to a continuation page through ensureRoom().
       y = Math.max(y, 540)
       y = ensureRoom(doc, company, input, y, paymentH + 12)
-      line(doc, MARGIN, y, RIGHT, BORDER, .55)
+      line(doc, MARGIN, y, right(doc), BORDER, .55)
       writeLabel(doc, 'Payment instructions', MARGIN, y + 18)
       const midpoint = Math.ceil(payment.length / 2)
       payment.forEach((entry, index) => {
         const isRight = index >= midpoint
         const itemIndex = isRight ? index - midpoint : index
-        const x = isRight ? MARGIN + CONTENT_W / 2 + 12 : MARGIN
+        const x = isRight ? MARGIN + contentW(doc) / 2 + 12 : MARGIN
         doc.setFont('helvetica', /BANK|M-PESA|PAYMENT/i.test(entry) ? 'bold' : 'normal')
           .setFontSize(7.5)
           .setTextColor(...INK)
-        doc.text(entry, x, y + 36 + itemIndex * 13, { maxWidth: CONTENT_W / 2 - 24 })
+        doc.text(entry, x, y + 36 + itemIndex * 13, { maxWidth: contentW(doc) / 2 - 24 })
       })
       y += paymentH
     }
@@ -508,9 +564,9 @@ export function buildDeedDocumentPdf(
   const showAck = input.showReceiptAcknowledgement ?? delivery
   if (showAck) {
     y = ensureRoom(doc, company, input, y, 108)
-    line(doc, MARGIN, y, RIGHT, BORDER, .55)
+    line(doc, MARGIN, y, right(doc), BORDER, .55)
     writeLabel(doc, 'Receipt acknowledgement', MARGIN, y + 18)
-    const half = CONTENT_W / 2 - 16
+    const half = contentW(doc) / 2 - 16
     const fields: Array<[string, string, number, number]> = [
       ['Received by', input.attention || '', MARGIN, y + 48],
       ['ID / Passport No.', input.recipientIdNumber || '', MARGIN + half + 32, y + 48],
@@ -527,19 +583,19 @@ export function buildDeedDocumentPdf(
     y += 102
   } else if (showSignature && kind !== 'quotation' && kind !== 'proforma' && kind !== 'invoice' && kind !== 'bill' && kind !== 'receipt') {
     y = ensureRoom(doc, company, input, y, 102)
-    line(doc, MARGIN, y, RIGHT, BORDER, .55)
+    line(doc, MARGIN, y, right(doc), BORDER, .55)
     writeLabel(doc, 'Authorised by', MARGIN, y + 18)
-    writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 14, y + 18)
-    const leftWidth = CONTENT_W / 2 - 14
+    writeLabel(doc, 'Received by', MARGIN + contentW(doc) / 2 + 14, y + 18)
+    const leftWidth = contentW(doc) / 2 - 14
     const signatureFields = ['Signature', 'Name', 'Date']
     signatureFields.forEach((label, index) => {
       const rowY = y + 42 + index * 18
       doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
       doc.text(`${label}:`, MARGIN, rowY)
       line(doc, MARGIN + 48, rowY + 2, MARGIN + leftWidth, BORDER, .55)
-      const rx = MARGIN + CONTENT_W / 2 + 14
+      const rx = MARGIN + contentW(doc) / 2 + 14
       doc.text(`${label}:`, rx, rowY)
-      line(doc, rx + 48, rowY + 2, RIGHT, BORDER, .55)
+      line(doc, rx + 48, rowY + 2, right(doc), BORDER, .55)
     })
     y += 98
   }
