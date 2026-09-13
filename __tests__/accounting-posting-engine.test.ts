@@ -127,8 +127,8 @@ describe('commitPosting', () => {
     const arg = mockPersist.mock.calls[0][0]
     expect(arg.ref).toBe('JRN/INV-1')
     expect(arg.lines).toEqual([
-      { account: '1800 - Accounts Receivable', description: 'AR: Acme', debit: 100, credit: 0 },
-      { account: '5000', description: 'Revenue: INV-1', debit: 0, credit: 100 },
+      { account: '1800 - Accounts Receivable', description: 'AR: Acme', debit: 100, credit: 0, analyticAccountId: null },
+      { account: '5000', description: 'Revenue: INV-1', debit: 0, credit: 100, analyticAccountId: null },
     ])
   })
 
