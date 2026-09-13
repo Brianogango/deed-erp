@@ -162,6 +162,44 @@ describe('POST /api/purchase-orders', () => {
     expect(body.ref).toBe('PO/2026/0001')
   })
 
+  it('preserves the client-reserved UUID and PO reference instead of creating a shadow RFQ', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue(null)
+    mockPrismaPurchaseOrder.create.mockResolvedValue({ ...dbPo, id: PO_ID, poNumber: 'PO/2026/0249' })
+
+    const res = await POST(postReq({
+      id: PO_ID,
+      ref: 'PO/2026/0249',
+      vendorId: VENDOR_ID,
+      vendorName: 'Acme Supplies',
+      lines: [],
+    }))
+
+    expect(res.status).toBe(201)
+    expect(mockGetNextDocNumber).not.toHaveBeenCalled()
+    expect(mockPrismaPurchaseOrder.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ id: PO_ID, poNumber: 'PO/2026/0249' }),
+      }),
+    )
+  })
+
+  it('returns the existing PO on a retried POST with the same UUID', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue(dbPo)
+
+    const res = await POST(postReq({
+      id: PO_ID,
+      ref: 'PO/2026/0001',
+      vendorId: VENDOR_ID,
+      vendorName: 'Acme Supplies',
+      lines: [],
+    }))
+
+    expect(res.status).toBe(200)
+    expect(mockPrismaPurchaseOrder.create).not.toHaveBeenCalled()
+    expect(mockGetNextDocNumber).not.toHaveBeenCalled()
+    expect((await res.json()).id).toBe(PO_ID)
+  })
+
   it('rejects when neither vendorName nor vendorId is present', async () => {
     const res = await POST(postReq({ lines: [] }))
     expect(res.status).toBe(400)

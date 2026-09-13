@@ -172,6 +172,10 @@ function PurchaseContent() {
   const [showNewVendorModal, setShowNewVendorModal] = useState(false)
   const [newVendorSeed, setNewVendorSeed] = useState('')
   const [vendorFormKey, setVendorFormKey] = useState(0)
+  const createRfqInFlight = useRef(false)
+  const [isCreatingRFQ, setIsCreatingRFQ] = useState(false)
+  const importInFlight = useRef(false)
+  const [isImporting, setIsImporting] = useState(false)
 
   // ── Add single line ────────────────────────────────────────────────────────
   const [showAddLine, setShowAddLine] = useState(false)
@@ -368,7 +372,11 @@ function PurchaseContent() {
 
   // ── Create RFQ ─────────────────────────────────────────────────────────────
   const handleCreateRFQ = async () => {
+    if (createRfqInFlight.current) return
     if (!rfqPreview.canSave) { showToast(rfqPreview.blockedReason || 'Complete the RFQ before creating it', 'error'); return }
+    createRfqInFlight.current = true
+    setIsCreatingRFQ(true)
+    try {
     const lines: POLine[] = rfqPreview.lines.map(line => {
       const product = products.find(p => p.id === line.productId)
       const catCfg = product ? CATEGORY_CONFIG[product.category as CategoryId] ?? { serialRequired: false } : { serialRequired: false }
@@ -396,6 +404,10 @@ function PurchaseContent() {
     resetRfqForm()
     setActiveId(po.id)
     setSubView('form')
+    } finally {
+      createRfqInFlight.current = false
+      setIsCreatingRFQ(false)
+    }
   }
 
   const openNewVendorForm = (seed = '') => {
@@ -844,8 +856,12 @@ function PurchaseContent() {
   }
 
   const handleConfirmImport = async () => {
+    if (importInFlight.current) return
     if (!activeId && !importVendorId) { showToast('Select or open a PO first', 'error'); return }
 
+    importInFlight.current = true
+    setIsImporting(true)
+    try {
     let targetPoId = activeId
     if (!targetPoId) {
       const po = await createPO(importVendorId, importVendorName)
@@ -873,6 +889,19 @@ function PurchaseContent() {
     setShowImport(false)
     setImportRows([])
     setSubView('form')
+    } finally {
+      importInFlight.current = false
+      setIsImporting(false)
+    }
+  }
+
+  const navigateMainView = (nextView: MainView) => {
+    // Section navigation closes any open PO/GRN and resets shared pagination.
+    // Deep-link hydration continues to use the low-level setMainView above.
+    setLocalActiveId(null)
+    setActiveReceiptId(null)
+    setLocalSubView('list')
+    setUrlActiveId(null, { queryPatch: { tab: nextView, page: null } })
   }
 
   if (!mounted) return <ModuleSkeleton />
@@ -1286,7 +1315,7 @@ function PurchaseContent() {
           { id: 'bills', label: 'Bills' },
         ]}
         active={mainView}
-        onChange={id => setMainView(id as MainView)}
+        onChange={id => navigateMainView(id as MainView)}
         maxVisibleMobile={4}
         maxVisibleTablet={4}
         maxVisibleDesktop={4}
@@ -1295,22 +1324,22 @@ function PurchaseContent() {
 
       <div className="mod-body purchase-body">
         <section className="purchase-summary" aria-label="Purchase overview">
-          <button type="button" className="purchase-summary__item purchase-summary__item--attention" onClick={() => setMainView('orders')}>
+          <button type="button" className="purchase-summary__item purchase-summary__item--attention" onClick={() => navigateMainView('orders')}>
             <span className="purchase-summary__label">Needs action</span>
             <strong className="purchase-summary__value tabular-nums">{(stats.rfqs + stats.pendingGRNs).toLocaleString()}</strong>
             <span className="purchase-summary__hint">RFQs and receipts waiting</span>
           </button>
-          <button type="button" className="purchase-summary__item" onClick={() => setMainView('orders')}>
+          <button type="button" className="purchase-summary__item" onClick={() => navigateMainView('orders')}>
             <span className="purchase-summary__label">Open orders</span>
             <strong className="purchase-summary__value tabular-nums">{stats.activePOs.toLocaleString()}</strong>
             <span className="purchase-summary__hint">Confirmed or partially received</span>
           </button>
-          <button type="button" className="purchase-summary__item" onClick={() => setMainView('receipts')}>
+          <button type="button" className="purchase-summary__item" onClick={() => navigateMainView('receipts')}>
             <span className="purchase-summary__label">Awaiting receipt</span>
             <strong className="purchase-summary__value tabular-nums">{stats.pendingGRNs.toLocaleString()}</strong>
             <span className="purchase-summary__hint">Draft GRNs to validate</span>
           </button>
-          <button type="button" className="purchase-summary__item purchase-summary__item--money" onClick={() => setMainView('bills')}>
+          <button type="button" className="purchase-summary__item purchase-summary__item--money" onClick={() => navigateMainView('bills')}>
             <span className="purchase-summary__label">Bills due</span>
             <strong className="purchase-summary__value purchase-summary__value--money">{fmtKes(stats.unpaid)}</strong>
             <span className="purchase-summary__hint">Outstanding vendor balance</span>
@@ -1505,7 +1534,7 @@ function PurchaseContent() {
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-4 border-t border-[var(--border-lt)]">
                 <button className="btn-outline text-xs cursor-pointer" onClick={resetRfqForm}>Discard</button>
-                <button className="btn-primary text-xs disabled:opacity-50 disabled:cursor-not-allowed" disabled={!rfqPreview.canSave} onClick={handleCreateRFQ}>Create RFQ →</button>
+                <button className="btn-primary text-xs disabled:opacity-50 disabled:cursor-not-allowed" disabled={!rfqPreview.canSave || isCreatingRFQ} onClick={handleCreateRFQ}>{isCreatingRFQ ? 'Creating RFQ…' : 'Create RFQ →'}</button>
               </div>
             </div>
           </div>
@@ -1801,10 +1830,10 @@ function PurchaseContent() {
               )}
               <button
                 className="btn-primary"
-                disabled={!importRows.length || importRows.every(r => r.status === 'error') || (!activeId && !importVendorId)}
-                style={{ opacity: (!importRows.length || importRows.every(r => r.status === 'error') || (!activeId && !importVendorId)) ? 0.5 : 1 }}
+                disabled={isImporting || !importRows.length || importRows.every(r => r.status === 'error') || (!activeId && !importVendorId)}
+                style={{ opacity: (isImporting || !importRows.length || importRows.every(r => r.status === 'error') || (!activeId && !importVendorId)) ? 0.5 : 1 }}
                 onClick={handleConfirmImport}>
-                ✓ Import {importRows.filter(r => r.status !== 'error').length} Line(s)
+                {isImporting ? 'Importing…' : '✓ Import'} {importRows.filter(r => r.status !== 'error').length} Line(s)
               </button>
             </div>
           </div>
