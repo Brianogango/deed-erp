@@ -74,6 +74,7 @@ import { AccountingProvider } from './accounting/AccountingContext'
 import FinancialReportTab from './accounting/FinancialReportTab'
 import JournalsTab from './accounting/JournalsTab'
 import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
+import AnalyticBudgetsTab from './accounting/AnalyticBudgetsTab'
 import GeneralLedgerTab from './accounting/GeneralLedgerTab'
 import PartnerLedgerTab from './accounting/PartnerLedgerTab'
 import CustomerCreditsTab from './accounting/CustomerCreditsTab'
@@ -108,6 +109,7 @@ type MainTab =
   | 'credits'
   | 'commissions'
   | 'coa'
+  | 'analytics'
   | 'gl'
   | 'partner_ledger'
   | 'reports'
@@ -147,6 +149,7 @@ const FINANCE_SECTION_TABS: Record<FinanceSection, Array<{ id: MainTab; label: s
   accounting: [
     { id: 'journals', label: 'Accounting entries' },
     { id: 'coa', label: 'Chart of accounts' },
+    { id: 'analytics', label: 'Analytic accounting & budgets' },
     { id: 'gl', label: 'General ledger' },
     { id: 'partner_ledger', label: 'Customer & supplier ledger' },
     { id: 'integrity', label: 'Integrity controls' },
@@ -1777,6 +1780,8 @@ function AccountingContent() {
             <div className="finance-subview finance-subview--journals"><JournalsTab /></div>
           ) : tab === 'coa' ? (
             <div className="finance-subview finance-subview--coa"><ChartOfAccountsTab /></div>
+          ) : tab === 'analytics' ? (
+            <div className="finance-subview finance-subview--analytics"><AnalyticBudgetsTab /></div>
           ) : tab === 'gl' ? (
             <div className="finance-subview finance-subview--ledger"><GeneralLedgerTab /></div>
           ) : tab === 'partner_ledger' ? (
