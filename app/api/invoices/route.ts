@@ -214,9 +214,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invoice total must be at least 1 — invoices below this amount cannot be created' }, { status: 400 })
     }
 
+    const invoiceDate = String(body.invoiceDate ?? body.date ?? '').trim()
+    if (!invoiceDate) {
+      return NextResponse.json({ error: 'Document date is required and must be entered by the user' }, { status: 422 })
+    }
+    const parsedInvoiceDate = new Date(`${invoiceDate}T00:00:00Z`)
+    if (Number.isNaN(parsedInvoiceDate.getTime())) {
+      return NextResponse.json({ error: 'Document date is invalid' }, { status: 422 })
+    }
+    const dueDate = String(body.dueDate ?? '').trim()
+    if (!isCreditNote && !dueDate) {
+      return NextResponse.json({ error: 'Due date is required and must be entered by the user' }, { status: 422 })
+    }
+    if (dueDate) {
+      const parsedDueDate = new Date(`${dueDate}T00:00:00Z`)
+      if (Number.isNaN(parsedDueDate.getTime())) {
+        return NextResponse.json({ error: 'Due date is invalid' }, { status: 422 })
+      }
+      if (parsedDueDate < parsedInvoiceDate) {
+        return NextResponse.json({ error: 'Due date cannot be before the document date' }, { status: 422 })
+      }
+    }
+
     const clientId = await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
 
-    const invoiceDate = body.invoiceDate ?? body.date ?? new Date().toISOString().slice(0, 10)
     const lock = await checkFiscalLock(invoiceDate)
     if (!lock.ok) {
       return NextResponse.json({ error: lock.error }, { status: lock.status })
