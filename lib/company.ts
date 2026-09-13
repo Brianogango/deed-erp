@@ -33,7 +33,7 @@ export const CO = {
 // Reads companySettings from localStorage and merges with CO defaults.
 // Use this in utility/lib files that cannot call React hooks.
 export function getStoredCompanyData() {
-  let stored: Partial<typeof CO & { logoUrl: string; invoiceFooter: string; printTemplate: string }> = {}
+  let stored: Partial<typeof CO & { logoUrl: string; invoiceFooter: string; printTemplate: string; printFont: string; printBackground: string; printPrimaryColor: string; printSecondaryColor: string; printTagline: string; printPaperFormat: string }> = {}
   if (typeof window !== 'undefined') {
     try {
       const raw = window.localStorage.getItem('deed_companySettings')
@@ -53,7 +53,13 @@ export function getStoredCompanyData() {
     mpesaAccount: stored.mpesaAccount ?? CO.mpesaAccount,
     logoUrl:      stored.logoUrl      ?? '',
     invoiceFooter: (stored as any).invoiceFooter ?? '',
-    printTemplate: (stored as any).printTemplate ?? 'light',
+    printTemplate: (stored as any).printTemplate ?? 'standard',
+    printFont: (stored as any).printFont ?? 'lato',
+    printBackground: (stored as any).printBackground ?? 'blank',
+    printPrimaryColor: (stored as any).printPrimaryColor ?? '#714B67',
+    printSecondaryColor: (stored as any).printSecondaryColor ?? '#017E84',
+    printTagline: (stored as any).printTagline ?? '',
+    printPaperFormat: (stored as any).printPaperFormat ?? 'a4',
     navy:         CO.navy,
     cyan:         CO.cyan,
   }
