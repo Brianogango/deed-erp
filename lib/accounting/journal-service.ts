@@ -222,7 +222,7 @@ export async function persistStoreJournalEntryInTx(
     description?: string
     invoiceId?: string
     paymentId?: string
-    lines: Array<{ account: string; description?: string; debit: number; credit: number }>
+    lines: Array<{ account: string; description?: string; debit: number; credit: number; analyticAccountId?: string | null }>
     totalDebit?: number
     totalCredit?: number
   },
@@ -253,6 +253,7 @@ export async function persistStoreJournalEntryInTx(
       label: l.description,
       debit: Number(l.debit || 0),
       credit: Number(l.credit || 0),
+      analyticAccountId: l.analyticAccountId || null,
     })),
   })
 }
@@ -265,7 +266,7 @@ export async function persistStoreJournalEntry(entry: {
   description?: string
   invoiceId?: string
   paymentId?: string
-  lines: Array<{ account: string; description?: string; debit: number; credit: number }>
+  lines: Array<{ account: string; description?: string; debit: number; credit: number; analyticAccountId?: string | null }>
   totalDebit?: number
   totalCredit?: number
 }, opts?: { createdById?: string; journalCode?: string }) {
@@ -296,6 +297,7 @@ export async function reverseJournalEntry(ref: string, userId?: string) {
         label: `Reversal: ${l.label ?? ''}`,
         debit: Number(l.credit),
         credit: Number(l.debit),
+        analyticAccountId: l.analyticAccountId,
       })),
     })
     await tx.journalEntry.update({ where: { id: original.id }, data: { isReversed: true } })
