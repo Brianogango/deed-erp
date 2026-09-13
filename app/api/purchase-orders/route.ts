@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     // The SPA reserves the document reference before POST and optimistically
     // inserts the same UUID. Honour both values: allocating a second id/ref
     // here created a duplicate Prisma RFQ beside the client PO.
-    const requestedId = typeof body.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.id)
+    const requestedId = typeof body.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.id)
       ? body.id
       : undefined
     if (requestedId) {
