@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
           description: l.label || '',
           debit: Number(l.debit),
           credit: Number(l.credit),
+          analyticAccountId: l.analyticAccountId,
         })),
       }))
 
