@@ -29,7 +29,7 @@ import { compressCompanyLogoDataUrl } from '@/lib/pdf-logo'
 import { resolveSettingsSection } from '@/lib/dashboard-priority'
 import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 import { normalizeProductCategorySettings, PRODUCT_CREATION_CATEGORY_OPTIONS, type ProductCategorySetting } from '@/lib/product-categories'
-import { DOCUMENT_LAYOUT_OPTIONS, normalizeDocumentLayout, type DocumentLayoutId } from '@/lib/document-layout'
+import { DocumentLayoutConfigurator } from './settings/DocumentLayoutConfigurator'
 type Section =
   | 'general' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
@@ -675,63 +675,12 @@ export default function Settings() {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Document layout">
-                <div className="py-4">
-                  <div className="mb-4">
-                    <p className="text-[12px] font-semibold text-gray-800">Choose the layout used when printing documents</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
-                      The selected Odoo 18 layout applies consistently to quotations, sales orders,
-                      pro-forma invoices, invoices, bills, receipts, purchase orders, and delivery notes.
-                      Company details, totals, payment instructions, and document business logic do not change.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" role="radiogroup" aria-label="Document layout">
-                    {DOCUMENT_LAYOUT_OPTIONS.map(option => {
-                      const selected = normalizeDocumentLayout(companySettings.printTemplate) === option.id
-                      const chooseLayout = () => {
-                        updateCompanySettings({ printTemplate: option.id as DocumentLayoutId })
-                        showToast(`${option.label} document layout selected`, 'success')
-                      }
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          onClick={chooseLayout}
-                          className={`group relative overflow-hidden rounded-xl border-2 bg-white p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-[#714B67]/25 ${selected ? 'border-[#714B67] shadow-md' : 'border-gray-200 hover:border-[#B89AAF] hover:shadow-sm'}`}
-                        >
-                          <div className="mb-3 aspect-[1.414/1] overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
-                            <div
-                              className={`h-5 ${option.id === 'bold' ? 'bg-[#017E84]' : option.id === 'wave' ? 'rounded-br-[70%] bg-[#714B67]' : option.id === 'bubble' ? 'rounded-br-full bg-[#017E84]' : 'bg-white'}`}
-                            />
-                            <div className="px-3 pt-2">
-                              <div className={`mb-2 h-2 w-14 rounded-sm ${option.id === 'bold' || option.id === 'bubble' ? 'bg-[#017E84]' : 'bg-[#714B67]'}`} />
-                              <div className={`mb-2 h-5 rounded-sm ${option.id === 'boxed' ? 'border border-[#714B67] bg-[#F7F3F6]' : 'bg-gray-50'}`} />
-                              <div className="space-y-1">
-                                {[0, 1, 2].map(row => (
-                                  <div
-                                    key={row}
-                                    className={`h-2 rounded-sm ${option.id === 'striped' && row % 2 ? 'bg-[#EEE5EB]' : 'bg-gray-100'}`}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          <span className="flex items-start justify-between gap-2">
-                            <span>
-                              <span className="block text-[12px] font-bold text-gray-800">{option.label}</span>
-                              <span className="mt-0.5 block text-[10.5px] leading-snug text-gray-500">{option.description}</span>
-                            </span>
-                            <span className={`mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full border ${selected ? 'border-[#714B67] bg-[#714B67] text-white' : 'border-gray-300 text-transparent'}`}>
-                              <Fa icon={faCheck} style={{ fontSize: 9 }} />
-                            </span>
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+              <SectionCard title="Document Layout">
+                <DocumentLayoutConfigurator
+                  company={companySettings}
+                  updateCompany={updateCompanySettings}
+                  showToast={showToast}
+                />
               </SectionCard>
 
               <SectionCard title="System Access">
