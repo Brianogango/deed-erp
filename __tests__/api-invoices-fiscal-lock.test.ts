@@ -63,6 +63,7 @@ describe('POST /api/invoices fiscal lock', () => {
       body: JSON.stringify({
         clientId: CLIENT_ID,
         date: '2026-03-01',
+        dueDate: '2026-03-31',
         totalAmount: 1000,
         lines: [{ description: 'Item', qty: 1, unitPrice: 1000, taxRate: 0 }],
       }),
@@ -78,6 +79,7 @@ describe('POST /api/invoices fiscal lock', () => {
       body: JSON.stringify({
         clientId: CLIENT_ID,
         date: '2026-04-15',
+        dueDate: '2026-05-15',
         totalAmount: 1000,
         lines: [{ description: 'Item', qty: 1, unitPrice: 1000, taxRate: 0 }],
       }),
