@@ -70,6 +70,7 @@ export async function generateQuotePdfBuffer(quote: QuotePdfInput): Promise<Buff
       currency: String(co.currency ?? 'KES'),
       mpesaPaybill: co.mpesaPaybill ? String(co.mpesaPaybill) : undefined,
       mpesaAccount: co.mpesaAccount ? String(co.mpesaAccount) : undefined,
+      printTemplate: co.printTemplate,
       invoiceFooter: co.invoiceFooter ? String(co.invoiceFooter) : undefined,
       logoDataUrl: logo?.dataUrl,
       logoWidth: logo?.width,
