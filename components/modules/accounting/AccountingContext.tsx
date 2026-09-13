@@ -42,6 +42,9 @@ export interface AccountingCtxValue {
   outstandingAR: number
   outstandingAP: number
   totalRevenueDynamic: number
+  currentYearNetProfit: number | null
+  currentYearNetProfitLoading: boolean
+  currentYearNetProfitError: string | null
   cashAtBankBS: number
   cashInHandBS: number
   allCashbookEntries: any[]

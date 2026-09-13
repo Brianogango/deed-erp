@@ -484,13 +484,14 @@ function AccountingContent() {
     || (plSource === 'prisma' && reportTab === 'pl')
     || (bsSource === 'prisma' && reportTab === 'bs')
     || (vatSource === 'prisma' && reportTab === 'vat')
+    || tab === 'coa'
   const prismaReports = usePrismaAccountingReports(prismaReportsEnabled, {
     trialBalance: tbSource === 'prisma' && reportTab === 'trial_balance',
-    profitLoss: plSource === 'prisma' && reportTab === 'pl',
+    profitLoss: (plSource === 'prisma' && reportTab === 'pl') || tab === 'coa',
     balanceSheet: bsSource === 'prisma' && reportTab === 'bs',
     vatControl: vatSource === 'prisma' && reportTab === 'vat',
-    plDateFrom: plSource === 'prisma' && reportTab === 'pl' ? pnlDateFrom : null,
-    plDateTo: plSource === 'prisma' && reportTab === 'pl' ? pnlDateTo : null,
+    plDateFrom: ((plSource === 'prisma' && reportTab === 'pl') || tab === 'coa') ? pnlDateFrom : null,
+    plDateTo: ((plSource === 'prisma' && reportTab === 'pl') || tab === 'coa') ? pnlDateTo : null,
     plView: 'management',
   })
 
@@ -1383,6 +1384,9 @@ function AccountingContent() {
     registerPayment, deleteInvoice, updateInvoice, postInvoice, createManualInvoice, addAccount, updateAccount, addBankAccount, showToast,
     currentUser, canViewJournals, canManageFinance, customers, vendors,
     allInvoices, customerInvoices, vendorBills, outstandingAR, outstandingAP, totalRevenueDynamic,
+    currentYearNetProfit: prismaReports.profitLoss?.netProfit ?? null,
+    currentYearNetProfitLoading: tab === 'coa' && prismaReports.loading,
+    currentYearNetProfitError: tab === 'coa' ? prismaReports.error : null,
     cashAtBankBS, cashInHandBS, allCashbookEntries, cashbookTotals,
     tab, setTab,
     invFilter, setInvFilter, invSearch, setInvSearch,
