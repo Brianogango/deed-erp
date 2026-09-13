@@ -117,7 +117,7 @@ export default function HRSettings() {
 
   const [section, setSection] = useState<Section>('general')
 
-  const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
+  const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: '' })
   const [editingBankId, setEditingBankId] = useState<string | null>(null)
   const [showBankModal, setShowBankModal] = useState(false)
 
@@ -129,7 +129,7 @@ export default function HRSettings() {
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   const openAddBank = () => {
-    setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
+    setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: '' })
     setEditingBankId(null); setShowBankModal(true)
   }
   const openEditBank = (id: string) => {
@@ -139,6 +139,10 @@ export default function HRSettings() {
     setEditingBankId(id); setShowBankModal(true)
   }
   const saveBank = () => {
+    if (!bankForm.name.trim() || !bankForm.bankName.trim() || !bankForm.accountNo.trim() || !bankForm.openingDate) {
+      showToast('Complete the account name, bank, account number, and opening date.', 'error')
+      return
+    }
     const data = { name: bankForm.name, bankName: bankForm.bankName, accountNo: bankForm.accountNo, openingBalance: Number(bankForm.openingBalance), openingDate: bankForm.openingDate }
     if (editingBankId) updateBankAccount(editingBankId, data)
     else addBankAccount({ ...data, currency: bankForm.currency, active: true })
