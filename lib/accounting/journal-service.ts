@@ -10,6 +10,7 @@ export type JournalLineInput = {
   debit: number
   credit: number
   partnerId?: string | null
+  analyticAccountId?: string | null
 }
 
 export type CreateJournalEntryInput = {
@@ -153,6 +154,7 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
       debit: round2(line.debit),
       credit: round2(line.credit),
       partnerId: line.partnerId || null,
+      analyticAccountId: line.analyticAccountId || null,
       sortOrder: i,
     })
   }
