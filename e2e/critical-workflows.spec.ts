@@ -109,6 +109,8 @@ test.describe('2. Quote → sale order → invoice → payment', () => {
         partnerName: customer,
         saleOrderId: so.id,
         status: 'posted',
+        date: '2026-09-13',
+        dueDate: '2026-10-13',
         total: 5800,
         subtotal: 5000,
         taxTotal: 800,
@@ -332,6 +334,8 @@ test.describe('4. POS session → transaction → close session', () => {
       data: {
         partnerName: 'Walk-in Customer',
         status: 'posted',
+        date: '2026-09-13',
+        dueDate: '2026-10-13',
         total: 1160,
         subtotal: 1000,
         taxTotal: 160,

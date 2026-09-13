@@ -167,7 +167,7 @@ function postReq(body: Record<string, unknown>): Request {
   // unless they explicitly override it.
   return new Request('http://localhost/api/invoices', {
     method: 'POST',
-    body: JSON.stringify({ total: 5800, ...body }),
+    body: JSON.stringify({ total: 5800, date: '2026-09-13', dueDate: '2026-10-13', ...body }),
     headers: { 'Content-Type': 'application/json' },
   })
 }
