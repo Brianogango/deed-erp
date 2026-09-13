@@ -39,6 +39,7 @@ export type PostingLineInput = {
   description: string
   debit?: number
   credit?: number
+  analyticAccountId?: string | null
 }
 
 export type CommitPostingInput = {
@@ -544,6 +545,7 @@ export async function commitPosting(input: CommitPostingInput) {
     description: l.description,
     debit: roundMoney(l.debit),
     credit: roundMoney(l.credit),
+    analyticAccountId: l.analyticAccountId || null,
   }))
   assertPostingBalanced(resolved, input.ref)
 
