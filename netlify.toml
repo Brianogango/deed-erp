@@ -1,9 +1,0 @@
-[build]
-  command = "pnpm build"
-
-[build.environment]
-  NODE_VERSION = "22"
-  PNPM_VERSION = "10"
-
-[context.deploy-preview]
-  command = "pnpm install --frozen-lockfile && pnpm run validate:notifications && pnpm run typecheck && pnpm test && pnpm build"
