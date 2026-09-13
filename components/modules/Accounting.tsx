@@ -864,6 +864,7 @@ function AccountingContent() {
     journals: { title: 'Accounting entries', subtitle: 'Posted entries and audit-ready movements' },
     reports: { title: 'Financial reports', subtitle: 'Management, statutory and control reports' },
     cashbook: { title: 'Cashbook', subtitle: 'Daily transactions and bank reconciliation' },
+    analytics: { title: 'Analytic accounting & budgets', subtitle: 'Dimensions, budgets and budget versus actual' },
     coa: { title: 'Chart of accounts', subtitle: 'Accounts, groups and liquidity ledgers' },
     gl: { title: 'General ledger', subtitle: 'Account movements and running balances' },
     partner_ledger: { title: 'Customer & supplier ledger', subtitle: 'Customer and supplier account history' },
