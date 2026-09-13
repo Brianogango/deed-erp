@@ -97,6 +97,7 @@ const EMPTY_BANK: BankForm = {
 export default function ChartOfAccountsTab() {
   const {
     accounts, bankAccounts, outstandingAR, outstandingAP, totalRevenueDynamic,
+    currentYearNetProfit, currentYearNetProfitLoading, currentYearNetProfitError,
     coaSearch, setCoaSearch, coaTypeFilter, setCoaTypeFilter,
     showAccountForm, setShowAccountForm, editAccountId, setEditAccountId,
     accountForm, setAccountForm, addAccount, updateAccount, addBankAccount, showToast,
@@ -112,7 +113,6 @@ export default function ChartOfAccountsTab() {
       .reduce((s, a) => s + a.balance, 0)
   }, [accounts])
   const totalSalaries = payrollExpense || 0
-  const netProfit = 0
 
   const filteredAccounts = useMemo(() => {
     const q = coaSearch.toLowerCase()
@@ -129,7 +129,7 @@ export default function ChartOfAccountsTab() {
     if (a.dynamicKey === 'ap') return outstandingAP
     if (a.dynamicKey === 'revenue') return totalRevenueDynamic
     if (a.dynamicKey === 'salaries') return totalSalaries
-    if (a.dynamicKey === 'net_profit') return netProfit
+    if (a.dynamicKey === 'net_profit') return currentYearNetProfit ?? 0
     return 0
   }
 
@@ -273,14 +273,21 @@ export default function ChartOfAccountsTab() {
     {
       key: 'balance', label: 'Balance', priority: 1, width: '120px',
       render: a => {
+        if (a.dynamicKey === 'net_profit' && currentYearNetProfit == null) {
+          return (
+            <span className={`text-[11px] ${currentYearNetProfitError ? 'text-[var(--danger)]' : 'text-t4'}`}>
+              {currentYearNetProfitError ? 'Unavailable' : currentYearNetProfitLoading ? 'Loading…' : 'No posted GL data'}
+            </span>
+          )
+        }
         const bal = getLiveBalance(a)
         return (
           <span className={`font-mono text-[12px] tabular-nums ${bal < 0 ? 'text-[var(--danger)]' : 'text-t1'}`}>
-            {bal !== 0 ? fmtKes(bal) : <span className="text-t4">—</span>}
+            {fmtKes(bal)}
           </span>
         )
       },
-      exportValue: a => getLiveBalance(a),
+      exportValue: a => a.dynamicKey === 'net_profit' && currentYearNetProfit == null ? '' : getLiveBalance(a),
       footer: pageRows => (
         <span className="font-mono text-[12px] font-bold tabular-nums">
           {fmtKes(pageRows.reduce((sum, account) => sum + getLiveBalance(account), 0))}
