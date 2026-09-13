@@ -730,7 +730,8 @@ export interface CompanySettings {
   /** Always KES — accounting / trial balance functional currency. */
   functionalCurrency?: 'KES'
   invoiceFooter: string
-  printTemplate?: 'classic' | 'modern' | 'compact'
+  /** Odoo 18 document layout used by all commercial PDFs. */
+  printTemplate?: import('@/lib/document-layout').DocumentLayoutId | 'classic' | 'modern' | 'compact'
   /**
    * Product category names hidden from the public partner catalog
    * (GET /api/public/v1/products). Case-insensitive. Lets the merchant keep
@@ -928,7 +929,7 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   currency:      'KES',
   functionalCurrency: 'KES',
   invoiceFooter: 'Thank you for your business.',
-  printTemplate: 'classic',
+  printTemplate: 'light',
   partnerHiddenCategories: [],
 }
 
