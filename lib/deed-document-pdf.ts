@@ -140,11 +140,11 @@ function pdfFont(value: unknown): 'helvetica' | 'times' | 'courier' {
 }
 
 function drawDocumentBackground(doc: jsPDF, company: DeedPdfCompany) {
-  if (normalizeDocumentBackground(company.printBackground) !== 'demo_logo') return
+  if (normalizeDocumentBackground(company.printBackground) !== 'demo_logo' || !company.name) return
   const primary = hexRgb(company.printPrimaryColor, '#1B2762')
   const pale = primary.map(channel => Math.round(channel + (255 - channel) * .92)) as [number, number, number]
   doc.setFont(pdfFont(company.printFont), 'bold').setFontSize(58).setTextColor(...pale)
-  doc.text(company.name || 'COMPANY', pageW(doc) / 2, pageH(doc) / 2, { align: 'center', angle: 32 })
+  doc.text(company.name, pageW(doc) / 2, pageH(doc) / 2, { align: 'center', angle: 32 })
 }
 
 const money = (value: number) =>
