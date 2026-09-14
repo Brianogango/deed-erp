@@ -253,7 +253,7 @@ import {
   diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
 import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
-import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole } from '@/lib/repair/assignable-technicians'
+import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
 import {
@@ -3737,8 +3737,8 @@ export interface AppState {
   
   // Repair Workflow Actions
   verifyRepairIntake: (repairId: string, notes?: string) => void
-  assignTechnicianToRepair: (repairId: string, technicianId: string) => void
-  logDiagnosis: (repairId: string, diagnosis: Omit<RepairDiagnosis, 'diagnosedBy' | 'diagnosedDate'>, extras?: DiagnosisLogRepairPatch) => void
+  assignTechnicianToRepair: (repairId: string, technicianId: string) => void | Promise<void>
+  logDiagnosis: (repairId: string, diagnosis: Omit<RepairDiagnosis, 'diagnosedBy' | 'diagnosedDate'>, extras?: DiagnosisLogRepairPatch) => void | Promise<void>
   stopAtDiagnosis: (repairId: string) => void          // Close job at diagnosis stage, charge diagnosis fee
   markDiagnosisFeePaid: (repairId: string, method?: string) => void
   waiveDiagnosisFee: (repairId: string, reason: string) => void
@@ -5589,18 +5589,37 @@ export function StoreProvider({
     const handleOnline = () => void flushServerSync()
     window.addEventListener('online', handleOnline)
 
-    // 3. Sync users list (stored in DB, not app_state) — much less frequent
+    // 3. Sync users list (stored in DB, not app_state) — much less frequent.
+    // Technical leads cannot GET /api/users (viewUsers is director/admin only).
+    // Fall back to /api/technicians so the assign picker is not just "yourself".
     const syncUsers = async () => {
       try {
         const res = await fetch('/api/users')
-        if (!res.ok) return
-        const data = await res.json()
-        const fetched = Array.isArray(data) ? data : (Array.isArray(data.users) ? data.users : null)
-        if (fetched) {
-          setUsers(prev => JSON.stringify(prev) !== JSON.stringify(fetched)
-            ? fetched.map((u: any) => ({ ...u, modules: Array.isArray(u.modules) ? [...u.modules] : [] }))
-            : prev)
+        if (res.ok) {
+          const data = await res.json()
+          const fetched = Array.isArray(data) ? data : (Array.isArray(data.users) ? data.users : null)
+          if (fetched) {
+            setUsers(prev => JSON.stringify(prev) !== JSON.stringify(fetched)
+              ? fetched.map((u: any) => ({ ...u, modules: Array.isArray(u.modules) ? [...u.modules] : [] }))
+              : prev)
+            return
+          }
         }
+        const techRes = await fetch('/api/technicians')
+        if (!techRes.ok) return
+        const techData = await techRes.json()
+        const technicians = Array.isArray(techData?.technicians) ? techData.technicians : []
+        if (!technicians.length) return
+        setUsers(prev => mergeAssignableTechniciansIntoUsers(
+          prev,
+          technicians.map((u: any) => ({
+            ...u,
+            username: u.username || u.id,
+            createdAt: u.createdAt || '',
+            active: u.active !== false,
+            modules: Array.isArray(u.modules) ? [...u.modules] : [],
+          })),
+        ))
       } catch {}
     }
     syncUsers()
@@ -15218,7 +15237,7 @@ const storeCtx: AppState = {
       showToast(`${repair.ref} verified and moved to received`)
     },
 
-    assignTechnicianToRepair: (repairId, technicianId) => {
+    assignTechnicianToRepair: async (repairId, technicianId) => {
       const actor = currentUser()
       if (!actor || !isRepairAssignerRole(actor.role)) {
         showToast('Only the Technical Lead can assign repairs', 'error'); return
@@ -15231,14 +15250,33 @@ const storeCtx: AppState = {
       }
       const repair = repairs.find(r => r.id === repairId)
 
-      setRepairs(p => p.map(r => r.id === repairId ? {
-        ...r,
+      const assignedPatch = {
         assignedTechnicianId: technicianId,
         assignedTechnicianName: tech.name,
         assignedDate: now(),
-        status: r.status === 'received' ? 'assigned' : r.status,
+        status: (repair?.status === 'received' ? 'assigned' : repair?.status) as RepairOrder['status'],
         technicianName: tech.name,
-      } : r))
+      }
+
+      setRepairs(p => p.map(r => r.id === repairId ? { ...r, ...assignedPatch } : r))
+
+      try {
+        const res = await fetch(`/api/repairs/${encodeURIComponent(repairId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(assignedPatch),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({})) as { error?: string }
+          if (repair) setRepairs(p => p.map(r => r.id === repairId ? repair : r))
+          showToast(err.error || 'Could not assign technician', 'error')
+          return
+        }
+      } catch {
+        if (repair) setRepairs(p => p.map(r => r.id === repairId ? repair : r))
+        showToast('Could not assign technician', 'error')
+        return
+      }
 
       if (repair) {
         notifyUsers({
@@ -15252,13 +15290,13 @@ const storeCtx: AppState = {
           entityKey: `repair:${repair.id}:assigned`,
           excludeUserId: actor.id,
         })
-        syncRepairToPortal({ ...repair, assignedTechnicianId: technicianId, assignedTechnicianName: tech.name, assignedDate: now(), status: repair.status === 'received' ? 'assigned' : repair.status, technicianName: tech.name }, `Assigned to ${tech.name}`)
+        syncRepairToPortal({ ...repair, ...assignedPatch }, `Assigned to ${tech.name}`)
       }
       addAuditLog('assign_technician', repairId, `${actor.name} assigned to ${tech.name}`)
       showToast(`Assigned to ${tech.name}`)
     },
     
-    logDiagnosis: (repairId, diagnosisInput, extras) => {
+    logDiagnosis: async (repairId, diagnosisInput, extras) => {
       const user = currentUser()
       if (!user) return
       const repair = repairsRef.current.find(r => r.id === repairId)
@@ -15288,6 +15326,32 @@ const storeCtx: AppState = {
       const updated = applyLoggedDiagnosis(repair, diagnosis, extras, user.name)
       repairsRef.current = repairsRef.current.map(r => r.id === repairId ? updated : r)
       setRepairs(p => p.map(r => r.id === repairId ? updated : r))
+
+      try {
+        const res = await fetch(`/api/repairs/${encodeURIComponent(repairId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: updated.status,
+            diagnosis: updated.diagnosis,
+            diagnosisHistory: updated.diagnosisHistory,
+            statusHistory: updated.statusHistory,
+            ...(extras ?? {}),
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({})) as { error?: string }
+          repairsRef.current = repairsRef.current.map(r => r.id === repairId ? repair : r)
+          setRepairs(p => p.map(r => r.id === repairId ? repair : r))
+          showToast(err.error || 'Could not save diagnosis', 'error')
+          return
+        }
+      } catch {
+        repairsRef.current = repairsRef.current.map(r => r.id === repairId ? repair : r)
+        setRepairs(p => p.map(r => r.id === repairId ? repair : r))
+        showToast('Could not save diagnosis', 'error')
+        return
+      }
 
       syncRepairToPortal(updated, isRevision ? 'Diagnosis updated — latest findings are available' : 'Diagnosis completed')
       addAuditLog(isRevision ? 'update_diagnosis' : 'diagnose_repair', repairId, `${isRevision ? 'Diagnosis updated' : 'Diagnosis logged'}: ${diagnosis.findings}`)
@@ -17207,7 +17271,7 @@ const storeCtx: AppState = {
 
       // Full visibility: desk + finance + lead techs see every repair, even
       // when the same login also actsAsTechnician for shop-floor assignment.
-      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(user.role)) return list
+      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(normalizeClientRole(user.role))) return list
 
       // Functional Firewall: Technicians / actsAsTechnician see assigned jobs + QC pool (role technicians only for peer QC)
       if (isRepairTechActor(user)) {

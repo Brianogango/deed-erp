@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignableTechnicians, isAssignableTechnician, isRepairTechActor, isRepairAssignerRole } from '@/lib/repair/assignable-technicians'
+import { assignableTechnicians, isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import {
   canReadStoreKey,
   hasFullStoreContentAccess,
@@ -41,6 +41,8 @@ describe('assignableTechnicians', () => {
     expect(isRepairTechActor({ role: 'kilimall_officer', actsAsTechnician: true })).toBe(true)
     expect(isRepairTechActor({ role: 'kilimall_officer' })).toBe(false)
     expect(isRepairTechActor({ role: 'technical_lead' })).toBe(false)
+    expect(isRepairTechActor({ role: 'technical_lead', actsAsTechnician: true })).toBe(false)
+    expect(isRepairTechActor({ role: 'lead_tech', actsAsTechnician: true })).toBe(false)
   })
 
   it('accepts canonical and legacy technician/lead roles for assignment', () => {
@@ -78,6 +80,19 @@ describe('isRepairAssignerRole', () => {
     expect(isRepairAssignerRole('')).toBe(false)
     expect(isRepairAssignerRole(null)).toBe(false)
     expect(isRepairAssignerRole(undefined)).toBe(false)
+  })
+})
+
+describe('mergeAssignableTechniciansIntoUsers', () => {
+  it('adds other technicians without dropping the current user', () => {
+    const merged = mergeAssignableTechniciansIntoUsers(
+      [{ id: 'lead', name: 'Lead', role: 'technical_lead' }],
+      [
+        { id: 'lead', name: 'Lead', role: 'technical_lead' },
+        { id: 't1', name: 'James', role: 'technician' },
+      ],
+    )
+    expect(merged.map(u => u.id).sort()).toEqual(['lead', 't1'])
   })
 })
 

@@ -87,6 +87,8 @@ function mapRepair(r: any) {
 function fingerprint(r: any, mapped: ReturnType<typeof mapRepair>): string {
   return createHash('md5').update(JSON.stringify({
     m: mapped,
+    status: r.status ?? null,
+    diagnosis: r.diagnosis?.id ?? r.diagnosis?.findings ?? r.diagnosis?.faultDescription ?? null,
     customer: [r.customerId, r.customerName, r.customerPhone, r.customerEmail],
     invoiceId: r.invoiceId ?? r.linkedInvoiceId ?? null,
     assignedTo: r.assignedTechnicianId ?? null,
@@ -128,11 +130,16 @@ export async function loadRepairsFromPrisma(): Promise<any[] | null> {
   }
 }
 
-/** Single repair by current ref or id. Payload only; null when unmirrored. */
+/** Single repair by current ref, prisma id, or blob payload id. */
 export async function findRepairInPrisma(refOrId: string): Promise<any | null> {
   try {
+    const or: Array<Record<string, unknown>> = [
+      { jobNumber: refOrId },
+      { payload: { path: ['id'], equals: refOrId } },
+    ]
+    if (UUID_RE.test(refOrId)) or.unshift({ id: refOrId })
     const row = await prisma.repair.findFirst({
-      where: { OR: [{ jobNumber: refOrId }, { id: refOrId }] },
+      where: { OR: or },
       select: { payload: true },
     })
     return row?.payload ?? null

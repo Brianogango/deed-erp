@@ -179,7 +179,7 @@ export default function RepairDetailView() {
   const noCharge = isRepairNoCharge(r)
   const canQuote    = quotableStatusesForPath(r.repairPath).includes(r.status)
     && (isDirectRepairPath(r.repairPath) || !!(r.diagnosis?.findings || r.diagnosis?.faultDescription))
-    && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentUser?.role ?? ''))
+    && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentRole))
     && !r.diagnosisStopped
     && !billingExempt
     && !pendingOutsourceJob
@@ -194,8 +194,8 @@ export default function RepairDetailView() {
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
   const canPerformQA  = r.status === 'qc'
-    && (['director', 'technical_lead'].includes(currentUser?.role ?? '')
-    || (currentUser?.role === 'technician' && !isMyRepair))
+    && (['director', 'technical_lead'].includes(currentRole)
+    || (currentRole === 'technician' && !isMyRepair))
     && !pendingOutsourceJob
   const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status) && !pendingOutsourceJob
   const isDirector  = currentRole === 'director'
