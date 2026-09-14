@@ -89,6 +89,10 @@ function isUuid(id: string | undefined): boolean {
   return Boolean(id && UUID_RE.test(id))
 }
 
+function isPrismaUniqueViolation(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && 'code' in err && (err as { code?: unknown }).code === 'P2002')
+}
+
 function nowIso() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -512,11 +516,69 @@ export async function reverseReceiptStockMutation(params: {
   }
 
   await bumpPrismaOnHand(stockLevelDeltas)
+  await rollbackRelationalReceipt(params.receiptRef)
   await saveStoreKeys({
     deed_products: JSON.stringify(products),
     deed_serials: JSON.stringify(serials),
     deed_bulkStock: JSON.stringify(bulkStock),
     deed_stockMoves: JSON.stringify(stockMoves.filter(m => m.documentRef !== params.receiptRef)),
+  })
+}
+
+/**
+ * Valuation rollback used to reverse blob + StockLevel but leave the
+ * GoodsReceivedNote row. Retrying Validate then crashed on
+ * goods_received_notes_grn_number_key. Undo the PO counters and delete the
+ * GRN so a retry is a clean create.
+ */
+async function rollbackRelationalReceipt(receiptRef: string) {
+  const ref = String(receiptRef || '').trim()
+  if (!ref) return
+
+  await prisma.$transaction(async tx => {
+    const grn = await tx.goodsReceivedNote.findUnique({
+      where: { grnNumber: ref },
+      include: { items: true },
+    })
+    if (!grn) return
+
+    const itemIds = grn.items.map(item => item.id)
+    if (itemIds.length > 0) {
+      await tx.serialNumber.updateMany({
+        where: { purchaseItemId: { in: itemIds } },
+        data: { purchaseItemId: null },
+      })
+      await tx.inventoryBatch.updateMany({
+        where: { receivedLineId: { in: itemIds } },
+        data: { receivedLineId: null },
+      })
+    }
+
+    for (const item of grn.items) {
+      const poItem = await tx.purchaseOrderItem.findUnique({
+        where: { id: item.poItemId },
+        select: { id: true, qtyReceived: true },
+      })
+      if (!poItem) continue
+      await tx.purchaseOrderItem.update({
+        where: { id: poItem.id },
+        data: { qtyReceived: Math.max(0, poItem.qtyReceived - item.qtyReceived) },
+      })
+    }
+
+    await tx.goodsReceivedNote.delete({ where: { id: grn.id } })
+
+    const refreshedItems = await tx.purchaseOrderItem.findMany({ where: { poId: grn.poId } })
+    const allReceived = refreshedItems.length > 0
+      && refreshedItems.every(item => item.qtyReceived >= item.qtyOrdered)
+    const anyReceived = refreshedItems.some(item => item.qtyReceived > 0)
+    const nextStatus = allReceived ? 'received' : anyReceived ? 'partial' : 'confirmed'
+    if (anyReceived || nextStatus === 'confirmed') {
+      await tx.purchaseOrder.update({
+        where: { id: grn.poId },
+        data: { status: nextStatus },
+      })
+    }
   })
 }
 
@@ -734,6 +796,11 @@ async function bumpPrismaOnHand(deltas: Map<string, number>) {
  * it last fetched — bumping it here would make that PATCH 409 on every
  * single receipt. qtyReceived is a monotonic, additive counter that's safe
  * to advance out from under the optimistic lock.
+ *
+ * Create is idempotent on grnNumber (the blob receipt ref). A first attempt
+ * that committed the GRN then failed later (valuation, blob lock, overlapping
+ * Validate click) used to surface Prisma's goods_received_notes_grn_number_key
+ * error on retry. Reuse the existing row and skip stock/qty mutations.
  */
 async function applyReceiptRelational(params: {
   purchaseOrderId?: string
@@ -754,20 +821,61 @@ async function applyReceiptRelational(params: {
         ? await tx.purchaseOrder.findUnique({ where: { id: params.purchaseOrderId }, include: { items: true } })
         : null
 
-    const grnId =
-      po && params.userId
-        ? (
-            await tx.goodsReceivedNote.create({
-              data: {
-                grnNumber: params.receiptRef,
-                poId: po.id,
-                supplierInvoiceNo: params.supplierInvoiceNo || null,
-                notes: params.notes || null,
-                createdById: params.userId,
-              },
-            })
-          ).id
-        : null
+    const adoptExistingGrn = async (existing: { id: string; poId: string; items: Array<{ id: string; productId: string }> }) => {
+      if (po && existing.poId !== po.id) {
+        throw new Error(
+          `Receipt ${params.receiptRef} was already posted against a different purchase order.`,
+        )
+      }
+      for (const line of validLines) {
+        const resolved = await resolvePrismaProductIdForStock(tx, line.productId, {
+          name: line.productName,
+          sku: line.sku,
+          requiresSerial: line.requiresSerial,
+          trackingMethod: line.trackingMethod,
+          costPrice: line.costPrice,
+          sellingPrice: line.sellingPrice,
+        })
+        if (!resolved) continue
+        resolvedProductIds.set(line.productId, resolved)
+        const existingItem = existing.items.find(item => item.productId === resolved)
+        if (existingItem) grnItemsByProductId.set(line.productId, existingItem.id)
+      }
+    }
+
+    let grnId: string | null = null
+    if (po && params.userId) {
+      const prior = await tx.goodsReceivedNote.findUnique({
+        where: { grnNumber: params.receiptRef },
+        include: { items: true },
+      })
+      if (prior) {
+        await adoptExistingGrn(prior)
+        return
+      }
+      try {
+        grnId = (
+          await tx.goodsReceivedNote.create({
+            data: {
+              grnNumber: params.receiptRef,
+              poId: po.id,
+              supplierInvoiceNo: params.supplierInvoiceNo || null,
+              notes: params.notes || null,
+              createdById: params.userId,
+            },
+          })
+        ).id
+      } catch (err) {
+        if (!isPrismaUniqueViolation(err)) throw err
+        const raced = await tx.goodsReceivedNote.findUnique({
+          where: { grnNumber: params.receiptRef },
+          include: { items: true },
+        })
+        if (!raced) throw err
+        await adoptExistingGrn(raced)
+        return
+      }
+    }
 
     for (const line of validLines) {
       const resolved = await resolvePrismaProductIdForStock(tx, line.productId, {
@@ -962,8 +1070,11 @@ export async function applyReceiptStockMutation(params: {
     const newMoves: BlobStockMove[] = []
     const destination = asLocationId(params.destination || 'warehouse')
     const existingSerialKeys = new Set(serials.map(s => String(s.serial || '').toLowerCase()).filter(Boolean))
+    const blobAlreadyPosted = stockMoves.some(m => m.documentRef === params.receiptRef)
+    const existingMoves = stockMoves.filter(m => m.documentRef === params.receiptRef)
 
-    for (const line of params.lines) {
+    if (!blobAlreadyPosted) {
+      for (const line of params.lines) {
       const productId = String(line.productId || '')
       const qty = Math.max(0, Math.floor(Number(line.qtyReceived) || 0))
       if (!productId || qty <= 0) continue
@@ -1015,6 +1126,7 @@ export async function applyReceiptStockMutation(params: {
           userId: params.userId ?? 'system', documentRef: params.receiptRef,
         })
       }
+      }
     }
 
     let grnItemsByProductId = new Map<string, string>()
@@ -1044,15 +1156,23 @@ export async function applyReceiptStockMutation(params: {
       resolvedProductIds = relational.resolvedProductIds
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Stock update failed'
+      if (isPrismaUniqueViolation(err) || message.includes('goods_received_notes_grn_number_key')) {
+        return {
+          ok: false,
+          error: `${params.receiptRef} was already received. Refresh Purchase — if this GRN is still draft, retry once.`,
+        }
+      }
       return { ok: false, error: message }
     }
 
-    await saveStoreKeys({
-      deed_products: JSON.stringify(products),
-      deed_serials: JSON.stringify(serials),
-      deed_bulkStock: JSON.stringify(bulkStock),
-      deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
-    })
+    if (!blobAlreadyPosted) {
+      await saveStoreKeys({
+        deed_products: JSON.stringify(products),
+        deed_serials: JSON.stringify(serials),
+        deed_bulkStock: JSON.stringify(bulkStock),
+        deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+      })
+    }
 
     // Best-effort relational SerialNumber mirror — deed_serials (just written
     // above, inside the lock) remains the source of truth for on-hand serial
@@ -1083,7 +1203,7 @@ export async function applyReceiptStockMutation(params: {
     }
 
     void params.receiptId
-    return { ok: true, moves: newMoves }
+    return { ok: true, moves: blobAlreadyPosted ? existingMoves : newMoves }
   })
 }
 
