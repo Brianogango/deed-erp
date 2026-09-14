@@ -126,7 +126,10 @@ export async function postReceiptValuationFromPayload(params: {
       results.push({ productId, qty, unitCost, error: err instanceof Error ? err.message : 'failed' })
     }
   }
-  return { ...finalizeValuation(results), receiptRef: params.receiptRef }
+  return {
+    ...finalizeValuation(results, { allowMissingProduct: true, allowFinanceSetupGap: true }),
+    receiptRef: params.receiptRef,
+  }
 }
 
 /**
