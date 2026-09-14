@@ -50,6 +50,8 @@ export function isFinanceSetupGap(message: string | null | undefined): boolean {
     || /Unknown analytic account/i.test(value)
     || /Inactive analytic account/i.test(value)
     || /Journal account must start with a valid account code/i.test(value)
+    || /analytic_account_id/i.test(value)
+    || /does not exist in the current database/i.test(value)
 }
 
 function isSoftSkip(result: any, opts?: { allowMissingProduct?: boolean; allowFinanceSetupGap?: boolean }) {

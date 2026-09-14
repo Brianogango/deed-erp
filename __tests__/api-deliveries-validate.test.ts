@@ -101,6 +101,19 @@ describe('POST /api/deliveries/:id/validate', () => {
     expect(mockSaveStoreKeys).toHaveBeenCalled()
   })
 
+  it('persists done when COGS hits a missing analytic_account_id column', async () => {
+    mockPostDeliveryValuationFromPayload.mockResolvedValue({
+      ok: false,
+      reason: 'Invalid `prisma.journalEntry.create()` invocation: The column `analytic_account_id` of relation `journal_entry_lines` does not exist in the current database',
+    })
+    const res = await POST(postReq({ status: 'done' }), params)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.item.status).toBe('done')
+    expect(json.item.ref).toBe('DN/2026/0001')
+    expect(mockSaveStoreKeys).toHaveBeenCalled()
+  })
+
   it('persists done when valuation fails', async () => {
     mockPostDeliveryValuationFromPayload.mockResolvedValue({ ok: false, reason: 'insufficient_layers' })
     const res = await POST(postReq({ status: 'done' }), params)
