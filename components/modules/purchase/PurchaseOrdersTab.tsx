@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { usePurchase } from './PurchaseContext'
 import { PanelHeader, RecordCard } from '@/components/ui'
@@ -10,7 +10,9 @@ import {
   countPurchaseFilterFacets,
   PURCHASE_LIFECYCLE_STATUSES,
   PURCHASE_STATUS_FILTER_LABELS,
+  parsePurchaseSavedView,
   purchaseDocType,
+  purchaseSavedViewQueryPatch,
   type PurchaseStatusFilter,
   type PurchaseTypeFilter,
 } from '@/lib/purchases-filter'
@@ -18,31 +20,6 @@ import {
 const STATUS_LABEL: Record<string, string> = {
   draft: 'RFQ', sent: 'RFQ Sent', confirmed: 'Purchase Order',
   partial: 'Partially Received', received: 'Fully Received', cancelled: 'Cancelled',
-}
-
-const TYPE_FILTERS: PurchaseTypeFilter[] = ['all', 'rfq', 'po']
-const STATUS_FILTERS: PurchaseStatusFilter[] = ['all', ...PURCHASE_LIFECYCLE_STATUSES]
-
-function isTypeFilter(value: string): value is PurchaseTypeFilter {
-  return (TYPE_FILTERS as string[]).includes(value)
-}
-
-function isStatusFilter(value: string): value is PurchaseStatusFilter {
-  return (STATUS_FILTERS as string[]).includes(value)
-}
-
-/** Migrate legacy single-filter saved views (`rfq` | `po` | `received` | status). */
-function migrateLegacySavedView(stored: string): {
-  typeFilter: PurchaseTypeFilter
-  statusFilter: PurchaseStatusFilter
-} | null {
-  if (stored === 'all') return { typeFilter: 'all', statusFilter: 'all' }
-  if (stored === 'rfq') return { typeFilter: 'rfq', statusFilter: 'all' }
-  if (stored === 'po') return { typeFilter: 'po', statusFilter: 'all' }
-  if (isStatusFilter(stored) && stored !== 'all') {
-    return { typeFilter: 'all', statusFilter: stored }
-  }
-  return null
 }
 
 // Matches lib/store.tsx's canManageProcurement — the actual gate behind
@@ -59,6 +36,7 @@ export default function PurchaseOrdersTab() {
   const canManageProcurement = CAN_MANAGE_PROCUREMENT_ROLES.includes(currentUser?.role ?? '')
   const savedViewKey = 'deed_po_saved_view'
   const patchUi = useUrlUiPatch()
+  const savedViewHydrated = useRef(false)
   const [search, setSearchValue] = useUrlUiState('q', '')
   const [pageValue, setPageValue] = useUrlUiState('page', '1')
   const currentPage = Math.max(1, Number.parseInt(pageValue, 10) || 1)
@@ -66,36 +44,19 @@ export default function PurchaseOrdersTab() {
   const setPage = (page: number) => setPageValue(String(Math.max(1, page)))
 
   useEffect(() => {
+    // Saved-view hydration is a one-time mount concern. patchUi changes identity
+    // when the URL changes; without this gate, clicking page 2 reruns hydration
+    // and can erase the pagination query.
+    if (savedViewHydrated.current) return
+    savedViewHydrated.current = true
+
     // A URL/deep-link selection wins over the user's local saved view.
     if (typeFilter !== 'all' || statusFilter !== 'all') return
     try {
       const stored = localStorage.getItem(savedViewKey)
       if (!stored) return
-
-      try {
-        const parsed = JSON.parse(stored) as { type?: string; status?: string }
-        if (parsed && typeof parsed === 'object' && (parsed.type || parsed.status)) {
-          const nextType = parsed.type && isTypeFilter(parsed.type) ? parsed.type : 'all'
-          const nextStatus = parsed.status && isStatusFilter(parsed.status) ? parsed.status : 'all'
-          patchUi({
-            type: nextType === 'all' ? null : nextType,
-            status: nextStatus === 'all' ? null : nextStatus,
-            page: null,
-          })
-          return
-        }
-      } catch {
-        // not JSON — try legacy string values
-      }
-
-      const migrated = migrateLegacySavedView(stored)
-      if (migrated) {
-        patchUi({
-          type: migrated.typeFilter === 'all' ? null : migrated.typeFilter,
-          status: migrated.statusFilter === 'all' ? null : migrated.statusFilter,
-          page: null,
-        })
-      }
+      const savedView = parsePurchaseSavedView(stored)
+      if (savedView) patchUi(purchaseSavedViewQueryPatch(savedView))
     } catch {
       // ignore storage failures
     }
