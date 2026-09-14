@@ -13,6 +13,7 @@ import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirro
 import { invoiceDocState } from '@/lib/odoo-sales-flow'
 import { labelForRole, cashAccountRoleForBankId } from '@/lib/accounting/coa-roles'
 import { isUuid } from '@/lib/legacy-compat'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -31,11 +32,11 @@ function isPayableInvoiceStatus(status: string): boolean {
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: RouteParams<{ id: string }> }
 ) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(WRITE_ROLES)
-    const invoiceId = params.id
+    const { id: invoiceId } = await resolveRouteParams(params)
     const body = await request.json()
 
     const {
@@ -251,12 +252,13 @@ export async function POST(
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: RouteParams<{ id: string }> }
 ) {
   return withApiErrorHandling(async () => {
     await requireRole([...WRITE_ROLES])
+    const { id } = await resolveRouteParams(params)
     const payments = await prisma.payment.findMany({
-      where: { invoiceId: params.id, isVoided: false },
+      where: { invoiceId: id, isVoided: false },
       orderBy: { paidAt: 'asc' },
     })
     return NextResponse.json(payments)

@@ -11,6 +11,20 @@ import { salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { buildInvoiceJournalInput, allocateInvoiceJournalRef } from '@/lib/accounting/invoice-journals'
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
+
+function rethrowInvoicePostingError(err: unknown): never {
+  if (err && typeof err === 'object' && 'status' in err && typeof (err as { status?: unknown }).status === 'number') {
+    throw err
+  }
+  const message = err instanceof Error ? err.message : 'Invoice journal posting failed'
+  if (
+    /Unknown journal code|Unknown account|Inactive account|Fiscal period|Unbalanced journal|Journal ref already exists|Zero-value journal|Journal account must start|no positive posting amount/i.test(message)
+  ) {
+    throw Object.assign(new Error(message), { status: 409 })
+  }
+  throw err
+}
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -137,11 +151,12 @@ function mapInvoiceItems(lines: any[]) {
   })
 }
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_: Request, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
+    const { id } = await resolveRouteParams(params)
     const invoice = await prisma.invoice.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { items: true },
     })
     if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -149,8 +164,9 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   })
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
+    const { id } = await resolveRouteParams(params)
     const body = await request.json()
     // Repair authorization is derived from the persisted Repair relation, never
     // from caller-supplied notes/repair-looking references.
@@ -161,7 +177,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       : undefined
 
     const before = await prisma.invoice.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { items: true },
     })
     if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -239,7 +255,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       }
 
       // Phase 3: server 3-way match before posting a vendor bill linked to a PO.
-      const preMirror = await resolveBlobInvoiceMirror(params.id)
+      const preMirror = await resolveBlobInvoiceMirror(id)
       const willBeVendor = body.type === 'vendor_bill' || preMirror.type === 'vendor_bill'
       const rawPoId = optionalUuid(body.purchaseOrderId)
         ?? preMirror.purchaseOrderId
@@ -259,7 +275,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           await assertVendorBillThreeWayMatchServer({
             purchaseOrderId: poId,
             billLines,
-            excludeBillId: params.id,
+            excludeBillId: id,
           })
         } catch (err: any) {
           const status = typeof err?.status === 'number' ? err.status : 409
@@ -284,7 +300,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       // invoice_number constraint would otherwise surface as a bare 500.
       const chosenNumber = String(data.invoiceNumber ?? before.invoiceNumber)
       const numberClash = await prisma.invoice.findFirst({
-        where: { invoiceNumber: chosenNumber, id: { not: params.id } },
+        where: { invoiceNumber: chosenNumber, id: { not: id } },
         select: { id: true },
       })
       if (numberClash) {
@@ -320,28 +336,32 @@ export async function PUT(request: Request, { params }: { params: { id: string }
             subtotal: Number(i.lineSubtotal),
             description: i.description,
           }))
-      postingJournal = await buildInvoiceJournalInput({
-        id: before.id,
-        ref: String(data.invoiceNumber ?? before.invoiceNumber),
-        invoiceNumber: String(data.invoiceNumber ?? before.invoiceNumber),
-        invoiceDate: data.invoiceDate ?? before.invoiceDate,
-        totalAmount: Number(data.totalAmount ?? before.totalAmount),
-        subtotal: Number(data.subtotal ?? before.subtotal),
-        taxAmount: Number(data.taxAmount ?? before.taxAmount),
-        type: postingInvoiceType,
-        repairId: before.repairId ?? undefined,
-        purchaseOrderId: (postingPurchaseOrderId = vendorPoId ?? optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? null) ?? undefined,
-        partnerName: postingMirror.partnerName,
-        clientName: postingMirror.clientName,
-        lines: normalizedItems.map((i: any) => ({
-          productId: i.productId ?? undefined,
-          qty: Number(i.qty),
-          unitPrice: Number(i.unitPrice),
-          subtotal: Number(i.lineSubtotal ?? i.subtotal),
-          description: i.description,
-        })),
-      }, { createdById: actor.id })
-      postingJournal.ref = await allocateInvoiceJournalRef(postingJournal.ref)
+      try {
+        postingJournal = await buildInvoiceJournalInput({
+          id: before.id,
+          ref: String(data.invoiceNumber ?? before.invoiceNumber),
+          invoiceNumber: String(data.invoiceNumber ?? before.invoiceNumber),
+          invoiceDate: data.invoiceDate ?? before.invoiceDate,
+          totalAmount: Number(data.totalAmount ?? before.totalAmount),
+          subtotal: Number(data.subtotal ?? before.subtotal),
+          taxAmount: Number(data.taxAmount ?? before.taxAmount),
+          type: postingInvoiceType,
+          repairId: before.repairId ?? undefined,
+          purchaseOrderId: (postingPurchaseOrderId = vendorPoId ?? optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? null) ?? undefined,
+          partnerName: postingMirror.partnerName,
+          clientName: postingMirror.clientName,
+          lines: normalizedItems.map((i: any) => ({
+            productId: i.productId ?? undefined,
+            qty: Number(i.qty),
+            unitPrice: Number(i.unitPrice),
+            subtotal: Number(i.lineSubtotal ?? i.subtotal),
+            description: i.description,
+          })),
+        }, { createdById: actor.id })
+        postingJournal.ref = await allocateInvoiceJournalRef(postingJournal.ref)
+      } catch (err) {
+        rethrowInvoicePostingError(err)
+      }
       postingBillLines = normalizedItems.map((i: any) => ({
         purchaseOrderItemId: i.purchaseOrderItemId ?? undefined,
         grnItemId: i.grnItemId ?? undefined,
@@ -355,7 +375,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     const invoice = await prisma.$transaction(async tx => {
       const claimed = await tx.invoice.updateMany({
-        where: { id: params.id, lockVersion: before.lockVersion },
+        where: { id: id, lockVersion: before.lockVersion },
         data: {
           ...data,
           lockVersion: nextLockVersion(before.lockVersion),
@@ -369,11 +389,11 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       }
 
       if (lines !== undefined) {
-        await tx.invoiceItem.deleteMany({ where: { invoiceId: params.id } })
+        await tx.invoiceItem.deleteMany({ where: { invoiceId: id } })
         const mapped = mapInvoiceItems(lines)
         if (mapped.length) {
           await tx.invoiceItem.createMany({
-            data: mapped.map((item: any) => ({ ...item, invoiceId: params.id })),
+            data: mapped.map((item: any) => ({ ...item, invoiceId: id })),
           })
         }
       }
@@ -384,16 +404,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           purchaseOrderId: postingPurchaseOrderId,
           vendorId: before.clientId,
           billLines: postingBillLines,
-          excludeBillId: params.id,
+          excludeBillId: id,
         })
       }
 
       let journalId: string | null = null
       if (postingJournal) {
-        const journal = await createJournalEntryInTx(tx, postingJournal)
+        const journal = await createJournalEntryInTx(tx, postingJournal).catch(rethrowInvoicePostingError)
         journalId = journal.id
         await tx.invoice.update({
-          where: { id: params.id },
+          where: { id },
           data: {
             postingStatus: 'posted',
             postedJournalEntryId: journal.id,
@@ -403,8 +423,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           },
         })
 
-        const postedItems = await tx.invoiceItem.findMany({ where: { invoiceId: params.id } })
-        const partner = await tx.client.findUnique({ where: { id: before.clientId }, select: { kraPin: true } })
+        const postedItems = await tx.invoiceItem.findMany({ where: { invoiceId: id } })
+        const partner = before.clientId
+          ? await tx.client.findUnique({ where: { id: before.clientId }, select: { kraPin: true } })
+          : null
         const taxPoint = data.invoiceDate ?? before.invoiceDate ?? new Date()
         for (const item of postedItems) {
           const category = String((item as any).taxCategory || 'not_selected')
@@ -412,7 +434,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
             where: {
               sourceType_sourceId_sourceLineId: {
                 sourceType: postingInvoiceType === 'vendor_bill' ? 'vendor_bill' : 'invoice',
-                sourceId: params.id,
+                sourceId: id,
                 sourceLineId: item.id,
               },
             },
@@ -433,7 +455,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
             },
             create: {
               sourceType: postingInvoiceType === 'vendor_bill' ? 'vendor_bill' : 'invoice',
-              sourceId: params.id,
+              sourceId: id,
               sourceLineId: item.id,
               direction: postingInvoiceType === 'vendor_bill' ? 'input' : 'output',
               taxCategory: category,
@@ -457,14 +479,14 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         userId: actor.id,
         action: willPostNow ? 'post_invoice' : 'update_invoice',
         entityType: 'invoice',
-        entityId: params.id,
+        entityId: id,
         relatedJournalId: journalId,
         oldValues: { status: before.status, totalAmount: Number(before.totalAmount), amountPaid: Number(before.amountPaid), lockVersion: before.lockVersion },
         newValues: { status: data.status ?? before.status, totalAmount: Number(data.totalAmount ?? before.totalAmount), lockVersion: nextLockVersion(before.lockVersion) },
       })
 
       return tx.invoice.findUniqueOrThrow({
-        where: { id: params.id },
+        where: { id: id },
         include: { items: true },
       })
     }, { isolationLevel: 'Serializable' })
@@ -555,7 +577,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   })
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: RouteParams<{ id: string }> }) {
   return PUT(request, { params })
 }
 
@@ -563,11 +585,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 // destroy audit history and break GL reconciliation. Instead we transition the
 // invoice to a terminal `voided`/`cancelled` status and record who did it.
 // A fully-paid invoice cannot be voided; it must be credited/refunded instead.
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_: Request, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(WRITE_ROLES)
+    const { id } = await resolveRouteParams(params)
 
-    const invoice = await prisma.invoice.findUnique({ where: { id: params.id } })
+    const invoice = await prisma.invoice.findUnique({ where: { id } })
     if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
 
     if (Number(invoice.amountPaid) > 0) {
@@ -581,7 +604,7 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
     }
 
     const voided = await prisma.invoice.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: 'voided' as any },
     })
 

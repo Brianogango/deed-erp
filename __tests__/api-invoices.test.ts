@@ -11,6 +11,7 @@ const {
   mockPrismaPurchaseOrderItem,
   mockResolveClientId,
   mockGetNextDocNumber,
+  mockCreateJournalEntryInTx,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockRequireRole: vi.fn(),
@@ -39,6 +40,7 @@ const {
   },
   mockResolveClientId: vi.fn(),
   mockGetNextDocNumber: vi.fn(),
+  mockCreateJournalEntryInTx: vi.fn().mockResolvedValue({ id: 'je-1' }),
 }))
 
 vi.mock('@/lib/doc-ref-counter', () => ({ getNextDocNumber: mockGetNextDocNumber }))
@@ -107,7 +109,7 @@ vi.mock('@/lib/accounting/invoice-journals', () => ({
 }))
 
 vi.mock('@/lib/accounting/journal-service', () => ({
-  createJournalEntryInTx: vi.fn().mockResolvedValue({ id: 'je-1' }),
+  createJournalEntryInTx: mockCreateJournalEntryInTx,
   createJournalEntry: vi.fn().mockResolvedValue({ id: 'je-1' }),
   reverseJournalEntry: vi.fn().mockResolvedValue(null),
 }))
@@ -193,6 +195,7 @@ beforeEach(() => {
   mockPrismaInvoice.findUniqueOrThrow.mockImplementation((...args: any[]) => mockPrismaInvoice.findUnique(...args))
   mockGetNextDocNumber.mockResolvedValue('INV-00001')
   mockPostSalesCommissionForInvoice.mockResolvedValue(undefined)
+  mockCreateJournalEntryInTx.mockResolvedValue({ id: 'je-1' })
 })
 
 // ── GET /api/invoices ─────────────────────────────────────────────────────────
@@ -448,6 +451,18 @@ describe('GET /api/invoices/:id', () => {
     expect(res.status).toBe(404)
   })
 
+  it('accepts Next 15 promise params', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue(baseInvoice)
+    const res = await GET_ONE(
+      new Request(`http://localhost/api/invoices/${INVOICE_ID}`),
+      { params: Promise.resolve({ id: INVOICE_ID }) },
+    )
+    expect(res.status).toBe(200)
+    expect(mockPrismaInvoice.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: INVOICE_ID } }),
+    )
+  })
+
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(err401())
     const res = await GET_ONE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`), { params: { id: INVOICE_ID } })
@@ -498,6 +513,49 @@ describe('PUT /api/invoices/:id', () => {
     mockRequireRole.mockRejectedValue(err403())
     const res = await PUT(idReq(INVOICE_ID, {}), { params: { id: INVOICE_ID } })
     expect(res.status).toBe(403)
+  })
+
+  it('accepts Next 15 promise params when confirming a draft invoice', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({
+      ...baseInvoice,
+      lockVersion: 0,
+      items: [{ id: 'li1', description: 'Laptop', qty: 1, unitPrice: 5000, taxRate: 16, taxCategory: 'standard_16', lineSubtotal: 5000, lineTax: 800, lineTotal: 5800 }],
+    })
+    mockPrismaInvoice.findUniqueOrThrow.mockResolvedValue({ ...baseInvoice, status: 'approved', lockVersion: 1 })
+    const res = await PUT(
+      idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }),
+      { params: Promise.resolve({ id: INVOICE_ID }) },
+    )
+    expect(res.status).toBe(200)
+    expect(mockPrismaInvoice.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: INVOICE_ID } }),
+    )
+  })
+
+  it('returns the posting error instead of Internal server error when the GL journal cannot post', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({
+      ...baseInvoice,
+      lockVersion: 0,
+      items: [{ id: 'li1', description: 'Laptop', qty: 1, unitPrice: 5000, taxRate: 16, taxCategory: 'standard_16', lineSubtotal: 5000, lineTax: 800, lineTotal: 5800 }],
+    })
+    mockCreateJournalEntryInTx.mockRejectedValue(
+      Object.assign(new Error('Unknown journal code: SAL'), { status: 409 }),
+    )
+    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: { id: INVOICE_ID } })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'Unknown journal code: SAL' })
+  })
+
+  it('maps a journal setup failure thrown without status onto 409', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({
+      ...baseInvoice,
+      lockVersion: 0,
+      items: [{ id: 'li1', description: 'Laptop', qty: 1, unitPrice: 5000, taxRate: 16, taxCategory: 'standard_16', lineSubtotal: 5000, lineTax: 800, lineTotal: 5800 }],
+    })
+    mockCreateJournalEntryInTx.mockRejectedValue(new Error('Fiscal period 2026 is draft and cannot accept postings'))
+    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: { id: INVOICE_ID } })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/Fiscal period 2026/)
   })
 })
 

@@ -41,17 +41,37 @@ function collectWarnings(results: any[]) {
       : `${r.productId}: valuation skipped (${r.result?.reason || 'unknown'})`)
 }
 
-function isSoftSkip(result: any, opts?: { allowMissingProduct?: boolean }) {
+/** Chart / journal / analytic setup gaps must not reverse POS or delivery stock. */
+export function isFinanceSetupGap(message: string | null | undefined): boolean {
+  const value = String(message || '')
+  return /Unknown journal code/i.test(value)
+    || /Unknown account/i.test(value)
+    || /Inactive account/i.test(value)
+    || /Unknown analytic account/i.test(value)
+    || /Inactive analytic account/i.test(value)
+    || /Journal account must start with a valid account code/i.test(value)
+}
+
+function isSoftSkip(result: any, opts?: { allowMissingProduct?: boolean; allowFinanceSetupGap?: boolean }) {
   if (result?.skipped && result?.reason === 'already_processed') return true
   if (opts?.allowMissingProduct && result?.skipped && result?.reason === 'product_not_in_prisma') return true
   if (result?.skipped && result?.reason === 'non_stock') return true
+  if (opts?.allowFinanceSetupGap && isFinanceSetupGap(result?.reason)) return true
   return false
 }
 
+function isHardValuationLine(result: any, opts?: { allowMissingProduct?: boolean; allowFinanceSetupGap?: boolean }) {
+  if (result?.error) {
+    if (opts?.allowFinanceSetupGap && isFinanceSetupGap(result.error)) return false
+    return true
+  }
+  return Boolean(result?.result?.skipped && !isSoftSkip(result.result, opts))
+}
+
 /** Fail-closed: any hard line error or non-idempotent skip blocks the operational document. */
-export function finalizeValuation(results: any[], opts?: { allowMissingProduct?: boolean }) {
+export function finalizeValuation(results: any[], opts?: { allowMissingProduct?: boolean; allowFinanceSetupGap?: boolean }) {
   const warnings = collectWarnings(results)
-  const hard = results.filter((r: any) => r.error || (r.result?.skipped && !isSoftSkip(r.result, opts)))
+  const hard = results.filter((r: any) => isHardValuationLine(r, opts))
   if (hard.length > 0) {
     const reason = hard
       .map(r => String(r.error || r.result?.reason || 'valuation_failed'))
@@ -163,10 +183,10 @@ export async function postDeliveryValuationFromPayload(params: {
       results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
     }
   }
-  // Legacy blob-only products cannot be valued in Prisma — that is a
-  // bookkeeping gap, not a reason to block delivery validation (and with it
-  // invoicing) for the sale order. Same tolerance POS already had.
-  return finalizeValuation(results, { allowMissingProduct: true })
+  // Legacy blob-only products and incomplete finance setup (missing STK
+  // journal, inactive CoA row after a chart edit) are bookkeeping gaps —
+  // not a reason to reverse warehouse stock or block the delivery note.
+  return finalizeValuation(results, { allowMissingProduct: true, allowFinanceSetupGap: true })
 }
 
 export async function postPosValuationFromPayload(params: {
@@ -196,7 +216,7 @@ export async function postPosValuationFromPayload(params: {
       results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
     }
   }
-  return finalizeValuation(results, { allowMissingProduct: true })
+  return finalizeValuation(results, { allowMissingProduct: true, allowFinanceSetupGap: true })
 }
 export async function reversePosValuationFromPayload(params: {
   orderRef: string

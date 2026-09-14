@@ -44,10 +44,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'orderId, orderRef, total, and subtotal are required' }, { status: 400 })
     }
 
-    const date = String(body.date || '').trim()
-    if (!date) {
-      return NextResponse.json({ error: 'POS posting date is required' }, { status: 422 })
-    }
+    const date = String(body.date || '').trim() || new Date().toISOString().slice(0, 10)
     const parsedDate = new Date(date.includes('T') ? date : `${date}T00:00:00Z`)
     if (Number.isNaN(parsedDate.getTime())) {
       return NextResponse.json({ error: 'POS posting date is invalid' }, { status: 422 })
