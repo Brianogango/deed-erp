@@ -474,11 +474,19 @@ describe('postedInvoicePutDecision', () => {
     if (decision.kind === 'forbidden') expect(decision.status).toBe(403)
   })
 
-  it('keeps stay_posted when status is unchanged so the caller can 409 economic edits', () => {
+  it('treats Confirm Invoice retries as already_posted, not economic mutations', () => {
     expect(postedInvoicePutDecision({
       prismaStatus: 'approved',
       amountPaid: 0,
       nextStatus: 'posted',
+      role: 'finance_officer',
+    }).kind).toBe('already_posted')
+  })
+
+  it('keeps stay_posted when status is omitted so the caller can 409 economic edits', () => {
+    expect(postedInvoicePutDecision({
+      prismaStatus: 'approved',
+      amountPaid: 0,
       role: 'finance_officer',
     }).kind).toBe('stay_posted')
   })

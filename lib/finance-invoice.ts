@@ -286,16 +286,22 @@ export function mapClientInvoiceStatus(raw: string | undefined): string | undefi
 export type PostedInvoicePutDecision =
   | { kind: 'passthrough' }
   | { kind: 'stay_posted' }
+  | { kind: 'already_posted' }
   | { kind: 'reversal'; nextStatus: 'draft' | 'cancelled' | 'voided' }
   | { kind: 'reject'; status: 409; error: string }
   | { kind: 'forbidden'; status: 403; error: string }
 
 /**
- * Decide whether a PUT on a Prisma-posted invoice is a status-only reversal
- * (unpaid Reset to Draft / cancel) or must stay immutable.
+ * Decide whether a PUT on a Prisma-posted invoice is a Confirm retry
+ * (`already_posted`), a status-only reversal (unpaid Reset to Draft / cancel),
+ * or must stay immutable.
  *
- * Line and total edits while posted are never allowed here — the caller still
- * 409s `stay_posted` when economic fields are present.
+ * Confirm Invoice always PUTs the full document with `status: 'posted'`. If
+ * Prisma already posted (UI/blob may still show draft), that retry is
+ * idempotent — do not 409 economic keys on the confirm payload.
+ *
+ * Line and total edits while posted without a confirm/reversal status still
+ * 409 via `stay_posted`.
  */
 export function postedInvoicePutDecision(args: {
   prismaStatus: string
@@ -306,6 +312,7 @@ export function postedInvoicePutDecision(args: {
   if (!PRISMA_POSTED_INVOICE_STATUSES.has(String(args.prismaStatus))) return { kind: 'passthrough' }
 
   const mapped = mapClientInvoiceStatus(args.nextStatus)
+  if (mapped && PRISMA_POSTED_INVOICE_STATUSES.has(mapped)) return { kind: 'already_posted' }
   if (!mapped || !REVERSAL_TARGET_STATUSES.has(mapped)) return { kind: 'stay_posted' }
 
   if (!canCancelOrResetInvoice(args.role)) {

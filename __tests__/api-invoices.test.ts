@@ -135,6 +135,13 @@ vi.mock('@/lib/fiscal-lock.server', () => ({
   checkFiscalLock: vi.fn().mockResolvedValue({ ok: true }),
 }))
 
+vi.mock('@/lib/documents-broadcast.server', () => ({
+  refreshInvoicesBlob: vi.fn().mockResolvedValue(undefined),
+  refreshSaleOrdersBlob: vi.fn().mockResolvedValue(undefined),
+  refreshQuotesBlob: vi.fn().mockResolvedValue(undefined),
+  refreshDocumentBlobsForClientChange: vi.fn().mockResolvedValue(undefined),
+}))
+
 const { mockPostSalesCommissionForInvoice } = vi.hoisted(() => ({
   mockPostSalesCommissionForInvoice: vi.fn(),
 }))
@@ -577,6 +584,43 @@ describe('PUT /api/invoices/:id', () => {
     const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: { id: INVOICE_ID } })
     expect(res.status).toBe(200)
     expect((await res.json()).status).toBe('approved')
+  })
+
+  it('returns 200 on Confirm retry when Prisma is already posted', async () => {
+    const posted = {
+      ...baseInvoice,
+      status: 'approved',
+      lockVersion: 1,
+      items: [{ id: 'li1', description: 'Laptop', qty: 1, unitPrice: 5000, taxRate: 16, taxCategory: 'standard_16', lineSubtotal: 5000, lineTax: 800, lineTotal: 5800 }],
+    }
+    mockPrismaInvoice.findUnique.mockResolvedValue(posted)
+    const res = await PUT(idReq(INVOICE_ID, {
+      status: 'posted',
+      date: '2026-09-13',
+      lines: [{ description: 'mutated', qty: 9, unitPrice: 1 }],
+      totalAmount: 9,
+      subtotal: 9,
+    }), { params: { id: INVOICE_ID } })
+    expect(res.status).toBe(200)
+    expect((await res.json()).status).toBe('approved')
+    expect(mockPrismaInvoice.updateMany).not.toHaveBeenCalled()
+    expect(mockPrismaInvoiceItem.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('still 409s economic edits on a posted invoice when Confirm is not the intent', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({
+      ...baseInvoice,
+      status: 'approved',
+      lockVersion: 1,
+      items: [{ id: 'li1', description: 'Laptop', qty: 1, unitPrice: 5000 }],
+    })
+    const res = await PUT(idReq(INVOICE_ID, {
+      lines: [{ description: 'mutated', qty: 9, unitPrice: 1 }],
+      totalAmount: 9,
+    }), { params: { id: INVOICE_ID } })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/immutable/)
+    expect(mockPrismaInvoice.updateMany).not.toHaveBeenCalled()
   })
 })
 

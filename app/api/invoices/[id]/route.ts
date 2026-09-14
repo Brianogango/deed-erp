@@ -183,6 +183,21 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
     if (putDecision.kind === 'forbidden' || putDecision.kind === 'reject') {
       return NextResponse.json({ error: putDecision.error }, { status: putDecision.status })
     }
+    if (putDecision.kind === 'already_posted') {
+      // Confirm retry: Prisma already posted (UI/blob may still show draft).
+      // Do not apply economic fields from the confirm payload.
+      try {
+        const { refreshInvoicesBlob } = await import('@/lib/documents-broadcast.server')
+        await refreshInvoicesBlob()
+      } catch (err) {
+        console.error('[invoice] invoices blob refresh failed:', err)
+      }
+      const invoice = await prisma.invoice.findUnique({
+        where: { id },
+        include: { items: true },
+      })
+      return NextResponse.json(invoice)
+    }
     if (putDecision.kind === 'reversal') {
       const lock = await checkFiscalLock(before.invoiceDate)
       if (!lock.ok) {
@@ -531,9 +546,9 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       }
     }
 
-    // Keep the deed_invoices blob aligned with Prisma after Reset to Draft /
-    // cancel so a later store sync does not resurrect the posted status.
-    if (leftPosted) {
+    // Keep the deed_invoices blob aligned with Prisma after Confirm / Reset
+    // so a later store hydrate does not resurrect draft vs posted.
+    if (leftPosted || becamePosted) {
       try {
         const { refreshInvoicesBlob } = await import('@/lib/documents-broadcast.server')
         await refreshInvoicesBlob()
