@@ -26,14 +26,8 @@ async function mergeReceipt(params: { id: string; body: Record<string, unknown>;
         receipt: next as any,
       })
     } catch (err) {
-      return {
-        error: err instanceof Error ? err.message : 'Receipt valuation failed',
-        status: 422 as const,
-      }
-    }
-    if (!valuation || (typeof valuation === 'object' && valuation && 'ok' in valuation && !(valuation as { ok?: boolean }).ok)) {
-      const reason = (valuation as { reason?: string } | null)?.reason || 'valuation_failed'
-      return { error: `Receipt valuation failed: ${reason}`, status: 422 as const }
+      console.error('[receipt] valuation failed — GRN stays validated:', err)
+      valuation = { ok: false, reason: err instanceof Error ? err.message : 'Receipt valuation failed' }
     }
   }
 

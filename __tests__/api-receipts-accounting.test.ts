@@ -34,7 +34,7 @@ beforeEach(() => {
 })
 
 describe('receipts API fail-closed valuation and delete', () => {
-  it('does not persist validated when valuation fails', async () => {
+  it('persists validated when valuation fails', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_receipts: [{ id: 'r1', status: 'draft', lines: [] }],
     })
@@ -45,8 +45,10 @@ describe('receipts API fail-closed valuation and delete', () => {
       headers: { 'Content-Type': 'application/json' },
     })
     const res = await PATCH(req, { params: { id: 'r1' } })
-    expect(res.status).toBe(422)
-    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.item.status).toBe('validated')
+    expect(mockSaveStoreKeys).toHaveBeenCalled()
   })
 
   it('blocks DELETE of a validated receipt', async () => {
