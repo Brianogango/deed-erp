@@ -273,7 +273,7 @@ import {
   isOpeningStockLocked,
   isOpeningStockMove,
 } from '@/lib/inventory/opening-stock'
-import { billableQty, assertBillableQty } from '@/lib/purchase/three-way-match'
+import { billableQty, assertBillableQty, poHasReceivedGoods } from '@/lib/purchase/three-way-match'
 import { allocatePurchaseReturn } from '@/lib/purchase/return-allocation'
 import {
   formatStockByLocation,
@@ -14287,8 +14287,12 @@ const storeCtx: AppState = {
       }
       const po = poRef.current.find(p => p.id === poId)
       if (!po) return null
-      const hasValidatedReceipt = recRef.current.some(r => r.poId === poId && r.status === 'validated')
-      if (!hasValidatedReceipt) { showToast('Receive goods before creating a vendor bill', 'error'); return null }
+      // Three-way match keys off PO qtyReceived. A missing blob GRN with
+      // status === 'validated' used to block Create Bill even when the modal
+      // already showed "Up to N billable now" from Prisma-hydrated receipts.
+      if (!poHasReceivedGoods(po.lines)) {
+        showToast('Receive goods before creating a vendor bill', 'error'); return null
+      }
 
       const overrideMap = lineOverrides
         ? new Map(lineOverrides.map(o => [o.lineId, Math.max(0, Math.floor(Number(o.qty) || 0))]))

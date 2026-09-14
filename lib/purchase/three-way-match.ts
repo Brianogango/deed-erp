@@ -22,6 +22,16 @@ export function billableQty(poLine: ThreeWayPoLine): number {
   return Math.max(0, received - billed)
 }
 
+/**
+ * True when any PO line already has received stock.
+ * Create Bill should follow qtyReceived (Prisma GRN / hydrate), not a blob
+ * receipt with status === 'validated' — valuation failures can leave the
+ * GRN unvalidated in the blob while the PO line still shows received qty.
+ */
+export function poHasReceivedGoods(poLines: ThreeWayPoLine[]): boolean {
+  return poLines.some(l => Math.max(0, Math.floor(Number(l.qtyReceived) || 0)) > 0)
+}
+
 /** Throws when qtyToBill would exceed received − already billed. */
 export function assertBillableQty(poLine: ThreeWayPoLine, qtyToBill: number): void {
   const qty = Math.max(0, Math.floor(Number(qtyToBill) || 0))

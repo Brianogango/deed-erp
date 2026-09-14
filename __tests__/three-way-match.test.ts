@@ -4,6 +4,7 @@ import {
   assertVendorBillThreeWayMatch,
   billableQty,
   billMatchStatus,
+  poHasReceivedGoods,
   summarizePoThreeWayMatch,
 } from '@/lib/purchase/three-way-match'
 
@@ -11,6 +12,12 @@ describe('three-way match', () => {
   it('computes billable qty as received minus billed', () => {
     expect(billableQty({ qtyReceived: 10, qtyBilled: 3 })).toBe(7)
     expect(billableQty({ qtyReceived: 5, qtyBilled: 5 })).toBe(0)
+  })
+
+  it('treats Prisma-hydrated qtyReceived as goods received even without a blob GRN', () => {
+    expect(poHasReceivedGoods([{ qtyReceived: 1, qtyBilled: 0 }])).toBe(true)
+    expect(poHasReceivedGoods([{ qtyReceived: 0, qtyBilled: 0 }])).toBe(false)
+    expect(poHasReceivedGoods([])).toBe(false)
   })
 
   it('blocks over-billing', () => {
