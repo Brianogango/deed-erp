@@ -114,7 +114,7 @@ function LayoutThumbnail({ layout, primary, secondary }: {
         <span className="mt-1 grid grid-cols-[1fr_18px_25px] text-[2.5px] font-bold text-white" style={{ backgroundColor: primary }}>
           <span className="px-1 py-[2px]">DESCRIPTION</span><span className="py-[2px] text-center">QTY</span><span className="px-1 py-[2px] text-right">AMOUNT</span>
         </span>
-        {[0, 1, 2].map(row => <span key={row} className="grid grid-cols-[1fr_18px_25px] border-b border-gray-200 text-[2px] text-gray-400" style={{ backgroundColor: layout === 'striped' && row % 2 ? `${primary}0D` : '#fff' }}><span className="px-1 py-[2px]">Item</span><span className="py-[2px] text-center">—</span><span className="px-1 py-[2px] text-right">—</span></span>)}
+        {[0, 1, 2].map(row => <span key={row} className="grid grid-cols-[1fr_18px_25px] border-b border-gray-200 text-[2px] text-gray-400" style={{ backgroundColor: layout === 'striped' && row % 2 ? `${primary}0D` : '#fff' }}><span className="px-1 py-[2px]">—</span><span className="py-[2px] text-center">—</span><span className="px-1 py-[2px] text-right">—</span></span>)}
         <span className="mt-auto ml-auto text-[2.5px] font-bold" style={{ color: primary }}>TOTAL&nbsp;&nbsp; —</span>
       </span>
     </span>
@@ -133,7 +133,7 @@ function DocumentPreview({ draft, company }: { draft: Draft; company: CompanySet
         <LayoutChrome layout={draft.printTemplate} primary={draft.printPrimaryColor} secondary={draft.printSecondaryColor} />
         <header className={`relative mx-8 flex min-h-[92px] items-start justify-between pb-4 pt-7 ${draft.printTemplate === 'boxed' ? 'mt-5 rounded border px-4' : ''}`} style={draft.printTemplate === 'boxed' ? { borderColor: draft.printPrimaryColor } : undefined}>
           <div>
-            {draft.logoUrl ? <img src={draft.logoUrl} alt="Company logo preview" className="h-11 max-w-[150px] object-contain object-left" /> : <div className="text-xl font-black tracking-tight" style={{ color: inverse ? '#fff' : draft.printPrimaryColor }}>{company.name || 'Company'}</div>}
+            {draft.logoUrl ? <img src={draft.logoUrl} alt="Company logo preview" className="h-11 max-w-[150px] object-contain object-left" /> : <div className="text-xl font-black tracking-tight" style={{ color: inverse ? '#fff' : draft.printPrimaryColor }}>{company.name || ''}</div>}
             {draft.printTagline && <p className="mt-1 text-[7px] italic" style={{ color: inverse ? '#fff' : draft.printSecondaryColor }}>{draft.printTagline}</p>}
           </div>
           <div className="max-w-[210px] whitespace-pre-line text-right text-[7px] leading-[1.55]" style={{ color: inverse ? '#fff' : '#475569' }}>
@@ -157,7 +157,7 @@ function DocumentPreview({ draft, company }: { draft: Draft; company: CompanySet
 
           <section className={`overflow-hidden ${draft.printTemplate === 'boxed' ? 'rounded border' : ''}`} style={draft.printTemplate === 'boxed' ? { borderColor: draft.printPrimaryColor } : undefined}>
             <div className="grid grid-cols-[1fr_42px_72px_76px] px-3 py-2.5 text-[6px] font-bold tracking-[.08em] text-white" style={{ backgroundColor: draft.printPrimaryColor }}><span>DESCRIPTION</span><span className="text-center">QTY</span><span className="text-right">UNIT PRICE</span><span className="text-right">AMOUNT</span></div>
-            {[0,1,2,3].map(row => <div key={row} className="grid grid-cols-[1fr_42px_72px_76px] border-b border-slate-200 px-3 py-3 text-slate-300" style={{ backgroundColor: draft.printTemplate === 'striped' && row % 2 ? `${draft.printPrimaryColor}0A` : '#fff' }}><span>Document line</span><span className="text-center">—</span><span className="text-right">—</span><span className="text-right">—</span></div>)}
+            {[0,1,2,3].map(row => <div key={row} className="grid grid-cols-[1fr_42px_72px_76px] border-b border-slate-200 px-3 py-3 text-slate-300" style={{ backgroundColor: draft.printTemplate === 'striped' && row % 2 ? `${draft.printPrimaryColor}0A` : '#fff' }}><span>—</span><span className="text-center">—</span><span className="text-right">—</span><span className="text-right">—</span></div>)}
           </section>
 
           <section className="ml-auto mt-5 w-52 text-[8px]">{['Subtotal','VAT','TOTAL'].map((label,index) => <div key={label} className={`flex justify-between border-b px-3 py-2 ${index === 2 ? 'font-black' : ''}`} style={index === 2 ? { backgroundColor: `${draft.printPrimaryColor}0D`, color: draft.printPrimaryColor } : undefined}><span>{label}</span><span>—</span></div>)}</section>
