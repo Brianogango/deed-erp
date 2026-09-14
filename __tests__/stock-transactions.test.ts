@@ -16,6 +16,7 @@ const mockPurchaseOrderFindUnique = vi.fn()
 const mockPurchaseOrderUpdate = vi.fn()
 const mockPurchaseOrderItemUpdate = vi.fn()
 const mockPurchaseOrderItemFindMany = vi.fn()
+const mockGoodsReceivedNoteFindUnique = vi.fn()
 const mockGoodsReceivedNoteCreate = vi.fn()
 const mockGrnItemCreate = vi.fn()
 const mockSerialNumberCreate = vi.fn()
@@ -58,6 +59,7 @@ vi.mock('@/lib/prisma', () => ({
       findMany: (...args: unknown[]) => mockPurchaseOrderItemFindMany(...args),
     },
     goodsReceivedNote: {
+      findUnique: (...args: unknown[]) => mockGoodsReceivedNoteFindUnique(...args),
       create: (...args: unknown[]) => mockGoodsReceivedNoteCreate(...args),
     },
     grnItem: {
@@ -98,6 +100,7 @@ beforeEach(() => {
         findMany: mockPurchaseOrderItemFindMany,
       },
       goodsReceivedNote: {
+        findUnique: mockGoodsReceivedNoteFindUnique,
         create: mockGoodsReceivedNoteCreate,
       },
       grnItem: {
@@ -125,6 +128,7 @@ beforeEach(() => {
     }
     return items
   })
+  mockGoodsReceivedNoteFindUnique.mockResolvedValue(null)
   mockGoodsReceivedNoteCreate.mockResolvedValue({ id: 'grn-1' })
   mockGrnItemCreate.mockResolvedValue({ id: 'grn-item-1' })
   mockSerialNumberCreate.mockResolvedValue({})
@@ -258,6 +262,48 @@ describe('applyReceiptStockMutation() — blob/Prisma product ID mismatch', () =
 describe('applyReceiptStockMutation() — atomic relational GRN', () => {
   const PO_ID = 'cccccccc-dddd-4eee-8fff-000000000000'
   const PO_ITEM_ID = 'dddddddd-eeee-4fff-8000-111111111111'
+
+  it('treats a retry of an already-posted GRN as success without posting stock twice', async () => {
+    mockGoodsReceivedNoteFindUnique.mockResolvedValue({ poId: PO_ID })
+    mockLoadAppState.mockResolvedValue({
+      deed_stockMoves: [{ id: 'move-1', documentRef: 'REC/2026/0001' }],
+    })
+
+    const result = await applyReceiptStockMutation({
+      receiptId: 'rec-1',
+      receiptRef: 'REC/2026/0001',
+      purchaseOrderId: PO_ID,
+      destination: 'warehouse',
+      lines: [{ productId: PRODUCT_ID, productName: 'Widget', qtyReceived: 3, requiresSerial: false }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true, alreadyApplied: true }))
+    expect(mockPrismaTransaction).not.toHaveBeenCalled()
+    expect(mockGoodsReceivedNoteCreate).not.toHaveBeenCalled()
+    expect(mockPurchaseOrderItemUpdate).not.toHaveBeenCalled()
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('rejects a reused GRN reference that belongs to another purchase order', async () => {
+    mockGoodsReceivedNoteFindUnique.mockResolvedValue({ poId: 'eeeeeeee-ffff-4000-8000-222222222222' })
+
+    const result = await applyReceiptStockMutation({
+      receiptId: 'rec-1',
+      receiptRef: 'REC/2026/0001',
+      purchaseOrderId: PO_ID,
+      destination: 'warehouse',
+      lines: [{ productId: PRODUCT_ID, productName: 'Widget', qtyReceived: 3, requiresSerial: false }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'GRN reference REC/2026/0001 is already linked to another purchase order.',
+    })
+    expect(mockPrismaTransaction).not.toHaveBeenCalled()
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
 
   it('bumps PurchaseOrderItem.qtyReceived and writes a GoodsReceivedNote/GrnItem inside one transaction', async () => {
     mockLoadAppState.mockResolvedValue({
