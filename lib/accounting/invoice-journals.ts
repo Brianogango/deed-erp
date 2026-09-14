@@ -150,7 +150,9 @@ export async function buildInvoiceJournalInput(
   const isCredit = isVendor && total < 0
 
   if (total <= 0 && !isCredit) {
-    throw new Error(`Invoice ${ref} has no positive posting amount`)
+    const err = new Error(`Invoice ${ref} has no positive posting amount`)
+    ;(err as Error & { status?: number }).status = 409
+    throw err
   }
 
   if (isVendor) {
