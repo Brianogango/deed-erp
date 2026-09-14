@@ -23,6 +23,55 @@ export const PURCHASE_LIFECYCLE_STATUSES: PurchaseLifecycleStatus[] = [
   'cancelled',
 ]
 
+export interface PurchaseSavedView {
+  typeFilter: PurchaseTypeFilter
+  statusFilter: PurchaseStatusFilter
+}
+
+const PURCHASE_TYPE_FILTERS: PurchaseTypeFilter[] = ['all', 'rfq', 'po']
+
+function isPurchaseTypeFilter(value: unknown): value is PurchaseTypeFilter {
+  return typeof value === 'string' && (PURCHASE_TYPE_FILTERS as string[]).includes(value)
+}
+
+function isPurchaseStatusFilter(value: unknown): value is PurchaseStatusFilter {
+  return typeof value === 'string' && (['all', ...PURCHASE_LIFECYCLE_STATUSES] as string[]).includes(value)
+}
+
+/** Parse current JSON and legacy string purchase-order saved views. */
+export function parsePurchaseSavedView(stored: string): PurchaseSavedView | null {
+  try {
+    const parsed = JSON.parse(stored) as { type?: unknown; status?: unknown }
+    if (parsed && typeof parsed === 'object' && (parsed.type || parsed.status)) {
+      return {
+        typeFilter: isPurchaseTypeFilter(parsed.type) ? parsed.type : 'all',
+        statusFilter: isPurchaseStatusFilter(parsed.status) ? parsed.status : 'all',
+      }
+    }
+  } catch {
+    // Legacy values were stored as unquoted strings.
+  }
+
+  if (stored === 'all') return { typeFilter: 'all', statusFilter: 'all' }
+  if (stored === 'rfq') return { typeFilter: 'rfq', statusFilter: 'all' }
+  if (stored === 'po') return { typeFilter: 'po', statusFilter: 'all' }
+  if (isPurchaseStatusFilter(stored) && stored !== 'all') {
+    return { typeFilter: 'all', statusFilter: stored }
+  }
+  return null
+}
+
+/**
+ * Applying a saved filter must preserve unrelated URL state, especially page.
+ * The caller merges this patch into the current query string.
+ */
+export function purchaseSavedViewQueryPatch(view: PurchaseSavedView): Record<string, string | null> {
+  return {
+    type: view.typeFilter === 'all' ? null : view.typeFilter,
+    status: view.statusFilter === 'all' ? null : view.statusFilter,
+  }
+}
+
 export const PURCHASE_STATUS_FILTER_LABELS: Record<PurchaseLifecycleStatus, string> = {
   draft: 'Draft',
   sent: 'Sent',
