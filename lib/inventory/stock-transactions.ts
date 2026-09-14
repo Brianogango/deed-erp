@@ -951,8 +951,25 @@ export async function applyReceiptStockMutation(params: {
     serialRecords?: Array<Record<string, unknown>>
   }>
   userId?: string
-}): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
+}): Promise<{ ok: true; moves: BlobStockMove[]; alreadyApplied?: boolean } | { ok: false; error: string }> {
   return withAppStateKeyLock('deed_serials', async () => {
+    const existingGrn = params.purchaseOrderId
+      ? await prisma.goodsReceivedNote.findUnique({
+          where: { grnNumber: params.receiptRef },
+          select: { poId: true },
+        }).catch(() => null)
+      : null
+    if (existingGrn) {
+      if (existingGrn.poId !== params.purchaseOrderId) {
+        return { ok: false, error: `GRN reference ${params.receiptRef} is already linked to another purchase order.` }
+      }
+      const existingState = await loadAppState(['deed_stockMoves'])
+      const existingMoves: BlobStockMove[] = Array.isArray(existingState.deed_stockMoves)
+        ? (existingState.deed_stockMoves as BlobStockMove[]).filter(move => move.documentRef === params.receiptRef)
+        : []
+      return { ok: true, moves: existingMoves, alreadyApplied: true }
+    }
+
     const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
     const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
     const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
@@ -1043,6 +1060,20 @@ export async function applyReceiptStockMutation(params: {
       grnItemsByProductId = relational.grnItemsByProductId
       resolvedProductIds = relational.resolvedProductIds
     } catch (err) {
+      const prismaCode = typeof err === 'object' && err !== null && 'code' in err
+        ? String((err as { code?: unknown }).code || '')
+        : ''
+      if (prismaCode === 'P2002' && params.purchaseOrderId) {
+        const winner = await prisma.goodsReceivedNote.findUnique({
+          where: { grnNumber: params.receiptRef },
+          select: { poId: true },
+        }).catch(() => null)
+        if (winner?.poId === params.purchaseOrderId) {
+          // Another request won the unique-key race. Its transaction owns the
+          // relational stock/PO update; do not persist this request's blob copy.
+          return { ok: true, moves: [], alreadyApplied: true }
+        }
+      }
       const message = err instanceof Error ? err.message : 'Stock update failed'
       return { ok: false, error: message }
     }
