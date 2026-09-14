@@ -245,7 +245,22 @@ printf '%s\n' "$VERIFIED_MANIFEST" >"$ROLLBACK_STATE_DIR/pre-deploy-backup-manif
 printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$ROLLBACK_STATE_DIR/deploy-started-utc"
 
 log "--- Syncing source to $DEPLOY_REMOTE/$DEPLOY_BRANCH"
-GIT_TERMINAL_PROMPT=0 git fetch "$DEPLOY_REMOTE" "$DEPLOY_BRANCH"
+# Contabo counts outbound TCP/22. GitHub SSH on 443 keeps deploy fetches
+# off that quota. Local/file remotes never invoke ssh.
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o HostName=ssh.github.com -p 443 -o ConnectTimeout=15 -o ConnectionAttempts=1 -o BatchMode=yes}"
+fetch_status=1
+for fetch_attempt in 1 2 3 4; do
+  if GIT_TERMINAL_PROMPT=0 git fetch "$DEPLOY_REMOTE" "$DEPLOY_BRANCH"; then
+    fetch_status=0
+    break
+  fi
+  log "git fetch attempt $fetch_attempt failed; retrying"
+  sleep $((4 * fetch_attempt))
+done
+[[ "$fetch_status" == 0 ]] || {
+  log "git fetch of $DEPLOY_REMOTE/$DEPLOY_BRANCH failed"
+  exit 1
+}
 SOURCE_SYNCED=1
 git checkout -B "$DEPLOY_BRANCH" "$DEPLOY_REMOTE/$DEPLOY_BRANCH"
 git log --oneline -1

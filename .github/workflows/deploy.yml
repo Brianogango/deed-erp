@@ -199,6 +199,17 @@ jobs:
               fi
             done
             git status --porcelain || true
+            # Route GitHub git+ssh over 443 so Contabo outbound :22 quota
+            # is not consumed by production `git fetch origin master`.
+            mkdir -p "$HOME/.ssh"
+            chmod 700 "$HOME/.ssh"
+            ssh_config="$HOME/.ssh/config"
+            touch "$ssh_config"
+            chmod 600 "$ssh_config"
+            if ! grep -Fq 'HostName ssh.github.com' "$ssh_config"; then
+              printf '\nHost github.com\n  HostName ssh.github.com\n  Port 443\n  User git\n' >>"$ssh_config"
+              echo "Configured GitHub SSH over 443"
+            fi
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1

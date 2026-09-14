@@ -328,8 +328,14 @@ test_deploy_restores_next_generated_dirt() {
   assert_file_contains "$fixture/app/tsconfig.json" "{}"
 }
 
+test_deploy_script_uses_github_ssh_over_443() {
+  assert_file_contains "$ROOT/scripts/deploy/deed-erp-deploy.sh" "ssh.github.com"
+  assert_file_contains "$ROOT/scripts/deploy/deed-erp-deploy.sh" "ConnectTimeout=15"
+}
+
 test_backup_and_verifier
 test_deploy_rollback reload
 test_deploy_rollback health
 test_deploy_restores_next_generated_dirt
+test_deploy_script_uses_github_ssh_over_443
 printf 'Production safety tests passed\n'
