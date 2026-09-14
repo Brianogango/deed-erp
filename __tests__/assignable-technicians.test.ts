@@ -14,6 +14,8 @@ const users = [
   { id: 't4', name: 'Lead', role: 'technical_lead', active: true, employeeId: 'e4' },
   { id: 'k1', name: 'Kilimall', role: 'kilimall_officer', active: true, employeeId: 'e5', actsAsTechnician: true },
   { id: 'k2', name: 'Other Kilimall', role: 'kilimall_officer', active: true, employeeId: 'e6', actsAsTechnician: false },
+  { id: 't5', name: 'Legacy Tech', role: 'repair_tech', active: true, employeeId: 'e7' },
+  { id: 't6', name: 'Legacy Lead', role: 'lead_tech', active: true, employeeId: 'e8' },
 ]
 
 const employees = [
@@ -23,19 +25,29 @@ const employees = [
   { id: 'e4', status: 'active' },
   { id: 'e5', status: 'active' },
   { id: 'e6', status: 'active' },
+  { id: 'e7', status: 'active' },
+  { id: 'e8', status: 'active' },
 ]
 
 describe('assignableTechnicians', () => {
   it('includes actsAsTechnician users and excludes inactive/exited', () => {
     const list = assignableTechnicians(users, employees)
-    expect(list.map(u => u.id).sort()).toEqual(['k1', 't1', 't4'])
+    expect(list.map(u => u.id).sort()).toEqual(['k1', 't1', 't4', 't5', 't6'])
   })
 
-  it('isRepairTechActor is true for technicians and flag users only', () => {
+  it('isRepairTechActor normalizes technician aliases and supports flag users', () => {
     expect(isRepairTechActor({ role: 'technician' })).toBe(true)
+    expect(isRepairTechActor({ role: 'repair_tech' })).toBe(true)
     expect(isRepairTechActor({ role: 'kilimall_officer', actsAsTechnician: true })).toBe(true)
     expect(isRepairTechActor({ role: 'kilimall_officer' })).toBe(false)
     expect(isRepairTechActor({ role: 'technical_lead' })).toBe(false)
+  })
+
+  it('accepts canonical and legacy technician/lead roles for assignment', () => {
+    expect(isAssignableTechnician({ id: 'a', name: 'A', role: 'technician', active: true })).toBe(true)
+    expect(isAssignableTechnician({ id: 'b', name: 'B', role: 'repair_tech', active: true })).toBe(true)
+    expect(isAssignableTechnician({ id: 'c', name: 'C', role: 'technical_lead', active: true })).toBe(true)
+    expect(isAssignableTechnician({ id: 'd', name: 'D', role: 'lead_tech', active: true })).toBe(true)
   })
 
   it('rejects actsAsTechnician when user is inactive', () => {

@@ -37,15 +37,16 @@ export function isRepairTechActor(user: {
   role: string
   actsAsTechnician?: boolean
 }): boolean {
-  return user.role === 'technician' || user.actsAsTechnician === true
+  return normalizeClientRole(user.role) === 'technician' || user.actsAsTechnician === true
 }
 
 export function isAssignableTechnician(
   user: TechUser,
   exitedEmployeeIds?: Set<string>,
 ): boolean {
+  const normalizedRole = normalizeClientRole(user.role)
   const roleOk =
-    ['technician', 'technical_lead'].includes(user.role) || user.actsAsTechnician === true
+    ['technician', 'technical_lead'].includes(normalizedRole) || user.actsAsTechnician === true
   if (!roleOk) return false
   if (user.active === false) return false
   if (user.employeeId && exitedEmployeeIds?.has(user.employeeId)) return false
