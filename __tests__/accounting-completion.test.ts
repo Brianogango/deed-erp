@@ -70,5 +70,21 @@ describe('finalizeValuation', () => {
       { productId: 'svc', result: { skipped: true, reason: 'non_stock' } },
     ])
     expect(nonStock.ok).toBe(true)
+    const financeGapOnDelivery = finalizeValuation(
+      [{ productId: 'a', error: 'Unknown journal code: STK' }],
+      { allowMissingProduct: true, allowFinanceSetupGap: true },
+    )
+    expect(financeGapOnDelivery.ok).toBe(true)
+    expect(financeGapOnDelivery.warnings?.some(w => w.includes('Unknown journal code'))).toBe(true)
+    const inactiveCoaOnPos = finalizeValuation(
+      [{ productId: 'b', error: 'Inactive account 5000 cannot receive postings.' }],
+      { allowMissingProduct: true, allowFinanceSetupGap: true },
+    )
+    expect(inactiveCoaOnPos.ok).toBe(true)
+    const fifoStillHard = finalizeValuation(
+      [{ productId: 'c', error: 'Insufficient FIFO layers for product c: short 1' }],
+      { allowMissingProduct: true, allowFinanceSetupGap: true },
+    )
+    expect(fifoStillHard.ok).toBe(false)
   })
 })

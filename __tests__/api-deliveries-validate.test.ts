@@ -112,4 +112,15 @@ describe('POST /api/deliveries/:id/validate', () => {
     expect(mockReverseDeliveryStockMutation).toHaveBeenCalled()
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
+
+  it('keeps the delivery done when COGS only warns about finance setup', async () => {
+    mockPostDeliveryValuationFromPayload.mockResolvedValue({
+      ok: true,
+      warnings: ['prod-1: Unknown journal code: STK'],
+    })
+    const res = await POST(postReq({ status: 'done' }), params)
+    expect(res.status).toBe(200)
+    expect(mockSaveStoreKeys).toHaveBeenCalled()
+    expect(mockReverseDeliveryStockMutation).not.toHaveBeenCalled()
+  })
 })

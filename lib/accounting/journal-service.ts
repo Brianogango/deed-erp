@@ -44,6 +44,22 @@ export async function getFiscalLockDate(): Promise<Date | null> {
   return getFiscalLockDateFrom(prisma)
 }
 
+const OPERATIONAL_JOURNALS: Record<string, { name: string; journalType: string }> = {
+  SAL: { name: 'Sales Journal', journalType: 'sale' },
+  PUR: { name: 'Purchase Journal', journalType: 'purchase' },
+  BNK: { name: 'Bank Journal', journalType: 'bank' },
+  CSH: { name: 'Cash Journal', journalType: 'cash' },
+  STK: { name: 'Stock Journal', journalType: 'stock' },
+  PAY: { name: 'Payroll Journal', journalType: 'payroll' },
+  GEN: { name: 'Miscellaneous', journalType: 'general' },
+  MISC: { name: 'Miscellaneous', journalType: 'general' },
+}
+
+function isClosedFiscalState(state: string | null | undefined): boolean {
+  const value = String(state || '').trim().toLowerCase()
+  return value === 'closed' || value === 'locked'
+}
+
 async function assertFiscalPeriodOpenWith(db: AccountingDb, date: Date | string): Promise<void> {
   const lockDate = await getFiscalLockDateFrom(db)
   if (lockDate && isDocumentDateFiscalLocked(date, lockDate)) {
@@ -56,16 +72,58 @@ async function assertFiscalPeriodOpenWith(db: AccountingDb, date: Date | string)
     ? date
     : new Date(String(date).includes('T') ? String(date) : `${date}T00:00:00Z`)
   const periodDelegate = (db as { fiscalPeriod?: { findFirst: typeof prisma.fiscalPeriod.findFirst } }).fiscalPeriod
-  if (periodDelegate?.findFirst) {
-    const period = await periodDelegate.findFirst({
-      where: { dateFrom: { lte: when }, dateTo: { gte: when } },
-      select: { id: true, name: true, state: true },
+  if (!periodDelegate?.findFirst) return
+
+  const covering = { dateFrom: { lte: when }, dateTo: { gte: when } }
+  // Prefer an open covering period so a newly created draft year cannot freeze
+  // POS / delivery notes while the live year is still open.
+  const openPeriod = await periodDelegate.findFirst({
+    where: { ...covering, state: 'open' },
+    select: { id: true },
+  })
+  if (openPeriod) return
+
+  const period = await periodDelegate.findFirst({
+    where: covering,
+    select: { id: true, name: true, state: true },
+  })
+  // Draft (not yet formally opened) must not block operational documents.
+  // Closed / locked periods remain a hard finance seal.
+  if (period && isClosedFiscalState(period.state)) {
+    const err = new Error(`Fiscal period ${period.name} is ${period.state} and cannot accept postings`)
+    ;(err as Error & { status?: number }).status = 409
+    throw err
+  }
+}
+
+async function resolveJournalId(db: AccountingDb, journalCode: string): Promise<string | null> {
+  const code = String(journalCode || '').trim().toUpperCase()
+  if (!code) return null
+
+  const existing = await db.journal.findUnique({ where: { code }, select: { id: true } })
+  if (existing) return existing.id
+
+  const spec = OPERATIONAL_JOURNALS[code]
+  if (!spec) throw postingError(`Unknown journal code: ${journalCode}`)
+
+  try {
+    const created = await db.journal.create({
+      data: {
+        code,
+        name: spec.name,
+        journalType: spec.journalType,
+        isActive: true,
+      },
+      select: { id: true },
     })
-    if (period && period.state !== 'open') {
-      const err = new Error(`Fiscal period ${period.name} is ${period.state} and cannot accept postings`)
-      ;(err as Error & { status?: number }).status = 409
-      throw err
+    return created.id
+  } catch (err) {
+    const prismaCode = typeof err === 'object' && err && 'code' in err ? String((err as { code?: unknown }).code) : ''
+    if (prismaCode === 'P2002') {
+      const raced = await db.journal.findUnique({ where: { code }, select: { id: true } })
+      if (raced) return raced.id
     }
+    throw err
   }
 }
 
@@ -121,12 +179,7 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
     throw postingError(`Journal ref already exists: ${params.ref}`)
   }
 
-  let journalId: string | null = null
-  if (params.journalCode) {
-    const journal = await db.journal.findUnique({ where: { code: params.journalCode }, select: { id: true } })
-    if (!journal) throw postingError(`Unknown journal code: ${params.journalCode}`)
-    journalId = journal.id
-  }
+  const journalId = params.journalCode ? await resolveJournalId(db, params.journalCode) : null
 
   const entryDate = params.date
     ? (params.date instanceof Date ? params.date : new Date(String(params.date).includes('T') ? String(params.date) : `${params.date}T00:00:00Z`))
