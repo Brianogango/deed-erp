@@ -260,10 +260,14 @@ jobs:
             set -euo pipefail
             cd /var/www/deed-erp
             LIVE_SHA="$(git rev-parse HEAD)"
-            EXPECTED_SHA="${{ github.sha }}"
+            TRIGGER_SHA="${{ github.sha }}"
             echo "Production commit: $LIVE_SHA"
-            echo "Expected commit:   $EXPECTED_SHA"
-            test "$LIVE_SHA" = "$EXPECTED_SHA"
+            echo "Trigger commit:    $TRIGGER_SHA"
+            # Deploys are queued, but each run fetches the moving master branch.
+            # A newer queued master commit may therefore be installed by an older
+            # run. Accept only the trigger commit itself or a verified descendant;
+            # never accept an older or unrelated production revision.
+            git merge-base --is-ancestor "$TRIGGER_SHA" "$LIVE_SHA"
             node scripts/security/verify-production-config.mjs
-            EXPECTED_COMMIT_SHA="$EXPECTED_SHA" bash scripts/security/audit-production-host.sh
+            EXPECTED_COMMIT_SHA="$LIVE_SHA" bash scripts/security/audit-production-host.sh
             node scripts/security/live-penetration-smoke.mjs
