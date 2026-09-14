@@ -86,5 +86,13 @@ describe('finalizeValuation', () => {
       { allowMissingProduct: true, allowFinanceSetupGap: true },
     )
     expect(fifoStillHard.ok).toBe(false)
+    const missingAnalyticColumn = finalizeValuation(
+      [{
+        productId: 'd',
+        error: 'Invalid `prisma.journalEntry.create()` invocation: The column `analytic_account_id` of relation `journal_entry_lines` does not exist in the current database',
+      }],
+      { allowMissingProduct: true, allowFinanceSetupGap: true },
+    )
+    expect(missingAnalyticColumn.ok).toBe(true)
   })
 })

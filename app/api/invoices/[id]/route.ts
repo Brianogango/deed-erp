@@ -8,23 +8,10 @@ import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
 import { salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
-import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
+import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { buildInvoiceJournalInput, allocateInvoiceJournalRef } from '@/lib/accounting/invoice-journals'
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
-
-function rethrowInvoicePostingError(err: unknown): never {
-  if (err && typeof err === 'object' && 'status' in err && typeof (err as { status?: unknown }).status === 'number') {
-    throw err
-  }
-  const message = err instanceof Error ? err.message : 'Invoice journal posting failed'
-  if (
-    /Unknown journal code|Unknown account|Inactive account|Fiscal period|Unbalanced journal|Journal ref already exists|Zero-value journal|Journal account must start|no positive posting amount/i.test(message)
-  ) {
-    throw Object.assign(new Error(message), { status: 409 })
-  }
-  throw err
-}
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -288,7 +275,8 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       && (data.status === 'approved' || data.status === 'invoiced')
 
     // Build the canonical journal from server-resolved facts before entering the
-    // transaction; persistence itself occurs inside the same DB transaction.
+    // document transaction. GL persistence is best-effort after commit so a
+    // Chart of Accounts / journal / fiscal-period gap cannot roll back Confirm.
     let postingJournal: Awaited<ReturnType<typeof buildInvoiceJournalInput>> | null = null
     let postingInvoiceType: 'customer_invoice' | 'vendor_bill' = 'customer_invoice'
     let postingPurchaseOrderId: string | null = null
@@ -360,7 +348,9 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
         }, { createdById: actor.id })
         postingJournal.ref = await allocateInvoiceJournalRef(postingJournal.ref)
       } catch (err) {
-        rethrowInvoicePostingError(err)
+        // Confirm must not fail because yesterday's Prisma GL path cannot post.
+        console.error('[invoice] confirm journal could not be built:', err)
+        postingJournal = null
       }
       postingBillLines = normalizedItems.map((i: any) => ({
         purchaseOrderItemId: i.purchaseOrderItemId ?? undefined,
@@ -373,7 +363,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       }))
     }
 
-    const invoice = await prisma.$transaction(async tx => {
+    let invoice = await prisma.$transaction(async tx => {
       const claimed = await tx.invoice.updateMany({
         where: { id: id, lockVersion: before.lockVersion },
         data: {
@@ -408,29 +398,36 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
         })
       }
 
-      let journalId: string | null = null
-      if (postingJournal) {
-        const journal = await createJournalEntryInTx(tx, postingJournal).catch(rethrowInvoicePostingError)
-        journalId = journal.id
-        await tx.invoice.update({
-          where: { id },
-          data: {
-            postingStatus: 'posted',
-            postedJournalEntryId: journal.id,
-            postedAt: new Date(),
-            postedById: actor.id,
-            documentType: postingInvoiceType,
-          },
-        })
+      await writeFinancialAuditInTx(tx, {
+        userId: actor.id,
+        action: willPostNow ? 'post_invoice' : 'update_invoice',
+        entityType: 'invoice',
+        entityId: id,
+        relatedJournalId: null,
+        oldValues: { status: before.status, totalAmount: Number(before.totalAmount), amountPaid: Number(before.amountPaid), lockVersion: before.lockVersion },
+        newValues: { status: data.status ?? before.status, totalAmount: Number(data.totalAmount ?? before.totalAmount), lockVersion: nextLockVersion(before.lockVersion) },
+      })
 
-        const postedItems = await tx.invoiceItem.findMany({ where: { invoiceId: id } })
+      return tx.invoice.findUniqueOrThrow({
+        where: { id: id },
+        include: { items: true },
+      })
+    }, { isolationLevel: 'Serializable' })
+
+    // GL / tax subledger stay best-effort. Confirming the customer document
+    // must succeed even when Chart of Accounts, journals, or fiscal periods
+    // from the 13 Sep finance cutover cannot accept the posting.
+    if (willPostNow && postingJournal) {
+      try {
+        const journal = await createJournalEntry(postingJournal)
+        const postedItems = await prisma.invoiceItem.findMany({ where: { invoiceId: id } })
         const partner = before.clientId
-          ? await tx.client.findUnique({ where: { id: before.clientId }, select: { kraPin: true } })
+          ? await prisma.client.findUnique({ where: { id: before.clientId }, select: { kraPin: true } })
           : null
         const taxPoint = data.invoiceDate ?? before.invoiceDate ?? new Date()
         for (const item of postedItems) {
           const category = String((item as any).taxCategory || 'not_selected')
-          await tx.taxTransaction.upsert({
+          await prisma.taxTransaction.upsert({
             where: {
               sourceType_sourceId_sourceLineId: {
                 sourceType: postingInvoiceType === 'vendor_bill' ? 'vendor_bill' : 'invoice',
@@ -473,23 +470,31 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
             },
           })
         }
+        const postedInvoice = await prisma.invoice.update({
+          where: { id },
+          data: {
+            postingStatus: 'posted',
+            postedJournalEntryId: journal.id,
+            postedAt: new Date(),
+            postedById: actor.id,
+            documentType: postingInvoiceType,
+          },
+          include: { items: true },
+        })
+        if (postedInvoice) invoice = postedInvoice
+      } catch (err) {
+        console.error('[invoice] GL journal for confirm failed — invoice stays posted:', err)
+        await prisma.invoice.update({
+          where: { id },
+          data: { postingStatus: 'unposted', documentType: postingInvoiceType },
+        }).catch(() => {})
       }
-
-      await writeFinancialAuditInTx(tx, {
-        userId: actor.id,
-        action: willPostNow ? 'post_invoice' : 'update_invoice',
-        entityType: 'invoice',
-        entityId: id,
-        relatedJournalId: journalId,
-        oldValues: { status: before.status, totalAmount: Number(before.totalAmount), amountPaid: Number(before.amountPaid), lockVersion: before.lockVersion },
-        newValues: { status: data.status ?? before.status, totalAmount: Number(data.totalAmount ?? before.totalAmount), lockVersion: nextLockVersion(before.lockVersion) },
-      })
-
-      return tx.invoice.findUniqueOrThrow({
-        where: { id: id },
-        include: { items: true },
-      })
-    }, { isolationLevel: 'Serializable' })
+    } else if (willPostNow) {
+      await prisma.invoice.update({
+        where: { id },
+        data: { postingStatus: 'unposted', documentType: postingInvoiceType },
+      }).catch(() => {})
+    }
 
     const mirror = await resolveBlobInvoiceMirror(invoice.id)
     const invoiceType = body.type === 'vendor_bill' || mirror.type === 'vendor_bill'

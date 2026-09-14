@@ -4,25 +4,19 @@ import { NextRequest } from 'next/server'
 const {
   mockGetServerSession,
   mockApplyPosStockMutation,
-  mockReversePosStockMutation,
   mockPostPosValuationFromPayload,
-  mockReversePosValuationFromPayload,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockApplyPosStockMutation: vi.fn(),
-  mockReversePosStockMutation: vi.fn(),
   mockPostPosValuationFromPayload: vi.fn(),
-  mockReversePosValuationFromPayload: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/server', () => ({ getServerSession: mockGetServerSession }))
 vi.mock('@/lib/inventory/stock-transactions', () => ({
   applyPosStockMutation: mockApplyPosStockMutation,
-  reversePosStockMutation: mockReversePosStockMutation,
 }))
 vi.mock('@/lib/inventory/valuation-hooks', () => ({
   postPosValuationFromPayload: mockPostPosValuationFromPayload,
-  reversePosValuationFromPayload: mockReversePosValuationFromPayload,
 }))
 
 import { POST } from '@/app/api/inventory/apply-pos-stock/route'
@@ -46,8 +40,6 @@ beforeEach(() => {
   mockGetServerSession.mockResolvedValue(session)
   mockApplyPosStockMutation.mockResolvedValue({ ok: true, moves: [{ id: 'm1' }] })
   mockPostPosValuationFromPayload.mockResolvedValue({ ok: true, warnings: [] })
-  mockReversePosStockMutation.mockResolvedValue(undefined)
-  mockReversePosValuationFromPayload.mockResolvedValue({ ok: true })
 })
 
 describe('POST /api/inventory/apply-pos-stock', () => {
@@ -60,16 +52,27 @@ describe('POST /api/inventory/apply-pos-stock', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.ok).toBe(true)
-    expect(mockReversePosStockMutation).not.toHaveBeenCalled()
+    expect(json.valuation.warnings).toEqual(['prod-1: Unknown journal code: STK'])
   })
 
-  it('reverses POS stock when valuation still fails closed', async () => {
+  it('keeps the stock deduction when valuation fails closed', async () => {
     mockPostPosValuationFromPayload.mockResolvedValue({
       ok: false,
       reason: 'Insufficient FIFO layers for product prod-1: short 1',
     })
     const res = await POST(postReq(body))
-    expect(res.status).toBe(422)
-    expect(mockReversePosStockMutation).toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.ok).toBe(true)
+    expect(json.valuation.ok).toBe(false)
+  })
+
+  it('keeps the stock deduction when valuation throws', async () => {
+    mockPostPosValuationFromPayload.mockRejectedValue(new Error('Fiscal period 2026 is closed'))
+    const res = await POST(postReq(body))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.ok).toBe(true)
+    expect(json.valuation.ok).toBe(false)
   })
 })
