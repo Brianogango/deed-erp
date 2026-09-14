@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { applyPosStockMutation, reversePosStockMutation } from '@/lib/inventory/stock-transactions'
-import { postPosValuationFromPayload, reversePosValuationFromPayload } from '@/lib/inventory/valuation-hooks'
+import { applyPosStockMutation } from '@/lib/inventory/stock-transactions'
+import { postPosValuationFromPayload } from '@/lib/inventory/valuation-hooks'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,8 @@ const POS_ROLES = new Set([
 ])
 
 /**
- * Authoritative POS stock deduction (bulk/serials + stock moves) with fail-closed COGS.
+ * Authoritative POS stock deduction. COGS / Prisma journals are best-effort:
+ * a finance setup gap must not reverse the till sale.
  */
 export async function POST(request: NextRequest) {
   const session = await getServerSession()
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 422 })
   }
 
-  let valuation: Awaited<ReturnType<typeof postPosValuationFromPayload>>
+  let valuation: Awaited<ReturnType<typeof postPosValuationFromPayload>> | { ok: false; reason: string } = { ok: false, reason: 'not_attempted' }
   try {
     valuation = await postPosValuationFromPayload({
       orderRef: body.orderRef,
@@ -54,29 +55,8 @@ export async function POST(request: NextRequest) {
       userId: session.user.id,
     })
   } catch (err) {
-    await reversePosValuationFromPayload({
-      orderRef: body.orderRef,
-      lines: body.lines.map(l => ({ productId: l.productId, qty: l.qty })),
-      userId: session.user.id,
-    }).catch(() => {})
-    await reversePosStockMutation({ orderRef: body.orderRef, lines: body.lines })
-    return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : 'POS valuation failed' },
-      { status: 422 },
-    )
-  }
-
-  if (!valuation.ok) {
-    await reversePosValuationFromPayload({
-      orderRef: body.orderRef,
-      lines: body.lines.map(l => ({ productId: l.productId, qty: l.qty })),
-      userId: session.user.id,
-    }).catch(() => {})
-    await reversePosStockMutation({ orderRef: body.orderRef, lines: body.lines })
-    return NextResponse.json(
-      { ok: false, error: `POS valuation failed: ${valuation.reason || 'unknown'}`, valuation },
-      { status: 422 },
-    )
+    console.error('[pos] valuation failed after stock deduction:', err)
+    valuation = { ok: false, reason: err instanceof Error ? err.message : 'POS valuation failed' }
   }
 
   return NextResponse.json({ ok: true, moves: result.moves, valuation })

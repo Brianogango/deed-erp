@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { postDeliveryValuationFromPayload } from '@/lib/inventory/valuation-hooks'
-import { applyDeliveryStockMutation, reverseDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
+import { applyDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
 import { mirrorDeliveryToPrisma } from '@/lib/delivery-mirror'
 import {
   deliveryDeliveredTotal,
@@ -87,38 +87,16 @@ export async function POST(request: NextRequest, { params }: { params: RoutePara
         return { status: 409 as const, error: stockResult.error }
       }
 
-      let valuation: Awaited<ReturnType<typeof postDeliveryValuationFromPayload>>
       try {
-        valuation = await postDeliveryValuationFromPayload({
+        doneValuation = await postDeliveryValuationFromPayload({
           deliveryRef: String(previous?.ref || id),
           lines: healedLines,
           userId: session.user?.id,
         })
       } catch (err) {
-        await reverseDeliveryStockMutation({
-          deliveryId: id,
-          deliveryRef: String(previous?.ref || id),
-          saleOrderId: String(previous?.saleOrderId ?? body.saleOrderId ?? ''),
-          lines: doneLines,
-        })
-        return {
-          status: 422 as const,
-          error: err instanceof Error ? err.message : 'Delivery valuation failed',
-        }
+        console.error('[delivery] valuation failed after stock deduction:', err)
+        doneValuation = { ok: false, reason: err instanceof Error ? err.message : 'Delivery valuation failed' }
       }
-      if (!valuation.ok) {
-        await reverseDeliveryStockMutation({
-          deliveryId: id,
-          deliveryRef: String(previous?.ref || id),
-          saleOrderId: String(previous?.saleOrderId ?? body.saleOrderId ?? ''),
-          lines: doneLines,
-        })
-        return {
-          status: 422 as const,
-          error: `Delivery valuation failed: ${valuation.reason || 'unknown'}`,
-        }
-      }
-      doneValuation = valuation
     }
 
     deliveries[idx] = next
