@@ -26,6 +26,27 @@ function taggedError(message: string, status = 409): Error {
   return err
 }
 
+/** Cash/bank receipt must persist even when Prisma GL cannot post. */
+async function tryPostPaymentJournalInTx(
+  tx: Prisma.TransactionClient,
+  paymentId: string,
+  input: CreateJournalEntryInput,
+) {
+  try {
+    const journal = await createJournalEntryInTx(tx, input)
+    await tx.payment.update({
+      where: { id: paymentId },
+      data: { journalId: journal.id, postingStatus: 'posted' },
+    })
+  } catch (err) {
+    console.error('[payment] GL journal failed — payment stays recorded:', err)
+    await tx.payment.update({
+      where: { id: paymentId },
+      data: { postingStatus: 'unposted' },
+    }).catch(() => {})
+  }
+}
+
 async function runSerializable<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   let last: unknown
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -184,11 +205,7 @@ export async function allocatePayment(opts: {
     }
 
     if (opts.journal) {
-      const journal = await createJournalEntryInTx(tx, opts.journal(payment.id, created))
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: { journalId: journal.id, postingStatus: 'posted' },
-      })
+      await tryPostPaymentJournalInTx(tx, payment.id, opts.journal(payment.id, created))
     }
     if (opts.audit) {
       await opts.audit(tx, payment, created)
@@ -290,7 +307,7 @@ export async function recordPaymentWithAllocations(opts: {
         externalReference: opts.externalReference ?? opts.reference ?? null,
         idempotencyKey: opts.idempotencyKey ?? null,
         reconciliationStatus: 'unreconciled',
-        postingStatus: opts.journal ? 'posted' : 'unposted',
+        postingStatus: 'unposted',
         paymentMethod: opts.paymentMethod as any,
         reference: opts.reference ?? null,
         mpesaPhone: opts.mpesaPhone ?? null,
@@ -321,11 +338,7 @@ export async function recordPaymentWithAllocations(opts: {
     }
 
     if (opts.journal) {
-      const journal = await createJournalEntryInTx(tx, opts.journal(payment.id))
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: { journalId: journal.id, postingStatus: 'posted' },
-      })
+      await tryPostPaymentJournalInTx(tx, payment.id, opts.journal(payment.id))
     }
     if (opts.audit) {
       await opts.audit(tx, payment, allocations)
