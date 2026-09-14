@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { makeDetailHandlers } from '@/lib/server-store-crud'
-import { loadAppState } from '@/lib/server-store'
+import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getServerSession } from '@/lib/auth/server'
 import type { RepairOrder } from '@/lib/store'
 import { repairDatesWriteError } from '@/lib/data-validation'
@@ -8,6 +8,9 @@ import { canAccessRecord, filterStoreValueForRole, normalizePermissionRole } fro
 import { hasModuleAccess } from '@/lib/auth/access'
 import { repairHardDeleteBlocker } from '@/lib/repair-delete'
 import { findOpenRepairWithSerial, normalizeRepairSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
+import { findRepairInPrisma, loadRepairsFromPrisma } from '@/lib/repair-mirror'
+import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 const config = {
   storeKey: 'deed_repairs_v2',
@@ -63,8 +66,33 @@ const config = {
   },
 }
 
-const { PATCH, DELETE } = makeDetailHandlers(config)
-export { PATCH, DELETE }
+const handlers = makeDetailHandlers(config)
+export const DELETE = handlers.DELETE
+
+/**
+ * Prisma is the repair read SoT. If the blob backup is missing this job,
+ * seed it from Prisma before the generic PATCH so diagnosis/assignment
+ * cannot 404 after the list hydrated from the relational table.
+ */
+export async function PATCH(request: NextRequest, ctx: { params: RouteParams<{ id: string }> }) {
+  const { id } = await resolveRouteParams(ctx.params)
+  try {
+    const state = await loadAppState(['deed_repairs_v2'])
+    const blob = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as RepairOrder[] : []
+    if (!blob.some(row => String(row.id) === id || String(row.ref) === id)) {
+      const fromPrisma = await loadRepairsFromPrisma()
+      if (fromPrisma?.length) {
+        const merged = mergeRepairsStoreWrite(blob, fromPrisma)
+        if (merged.some(row => String(row.id) === id || String(row.ref) === id)) {
+          await saveStoreKeys({ deed_repairs_v2: JSON.stringify(merged) })
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[repairs PATCH] prisma hydrate failed:', err)
+  }
+  return handlers.PATCH(request, ctx)
+}
 
 /**
  * Lightweight authoritative read for an open Repair detail.
@@ -81,14 +109,16 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params
+  const fromPrisma = await findRepairInPrisma(id)
   const state = await loadAppState(['deed_repairs_v2'])
-  const all = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as RepairOrder[] : []
+  const blob = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as RepairOrder[] : []
+  const all = fromPrisma ? [fromPrisma as RepairOrder, ...blob.filter(row => row.id !== fromPrisma.id)] : blob
   const visible = filterStoreValueForRole(
     { id: user?.id, role: user?.role, modules: user?.modules, actsAsTechnician: user?.actsAsTechnician },
     'deed_repairs_v2',
     all,
   ) as RepairOrder[]
-  const repair = visible.find(item => item.id === id)
+  const repair = visible.find(item => item.id === id || item.ref === id)
   if (!repair) return NextResponse.json({ error: 'Repair not found' }, { status: 404 })
 
   return NextResponse.json({ repair }, { status: 200, headers: { 'Cache-Control': 'no-store' } })
