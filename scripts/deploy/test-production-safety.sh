@@ -333,9 +333,15 @@ test_deploy_script_uses_github_ssh_over_443() {
   assert_file_contains "$ROOT/scripts/deploy/deed-erp-deploy.sh" "ConnectTimeout=15"
 }
 
+test_workflow_accepts_only_trigger_or_newer_master_commit() {
+  assert_file_contains "$ROOT/.github/workflows/deploy.yml" 'git merge-base --is-ancestor "$TRIGGER_SHA" "$LIVE_SHA"'
+  assert_file_contains "$ROOT/.github/workflows/deploy.yml" 'EXPECTED_COMMIT_SHA="$LIVE_SHA"'
+}
+
 test_backup_and_verifier
 test_deploy_rollback reload
 test_deploy_rollback health
 test_deploy_restores_next_generated_dirt
 test_deploy_script_uses_github_ssh_over_443
+test_workflow_accepts_only_trigger_or_newer_master_commit
 printf 'Production safety tests passed\n'
