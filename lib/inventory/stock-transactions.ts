@@ -912,7 +912,7 @@ async function applyReceiptRelational(params: {
             { productId: resolved, description: line.productName },
           )
         : undefined
-      const poItem = poItemMatch ? po.items.find(item => item.id === poItemMatch.id) : undefined
+      const poItem = po && poItemMatch ? po.items.find(item => item.id === poItemMatch.id) : undefined
       if (poItem) {
         await tx.purchaseOrderItem.update({
           where: { id: poItem.id },

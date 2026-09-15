@@ -67,7 +67,7 @@ export async function syncPrismaPoReceivedFromBlob(prismaPoId: string, blobPoId?
   })
   if (!prismaPo?.items.length) return
 
-  const blobLines = po.lines.map((line: any) => ({
+  const blobLines: Array<{ id: string; productId: string; description: string; qtyReceived: number }> = po.lines.map((line: any) => ({
     id: String(line?.id ?? ''),
     productId: String(line?.productId ?? ''),
     description: String(line?.productName ?? line?.description ?? ''),
