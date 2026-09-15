@@ -32,9 +32,10 @@ export function isQuoteDeclinedReopenable(status: unknown): boolean {
 
 /** Statuses where a quote may be generated/edited. */
 export function quotableStatusesForPath(path: unknown): string[] {
-  // `declined` is intentionally included — staff may revise and re-send after
-  // the customer rejects a quote (cheaper scope, fewer parts, etc.).
-  const base = ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'declined']
+  // `awaiting_approval` is deliberately excluded. Once a quote has been sent,
+  // the next step is customer approval/rejection, not another "Update Quote"
+  // workflow CTA. A declined quote remains reopenable for a controlled revision.
+  const base = ['diagnosed', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'declined']
   return isDirectRepairPath(path) ? ['assigned', ...base] : base
 }
 
