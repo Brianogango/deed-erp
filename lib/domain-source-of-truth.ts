@@ -61,4 +61,4 @@ export function isPrismaRestSotStoreKey(key: string): boolean {
   return PRISMA_REST_SOT_KEY_SET.has(key)
 }
 
-export const VISIBLE_POLL_INTERVAL_MS = 60_000
+export const VISIBLE_POLL_INTERVAL_MS = 10_000

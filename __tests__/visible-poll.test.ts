@@ -44,7 +44,7 @@ describe('startVisiblePoll', () => {
     stop()
   })
 
-  it('defaults to a one-minute interval', () => {
-    expect(VISIBLE_POLL_MS).toBe(60_000)
+  it('defaults to a ten-second interval while the tab is visible', () => {
+    expect(VISIBLE_POLL_MS).toBe(10_000)
   })
 })

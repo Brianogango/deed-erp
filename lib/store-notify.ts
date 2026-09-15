@@ -12,7 +12,7 @@ type Listener = () => void
 type NotifyState = {
   listeners: Set<Listener>
   client: Client | null
-  connecting: boolean
+  connectPromise: Promise<void> | null
   reconnectDelayMs: number
 }
 
@@ -20,7 +20,18 @@ type NotifyState = {
 // the state a per-process singleton.
 const g = globalThis as unknown as { __appStateNotify?: NotifyState }
 const state: NotifyState =
-  g.__appStateNotify ?? (g.__appStateNotify = { listeners: new Set(), client: null, connecting: false, reconnectDelayMs: 1_000 })
+  g.__appStateNotify ?? (g.__appStateNotify = {
+    listeners: new Set(),
+    client: null,
+    connectPromise: null,
+    reconnectDelayMs: 1_000,
+  })
+
+const NOTIFY_TRIGGER_NAME = 'app_state_notify_trigger'
+const TRIGGER_CHECK_TTL_MS = 60_000
+
+let triggerPresent: boolean | null = null
+let triggerCheckedAt = 0
 
 function fanOut() {
   for (const listener of state.listeners) {
@@ -40,11 +51,7 @@ function scheduleReconnect() {
   setTimeout(() => { void connect() }, delay)
 }
 
-async function connect(): Promise<void> {
-  if (state.client || state.connecting) return
-  const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL
-  if (!connectionString) return
-  state.connecting = true
+async function establishConnection(connectionString: string): Promise<void> {
   try {
     const client = new Client({ connectionString, ssl: false })
     client.on('error', scheduleReconnect)
@@ -56,8 +63,39 @@ async function connect(): Promise<void> {
     state.reconnectDelayMs = 1_000
   } catch {
     scheduleReconnect()
+  }
+}
+
+async function connect(): Promise<void> {
+  if (state.client) return
+  if (state.connectPromise) return state.connectPromise
+  const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL
+  if (!connectionString) return
+
+  const attempt = establishConnection(connectionString)
+  state.connectPromise = attempt
+  try {
+    await attempt
   } finally {
-    state.connecting = false
+    if (state.connectPromise === attempt) state.connectPromise = null
+  }
+}
+
+async function hasNotifyTrigger(): Promise<boolean | null> {
+  if (!state.client) return false
+  if (triggerPresent != null && Date.now() - triggerCheckedAt < TRIGGER_CHECK_TTL_MS) {
+    return triggerPresent
+  }
+  try {
+    const res = await state.client.query(
+      `SELECT 1 FROM pg_trigger WHERE NOT tgisinternal AND tgname = $1 LIMIT 1`,
+      [NOTIFY_TRIGGER_NAME],
+    )
+    triggerPresent = (res.rowCount ?? res.rows.length) > 0
+    triggerCheckedAt = Date.now()
+    return triggerPresent
+  } catch {
+    return null
   }
 }
 
@@ -70,4 +108,17 @@ export function subscribeAppStateChanges(listener: Listener): () => void {
   state.listeners.add(listener)
   void connect()
   return () => { state.listeners.delete(listener) }
+}
+
+/**
+ * True when this process is LISTENing and the app_state notify trigger exists.
+ * A connected socket with no trigger still leaves every tab on the fallback
+ * poll, so the SSE hello treats that as "not live" and clients poll faster.
+ */
+export async function getStoreNotifyLive(): Promise<boolean> {
+  await connect()
+  if (!state.client) return false
+  const present = await hasNotifyTrigger()
+  // Catalog lookup failed — LISTEN itself is up, so do not force backup polling.
+  return present !== false
 }

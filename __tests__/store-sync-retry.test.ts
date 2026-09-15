@@ -3,7 +3,11 @@ import {
   mergeRemoteStatePerKey,
   nextSseRetryMs,
   nextSyncRetryMs,
+  parseStoreHelloData,
+  parseStoreSseData,
   SSE_RETRY_MIN_MS,
+  STORE_HELLO_GRACE_MS,
+  STORE_NOTIFY_BACKUP_POLL_MS,
   SYNC_RETRY_MAX_MS,
   SYNC_RETRY_MIN_MS,
 } from '@/lib/store-sync-retry'
@@ -34,5 +38,35 @@ describe('mergeRemoteStatePerKey', () => {
       key => pending.has(key),
     )
     expect(applied.map(([key]) => key)).toEqual(['deed_saleOrders'])
+  })
+})
+
+describe('store SSE payloads', () => {
+  it('applies patched state and deed_ keys marked invalidated', () => {
+    expect(parseStoreSseData(JSON.stringify({
+      state: { deed_invoices: [{ id: '1' }] },
+      patch: true,
+      invalidated: ['deed_repairs_v2', 'ignore_me', 12],
+    }))).toEqual({
+      state: { deed_invoices: [{ id: '1' }] },
+      invalidated: ['deed_repairs_v2'],
+    })
+  })
+
+  it('treats malformed store events as empty so a bad packet cannot freeze sync', () => {
+    expect(parseStoreSseData('{')).toEqual({ state: null, invalidated: [] })
+    expect(parseStoreSseData('[]')).toEqual({ state: null, invalidated: [] })
+  })
+
+  it('only treats an explicit liveNotify true as instant-path healthy', () => {
+    expect(parseStoreHelloData(JSON.stringify({ liveNotify: true }))).toEqual({ liveNotify: true })
+    expect(parseStoreHelloData(JSON.stringify({ liveNotify: false }))).toEqual({ liveNotify: false })
+    expect(parseStoreHelloData('{"liveNotify":"yes"}')).toEqual({ liveNotify: false })
+    expect(parseStoreHelloData('{')).toEqual({ liveNotify: false })
+  })
+
+  it('polls critical keys within seconds while notify is down', () => {
+    expect(STORE_NOTIFY_BACKUP_POLL_MS).toBe(5_000)
+    expect(STORE_HELLO_GRACE_MS).toBe(3_000)
   })
 })
