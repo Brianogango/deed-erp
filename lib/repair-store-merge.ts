@@ -80,42 +80,57 @@ const BILLING_EXEMPT_KEYS = [
 /**
  * No-charge is blob/payload-only. A Prisma snapshot taken before the mark
  * must not restore Create Invoice / Update Quote on the next hydrate.
+ *
+ * Generic overloads keep domain DTOs (such as RepairOrder) type-safe without
+ * requiring them to expose the index signature used by the blob merge layer.
  */
+export function overlayRepairNoCharge<T extends object, U extends object>(
+  primary: T,
+  secondary: U | undefined,
+): T
 export function overlayRepairNoCharge(
-  primary: RepairStoreRow,
-  secondary: RepairStoreRow | undefined,
-): RepairStoreRow {
-  if (!secondary || secondary.billingExempt !== true) return primary
-  const next: RepairStoreRow = primary.billingExempt === true
-    ? { ...primary }
-    : { ...primary, billingExempt: true }
-  if (primary.billingExempt !== true) {
+  primary: object,
+  secondary: object | undefined,
+): object {
+  const primaryRow = primary as RepairStoreRow
+  const secondaryRow = secondary as RepairStoreRow | undefined
+  if (!secondaryRow || secondaryRow.billingExempt !== true) return primary
+  const next: RepairStoreRow = primaryRow.billingExempt === true
+    ? { ...primaryRow }
+    : { ...primaryRow, billingExempt: true }
+  if (primaryRow.billingExempt !== true) {
     for (const key of BILLING_EXEMPT_KEYS) {
-      if (isPresent(secondary[key])) next[key] = secondary[key]
+      if (isPresent(secondaryRow[key])) next[key] = secondaryRow[key]
     }
   }
-  if (QUOTE_SKIP_STATUSES.has(asStatus(next)) && asStatus(secondary) === 'approved') {
+  if (QUOTE_SKIP_STATUSES.has(asStatus(next)) && asStatus(secondaryRow) === 'approved') {
     next.status = 'approved'
   }
   return next
 }
 
+export function overlayRepairNoChargeFromBlob<T extends object, U extends object>(
+  rows: T[],
+  blob: U[],
+): T[]
 export function overlayRepairNoChargeFromBlob(
-  rows: RepairStoreRow[],
-  blob: RepairStoreRow[],
-): RepairStoreRow[] {
+  rows: object[],
+  blob: object[],
+): object[] {
   if (!Array.isArray(rows) || rows.length === 0 || !Array.isArray(blob) || blob.length === 0) {
     return rows
   }
   const byId = new Map<string, RepairStoreRow>()
   const byRef = new Map<string, RepairStoreRow>()
-  for (const row of blob) {
+  for (const item of blob) {
+    const row = item as RepairStoreRow
     const id = asId(row)
     if (id) byId.set(id, row)
     const ref = String(row.ref ?? '').trim()
     if (ref) byRef.set(ref, row)
   }
-  return rows.map(row => {
+  return rows.map(item => {
+    const row = item as RepairStoreRow
     const id = asId(row)
     const ref = String(row.ref ?? '').trim()
     const secondary = (id ? byId.get(id) : undefined) ?? (ref ? byRef.get(ref) : undefined)
