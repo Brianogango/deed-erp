@@ -7,6 +7,10 @@ export const SYNC_RETRY_MIN_MS = 500
 export const SYNC_RETRY_MAX_MS = 30_000
 export const SSE_RETRY_MIN_MS = 1_000
 export const SSE_RETRY_MAX_MS = 30_000
+/** Visible-tab GET of critical keys while LISTEN/NOTIFY is down or unknown. */
+export const STORE_NOTIFY_BACKUP_POLL_MS = 5_000
+/** Wait this long for the stream `hello` before assuming notify is not live. */
+export const STORE_HELLO_GRACE_MS = 3_000
 
 export function nextBackoffMs(previous: number, minMs: number, maxMs: number): number {
   if (!Number.isFinite(previous) || previous <= 0) return minMs
@@ -36,4 +40,42 @@ export function mergeRemoteStatePerKey<T>(
     applied.push([key, value])
   }
   return applied
+}
+
+function asDeedKeyList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((key): key is string => typeof key === 'string' && key.startsWith('deed_'))
+}
+
+/** Parse an SSE `store` event body. Unknown / malformed payloads are empty. */
+export function parseStoreSseData(raw: string): {
+  state: Record<string, unknown> | null
+  invalidated: string[]
+} {
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { state: null, invalidated: [] }
+    }
+    const record = parsed as { state?: unknown; invalidated?: unknown }
+    const state = record.state && typeof record.state === 'object' && !Array.isArray(record.state)
+      ? record.state as Record<string, unknown>
+      : null
+    return { state, invalidated: asDeedKeyList(record.invalidated) }
+  } catch {
+    return { state: null, invalidated: [] }
+  }
+}
+
+/** Parse an SSE `hello` event. Missing/invalid `liveNotify` means not live. */
+export function parseStoreHelloData(raw: string): { liveNotify: boolean } {
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { liveNotify: false }
+    }
+    return { liveNotify: (parsed as { liveNotify?: unknown }).liveNotify === true }
+  } catch {
+    return { liveNotify: false }
+  }
 }

@@ -1,9 +1,13 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { getLatestAppStateUpdatedAt, loadAppStateChangesSince } from '@/lib/server-store'
-import { subscribeAppStateChanges } from '@/lib/store-notify'
+import { getStoreNotifyLive, subscribeAppStateChanges } from '@/lib/store-notify'
 import { canReadStoreKey, filterStoreValueForRole } from '@/lib/auth/authorization'
-import { pickChangedSseKeys } from '@/lib/store-sse-diff'
+import {
+  pickChangedSseKeys,
+  splitSseBroadcastState,
+  SSE_FALLBACK_POLL_MS,
+} from '@/lib/store-sse-diff'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -54,22 +58,20 @@ export async function GET(request: NextRequest) {
         try { controller.enqueue(enc.encode(': ping\n\n')) } catch { /* disconnected */ }
       }
 
-      // Skip individual keys above this size from broadcast. 1 MB so large
-      // collaborative blobs (deed_repairs_v2 is ~0.5 MB) still propagate live;
-      // binary payloads (receipts/photos) live outside app_state entirely.
-      const SSE_MAX_KEY_BYTES = 1024 * 1024
+      // Flush the stream immediately so nginx / EventSource do not sit on the
+      // hello event until the first app_state change or 20s ping.
+      ping()
 
-      const toLeanState = (state: Record<string, unknown>) => {
-        const lean: Record<string, unknown> = {}
+      const toReadable = (state: Record<string, unknown>) => {
+        const readable: Record<string, unknown> = {}
         for (const [k, raw] of Object.entries(state)) {
           // Never stream permission-gated or collaborative keys without both
           // the required role and module grant.
           if (!canReadStoreKey(session.user, k)) continue
           // Collaborative ledgers stream only the slice this user may read.
-          const v = filterStoreValueForRole(session.user, k, raw)
-          if (JSON.stringify(v).length <= SSE_MAX_KEY_BYTES) lean[k] = v
+          readable[k] = filterStoreValueForRole(session.user, k, raw)
         }
-        return lean
+        return readable
       }
 
       const checkState = async () => {
@@ -84,20 +86,17 @@ export async function GET(request: NextRequest) {
           const { changes, latestUpdatedAt } = await loadAppStateChangesSince(lastUpdatedAt)
           if (!Object.keys(changes).length) return
 
-          const lean = toLeanState(changes as Record<string, unknown>)
+          const { lean, invalidated } = splitSseBroadcastState(toReadable(changes as Record<string, unknown>))
           const changedOnly = pickChangedSseKeys(lean, lastKeyHashes, stateHash)
-          if (!Object.keys(changedOnly).length) {
+          if (!Object.keys(changedOnly).length && invalidated.length === 0) {
             lastUpdatedAt = latestUpdatedAt
             return
           }
 
-          send('store', { state: changedOnly, patch: true })
+          send('store', { state: changedOnly, patch: true, invalidated })
           lastUpdatedAt = latestUpdatedAt
         } catch { /* DB error — skip this tick, retry next */ }
       }
-
-      // Prime the change cursor and flush the overlap window immediately
-      await checkState()
 
       // Instant path: Postgres NOTIFY wakes the stream the moment app_state
       // changes. Bursts of writes are coalesced into one check per 150ms.
@@ -108,8 +107,15 @@ export async function GET(request: NextRequest) {
         notifyTimer = setTimeout(() => { notifyTimer = null; void checkState() }, 150)
       })
 
+      // Tell the client whether LISTEN + the notify trigger are actually live
+      // so it can poll critical keys instead of waiting on a dead instant path.
+      send('hello', { liveNotify: await getStoreNotifyLive() })
+
+      // Prime the change cursor and flush the overlap window immediately
+      await checkState()
+
       // Fallback poll (covers a dropped LISTEN connection or missed NOTIFY).
-      const stateId = setInterval(checkState, 60_000)
+      const stateId = setInterval(checkState, SSE_FALLBACK_POLL_MS)
       const pingId  = setInterval(ping, 20_000)
 
       request.signal.addEventListener('abort', () => {

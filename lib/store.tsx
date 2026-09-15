@@ -213,7 +213,15 @@ import {
 import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { evaluateCustomerCreditGate } from '@/lib/customer-credit-gate'
 import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
-import { nextSseRetryMs, nextSyncRetryMs } from '@/lib/store-sync-retry'
+import {
+  nextSseRetryMs,
+  nextSyncRetryMs,
+  parseStoreHelloData,
+  parseStoreSseData,
+  STORE_HELLO_GRACE_MS,
+  STORE_NOTIFY_BACKUP_POLL_MS,
+} from '@/lib/store-sync-retry'
+import { startVisiblePoll } from '@/lib/visible-poll'
 import { repairOutsourceReadiness, repairHasLoggedDiagnosis } from '@/lib/repair-outsource'
 import { applyLoggedDiagnosis, type DiagnosisLogRepairPatch } from '@/lib/repair-diagnosis-log'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
@@ -5558,27 +5566,78 @@ export function StoreProvider({
       }
     }
 
+    const fetchStoreKeys = async (keys: string[]) => {
+      const deedKeys = [...new Set(keys.filter(key => key.startsWith('deed_')))]
+      if (!deedKeys.length) return
+      try {
+        const res = await fetch(`/api/store?keys=${encodeURIComponent(deedKeys.join(','))}`)
+        if (!res.ok) return
+        const payload = await res.json().catch(() => null) as Record<string, unknown> | null
+        if (payload && typeof payload === 'object') applyRemoteState(payload)
+      } catch {
+        // best effort — SSE reconnect / backup poll will retry
+      }
+    }
+
     // 2. SSE stream for real-time store updates — reconnect with backoff so a
     //    dropped socket cannot freeze every key behind one pending EventSource.
     let sseRetryMs = 1000
     let sseTimer: ReturnType<typeof setTimeout> | null = null
+    let helloTimer: ReturnType<typeof setTimeout> | null = null
     let source: EventSource | null = null
     let sseClosed = false
+    let stopBackupPoll: (() => void) | null = null
+
+    const ensureBackupPoll = (enabled: boolean) => {
+      if (enabled) {
+        if (stopBackupPoll) return
+        stopBackupPoll = startVisiblePoll(
+          () => { void fetchStoreKeys([...CRITICAL_VISIBILITY_KEYS]) },
+          STORE_NOTIFY_BACKUP_POLL_MS,
+        )
+        return
+      }
+      stopBackupPoll?.()
+      stopBackupPoll = null
+    }
 
     const connectSse = () => {
       if (sseClosed) return
       try { source?.close() } catch { /* already closed */ }
+      if (helloTimer) {
+        clearTimeout(helloTimer)
+        helloTimer = null
+      }
+      let heardHello = false
       source = new EventSource('/api/store/stream')
-      source.addEventListener('store', (e: Event) => {
-        try {
-          const { state } = JSON.parse((e as MessageEvent).data)
-          if (state) applyRemoteState(state)
-        } catch { /* malformed message — ignore */ }
+      source.addEventListener('hello', (e: Event) => {
+        heardHello = true
+        if (helloTimer) {
+          clearTimeout(helloTimer)
+          helloTimer = null
+        }
+        ensureBackupPoll(!parseStoreHelloData((e as MessageEvent).data).liveNotify)
       })
-      source.onopen = () => { sseRetryMs = 1000 }
+      source.addEventListener('store', (e: Event) => {
+        const { state, invalidated } = parseStoreSseData((e as MessageEvent).data)
+        if (state) applyRemoteState(state)
+        if (invalidated.length) void fetchStoreKeys(invalidated)
+      })
+      source.onopen = () => {
+        sseRetryMs = 1000
+        if (helloTimer) clearTimeout(helloTimer)
+        helloTimer = setTimeout(() => {
+          if (!heardHello) ensureBackupPoll(true)
+        }, STORE_HELLO_GRACE_MS)
+      }
       source.onerror = () => {
         try { source?.close() } catch { /* ignore */ }
         source = null
+        if (helloTimer) {
+          clearTimeout(helloTimer)
+          helloTimer = null
+        }
+        ensureBackupPoll(true)
         if (sseClosed) return
         const wait = sseRetryMs
         sseRetryMs = nextSseRetryMs(sseRetryMs)
@@ -5631,6 +5690,8 @@ export function StoreProvider({
     return () => {
       sseClosed = true
       if (sseTimer) clearTimeout(sseTimer)
+      if (helloTimer) clearTimeout(helloTimer)
+      stopBackupPoll?.()
       try { source?.close() } catch { /* already closed */ }
       clearInterval(usersId)
       window.removeEventListener('online', handleOnline)
@@ -6613,7 +6674,7 @@ export function StoreProvider({
         } catch { /* silent */ }
       }
     }
-    const id = setInterval(check, 60_000) // Portal approvals: SSE is primary, this is a fallback
+    const id = setInterval(check, 10_000) // Portal approvals: SSE is primary, this is a fallback
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

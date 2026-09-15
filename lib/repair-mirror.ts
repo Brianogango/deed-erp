@@ -20,7 +20,9 @@ const MIRROR_STATE_KEY = 'repair_mirror_hashes_v1'
 const MIRROR_FINGERPRINT_VERSION = 2
 
 let repairsPayloadCache: { at: number; data: any[] } | null = null
-const REPAIRS_PAYLOAD_CACHE_MS = 15_000
+// Short TTL so GET /api/repairs does not serve a 15s-stale list after another
+// user's write while still coalescing the boot fan-out on one worker.
+const REPAIRS_PAYLOAD_CACHE_MS = 3_000
 
 export function invalidateRepairsPayloadCache() {
   repairsPayloadCache = null
