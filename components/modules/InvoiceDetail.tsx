@@ -18,7 +18,7 @@ import {
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
 import { canCancelOrResetInvoice, canApplyCustomerCredit } from '@/lib/finance-controls'
 import { financePaymentPreview } from '@/lib/finance-payment-preview'
-import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, invoiceDueRelativeLabel, invoiceDueDateNeedsAlert, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Breadcrumbs, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import Chatter from '@/components/erp/Chatter'
@@ -525,20 +525,8 @@ export default function InvoiceDetail() {
   const invoiceIsVat = documentHasVat(invoice)
   const titleRef = invoice.ref.startsWith('DRAFT/') ? displayDocRef(invoice.ref) : invoice.ref
   const partnerCountry = partnerContact?.country || 'Kenya'
-  const dueDays = (() => {
-    if (!invoice.dueDate) return null
-    const due = new Date(`${invoice.dueDate}T00:00:00`)
-    const todayDate = new Date()
-    todayDate.setHours(0, 0, 0, 0)
-    return Math.round((due.getTime() - todayDate.getTime()) / 86_400_000)
-  })()
-  const dueDaysLabel = dueDays == null
-    ? ''
-    : dueDays < 0
-      ? `${Math.abs(dueDays)} day${Math.abs(dueDays) === 1 ? '' : 's'} overdue`
-      : dueDays === 0
-        ? 'Due today'
-        : `${dueDays} day${dueDays === 1 ? '' : 's'}`
+  const dueDaysLabel = invoiceDueRelativeLabel(invoice)
+  const dueDateAlert = invoiceDueDateNeedsAlert(invoice)
   const journeyNotice = !canManageFinance
     ? {
         title: 'View-only access.',
@@ -676,7 +664,7 @@ export default function InvoiceDetail() {
                 <Fa icon={faCalendarDay} aria-hidden="true" />
                 <span>Invoice Date: <strong>{fmtDate(invoice.date)}</strong></span>
               </span>
-              <span className={`invoice-detail__date-item ${overdue || (dueDays != null && dueDays <= 7) ? 'is-alert' : ''}`}>
+              <span className={`invoice-detail__date-item ${dueDateAlert ? 'is-alert' : ''}`}>
                 <Fa icon={faCalendarDay} aria-hidden="true" />
                 <span>
                   Due Date: <strong>{fmtDate(invoice.dueDate)}</strong>
