@@ -436,9 +436,9 @@ describe('invoice document state and payment status', () => {
     expect(invoicePaymentStatus({ status: 'cancelled', total: 100, amountPaid: 0 })).toBe('not_paid')
   })
 
-  it('list payment column hides draft state but keeps Reversed on cancelled paid invoices', () => {
-    expect(financeListPaymentStatusLabel({ status: 'draft', total: 100, amountPaid: 0 })).toBe('Not available')
-    expect(financeListPaymentStatusLabel({ status: 'cancelled', total: 100, amountPaid: 0 })).toBe('Not available')
+  it('list payment column shows Draft (not Not available) until the invoice is posted', () => {
+    expect(financeListPaymentStatusLabel({ status: 'draft', total: 100, amountPaid: 0 })).toBe('Draft')
+    expect(financeListPaymentStatusLabel({ status: 'cancelled', total: 100, amountPaid: 0 })).toBe('Cancelled')
     expect(financeListPaymentStatusLabel({ status: 'cancelled', total: 100, amountPaid: 100 })).toBe('Reversed')
     expect(financeListPaymentStatusLabel({ status: 'posted', total: 100, amountPaid: 40 })).toBe('Partially Paid')
   })

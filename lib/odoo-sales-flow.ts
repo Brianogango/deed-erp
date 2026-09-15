@@ -796,14 +796,15 @@ export function invoicePaymentStatus(inv: PaymentStatusInput): PaymentStatus {
 }
 
 /**
- * Invoice/bill list payment column. Drafts hide payment state until posting,
- * but a cancelled document that already had money still shows Reversed.
+ * Invoice/bill list payment column. Drafts and unpaid cancels show the
+ * document badge (Draft / Cancelled) instead of a fake payment state.
+ * A cancelled document that already had money still shows Reversed.
  */
 export function financeListPaymentStatusLabel(inv: PaymentStatusInput): string {
   const paymentState = invoicePaymentStatus(inv)
-  if (invoiceDocState(inv.status) !== 'posted' && paymentState !== 'reversed') {
-    return 'Not available'
-  }
+  if (paymentState === 'reversed') return PAYMENT_STATUS_LABELS.reversed
+  const docState = invoiceDocState(inv.status)
+  if (docState !== 'posted') return INVOICE_DOC_STATE_LABELS[docState]
   return PAYMENT_STATUS_LABELS[paymentState]
 }
 

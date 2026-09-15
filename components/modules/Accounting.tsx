@@ -1665,7 +1665,8 @@ function AccountingContent() {
                     key: 'payment_status', label: 'Payment Status', priority: 1 as const, width: '132px',
                     render: (i: Invoice) => {
                       const label = financeListPaymentStatusLabel(i)
-                      if (label === 'Not available') return <Badge status="pending" label={label} />
+                      if (label === 'Draft') return <Badge status="pending" label={label} />
+                      if (label === 'Cancelled') return <Badge status="cancelled" label={label} />
                       const paymentState = invoicePaymentStatus(i)
                       return (
                         <span className="inline-flex items-center gap-1 flex-wrap">
