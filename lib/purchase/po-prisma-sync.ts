@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { loadAppState } from '@/lib/server-store'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { resolvePrismaProductIdForStock } from '@/lib/inventory/stock-transactions'
+import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 
 type BlobProduct = {
   id?: string
@@ -48,6 +49,61 @@ export async function resolvePOLineProducts<T extends { productId?: string | nul
 }
 
 /**
+ * GRN validation can mark the blob PO fully received while Prisma
+ * PurchaseOrderItem.qtyReceived stays 0 (blob-only PO, twin id, or a product
+ * UUID that did not match the relational line). Confirm Vendor Bill then
+ * 404s / 3-way-matches against unreceived Prisma lines. Copy blob received
+ * qty forward; never decrease a relational counter.
+ */
+export async function syncPrismaPoReceivedFromBlob(prismaPoId: string, blobPoId?: string): Promise<void> {
+  const state = await loadAppState(['deed_purchaseOrders'])
+  const blob = Array.isArray(state.deed_purchaseOrders) ? (state.deed_purchaseOrders as any[]) : []
+  const po = blob.find((row: any) => row?.id === blobPoId || row?.id === prismaPoId)
+  if (!po || !Array.isArray(po.lines)) return
+
+  const prismaPo = await prisma.purchaseOrder.findUnique({
+    where: { id: prismaPoId },
+    include: { items: true },
+  })
+  if (!prismaPo?.items.length) return
+
+  const blobLines: Array<{ id: string; productId: string; description: string; qtyReceived: number }> = po.lines.map((line: any) => ({
+    id: String(line?.id ?? ''),
+    productId: String(line?.productId ?? ''),
+    description: String(line?.productName ?? line?.description ?? ''),
+    qtyReceived: Math.max(0, Math.floor(Number(line?.qtyReceived) || 0)),
+  }))
+
+  let changed = false
+  for (const item of prismaPo.items) {
+    const matched = resolveVendorBillPoItem(
+      blobLines.map(line => ({ id: line.id, productId: line.productId, description: line.description })),
+      { productId: item.productId, description: item.description },
+    )
+    if (!matched) continue
+    const blobLine = blobLines.find(line => line.id === matched.id)
+    if (!blobLine) continue
+    const next = Math.min(item.qtyOrdered, Math.max(item.qtyReceived, blobLine.qtyReceived))
+    if (next === item.qtyReceived) continue
+    await prisma.purchaseOrderItem.update({
+      where: { id: item.id },
+      data: { qtyReceived: next },
+    })
+    item.qtyReceived = next
+    changed = true
+  }
+
+  if (!changed) return
+  const allReceived = prismaPo.items.every(item => item.qtyReceived >= item.qtyOrdered)
+  const anyReceived = prismaPo.items.some(item => item.qtyReceived > 0)
+  if (!anyReceived) return
+  await prisma.purchaseOrder.update({
+    where: { id: prismaPoId },
+    data: { status: allReceived ? 'received' : 'partial' },
+  })
+}
+
+/**
  * Materialize a blob-only purchase order into Prisma (same id) so vendor
  * bills and GRN valuation can post. When the PO already exists under a
  * different id (blob-first create, then API re-create), returns the Prisma
@@ -57,7 +113,10 @@ export async function resolvePOLineProducts<T extends { productId?: string | nul
 export async function ensurePrismaPurchaseOrder(poId: string, actorUserId?: string | null): Promise<string | null> {
   if (!optionalUuid(poId)) return null
   const existing = await prisma.purchaseOrder.findUnique({ where: { id: poId }, select: { id: true } })
-  if (existing) return existing.id
+  if (existing) {
+    await syncPrismaPoReceivedFromBlob(existing.id, poId)
+    return existing.id
+  }
 
   const state = await loadAppState(['deed_purchaseOrders'])
   const blob = Array.isArray(state.deed_purchaseOrders) ? (state.deed_purchaseOrders as any[]) : []
@@ -70,6 +129,7 @@ export async function ensurePrismaPurchaseOrder(poId: string, actorUserId?: stri
     const twin = await prisma.purchaseOrder.findUnique({ where: { poNumber }, select: { id: true } })
     if (twin) {
       console.warn(`[po-sync] blob PO ${poId} maps to existing Prisma PO ${twin.id} (${poNumber})`)
+      await syncPrismaPoReceivedFromBlob(twin.id, poId)
       return twin.id
     }
   }

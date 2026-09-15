@@ -330,6 +330,41 @@ describe('applyReceiptStockMutation() — atomic relational GRN', () => {
     })
   })
 
+  it('advances qtyReceived when the Prisma product UUID differs but the line name matches', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'HP ProBook 11 G5 EE', stockQty: 0, requiresSerial: false }],
+      deed_serials: [], deed_bulkStock: [], deed_stockMoves: [],
+    })
+    mockProductFindUnique.mockResolvedValue({ id: PRODUCT_ID })
+    mockPurchaseOrderFindUnique.mockResolvedValue({
+      id: PO_ID,
+      items: [{
+        id: PO_ITEM_ID,
+        productId: PRISMA_PRODUCT_ID,
+        description: 'HP ProBook 11 G5 EE',
+        qtyOrdered: 2,
+        qtyReceived: 0,
+        unitCost: 18000,
+      }],
+    })
+    mockPurchaseOrderItemFindMany.mockResolvedValue([{ qtyReceived: 2, qtyOrdered: 2 }])
+
+    const result = await applyReceiptStockMutation({
+      receiptId: 'rec-1',
+      receiptRef: 'REC/2026/0253',
+      purchaseOrderId: PO_ID,
+      destination: 'warehouse',
+      lines: [{ productId: PRODUCT_ID, productName: 'HP ProBook 11 G5 EE', qtyReceived: 2, requiresSerial: false }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }))
+    expect(mockPurchaseOrderItemUpdate).toHaveBeenCalledWith({
+      where: { id: PO_ITEM_ID },
+      data: { qtyReceived: 2 },
+    })
+  })
+
   it('clamps qtyReceived at qtyOrdered rather than overshooting', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_products: [{ id: PRODUCT_ID, name: 'Widget', stockQty: 0, requiresSerial: false }],
