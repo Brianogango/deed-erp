@@ -51,31 +51,34 @@ function scheduleReconnect() {
   setTimeout(() => { void connect() }, delay)
 }
 
+async function establishConnection(connectionString: string): Promise<void> {
+  try {
+    const client = new Client({ connectionString, ssl: false })
+    client.on('error', scheduleReconnect)
+    client.on('end', scheduleReconnect)
+    client.on('notification', fanOut)
+    await client.connect()
+    await client.query('LISTEN app_state_changed')
+    state.client = client
+    state.reconnectDelayMs = 1_000
+  } catch {
+    scheduleReconnect()
+  }
+}
+
 async function connect(): Promise<void> {
   if (state.client) return
   if (state.connectPromise) return state.connectPromise
   const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL
   if (!connectionString) return
 
-  const attempt = (async () => {
-    try {
-      const client = new Client({ connectionString, ssl: false })
-      client.on('error', scheduleReconnect)
-      client.on('end', scheduleReconnect)
-      client.on('notification', fanOut)
-      await client.connect()
-      await client.query('LISTEN app_state_changed')
-      state.client = client
-      state.reconnectDelayMs = 1_000
-    } catch {
-      scheduleReconnect()
-    } finally {
-      if (state.connectPromise === attempt) state.connectPromise = null
-    }
-  })()
-
+  const attempt = establishConnection(connectionString)
   state.connectPromise = attempt
-  return attempt
+  try {
+    await attempt
+  } finally {
+    if (state.connectPromise === attempt) state.connectPromise = null
+  }
 }
 
 async function hasNotifyTrigger(): Promise<boolean | null> {
