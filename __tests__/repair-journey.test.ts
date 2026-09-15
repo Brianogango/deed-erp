@@ -76,4 +76,14 @@ describe('repair invoice journey', () => {
       canManageBilling: true,
     })).toBe('none')
   })
+
+  it('does not keep Create Invoice when no-charge even if an unpaid draft exists', () => {
+    expect(repairInvoiceJourneyAction({
+      repairStatus: 'ready',
+      noCharge: true,
+      invoice: { status: 'draft', amountPaid: 0 },
+      billingSyncNeeded: true,
+      canManageBilling: true,
+    })).toBe('view')
+  })
 })

@@ -92,6 +92,8 @@ function fingerprint(r: any, mapped: ReturnType<typeof mapRepair>): string {
     customer: [r.customerId, r.customerName, r.customerPhone, r.customerEmail],
     invoiceId: r.invoiceId ?? r.linkedInvoiceId ?? null,
     assignedTo: r.assignedTechnicianId ?? null,
+    billingExempt: r.billingExempt === true,
+    billingExemptAt: r.billingExemptAt ?? null,
   })).digest('hex')
 }
 

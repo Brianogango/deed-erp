@@ -94,7 +94,7 @@ export function pickRepairPrimaryAction(flags: {
   if (flags.canStart) return 'start'
   if (flags.canComplete) return 'complete'
   if (flags.canPerformQA) return 'qc'
-  if (flags.canInvoice) return 'invoice'
+  if (flags.canInvoice && !flags.noCharge) return 'invoice'
 
   const collectAvailable = collectActionAvailable({
     canMarkCollected: !!flags.canMarkCollected,

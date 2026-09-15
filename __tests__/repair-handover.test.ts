@@ -62,6 +62,15 @@ describe('pickRepairPrimaryAction — ready for pickup', () => {
     })).toBe('invoice')
   })
 
+  it('never offers Create Invoice on a no-charge ready job', () => {
+    expect(pickRepairPrimaryAction({
+      ...readyBase,
+      canInvoice: true,
+      noCharge: true,
+      serialNumber: '',
+    })).toBe('collect')
+  })
+
   it('shows Close job after collection when handover did not auto-close', () => {
     expect(pickRepairPrimaryAction({
       canPrepareRelease: false,

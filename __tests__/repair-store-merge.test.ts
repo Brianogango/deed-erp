@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   mergeRepairsStoreWrite,
+  overlayRepairNoCharge,
+  overlayRepairNoChargeFromBlob,
   pickRepairStoreRow,
 } from '@/lib/repair-store-merge'
 
@@ -184,5 +186,51 @@ describe('mergeRepairsStoreWrite', () => {
     expect(stale.find(r => r.id === 'a')?.status).toBe('diagnosed')
     expect(stale.find(r => r.id === 'b')?.status).toBe('qc')
     expect(stale.find(r => r.id === 'c')?.status).toBe('assigned')
+  })
+
+  it('does not let a Prisma snapshot wipe a no-charge mark', () => {
+    const merged = mergeRepairsStoreWrite(
+      [{ id: 'open', status: 'approved', billingExempt: true, billingExemptReason: 'goodwill', ref: 'REP/1' }],
+      [{ id: 'open', status: 'diagnosed', ref: 'REP/1' }],
+    )
+    const row = merged.find(r => r.id === 'open')
+    expect(row?.billingExempt).toBe(true)
+    expect(row?.billingExemptReason).toBe('goodwill')
+    expect(row?.status).toBe('approved')
+  })
+})
+
+describe('overlayRepairNoCharge', () => {
+  it('restores billingExempt and quote-skip status from the blob onto a stale Prisma row', () => {
+    const prisma = { id: 'r1', status: 'diagnosed', ref: 'REP/9' }
+    const blob = {
+      id: 'r1',
+      status: 'approved',
+      billingExempt: true,
+      billingExemptReason: 'company_mistake',
+      billingExemptNotes: 'wrong diagnosis last week',
+      ref: 'REP/9',
+    }
+    const overlaid = overlayRepairNoCharge(prisma, blob)
+    expect(overlaid.billingExempt).toBe(true)
+    expect(overlaid.billingExemptReason).toBe('company_mistake')
+    expect(overlaid.status).toBe('approved')
+  })
+
+  it('leaves billed jobs unchanged', () => {
+    const prisma = { id: 'r1', status: 'ready' }
+    expect(overlayRepairNoCharge(prisma, { id: 'r1', status: 'ready' }).billingExempt).toBeUndefined()
+  })
+
+  it('overlays a list from blob rows by id', () => {
+    const rows = overlayRepairNoChargeFromBlob(
+      [{ id: 'a', status: 'ready' }, { id: 'b', status: 'diagnosed' }],
+      [{ id: 'b', status: 'approved', billingExempt: true }],
+    )
+    expect(rows.find(r => r.id === 'a')?.billingExempt).toBeUndefined()
+    expect(rows.find(r => r.id === 'b')).toEqual(expect.objectContaining({
+      billingExempt: true,
+      status: 'approved',
+    }))
   })
 })

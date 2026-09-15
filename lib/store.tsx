@@ -3749,7 +3749,7 @@ export interface AppState {
   markRepairNoCharge: (
     repairId: string,
     opts: { reason: BillingExemptReason; notes: string },
-  ) => void
+  ) => void | Promise<void>
   generateRepairQuote: (repairId: string, lines: Omit<RepairQuoteLine, 'id' | 'reserved'>[], applyVat?: boolean) => Promise<RepairQuote | undefined>
   sendQuoteToCustomer: (repairId: string) => void
   approveRepairQuote: (repairId: string, approved: boolean, reason?: string) => void
@@ -15450,6 +15450,10 @@ const storeCtx: AppState = {
       if (!canGenerate) {
         showToast('Only the assigned technician or authorised staff can generate a quote', 'error'); return
       }
+      if (isRepairBillingExempt(repair)) {
+        showToast('This job is no-charge — no customer quote or invoice', 'info')
+        return
+      }
       const QUOTABLE_STATUSES = quotableStatusesForPath(repair.repairPath)
       if (!QUOTABLE_STATUSES.includes(repair.status)) {
         showToast('Cannot generate a new quote at this stage', 'error'); return
@@ -17681,10 +17685,10 @@ const storeCtx: AppState = {
       showToast('Diagnosis fee waived', 'success')
     },
 
-    markRepairNoCharge: (repairId, opts) => {
+    markRepairNoCharge: async (repairId, opts) => {
       const user = currentUser()
       if (!user) return
-      const repair = repairs.find(r => r.id === repairId)
+      const repair = repairsRef.current.find(r => r.id === repairId)
       if (!repair) {
         showToast('Repair not found', 'error')
         return
@@ -17732,47 +17736,85 @@ const storeCtx: AppState = {
         }))
       }
 
-      setRepairs(p => p.map(r => {
-        if (r.id !== repairId) return r
-        let nextQuote = r.quote
-        if (r.quote) {
-          const nextLines = (r.quote.lines ?? []).filter(l => !isDiagnosisFeeLine(l))
-          const sub = nextLines.reduce((s, l) => s + l.subtotal, 0)
-          nextQuote = {
-            ...r.quote,
-            lines: nextLines,
-            subtotal: sub,
-            total: sub + (r.quote.tax || 0),
-            approvedDate: r.quote.approvedDate || markedAt,
-            approvedBy: r.quote.approvedBy || `No-charge (${reason}) — auto-approved`,
-          }
+      let nextQuote = repair.quote
+      if (repair.quote) {
+        const nextLines = (repair.quote.lines ?? []).filter(l => !isDiagnosisFeeLine(l))
+        const sub = nextLines.reduce((s, l) => s + l.subtotal, 0)
+        nextQuote = {
+          ...repair.quote,
+          lines: nextLines,
+          subtotal: sub,
+          total: sub + (repair.quote.tax || 0),
+          approvedDate: repair.quote.approvedDate || markedAt,
+          approvedBy: repair.quote.approvedBy || `No-charge (${reason}) — auto-approved`,
         }
-        return {
-          ...r,
-          billingExempt: true,
-          billingExemptReason: reason,
-          billingExemptNotes: notes,
-          billingExemptBy: user.name,
-          billingExemptAt: markedAt,
-          diagnosisFee: 0,
-          diagnosisFeeStatus: 'not_applicable' as const,
-          total: 0,
-          quote: nextQuote,
-          quoteApprovalDeadline: undefined,
-          status: nextStatus,
-          ...(clearInvoiceLink ? { invoiceId: undefined, invoiceDate: undefined } : {}),
-          notes: `${r.notes || ''}\n[No-charge — ${reasonLabel} by ${user.name}] ${notes}`.trim(),
-          statusHistory: [
-            ...(r.statusHistory ?? []),
-            {
-              status: nextStatus,
-              date: markedAt,
-              note: `Marked no-charge (${reasonLabel}): ${notes}`,
-              by: user.name,
-            },
-          ],
+      }
+
+      const updated: RepairOrder = {
+        ...repair,
+        billingExempt: true,
+        billingExemptReason: reason,
+        billingExemptNotes: notes,
+        billingExemptBy: user.name,
+        billingExemptAt: markedAt,
+        diagnosisFee: 0,
+        diagnosisFeeStatus: 'not_applicable',
+        total: 0,
+        quote: nextQuote,
+        quoteApprovalDeadline: undefined,
+        status: nextStatus,
+        ...(clearInvoiceLink ? { invoiceId: undefined, invoiceDate: undefined } : {}),
+        notes: `${repair.notes || ''}\n[No-charge — ${reasonLabel} by ${user.name}] ${notes}`.trim(),
+        statusHistory: [
+          ...(repair.statusHistory ?? []),
+          {
+            status: nextStatus,
+            date: markedAt,
+            note: `Marked no-charge (${reasonLabel}): ${notes}`,
+            by: user.name,
+          },
+        ],
+      }
+
+      repairsRef.current = repairsRef.current.map(r => r.id === repairId ? updated : r)
+      setRepairs(p => p.map(r => r.id === repairId ? updated : r))
+
+      try {
+        const res = await fetch(`/api/repairs/${encodeURIComponent(repairId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            billingExempt: true,
+            billingExemptReason: reason,
+            billingExemptNotes: notes,
+            billingExemptBy: user.name,
+            billingExemptAt: markedAt,
+            diagnosisFee: 0,
+            diagnosisFeeStatus: 'not_applicable',
+            total: 0,
+            quote: nextQuote,
+            quoteApprovalDeadline: undefined,
+            status: nextStatus,
+            notes: updated.notes,
+            statusHistory: updated.statusHistory,
+            ...(clearInvoiceLink ? { invoiceId: null, invoiceDate: null } : {}),
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({})) as { error?: string }
+          repairsRef.current = repairsRef.current.map(r => r.id === repairId ? repair : r)
+          setRepairs(p => p.map(r => r.id === repairId ? repair : r))
+          showToast(err.error || 'Could not mark this job as no-charge', 'error')
+          return
         }
-      }))
+      } catch {
+        repairsRef.current = repairsRef.current.map(r => r.id === repairId ? repair : r)
+        setRepairs(p => p.map(r => r.id === repairId ? repair : r))
+        showToast('Could not mark this job as no-charge', 'error')
+        return
+      }
+
+      syncRepairToPortal(updated, `No-charge (${reasonLabel}) — customer quote and invoice skipped`)
 
       addAuditLog(
         'mark_repair_no_charge',

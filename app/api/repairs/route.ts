@@ -10,6 +10,7 @@ import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { filterStoreValueForRole } from '@/lib/auth/authorization'
 import { loadRepairsFromPrisma } from '@/lib/repair-mirror'
+import { overlayRepairNoChargeFromBlob } from '@/lib/repair-store-merge'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { resolveDiagnosisFee, normalizeDeviceTier } from '@/lib/diagnosis-fee'
 import { publishNotificationEvent } from '@/lib/notifications/service'
@@ -54,12 +55,13 @@ export async function GET(request: NextRequest) {
     // Phase 2a: read from the relational table when mirrored (payload carries
     // the full job); fall back to the blob otherwise.
     const fromPrisma = await loadRepairsFromPrisma()
+    const state = await loadAppState(['deed_repairs_v2'])
+    const blob = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
     let repairs: RepairOrder[]
     if (fromPrisma) {
-      repairs = fromPrisma as RepairOrder[]
+      repairs = overlayRepairNoChargeFromBlob(fromPrisma as RepairOrder[], blob) as RepairOrder[]
     } else {
-      const state = await loadAppState()
-      repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
+      repairs = blob
     }
     repairs = filterStoreValueForRole(
       { id: user?.id, role: user?.role, modules: user?.modules, actsAsTechnician: user?.actsAsTechnician },

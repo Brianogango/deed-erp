@@ -9,12 +9,12 @@ import { hasModuleAccess } from '@/lib/auth/access'
 import { repairHardDeleteBlocker } from '@/lib/repair-delete'
 import { findOpenRepairWithSerial, normalizeRepairSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
 import { findRepairInPrisma, loadRepairsFromPrisma } from '@/lib/repair-mirror'
-import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
+import { mergeRepairsStoreWrite, overlayRepairNoCharge } from '@/lib/repair-store-merge'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 const config = {
   storeKey: 'deed_repairs_v2',
-  allowedWriteRoles: ['director', 'admin_officer', 'technical_lead', 'technician'],
+  allowedWriteRoles: ['director', 'admin_officer', 'technical_lead', 'technician', 'finance_officer'],
   build: () => '' as unknown as RepairOrder,
   lockKey: 'deed_repairs_v2',
   preparePatch: async (body: Record<string, unknown>, previous: RepairOrder) => {
@@ -112,7 +112,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const fromPrisma = await findRepairInPrisma(id)
   const state = await loadAppState(['deed_repairs_v2'])
   const blob = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as RepairOrder[] : []
-  const all = fromPrisma ? [fromPrisma as RepairOrder, ...blob.filter(row => row.id !== fromPrisma.id)] : blob
+  const blobMatch = blob.find(row => row.id === id || row.ref === id || (fromPrisma && (row.id === fromPrisma.id || row.ref === fromPrisma.ref)))
+  const fromStore = fromPrisma
+    ? overlayRepairNoCharge(fromPrisma as RepairOrder, blobMatch as RepairOrder | undefined) as RepairOrder
+    : undefined
+  const all = fromStore ? [fromStore, ...blob.filter(row => row.id !== fromStore.id)] : blob
   const visible = filterStoreValueForRole(
     { id: user?.id, role: user?.role, modules: user?.modules, actsAsTechnician: user?.actsAsTechnician },
     'deed_repairs_v2',

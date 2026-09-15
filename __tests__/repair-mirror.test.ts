@@ -114,6 +114,25 @@ describe('mirrorRepairsToPrisma()', () => {
     expect(second.skipped).toBe(1)
   })
 
+  it('remirrors when a job is marked no-charge even if status is unchanged', async () => {
+    const first = await mirrorRepairsToPrisma([blobRepair])
+    expect(first.mirrored).toBe(1)
+    const savedHashes = JSON.parse(mockSaveStoreKeys.mock.calls[0][0]['repair_mirror_hashes_v1'])
+    mockLoadAppState.mockResolvedValue({ repair_mirror_hashes_v1: savedHashes })
+    mockPrisma.repair.upsert.mockClear()
+
+    const second = await mirrorRepairsToPrisma([{
+      ...blobRepair,
+      billingExempt: true,
+      billingExemptAt: '2026-09-15T11:00:00Z',
+    }])
+    expect(second.skipped).toBe(0)
+    expect(second.mirrored).toBe(1)
+    expect(mockPrisma.repair.upsert).toHaveBeenCalled()
+    const payload = mockPrisma.repair.upsert.mock.calls[0][0].update.payload
+    expect(payload.billingExempt).toBe(true)
+  })
+
   it('only links invoices that exist in the relational table', async () => {
     const invoiceId = '44444444-4444-4444-8444-444444444444'
     mockPrisma.invoice.findUnique.mockResolvedValue(null)

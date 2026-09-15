@@ -60,7 +60,68 @@ const COMPLETION_KEYS = [
   'conditionOnRelease',
   'deliveryRecipient',
   'deliveryRecipientPhone',
+  'billingExempt',
+  'billingExemptReason',
+  'billingExemptNotes',
+  'billingExemptBy',
+  'billingExemptAt',
 ] as const
+
+const QUOTE_SKIP_STATUSES = new Set(['diagnosed', 'awaiting_approval', 'declined'])
+
+const BILLING_EXEMPT_KEYS = [
+  'billingExempt',
+  'billingExemptReason',
+  'billingExemptNotes',
+  'billingExemptBy',
+  'billingExemptAt',
+] as const
+
+/**
+ * No-charge is blob/payload-only. A Prisma snapshot taken before the mark
+ * must not restore Create Invoice / Update Quote on the next hydrate.
+ */
+export function overlayRepairNoCharge(
+  primary: RepairStoreRow,
+  secondary: RepairStoreRow | undefined,
+): RepairStoreRow {
+  if (!secondary || secondary.billingExempt !== true) return primary
+  const next: RepairStoreRow = primary.billingExempt === true
+    ? { ...primary }
+    : { ...primary, billingExempt: true }
+  if (primary.billingExempt !== true) {
+    for (const key of BILLING_EXEMPT_KEYS) {
+      if (isPresent(secondary[key])) next[key] = secondary[key]
+    }
+  }
+  if (QUOTE_SKIP_STATUSES.has(asStatus(next)) && asStatus(secondary) === 'approved') {
+    next.status = 'approved'
+  }
+  return next
+}
+
+export function overlayRepairNoChargeFromBlob(
+  rows: RepairStoreRow[],
+  blob: RepairStoreRow[],
+): RepairStoreRow[] {
+  if (!Array.isArray(rows) || rows.length === 0 || !Array.isArray(blob) || blob.length === 0) {
+    return rows
+  }
+  const byId = new Map<string, RepairStoreRow>()
+  const byRef = new Map<string, RepairStoreRow>()
+  for (const row of blob) {
+    const id = asId(row)
+    if (id) byId.set(id, row)
+    const ref = String(row.ref ?? '').trim()
+    if (ref) byRef.set(ref, row)
+  }
+  return rows.map(row => {
+    const id = asId(row)
+    const ref = String(row.ref ?? '').trim()
+    const secondary = (id ? byId.get(id) : undefined) ?? (ref ? byRef.get(ref) : undefined)
+    return overlayRepairNoCharge(row, secondary)
+  })
+}
 
 /** Booked timestamps — a stale tab must not rewrite the year on a finished job. */
 const BOOKING_KEYS = ['intakeDate', 'createdDate', 'date'] as const
@@ -188,25 +249,40 @@ export function pickRepairStoreRow(
   const incomingStatus = asStatus(incoming)
 
   if (isOrcVoidRewind(currentStatus, incomingStatus)) {
-    return preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming)
+    return overlayRepairNoCharge(
+      preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming),
+      current,
+    )
   }
 
   if (REPAIR_TERMINAL_STATUSES.has(currentStatus) && incomingStatus !== currentStatus) {
-    return preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming)
+    return overlayRepairNoCharge(
+      preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming),
+      current,
+    )
   }
 
   const currentRank = repairStatusRank(currentStatus)
   const incomingRank = repairStatusRank(incomingStatus)
 
   if (REPAIR_FINALIZED_STATUSES.has(currentStatus) && incomingRank < currentRank) {
-    return preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming)
+    return overlayRepairNoCharge(
+      preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming),
+      current,
+    )
   }
 
   if (options.pinInProgressRewind && isInProgressStatusRewind(current, incoming)) {
-    return preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming)
+    return overlayRepairNoCharge(
+      preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming),
+      current,
+    )
   }
 
-  return preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming)
+  return overlayRepairNoCharge(
+    preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming),
+    current,
+  )
 }
 
 export function mergeRepairsStoreWrite(current: unknown, incoming: unknown): RepairStoreRow[] {
