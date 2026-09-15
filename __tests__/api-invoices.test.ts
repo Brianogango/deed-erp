@@ -607,6 +607,33 @@ describe('PUT /api/invoices/:id', () => {
     expect(mockPrismaInvoiceItem.deleteMany).not.toHaveBeenCalled()
   })
 
+  it('returns 409 when Confirm carries a stale lockVersion after an edit', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({
+      ...baseInvoice,
+      lockVersion: 2,
+      items: [{ id: 'li1', description: 'Laptop', qty: 1, unitPrice: 5000, taxRate: 16, taxCategory: 'standard_16', lineSubtotal: 5000, lineTax: 800, lineTotal: 5800 }],
+    })
+    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13', lockVersion: 0 }), { params: { id: INVOICE_ID } })
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error).toMatch(/modified by another user/)
+    expect(body.lockVersion).toBe(2)
+    expect(mockPrismaInvoice.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('confirms a draft after an edit when lockVersion is omitted', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({
+      ...baseInvoice,
+      lockVersion: 2,
+      items: [{ id: 'li1', description: 'Laptop', qty: 1, unitPrice: 5000, taxRate: 16, taxCategory: 'standard_16', lineSubtotal: 5000, lineTax: 800, lineTotal: 5800 }],
+    })
+    mockPrismaInvoice.findUniqueOrThrow.mockResolvedValue({ ...baseInvoice, status: 'approved', lockVersion: 3 })
+    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: { id: INVOICE_ID } })
+    expect(res.status).toBe(200)
+    expect(mockPrismaInvoice.updateMany).toHaveBeenCalled()
+    expect(mockPrismaInvoice.updateMany.mock.calls[0][0].where).toEqual({ id: INVOICE_ID, lockVersion: 2 })
+  })
+
   it('still 409s economic edits on a posted invoice when Confirm is not the intent', async () => {
     mockPrismaInvoice.findUnique.mockResolvedValue({
       ...baseInvoice,
