@@ -20,6 +20,8 @@ import {
   invoicePaymentStatus,
   financeListPaymentStatusLabel,
   isInvoiceOverdue,
+  invoiceDueRelativeLabel,
+  invoiceDueDateNeedsAlert,
   invoiceResidual,
   isOpenInvoice,
   shouldReplaceCancelledDelivery,
@@ -461,6 +463,18 @@ describe('invoice document state and payment status', () => {
     expect(isInvoiceOverdue({
       status: 'posted', total: 100, amountPaid: 0, date: '2026-08-28',
     }, today)).toBe(false)
+  })
+
+  it('does not call a paid invoice overdue even when the due date has passed', () => {
+    const today = '2026-09-15'
+    const paid = { status: 'posted' as const, total: 226200, amountPaid: 226200, dueDate: '2026-09-14' }
+    expect(isInvoiceOverdue(paid, today)).toBe(false)
+    expect(invoiceDueRelativeLabel(paid, today)).toBe('')
+    expect(invoiceDueDateNeedsAlert(paid, today)).toBe(false)
+    expect(invoiceDueRelativeLabel({ ...paid, amountPaid: 0 }, today)).toBe('1 day overdue')
+    expect(invoiceDueDateNeedsAlert({ ...paid, amountPaid: 0 }, today)).toBe(true)
+    expect(invoiceDueRelativeLabel({ status: 'posted', total: 100, amountPaid: 0, dueDate: '2026-09-15' }, today)).toBe('Due today')
+    expect(invoiceDueRelativeLabel({ status: 'posted', total: 100, amountPaid: 0, dueDate: '2026-09-17' }, today)).toBe('2 days')
   })
 })
 

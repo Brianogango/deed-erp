@@ -823,6 +823,46 @@ export function isInvoiceOverdue(
   return residual > 0 && due < today
 }
 
+/** Calendar days from today to the due date. Negative means past due. */
+export function invoiceDueDaysRemaining(
+  dueDate: string | undefined | null,
+  today: string = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }),
+): number | null {
+  const due = String(dueDate ?? '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return null
+  const dueMs = Date.parse(`${due}T00:00:00Z`)
+  const todayMs = Date.parse(`${today}T00:00:00Z`)
+  if (!Number.isFinite(dueMs) || !Number.isFinite(todayMs)) return null
+  return Math.round((dueMs - todayMs) / 86_400_000)
+}
+
+/**
+ * Due-date countdown for the invoice header. Settled invoices never say overdue.
+ */
+export function invoiceDueRelativeLabel(
+  inv: { total: number; amountPaid: number; dueDate?: string; status?: unknown },
+  today: string = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }),
+): string {
+  if (invoiceResidual(inv) <= 0) return ''
+  if (invoiceDocState(inv.status) === 'cancelled') return ''
+  const days = invoiceDueDaysRemaining(inv.dueDate, today)
+  if (days == null) return ''
+  if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`
+  if (days === 0) return 'Due today'
+  return `${days} day${days === 1 ? '' : 's'}`
+}
+
+/** Red due-date styling only while money is still outstanding. */
+export function invoiceDueDateNeedsAlert(
+  inv: { status: unknown; total: number; amountPaid: number; dueDate?: string; date?: string },
+  today: string = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }),
+): boolean {
+  if (invoiceResidual(inv) <= 0) return false
+  if (isInvoiceOverdue(inv, today)) return true
+  const days = invoiceDueDaysRemaining(inv.dueDate || inv.date, today)
+  return days != null && days <= 7
+}
+
 // ─── Cancellation guards ─────────────────────────────────────────────────────
 
 export interface CancelGuardInput {
