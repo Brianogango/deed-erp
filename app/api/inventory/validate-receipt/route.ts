@@ -5,6 +5,7 @@ import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock 
 import { validateReceiptInput } from '@/lib/inventory-validation'
 import { applyReceiptStockMutation } from '@/lib/inventory/stock-transactions'
 import { postReceiptValuationFromPayload } from '@/lib/inventory/valuation-hooks'
+import prisma from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,9 +61,25 @@ export async function POST(request: NextRequest) {
       { status: 422 },
     )
   }
-  const preflightState = await loadAppState(['deed_receipts', 'deed_purchaseOrders'])
+
+  const receiptRef = String(body.receiptRef || 'REC')
+  const existingGrn = await prisma.goodsReceivedNote.findUnique({
+    where: { grnNumber: receiptRef },
+    select: { poId: true },
+  }).catch(() => null)
+
+  if (existingGrn && existingGrn.poId !== body.purchaseOrderId) {
+    return NextResponse.json(
+      { ok: false, error: `GRN reference ${receiptRef} is already linked to another purchase order.` },
+      { status: 409 },
+    )
+  }
+
+  const preflightState = await loadAppState(['deed_receipts', 'deed_purchaseOrders', 'deed_stockMoves'])
   const preflightReceipts = Array.isArray(preflightState.deed_receipts) ? preflightState.deed_receipts as any[] : []
   const preflightOrders = Array.isArray(preflightState.deed_purchaseOrders) ? preflightState.deed_purchaseOrders as any[] : []
+  const preflightMoves = Array.isArray(preflightState.deed_stockMoves) ? preflightState.deed_stockMoves as any[] : []
+  const existingMoves = preflightMoves.filter(move => move?.documentRef === receiptRef)
   const preflightReceipt = preflightReceipts.find(item => item?.id === body.receiptId)
   if (!preflightReceipt) {
     return NextResponse.json(
@@ -71,6 +88,18 @@ export async function POST(request: NextRequest) {
     )
   }
   if (preflightReceipt.status !== 'draft') {
+    if (existingGrn?.poId === body.purchaseOrderId && preflightReceipt.status === 'validated') {
+      const purchaseOrder = preflightOrders.find(item => item?.id === body.purchaseOrderId) ?? null
+      return NextResponse.json({
+        ...result,
+        stockApplied: true,
+        alreadyApplied: true,
+        moves: existingMoves,
+        valuation: { ok: true, reason: 'already_validated' },
+        finalized: { receipt: preflightReceipt, purchaseOrder },
+        message: `${receiptRef} was already validated. No duplicate stock was posted.`,
+      })
+    }
     return NextResponse.json(
       { ok: false, error: `${preflightReceipt.ref || 'This receipt'} has already updated inventory.` },
       { status: 409 },
@@ -83,29 +112,45 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const stock = await applyReceiptStockMutation({
-    receiptId: String(body.receiptId || ''),
-    receiptRef: String(body.receiptRef || 'REC'),
-    purchaseOrderId: body.purchaseOrderId,
-    destination: String(body.destination || 'warehouse'),
-    supplierInvoiceNo: body.supplierInvoiceNo,
-    notes: body.notes,
-    lines: body.lines.map(line => ({
-      productId: line.productId,
-      productName: line.productName || '',
-      qtyReceived: Number(line.qtyReceived || 0),
-      requiresSerial: Boolean(line.requiresSerial),
-      serials: line.serials,
-      serialRecords: line.serialRecords,
-    })),
-    userId: session.user.id,
-  })
+  let stock = existingGrn?.poId === body.purchaseOrderId
+    ? { ok: true as const, moves: existingMoves, alreadyApplied: true }
+    : await applyReceiptStockMutation({
+        receiptId: String(body.receiptId || ''),
+        receiptRef,
+        purchaseOrderId: body.purchaseOrderId,
+        destination: String(body.destination || 'warehouse'),
+        supplierInvoiceNo: body.supplierInvoiceNo,
+        notes: body.notes,
+        lines: body.lines.map(line => ({
+          productId: line.productId,
+          productName: line.productName || '',
+          qtyReceived: Number(line.qtyReceived || 0),
+          requiresSerial: Boolean(line.requiresSerial),
+          serials: line.serials,
+          serialRecords: line.serialRecords,
+        })),
+        userId: session.user.id,
+      })
 
   if (!stock.ok) {
-    return NextResponse.json({ ok: false, errors: [stock.error], error: stock.error }, { status: 422 })
+    // A concurrent retry may have won the unique GRN insert after our preflight.
+    // Treat that race as success only when the winning GRN belongs to this PO.
+    const winner = await prisma.goodsReceivedNote.findUnique({
+      where: { grnNumber: receiptRef },
+      select: { poId: true },
+    }).catch(() => null)
+
+    if (winner?.poId === body.purchaseOrderId) {
+      const retryState = await loadAppState(['deed_stockMoves'])
+      const retryMoves = Array.isArray(retryState.deed_stockMoves)
+        ? (retryState.deed_stockMoves as any[]).filter(move => move?.documentRef === receiptRef)
+        : []
+      stock = { ok: true as const, moves: retryMoves, alreadyApplied: true }
+    } else {
+      return NextResponse.json({ ok: false, errors: [stock.error], error: stock.error }, { status: 422 })
+    }
   }
 
-  const receiptRef = String(body.receiptRef || 'REC')
   const destination = String(body.destination || 'warehouse')
   const poState = await loadAppState(['deed_purchaseOrders'])
   const pos = Array.isArray(poState.deed_purchaseOrders) ? poState.deed_purchaseOrders as any[] : []
@@ -196,9 +241,12 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ...result,
     stockApplied: true,
+    alreadyApplied: 'alreadyApplied' in stock ? Boolean(stock.alreadyApplied) : false,
     moves: stock.moves,
     valuation,
     finalized,
-    message: `${receiptRef} validated successfully. Stock and purchase progress were updated.`,
+    message: 'alreadyApplied' in stock && stock.alreadyApplied
+      ? `${receiptRef} was already posted to stock; document state was finalized without a duplicate receipt.`
+      : `${receiptRef} validated successfully. Stock and purchase progress were updated.`,
   })
 }
