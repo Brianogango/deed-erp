@@ -112,7 +112,8 @@ import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization
 import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
 import { fulfillmentSaleOrderPatch } from '@/lib/sales/fulfillment-sale-order-patch'
-import { omitLockVersion, readLockVersionFromResponse } from '@/lib/optimistic-lock'
+import { readLockVersionFromResponse } from '@/lib/optimistic-lock'
+import { invoicePersistBody, putInvoiceWithLockRetry } from '@/lib/invoice-persist'
 import { resolveAddSaleOrderLineTaxRate } from '@/lib/sale-order-line-tax'
 import {
   markSaleOrderDraftEdit,
@@ -1260,6 +1261,8 @@ export interface Invoice {
   postedByUserId?: string
   postedByName?: string
   postedAt?: string
+  /** Optimistic lock from Prisma; omitted on persist so sequential edits cannot 409 Confirm. */
+  lockVersion?: number
   /** POS till invoice created already posted; commission uses salespersonId. */
   isPosInvoice?: boolean
   salespersonId?: string
@@ -13457,7 +13460,7 @@ const storeCtx: AppState = {
         const updated = next.find(i => i.id === id)
         if (updated) {
           invRef.current = next
-          sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoicePersistBody(updated as unknown as Record<string, unknown>)) })
         }
         return next
       })
@@ -13544,11 +13547,9 @@ const storeCtx: AppState = {
       const postedInvoice = { ...inv, ...postedMeta, lines: linesWithTax }
       setInvoices(p => p.map(i => i.id === id ? postedInvoice : i))
       try {
-        let res = await fetch(`/api/invoices/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(postedInvoice),
-        })
+        // Edit PUT already incremented Prisma lockVersion; the local row still
+        // holds the pre-edit value. Omit + one retry, same as sale-order Confirm.
+        let { res, data } = await putInvoiceWithLockRetry(id, postedInvoice as unknown as Record<string, unknown>)
         if (res.status === 404) {
           // The bill exists only in the local store (its create POST failed
           // earlier, e.g. a missing PO/product link). Create it as a draft,
@@ -13556,21 +13557,23 @@ const storeCtx: AppState = {
           const create = await fetch('/api/invoices', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...postedInvoice, status: 'draft' }),
+            body: JSON.stringify({ ...invoicePersistBody(postedInvoice as unknown as Record<string, unknown>), status: 'draft' }),
           })
           if (create.ok) {
-            res = await fetch(`/api/invoices/${id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(postedInvoice),
-            })
+            ;({ res, data } = await putInvoiceWithLockRetry(id, postedInvoice as unknown as Record<string, unknown>))
           }
         }
         if (!res.ok) {
-          const err = await res.json().catch(() => ({})) as { error?: string }
+          const err = (data && typeof data === 'object' ? data : {}) as { error?: string }
           setInvoices(p => p.map(i => i.id === id ? inv : i))
           showToast(err.error || 'Could not post invoice to accounting', 'error')
           return
+        }
+        const postedLock = readLockVersionFromResponse(data)
+        if (postedLock !== undefined) {
+          const withLock = { ...postedInvoice, lockVersion: postedLock }
+          invRef.current = invRef.current.map(i => i.id === id ? withLock : i)
+          setInvoices(p => p.map(i => i.id === id ? withLock : i))
         }
       } catch {
         setInvoices(p => p.map(i => i.id === id ? inv : i))
@@ -13594,7 +13597,7 @@ const storeCtx: AppState = {
       setInvoices(p => {
         const next = p.map(i => i.id === id ? { ...i, paymentBlocked: blocked } : i)
         const updated = next.find(i => i.id === id)
-        if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoicePersistBody(updated as unknown as Record<string, unknown>)) })
         return next
       })
       addAuditLog(blocked ? 'block_invoice_payment' : 'release_invoice_payment', inv.ref, `${blocked ? 'Payment blocked' : 'Payment released'} by ${actor?.name ?? 'Finance'}`)
@@ -16744,7 +16747,7 @@ const storeCtx: AppState = {
           setInvoices(p => {
             const next = p.map(i => i.id === inv.id ? { ...i, status: 'posted' as const } : i)
             const updated = next.find(i => i.id === inv.id)
-            if (updated) sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            if (updated) sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoicePersistBody(updated as unknown as Record<string, unknown>)) })
             return next
           })
           // Post GL journal: AR debit / Sales Revenue credit / VAT credit
@@ -17058,27 +17061,6 @@ const storeCtx: AppState = {
           invRef.current = invRef.current.map(inv => inv.id === next.id ? next : inv)
           setInvoices(p => p.map(inv => inv.id === next.id ? next : inv))
         }
-        const putInvoice = async (id: string, body: Record<string, unknown>) => {
-          const send = async (payload: Record<string, unknown>) => {
-            const res = await fetch(`/api/invoices/${id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            })
-            const data = await res.json().catch(() => null)
-            return { res, data }
-          }
-          let { res, data } = await send(omitLockVersion(body))
-          const conflictLock = readLockVersionFromResponse(data)
-          if (
-            res.status === 409
-            && conflictLock !== undefined
-            && String((data as { error?: string } | null)?.error || '').includes('modified by another user')
-          ) {
-            ;({ res, data } = await send({ ...omitLockVersion(body), lockVersion: conflictLock }))
-          }
-          return { res, data }
-        }
         if (invoice.status !== 'draft') {
           showToast(`${invoice.ref} is immutable — issue a credit/debit note in the Invoice module.`, 'error')
           return invoice
@@ -17094,7 +17076,7 @@ const storeCtx: AppState = {
           notes: invoice.notes?.includes(repair.ref) ? invoice.notes : `${invoice.notes ?? ''}\n${invoiceNotes}`.trim(),
         }
         commitInvoice(patched)
-        const { res: putRes, data: putBody } = await putInvoice(patched.id, patched as unknown as Record<string, unknown>)
+        const { res: putRes, data: putBody } = await putInvoiceWithLockRetry(patched.id, patched as unknown as Record<string, unknown>)
         if (!putRes.ok) {
           showToast((putBody as { error?: string } | null)?.error || `Could not update ${patched.ref} from the quote`, 'error')
           return patched
@@ -17727,7 +17709,7 @@ const storeCtx: AppState = {
         setInvoices(p => p.map(inv => {
           if (inv.id !== repair.invoiceId) return inv
           const updated = { ...inv, status: 'cancelled' as const }
-          sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoicePersistBody(updated as unknown as Record<string, unknown>)) })
           return updated
         }))
       }
