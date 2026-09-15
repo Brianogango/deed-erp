@@ -17,6 +17,7 @@ import { resolveClientId } from './legacy-compat'
  */
 
 const MIRROR_STATE_KEY = 'repair_mirror_hashes_v1'
+const MIRROR_FINGERPRINT_VERSION = 2
 
 let repairsPayloadCache: { at: number; data: any[] } | null = null
 const REPAIRS_PAYLOAD_CACHE_MS = 15_000
@@ -84,14 +85,20 @@ function mapRepair(r: any) {
   }
 }
 
-function fingerprint(r: any, mapped: ReturnType<typeof mapRepair>): string {
+/**
+ * The relational row stores the entire repair object in `payload`, so the
+ * fingerprint must cover that same payload. Fingerprinting only selected
+ * mapped fields allowed business-critical changes such as billingExempt,
+ * quote approval metadata and workflow flags to be skipped while Prisma
+ * remained the authoritative read surface.
+ *
+ * Version 2 intentionally invalidates the old partial hashes once so existing
+ * stale repair payloads are rewritten on the next mirror pass.
+ */
+function fingerprint(r: any): string {
   return createHash('md5').update(JSON.stringify({
-    m: mapped,
-    status: r.status ?? null,
-    diagnosis: r.diagnosis?.id ?? r.diagnosis?.findings ?? r.diagnosis?.faultDescription ?? null,
-    customer: [r.customerId, r.customerName, r.customerPhone, r.customerEmail],
-    invoiceId: r.invoiceId ?? r.linkedInvoiceId ?? null,
-    assignedTo: r.assignedTechnicianId ?? null,
+    v: MIRROR_FINGERPRINT_VERSION,
+    payload: r,
   })).digest('hex')
 }
 
@@ -182,7 +189,7 @@ export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force
       if (!ref) continue
       try {
         const mapped = mapRepair(r)
-        const hash = fingerprint(r, mapped)
+        const hash = fingerprint(r)
         if (!opts.force && hashes[ref] === hash) { result.skipped++; continue }
 
         const clientId = await resolveClientId(prisma as any, r.customerId, {

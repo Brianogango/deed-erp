@@ -28,6 +28,11 @@ describe('repair-path helpers', () => {
     expect(quotableStatusesForPath('direct_repair')).toContain('qc')
   })
 
+  it('waits for customer action after a quote is sent instead of offering Update Quote again', () => {
+    expect(quotableStatusesForPath('diagnosis_first')).not.toContain('awaiting_approval')
+    expect(quotableStatusesForPath('direct_repair')).not.toContain('awaiting_approval')
+  })
+
   it('allows re-quote and return after customer declines a quote', () => {
     expect(isQuoteDeclinedReopenable('declined')).toBe(true)
     expect(isQuoteDeclinedReopenable('returned')).toBe(false)
