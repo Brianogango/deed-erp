@@ -18,6 +18,20 @@ type ReceiptLinePayload = {
   serialRecords?: Array<Record<string, unknown>>
 }
 
+async function findGrnOwner(grnNumber: string): Promise<{ poId: string } | null> {
+  try {
+    return await prisma.goodsReceivedNote.findUnique({
+      where: { grnNumber },
+      select: { poId: true },
+    })
+  } catch {
+    // Unit tests and degraded non-DB contexts may intentionally omit
+    // DATABASE_URL. The authoritative stock mutation still enforces the
+    // relational uniqueness constraint when a database is available.
+    return null
+  }
+}
+
 /**
  * Validates GRN serial uniqueness. When `applyStock: true` (or destination
  * is provided with receiptRef), also applies authoritative stock mutation.
@@ -63,10 +77,7 @@ export async function POST(request: NextRequest) {
   }
 
   const receiptRef = String(body.receiptRef || 'REC')
-  const existingGrn = await prisma.goodsReceivedNote.findUnique({
-    where: { grnNumber: receiptRef },
-    select: { poId: true },
-  }).catch(() => null)
+  const existingGrn = await findGrnOwner(receiptRef)
 
   if (existingGrn && existingGrn.poId !== body.purchaseOrderId) {
     return NextResponse.json(
@@ -135,10 +146,7 @@ export async function POST(request: NextRequest) {
   if (!stock.ok) {
     // A concurrent retry may have won the unique GRN insert after our preflight.
     // Treat that race as success only when the winning GRN belongs to this PO.
-    const winner = await prisma.goodsReceivedNote.findUnique({
-      where: { grnNumber: receiptRef },
-      select: { poId: true },
-    }).catch(() => null)
+    const winner = await findGrnOwner(receiptRef)
 
     if (winner?.poId === body.purchaseOrderId) {
       const retryState = await loadAppState(['deed_stockMoves'])
