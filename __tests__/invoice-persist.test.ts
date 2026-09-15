@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { lockVersionMismatch, readExpectedVersion, readLockVersionFromResponse } from '@/lib/optimistic-lock'
 import {
   invoicePersistBody,
+  invoiceErrorMessage,
   isInvoiceLockConflict,
+  putInvoiceOrCreateThenPost,
   putInvoiceWithLockRetry,
 } from '@/lib/invoice-persist'
 
@@ -97,5 +99,68 @@ describe('putInvoiceWithLockRetry', () => {
 
     expect(res.status).toBe(200)
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('lockVersion')
+  })
+})
+
+describe('putInvoiceOrCreateThenPost', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('surfaces the create error instead of the original Not found toast', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        status: 404,
+        ok: false,
+        json: async () => ({ error: 'Not found' }),
+      })
+      .mockResolvedValueOnce({
+        status: 400,
+        ok: false,
+        json: async () => ({ error: '3-way match failed: quantity 2 exceeds received/unbilled 0' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { res, data } = await putInvoiceOrCreateThenPost('bill-blob', {
+      id: 'bill-blob',
+      status: 'posted',
+      type: 'vendor_bill',
+    })
+
+    expect(res.status).toBe(400)
+    expect(invoiceErrorMessage(data, 'Could not post invoice to accounting')).toBe(
+      '3-way match failed: quantity 2 exceeds received/unbilled 0',
+    )
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/invoices')
+  })
+
+  it('posts using the Prisma id when create assigns a new UUID', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        status: 404,
+        ok: false,
+        json: async () => ({ error: 'Not found' }),
+      })
+      .mockResolvedValueOnce({
+        status: 201,
+        ok: true,
+        json: async () => ({ id: 'prisma-bill' }),
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: async () => ({ id: 'prisma-bill', lockVersion: 1, status: 'approved' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await putInvoiceOrCreateThenPost('bill-blob', {
+      id: 'bill-blob',
+      status: 'posted',
+      type: 'vendor_bill',
+    })
+
+    expect(result.id).toBe('prisma-bill')
+    expect(result.res.status).toBe(200)
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/invoices/prisma-bill')
   })
 })

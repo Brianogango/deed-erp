@@ -11,6 +11,7 @@ import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifie
 import { isOnHandSerialStatus } from '@/lib/inventory/serial-status'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { isNonStockProduct } from '@/lib/sales/non-stock-line'
+import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -815,10 +816,21 @@ async function applyReceiptRelational(params: {
   const validLines = params.lines.filter(l => l.qty > 0)
   if (validLines.length === 0) return { grnItemsByProductId, resolvedProductIds }
 
+  let purchaseOrderId = params.purchaseOrderId
+  if (purchaseOrderId && isUuid(purchaseOrderId) && params.userId) {
+    try {
+      const { ensurePrismaPurchaseOrder } = await import('@/lib/purchase/po-prisma-sync')
+      const resolved = await ensurePrismaPurchaseOrder(purchaseOrderId, params.userId)
+      if (resolved) purchaseOrderId = resolved
+    } catch {
+      // Materialize is best-effort; findUnique below still runs.
+    }
+  }
+
   await prisma.$transaction(async tx => {
     const po =
-      params.purchaseOrderId && isUuid(params.purchaseOrderId)
-        ? await tx.purchaseOrder.findUnique({ where: { id: params.purchaseOrderId }, include: { items: true } })
+      purchaseOrderId && isUuid(purchaseOrderId)
+        ? await tx.purchaseOrder.findUnique({ where: { id: purchaseOrderId }, include: { items: true } })
         : null
 
     const adoptExistingGrn = async (existing: { id: string; poId: string; items: Array<{ id: string; productId: string }> }) => {
@@ -894,7 +906,13 @@ async function applyReceiptRelational(params: {
       resolvedProductIds.set(line.productId, resolved)
       await adjustStockLevel(tx, resolved, { onHand: line.qty })
 
-      const poItem = po?.items.find(i => i.productId === resolved)
+      const poItemMatch = po
+        ? resolveVendorBillPoItem(
+            po.items.map(item => ({ id: item.id, productId: item.productId, description: item.description })),
+            { productId: resolved, description: line.productName },
+          )
+        : undefined
+      const poItem = poItemMatch ? po.items.find(item => item.id === poItemMatch.id) : undefined
       if (poItem) {
         await tx.purchaseOrderItem.update({
           where: { id: poItem.id },

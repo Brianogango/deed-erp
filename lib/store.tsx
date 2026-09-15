@@ -113,7 +113,7 @@ import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
 import { fulfillmentSaleOrderPatch } from '@/lib/sales/fulfillment-sale-order-patch'
 import { readLockVersionFromResponse } from '@/lib/optimistic-lock'
-import { invoicePersistBody, putInvoiceWithLockRetry } from '@/lib/invoice-persist'
+import { createdInvoiceId, invoiceErrorMessage, invoicePersistBody, putInvoiceOrCreateThenPost, putInvoiceWithLockRetry } from '@/lib/invoice-persist'
 import { resolveAddSaleOrderLineTaxRate } from '@/lib/sale-order-line-tax'
 import {
   markSaleOrderDraftEdit,
@@ -3676,7 +3676,7 @@ export interface AppState {
   validateReceipt: (receiptId: string, lines: Receipt['lines'], destination: LocationId, serialAccessories?: Record<string, string[]>, serialAccessoryNotes?: Record<string, string>, serialSpecs?: Record<string, string>, serialIssues?: Record<string, string>) => Promise<boolean>
   deletePO: (id: string) => void
   /** lineOverrides caps each line's bill qty (still clamped to billableQty) — omit to bill everything billable, matching prior one-click behaviour. */
-  createBillFromPO: (poId: string, lineOverrides?: Array<{ lineId: string; qty: number }>) => Invoice | null
+  createBillFromPO: (poId: string, lineOverrides?: Array<{ lineId: string; qty: number }>) => Promise<Invoice | null>
 
   // Purchase Returns
   createPurchaseReturn: (receiptId: string, reason: PurchaseReturn['reason']) => PurchaseReturn | null
@@ -13610,31 +13610,29 @@ const storeCtx: AppState = {
       try {
         // Edit PUT already incremented Prisma lockVersion; the local row still
         // holds the pre-edit value. Omit + one retry, same as sale-order Confirm.
-        let { res, data } = await putInvoiceWithLockRetry(id, postedInvoice as unknown as Record<string, unknown>)
-        if (res.status === 404) {
-          // The bill exists only in the local store (its create POST failed
-          // earlier, e.g. a missing PO/product link). Create it as a draft,
-          // then post — creating it already-posted would skip the GL journal.
-          const create = await fetch('/api/invoices', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...invoicePersistBody(postedInvoice as unknown as Record<string, unknown>), status: 'draft' }),
-          })
-          if (create.ok) {
-            ;({ res, data } = await putInvoiceWithLockRetry(id, postedInvoice as unknown as Record<string, unknown>))
-          }
-        }
+        // A 404 means Create Bill never reached Prisma — create as draft, then
+        // post using the server id so a new UUID cannot 404 again.
+        const { res, data, id: postedId } = await putInvoiceOrCreateThenPost(
+          id,
+          postedInvoice as unknown as Record<string, unknown>,
+        )
         if (!res.ok) {
-          const err = (data && typeof data === 'object' ? data : {}) as { error?: string }
+          const err = invoiceErrorMessage(data, 'Could not post invoice to accounting')
           setInvoices(p => p.map(i => i.id === id ? inv : i))
-          showToast(err.error || 'Could not post invoice to accounting', 'error')
+          showToast(err, 'error')
           return
+        }
+        if (postedId !== id) {
+          const remapped = { ...postedInvoice, id: postedId }
+          invRef.current = invRef.current.map(i => i.id === id ? remapped : i)
+          setInvoices(p => p.map(i => i.id === id ? remapped : i))
+          setPurchaseOrders(p => p.map(po => po.billId === id ? { ...po, billId: postedId } : po))
         }
         const postedLock = readLockVersionFromResponse(data)
         if (postedLock !== undefined) {
-          const withLock = { ...postedInvoice, lockVersion: postedLock }
-          invRef.current = invRef.current.map(i => i.id === id ? withLock : i)
-          setInvoices(p => p.map(i => i.id === id ? withLock : i))
+          const withLock = { ...(postedId !== id ? { ...postedInvoice, id: postedId } : postedInvoice), lockVersion: postedLock }
+          invRef.current = invRef.current.map(i => i.id === postedId || i.id === id ? withLock : i)
+          setInvoices(p => p.map(i => i.id === postedId || i.id === id ? withLock : i))
         }
       } catch {
         setInvoices(p => p.map(i => i.id === id ? inv : i))
@@ -14364,7 +14362,7 @@ const storeCtx: AppState = {
       sync(`/api/purchase-orders/${id}`, { method: 'DELETE' })
       showToast('PO deleted') 
     },
-    createBillFromPO: (poId, lineOverrides) => {
+    createBillFromPO: async (poId, lineOverrides) => {
       if (!canManageFinance(currentUser())) {
         showToast('Only Finance or Admin Officer can create vendor bills', 'error'); return null;
       }
@@ -14438,8 +14436,25 @@ const storeCtx: AppState = {
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: 0,
         purchaseOrderId: po.id, notes: '',
       }
+      // Await Prisma create. A fire-and-forget POST left a "Linked" draft in
+      // the UI whose Confirm then 404ed "Not found".
+      try {
+        const res = await fetch('/api/invoices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bill),
+        })
+        const payload = await res.json().catch(() => null)
+        if (!res.ok) {
+          showToast(invoiceErrorMessage(payload, 'Could not create vendor bill'), 'error')
+          return null
+        }
+        bill.id = createdInvoiceId(payload, bill.id)
+      } catch {
+        showToast('Could not create vendor bill', 'error')
+        return null
+      }
       setInvoices(p => [bill, ...p])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
       setPurchaseOrders(p => {
         const next = p.map(x => {
           if (x.id !== poId) return x

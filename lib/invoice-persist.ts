@@ -52,3 +52,40 @@ export async function putInvoiceWithLockRetry(
   }
   return { res, data }
 }
+
+export function invoiceErrorMessage(data: unknown, fallback: string): string {
+  const error = data && typeof data === 'object' ? (data as { error?: unknown }).error : undefined
+  return typeof error === 'string' && error.trim() ? error : fallback
+}
+
+export function createdInvoiceId(data: unknown, fallbackId: string): string {
+  if (!data || typeof data !== 'object') return fallbackId
+  const id = (data as { id?: unknown }).id
+  return typeof id === 'string' && id.trim() ? id : fallbackId
+}
+
+/**
+ * Confirm Vendor Bill PUTs a blob draft that often never reached Prisma
+ * (createBillFromPO used to fire-and-forget POST). Creating as draft then
+ * posting uses the server id — a new UUID must not 404 on the blob id again.
+ */
+export async function putInvoiceOrCreateThenPost(
+  id: string,
+  postedInvoice: Record<string, unknown>,
+): Promise<{ res: Response; data: unknown; id: string }> {
+  let { res, data } = await putInvoiceWithLockRetry(id, postedInvoice)
+  let effectiveId = id
+  if (res.status !== 404) return { res, data, id: effectiveId }
+
+  const create = await fetch('/api/invoices', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...invoicePersistBody(postedInvoice), status: 'draft' }),
+  })
+  const created = await create.json().catch(() => null)
+  if (!create.ok) return { res: create, data: created, id }
+
+  effectiveId = createdInvoiceId(created, id)
+  ;({ res, data } = await putInvoiceWithLockRetry(effectiveId, { ...postedInvoice, id: effectiveId }))
+  return { res, data, id: effectiveId }
+}
