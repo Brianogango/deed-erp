@@ -14,8 +14,8 @@ describe('domain source of truth', () => {
   it('uses Prisma for every registered operational domain', () => {
     expect(new Set(Object.values(DOMAIN_SOURCE_OF_TRUTH))).toEqual(new Set(['prisma']))
     expect(DOMAIN_PERSISTENCE.sale_orders).toBe('normalized')
-    expect(DOMAIN_PERSISTENCE.purchase_orders).toBe('normalized')
-    expect(DOMAIN_PERSISTENCE.serials).toBe('normalized')
-    expect(DOMAIN_PERSISTENCE.receipts).toBe('normalized')
+    expect(DOMAIN_PERSISTENCE.purchase_orders).toBe('row_projection')
+    expect(DOMAIN_PERSISTENCE.serials).toBe('row_projection')
+    expect(DOMAIN_PERSISTENCE.receipts).toBe('row_projection')
   })
 })
