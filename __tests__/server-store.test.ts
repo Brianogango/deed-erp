@@ -77,9 +77,9 @@ describe('saveStoreKeys()', () => {
     ]))
   })
 
-  it('does not throw when DB fails (swallows error)', async () => {
+  it('rejects when persistence fails so callers cannot report a false save', async () => {
     mockSql.mockRejectedValue(new Error('write failed'))
 
-    await expect(saveStoreKeys({ some_key: 'value' })).resolves.toBeUndefined()
+    await expect(saveStoreKeys({ some_key: 'value' })).rejects.toThrow('write failed')
   })
 })
