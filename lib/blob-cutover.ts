@@ -5,10 +5,9 @@
  * certificate. Products blob vs Prisma gap is a hard stop for product cutover.
  *
  * Domain roles (AGENT-DB-002 / DB-001 follow-up):
- *  - dual_write: expect blob count ≈ Prisma count (certify when equal)
+ *  - dual_write: expect blob/store_records count ≈ Prisma count (certify when equal)
  *  - catalog:    relational-first catalogs; hard-stop when unequal
- *  - blob_sot:   blob is operational SoT; Prisma may lag (track coverage, do not
- *                certify for retirement until counts converge)
+ *  - blob_sot:   legacy role; BLOB_SOT_KEYS is empty after the Prisma transfer
  */
 
 export const DUAL_WRITE_BLOB_KEYS = [
@@ -40,14 +39,11 @@ export const EXTENDED_CUTOVER_BLOB_KEYS = [
   'deed_receipts',
 ] as const
 
-/** Keys where blob remains the operational source of truth today. */
-export const BLOB_SOT_KEYS = [
-  'deed_purchaseOrders',
-  'deed_stockMoves',
-  'deed_serials',
-  'deed_deliveries',
-  'deed_receipts',
-] as const
+/**
+ * Former blob-SoT domains. Empty after the Prisma store_records transfer —
+ * those collections now dual-write into Prisma.
+ */
+export const BLOB_SOT_KEYS = [] as const
 
 export type CutoverBlobKey = (typeof DUAL_WRITE_BLOB_KEYS)[number] | (typeof CATALOG_BLOB_KEYS)[number] | string
 

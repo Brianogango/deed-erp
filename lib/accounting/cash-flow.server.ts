@@ -1,5 +1,5 @@
 import 'server-only'
-import prisma from '@/lib/prisma'
+import { getReportingPrisma } from '@/lib/infra/reporting-db'
 import {
   aggregateJournalLines,
   fetchPostedLines,
@@ -19,7 +19,7 @@ function dayBefore(iso: string) {
 }
 
 export async function buildCashFlowStatement(opts: { dateFrom: string; dateTo: string }) {
-  const entries = await prisma.journalEntry.findMany({
+  const entries = await getReportingPrisma().journalEntry.findMany({
     where: {
       isPosted: true,
       entryDate: {

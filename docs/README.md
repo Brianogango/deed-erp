@@ -18,6 +18,7 @@ Role catalogue: [role_access_design.md](../role_access_design.md).
 |-----|---------|
 | [INCIDENT_RESPONSE.md](./INCIDENT_RESPONSE.md) | Severity, escalation, data loss, breach, outage, failed deploy |
 | [BLOB_PRISMA_PARITY.md](./BLOB_PRISMA_PARITY.md) | Blob ↔ Prisma drift checks and cutover gates (DB-001) |
+| [INFRA_PLATFORM.md](./INFRA_PLATFORM.md) | Redis cache/queues, object store, read-optimised reporting |
 | [FINANCE_SALES_SEALS.md](./FINANCE_SALES_SEALS.md) | Invoice / GRN / payment permission seals |
 
 ## Other technical docs

@@ -7,12 +7,27 @@ const { mockSql } = vi.hoisted(() => {
   return { mockSql }
 })
 
+const { mockPrismaStore } = vi.hoisted(() => ({
+  mockPrismaStore: {
+    storeBackend: vi.fn((): 'prisma' | 'dual' | 'app_state' => 'dual'),
+    writeStoreRecords: vi.fn().mockResolvedValue(undefined),
+    readStoreRecords: vi.fn().mockResolvedValue({}),
+    storeRecordVersion: vi.fn().mockResolvedValue({ latest: '', n: 0 }),
+    loadStoreRecordChangesSince: vi.fn().mockResolvedValue({ changes: {}, latestUpdatedAt: '' }),
+    latestStoreRecordUpdatedAt: vi.fn().mockResolvedValue(''),
+  },
+}))
+
 vi.mock('@/lib/auth/db', () => ({ sql: mockSql }))
+vi.mock('@/lib/prisma-store', () => mockPrismaStore)
 
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockPrismaStore.storeBackend.mockReturnValue('dual')
+  mockPrismaStore.readStoreRecords.mockResolvedValue({})
+  mockPrismaStore.writeStoreRecords.mockResolvedValue(undefined)
 })
 
 describe('loadAppState()', () => {

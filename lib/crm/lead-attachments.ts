@@ -1,7 +1,7 @@
 import 'server-only'
 import { randomUUID } from 'crypto'
 import path from 'path'
-import { mkdir, writeFile, readFile } from 'fs/promises'
+import { getObject, putObject } from '@/lib/infra/object-store'
 
 export type LeadAttachmentMeta = {
   id: string
@@ -9,6 +9,7 @@ export type LeadAttachmentMeta = {
   size: number
   contentType: string
   storedAt: string
+  objectKey?: string
 }
 
 const MAX_BYTES = 12 * 1024 * 1024
@@ -17,8 +18,9 @@ function safeStem(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 100) || 'attachment'
 }
 
-function leadDir(leadId: string) {
-  return path.join(process.cwd(), '.uploads', 'lead-attachments', safeStem(leadId))
+function leadObjectKey(leadId: string, id: string, name: string) {
+  const ext = path.extname(safeStem(name))
+  return `lead-attachments/${safeStem(leadId)}/${id}${ext || ''}`
 }
 
 /**
@@ -29,8 +31,6 @@ export async function storeLeadEmailAttachments(
   files: Array<{ filename: string; contentType: string; size: number; content?: Buffer }>,
 ): Promise<LeadAttachmentMeta[]> {
   if (!files.length) return []
-  const dir = leadDir(leadId)
-  await mkdir(dir, { recursive: true })
   const out: LeadAttachmentMeta[] = []
 
   for (const file of files.slice(0, 10)) {
@@ -39,15 +39,20 @@ export async function storeLeadEmailAttachments(
     if (buf.length > MAX_BYTES) continue
     const id = randomUUID()
     const originalName = safeStem(file.filename || 'attachment')
-    const ext = path.extname(originalName)
-    const storagePath = path.join(dir, `${id}${ext || ''}`)
-    await writeFile(storagePath, buf)
+    const objectKey = leadObjectKey(leadId, id, originalName)
+    await putObject({
+      bucket: 'uploads',
+      key: objectKey,
+      body: buf,
+      contentType: file.contentType || 'application/octet-stream',
+    })
     out.push({
       id,
       name: originalName,
       size: buf.length,
       contentType: file.contentType || 'application/octet-stream',
       storedAt: new Date().toISOString(),
+      objectKey,
     })
   }
 
@@ -58,17 +63,19 @@ export async function readLeadAttachmentFile(
   leadId: string,
   meta: LeadAttachmentMeta,
 ): Promise<Buffer | null> {
-  const dir = leadDir(leadId)
-  const ext = path.extname(meta.name)
-  const storagePath = path.join(dir, `${meta.id}${ext || ''}`)
+  const key = meta.objectKey || leadObjectKey(leadId, meta.id, meta.name)
+  const fromStore = await getObject('uploads', key)
+  if (fromStore) return fromStore
   try {
-    return await readFile(storagePath)
-  } catch {
-    // Fallback: try without relying on extension from name
+    const { readFile } = await import('fs/promises')
+    const dir = path.join(process.cwd(), '.uploads', 'lead-attachments', safeStem(leadId))
+    const ext = path.extname(meta.name)
     try {
-      return await readFile(path.join(dir, meta.id))
+      return await readFile(path.join(dir, `${meta.id}${ext || ''}`))
     } catch {
-      return null
+      return await readFile(path.join(dir, meta.id))
     }
+  } catch {
+    return null
   }
 }

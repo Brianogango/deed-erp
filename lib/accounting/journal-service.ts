@@ -221,7 +221,7 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
   }
 
   try {
-    return await db.journalEntry.create({
+    const created = await db.journalEntry.create({
       data: {
         id: uuidFromKey('journal', params.ref),
         ref: params.ref,
@@ -244,6 +244,10 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
       },
       include: { lines: true },
     })
+    void import('@/lib/infra/report-snapshots')
+      .then(mod => mod.invalidateReportingPath())
+      .catch(() => {})
+    return created
   } catch (err) {
     const code = typeof err === 'object' && err && 'code' in err ? String((err as { code?: unknown }).code) : ''
     if (code === 'P2002') {

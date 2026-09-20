@@ -26,6 +26,7 @@ Diagnosis First fee fields also live on the same blob only: `deviceTier` (`regul
 9. **Multi-currency (KES-first):** document `currencyCode` / `baseCurrencyCode` / `exchangeRateToBase` snapshots; functional currency locked to KES; exchange rates table; **Phase 4 FX journals** available for revaluation posts via `POST /api/accounting/fx-revaluation`.
 10. **Pricelists:** Retail / Wholesale / Kilimall map to product selling / wholesale / Kilimall prices; shared resolver; special_pricing approval when unit price undercuts list.
 11. **Gated blob cutover:** Settings → Data Cutover / `POST /api/admin/blob-cutover` — verify → certify → archive (copy) → retire live key. Admin reset blocked while protected keys are uncertified (unless explicit force phrase).
+12. **Prisma `store_records`:** every JSON `app_state` collection is copied into Prisma (`POST /api/admin/blob-transfer`). `STORE_BACKEND` defaults to `prisma`. Live `app_state` is retired only with `confirm: "RETIRE_APP_STATE"` after a Prisma copy exists. Binary files stay in the object store.
 
 ## Deploy order (production)
 ```bash

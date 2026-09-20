@@ -5,6 +5,9 @@
  * Remaining legacy screens persist one business record per ErpStateRecord row;
  * they no longer write whole-array app_state blobs. That projection is an
  * explicit bridge while those screens move to dedicated normalized services.
+ *
+ * `store_records` plus POST /api/admin/blob-transfer copy leftover JSON
+ * collections into Prisma. Binary files stay in the object store.
  */
 
 export type DomainTruth = 'prisma'

@@ -20,6 +20,9 @@ http://localhost:3000
 - **Next.js 14** — App Router
 - **TypeScript** — Type safety
 - **Tailwind CSS** — Styling
+- **PostgreSQL + Prisma** — Operational source of truth
+- **Redis** — Optional cache and queues (memory fallback)
+- **Object store** — Local disk by default; S3-compatible when configured
 - **Recharts** — Charts
 - **Lucide React** — Icons
 - **DM Sans / DM Mono** — Fonts
@@ -76,7 +79,7 @@ http://localhost:3000
 This application can be deployed on **Vercel**.
 
 1. **Database Setup:** 
-   Provision a PostgreSQL database (e.g., Vercel Postgres, Supabase, Neon) and an Upstash Redis database (for rate-limiting).
+   Provision a PostgreSQL database (e.g., Vercel Postgres, Supabase, Neon) and, optionally, Redis plus an S3-compatible bucket.
 2. **Environment Variables:**
    Add the following variables to your Vercel project settings:
    - `DATABASE_URL` (PostgreSQL connection string)
@@ -84,6 +87,9 @@ This application can be deployed on **Vercel**.
    - `CUSTOMER_PORTAL_SECRET` (Random 32-char string)
    - `UPSTASH_REDIS_REST_URL`
    - `UPSTASH_REDIS_REST_TOKEN`
+   - `REDIS_URL` (optional self-hosted Redis)
+   - `REPORTING_DATABASE_URL` (optional read replica)
+   - `OBJECT_STORE_DRIVER` (`fs` default, or `s3`)
 3. **Deploy:**
    Connect your GitHub repository to Vercel. The `vercel.json` file will automatically handle the build command (`npx prisma generate && next build`).
 

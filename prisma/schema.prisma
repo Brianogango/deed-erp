@@ -3913,6 +3913,57 @@ model NotificationDeadLetter {
   @@map("notification_dead_letters")
 }
 
+// ── Infra platform: Redis-backed cache/queues, object store, reporting path ─
+// Snapshots and durable jobs live on the operational database. GL reads may use
+// REPORTING_DATABASE_URL. Never delete app_state keys when applying this.
+
+model ReportSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  scopeKey    String   @unique @map("scope_key") @db.VarChar(220)
+  kind        String   @db.VarChar(40)
+  params      Json     @default("{}")
+  payload     Json
+  generatedAt DateTime @map("generated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([kind, generatedAt], map: "idx_report_snapshots_kind_generated")
+  @@map("report_snapshots")
+}
+
+model BackgroundJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String    @db.VarChar(80)
+  queue       String    @default("default") @db.VarChar(40)
+  payload     Json      @default("{}")
+  status      String    @default("queued") @db.VarChar(20)
+  uniqueKey   String?   @unique @map("unique_key") @db.VarChar(200)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5) @map("max_attempts")
+  runAt       DateTime  @default(now()) @map("run_at")
+  lockedAt    DateTime? @map("locked_at")
+  lockedBy    String?   @map("locked_by") @db.VarChar(80)
+  lastError   String?   @map("last_error")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, runAt], map: "idx_background_jobs_claim")
+  @@index([queue, status], map: "idx_background_jobs_queue")
+  @@map("background_jobs")
+}
+
+// Whole-collection JSON backup for leftover app_state keys. Binary files stay
+// in the object store. ErpStateKey/Record is the live per-row projection.
+model StoreRecord {
+  key       String   @id @db.VarChar(240)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([updatedAt], map: "idx_store_records_updated_at")
+  @@map("store_records")
+}
 
 // ── Legacy-client Prisma projection ────────────────────────────────────────────
 // Normalized domain models above remain authoritative. These two tables replace

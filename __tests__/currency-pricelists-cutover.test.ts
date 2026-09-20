@@ -19,9 +19,11 @@ import {
   canCertify,
   canRetireLiveKey,
   countBlobArray,
+  domainRoleFor,
   evaluateParity,
   summariseParityChecks,
   uncertifiedProtectedKeys,
+  BLOB_SOT_KEYS,
 } from '@/lib/blob-cutover'
 
 describe('multi-currency KES-first', () => {
@@ -184,5 +186,14 @@ describe('blob cutover gates', () => {
     expect(uncertifiedProtectedKeys([
       { blobKey: 'deed_accounts', status: 'certified', parityOk: true },
     ], ['deed_accounts', 'deed_products'])).toEqual(['deed_products'])
+  })
+
+  it('treats former blob-SoT collections as dual-write after Prisma transfer', () => {
+    expect(BLOB_SOT_KEYS).toEqual([])
+    expect(domainRoleFor('deed_serials')).toBe('dual_write')
+    expect(domainRoleFor('deed_purchaseOrders')).toBe('dual_write')
+    expect(domainRoleFor('deed_stockMoves')).toBe('dual_write')
+    expect(domainRoleFor('deed_deliveries')).toBe('dual_write')
+    expect(domainRoleFor('deed_receipts')).toBe('dual_write')
   })
 })

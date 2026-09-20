@@ -68,14 +68,18 @@ async function loadStateWithLegacyFallback(keys?: string[]): Promise<AppStateMap
     return loadLegacyAppState(keys)
   }
   const wantedKeys = keys?.filter(Boolean)
+  let fromStoreRecords: AppStateMap = {}
+  try {
+    const { readStoreRecords } = await import('./prisma-store')
+    fromStoreRecords = await readStoreRecords(wantedKeys)
+  } catch { /* store_records may not exist yet */ }
   if (wantedKeys?.length) {
-    const missing = wantedKeys.filter(key => !(key in projected))
-    if (!missing.length) return projected
-    const legacy = await loadLegacyAppState(missing)
-    return { ...legacy, ...projected }
+    const missing = wantedKeys.filter(key => !(key in projected) && !(key in fromStoreRecords))
+    const legacy = missing.length ? await loadLegacyAppState(missing) : {}
+    return { ...legacy, ...fromStoreRecords, ...projected }
   }
   const legacy = await loadLegacyAppState()
-  return { ...legacy, ...projected }
+  return { ...legacy, ...fromStoreRecords, ...projected }
 }
 
 async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
@@ -257,6 +261,9 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
       `
     } else {
       await savePrismaStateEntries(structuredEntries)
+      await import('./prisma-store')
+        .then(m => m.writeStoreRecords(structuredEntries))
+        .catch(err => console.error('[server-store] store_records write failed:', err))
       // Reuse the existing LISTEN channel as a wake-up only; business payloads
       // are no longer written to app_state.
       await sql`SELECT pg_notify('app_state_changed', ${keys.join(',')})`.catch(() => null)
@@ -296,6 +303,25 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
       if (entries['deed_holdovers']) {
         void import('./accounting/holdover-mirror')
           .then(m => m.mirrorHoldoversToPrisma(entries['deed_holdovers']))
+          .catch(() => {})
+      }
+      if (entries['deed_deliveries']) {
+        void import('./delivery-mirror')
+          .then(async m => {
+            const parsed = JSON.parse(entries['deed_deliveries'] || '[]')
+            if (!Array.isArray(parsed)) return
+            for (const delivery of parsed) await m.mirrorDeliveryToPrisma(delivery)
+          })
+          .catch(() => {})
+      }
+      const extraMirrors = ['deed_purchaseOrders', 'deed_serials', 'deed_stockMoves', 'deed_receipts'] as const
+      if (extraMirrors.some(key => entries[key])) {
+        void import('./blob-transfer')
+          .then(async m => {
+            for (const key of extraMirrors) {
+              if (entries[key]) await m.mirrorKnownDomain(key, entries[key], null)
+            }
+          })
           .catch(() => {})
       }
     }
