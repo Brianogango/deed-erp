@@ -6692,62 +6692,9 @@ export function StoreProvider({
     })
   }, [serials, bulkStock])
 
-  // Poll portal every 20 s for quote approval decisions — auto-applies them to ERP state
-  useEffect(() => {
-    const check = async () => {
-      const pending = repairsRef.current.filter(r => r.status === 'awaiting_approval')
-      for (const repair of pending) {
-        try {
-          const res = await fetch(`/api/portal/repair/${encodeURIComponent(repair.ref)}`)
-          if (!res.ok) continue
-          const { repair: p } = await res.json()
-          if (!p || (p.status !== 'approved' && p.status !== 'declined')) continue
-          const approved = p.status === 'approved'
-          let serverRepair: RepairOrder | undefined
-          const repairRes = await fetch(`/api/repairs?q=${encodeURIComponent(repair.ref)}`)
-          if (repairRes.ok) {
-            const serverRepairs = await repairRes.json().catch(() => [])
-            if (Array.isArray(serverRepairs)) serverRepair = serverRepairs.find((item: RepairOrder) => item.id === repair.id || item.ref === repair.ref)
-          }
-          setRepairs(prev => prev.map(r => {
-            if (r.id !== repair.id || r.status !== 'awaiting_approval') return r
-            if (serverRepair) return serverRepair
-            return {
-              ...r,
-              status: approved ? 'approved' : 'declined',
-              quote: r.quote ? {
-                ...r.quote,
-                ...(approved
-                  ? { approvedDate: p.quote?.approvedDate ?? now(), approvedBy: 'customer' }
-                  : { rejectedDate: p.quote?.rejectedDate ?? now(), rejectionReason: p.quote?.rejectionReason }),
-              } : r.quote,
-            }
-          }))
-          if (repair.assignedTechnicianId) {
-            notifyUsers({
-              recipients: [repair.assignedTechnicianId],
-              type: 'repair',
-              title: approved ? '✅ Quote approved by customer' : '❌ Quote declined by customer',
-              body: `${repair.ref} — ${repair.productName}`,
-              module: 'repair',
-              path: `?id=${repair.id}`,
-              icon: approved ? '✅' : '❌',
-              entityKey: `repair:${repair.id}:portal_quote`,
-            })
-          }
-          setAuditLogs(prev => [{
-            id: uid(), date: now(), user: 'portal',
-            action: approved ? 'quote_approved_portal' : 'quote_declined_portal',
-            documentRef: repair.id,
-            details: approved ? 'Customer approved quote via tracking portal' : `Customer declined: ${p.quote?.rejectionReason ?? ''}`,
-          }, ...prev])
-        } catch { /* silent */ }
-      }
-    }
-    const id = setInterval(check, 10_000) // Portal approvals: SSE is primary, this is a fallback
-    return () => clearInterval(id)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Customer quote decisions write deed_repairs_v2. The store SSE invalidates
+  // that key; a 10s per-job /api/portal/repair/{ref} poll was reconstructing
+  // invoices + photos for every awaiting-approval row on every screen.
 
   // Poll server for new notifications — sticky-merge so read never flips unread
   useEffect(() => {

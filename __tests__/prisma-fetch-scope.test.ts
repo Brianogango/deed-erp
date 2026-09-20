@@ -40,4 +40,10 @@ describe('Prisma fetch scope', () => {
     expect(store).toContain('startLeavePoll')
     expect(store).toContain('stopLeavePoll')
   })
+
+  it('does not poll every awaiting-approval job through the customer portal API', () => {
+    expect(store).not.toContain("setInterval(check, 10_000)")
+    expect(store).not.toContain('`/api/portal/repair/${encodeURIComponent(repair.ref)}`')
+    expect(store).toContain('/api/portal/repair/sync')
+  })
 })
