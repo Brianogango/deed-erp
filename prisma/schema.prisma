@@ -3912,3 +3912,41 @@ model NotificationDeadLetter {
   @@index([createdAt], map: "idx_notification_dead_letters_open")
   @@map("notification_dead_letters")
 }
+
+
+// ── Legacy-client Prisma projection ────────────────────────────────────────────
+// Normalized domain models above remain authoritative. These two tables replace
+// whole-collection app_state blobs for legacy screens that still consume the
+// shared store: one row per collection key plus one row per business record.
+// app_state is read-only migration fallback after this cutover.
+
+model ErpStateKey {
+  key       String   @id @db.VarChar(160)
+  kind      String   @db.VarChar(20)
+  value     Json?
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  records ErpStateRecord[]
+
+  @@index([updatedAt], map: "idx_erp_state_keys_updated")
+  @@map("erp_state_keys")
+}
+
+model ErpStateRecord {
+  id        String   @id @default(cuid())
+  key       String   @db.VarChar(160)
+  recordKey String   @map("record_key") @db.VarChar(240)
+  position  Int      @default(0)
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  stateKey ErpStateKey @relation(fields: [key], references: [key], onDelete: Cascade)
+
+  @@unique([key, recordKey], map: "uq_erp_state_record_key")
+  @@index([key, position], map: "idx_erp_state_records_order")
+  @@index([updatedAt], map: "idx_erp_state_records_updated")
+  @@map("erp_state_records")
+}
