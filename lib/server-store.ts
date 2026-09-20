@@ -59,7 +59,14 @@ async function loadStateWithLegacyFallback(keys?: string[]): Promise<AppStateMap
   // Existing unit tests use a lightweight sql mock and intentionally do not
   // start PostgreSQL or construct a complete Prisma mock.
   if (process.env.NODE_ENV === 'test') return loadLegacyAppState(keys)
-  const projected = await loadPrismaState(keys)
+  let projected: AppStateMap
+  try {
+    projected = await loadPrismaState(keys)
+  } catch {
+    // Safe rollout: reads remain available if code starts before the additive
+    // migration. Writes still fail closed until the Prisma tables exist.
+    return loadLegacyAppState(keys)
+  }
   const wantedKeys = keys?.filter(Boolean)
   if (wantedKeys?.length) {
     const missing = wantedKeys.filter(key => !(key in projected))
