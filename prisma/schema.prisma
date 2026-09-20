@@ -2010,6 +2010,8 @@ model Repair {
   @@index([assignedToId], map: "idx_repairs_technician")
   @@index([jobNumber], map: "idx_repairs_job_number")
   @@index([status, createdAt], map: "idx_repairs_status_created")
+  @@index([intakeDate, jobNumber], map: "idx_repairs_intake_job")
+  @@index([assignedToId, intakeDate], map: "idx_repairs_assignee_intake")
   @@map("repairs")
 }
 
