@@ -1,18 +1,14 @@
 /**
- * One source of truth per ERP domain.
+ * One persistence source of truth per ERP domain: PostgreSQL through Prisma.
  *
- * Prisma REST is the write path for catalogs, CRM, HR, and payroll. The
- * `deed_*` KV blob is a read cache / SSE fan-out for those keys — clients must
- * not POST a different shape back through /api/store.
- *
- * Blob (KV) remains operational SoT for POs, serials, stock moves, deliveries,
- * and receipts until their dedicated cutover (see lib/blob-cutover.ts).
- *
- * Dual-write domains (invoices, sale orders, journals, repairs) still converge
- * both sides; repairs reads Prisma first on the server.
+ * Domains with complete normalized models use their dedicated REST services.
+ * Remaining legacy screens persist one business record per ErpStateRecord row;
+ * they no longer write whole-array app_state blobs. That projection is an
+ * explicit bridge while those screens move to dedicated normalized services.
  */
 
-export type DomainTruth = 'prisma' | 'kv' | 'dual_write'
+export type DomainTruth = 'prisma'
+export type DomainPersistence = 'normalized' | 'row_projection'
 
 export const DOMAIN_SOURCE_OF_TRUTH = {
   products: 'prisma',
@@ -24,20 +20,45 @@ export const DOMAIN_SOURCE_OF_TRUTH = {
   notifications: 'prisma',
   contacts: 'prisma',
   repairs: 'prisma',
-  sale_orders: 'dual_write',
-  invoices: 'dual_write',
-  journals: 'dual_write',
-  payments: 'dual_write',
-  accounts: 'dual_write',
-  deposits: 'dual_write',
-  holdovers: 'dual_write',
-  stock_reservations: 'dual_write',
-  purchase_orders: 'kv',
-  serials: 'kv',
-  stock_moves: 'kv',
-  deliveries: 'kv',
-  receipts: 'kv',
+  sale_orders: 'prisma',
+  invoices: 'prisma',
+  journals: 'prisma',
+  payments: 'prisma',
+  accounts: 'prisma',
+  deposits: 'prisma',
+  holdovers: 'prisma',
+  stock_reservations: 'prisma',
+  purchase_orders: 'prisma',
+  serials: 'prisma',
+  stock_moves: 'prisma',
+  deliveries: 'prisma',
+  receipts: 'prisma',
 } as const satisfies Record<string, DomainTruth>
+
+export const DOMAIN_PERSISTENCE = {
+  products: 'normalized',
+  quotes: 'normalized',
+  opportunities: 'normalized',
+  employees: 'normalized',
+  leave: 'normalized',
+  payroll: 'normalized',
+  notifications: 'normalized',
+  contacts: 'normalized',
+  repairs: 'normalized',
+  sale_orders: 'normalized',
+  invoices: 'normalized',
+  journals: 'normalized',
+  payments: 'normalized',
+  accounts: 'normalized',
+  deposits: 'normalized',
+  holdovers: 'normalized',
+  stock_reservations: 'normalized',
+  purchase_orders: 'normalized',
+  serials: 'normalized',
+  stock_moves: 'normalized',
+  deliveries: 'normalized',
+  receipts: 'normalized',
+} as const satisfies Record<keyof typeof DOMAIN_SOURCE_OF_TRUTH, DomainPersistence>
 
 /**
  * Client must not POST these keys. Dedicated REST routes own the write; a
