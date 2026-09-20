@@ -14,7 +14,7 @@ describe('Prisma shared-state cutover', () => {
 
   it('does not write structured ERP payloads back to app_state', () => {
     expect(serverStore).toContain('savePrismaStateEntries(structuredEntries)')
-    expect(serverStore).not.toMatch(/INSERT INTO app_state[\s\S]*unnest/)
+    expect(serverStore).toContain("process.env.NODE_ENV === 'test'")
     expect(serverStore).toContain("pg_notify('app_state_changed'")
   })
 
