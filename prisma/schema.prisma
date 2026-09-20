@@ -3950,3 +3950,16 @@ model BackgroundJob {
   @@index([queue, status], map: "idx_background_jobs_queue")
   @@map("background_jobs")
 }
+
+// Prisma replacement for the operational app_state JSON blobs. Binary files
+// stay in the object store; deed_* collections live here (and in dedicated
+// relational tables). load/save prefer this table over app_state.
+model StoreRecord {
+  key       String   @id @db.VarChar(240)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([updatedAt], map: "idx_store_records_updated_at")
+  @@map("store_records")
+}

@@ -11,9 +11,14 @@ describe('domain source of truth', () => {
     expect(isPrismaRestSotStoreKey('deed_repairs_v2')).toBe(false)
   })
 
-  it('keeps dual-write domains off the skip list', () => {
+  it('keeps dual-write domains off the skip list and treats former blob-SoT keys as dual-write', () => {
     expect(DOMAIN_SOURCE_OF_TRUTH.sale_orders).toBe('dual_write')
     expect(DOMAIN_SOURCE_OF_TRUTH.invoices).toBe('dual_write')
     expect(DOMAIN_SOURCE_OF_TRUTH.quotes).toBe('prisma')
+    expect(DOMAIN_SOURCE_OF_TRUTH.purchase_orders).toBe('dual_write')
+    expect(DOMAIN_SOURCE_OF_TRUTH.serials).toBe('dual_write')
+    expect(DOMAIN_SOURCE_OF_TRUTH.stock_moves).toBe('dual_write')
+    expect(DOMAIN_SOURCE_OF_TRUTH.deliveries).toBe('dual_write')
+    expect(DOMAIN_SOURCE_OF_TRUTH.receipts).toBe('dual_write')
   })
 })

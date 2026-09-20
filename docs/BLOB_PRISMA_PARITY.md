@@ -16,7 +16,25 @@ Audit finding **DB-001**: the ERP dual-writes critical domains (blob + Prisma). 
 |------|---------|-------------------|
 | `catalog` | Relational-first (e.g. products) | Only when counts match (hard stop otherwise) |
 | `dual_write` | Both sides should converge (invoices, quotes, sale orders, repairs, …) | Only when counts match (optionally Prisma ahead) |
-| `blob_sot` | Blob is still operational SoT (POs, serials, stock moves, deliveries, receipts) | Track coverage; do **not** certify until Prisma catches up |
+| `blob_sot` | Legacy role. `BLOB_SOT_KEYS` is empty after the Prisma transfer | n/a |
+
+## Transfer JSON blobs into Prisma
+
+Operational JSON (`deed_*` / `app_state`) is copied into Prisma `store_records` plus dedicated relational tables. Binary files (receipts, photos) stay in the object store.
+
+```bash
+npm run migrate:store-records:safe
+# Contabo: scripts/apply-sql-as-postgres.sh database/migrations/20260920_store_records_safe.sql
+
+# Copy (never deletes app_state)
+POST /api/admin/blob-transfer
+# or: npm run transfer:blobs
+
+# Optional retire after soak — requires confirm RETIRE_APP_STATE
+POST /api/admin/blob-transfer  { "retire": true, "confirm": "RETIRE_APP_STATE" }
+```
+
+`STORE_BACKEND` (default `prisma`) writes JSON to `store_records`. `dual` also writes `app_state`. `app_state` is the emergency fallback. Live `app_state` keys are never deleted without `RETIRE_APP_STATE` and a Prisma copy.
 
 ### Journals (`deed_journalEntries`) — Phase 9
 
@@ -72,11 +90,11 @@ Observed after AGENT packages (counts move over time):
 2. For products gap: export blob-only SKUs, create missing Prisma rows or archive orphans deliberately.
 3. For invoices gap: compare ID sets; re-broadcast / backfill from Prisma → blob or repair missing Prisma rows.
 4. **Deliveries cutover (unblocked 2026-08-06):** `DeliveryNote.invoiceId` is nullable so rows can represent “delivered, not yet invoiced” (Confirm SO → Delivery → Invoice). Next: dual-write `deed_deliveries` → Prisma `delivery_notes` / items with transactions, then retire the blob.
-5. Keep remaining blob-SoT domains (POs / serials / stock moves) on blob writes until their dedicated cutover.
-6. Never `retire` a live key without archive + Director confirmation.
+5. Run `POST /api/admin/blob-transfer` so POs / serials / stock moves / deliveries / receipts land in `store_records` and relational tables.
+6. Never `retire` a live key without archive + Director confirmation (`RETIRE_APP_STATE` for bulk transfer retire).
 
 ## What this package does **not** do
 
-- Full blob retirement
-- Changing which store the UI treats as SoT
+- Blind `DELETE FROM app_state` without a Prisma `store_records` copy and `RETIRE_APP_STATE`
+- Moving binary files (receipts, photos) into Postgres — those stay in the object store
 - Client pagination UI (see PERF-001)

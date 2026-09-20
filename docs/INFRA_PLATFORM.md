@@ -73,8 +73,24 @@ node scripts/run-safe-infra-platform.mjs
 # GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE report_snapshots, background_jobs TO deed_user;
 ```
 
+## Prisma store_records (JSON blob transfer)
+
+JSON `app_state` collections are stored in Prisma `store_records`. Binary files stay in the object store (`blobs` bucket).
+
+```bash
+node scripts/run-safe-store-records.mjs
+# Contabo:
+# scripts/apply-sql-as-postgres.sh database/migrations/20260920_store_records_safe.sql
+
+# Copy live JSON into Prisma (never deletes app_state unless retire is confirmed)
+POST /api/admin/blob-transfer
+# or: npm run transfer:blobs
+```
+
+`STORE_BACKEND=prisma` (default) writes JSON to Prisma only. Set `STORE_BACKEND=dual` during soak if you still want `app_state` backups.
+
 ## Tests
 
 ```bash
-npm test -- --run __tests__/infra-platform.test.ts __tests__/blob-store.test.ts __tests__/gl-reports.test.ts
+npm test -- --run __tests__/infra-platform.test.ts __tests__/blob-store.test.ts __tests__/gl-reports.test.ts __tests__/prisma-store.test.ts __tests__/blob-transfer.test.ts
 ```

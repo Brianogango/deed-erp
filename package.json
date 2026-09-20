@@ -20,6 +20,8 @@
     "migrate:sale-order-item-discount-pct:safe": "node scripts/run-safe-sale-order-item-discount-pct.mjs",
     "migrate:delivery-notes-mirror:safe": "node scripts/run-safe-delivery-notes-mirror.mjs",
     "migrate:infra-platform:safe": "node scripts/run-safe-infra-platform.mjs",
+    "migrate:store-records:safe": "node scripts/run-safe-store-records.mjs",
+    "transfer:blobs": "node scripts/transfer-blobs-to-prisma.mjs",
     "backfill:accounting": "node scripts/backfill-accounting-to-prisma.mjs",
     "screenshots:core": "node scripts/capture-visual-regression.mjs",
     "analyze": "ANALYZE=true npm run build",

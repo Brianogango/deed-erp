@@ -7,12 +7,27 @@ const { mockSql } = vi.hoisted(() => {
   return { mockSql }
 })
 
+const { mockPrismaStore } = vi.hoisted(() => ({
+  mockPrismaStore: {
+    storeBackend: vi.fn(() => 'dual' as const),
+    writeStoreRecords: vi.fn().mockResolvedValue(undefined),
+    readStoreRecords: vi.fn().mockResolvedValue({}),
+    storeRecordVersion: vi.fn().mockResolvedValue({ latest: '', n: 0 }),
+    loadStoreRecordChangesSince: vi.fn().mockResolvedValue({ changes: {}, latestUpdatedAt: '' }),
+    latestStoreRecordUpdatedAt: vi.fn().mockResolvedValue(''),
+  },
+}))
+
 vi.mock('@/lib/auth/db', () => ({ sql: mockSql }))
+vi.mock('@/lib/prisma-store', () => mockPrismaStore)
 
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockPrismaStore.storeBackend.mockReturnValue('dual')
+  mockPrismaStore.readStoreRecords.mockResolvedValue({})
+  mockPrismaStore.writeStoreRecords.mockResolvedValue(undefined)
 })
 
 describe('loadAppState()', () => {
@@ -81,5 +96,32 @@ describe('saveStoreKeys()', () => {
     mockSql.mockRejectedValue(new Error('write failed'))
 
     await expect(saveStoreKeys({ some_key: 'value' })).resolves.toBeUndefined()
+  })
+
+  it('writes Prisma store_records and skips app_state when STORE_BACKEND=prisma', async () => {
+    mockPrismaStore.storeBackend.mockReturnValue('prisma')
+    mockSql.mockResolvedValue(undefined)
+
+    await saveStoreKeys({ deed_serials: '[{"id":"s1"}]' })
+
+    expect(mockPrismaStore.writeStoreRecords).toHaveBeenCalledWith({ deed_serials: '[{"id":"s1"}]' })
+    expect(mockSql.mock.calls.some(c => String(c[0]).includes('INSERT INTO app_state'))).toBe(false)
+  })
+})
+
+describe('Prisma store overlay', () => {
+  it('lets store_records win over legacy app_state on load', async () => {
+    mockSql
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        rows: [{ key: 'deed_serials', value: JSON.stringify([{ id: 'blob' }]) }],
+      })
+    mockPrismaStore.readStoreRecords.mockResolvedValue({
+      deed_serials: [{ id: 'prisma' }],
+    })
+
+    const state = await loadAppState(['deed_serials'])
+    expect(state['deed_serials']).toEqual([{ id: 'prisma' }])
   })
 })

@@ -17,14 +17,24 @@ import { evaluateJournalRetireReadiness } from '@/lib/accounting/journal-retire-
 import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 import { accountingCutoverState } from '@/lib/accounting/source-of-truth'
 
-async function readAppState(key: string): Promise<string | null> {
+async function readCollectionRaw(key: string): Promise<string | null> {
   try {
     const { rows } = await sql`SELECT value FROM app_state WHERE key = ${key} LIMIT 1`
     const row = rows[0] as { value?: string } | undefined
-    return row?.value ?? null
+    if (row?.value != null) return row.value
   } catch {
-    return null
+    /* fall through to store_records */
   }
+  try {
+    const { readStoreRecords } = await import('@/lib/prisma-store')
+    const rec = await readStoreRecords([key])
+    if (Object.prototype.hasOwnProperty.call(rec, key)) {
+      return JSON.stringify(rec[key])
+    }
+  } catch {
+    /* store_records may not exist yet */
+  }
+  return null
 }
 
 async function safeCount(fn: () => Promise<number>): Promise<number | null> {
@@ -139,7 +149,10 @@ function mappings(): Record<string, Mapping> {
       prismaTable: 'delivery_notes',
       count: () => prisma.deliveryNote.count(),
     },
-    // Receipts/GRNs remain blob-only — no parent Prisma model yet.
+    deed_receipts: {
+      prismaTable: 'goods_received_notes',
+      count: () => prisma.goodsReceivedNote.count(),
+    },
   }
 }
 
@@ -153,7 +166,7 @@ export async function verifyBlobParity(keys?: string[]): Promise<BlobParityCheck
   const checks: BlobParityCheck[] = []
 
   for (const blobKey of want) {
-    const raw = await readAppState(blobKey)
+    const raw = await readCollectionRaw(blobKey)
     const blobCount = countBlobArray(raw)
     const mapping = map[blobKey]
 
@@ -215,7 +228,7 @@ export async function verifyBlobParity(keys?: string[]): Promise<BlobParityCheck
 
 /** Director-facing deep journal parity (read-only). */
 export async function verifyJournalParityReport() {
-  const raw = await readAppState('deed_journalEntries')
+  const raw = await readCollectionRaw('deed_journalEntries')
   const prismaCount = await safeCount(() => prisma.journalEntry.count())
   const deep = await runJournalDeepParity(raw, prismaCount)
   const certificates = await listCutoverCertificates()

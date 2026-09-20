@@ -7,13 +7,27 @@ const BLOB_TMP = mkdtempSync(path.join(tmpdir(), 'deed-blobs-'))
 process.env.BLOB_STORE_DIR = BLOB_TMP
 
 const { mockSql } = vi.hoisted(() => ({ mockSql: vi.fn() }))
+const { mockPrismaStore } = vi.hoisted(() => ({
+  mockPrismaStore: {
+    storeBackend: vi.fn(() => 'dual' as const),
+    writeStoreRecords: vi.fn().mockResolvedValue(undefined),
+    readStoreRecords: vi.fn().mockResolvedValue({}),
+    storeRecordVersion: vi.fn().mockResolvedValue({ latest: '', n: 0 }),
+    loadStoreRecordChangesSince: vi.fn().mockResolvedValue({ changes: {}, latestUpdatedAt: '' }),
+    latestStoreRecordUpdatedAt: vi.fn().mockResolvedValue(''),
+  },
+}))
 vi.mock('@/lib/auth/db', () => ({ sql: mockSql }))
+vi.mock('@/lib/prisma-store', () => mockPrismaStore)
 
 import { isBlobKey, readBlob, writeBlob } from '@/lib/blob-store'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockPrismaStore.storeBackend.mockReturnValue('dual')
+  mockPrismaStore.readStoreRecords.mockResolvedValue({})
+  mockPrismaStore.writeStoreRecords.mockResolvedValue(undefined)
 })
 
 afterAll(() => {

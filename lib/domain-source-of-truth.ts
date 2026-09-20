@@ -5,11 +5,12 @@
  * `deed_*` KV blob is a read cache / SSE fan-out for those keys — clients must
  * not POST a different shape back through /api/store.
  *
- * Blob (KV) remains operational SoT for POs, serials, stock moves, deliveries,
- * and receipts until their dedicated cutover (see lib/blob-cutover.ts).
+ * Blob (KV) collections are transferred into Prisma `store_records` plus
+ * dedicated relational tables. See docs/INFRA_PLATFORM.md and
+ * POST /api/admin/blob-transfer.
  *
- * Dual-write domains (invoices, sale orders, journals, repairs) still converge
- * both sides; repairs reads Prisma first on the server.
+ * Dual-write domains still converge both sides; after blob→Prisma transfer,
+ * live app_state is a backup until STORE_BACKEND=prisma + retire.
  */
 
 export type DomainTruth = 'prisma' | 'kv' | 'dual_write'
@@ -32,11 +33,11 @@ export const DOMAIN_SOURCE_OF_TRUTH = {
   deposits: 'dual_write',
   holdovers: 'dual_write',
   stock_reservations: 'dual_write',
-  purchase_orders: 'kv',
-  serials: 'kv',
-  stock_moves: 'kv',
-  deliveries: 'kv',
-  receipts: 'kv',
+  purchase_orders: 'dual_write',
+  serials: 'dual_write',
+  stock_moves: 'dual_write',
+  deliveries: 'dual_write',
+  receipts: 'dual_write',
 } as const satisfies Record<string, DomainTruth>
 
 /**

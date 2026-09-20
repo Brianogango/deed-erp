@@ -42,6 +42,11 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
       ? await sql`SELECT key, value FROM app_state WHERE key = ANY(${wantedKeys})`
       : await sql`SELECT key, value FROM app_state`
     const state = rowsToAppState(rows as { key: string; value: string }[])
+    try {
+      const { readStoreRecords } = await import('./prisma-store')
+      const fromPrisma = await readStoreRecords(wantedKeys)
+      Object.assign(state, fromPrisma)
+    } catch { /* store_records may not exist yet */ }
     // Binary payloads live on the filesystem; overlay them for explicitly
     // requested keys. Missing files fall back to any legacy app_state row.
     if (wantedKeys?.length) {
@@ -78,6 +83,10 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
     ? await sql`SELECT key, value FROM app_state WHERE key = ANY(${wantedKeys})`
     : await sql`SELECT key, value FROM app_state`
   const state = rowsToAppState(rows as { key: string; value: string }[])
+  try {
+    const { readStoreRecords } = await import('./prisma-store')
+    Object.assign(state, await readStoreRecords(wantedKeys))
+  } catch { /* store_records may not exist yet */ }
   if (wantedKeys?.length) {
     for (const key of wantedKeys.filter(isBlobKey)) {
       const blob = await readBlob(key)
@@ -112,7 +121,19 @@ export async function loadInitialAppState(): Promise<AppStateMap> {
         AND key NOT LIKE ${excludedKeyPatterns[2]}
         AND key NOT LIKE ${excludedKeyPatterns[3]}
     `
-    return rowsToAppState(rows as { key: string; value: string }[])
+    const state = rowsToAppState(rows as { key: string; value: string }[])
+    try {
+      const { readStoreRecords } = await import('./prisma-store')
+      Object.assign(state, await readStoreRecords())
+      for (const key of Object.keys(state)) {
+        if (isBlobKey(key)) delete state[key]
+      }
+    } catch { /* store_records may not exist yet */ }
+    const fromPrisma = await import('./repair-mirror')
+      .then(m => m.loadRepairsFromPrisma())
+      .catch(() => null)
+    if (fromPrisma) state['deed_repairs_v2'] = fromPrisma
+    return state
   } catch {
     return {}
   }
@@ -132,7 +153,15 @@ export async function getAppStateVersion(keys: string[]): Promise<string> {
       WHERE key = ANY(${keys})
     `
     const row = rows?.[0] as { latest?: string; n?: string | number } | undefined
-    return `${row?.latest ?? ''}:${row?.n ?? 0}`
+    let latest = String(row?.latest ?? '')
+    let sqlN = Number(row?.n ?? 0)
+    try {
+      const { storeRecordVersion } = await import('./prisma-store')
+      const prismaVer = await storeRecordVersion(keys)
+      if (prismaVer.latest > latest) latest = prismaVer.latest
+      sqlN += prismaVer.n
+    } catch { /* store_records may not exist yet */ }
+    return `${latest}:${sqlN}`
   } catch {
     return ''
   }
@@ -145,7 +174,13 @@ export async function getLatestAppStateUpdatedAt(): Promise<string> {
       SELECT COALESCE(MAX(updated_at), '') AS updated_at
       FROM app_state
     `
-    return String((rows?.[0] as { updated_at?: string } | undefined)?.updated_at ?? '')
+    let latest = String((rows?.[0] as { updated_at?: string } | undefined)?.updated_at ?? '')
+    try {
+      const { latestStoreRecordUpdatedAt } = await import('./prisma-store')
+      const prismaLatest = await latestStoreRecordUpdatedAt()
+      if (prismaLatest > latest) latest = prismaLatest
+    } catch { /* store_records may not exist yet */ }
+    return latest
   } catch {
     return ''
   }
@@ -166,6 +201,14 @@ export async function loadAppStateChangesSince(sinceUpdatedAt: string): Promise<
     const typed = rows as { key: string; value: string; updated_at: string }[]
     const changes = rowsToAppState(typed.map(row => ({ key: row.key, value: row.value })))
     const latestUpdatedAt = typed.length > 0 ? typed[typed.length - 1].updated_at : sinceUpdatedAt
+    try {
+      const { loadStoreRecordChangesSince } = await import('./prisma-store')
+      const fromPrisma = await loadStoreRecordChangesSince(sinceUpdatedAt)
+      Object.assign(changes, fromPrisma.changes)
+      if (fromPrisma.latestUpdatedAt > latestUpdatedAt) {
+        return { changes, latestUpdatedAt: fromPrisma.latestUpdatedAt }
+      }
+    } catch { /* store_records may not exist yet */ }
     return { changes, latestUpdatedAt }
   } catch {
     return { changes: {}, latestUpdatedAt: sinceUpdatedAt }
@@ -213,25 +256,39 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
     }
     const pairs = Object.entries(entries).filter(([key]) => !isBlobKey(key))
     if (pairs.length === 0) return
-    // Single batched upsert — one round trip instead of one per key.
-    const keys = pairs.map(([key]) => key)
-    const values = pairs.map(([, value]) => value)
-    await sql`
-      INSERT INTO app_state (key, value, updated_at)
-      SELECT k, v, ${now} FROM unnest(${keys}::text[], ${values}::text[]) AS t(k, v)
-      ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
-    `
+
+    let backend: 'prisma' | 'dual' | 'app_state' = 'prisma'
+    try {
+      const prismaStore = await import('./prisma-store')
+      backend = prismaStore.storeBackend()
+      if (backend !== 'app_state') {
+        await prismaStore.writeStoreRecords(Object.fromEntries(pairs))
+      }
+    } catch (err) {
+      console.error('[server-store] prisma store_records write failed:', err)
+      if (backend === 'prisma') backend = 'dual'
+    }
+
+    // app_state remains a backup until STORE_BACKEND=prisma after transfer.
+    if (backend !== 'prisma') {
+      const keys = pairs.map(([key]) => key)
+      const values = pairs.map(([, value]) => value)
+      await sql`
+        INSERT INTO app_state (key, value, updated_at)
+        SELECT k, v, ${now} FROM unnest(${keys}::text[], ${values}::text[]) AS t(k, v)
+        ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+      `
+    }
 
     // Repairs migration phase 2c: the repairs table is authoritative — upsert
     // synchronously (fingerprinted — only changed rows) so a following read
-    // never sees a pre-write state. The blob write above is now a write-only
-    // backup copy; nothing reads it. Removing that write is the final cleanup.
+    // never sees a pre-write state.
     if (entries['deed_repairs_v2'] && process.env.NODE_ENV !== 'test') {
       await import('./repair-mirror')
         .then(m => m.mirrorRepairsToPrisma(entries['deed_repairs_v2']))
         .catch(err => console.error('[repair-mirror] sync write failed:', err))
     }
-    // Accounting / inventory dual-write mirrors — NEVER delete app_state keys.
+    // Accounting / inventory dual-write mirrors.
     if (process.env.NODE_ENV !== 'test') {
       if (entries['deed_accounts']) {
         void import('./accounting/account-journal-mirror')
@@ -256,6 +313,25 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
       if (entries['deed_holdovers']) {
         void import('./accounting/holdover-mirror')
           .then(m => m.mirrorHoldoversToPrisma(entries['deed_holdovers']))
+          .catch(() => {})
+      }
+      if (entries['deed_deliveries']) {
+        void import('./delivery-mirror')
+          .then(async m => {
+            const parsed = JSON.parse(entries['deed_deliveries'] || '[]')
+            if (!Array.isArray(parsed)) return
+            for (const delivery of parsed) await m.mirrorDeliveryToPrisma(delivery)
+          })
+          .catch(() => {})
+      }
+      const extraMirrors = ['deed_purchaseOrders', 'deed_serials', 'deed_stockMoves', 'deed_receipts'] as const
+      if (extraMirrors.some(key => entries[key])) {
+        void import('./blob-transfer')
+          .then(async m => {
+            for (const key of extraMirrors) {
+              if (entries[key]) await m.mirrorKnownDomain(key, entries[key], null)
+            }
+          })
           .catch(() => {})
       }
     }
