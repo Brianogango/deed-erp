@@ -210,7 +210,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const [jarvisOpen, setJarvisOpen] = useState(false)
   const hydratedRoutesRef = useRef<Set<string>>(new Set())
   const lastRouteRefreshRef = useRef(0)
-  const [routeRefreshTick, setRouteRefreshTick] = useState(0)
   const routeReady = useRouteDataReady(pathname || '/')
 
   // Topbar dispatches this event on its DIA button click — kept as a
@@ -401,10 +400,15 @@ function AppContent({ children }: { children: React.ReactNode }) {
     const refreshActiveRoute = () => {
       if (document.visibilityState !== 'visible') return
       const now = Date.now()
-      if (now - lastRouteRefreshRef.current < 15_000) return
+      if (now - lastRouteRefreshRef.current < 60_000) return
       lastRouteRefreshRef.current = now
-      hydratedRoutesRef.current.delete(pathname || '/')
-      setRouteRefreshTick(tick => tick + 1)
+      const route = pathname || '/'
+      const keys = criticalAppStateKeysForRoute(route)
+      if (!keys.length) return
+      void fetchAndApplyStoreKeys({
+        keys,
+        etagStorageKey: `deed_store_etag_${currentUserId}_${route}`,
+      })
     }
     window.addEventListener('focus', refreshActiveRoute)
     document.addEventListener('visibilitychange', refreshActiveRoute)
@@ -420,8 +424,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
   //
   // First GET is the critical key set so the loading gate can release. A second
   // GET fills deferred collections (journals, serials, catalog extras) without
-  // blocking the module. Visibility refetch deletes from hydratedRoutesRef but
-  // never from readyRoutes, so an already-shown module is not skeletoned.
+  // blocking the module. Focus/visibility only ETag-revalidates the critical
+  // keys for the active route — it does not wipe the hydration cache.
   useEffect(() => {
     if (isPublicRepairTracker || !currentUserId) return
     const route = pathname || '/'
@@ -494,7 +498,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       controller.abort()
       window.clearTimeout(paintCap)
     }
-  }, [pathname, currentUserId, isPublicRepairTracker, routeRefreshTick])
+  }, [pathname, currentUserId, isPublicRepairTracker])
 
   // Patch legacy tables whenever module content mutates (tabs, lazy panels,
   // detail drawers). Debounced so React paint bursts don't thrash the DOM.

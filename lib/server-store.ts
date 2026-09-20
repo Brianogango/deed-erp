@@ -68,18 +68,25 @@ async function loadStateWithLegacyFallback(keys?: string[]): Promise<AppStateMap
     return loadLegacyAppState(keys)
   }
   const wantedKeys = keys?.filter(Boolean)
-  let fromStoreRecords: AppStateMap = {}
-  try {
-    const { readStoreRecords } = await import('./prisma-store')
-    fromStoreRecords = await readStoreRecords(wantedKeys)
-  } catch { /* store_records may not exist yet */ }
   if (wantedKeys?.length) {
-    const missing = wantedKeys.filter(key => !(key in projected) && !(key in fromStoreRecords))
-    const legacy = missing.length ? await loadLegacyAppState(missing) : {}
+    const missing = wantedKeys.filter(key => !(key in projected))
+    if (!missing.length) return projected
+    let fromStoreRecords: AppStateMap = {}
+    try {
+      const { readStoreRecords } = await import('./prisma-store')
+      fromStoreRecords = await readStoreRecords(missing)
+    } catch { /* store_records may not exist yet */ }
+    const stillMissing = missing.filter(key => !(key in fromStoreRecords))
+    const legacy = stillMissing.length ? await loadLegacyAppState(stillMissing) : {}
     return { ...legacy, ...fromStoreRecords, ...projected }
   }
-  const legacy = await loadLegacyAppState()
-  return { ...legacy, ...fromStoreRecords, ...projected }
+  if (Object.keys(projected).length > 0) return projected
+  try {
+    const { readStoreRecords } = await import('./prisma-store')
+    const fromStoreRecords = await readStoreRecords()
+    if (Object.keys(fromStoreRecords).length > 0) return fromStoreRecords
+  } catch { /* store_records may not exist yet */ }
+  return loadLegacyAppState()
 }
 
 async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
@@ -175,33 +182,55 @@ export async function getLatestAppStateUpdatedAt(): Promise<string> {
   }
 }
 
-export async function loadAppStateChangesSince(sinceUpdatedAt: string): Promise<{
-  changes: AppStateMap
+/** Changed collection names only — never reconstruct multi-megabyte payloads. */
+export async function loadChangedStoreKeysSince(
+  sinceUpdatedAt: string,
+  keys?: string[],
+): Promise<{
+  keys: string[]
   latestUpdatedAt: string
 }> {
   try {
+    const wanted = keys?.filter(Boolean)
     const projected = process.env.NODE_ENV === 'test'
       ? { keys: [] as string[], latestUpdatedAt: sinceUpdatedAt }
-      : await getPrismaStateChangedKeysSince(sinceUpdatedAt)
+      : await getPrismaStateChangedKeysSince(sinceUpdatedAt, wanted)
     await ensureTable()
-    const { rows } = await sql`
-      SELECT key, updated_at
-      FROM app_state
-      WHERE updated_at > ${sinceUpdatedAt}
-      ORDER BY updated_at ASC
-    `
+    const { rows } = wanted?.length
+      ? await sql`
+          SELECT key, updated_at
+          FROM app_state
+          WHERE updated_at > ${sinceUpdatedAt}
+            AND key = ANY(${wanted})
+          ORDER BY updated_at ASC
+        `
+      : await sql`
+          SELECT key, updated_at
+          FROM app_state
+          WHERE updated_at > ${sinceUpdatedAt}
+          ORDER BY updated_at ASC
+        `
     const legacyRows = rows as { key: string; updated_at: string }[]
-    const keys = [...new Set([...projected.keys, ...legacyRows.map(row => row.key)])]
-    if (!keys.length) return { changes: {}, latestUpdatedAt: sinceUpdatedAt }
+    const changed = [...new Set([...projected.keys, ...legacyRows.map(row => row.key)])]
+    if (!changed.length) return { keys: [], latestUpdatedAt: sinceUpdatedAt }
 
     const legacyLatest = legacyRows.at(-1)?.updated_at ?? sinceUpdatedAt
     const latestUpdatedAt = Date.parse(projected.latestUpdatedAt) >= Date.parse(legacyLatest)
       ? projected.latestUpdatedAt
       : legacyLatest
-    return { changes: await loadAppState(keys), latestUpdatedAt }
+    return { keys: changed, latestUpdatedAt }
   } catch {
-    return { changes: {}, latestUpdatedAt: sinceUpdatedAt }
+    return { keys: [], latestUpdatedAt: sinceUpdatedAt }
   }
+}
+
+export async function loadAppStateChangesSince(sinceUpdatedAt: string): Promise<{
+  changes: AppStateMap
+  latestUpdatedAt: string
+}> {
+  const { keys, latestUpdatedAt } = await loadChangedStoreKeysSince(sinceUpdatedAt)
+  if (!keys.length) return { changes: {}, latestUpdatedAt: sinceUpdatedAt }
+  return { changes: await loadAppState(keys), latestUpdatedAt }
 }
 
 /**

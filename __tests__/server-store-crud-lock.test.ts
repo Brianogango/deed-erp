@@ -15,7 +15,7 @@ vi.mock('@/lib/server-store', () => ({
   withAppStateKeyLock: mockWithAppStateKeyLock,
 }))
 
-import { makeCreateHandler, makeDetailHandlers } from '@/lib/server-store-crud'
+import { makeCreateHandler, makeDetailHandlers, makeListHandler } from '@/lib/server-store-crud'
 
 const session = { user: { id: 'user-1', role: 'director' } }
 
@@ -144,5 +144,20 @@ describe('onWritten dual-write hook opt-in', () => {
     })
     const res = await POST(req)
     expect(res.status).toBe(201)
+  })
+})
+
+describe('makeListHandler Prisma scope', () => {
+  it('loads only the requested collection key', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_widgets: [{ id: '1', name: 'a' }] })
+    const GET = makeListHandler<{ id: string; name: string }>({
+      storeKey: 'deed_widgets',
+      build: () => 'unused' as any,
+    })
+    const res = await GET(new NextRequest('http://localhost/api/widgets'))
+    expect(res.status).toBe(200)
+    expect(mockLoadAppState).toHaveBeenCalledWith(['deed_widgets'])
+    const body = await res.json()
+    expect(body.items).toEqual([{ id: '1', name: 'a' }])
   })
 })

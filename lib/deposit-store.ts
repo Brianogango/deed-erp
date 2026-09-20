@@ -50,7 +50,7 @@ function asDeposits(value: unknown): Deposit[] {
 }
 
 export async function readDeposits(): Promise<Deposit[]> {
-  const state = await loadAppState()
+  const state = await loadAppState([DEPOSIT_STORE_KEY, LEGACY_DEPOSIT_STORE_KEY])
   const primary = asDeposits(state[DEPOSIT_STORE_KEY])
   if (primary.length > 0 || Object.prototype.hasOwnProperty.call(state, DEPOSIT_STORE_KEY)) return primary
   return asDeposits(state[LEGACY_DEPOSIT_STORE_KEY])

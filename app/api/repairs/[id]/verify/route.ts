@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const body = await req.json().catch(() => ({})) as { notes?: string; accessories?: RepairOrder['accessories'] }
-  const state = await loadAppState()
+  const state = await loadAppState([REPAIR_STORE_KEY])
   const repairs = Array.isArray(state[REPAIR_STORE_KEY]) ? state[REPAIR_STORE_KEY] as RepairOrder[] : []
   const idx = repairs.findIndex(r => r.id === params.id || r.ref === decodeURIComponent(params.id))
   if (idx === -1) return NextResponse.json({ error: 'Repair not found' }, { status: 404 })

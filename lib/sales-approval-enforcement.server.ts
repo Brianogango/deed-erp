@@ -128,7 +128,7 @@ export async function collectApprovalTriggers(
             category: { select: { name: true } },
           },
         })
-        const appState = await loadAppState().catch(() => null as any)
+        const appState = await loadAppState(['deed_systemSettings']).catch(() => null as any)
         const settings = (appState as any)?.deed_systemSettings ?? (appState as any)?.systemSettings ?? {}
         const marginTriggers = computeSaleOrderApprovalTriggers({
           lines,
