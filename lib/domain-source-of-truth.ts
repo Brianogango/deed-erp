@@ -53,11 +53,11 @@ export const DOMAIN_PERSISTENCE = {
   deposits: 'normalized',
   holdovers: 'normalized',
   stock_reservations: 'normalized',
-  purchase_orders: 'normalized',
-  serials: 'normalized',
-  stock_moves: 'normalized',
-  deliveries: 'normalized',
-  receipts: 'normalized',
+  purchase_orders: 'row_projection',
+  serials: 'row_projection',
+  stock_moves: 'row_projection',
+  deliveries: 'row_projection',
+  receipts: 'row_projection',
 } as const satisfies Record<keyof typeof DOMAIN_SOURCE_OF_TRUTH, DomainPersistence>
 
 /**
