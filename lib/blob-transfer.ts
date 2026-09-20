@@ -195,7 +195,7 @@ export async function mirrorKnownDomain(key: string, value: string, actorId: str
     if (key === 'deed_repairs_v2') {
       const { mirrorRepairsToPrisma } = await import('@/lib/repair-mirror')
       const result = await mirrorRepairsToPrisma(rows, { force: true })
-      return { upserted: Number(result?.upserted ?? result?.mirrored ?? rows.length), skipped: 0 }
+      return { upserted: result.mirrored, skipped: result.skipped }
     }
     if (key === 'deed_accounts') {
       const { mirrorAccountsToPrisma } = await import('@/lib/accounting/account-journal-mirror')

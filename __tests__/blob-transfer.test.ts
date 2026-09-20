@@ -154,8 +154,9 @@ describe('POST /api/admin/blob-transfer', () => {
       body: JSON.stringify({ retire: true }),
     })
     const res = await blobTransferPost(req as never)
-    expect(res.status).toBe(400)
-    const body = await res.json()
+    expect(res).toBeDefined()
+    expect(res!.status).toBe(400)
+    const body = await res!.json()
     expect(body.error).toMatch(/RETIRE_APP_STATE/)
   })
 })

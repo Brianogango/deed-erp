@@ -9,7 +9,7 @@ process.env.BLOB_STORE_DIR = BLOB_TMP
 const { mockSql } = vi.hoisted(() => ({ mockSql: vi.fn() }))
 const { mockPrismaStore } = vi.hoisted(() => ({
   mockPrismaStore: {
-    storeBackend: vi.fn(() => 'dual' as const),
+    storeBackend: vi.fn((): 'prisma' | 'dual' | 'app_state' => 'dual'),
     writeStoreRecords: vi.fn().mockResolvedValue(undefined),
     readStoreRecords: vi.fn().mockResolvedValue({}),
     storeRecordVersion: vi.fn().mockResolvedValue({ latest: '', n: 0 }),
