@@ -237,6 +237,7 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
     if (keys.length === 0) return
 
     if (process.env.NODE_ENV === 'test') {
+      await ensureTable()
       // Database-free unit fixtures still exercise the historical sql mock.
       // This branch is removed from production bundles by the environment
       // constant and is never an application persistence path.
