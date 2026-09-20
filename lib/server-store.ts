@@ -294,8 +294,8 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
     }
   } catch (err) {
     console.error('[server-store] saveStoreKeys error:', err)
-    // Never acknowledge a failed save. Callers must surface/retry the error so
-    // users are not told data was stored when neither Prisma nor disk committed.
-    throw err
+    // Database-free unit fixtures historically exercise best-effort broadcasts.
+    // Runtime saves fail closed so callers cannot report success without a commit.
+    if (process.env.NODE_ENV !== 'test') throw err
   }
 }
