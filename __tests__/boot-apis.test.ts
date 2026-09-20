@@ -25,6 +25,18 @@ describe('bootApiGroupsForRoute', () => {
     expect(groups).not.toContain('sales')
   })
 
+  it('does not duplicate dashboard collections already supplied by store hydration', () => {
+    const groups = bootApiGroupsForRoute('/')
+    expect(groups).not.toContain('products')
+    expect(groups).not.toContain('sales')
+  })
+
+  it('does not walk every repairs page during repair workspace boot', () => {
+    const groups = bootApiGroupsForRoute('/repairs')
+    expect(groups).toEqual(expect.arrayContaining(['products', 'contacts']))
+    expect(groups).not.toContain('repairs')
+  })
+
   it('lists idle groups as the remainder', () => {
     const immediate = bootApiGroupsForRoute('/inventory')
     const rest = remainingBootApiGroups(immediate)
