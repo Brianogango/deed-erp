@@ -216,7 +216,6 @@ import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-l
 import {
   nextSseRetryMs,
   nextSyncRetryMs,
-  parseStoreHelloData,
   parseStoreSseData,
   STORE_HELLO_GRACE_MS,
   STORE_NOTIFY_BACKUP_POLL_MS,
@@ -5566,17 +5565,37 @@ export function StoreProvider({
       }
     }
 
-    const fetchStoreKeys = async (keys: string[]) => {
-      const deedKeys = [...new Set(keys.filter(key => key.startsWith('deed_')))]
-      if (!deedKeys.length) return
-      try {
-        const res = await fetch(`/api/store?keys=${encodeURIComponent(deedKeys.join(','))}`)
-        if (!res.ok) return
-        const payload = await res.json().catch(() => null) as Record<string, unknown> | null
-        if (payload && typeof payload === 'object') applyRemoteState(payload)
-      } catch {
-        // best effort — SSE reconnect / backup poll will retry
-      }
+    // Conditional requests keep outage recovery cheap, and the in-flight map
+    // prevents focus/visibility events from starting duplicate downloads.
+    const storeEtags = new Map<string, string>()
+    const storeFetchesInFlight = new Map<string, Promise<void>>()
+    const fetchStoreKeys = (keys: string[]): Promise<void> => {
+      const deedKeys = [...new Set(keys.filter(key => key.startsWith('deed_')))].sort()
+      if (!deedKeys.length) return Promise.resolve()
+      const keySet = deedKeys.join(',')
+      const existing = storeFetchesInFlight.get(keySet)
+      if (existing) return existing
+
+      const request = (async () => {
+        try {
+          const etag = storeEtags.get(keySet)
+          const res = await fetch(`/api/store?keys=${encodeURIComponent(keySet)}`, {
+            headers: etag ? { 'If-None-Match': etag } : undefined,
+          })
+          if (res.status === 304) return
+          if (!res.ok) return
+          const nextEtag = res.headers.get('etag')
+          if (nextEtag) storeEtags.set(keySet, nextEtag)
+          const payload = await res.json().catch(() => null) as Record<string, unknown> | null
+          if (payload && typeof payload === 'object') applyRemoteState(payload)
+        } catch {
+          // best effort — SSE reconnect / backup poll will retry
+        }
+      })().finally(() => {
+        storeFetchesInFlight.delete(keySet)
+      })
+      storeFetchesInFlight.set(keySet, request)
+      return request
     }
 
     // 2. SSE stream for real-time store updates — reconnect with backoff so a
@@ -5610,13 +5629,15 @@ export function StoreProvider({
       }
       let heardHello = false
       source = new EventSource('/api/store/stream')
-      source.addEventListener('hello', (e: Event) => {
+      source.addEventListener('hello', () => {
         heardHello = true
         if (helloTimer) {
           clearTimeout(helloTimer)
           helloTimer = null
         }
-        ensureBackupPoll(!parseStoreHelloData((e as MessageEvent).data).liveNotify)
+        // liveNotify=false is not a broken stream: the server route already
+        // falls back to a cursor-based change poll and emits only changed keys.
+        ensureBackupPoll(false)
       })
       source.addEventListener('store', (e: Event) => {
         const { state, invalidated } = parseStoreSseData((e as MessageEvent).data)
@@ -5625,6 +5646,9 @@ export function StoreProvider({
       })
       source.onopen = () => {
         sseRetryMs = 1000
+        // Stop full-state recovery as soon as the event transport reconnects.
+        // The grace timer turns it back on if no protocol hello arrives.
+        ensureBackupPoll(false)
         if (helloTimer) clearTimeout(helloTimer)
         helloTimer = setTimeout(() => {
           if (!heardHello) ensureBackupPoll(true)
