@@ -4,12 +4,13 @@ import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock 
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import { isOfficialRepairRef, isTemporaryRepairRef, takenRepairRefs, uniqueRepairRefs } from '@/lib/repair-ref'
 import type { RepairOrder } from '@/lib/store'
-import { parsePaginationParams, paginateArray } from '@/lib/api-pagination'
+import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { repairDatesWriteError } from '@/lib/data-validation'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 import { hasModuleAccess } from '@/lib/auth/access'
-import { filterStoreValueForRole } from '@/lib/auth/authorization'
-import { loadRepairsFromPrisma } from '@/lib/repair-mirror'
+import { hasFullStoreContentAccess } from '@/lib/auth/authorization'
+import prisma from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { resolveDiagnosisFee, normalizeDeviceTier } from '@/lib/diagnosis-fee'
 import { publishNotificationEvent } from '@/lib/notifications/service'
@@ -34,7 +35,8 @@ function stripInlinePhotoPayloads(repair: RepairOrder): RepairOrder {
 
 /**
  * GET /api/repairs
- * Paginated repair list (blob SoT). Defaults: page=1, limit=50 (max 200).
+ * Relational, database-paginated repair list. Defaults: page=1, limit=50
+ * (max 200). The app_state blob remains a write-compatibility backup only.
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
@@ -43,63 +45,138 @@ export async function GET(request: NextRequest) {
   }
 
   // The repair ledger carries customer PII + commercial detail — require the
-  // repair module, and scope technicians to their assigned jobs (same rule as
-  // the store hydration path).
+  // repair module and scope technicians to assigned/created jobs.
   const user = session.user as any
   if (!hasModuleAccess(user, 'repair')) {
     return NextResponse.json({ error: 'Forbidden — no repair module access' }, { status: 403 })
   }
 
   try {
-    // Phase 2a: read from the relational table when mirrored (payload carries
-    // the full job); fall back to the blob otherwise.
-    const fromPrisma = await loadRepairsFromPrisma()
-    let repairs: RepairOrder[]
-    if (fromPrisma) {
-      repairs = fromPrisma as RepairOrder[]
-    } else {
-      const state = await loadAppState()
-      repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
-    }
-    repairs = filterStoreValueForRole(
-      { id: user?.id, role: user?.role, modules: user?.modules, actsAsTechnician: user?.actsAsTechnician },
-      'deed_repairs_v2',
-      repairs,
-    ) as RepairOrder[]
-
-    const status = request.nextUrl.searchParams.get('status')
-    const q = request.nextUrl.searchParams.get('q')?.toLowerCase()
-    const { page, limit, sort, order } = parsePaginationParams(request.nextUrl.searchParams, {
+    const status = request.nextUrl.searchParams.get('status')?.trim()
+    const q = request.nextUrl.searchParams.get('q')?.trim()
+    const { page, limit, skip, sort, order } = parsePaginationParams(request.nextUrl.searchParams, {
       defaultSort: 'intakeDate',
       allowedSorts: ['intakeDate', 'createdDate', 'ref', 'status', 'customerName'],
     })
 
+    const filters: Prisma.RepairWhereInput[] = []
+    if (!hasFullStoreContentAccess(
+      { id: user?.id, role: user?.role, modules: user?.modules, actsAsTechnician: user?.actsAsTechnician },
+      'deed_repairs_v2',
+    )) {
+      // createdById is not reliable for legacy rows because early mirror
+      // versions stored a username there. The payload ownership field is the
+      // compatibility predicate until those rows are backfilled.
+      filters.push({
+        OR: [
+          { assignedToId: user.id },
+          { payload: { path: ['createdByUserId'], equals: user.id } },
+        ],
+      })
+    }
     if (status) {
-      repairs = repairs.filter(r => r.status === status)
+      // The structured enum intentionally groups several workflow labels, so
+      // preserve exact list-filter semantics through the per-row JSON field.
+      filters.push({ payload: { path: ['status'], equals: status } })
     }
     if (q) {
-      repairs = repairs.filter(r =>
-        r.ref.toLowerCase().includes(q) ||
-        r.customerName.toLowerCase().includes(q) ||
-        r.productName.toLowerCase().includes(q)
-      )
+      filters.push({
+        OR: [
+          { jobNumber: { contains: q, mode: 'insensitive' } },
+          { deviceType: { contains: q, mode: 'insensitive' } },
+          { deviceBrand: { contains: q, mode: 'insensitive' } },
+          { deviceModel: { contains: q, mode: 'insensitive' } },
+          { serialNumber: { contains: q, mode: 'insensitive' } },
+          { reportedFault: { contains: q, mode: 'insensitive' } },
+          { client: {
+            is: {
+              OR: [
+                { name: { contains: q, mode: 'insensitive' } },
+                { companyName: { contains: q, mode: 'insensitive' } },
+                { phone: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
+              ],
+            },
+          } },
+        ],
+      })
     }
 
-    const sortKey = (sort ?? 'intakeDate') as keyof RepairOrder
-    repairs = [...repairs].sort((a, b) => {
-      if (sortKey === 'ref') {
-        const cmp = String(a.ref || '').localeCompare(String(b.ref || ''), undefined, { numeric: true })
-        return order === 'asc' ? cmp : -cmp
-      }
-      const aKey = String((a as any)[sortKey] || a.intakeDate || a.createdDate || '')
-      const bKey = String((b as any)[sortKey] || b.intakeDate || b.createdDate || '')
-      const byField = aKey.localeCompare(bKey)
-      if (byField !== 0) return order === 'asc' ? byField : -byField
-      return String(b.ref || '').localeCompare(String(a.ref || ''), undefined, { numeric: true })
+    const where: Prisma.RepairWhereInput = filters.length ? { AND: filters } : {}
+    const primaryOrder: Prisma.RepairOrderByWithRelationInput =
+      sort === 'ref' ? { jobNumber: order }
+      : sort === 'createdDate' ? { createdAt: order }
+      : sort === 'status' ? { status: order }
+      : sort === 'customerName' ? { client: { name: order } }
+      : { intakeDate: order }
+
+    const [rows, total] = await prisma.$transaction([
+      prisma.repair.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [primaryOrder, { jobNumber: 'desc' }],
+        select: {
+          id: true,
+          jobNumber: true,
+          status: true,
+          deviceType: true,
+          deviceBrand: true,
+          deviceModel: true,
+          serialNumber: true,
+          reportedFault: true,
+          priority: true,
+          intakeDate: true,
+          createdAt: true,
+          estimatedCost: true,
+          labourCost: true,
+          partsCost: true,
+          assignedToId: true,
+          payload: true,
+          client: {
+            select: {
+              id: true,
+              name: true,
+              companyName: true,
+              phone: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      prisma.repair.count({ where }),
+    ])
+
+    const items = rows.map(row => {
+      const payload = row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+        ? row.payload as Record<string, any>
+        : {}
+      const customerName = row.client.companyName || row.client.name
+      const productName = [row.deviceBrand, row.deviceModel, row.deviceType].filter(Boolean).join(' ')
+      const fallbackTotal = Number(row.estimatedCost ?? (row.labourCost.add(row.partsCost)))
+      return stripInlinePhotoPayloads({
+        ...payload,
+        id: typeof payload.id === 'string' ? payload.id : row.id,
+        ref: row.jobNumber,
+        status: typeof payload.status === 'string' ? payload.status : row.status,
+        customerId: typeof payload.customerId === 'string' ? payload.customerId : row.client.id,
+        customerName: typeof payload.customerName === 'string' ? payload.customerName : customerName,
+        customerPhone: typeof payload.customerPhone === 'string' ? payload.customerPhone : (row.client.phone ?? ''),
+        customerEmail: typeof payload.customerEmail === 'string' ? payload.customerEmail : (row.client.email ?? undefined),
+        productName: typeof payload.productName === 'string' ? payload.productName : (productName || row.deviceType),
+        serialNumber: typeof payload.serialNumber === 'string' ? payload.serialNumber : (row.serialNumber ?? ''),
+        issueDescription: typeof payload.issueDescription === 'string' ? payload.issueDescription : row.reportedFault,
+        priority: typeof payload.priority === 'string' ? payload.priority : row.priority,
+        intakeDate: typeof payload.intakeDate === 'string' ? payload.intakeDate : row.intakeDate.toISOString(),
+        createdDate: typeof payload.createdDate === 'string' ? payload.createdDate : row.createdAt.toISOString(),
+        assignedTechnicianId: typeof payload.assignedTechnicianId === 'string'
+          ? payload.assignedTechnicianId
+          : (row.assignedToId ?? undefined),
+        total: Number.isFinite(Number(payload.total)) ? Number(payload.total) : fallbackTotal,
+      } as RepairOrder)
     })
 
-    const pagePayload = paginateArray(repairs.map(stripInlinePhotoPayloads), page, limit)
-    return NextResponse.json(pagePayload, { status: 200 })
+    return NextResponse.json(paginatedResponse(items, total, page, limit), { status: 200 })
   } catch (err) {
     console.error('[repairs GET] Error:', err)
     return NextResponse.json({ error: 'Failed to fetch repairs' }, { status: 500 })

@@ -65,8 +65,8 @@ describe('store SSE payloads', () => {
     expect(parseStoreHelloData('{')).toEqual({ liveNotify: false })
   })
 
-  it('polls critical keys within seconds while notify is down', () => {
-    expect(STORE_NOTIFY_BACKUP_POLL_MS).toBe(5_000)
+  it('uses a conservative full-state poll only when the stream transport is unhealthy', () => {
+    expect(STORE_NOTIFY_BACKUP_POLL_MS).toBe(30_000)
     expect(STORE_HELLO_GRACE_MS).toBe(3_000)
   })
 })

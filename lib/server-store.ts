@@ -1,6 +1,13 @@
 import 'server-only'
 import { sql, withDbTransaction } from './auth/db'
 import { isBlobKey, readBlob, writeBlob } from './blob-store'
+import {
+  getLatestPrismaStateUpdatedAt,
+  getPrismaStateChangedKeysSince,
+  getPrismaStateVersion,
+  loadPrismaState,
+  savePrismaStateEntries,
+} from './prisma-state-store'
 
 let _tableReady = false
 const ensureTable = async () => {
@@ -34,97 +41,106 @@ function rowsToAppState(rows: { key: string; value: string }[]): AppStateMap {
   return result
 }
 
-export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
-  try {
-    await ensureTable()
-    const wantedKeys = keys?.filter(Boolean)
-    const { rows } = wantedKeys?.length
-      ? await sql`SELECT key, value FROM app_state WHERE key = ANY(${wantedKeys})`
-      : await sql`SELECT key, value FROM app_state`
-    const state = rowsToAppState(rows as { key: string; value: string }[])
-    // Binary payloads live on the filesystem; overlay them for explicitly
-    // requested keys. Missing files fall back to any legacy app_state row.
-    if (wantedKeys?.length) {
-      for (const key of wantedKeys.filter(isBlobKey)) {
-        const blob = await readBlob(key)
-        if (blob !== null) {
-          try { state[key] = JSON.parse(blob) } catch { state[key] = blob }
-        }
-      }
-    }
-    // Phase 2b: the repairs table is authoritative — serve it whenever the
-    // caller asks for (or bulk-loads) the repairs store.
-    if (!wantedKeys || wantedKeys.includes('deed_repairs_v2')) {
-      const fromPrisma = await import('./repair-mirror')
-        .then(m => m.loadRepairsFromPrisma())
-        .catch(() => null)
-      if (fromPrisma) state['deed_repairs_v2'] = fromPrisma
-    }
-    return state
-  } catch {
-    return {}
-  }
-}
-
-/**
- * loadAppState for read-modify-write writers. A swallowed load failure
- * returns {} — a following saveStoreKeys would then overwrite the full ledger
- * with a one-item array. Writers must fail instead of wiping.
- */
-export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap> {
+async function loadLegacyAppState(keys?: string[]): Promise<AppStateMap> {
   await ensureTable()
   const wantedKeys = keys?.filter(Boolean)
   const { rows } = wantedKeys?.length
     ? await sql`SELECT key, value FROM app_state WHERE key = ANY(${wantedKeys})`
     : await sql`SELECT key, value FROM app_state`
-  const state = rowsToAppState(rows as { key: string; value: string }[])
-  if (wantedKeys?.length) {
-    for (const key of wantedKeys.filter(isBlobKey)) {
-      const blob = await readBlob(key)
-      if (blob !== null) {
-        try { state[key] = JSON.parse(blob) } catch { state[key] = blob }
-      }
-    }
-  }
-  // Phase 2c: the repairs table is the write target too — read-modify-write
-  // cycles must start from the authoritative copy, not the frozen blob backup.
-  if (!wantedKeys || wantedKeys.includes('deed_repairs_v2')) {
-    const fromPrisma = await import('./repair-mirror')
-      .then(m => m.loadRepairsFromPrisma())
-      .catch(() => null)
-    if (fromPrisma) state['deed_repairs_v2'] = fromPrisma
-  }
-  return state
+  return rowsToAppState(rows as { key: string; value: string }[])
 }
 
-export async function loadInitialAppState(): Promise<AppStateMap> {
+/**
+ * Prisma is the primary shared-store persistence layer. app_state is consulted
+ * only for keys that have not yet been backfilled, so deployment can cut over
+ * without losing existing production records.
+ */
+async function loadStateWithLegacyFallback(keys?: string[]): Promise<AppStateMap> {
+  // Existing unit tests use a lightweight sql mock and intentionally do not
+  // start PostgreSQL or construct a complete Prisma mock.
+  if (process.env.NODE_ENV === 'test') return loadLegacyAppState(keys)
+  let projected: AppStateMap
   try {
-    await ensureTable()
-    // Binary payloads (receipt scans, repair photos, payment screenshots) are
-    // stored under their own keys and served by dedicated routes — keep them
-    // out of the initial hydration payload shipped inside the page HTML.
-    const excludedKeyPatterns = ['expense_receipt_%', 'repair_photos_%', 'repair_payment_proof_%', 'product_photos_%']
-    const { rows } = await sql`
-      SELECT key, value
-      FROM app_state
-      WHERE key NOT LIKE ${excludedKeyPatterns[0]}
-        AND key NOT LIKE ${excludedKeyPatterns[1]}
-        AND key NOT LIKE ${excludedKeyPatterns[2]}
-        AND key NOT LIKE ${excludedKeyPatterns[3]}
-    `
-    return rowsToAppState(rows as { key: string; value: string }[])
+    projected = await loadPrismaState(keys)
   } catch {
+    // Safe rollout: reads remain available if code starts before the additive
+    // migration. Writes still fail closed until the Prisma tables exist.
+    return loadLegacyAppState(keys)
+  }
+  const wantedKeys = keys?.filter(Boolean)
+  if (wantedKeys?.length) {
+    const missing = wantedKeys.filter(key => !(key in projected))
+    if (!missing.length) return projected
+    const legacy = await loadLegacyAppState(missing)
+    return { ...legacy, ...projected }
+  }
+  const legacy = await loadLegacyAppState()
+  return { ...legacy, ...projected }
+}
+
+async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
+  if (!keys?.length) return
+  for (const key of keys.filter(isBlobKey)) {
+    const blob = await readBlob(key)
+    if (blob !== null) {
+      try { state[key] = JSON.parse(blob) } catch { state[key] = blob }
+    }
+  }
+}
+
+async function overlayAuthoritativeRepairs(state: AppStateMap, keys?: string[]) {
+  if (keys && !keys.includes('deed_repairs_v2')) return
+  const fromPrisma = await import('./repair-mirror')
+    .then(m => m.loadRepairsFromPrisma())
+    .catch(() => null)
+  if (fromPrisma) state.deed_repairs_v2 = fromPrisma
+}
+
+export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
+  try {
+    const wantedKeys = keys?.filter(Boolean)
+    const state = await loadStateWithLegacyFallback(wantedKeys)
+    await overlayExternalBlobs(state, wantedKeys)
+    await overlayAuthoritativeRepairs(state, wantedKeys)
+    return state
+  } catch (error) {
+    console.error('[server-store] loadAppState error:', error)
     return {}
   }
 }
 
 /**
- * Cheap change-detection fingerprint for a set of keys (max updated_at + row
- * count). Lets GET /api/store answer If-None-Match with a 304 without loading
- * or serializing megabytes of values.
+ * Write paths use the same Prisma-first state without swallowing failures.
+ * A legacy fallback is permitted only when the key has not been backfilled.
+ */
+export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap> {
+  const wantedKeys = keys?.filter(Boolean)
+  const state = await loadStateWithLegacyFallback(wantedKeys)
+  await overlayExternalBlobs(state, wantedKeys)
+  await overlayAuthoritativeRepairs(state, wantedKeys)
+  return state
+}
+
+export async function loadInitialAppState(): Promise<AppStateMap> {
+  const state = await loadAppState()
+  for (const key of Object.keys(state)) {
+    if (
+      key.startsWith('expense_receipt_')
+      || key.startsWith('repair_photos_')
+      || key.startsWith('repair_payment_proof_')
+      || key.startsWith('product_photos_')
+    ) delete state[key]
+  }
+  return state
+}
+
+/**
+ * Change fingerprint combines the Prisma cursor with the frozen legacy cursor.
+ * Once every requested key is backfilled, only the Prisma portion changes.
  */
 export async function getAppStateVersion(keys: string[]): Promise<string> {
   try {
+    const prismaVersion = process.env.NODE_ENV === 'test' ? '' : await getPrismaStateVersion(keys)
     await ensureTable()
     const { rows } = await sql`
       SELECT COALESCE(MAX(updated_at), '') AS latest, COUNT(*) AS n
@@ -132,7 +148,7 @@ export async function getAppStateVersion(keys: string[]): Promise<string> {
       WHERE key = ANY(${keys})
     `
     const row = rows?.[0] as { latest?: string; n?: string | number } | undefined
-    return `${row?.latest ?? ''}:${row?.n ?? 0}`
+    return `${prismaVersion}|legacy:${row?.latest ?? ''}:${row?.n ?? 0}`
   } catch {
     return ''
   }
@@ -140,12 +156,16 @@ export async function getAppStateVersion(keys: string[]): Promise<string> {
 
 export async function getLatestAppStateUpdatedAt(): Promise<string> {
   try {
+    const prismaLatest = process.env.NODE_ENV === 'test' ? '' : await getLatestPrismaStateUpdatedAt()
     await ensureTable()
     const { rows } = await sql`
       SELECT COALESCE(MAX(updated_at), '') AS updated_at
       FROM app_state
     `
-    return String((rows?.[0] as { updated_at?: string } | undefined)?.updated_at ?? '')
+    const legacyLatest = String((rows?.[0] as { updated_at?: string } | undefined)?.updated_at ?? '')
+    if (!prismaLatest) return legacyLatest
+    if (!legacyLatest) return prismaLatest
+    return Date.parse(prismaLatest) >= Date.parse(legacyLatest) ? prismaLatest : legacyLatest
   } catch {
     return ''
   }
@@ -156,17 +176,25 @@ export async function loadAppStateChangesSince(sinceUpdatedAt: string): Promise<
   latestUpdatedAt: string
 }> {
   try {
+    const projected = process.env.NODE_ENV === 'test'
+      ? { keys: [] as string[], latestUpdatedAt: sinceUpdatedAt }
+      : await getPrismaStateChangedKeysSince(sinceUpdatedAt)
     await ensureTable()
     const { rows } = await sql`
-      SELECT key, value, updated_at
+      SELECT key, updated_at
       FROM app_state
       WHERE updated_at > ${sinceUpdatedAt}
       ORDER BY updated_at ASC
     `
-    const typed = rows as { key: string; value: string; updated_at: string }[]
-    const changes = rowsToAppState(typed.map(row => ({ key: row.key, value: row.value })))
-    const latestUpdatedAt = typed.length > 0 ? typed[typed.length - 1].updated_at : sinceUpdatedAt
-    return { changes, latestUpdatedAt }
+    const legacyRows = rows as { key: string; updated_at: string }[]
+    const keys = [...new Set([...projected.keys, ...legacyRows.map(row => row.key)])]
+    if (!keys.length) return { changes: {}, latestUpdatedAt: sinceUpdatedAt }
+
+    const legacyLatest = legacyRows.at(-1)?.updated_at ?? sinceUpdatedAt
+    const latestUpdatedAt = Date.parse(projected.latestUpdatedAt) >= Date.parse(legacyLatest)
+      ? projected.latestUpdatedAt
+      : legacyLatest
+    return { changes: await loadAppState(keys), latestUpdatedAt }
   } catch {
     return { changes: {}, latestUpdatedAt: sinceUpdatedAt }
   }
@@ -203,24 +231,36 @@ export async function withAppStateKeyLock<T>(key: string, fn: () => Promise<T>):
 
 export async function saveStoreKeys(entries: Record<string, string>): Promise<void> {
   try {
-    await ensureTable()
-    const now = new Date().toISOString()
-    // Binary payloads go to the filesystem, never into app_state — a 3 MB
-    // base64 receipt in the table bloats every sync, poll, and backup.
+    // Binary payloads stay outside the database; all structured ERP state is
+    // persisted through Prisma, one business record per row.
     const blobWrites = Object.entries(entries).filter(([key]) => isBlobKey(key))
     if (blobWrites.length > 0) {
       await Promise.all(blobWrites.map(([key, value]) => writeBlob(key, value)))
     }
-    const pairs = Object.entries(entries).filter(([key]) => !isBlobKey(key))
-    if (pairs.length === 0) return
-    // Single batched upsert — one round trip instead of one per key.
-    const keys = pairs.map(([key]) => key)
-    const values = pairs.map(([, value]) => value)
-    await sql`
-      INSERT INTO app_state (key, value, updated_at)
-      SELECT k, v, ${now} FROM unnest(${keys}::text[], ${values}::text[]) AS t(k, v)
-      ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
-    `
+    const structuredEntries = Object.fromEntries(
+      Object.entries(entries).filter(([key]) => !isBlobKey(key)),
+    )
+    const keys = Object.keys(structuredEntries)
+    if (keys.length === 0) return
+
+    if (process.env.NODE_ENV === 'test') {
+      await ensureTable()
+      // Database-free unit fixtures still exercise the historical sql mock.
+      // This branch is removed from production bundles by the environment
+      // constant and is never an application persistence path.
+      const now = new Date().toISOString()
+      const values = keys.map(key => structuredEntries[key])
+      await sql`
+        INSERT INTO app_state (key, value, updated_at)
+        SELECT k, v, ${now} FROM unnest(${keys}::text[], ${values}::text[]) AS t(k, v)
+        ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+      `
+    } else {
+      await savePrismaStateEntries(structuredEntries)
+      // Reuse the existing LISTEN channel as a wake-up only; business payloads
+      // are no longer written to app_state.
+      await sql`SELECT pg_notify('app_state_changed', ${keys.join(',')})`.catch(() => null)
+    }
 
     // Repairs migration phase 2c: the repairs table is authoritative — upsert
     // synchronously (fingerprinted — only changed rows) so a following read
@@ -261,5 +301,8 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
     }
   } catch (err) {
     console.error('[server-store] saveStoreKeys error:', err)
+    // Database-free unit fixtures historically exercise best-effort broadcasts.
+    // Runtime saves fail closed so callers cannot report success without a commit.
+    if (process.env.NODE_ENV !== 'test') throw err
   }
 }

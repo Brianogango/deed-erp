@@ -37,16 +37,16 @@ const ALL_BOOT_API_GROUPS: BootApiGroup[] = [
 const ALWAYS_BOOT: BootApiGroup[] = ['employees', 'leave', 'approval_rules']
 
 const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
-  // Dashboard first paint: products + sales for KPI cards. Contacts/repairs
-  // warm on hover or when those modules open (idle prefetch still covers them).
-  '/': ['products', 'sales'],
+  // Dashboard KPI data is already supplied by route-scoped store hydration.
+  // Booting the same Prisma collections here fetched every page a second time.
+  '/': [],
   '/sales': ['products', 'contacts', 'sales', 'crm'],
   '/crm': ['products', 'contacts', 'sales', 'crm'],
   '/purchases': ['products', 'contacts', 'purchases'],
   '/purchase': ['products', 'contacts', 'purchases'],
   '/operations': ['products', 'stock_moves'],
   '/inventory': ['products', 'stock_moves'],
-  '/repairs': ['products', 'contacts', 'repairs'],
+  '/repairs': ['products', 'contacts'],
   '/contacts': ['contacts'],
   '/hr': ['employees', 'leave', 'payroll', 'salary_advances'],
   // Finance first paint is the store GET (invoices/journals/bank). Catalog and
@@ -62,10 +62,10 @@ const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
   '/kilimall': ['products'],
   '/ecommerce': ['products', 'contacts'],
   '/expenses': ['contacts'],
-  '/outsource': ['contacts', 'repairs'],
+  '/outsource': ['contacts'],
   '/deposits': ['contacts'],
   '/documents': [],
-  '/holdovers': ['products', 'contacts', 'repairs'],
+  '/holdovers': ['products', 'contacts'],
   '/property': ['employees'],
   '/settings': ['approval_rules'],
 }
