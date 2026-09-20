@@ -62,6 +62,7 @@ async function readSseUntil(res: Response, predicate: (text: string) => boolean,
 describe('GET /api/store/stream', () => {
   afterEach(() => {
     vi.useRealTimers()
+    vi.clearAllMocks()
   })
 
   it('returns 401 when unauthenticated', async () => {
