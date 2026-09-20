@@ -2010,6 +2010,8 @@ model Repair {
   @@index([assignedToId], map: "idx_repairs_technician")
   @@index([jobNumber], map: "idx_repairs_job_number")
   @@index([status, createdAt], map: "idx_repairs_status_created")
+  @@index([intakeDate, jobNumber], map: "idx_repairs_intake_job")
+  @@index([assignedToId, intakeDate], map: "idx_repairs_assignee_intake")
   @@map("repairs")
 }
 
@@ -3951,9 +3953,8 @@ model BackgroundJob {
   @@map("background_jobs")
 }
 
-// Prisma replacement for the operational app_state JSON blobs. Binary files
-// stay in the object store; deed_* collections live here (and in dedicated
-// relational tables). load/save prefer this table over app_state.
+// Whole-collection JSON backup for leftover app_state keys. Binary files stay
+// in the object store. ErpStateKey/Record is the live per-row projection.
 model StoreRecord {
   key       String   @id @db.VarChar(240)
   value     Json
@@ -3962,4 +3963,41 @@ model StoreRecord {
 
   @@index([updatedAt], map: "idx_store_records_updated_at")
   @@map("store_records")
+}
+
+// ── Legacy-client Prisma projection ────────────────────────────────────────────
+// Normalized domain models above remain authoritative. These two tables replace
+// whole-collection app_state blobs for legacy screens that still consume the
+// shared store: one row per collection key plus one row per business record.
+// app_state is read-only migration fallback after this cutover.
+
+model ErpStateKey {
+  key       String   @id @db.VarChar(160)
+  kind      String   @db.VarChar(20)
+  value     Json?
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  records ErpStateRecord[]
+
+  @@index([updatedAt], map: "idx_erp_state_keys_updated")
+  @@map("erp_state_keys")
+}
+
+model ErpStateRecord {
+  id        String   @id @default(cuid())
+  key       String   @db.VarChar(160)
+  recordKey String   @map("record_key") @db.VarChar(240)
+  position  Int      @default(0)
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  stateKey ErpStateKey @relation(fields: [key], references: [key], onDelete: Cascade)
+
+  @@unique([key, recordKey], map: "uq_erp_state_record_key")
+  @@index([key, position], map: "idx_erp_state_records_order")
+  @@index([updatedAt], map: "idx_erp_state_records_updated")
+  @@map("erp_state_records")
 }

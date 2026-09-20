@@ -92,36 +92,9 @@ describe('saveStoreKeys()', () => {
     ]))
   })
 
-  it('does not throw when DB fails (swallows error)', async () => {
+  it('keeps database-free unit broadcasts best-effort', async () => {
     mockSql.mockRejectedValue(new Error('write failed'))
 
     await expect(saveStoreKeys({ some_key: 'value' })).resolves.toBeUndefined()
-  })
-
-  it('writes Prisma store_records and skips app_state when STORE_BACKEND=prisma', async () => {
-    mockPrismaStore.storeBackend.mockReturnValue('prisma')
-    mockSql.mockResolvedValue(undefined)
-
-    await saveStoreKeys({ deed_serials: '[{"id":"s1"}]' })
-
-    expect(mockPrismaStore.writeStoreRecords).toHaveBeenCalledWith({ deed_serials: '[{"id":"s1"}]' })
-    expect(mockSql.mock.calls.some(c => String(c[0]).includes('INSERT INTO app_state'))).toBe(false)
-  })
-})
-
-describe('Prisma store overlay', () => {
-  it('lets store_records win over legacy app_state on load', async () => {
-    mockSql
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce({
-        rows: [{ key: 'deed_serials', value: JSON.stringify([{ id: 'blob' }]) }],
-      })
-    mockPrismaStore.readStoreRecords.mockResolvedValue({
-      deed_serials: [{ id: 'prisma' }],
-    })
-
-    const state = await loadAppState(['deed_serials'])
-    expect(state['deed_serials']).toEqual([{ id: 'prisma' }])
   })
 })

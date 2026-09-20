@@ -1,19 +1,17 @@
 /**
- * One source of truth per ERP domain.
+ * One persistence source of truth per ERP domain: PostgreSQL through Prisma.
  *
- * Prisma REST is the write path for catalogs, CRM, HR, and payroll. The
- * `deed_*` KV blob is a read cache / SSE fan-out for those keys — clients must
- * not POST a different shape back through /api/store.
+ * Domains with complete normalized models use their dedicated REST services.
+ * Remaining legacy screens persist one business record per ErpStateRecord row;
+ * they no longer write whole-array app_state blobs. That projection is an
+ * explicit bridge while those screens move to dedicated normalized services.
  *
- * Blob (KV) collections are transferred into Prisma `store_records` plus
- * dedicated relational tables. See docs/INFRA_PLATFORM.md and
- * POST /api/admin/blob-transfer.
- *
- * Dual-write domains still converge both sides; after blob→Prisma transfer,
- * live app_state is a backup until STORE_BACKEND=prisma + retire.
+ * `store_records` plus POST /api/admin/blob-transfer copy leftover JSON
+ * collections into Prisma. Binary files stay in the object store.
  */
 
-export type DomainTruth = 'prisma' | 'kv' | 'dual_write'
+export type DomainTruth = 'prisma'
+export type DomainPersistence = 'normalized' | 'row_projection'
 
 export const DOMAIN_SOURCE_OF_TRUTH = {
   products: 'prisma',
@@ -25,20 +23,45 @@ export const DOMAIN_SOURCE_OF_TRUTH = {
   notifications: 'prisma',
   contacts: 'prisma',
   repairs: 'prisma',
-  sale_orders: 'dual_write',
-  invoices: 'dual_write',
-  journals: 'dual_write',
-  payments: 'dual_write',
-  accounts: 'dual_write',
-  deposits: 'dual_write',
-  holdovers: 'dual_write',
-  stock_reservations: 'dual_write',
-  purchase_orders: 'dual_write',
-  serials: 'dual_write',
-  stock_moves: 'dual_write',
-  deliveries: 'dual_write',
-  receipts: 'dual_write',
+  sale_orders: 'prisma',
+  invoices: 'prisma',
+  journals: 'prisma',
+  payments: 'prisma',
+  accounts: 'prisma',
+  deposits: 'prisma',
+  holdovers: 'prisma',
+  stock_reservations: 'prisma',
+  purchase_orders: 'prisma',
+  serials: 'prisma',
+  stock_moves: 'prisma',
+  deliveries: 'prisma',
+  receipts: 'prisma',
 } as const satisfies Record<string, DomainTruth>
+
+export const DOMAIN_PERSISTENCE = {
+  products: 'normalized',
+  quotes: 'normalized',
+  opportunities: 'normalized',
+  employees: 'normalized',
+  leave: 'normalized',
+  payroll: 'normalized',
+  notifications: 'normalized',
+  contacts: 'normalized',
+  repairs: 'normalized',
+  sale_orders: 'normalized',
+  invoices: 'normalized',
+  journals: 'normalized',
+  payments: 'normalized',
+  accounts: 'normalized',
+  deposits: 'normalized',
+  holdovers: 'normalized',
+  stock_reservations: 'normalized',
+  purchase_orders: 'row_projection',
+  serials: 'row_projection',
+  stock_moves: 'row_projection',
+  deliveries: 'row_projection',
+  receipts: 'row_projection',
+} as const satisfies Record<keyof typeof DOMAIN_SOURCE_OF_TRUTH, DomainPersistence>
 
 /**
  * Client must not POST these keys. Dedicated REST routes own the write; a
