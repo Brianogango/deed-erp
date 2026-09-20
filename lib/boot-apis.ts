@@ -33,8 +33,8 @@ const ALL_BOOT_API_GROUPS: BootApiGroup[] = [
   'stock_moves',
 ]
 
-/** Always warm these so shell / self-service never flash empty. */
-const ALWAYS_BOOT: BootApiGroup[] = ['employees', 'leave', 'approval_rules']
+/** Shell user comes from the session. Do not boot HR/settings lists on every route. */
+const ALWAYS_BOOT: BootApiGroup[] = []
 
 const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
   // Dashboard KPI data is already supplied by route-scoped store hydration.
@@ -49,6 +49,7 @@ const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
   '/repairs': ['products', 'contacts'],
   '/contacts': ['contacts'],
   '/hr': ['employees', 'leave', 'payroll', 'salary_advances'],
+  '/documents': [],
   // Finance first paint is the store GET (invoices/journals/bank). Catalog and
   // CRM lists idle-prefetch so they do not compete with that payload.
   '/finance': ['payroll'],
@@ -64,7 +65,6 @@ const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
   '/expenses': ['contacts'],
   '/outsource': ['contacts'],
   '/deposits': ['contacts'],
-  '/documents': [],
   '/holdovers': ['products', 'contacts'],
   '/property': ['employees'],
   '/settings': ['approval_rules'],

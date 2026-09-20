@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET() {
   try {
-    const state = await loadAppState()
+    const state = await loadAppState(['deed_companySettings'])
     const saved = state['deed_companySettings'] as Record<string, unknown> | undefined
     const settings = { ...DEFAULT_COMPANY_SETTINGS, ...(saved ?? {}) }
     return NextResponse.json({

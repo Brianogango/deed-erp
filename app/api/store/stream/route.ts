@@ -1,20 +1,11 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { getLatestAppStateUpdatedAt, loadAppStateChangesSince } from '@/lib/server-store'
+import { getLatestAppStateUpdatedAt, loadChangedStoreKeysSince } from '@/lib/server-store'
 import { getStoreNotifyLive, subscribeAppStateChanges } from '@/lib/store-notify'
-import { canReadStoreKey, filterStoreValueForRole } from '@/lib/auth/authorization'
-import {
-  pickChangedSseKeys,
-  splitSseBroadcastState,
-  SSE_FALLBACK_POLL_MS,
-} from '@/lib/store-sse-diff'
-import crypto from 'crypto'
+import { canReadStoreKey } from '@/lib/auth/authorization'
+import { SSE_FALLBACK_POLL_MS } from '@/lib/store-sse-diff'
 
 export const dynamic = 'force-dynamic'
-
-function stateHash(state: unknown): string {
-  return crypto.createHash('md5').update(JSON.stringify(state)).digest('hex').slice(0, 8)
-}
 
 // Overlap window applied when a client (re)connects: changes committed in the
 // last N ms before connect are re-sent so nothing is missed between the page
@@ -27,14 +18,20 @@ function minusOverlap(isoTimestamp: string): string {
   return new Date(t - CONNECT_OVERLAP_MS).toISOString()
 }
 
+function parseWatchedKeys(request: NextRequest): Set<string> | null {
+  const raw = request.nextUrl.searchParams.get('keys')
+  if (!raw) return null
+  const keys = raw.split(',').map(key => key.trim()).filter(key => key.startsWith('deed_'))
+  return keys.length ? new Set(keys) : null
+}
+
 /**
  * GET /api/store/stream
  * Server-Sent Events stream for real-time store sync.
- * Clients hydrate their initial state from the layout's server snapshot and
- * localStorage — the stream only carries CHANGES (with a 60s overlap on
- * connect), never a full app-state dump. Dumping the entire state per
- * connection was a full-table read plus a multi-megabyte push for every tab
- * and every EventSource reconnect.
+ *
+ * The stream only announces which keys changed. Clients GET those keys if the
+ * current screen needs them. Reconstructing every changed collection here
+ * used to reload serials, journals, and audit logs for every open tab.
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
@@ -42,9 +39,10 @@ export async function GET(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 })
   }
 
+  const watched = parseWatchedKeys(request)
   const enc = new TextEncoder()
-  const lastKeyHashes: Record<string, string> = {}
   let lastUpdatedAt = ''
+  const announced = new Set<string>()
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -58,63 +56,40 @@ export async function GET(request: NextRequest) {
         try { controller.enqueue(enc.encode(': ping\n\n')) } catch { /* disconnected */ }
       }
 
-      // Flush the stream immediately so nginx / EventSource do not sit on the
-      // hello event until the first app_state change or 20s ping.
       ping()
-
-      const toReadable = (state: Record<string, unknown>) => {
-        const readable: Record<string, unknown> = {}
-        for (const [k, raw] of Object.entries(state)) {
-          // Never stream permission-gated or collaborative keys without both
-          // the required role and module grant.
-          if (!canReadStoreKey(session.user, k)) continue
-          // Collaborative ledgers stream only the slice this user may read.
-          readable[k] = filterStoreValueForRole(session.user, k, raw)
-        }
-        return readable
-      }
 
       const checkState = async () => {
         try {
           if (!lastUpdatedAt) {
-            // Start streaming from just before "now" — the client already has
-            // its initial state; the overlap covers the hydration→connect gap.
             const latest = await getLatestAppStateUpdatedAt()
             lastUpdatedAt = latest ? minusOverlap(latest) : new Date(Date.now() - CONNECT_OVERLAP_MS).toISOString()
           }
 
-          const { changes, latestUpdatedAt } = await loadAppStateChangesSince(lastUpdatedAt)
-          if (!Object.keys(changes).length) return
-
-          const { lean, invalidated } = splitSseBroadcastState(toReadable(changes as Record<string, unknown>))
-          const changedOnly = pickChangedSseKeys(lean, lastKeyHashes, stateHash)
-          if (!Object.keys(changedOnly).length && invalidated.length === 0) {
+          const { keys, latestUpdatedAt } = await loadChangedStoreKeysSince(
+            lastUpdatedAt,
+            watched ? [...watched] : undefined,
+          )
+          const readable = keys.filter(key => canReadStoreKey(session.user, key))
+          const invalidated = readable.filter(key => !announced.has(`${key}:${latestUpdatedAt}`))
+          if (!invalidated.length) {
             lastUpdatedAt = latestUpdatedAt
             return
           }
-
-          send('store', { state: changedOnly, patch: true, invalidated })
+          for (const key of invalidated) announced.add(`${key}:${latestUpdatedAt}`)
+          send('store', { state: {}, patch: true, invalidated })
           lastUpdatedAt = latestUpdatedAt
         } catch { /* DB error — skip this tick, retry next */ }
       }
 
-      // Instant path: Postgres NOTIFY wakes the stream the moment app_state
-      // changes. Bursts of writes are coalesced into one check per 150ms.
-      // checkState is cursor-based and idempotent, so overlapping wake-ups are safe.
       let notifyTimer: ReturnType<typeof setTimeout> | null = null
       const unsubscribe = subscribeAppStateChanges(() => {
         if (notifyTimer) return
         notifyTimer = setTimeout(() => { notifyTimer = null; void checkState() }, 150)
       })
 
-      // Tell the client whether LISTEN + the notify trigger are actually live
-      // so it can poll critical keys instead of waiting on a dead instant path.
       send('hello', { liveNotify: await getStoreNotifyLive() })
-
-      // Prime the change cursor and flush the overlap window immediately
       await checkState()
 
-      // Fallback poll (covers a dropped LISTEN connection or missed NOTIFY).
       const stateId = setInterval(checkState, SSE_FALLBACK_POLL_MS)
       const pingId  = setInterval(ping, 20_000)
 
@@ -133,7 +108,7 @@ export async function GET(request: NextRequest) {
       'Content-Type':  'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       'Connection':    'keep-alive',
-      'X-Accel-Buffering': 'no', // Prevent nginx from buffering SSE
+      'X-Accel-Buffering': 'no',
     },
   })
 }

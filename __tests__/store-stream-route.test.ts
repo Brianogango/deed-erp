@@ -1,17 +1,16 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
-import { SSE_MAX_KEY_BYTES } from '@/lib/store-sse-diff'
 
 const {
   mockGetSession,
   mockGetLatestAppStateUpdatedAt,
-  mockLoadAppStateChangesSince,
+  mockLoadChangedStoreKeysSince,
   mockGetStoreNotifyLive,
   mockSubscribe,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockGetLatestAppStateUpdatedAt: vi.fn(),
-  mockLoadAppStateChangesSince: vi.fn(),
+  mockLoadChangedStoreKeysSince: vi.fn(),
   mockGetStoreNotifyLive: vi.fn(),
   mockSubscribe: vi.fn(),
 }))
@@ -22,7 +21,7 @@ vi.mock('@/lib/auth/server', () => ({
 
 vi.mock('@/lib/server-store', () => ({
   getLatestAppStateUpdatedAt: mockGetLatestAppStateUpdatedAt,
-  loadAppStateChangesSince: mockLoadAppStateChangesSince,
+  loadChangedStoreKeysSince: mockLoadChangedStoreKeysSince,
 }))
 
 vi.mock('@/lib/store-notify', () => ({
@@ -71,16 +70,13 @@ describe('GET /api/store/stream', () => {
     expect(res.status).toBe(401)
   })
 
-  it('sends hello liveNotify and invalidates oversized changed keys', async () => {
+  it('announces changed key names without reconstructing collection payloads', async () => {
     mockGetSession.mockResolvedValue(director)
     mockGetStoreNotifyLive.mockResolvedValue(false)
     mockSubscribe.mockReturnValue(() => {})
     mockGetLatestAppStateUpdatedAt.mockResolvedValue('2026-09-15T12:00:00.000Z')
-    mockLoadAppStateChangesSince.mockResolvedValue({
-      changes: {
-        deed_expenses: [{ id: 'e1' }],
-        deed_invoices: { blob: 'x'.repeat(SSE_MAX_KEY_BYTES + 8) },
-      },
+    mockLoadChangedStoreKeysSince.mockResolvedValue({
+      keys: ['deed_expenses', 'deed_invoices'],
       latestUpdatedAt: '2026-09-15T12:00:01.000Z',
     })
 
@@ -99,8 +95,40 @@ describe('GET /api/store/stream', () => {
     expect(text).toContain('event: hello')
     expect(text).toContain('"liveNotify":false')
     expect(text).toContain('event: store')
-    expect(text).toContain('deed_expenses')
-    expect(text).toContain('"invalidated":["deed_invoices"]')
+    expect(text).toContain('"state":{}')
+    expect(text).toContain('"patch":true')
+    expect(text).toContain('"invalidated":["deed_expenses","deed_invoices"]')
     expect(text.includes('"blob"')).toBe(false)
+    expect(mockLoadChangedStoreKeysSince).toHaveBeenCalled()
+  })
+
+  it('asks Prisma only for the route keys the client is watching', async () => {
+    mockGetSession.mockResolvedValue(director)
+    mockGetStoreNotifyLive.mockResolvedValue(false)
+    mockSubscribe.mockReturnValue(() => {})
+    mockGetLatestAppStateUpdatedAt.mockResolvedValue('2026-09-15T12:00:00.000Z')
+    mockLoadChangedStoreKeysSince.mockResolvedValue({
+      keys: ['deed_expenses'],
+      latestUpdatedAt: '2026-09-15T12:00:01.000Z',
+    })
+
+    const abort = new AbortController()
+    const res = await GET(new NextRequest(
+      'http://localhost/api/store/stream?keys=deed_expenses,deed_auditLogs',
+      { signal: abort.signal },
+    ))
+    expect(res.status).toBe(200)
+
+    const text = await readSseUntil(
+      res,
+      chunk => chunk.includes('event: store'),
+      abort,
+    )
+
+    expect(mockLoadChangedStoreKeysSince.mock.calls[0][1]).toEqual(
+      expect.arrayContaining(['deed_expenses', 'deed_auditLogs']),
+    )
+    expect(text).toContain('"invalidated":["deed_expenses"]')
+    expect(text).not.toContain('deed_auditLogs')
   })
 })

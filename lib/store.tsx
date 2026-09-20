@@ -20,6 +20,7 @@ import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-me
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
 import { bootApiGroupsForRoute, type BootApiGroup } from '@/lib/boot-apis'
+import { appStateKeysForRoute } from '@/lib/app-state-hydration'
 import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
 import { useInventoryDomainStore } from '@/hooks/useInventoryDomainStore'
 import { useNotificationStore } from '@/hooks/useNotificationStore'
@@ -126,7 +127,7 @@ import {
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergeCollectionById } from '@/lib/collection-merge'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
-import { fetchAllCollectionPages } from '@/lib/api-pagination'
+import { fetchCollection } from '@/lib/api-pagination'
 import {
   registerSaleOrderDraftPersistApi,
   scheduleDraftSaleOrderLinePersist,
@@ -5424,11 +5425,14 @@ export function StoreProvider({
     const reconcileCriticalVisibilityKeys = async () => {
       // One batched GET instead of 5 sequential /api/store/<key> round-trips.
       try {
-        const res = await fetch(`/api/store?keys=${encodeURIComponent(CRITICAL_VISIBILITY_KEYS.join(','))}`)
+        const path = typeof window !== 'undefined' ? (window.location.pathname || '/') : '/'
+        const needed = CRITICAL_VISIBILITY_KEYS.filter(key => appStateKeysForRoute(path).includes(key))
+        if (!needed.length) return
+        const res = await fetch(`/api/store?keys=${encodeURIComponent(needed.join(','))}`)
         if (!res.ok) return
         const state = await res.json().catch(() => null) as Record<string, unknown> | null
         if (!state || typeof state !== 'object') return
-        for (const key of CRITICAL_VISIBILITY_KEYS) {
+        for (const key of needed) {
           if (!(key in state)) continue
           try {
             const value = state[key]
@@ -5611,7 +5615,11 @@ export function StoreProvider({
       if (enabled) {
         if (stopBackupPoll) return
         stopBackupPoll = startVisiblePoll(
-          () => { void fetchStoreKeys([...CRITICAL_VISIBILITY_KEYS]) },
+          () => {
+            const path = typeof window !== 'undefined' ? (window.location.pathname || '/') : '/'
+            const needed = CRITICAL_VISIBILITY_KEYS.filter(key => appStateKeysForRoute(path).includes(key))
+            void fetchStoreKeys(needed)
+          },
           STORE_NOTIFY_BACKUP_POLL_MS,
         )
         return
@@ -5628,7 +5636,14 @@ export function StoreProvider({
         helloTimer = null
       }
       let heardHello = false
-      source = new EventSource('/api/store/stream')
+      const watchedKeys = appStateKeysForRoute(
+        typeof window !== 'undefined' ? (window.location.pathname || '/') : '/',
+      ).join(',')
+      source = new EventSource(
+        watchedKeys
+          ? `/api/store/stream?keys=${encodeURIComponent(watchedKeys)}`
+          : '/api/store/stream',
+      )
       source.addEventListener('hello', () => {
         heardHello = true
         if (helloTimer) {
@@ -5642,7 +5657,11 @@ export function StoreProvider({
       source.addEventListener('store', (e: Event) => {
         const { state, invalidated } = parseStoreSseData((e as MessageEvent).data)
         if (state) applyRemoteState(state)
-        if (invalidated.length) void fetchStoreKeys(invalidated)
+        if (invalidated.length) {
+          const path = typeof window !== 'undefined' ? (window.location.pathname || '/') : '/'
+          const needed = new Set(appStateKeysForRoute(path))
+          void fetchStoreKeys(invalidated.filter(key => needed.has(key)))
+        }
       })
       source.onopen = () => {
         sseRetryMs = 1000
@@ -5669,6 +5688,19 @@ export function StoreProvider({
       }
     }
     connectSse()
+
+    let lastStreamKeys = appStateKeysForRoute(
+      typeof window !== 'undefined' ? (window.location.pathname || '/') : '/',
+    ).join(',')
+    const onStreamRoute = (e: Event) => {
+      const nextPath = (e as CustomEvent).detail?.pathname
+      if (typeof nextPath !== 'string') return
+      const nextKeys = appStateKeysForRoute(nextPath).join(',')
+      if (nextKeys === lastStreamKeys) return
+      lastStreamKeys = nextKeys
+      connectSse()
+    }
+    window.addEventListener('deed_route_change', onStreamRoute as EventListener)
 
     // 2b. When the network comes back, immediately flush any queued writes so data
     //     reaches the server without waiting for the next user interaction.
@@ -5719,6 +5751,7 @@ export function StoreProvider({
       try { source?.close() } catch { /* already closed */ }
       clearInterval(usersId)
       window.removeEventListener('online', handleOnline)
+      window.removeEventListener('deed_route_change', onStreamRoute as EventListener)
     }
   }, [])
 
@@ -5986,9 +6019,9 @@ export function StoreProvider({
           }
           case 'contacts': {
             const results = await Promise.allSettled([
-              fetchAllCollectionPages('/api/contacts'),
-              fetchAllCollectionPages('/api/companies'),
-              fetchAllCollectionPages('/api/contact-persons'),
+              fetchCollection('/api/contacts?limit=200'),
+              fetchCollection('/api/companies?limit=200'),
+              fetchCollection('/api/contact-persons?limit=200'),
             ])
             const list = (r: PromiseSettledResult<unknown[]>) =>
               r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : null
@@ -6001,11 +6034,12 @@ export function StoreProvider({
             break
           }
           case 'sales': {
+            if (window.localStorage.getItem('deed_saleOrders')) break
             const results = await Promise.allSettled([
-              fetchAllCollectionPages('/api/quotes'),
-              fetchAllCollectionPages('/api/sale-orders'),
-              fetchAllCollectionPages('/api/payments'),
-              fetchAllCollectionPages('/api/deliveries'),
+              fetchCollection('/api/quotes?limit=200'),
+              fetchCollection('/api/sale-orders?limit=200'),
+              fetchCollection('/api/payments?limit=200'),
+              fetchCollection('/api/deliveries?limit=200'),
             ])
             const val = (r: PromiseSettledResult<unknown>) =>
               r.status === 'fulfilled' && r.value != null ? r.value : null
@@ -6030,8 +6064,8 @@ export function StoreProvider({
           }
           case 'crm': {
             const results = await Promise.allSettled([
-              fetchAllCollectionPages('/api/opportunities'),
-              fetchAllCollectionPages('/api/opportunity-activities'),
+              fetchCollection('/api/opportunities?limit=200'),
+              fetchCollection('/api/opportunity-activities?limit=200'),
             ])
             const val = (r: PromiseSettledResult<unknown>) =>
               r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : null
@@ -6042,18 +6076,18 @@ export function StoreProvider({
             break
           }
           case 'repairs': {
-            // Blob SoT already hydrates via app_state. A paginated page must
-            // never replace the list or open-job counts jump 200 ↔ full.
-            const list = await fetchAllCollectionPages('/api/repairs')
+            if (window.localStorage.getItem('deed_repairs_v2')) break
+            const list = await fetchCollection('/api/repairs?limit=200')
             if (list.length > 0) {
               setRepairs(prev => mergeRepairsStoreWrite(prev, list) as RepairOrder[])
             }
             break
           }
           case 'purchases': {
+            if (window.localStorage.getItem('deed_purchaseOrders')) break
             const results = await Promise.allSettled([
-              fetchAllCollectionPages('/api/purchase-orders'),
-              fetchAllCollectionPages('/api/receipts'),
+              fetchCollection('/api/purchase-orders?limit=200'),
+              fetchCollection('/api/receipts?limit=200'),
             ])
             const val = (r: PromiseSettledResult<unknown>) =>
               r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : null
@@ -6064,7 +6098,7 @@ export function StoreProvider({
             break
           }
           case 'employees': {
-            const d = await fetchAllCollectionPages('/api/employees')
+            const d = await fetchCollection('/api/employees?limit=200')
             const prev = useHrDomainStore.getState().employees ?? []
             useHrDomainStore.getState().setEmployees(preferExistingArray(prev, d))
             break
@@ -6102,9 +6136,10 @@ export function StoreProvider({
             break
           }
           case 'stock_moves': {
+            if (window.localStorage.getItem('deed_stockMoves') && window.localStorage.getItem('deed_serials')) break
             const [list, serialList] = await Promise.all([
-              fetchAllCollectionPages('/api/stock-moves'),
-              fetchAllCollectionPages('/api/serials'),
+              fetchCollection('/api/stock-moves?limit=200'),
+              fetchCollection('/api/serials?limit=200'),
             ])
             if (list.length > 0) {
               setStockMoves(prev => mergeCollectionById(prev, list as StockMove[]))
@@ -6125,21 +6160,32 @@ export function StoreProvider({
     void Promise.all(immediate.map(runGroup))
     scheduleCatalogHealOnce()
 
-    // Managers need periodic leave refresh; SSE covers most real-time cases.
+    // Leave lists belong on HR. Polling them on every screen re-fetched
+    // employees/balances while the user was on Sales or Finance.
     let leaveInterval: ReturnType<typeof setInterval> | undefined
-    if (['director', 'admin_officer'].includes(initialUser.role)) {
+    const canPollLeave = ['director', 'admin_officer'].includes(initialUser.role)
+    const startLeavePoll = (nextPath: string) => {
+      if (!canPollLeave || !nextPath.startsWith('/hr') || leaveInterval) return
       leaveInterval = setInterval(fetchLeave, 60_000)
     }
+    const stopLeavePoll = () => {
+      if (!leaveInterval) return
+      clearInterval(leaveInterval)
+      leaveInterval = undefined
+    }
+    startLeavePoll(path)
 
     const onRoute = (e: Event) => {
       const nextPath = (e as CustomEvent).detail?.pathname
       if (typeof nextPath !== 'string') return
       void Promise.all(bootApiGroupsForRoute(nextPath).map(runGroup))
+      if (nextPath.startsWith('/hr')) startLeavePoll(nextPath)
+      else stopLeavePoll()
     }
     window.addEventListener('deed_route_change', onRoute as EventListener)
 
     return () => {
-      if (leaveInterval) clearInterval(leaveInterval)
+      stopLeavePoll()
       window.removeEventListener('deed_route_change', onRoute as EventListener)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

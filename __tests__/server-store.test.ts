@@ -21,7 +21,7 @@ const { mockPrismaStore } = vi.hoisted(() => ({
 vi.mock('@/lib/auth/db', () => ({ sql: mockSql }))
 vi.mock('@/lib/prisma-store', () => mockPrismaStore)
 
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppState, saveStoreKeys, loadChangedStoreKeysSince } from '@/lib/server-store'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -96,5 +96,44 @@ describe('saveStoreKeys()', () => {
     mockSql.mockRejectedValue(new Error('write failed'))
 
     await expect(saveStoreKeys({ some_key: 'value' })).resolves.toBeUndefined()
+  })
+})
+
+describe('loadChangedStoreKeysSince()', () => {
+  it('returns changed key names without loading collection payloads', async () => {
+    mockSql
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        rows: [
+          { key: 'deed_invoices', updated_at: '2026-09-15T12:00:02.000Z' },
+          { key: 'deed_serials', updated_at: '2026-09-15T12:00:03.000Z' },
+        ],
+      })
+
+    const result = await loadChangedStoreKeysSince('2026-09-15T12:00:00.000Z')
+    expect(result.keys).toEqual(['deed_invoices', 'deed_serials'])
+    expect(result.latestUpdatedAt).toBe('2026-09-15T12:00:03.000Z')
+    const sqlText = JSON.stringify(mockSql.mock.calls[2][0])
+    expect(sqlText).toContain('updated_at')
+    expect(sqlText).not.toContain('value')
+  })
+
+  it('scopes the change cursor to the keys the current screen is watching', async () => {
+    mockSql
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        rows: [{ key: 'deed_invoices', updated_at: '2026-09-15T12:00:02.000Z' }],
+      })
+
+    const result = await loadChangedStoreKeysSince(
+      '2026-09-15T12:00:00.000Z',
+      ['deed_invoices'],
+    )
+    expect(result.keys).toEqual(['deed_invoices'])
+    expect(mockSql.mock.calls[2]).toEqual(expect.arrayContaining([
+      ['deed_invoices'],
+    ]))
   })
 })

@@ -21,7 +21,7 @@ async function requireSession(allowedRoles?: string[]) {
 }
 
 async function readCollection<T extends object>(key: string): Promise<T[]> {
-  const state = await loadAppState()
+  const state = await loadAppState([key])
   const raw = state[key]
   return Array.isArray(raw) ? (raw as T[]) : []
 }

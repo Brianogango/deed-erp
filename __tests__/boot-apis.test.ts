@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { bootApiGroupsForRoute, remainingBootApiGroups } from '@/lib/boot-apis'
 
 describe('bootApiGroupsForRoute', () => {
-  it('always includes shell essentials', () => {
+  it('does not boot HR or settings lists on unrelated routes', () => {
     const groups = bootApiGroupsForRoute('/documents')
-    expect(groups).toEqual(expect.arrayContaining(['employees', 'leave', 'approval_rules']))
+    expect(groups).toEqual([])
+    expect(bootApiGroupsForRoute('/pos')).not.toContain('employees')
+    expect(bootApiGroupsForRoute('/pos')).not.toContain('leave')
+    expect(bootApiGroupsForRoute('/pos')).not.toContain('approval_rules')
   })
 
   it('scopes purchases to catalog + contacts + purchase orders', () => {
@@ -19,7 +22,9 @@ describe('bootApiGroupsForRoute', () => {
 
   it('does not boot the catalog on Finance first paint', () => {
     const groups = bootApiGroupsForRoute('/finance')
-    expect(groups).toEqual(expect.arrayContaining(['payroll', 'employees', 'leave']))
+    expect(groups).toEqual(expect.arrayContaining(['payroll']))
+    expect(groups).not.toContain('employees')
+    expect(groups).not.toContain('leave')
     expect(groups).not.toContain('products')
     expect(groups).not.toContain('contacts')
     expect(groups).not.toContain('sales')
@@ -27,6 +32,7 @@ describe('bootApiGroupsForRoute', () => {
 
   it('does not duplicate dashboard collections already supplied by store hydration', () => {
     const groups = bootApiGroupsForRoute('/')
+    expect(groups).toEqual([])
     expect(groups).not.toContain('products')
     expect(groups).not.toContain('sales')
   })

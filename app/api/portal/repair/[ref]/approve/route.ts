@@ -38,7 +38,7 @@ export async function POST(
   const body = await req.json().catch(() => ({})) as { approved?: boolean; reason?: string; itemDecisions?: ItemDecision[]; verifyPhone?: string }
 
   const date = new Date().toISOString().slice(0, 10)
-  const appState = await loadAppState()
+  const appState = await loadAppState(['deed_systemSettings', 'deed_repairs_v2', 'deed_invoices'])
 
   // Ownership proof (default ON): require the customer phone on file unless an
   // admin explicitly disables secPortalRequirePhoneVerification (SEC-005).

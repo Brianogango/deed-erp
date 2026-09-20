@@ -136,14 +136,21 @@ export async function getLatestPrismaStateUpdatedAt(): Promise<string> {
   return latest._max.updatedAt?.toISOString() ?? ''
 }
 
-export async function getPrismaStateChangedKeysSince(sinceUpdatedAt: string): Promise<{
+export async function getPrismaStateChangedKeysSince(
+  sinceUpdatedAt: string,
+  keys?: string[],
+): Promise<{
   keys: string[]
   latestUpdatedAt: string
 }> {
   const parsed = new Date(sinceUpdatedAt)
   const since = Number.isNaN(parsed.getTime()) ? new Date(0) : parsed
+  const wanted = keys?.filter(Boolean)
   const rows = await prisma.erpStateKey.findMany({
-    where: { updatedAt: { gt: since } },
+    where: {
+      updatedAt: { gt: since },
+      ...(wanted?.length ? { key: { in: wanted } } : {}),
+    },
     orderBy: { updatedAt: 'asc' },
     select: { key: true, updatedAt: true },
   })

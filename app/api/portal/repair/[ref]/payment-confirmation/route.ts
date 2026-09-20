@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: { ref: string
     imageUrl = `/api/portal/repair/${encodeURIComponent(ref)}/payment-proof`
   }
 
-  const appState = await loadAppState()
+  const appState = await loadAppState(['deed_systemSettings', 'deed_repairs_v2', 'deed_invoices'])
 
   // Ownership proof (default ON): enforced unless an admin explicitly sets
   // secPortalRequirePhoneVerification to false (SEC-005).
