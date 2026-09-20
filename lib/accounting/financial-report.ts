@@ -1,5 +1,5 @@
 import 'server-only'
-import prisma from '@/lib/prisma'
+import { getReportingPrisma } from '@/lib/infra/reporting-db'
 import {
   buildBalanceSheet,
   buildManagementProfitAndLoss,
@@ -31,7 +31,7 @@ export async function buildFinancialReport(opts: FinancialReportPeriod) {
     buildBalanceSheet({ asOf: dateTo }),
     buildCashFlowStatement({ dateFrom, dateTo }),
     buildTrialBalance({ asOf: dateTo }),
-    prisma.$queryRaw<Array<{ day: string; revenue: string; expenses: string }>>`
+    getReportingPrisma().$queryRaw<Array<{ day: string; revenue: string; expenses: string }>>`
       SELECT
         to_char(e.entry_date, 'YYYY-MM-DD') AS day,
         COALESCE(SUM(CASE WHEN a.account_type = 'revenue' THEN l.credit - l.debit ELSE 0 END), 0) AS revenue,

@@ -52,6 +52,7 @@ export const PRODUCTION_ENV_CATALOG: readonly EnvFieldSpec[] = [
   { key: 'SETUP_ADMIN_SECRET', category: 'Security gate', kind: 'secret', description: 'Bootstrap-only. Leave empty after the first Director exists.' },
   { key: 'DATABASE_URL', category: 'Database', kind: 'secret', required: true, description: 'PostgreSQL URL for the non-superuser application role.' },
   { key: 'POSTGRES_URL', category: 'Database', kind: 'secret', description: 'Optional alias of DATABASE_URL.' },
+  { key: 'REPORTING_DATABASE_URL', category: 'Database', kind: 'secret', description: 'Optional PostgreSQL URL for read-optimised reporting (replica). Falls back to DATABASE_URL.' },
   { key: 'NEXT_PUBLIC_APP_URL', category: 'App URL', kind: 'value', required: true, description: 'Public HTTPS origin. Rebuild is required before the client bundle picks up a change.' },
   { key: 'NEXTAUTH_URL', category: 'App URL', kind: 'value', required: true, description: 'Auth callback origin. Must be https://erp.deed.co.ke in production.' },
   { key: 'NODE_ENV', category: 'App URL', kind: 'flag', readOnly: true, description: 'Process environment. Production deployments must stay on production.' },
@@ -141,8 +142,22 @@ export const PRODUCTION_ENV_CATALOG: readonly EnvFieldSpec[] = [
   { key: 'GEMINI_MODEL', category: 'Integrations', kind: 'value', description: 'Gemini model id.' },
   { key: 'ANTHROPIC_API_KEY', category: 'Integrations', kind: 'secret', description: 'Anthropic API key.' },
   { key: 'DEED_WEBSITE_URL', category: 'Integrations', kind: 'value', description: 'Public marketing site URL.' },
-  { key: 'UPSTASH_REDIS_REST_URL', category: 'Integrations', kind: 'value', description: 'Upstash Redis REST URL for distributed rate limits.' },
+  { key: 'UPSTASH_REDIS_REST_URL', category: 'Integrations', kind: 'value', description: 'Upstash Redis REST URL for cache, queues, and distributed rate limits.' },
   { key: 'UPSTASH_REDIS_REST_TOKEN', category: 'Integrations', kind: 'secret', description: 'Upstash Redis REST token.' },
+  { key: 'REDIS_URL', category: 'Integrations', kind: 'secret', description: 'Optional redis:// or rediss:// URL for cache and queues. Preferred over Upstash on self-hosted Redis.' },
+  { key: 'OBJECT_STORE_DRIVER', category: 'Integrations', kind: 'value', description: 'File object-store driver: fs (default) or s3.' },
+  { key: 'OBJECT_STORE_DIR', category: 'Integrations', kind: 'value', description: 'Local object-store root for uploads when driver=fs.' },
+  { key: 'BLOB_STORE_DIR', category: 'Integrations', kind: 'value', description: 'Local blob directory for expense/repair/product photos.' },
+  { key: 'UPLOADS_DIR', category: 'Integrations', kind: 'value', description: 'Local uploads directory used by the fs object store.' },
+  { key: 'OBJECT_STORE_ENDPOINT', category: 'Integrations', kind: 'value', description: 'S3-compatible endpoint (MinIO, Contabo Object Storage, AWS).' },
+  { key: 'OBJECT_STORE_REGION', category: 'Integrations', kind: 'value', description: 'S3 region.' },
+  { key: 'OBJECT_STORE_BUCKET', category: 'Integrations', kind: 'value', description: 'S3 bucket for ERP files.' },
+  { key: 'OBJECT_STORE_PREFIX', category: 'Integrations', kind: 'value', description: 'Key prefix inside the S3 bucket.' },
+  { key: 'OBJECT_STORE_ACCESS_KEY_ID', category: 'Integrations', kind: 'secret', description: 'S3 access key id.' },
+  { key: 'OBJECT_STORE_SECRET_ACCESS_KEY', category: 'Integrations', kind: 'secret', description: 'S3 secret access key.' },
+  { key: 'OBJECT_STORE_FORCE_PATH_STYLE', category: 'Integrations', kind: 'flag', description: 'Use path-style S3 URLs (required for MinIO).' },
+  { key: 'REPORT_CACHE_TTL_SECONDS', category: 'Integrations', kind: 'value', description: 'Redis TTL for accounting report cache. Default 60.' },
+  { key: 'REPORT_SNAPSHOT_TTL_SECONDS', category: 'Integrations', kind: 'value', description: 'Max age for persisted report snapshots before a live refresh. Default 300.' },
   { key: 'PARTNER_CORS_ORIGINS', category: 'Integrations', kind: 'value', description: 'Comma-separated partner API browser origins.' },
   { key: 'MPESA_ENV', category: 'M-Pesa', kind: 'value', description: 'sandbox or production.' },
   { key: 'MPESA_CONSUMER_KEY', category: 'M-Pesa', kind: 'secret', description: 'Daraja consumer key.' },
@@ -159,7 +174,7 @@ export function isSecretKey(name: string, spec?: EnvFieldSpec): boolean {
   if (spec?.kind === 'secret') return true
   if (spec?.kind === 'value' || spec?.kind === 'flag') return false
   if (name === 'VAPID_PUBLIC_KEY') return false
-  if (name === 'DATABASE_URL' || name === 'POSTGRES_URL' || name === 'deed_erp_POSTGRES_URL') return true
+  if (name === 'DATABASE_URL' || name === 'POSTGRES_URL' || name === 'deed_erp_POSTGRES_URL' || name === 'REPORTING_DATABASE_URL' || name === 'REDIS_URL') return true
   return /(SECRET|PASSWORD|_PASS$|TOKEN|PRIVATE|_KEY$)/i.test(name)
 }
 

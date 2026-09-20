@@ -1,5 +1,5 @@
 import 'server-only'
-import prisma from '@/lib/prisma'
+import { getReportingPrisma } from '@/lib/infra/reporting-db'
 
 export function round2(n: number) {
   return Math.round(Number(n || 0) * 100) / 100
@@ -213,6 +213,7 @@ export async function fetchPostedLines(opts: { dateFrom?: string; dateTo?: strin
     entryWhere.entryDate = entryDate
   }
 
+  const prisma = getReportingPrisma()
   return prisma.journalEntryLine.findMany({
     where: { journalEntry: entryWhere },
     select: {
@@ -315,6 +316,7 @@ export async function buildGeneralLedger(opts: {
   dateFrom?: string
   dateTo?: string
 }) {
+  const prisma = getReportingPrisma()
   const accountFilter: Record<string, unknown> = {}
   if (opts.accountId) {
     accountFilter.accountId = opts.accountId

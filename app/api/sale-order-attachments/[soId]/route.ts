@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import path from 'path'
-import { mkdir, writeFile, readFile, unlink } from 'fs/promises'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { validateFileContent, logRejectedUpload } from '@/lib/file-validation'
+import { deleteObject, getObject, putObject } from '@/lib/infra/object-store'
 
 // Quotation / sales-order attachments (Odoo: documents attached to the order).
-// Files live under .uploads/so-attachments/<soId>/; metadata is a JSON array
-// in app_state so every browser sees the same attachment list.
+// Bytes live in the object store (local .uploads by default, S3 when configured).
+// Metadata is a JSON array in app_state so every browser sees the same list.
 
 type AttachmentMeta = {
   id: string
@@ -18,6 +18,7 @@ type AttachmentMeta = {
   uploadedAt: string
   uploadedBy: string
   storagePath: string
+  objectKey?: string
 }
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
@@ -44,7 +45,27 @@ async function listAttachments(soId: string): Promise<AttachmentMeta[]> {
   return Array.isArray(state[key]) ? (state[key] as AttachmentMeta[]) : []
 }
 
-const toPublic = ({ storagePath: _hidden, ...pub }: AttachmentMeta) => pub
+const toPublic = ({ storagePath: _hidden, objectKey: _objectKey, ...pub }: AttachmentMeta) => pub
+
+function attachmentObjectKey(soId: string, id: string, name: string) {
+  const ext = path.extname(safeStem(name))
+  return `so-attachments/${safeStem(soId)}/${id}${ext || ''}`
+}
+
+async function readAttachmentBytes(soId: string, meta: AttachmentMeta): Promise<Buffer | null> {
+  const key = meta.objectKey || attachmentObjectKey(soId, meta.id, meta.name)
+  const fromStore = await getObject('uploads', key)
+  if (fromStore) return fromStore
+  if (meta.storagePath) {
+    try {
+      const { readFile } = await import('fs/promises')
+      return await readFile(meta.storagePath)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
 
 export async function GET(req: NextRequest, { params }: { params: { soId: string } }) {
   const session = await getServerSession()
@@ -58,17 +79,14 @@ export async function GET(req: NextRequest, { params }: { params: { soId: string
 
   const meta = attachments.find(a => a.id === fileId)
   if (!meta) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
-  try {
-    const buffer = await readFile(meta.storagePath)
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        'Content-Type': meta.contentType,
-        'Content-Disposition': `attachment; filename="${meta.name}"`,
-      },
-    })
-  } catch {
-    return NextResponse.json({ error: 'Attachment file is missing' }, { status: 404 })
-  }
+  const buffer = await readAttachmentBytes(params.soId, meta)
+  if (!buffer) return NextResponse.json({ error: 'Attachment file is missing' }, { status: 404 })
+  return new NextResponse(new Uint8Array(buffer), {
+    headers: {
+      'Content-Type': meta.contentType,
+      'Content-Disposition': `attachment; filename="${meta.name}"`,
+    },
+  })
 }
 
 export async function POST(req: NextRequest, { params }: { params: { soId: string } }) {
@@ -93,10 +111,7 @@ export async function POST(req: NextRequest, { params }: { params: { soId: strin
   try {
     const id = randomUUID()
     const originalName = safeStem(file.name || 'attachment')
-    const ext = path.extname(originalName)
-    const dir = path.join(process.cwd(), '.uploads', 'so-attachments', safeStem(params.soId))
-    await mkdir(dir, { recursive: true })
-    const storagePath = path.join(dir, `${id}${ext || ''}`)
+    const objectKey = attachmentObjectKey(params.soId, id, originalName)
     const buffer = Buffer.from(await file.arrayBuffer())
     const contentCheck = validateFileContent(buffer, contentType)
     if (!contentCheck.ok) {
@@ -110,7 +125,12 @@ export async function POST(req: NextRequest, { params }: { params: { soId: strin
       })
       return NextResponse.json({ error: contentCheck.error }, { status: 415 })
     }
-    await writeFile(storagePath, buffer)
+    const stored = await putObject({
+      bucket: 'uploads',
+      key: objectKey,
+      body: buffer,
+      contentType,
+    })
 
     const existing = await listAttachments(params.soId)
     const meta: AttachmentMeta = {
@@ -120,7 +140,8 @@ export async function POST(req: NextRequest, { params }: { params: { soId: strin
       contentType,
       uploadedAt: new Date().toISOString(),
       uploadedBy: session.user.name ?? session.user.username ?? 'User',
-      storagePath,
+      storagePath: stored.uri,
+      objectKey,
     }
     await saveStoreKeys({ [stateKey(params.soId)]: JSON.stringify([...existing, meta]) })
     return NextResponse.json({ attachment: toPublic(meta) }, { status: 201 })
@@ -141,7 +162,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { soId: str
   const meta = attachments.find(a => a.id === fileId)
   if (!meta) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
 
-  try { await unlink(meta.storagePath) } catch { /* file already gone */ }
+  try {
+    await deleteObject('uploads', meta.objectKey || attachmentObjectKey(params.soId, meta.id, meta.name))
+    if (meta.storagePath && !meta.storagePath.startsWith('file://') && !meta.storagePath.startsWith('s3://')) {
+      const { unlink } = await import('fs/promises')
+      await unlink(meta.storagePath).catch(() => {})
+    }
+  } catch { /* file already gone */ }
   await saveStoreKeys({
     [stateKey(params.soId)]: JSON.stringify(attachments.filter(a => a.id !== fileId)),
   })
