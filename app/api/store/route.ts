@@ -12,7 +12,7 @@ import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
-import { mergePosSessionsStoreWrite, reconcileOpenPosSessionFlags } from '@/lib/pos-session'
+import { mergePosSessionsStoreWrite, reconcileOpenPosSessionFlags, type PosSessionLike } from '@/lib/pos-session'
 import { appendStoreAudit } from '@/lib/store-audit'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 import { assertSafeStoreValue, InputSecurityError, readSafeJson } from '@/lib/input-security'
@@ -246,30 +246,42 @@ export async function POST(request: Request) {
     }
   }
 
+  // --- Single consolidated state load for all merge/protection operations ---
+  // Each step previously loaded its own subset (up to 5 DB round-trips).
+  // Computing all needed keys upfront collapses them into one load.
+  const mergeKeys = Object.keys(entries).filter(key =>
+    CONTENT_FILTERED_STORE_KEYS.has(key) && !hasFullStoreContentAccess(session.user, key))
+  const keysToProtect = Object.keys(entries).filter(key => PROTECTED_NON_EMPTY_ARRAY_KEYS.has(key))
+  const needsPosReconcile = 'deed_posSessions' in entries || 'deed_posSessionId' in entries || 'deed_posSessionOpen' in entries
+  const needsInvoiceGuard = !!entries.deed_invoices
+  const needsJournalMerge = !!entries.deed_journalEntries
+  const mergeStateKeys = [...new Set([
+    ...mergeKeys,
+    ...(needsJournalMerge ? ['deed_journalEntries'] : []),
+    ...keysToProtect,
+    ...(needsPosReconcile ? ['deed_posSessions', 'deed_posSessionId', 'deed_posSessionOpen'] : []),
+    ...(needsInvoiceGuard ? ['deed_invoices'] : []),
+  ])]
+  const serverState = mergeStateKeys.length > 0
+    ? await loadAppStateForWrite(mergeStateKeys)
+    : {} as Record<string, unknown>
+
   // Partial-view roles sync back only the slice of deed_invoices/deed_expenses
   // they were served. Merge their rows into the stored ledger by id instead of
   // replacing it, so records outside their view are never deleted.
-  const mergeKeys = Object.keys(entries).filter(key =>
-    CONTENT_FILTERED_STORE_KEYS.has(key) && !hasFullStoreContentAccess(session.user, key))
   if (mergeKeys.length > 0) {
-    // Write path: the merge base must be the write target (blob), not the
-    // derived Prisma read copy — a lagging mirror must not regress the ledger.
-    const currentState = await loadAppStateForWrite(mergeKeys)
     for (const key of mergeKeys) {
       let incoming: unknown
       try { incoming = JSON.parse(entries[key]) } catch { continue }
-      entries[key] = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming))
+      entries[key] = JSON.stringify(mergeFilteredStoreWrite(serverState[key], incoming))
     }
   }
 
   // Posted journals are append-only: existing refs are immutable and never
   // deleted. A rejected journal payload must only drop deed_journalEntries from
   // the batch — never fail the whole request — so co-bundled writes (POS
-  // orders, invoices, ...) still persist. Failing the batch here used to strand
-  // POS sales because every dirty key flushes together and a stale/partial
-  // journal ledger 409'd the entire sync in a retry loop.
-  if (entries.deed_journalEntries) {
-    const currentState = await loadAppState(['deed_journalEntries'])
+  // orders, invoices, ...) still persist.
+  if (needsJournalMerge) {
     let parsed = true
     let incoming: unknown
     try { incoming = JSON.parse(entries.deed_journalEntries) } catch { parsed = false }
@@ -277,7 +289,7 @@ export async function POST(request: Request) {
       delete entries.deed_journalEntries
       deniedKeys.push('deed_journalEntries')
     } else {
-      const merged = mergeAppendOnlyJournals(currentState.deed_journalEntries, incoming)
+      const merged = mergeAppendOnlyJournals(serverState.deed_journalEntries, incoming)
       if (!merged.ok) {
         delete entries.deed_journalEntries
         deniedKeys.push('deed_journalEntries')
@@ -287,59 +299,46 @@ export async function POST(request: Request) {
     }
   }
 
-  const keysToProtect = Object.keys(entries).filter(key => PROTECTED_NON_EMPTY_ARRAY_KEYS.has(key))
   const skippedKeys: string[] = []
   if (keysToProtect.length > 0) {
-    const currentState = await loadAppStateForWrite(keysToProtect)
     for (const key of keysToProtect) {
       const incomingLength = parseArrayLength(entries[key])
-      const currentLength = Array.isArray(currentState[key]) ? currentState[key].length : null
+      const currentLength = Array.isArray(serverState[key]) ? (serverState[key] as unknown[]).length : null
       if (incomingLength === 0 && typeof currentLength === 'number' && currentLength > 0) {
         delete entries[key]
         skippedKeys.push(key)
         continue
       }
-      // Product catalog rows created via Prisma must not be dropped by a stale client sync.
       if (key === 'deed_products' && entries[key]) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
-        entries[key] = JSON.stringify(mergeProductsStoreWrite(currentState[key], incoming))
+        entries[key] = JSON.stringify(mergeProductsStoreWrite(serverState[key], incoming))
         continue
       }
-      // POS tickets: union-by-id so a stale till tab cannot drop sales that
-      // already posted as invoices / landed on another device.
       if (key === 'deed_posOrders' && entries[key]) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
-        entries[key] = JSON.stringify(mergePosOrdersStoreWrite(currentState[key], incoming))
+        entries[key] = JSON.stringify(mergePosOrdersStoreWrite(serverState[key], incoming))
         continue
       }
-      // POS sessions: union-by-id so a stale tab cannot drop the live till.
       if (key === 'deed_posSessions' && entries[key]) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
-        entries[key] = JSON.stringify(mergePosSessionsStoreWrite(currentState[key], incoming))
+        entries[key] = JSON.stringify(mergePosSessionsStoreWrite(serverState[key], incoming))
         continue
       }
-      // Sale orders: merge by id + lockVersion so a stale tab cannot restore
-      // deleted quotation lines after a newer Save/broadcast.
       if (key === 'deed_saleOrders' && entries[key]) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
-        entries[key] = JSON.stringify(mergeSaleOrdersStoreWrite(currentState[key], incoming))
+        entries[key] = JSON.stringify(mergeSaleOrdersStoreWrite(serverState[key], incoming))
         continue
       }
-      // Repairs: always union-by-id and never rewind a finalised job. The
-      // previous "merge only when ids are missing" guard still let a stale
-      // full snapshot replace collected/ready rows with older statuses.
       if (key === 'deed_repairs_v2' && entries[key]) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
-        entries[key] = JSON.stringify(mergeRepairsStoreWrite(currentState[key], incoming))
+        entries[key] = JSON.stringify(mergeRepairsStoreWrite(serverState[key], incoming))
         continue
       }
-      // Collaborative ledgers: merge by id so a stale browser cache cannot delete
-      // rows that already exist on the server (outsource jobs, repair intakes, …).
       if (
         (
           key === 'deed_outsourceJobs'
@@ -347,7 +346,7 @@ export async function POST(request: Request) {
           || key === 'deed_outsourceVendors'
         )
         && entries[key]
-        && Array.isArray(currentState[key])
+        && Array.isArray(serverState[key])
       ) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
@@ -355,11 +354,11 @@ export async function POST(request: Request) {
           const incomingIds = new Set(
             incoming.map((row: { id?: unknown }) => row?.id).filter(id => id != null),
           )
-          const serverHasMissing = (currentState[key] as Array<{ id?: unknown }>).some(
+          const serverHasMissing = (serverState[key] as Array<{ id?: unknown }>).some(
             row => row?.id != null && !incomingIds.has(row.id),
           )
           if (serverHasMissing) {
-            entries[key] = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming))
+            entries[key] = JSON.stringify(mergeFilteredStoreWrite(serverState[key], incoming))
           }
         }
       }
@@ -367,14 +366,13 @@ export async function POST(request: Request) {
   }
 
   // Keep the live till attached when a stale tab syncs an older session blob.
-  if ('deed_posSessions' in entries || 'deed_posSessionId' in entries || 'deed_posSessionOpen' in entries) {
-    const currentTill = await loadAppState(['deed_posSessions', 'deed_posSessionId', 'deed_posSessionOpen'])
-    let mergedSessions = Array.isArray(currentTill.deed_posSessions) ? currentTill.deed_posSessions : []
+  if (needsPosReconcile) {
+    let mergedSessions = Array.isArray(serverState.deed_posSessions) ? serverState.deed_posSessions as PosSessionLike[] : [] as PosSessionLike[]
     if (entries.deed_posSessions) {
       try {
         mergedSessions = JSON.parse(entries.deed_posSessions)
       } catch {
-        mergedSessions = Array.isArray(currentTill.deed_posSessions) ? currentTill.deed_posSessions : []
+        mergedSessions = Array.isArray(serverState.deed_posSessions) ? serverState.deed_posSessions as PosSessionLike[] : []
       }
     }
     const incomingId = 'deed_posSessionId' in entries
@@ -384,8 +382,8 @@ export async function POST(request: Request) {
       ? (() => { try { return JSON.parse(entries.deed_posSessionOpen) } catch { return undefined } })()
       : undefined
     const flags = reconcileOpenPosSessionFlags({
-      currentOpen: currentTill.deed_posSessionOpen === true,
-      currentId: typeof currentTill.deed_posSessionId === 'string' ? currentTill.deed_posSessionId : null,
+      currentOpen: serverState.deed_posSessionOpen === true,
+      currentId: typeof serverState.deed_posSessionId === 'string' ? serverState.deed_posSessionId : null,
       incomingOpen: typeof incomingOpen === 'boolean' ? incomingOpen : undefined,
       incomingId: incomingId === null || typeof incomingId === 'string' ? incomingId : undefined,
       mergedSessions,
@@ -396,24 +394,16 @@ export async function POST(request: Request) {
     }
   }
 
-  // Per-invoice line protection: do not let an empty-line shell overwrite a
-  // mirror that already has line items (SO→invoice race / stale client).
-  // Posted-invoice immutability (FIN-001): once an invoice is posted, its
-  // financial substance (lines/totals/dates/customer/type/ref) can never
-  // change through this sync path — only via a credit note, reversal,
-  // unpaid posted→draft (Reset to Draft), or the posted→cancelled
-  // transition. This runs after the empty-shell guard so a posted invoice
-  // is protected regardless of which defect it hit.
+  // Per-invoice line protection and posted-invoice immutability (FIN-001).
   let rejectedPostedInvoiceEdits: RejectedPostedInvoiceEdit[] = []
-  if (entries.deed_invoices) {
-    const currentInvoices = await loadAppState(['deed_invoices'])
+  if (needsInvoiceGuard) {
     let incoming: unknown
     try { incoming = JSON.parse(entries.deed_invoices) } catch { incoming = null }
     if (incoming != null) {
-      const withPreservedLines = preserveInvoiceLinesOnStoreWrite(currentInvoices.deed_invoices, incoming)
-      const guarded = enforcePostedInvoiceImmutability(currentInvoices.deed_invoices, withPreservedLines)
+      const withPreservedLines = preserveInvoiceLinesOnStoreWrite(serverState.deed_invoices, incoming)
+      const guarded = enforcePostedInvoiceImmutability(serverState.deed_invoices, withPreservedLines)
       entries.deed_invoices = JSON.stringify(
-        preservePostedInvoicePaymentProgress(currentInvoices.deed_invoices, guarded.merged),
+        preservePostedInvoicePaymentProgress(serverState.deed_invoices, guarded.merged),
       )
       rejectedPostedInvoiceEdits = guarded.rejected
     }

@@ -339,7 +339,7 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
           .then(async m => {
             const parsed = JSON.parse(entries['deed_deliveries'] || '[]')
             if (!Array.isArray(parsed)) return
-            for (const delivery of parsed) await m.mirrorDeliveryToPrisma(delivery)
+            await m.mirrorDeliveriesToPrisma(parsed)
           })
           .catch(err => console.error('[delivery-mirror] sync write failed:', err))
       }
