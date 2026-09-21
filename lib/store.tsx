@@ -6266,6 +6266,11 @@ export function StoreProvider({
   // ── Internal notification pusher (single-recipient compat + multi fan-out) ──
   const notifyUsers = useCallback((input: NotifyUsersInput) => {
     setNotifications(prev => buildNotifyRows(prev, input, uid).next)
+    fetch('/api/notifications/bridge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }).catch(() => {})
   }, [])
 
   const pushNotif = useCallback((n: Omit<AppNotification, 'id' | 'createdAt' | 'read' | 'readAt'> & { excludeUserId?: string | null }) => {
