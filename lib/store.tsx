@@ -6097,6 +6097,12 @@ export function StoreProvider({
             break
           }
           case 'stock_moves': {
+            // deed_stockMoves / deed_serials are saved back as WHOLE collections.
+            // Hydrating them from a paginated REST page (?limit=200) put a
+            // partial list into synced state, and the next save replaced the
+            // stored collection with it (production truncation, 21 Sep 2026).
+            // Load the complete collections as a remote update, which neither
+            // marks the keys dirty nor syncs them back to the server.
             const result = await fetchAndApplyStoreKeys({
               keys: ['deed_stockMoves', 'deed_serials'],
               etagStorageKey: 'deed_boot_etag_stock_moves',

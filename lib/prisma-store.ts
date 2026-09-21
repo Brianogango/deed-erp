@@ -14,12 +14,8 @@ function parseMaybeJson(value: unknown): Prisma.InputJsonValue {
   }
 }
 
-export function storeBackend(): 'prisma' | 'dual' | 'app_state' {
-  const raw = String(process.env.STORE_BACKEND || 'prisma').trim().toLowerCase()
-  if (raw === 'app_state' || raw === 'blob') return 'app_state'
-  if (raw === 'dual') return 'dual'
-  return 'prisma'
-}
+// One flag governs every storage layer — see lib/store-backend.ts.
+export { storeBackend } from '@/lib/store-backend'
 
 export async function readStoreRecords(keys?: string[]): Promise<StoreMap> {
   const wanted = keys?.filter(key => key && !isBlobKey(key))
