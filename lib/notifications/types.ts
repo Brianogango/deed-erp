@@ -23,6 +23,8 @@ export type NotificationPolicy = {
   mandatory?: boolean
   /** Channels that must deliver for this event even when the user's optional channel preference is off. */
   mandatoryChannels?: NotificationChannel[]
+  /** Minimum hours between re-firing the same condition for the same entity. */
+  cooldownHours?: number
 }
 
 export type PublishNotificationInput = {

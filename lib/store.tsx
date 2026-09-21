@@ -8236,10 +8236,9 @@ const storeCtx: AppState = {
       }
       showToast(`Job ${job.ref} created`, 'success')
 
-      // Notify technical leads (+ directors) — exclude actor; internal only
       const notifBody = `${job.ref}: ${job.deviceDescription} → ${job.vendorName} for ${OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType}. Sent by ${user.name}.`
       notifyUsers({
-        recipients: userIdsWithRoles(users, ['technical_lead', 'director'], user.id),
+        recipients: userIdsWithRoles(users, ['technical_lead'], user.id),
         type: 'repair',
         title: 'Repair Outsourced',
         body: notifBody,
@@ -8329,11 +8328,10 @@ const storeCtx: AppState = {
           if (returnedRepair) syncRepairToPortal(returnedRepair, `Outsource job ${job.ref} returned fixed — repair moved to QC`)
           addAuditLog('advance_repair', job.repairOrderId, `Outsource job ${job.ref} returned resolved; repair resumed at ${resumeStatus}`)
 
-          // Notify assigned tech + TL/director (exclude actor)
           notifyUsers({
             recipients: [
               repair?.assignedTechnicianId,
-              ...userIdsWithRoles(users, ['director', 'technical_lead']),
+              ...userIdsWithRoles(users, ['technical_lead']),
             ],
             type: 'repair',
             title: repair?.assignedTechnicianId ? 'Outsource returned — repair resumed' : `Outsource job ${job.ref} resolved`,
@@ -8373,14 +8371,13 @@ const storeCtx: AppState = {
               `Status set to ${newStatus} after outsource job ${job.ref} returned unresolved`)
           }
 
-          // Notify assigned tech + TL/director (exclude actor)
           const nextLabel = p.repairNextStep === 'unrepairable' ? 'marked unrepairable'
             : p.repairNextStep === 'in_repair' ? 'moved back to in-repair'
             : 'status unchanged'
           notifyUsers({
             recipients: [
               repair?.assignedTechnicianId,
-              ...userIdsWithRoles(users, ['director', 'technical_lead']),
+              ...userIdsWithRoles(users, ['technical_lead']),
             ],
             type: 'repair',
             title: repair?.assignedTechnicianId ? 'Outsource returned — not fixed' : `Outsource job ${job.ref} unresolved`,
@@ -15906,11 +15903,10 @@ const storeCtx: AppState = {
       setRepairs(p => p.map(r => r.id === repairId ? savedRepair : r))
 
       if (isFullWarranty) {
-        // Warranty-covered — no customer approval needed, notify staff instead
         notifyUsers({
           recipients: [
             repair.assignedTechnicianId,
-            ...userIdsWithRoles(users, ['director', 'finance_officer']),
+            ...userIdsWithRoles(users, ['finance_officer']),
           ],
           type: 'repair',
           title: `Warranty repair approved: ${repair.ref}`,
@@ -16622,7 +16618,7 @@ const storeCtx: AppState = {
         notifyUsers({
           recipients: [
             repair.assignedTechnicianId,
-            ...userIdsWithRoles(users, ['director', 'finance_officer']),
+            ...userIdsWithRoles(users, ['finance_officer']),
           ],
           type: 'repair',
           title: `Device ready: ${repair.ref}`,
@@ -16842,7 +16838,7 @@ const storeCtx: AppState = {
         notifyUsers({
           recipients: [
             repair.assignedTechnicianId,
-            ...userIdsWithRoles(users, ['director', 'finance_officer']),
+            ...userIdsWithRoles(users, ['finance_officer']),
           ],
           type: 'repair',
           title: `Device ready — ${repair.ref}`,
@@ -17525,9 +17521,8 @@ const storeCtx: AppState = {
         .map(([t, names]) => `${typeIcons[t] ?? '📦'} ${names.join(', ')}`)
         .join(' · ')
 
-      // Notify technical leads and inventory/procurement-facing staff in-app
       notifyUsers({
-        recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer', 'director'], user.id),
+        recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], user.id),
         type: 'repair',
         title: `${user.name} requested items for ${repair.ref}`,
         body: `${repair.productName} — ${summary}`,

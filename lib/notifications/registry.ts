@@ -23,77 +23,93 @@ const POLICY = (
  * Central event policy registry. Business modules publish events; this table
  * owns delivery channels, urgency, acknowledgement and escalation semantics.
  * Event-specific user/customer targets are added by the publisher/scanner.
+ *
+ * Routing principle: notifications go to the responsible officer first.
+ * The director receives only approval requests and system-critical alerts.
+ * All other critical events escalate to the director after a cooldown
+ * if the primary recipient hasn't acknowledged.
  */
 export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
-  'crm.lead.created': POLICY(['in_app', 'push', 'email'], 'attention', { escalationMinutes: 60, escalationRoles: ['director'] }),
-  'crm.opportunity.assigned': POLICY(['in_app', 'push'], 'attention'),
-  'crm.opportunity.stale': POLICY(['in_app', 'email'], 'warning', { escalationMinutes: 1440, escalationRoles: ['director'] }),
-  'crm.opportunity.close_due': POLICY(['in_app', 'push', 'email'], 'warning'),
+  // ── CRM & Sales ──────────────────────────────────────────────────────────
+  'crm.lead.created': POLICY(['in_app', 'push'], 'attention', { escalationMinutes: 60, escalationRoles: ['director'] }),
+  'crm.opportunity.assigned': POLICY(['in_app'], 'info'),
+  'crm.opportunity.stale': POLICY(['in_app'], 'warning', { cooldownHours: 72, escalationMinutes: 1440, escalationRoles: ['director'] }),
+  'crm.opportunity.close_due': POLICY(['in_app', 'push'], 'warning', { cooldownHours: 24 }),
   'sales.quote.approval_required': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 120 }),
-  'sales.quote.expiring': POLICY(['in_app', 'email'], 'warning'),
+  'sales.quote.expiring': POLICY(['in_app'], 'warning', { cooldownHours: 24 }),
   'sales.order.confirmed': POLICY(['in_app'], 'success'),
-  'sales.followup.overdue': POLICY(['in_app', 'push'], 'warning'),
+  'sales.followup.overdue': POLICY(['in_app'], 'warning', { cooldownHours: 24 }),
 
+  // ── Repairs (customer-facing) ────────────────────────────────────────────
   'repair.received': POLICY(['sms'], 'success'),
   'repair.customer_message': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true }),
   'repair.quote_ready': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true }),
-  'repair.unassigned': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['technical_lead', 'director'], requiresAcknowledgement: true, escalationMinutes: 30, escalationRoles: ['director'], mandatory: true }),
-  'repair.assignment': POLICY(['in_app', 'push'], 'attention'),
-  'repair.diagnosis_overdue': POLICY(['in_app', 'push', 'email'], 'warning', { escalationMinutes: 120, escalationRoles: ['technical_lead', 'director'] }),
-  'repair.customer_approval': POLICY(['in_app', 'push'], 'attention'),
-  'repair.quote_declined': POLICY(['in_app'], 'warning'),
-  'repair.parts_requested': POLICY(['in_app', 'email'], 'attention', { recipientRoles: ['inventory_officer', 'admin_officer'] }),
-  'repair.parts_received': POLICY(['in_app', 'push'], 'attention'),
-  'repair.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead', 'director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
-  'repair.ready': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true }),
-  'repair.uncollected': POLICY(['email', 'whatsapp', 'sms'], 'warning', { fallbackSms: true }),
+  'repair.ready': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true, cooldownHours: 24 }),
+  'repair.uncollected': POLICY(['email', 'whatsapp', 'sms'], 'warning', { fallbackSms: true, cooldownHours: 72 }),
 
+  // ── Repairs (internal) ──────────────────────────────────────────────────
+  'repair.unassigned': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['technical_lead'], requiresAcknowledgement: true, escalationMinutes: 30, escalationRoles: ['director'], mandatory: true, cooldownHours: 4 }),
+  'repair.assignment': POLICY(['in_app', 'push'], 'attention'),
+  'repair.diagnosis_overdue': POLICY(['in_app', 'push'], 'warning', { escalationMinutes: 120, escalationRoles: ['technical_lead', 'director'], cooldownHours: 24 }),
+  'repair.customer_approval': POLICY(['in_app'], 'attention'),
+  'repair.quote_declined': POLICY(['in_app'], 'warning'),
+  'repair.parts_requested': POLICY(['in_app'], 'attention', { recipientRoles: ['inventory_officer'] }),
+  'repair.parts_received': POLICY(['in_app', 'push'], 'attention'),
+  'repair.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead'], requiresAcknowledgement: true, escalationMinutes: 60, escalationRoles: ['director'], mandatory: true, cooldownHours: 12 }),
+
+  // ── Purchasing ──────────────────────────────────────────────────────────
   'purchase.rfq_ready': POLICY(['in_app'], 'attention'),
   'purchase.po_approval_required': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director', 'finance_officer'], requiresAcknowledgement: true, escalationMinutes: 180 }),
-  'purchase.po_overdue': POLICY(['in_app', 'email'], 'warning', { recipientRoles: ['inventory_officer', 'admin_officer'] }),
-  'purchase.grn_validation_required': POLICY(['in_app', 'push'], 'attention', { recipientRoles: ['inventory_officer'] }),
-  'purchase.match_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer', 'director'], requiresAcknowledgement: true, escalationMinutes: 120, mandatory: true }),
-  'purchase.vendor_bill_blocked': POLICY(['in_app', 'email'], 'warning', { recipientRoles: ['finance_officer'] }),
-  'purchase.vendor_bill_due': POLICY(['in_app', 'email'], 'warning', { recipientRoles: ['finance_officer'] }),
+  'purchase.po_overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['inventory_officer'], cooldownHours: 48 }),
+  'purchase.grn_validation_required': POLICY(['in_app'], 'attention', { recipientRoles: ['inventory_officer'], cooldownHours: 24 }),
+  'purchase.match_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer'], requiresAcknowledgement: true, escalationMinutes: 120, escalationRoles: ['director'], mandatory: true, cooldownHours: 24 }),
+  'purchase.vendor_bill_blocked': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 48 }),
+  'purchase.vendor_bill_due': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 24 }),
 
-  'inventory.low_stock': POLICY(['in_app'], 'warning', { recipientRoles: ['inventory_officer'] }),
-  'inventory.negative_stock_attempt': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['inventory_officer', 'director'], requiresAcknowledgement: true, escalationMinutes: 30, mandatory: true }),
-  'inventory.serial_mismatch': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['inventory_officer', 'technical_lead'], requiresAcknowledgement: true, escalationMinutes: 60 }),
-  'inventory.transfer_overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['inventory_officer'] }),
-  'inventory.valuation_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer', 'director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
+  // ── Inventory ───────────────────────────────────────────────────────────
+  'inventory.low_stock': POLICY(['in_app'], 'warning', { recipientRoles: ['inventory_officer'], cooldownHours: 72 }),
+  'inventory.negative_stock_attempt': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['inventory_officer'], requiresAcknowledgement: true, escalationMinutes: 30, escalationRoles: ['director'], mandatory: true }),
+  'inventory.serial_mismatch': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['inventory_officer', 'technical_lead'], requiresAcknowledgement: true, escalationMinutes: 60, escalationRoles: ['director'] }),
+  'inventory.transfer_overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['inventory_officer'], cooldownHours: 48 }),
+  'inventory.valuation_exception': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 48, escalationMinutes: 1440, escalationRoles: ['director'] }),
 
+  // ── Delivery ────────────────────────────────────────────────────────────
   'delivery.assigned': POLICY(['in_app', 'push'], 'attention'),
   'delivery.dispatched': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true }),
-  'delivery.failed': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['admin_officer', 'director'], requiresAcknowledgement: true, escalationMinutes: 30 }),
-  'delivery.overdue': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['admin_officer'] }),
-  'delivery.pod_missing': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'] }),
+  'delivery.failed': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['admin_officer'], requiresAcknowledgement: true, escalationMinutes: 30, escalationRoles: ['director'] }),
+  'delivery.overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 24 }),
+  'delivery.pod_missing': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 48 }),
 
-  'finance.invoice_overdue': POLICY(['in_app', 'email'], 'warning', { recipientRoles: ['finance_officer'] }),
+  // ── Finance ─────────────────────────────────────────────────────────────
+  'finance.invoice_overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 72 }),
   'finance.payment_received': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true }),
-  'finance.payment_allocation_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer', 'director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
-  'finance.bank_reconciliation_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer', 'director'], requiresAcknowledgement: true, escalationMinutes: 120, mandatory: true }),
-  'finance.vat_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer', 'director'], requiresAcknowledgement: true, escalationMinutes: 120, mandatory: true }),
-  'finance.integrity_failure': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['finance_officer', 'director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
-  'finance.month_end_action': POLICY(['in_app', 'email'], 'attention', { recipientRoles: ['finance_officer'] }),
+  'finance.payment_allocation_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer'], requiresAcknowledgement: true, escalationMinutes: 60, escalationRoles: ['director'], mandatory: true, cooldownHours: 24 }),
+  'finance.bank_reconciliation_exception': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 72, escalationMinutes: 1440, escalationRoles: ['director'] }),
+  'finance.vat_exception': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 48, escalationMinutes: 1440, escalationRoles: ['director'] }),
+  'finance.integrity_failure': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['finance_officer'], requiresAcknowledgement: true, escalationMinutes: 120, escalationRoles: ['director'], mandatory: true, cooldownHours: 24 }),
+  'finance.month_end_action': POLICY(['in_app'], 'attention', { recipientRoles: ['finance_officer'] }),
 
+  // ── HR ──────────────────────────────────────────────────────────────────
   'hr.leave.approval_required': POLICY(['in_app', 'push', 'email', 'sms'], 'attention', { recipientRoles: ['director', 'admin_officer'], requiresAcknowledgement: true, escalationMinutes: 240, mandatoryChannels: ['sms'] }),
-  'hr.leave.approved': POLICY(['in_app', 'email', 'sms'], 'success'),
-  'hr.leave.rejected': POLICY(['in_app', 'email', 'sms'], 'warning'),
-  'hr.leave.booked': POLICY(['in_app', 'email', 'sms'], 'attention'),
+  'hr.leave.approved': POLICY(['in_app', 'sms'], 'success'),
+  'hr.leave.rejected': POLICY(['in_app', 'sms'], 'warning'),
+  'hr.leave.booked': POLICY(['in_app', 'sms'], 'attention'),
   'hr.leave.cancelled': POLICY(['in_app'], 'info'),
   'hr.salary_advance.approval_required': POLICY(['in_app', 'push', 'email', 'sms'], 'attention', { recipientRoles: ['director', 'finance_officer'], requiresAcknowledgement: true, escalationMinutes: 240, mandatoryChannels: ['sms'] }),
-  'hr.salary_advance.approved': POLICY(['in_app', 'email', 'sms'], 'success'),
-  'hr.salary_advance.rejected': POLICY(['in_app', 'email', 'sms'], 'warning'),
-  'hr.salary_advance.disbursed': POLICY(['in_app', 'email', 'sms'], 'success'),
+  'hr.salary_advance.approved': POLICY(['in_app', 'sms'], 'success'),
+  'hr.salary_advance.rejected': POLICY(['in_app', 'sms'], 'warning'),
+  'hr.salary_advance.disbursed': POLICY(['in_app', 'sms'], 'success'),
   'hr.payroll.approval_required': POLICY(['in_app', 'push', 'email', 'sms'], 'critical', { recipientRoles: ['director', 'finance_officer'], requiresAcknowledgement: true, escalationMinutes: 120, mandatory: true, mandatoryChannels: ['sms'] }),
-  'hr.payslip.ready': POLICY(['in_app', 'email'], 'success'),
-  'hr.contract.expiring': POLICY(['in_app', 'email'], 'warning', { recipientRoles: ['admin_officer', 'director'] }),
-  'hr.attendance.missing': POLICY(['in_app'], 'warning'),
+  'hr.payslip.ready': POLICY(['in_app'], 'success'),
+  'hr.contract.expiring': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 168 }),
+  'hr.attendance.missing': POLICY(['in_app'], 'info', { cooldownHours: 12 }),
 
-  'aftersales.warranty.expiring': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true }),
-  'aftersales.rma_action_required': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['admin_officer', 'technical_lead'] }),
-  'aftersales.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead', 'director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
+  // ── Aftersales ──────────────────────────────────────────────────────────
+  'aftersales.warranty.expiring': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true, cooldownHours: 168 }),
+  'aftersales.rma_action_required': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['admin_officer', 'technical_lead'], cooldownHours: 24 }),
+  'aftersales.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead'], requiresAcknowledgement: true, escalationMinutes: 60, escalationRoles: ['director'], mandatory: true, cooldownHours: 12 }),
 
+  // ── System ──────────────────────────────────────────────────────────────
   'system.escalation': POLICY(['in_app', 'push', 'email'], 'critical', { requiresAcknowledgement: true, mandatory: true }),
   'system.push_test': POLICY(['push'], 'info'),
   'system.manual_message': POLICY(['email'], 'info'),

@@ -2,9 +2,11 @@ import 'server-only'
 
 import prisma from '@/lib/prisma'
 import { publishNotificationEvent } from './service'
+import { defaultNotificationPolicy } from './registry'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
 
 const DAY = 86_400_000
+const HOUR = 3_600_000
 const now = () => new Date()
 const plusDays = (date: Date, days: number) => new Date(date.getTime() + days * DAY)
 const minusDays = (date: Date, days: number) => new Date(date.getTime() - days * DAY)
@@ -22,6 +24,21 @@ async function publishCondition(input: Parameters<typeof publishNotificationEven
       select: { id: true },
     })
     if (open) return false
+
+    const policy = defaultNotificationPolicy(input.eventType)
+    if (policy.cooldownHours) {
+      const cooldownCutoff = new Date(Date.now() - policy.cooldownHours * HOUR)
+      const recent = await prisma.notificationEvent.findFirst({
+        where: {
+          eventType: input.eventType,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          createdAt: { gte: cooldownCutoff },
+        },
+        select: { id: true },
+      })
+      if (recent) return false
+    }
   }
   const stateVersion = input.stateVersion instanceof Date
     ? input.stateVersion.toISOString()
