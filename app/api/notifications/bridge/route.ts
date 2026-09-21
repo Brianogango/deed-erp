@@ -4,10 +4,12 @@ import prisma from '@/lib/prisma'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { runNotificationWorker } from '@/lib/notifications/worker'
 import type { NotificationChannel } from '@/lib/notifications/types'
+import { bridgeEventType } from '@/lib/notifications/bridge-event-type'
 
 export const dynamic = 'force-dynamic'
 
 const MAX_RECIPIENTS = 50
+
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession()
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
     const actionUrl = module ? `/${module}${path || ''}` : path || null
 
     await publishNotificationEvent({
-      eventType: `app.${entityType}.${action}`,
+      eventType: bridgeEventType(entityType, action),
       entityType,
       entityId,
       actorUserId: session.user.id,

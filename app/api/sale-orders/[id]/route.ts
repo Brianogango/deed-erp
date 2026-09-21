@@ -25,6 +25,7 @@ import { extractRepairRefFromText } from '@/lib/repair/sale-order-link'
 import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
 import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
 import { canTrimFulfillmentQty, isFulfillmentQtyTrim } from '@/lib/sales/fulfillment-trim'
+import { notifySaleOrderConfirmed } from '@/lib/notifications/business-events'
 
 /** Serialize blob rewrites so a slower soft/findMany cannot overwrite a newer Save. */
 let broadcastSaleOrdersChain: Promise<void> = Promise.resolve()
@@ -622,6 +623,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (!skipBroadcast && (touchedLines || confirming || to !== from)) {
       await broadcastSaleOrders()
     }
+
+    if (confirming) await notifySaleOrderConfirmed(params.id, session.user.id)
 
     const fresh = confirming
       ? await prisma.saleOrder.findUnique({

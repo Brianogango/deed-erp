@@ -594,11 +594,23 @@ export async function processNotificationEscalations(limit = 50) {
 
     const policy = defaultNotificationPolicy(event.eventType)
     const roles = policy.escalationRoles?.length ? policy.escalationRoles : ['director']
+    // Escalate only to people who did NOT already receive the original. When
+    // the original went to the directors (quote approvals, leave, payroll),
+    // re-sending it to them as an "escalation" only doubled their inbox.
+    const alreadyNotified = new Set(event.recipients.map(r => r.userId))
+    const escalationUsers = (await prisma.user.findMany({
+      where: { isActive: true, role: { in: roles as any } },
+      select: { id: true },
+    })).map(u => u.id).filter(id => !alreadyNotified.has(id))
+    if (!escalationUsers.length) {
+      await prisma.notificationEvent.update({ where: { id: event.id }, data: { escalateAt: null } })
+      continue
+    }
     await publishNotificationEvent({
       eventType: 'system.escalation',
       entityType: event.entityType || 'notification_event',
       entityId: event.entityId || event.id,
-      roles,
+      userIds: escalationUsers,
       severity: 'critical',
       priority: 'urgent',
       title: `Escalation: ${event.title}`,

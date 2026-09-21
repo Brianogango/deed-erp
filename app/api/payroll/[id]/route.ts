@@ -5,6 +5,7 @@ import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 import prisma from '@/lib/prisma'
+import { notifyPayrollApproved, notifyPayrollPosted, notifyPayrollSubmitted } from '@/lib/notifications/business-events'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -74,6 +75,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return row
     }, { isolationLevel: 'Serializable' })
 
+    await notifyPayrollApproved(params.id, actorId)
     return NextResponse.json({ item: { id: updated.id, status: updated.status } })
   }
 
@@ -199,6 +201,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return row
     }, { isolationLevel: 'Serializable' })
 
+    await notifyPayrollPosted(params.id, actorId)
     return NextResponse.json({ item: { id: posted.id, status: posted.status, postedJournalId: posted.postedJournalId } })
   }
 
@@ -215,6 +218,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       })
       return row
     })
+    await notifyPayrollSubmitted(params.id, actorId)
     return NextResponse.json({ item: { id: updated.id, status: updated.status } })
   }
 

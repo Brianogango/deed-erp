@@ -68,6 +68,52 @@ async function resolveInactive(eventType: string, entityType: string, activeIds:
   return ids.length
 }
 
+export type DigestItem = { id: string; line: string }
+
+/**
+ * One notification per day summarising every open item of a kind, instead of
+ * one notification per product / invoice / bill. Per-item alerts put 700+
+ * unread rows in a single inbox and buried the approvals that matter.
+ * Re-running the scan the same day is a no-op (idempotency key per day);
+ * the previous day's summary is resolved when a new one is published, and
+ * any legacy per-item alerts of the same kind are resolved.
+ */
+export function buildDigest(items: DigestItem[], limit = 10) {
+  const shown = items.slice(0, limit).map(item => `• ${item.line}`)
+  const more = items.length > limit ? [`…and ${items.length - limit} more.`] : []
+  return [...shown, ...more].join('\n')
+}
+
+async function publishDigest(input: {
+  eventType: string
+  legacyEntityType: string
+  items: DigestItem[]
+  title: (count: number) => string
+  actionUrl: string
+  userIds?: Array<string | null | undefined>
+}) {
+  const day = nairobiClock().date
+  const entityId = `${input.eventType}:${day}`
+  await resolveInactive(input.eventType, input.legacyEntityType, [])
+  if (!input.items.length) {
+    await resolveInactive(input.eventType, 'digest', [])
+    return 0
+  }
+  await resolveInactive(input.eventType, 'digest', [entityId])
+  await publishNotificationEvent({
+    eventType: input.eventType,
+    entityType: 'digest',
+    entityId,
+    userIds: input.userIds,
+    title: input.title(input.items.length),
+    body: buildDigest(input.items),
+    actionUrl: input.actionUrl,
+    metadata: { count: input.items.length, ids: input.items.slice(0, 200).map(i => i.id) },
+    idempotencyKey: `digest:${entityId}`,
+  })
+  return 1
+}
+
 async function scanCrm() {
   const current = now()
   const opportunities = await prisma.opportunity.findMany({
@@ -350,6 +396,7 @@ async function scanPurchasing() {
     },
   })
   const dueIds: string[] = []
+  const dueItems: DigestItem[] = []
   const blockedIds: string[] = []
   for (const bill of vendorBills) {
     const balance = Number(bill.totalAmount) - Number(bill.amountPaid)
@@ -369,20 +416,17 @@ async function scanPurchasing() {
     }
     if (bill.dueDate && bill.dueDate <= plusDays(current, 3)) {
       dueIds.push(bill.id)
-      if (await publishCondition({
-        eventType: 'purchase.vendor_bill_due',
-        entityType: 'invoice',
-        entityId: bill.id,
-        title: `Vendor bill due — ${bill.invoiceNumber}`,
-        body: `KES ${Math.round(balance).toLocaleString('en-KE')} is due by ${dateOnly(bill.dueDate)}.`,
-        actionUrl: `/accounting?invoice=${bill.id}`,
-        idempotencyKey: '',
-        stateVersion: bill.dueDate,
-      })) emitted++
+      dueItems.push({ id: bill.id, line: `${bill.invoiceNumber} — KES ${Math.round(balance).toLocaleString('en-KE')} due ${dateOnly(bill.dueDate)}` })
     }
   }
   await resolveInactive('purchase.vendor_bill_blocked', 'invoice', blockedIds)
-  await resolveInactive('purchase.vendor_bill_due', 'invoice', dueIds)
+  emitted += await publishDigest({
+    eventType: 'purchase.vendor_bill_due',
+    legacyEntityType: 'invoice',
+    items: dueItems,
+    title: n => `${n} vendor bill${n === 1 ? '' : 's'} due within 3 days`,
+    actionUrl: '/accounting?tab=bills',
+  })
   return emitted
 }
 
@@ -397,42 +441,34 @@ async function scanInventory() {
     },
   })
 
-  const lowIds: string[] = []
-  const valuationIds: string[] = []
+  const lowItems: DigestItem[] = []
+  const valuationItems: DigestItem[] = []
   for (const product of products) {
     const level = product.stockLevel?.qtyOnHand ?? 0
     const reorder = product.reorderLevel ?? 0
     if (level <= reorder) {
-      lowIds.push(product.id)
-      if (await publishCondition({
-        eventType: 'inventory.low_stock',
-        entityType: 'product',
-        entityId: product.id,
-        title: `Low stock — ${product.name}`,
-        body: `${product.sku}: ${level} on hand; reorder level is ${reorder}.`,
-        actionUrl: `/inventory?product=${product.id}`,
-        idempotencyKey: '',
-        stateVersion: product.stockLevel?.updatedAt || product.updatedAt,
-      })) emitted++
+      lowItems.push({ id: product.id, line: `${product.name} (${product.sku}) — ${level} on hand, reorder at ${reorder}` })
     }
 
     if (product.productValuation && product.stockLevel &&
         Number(product.productValuation.totalQty) !== Number(product.stockLevel.qtyOnHand)) {
-      valuationIds.push(product.id)
-      if (await publishCondition({
-        eventType: 'inventory.valuation_exception',
-        entityType: 'product',
-        entityId: product.id,
-        title: `Inventory valuation mismatch — ${product.name}`,
-        body: `Stock ledger shows ${product.stockLevel.qtyOnHand} units while valuation shows ${product.productValuation.totalQty} units.`,
-        actionUrl: `/accounting?tab=integrity`,
-        idempotencyKey: '',
-        stateVersion: product.productValuation.lastUpdated,
-      })) emitted++
+      valuationItems.push({ id: product.id, line: `${product.name} — stock ${product.stockLevel.qtyOnHand}, valuation ${product.productValuation.totalQty}` })
     }
   }
-  await resolveInactive('inventory.low_stock', 'product', lowIds)
-  await resolveInactive('inventory.valuation_exception', 'product', valuationIds)
+  emitted += await publishDigest({
+    eventType: 'inventory.low_stock',
+    legacyEntityType: 'product',
+    items: lowItems,
+    title: n => `${n} product${n === 1 ? '' : 's'} at or below reorder level`,
+    actionUrl: '/inventory',
+  })
+  emitted += await publishDigest({
+    eventType: 'inventory.valuation_exception',
+    legacyEntityType: 'product',
+    items: valuationItems,
+    title: n => `${n} product${n === 1 ? '' : 's'} with a stock/valuation mismatch`,
+    actionUrl: '/accounting?tab=integrity',
+  })
   return emitted
 }
 
@@ -529,7 +565,7 @@ async function scanFinance() {
       etimsTransmissionStatus: true, invoiceDate: true,
     },
   })
-  const overdueIds: string[] = []
+  const overdueItems: Array<DigestItem & { balance: number }> = []
   const allocationIds: string[] = []
   const vatIds: string[] = []
 
@@ -538,17 +574,7 @@ async function scanFinance() {
     const paid = Number(inv.amountPaid)
     const balance = total - paid
     if (inv.documentType === 'customer_invoice' && inv.dueDate && inv.dueDate < current && balance > 0.01) {
-      overdueIds.push(inv.id)
-      if (await publishCondition({
-        eventType: 'finance.invoice_overdue',
-        entityType: 'invoice',
-        entityId: inv.id,
-        title: `Invoice overdue — ${inv.invoiceNumber}`,
-        body: `KES ${Math.round(balance).toLocaleString('en-KE')} remains outstanding after the due date ${dateOnly(inv.dueDate)}.`,
-        actionUrl: `/accounting?invoice=${inv.id}`,
-        idempotencyKey: '',
-        stateVersion: inv.updatedAt,
-      })) emitted++
+      overdueItems.push({ id: inv.id, balance, line: `${inv.invoiceNumber} — KES ${Math.round(balance).toLocaleString('en-KE')} (due ${dateOnly(inv.dueDate)})` })
     }
     if (paid > total + 0.01 || paid < -0.01) {
       allocationIds.push(inv.id)
@@ -577,7 +603,15 @@ async function scanFinance() {
       })) emitted++
     }
   }
-  await resolveInactive('finance.invoice_overdue', 'invoice', overdueIds)
+  overdueItems.sort((a, b) => b.balance - a.balance)
+  const overdueTotal = overdueItems.reduce((sum, i) => sum + i.balance, 0)
+  emitted += await publishDigest({
+    eventType: 'finance.invoice_overdue',
+    legacyEntityType: 'invoice',
+    items: overdueItems,
+    title: n => `${n} overdue invoice${n === 1 ? '' : 's'} — KES ${Math.round(overdueTotal).toLocaleString('en-KE')} outstanding`,
+    actionUrl: '/accounting?tab=invoices',
+  })
   await resolveInactive('finance.payment_allocation_exception', 'invoice', allocationIds)
   await resolveInactive('finance.vat_exception', 'invoice', vatIds)
 

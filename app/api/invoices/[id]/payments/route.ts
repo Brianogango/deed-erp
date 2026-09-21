@@ -245,6 +245,10 @@ export async function POST(
     } catch (err) {
       console.error('[invoice-payment] receipt notify failed:', err)
     }
+    if (!result.idempotent) {
+      const { notifyInvoicePayment } = await import('@/lib/notifications/business-events')
+      await notifyInvoicePayment({ invoiceId, paymentId: payment.id, amount: capped, actorUserId: actor.id })
+    }
 
     return NextResponse.json({ payment, invoice: updatedInvoice, idempotent: result.idempotent })
   })

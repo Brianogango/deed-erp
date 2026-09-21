@@ -46,9 +46,14 @@ export async function GET(request: NextRequest) {
     const before = request.nextUrl.searchParams.get('before')
     const beforeDate = before ? new Date(before) : null
 
+    // Resolved = the condition no longer applies (invoice paid, stock
+    // replenished, approval decided, superseded by a daily summary). Those
+    // rows are history, not work: keep them out of the bell and the count
+    // unless explicitly asked for with ?filter=history.
     const where: any = {
       userId: session.user.id,
       dismissedAt: null,
+      ...(filter === 'history' ? {} : { resolvedAt: null }),
       ...(filter === 'unread' ? { readAt: null } : {}),
       ...(beforeDate && !Number.isNaN(beforeDate.getTime()) ? { createdAt: { lt: beforeDate } } : {}),
     }
@@ -61,7 +66,7 @@ export async function GET(request: NextRequest) {
         take: limit,
       }),
       prisma.notificationRecipient.count({
-        where: { userId: session.user.id, dismissedAt: null, readAt: null },
+        where: { userId: session.user.id, dismissedAt: null, readAt: null, resolvedAt: null },
       }),
     ])
 
@@ -109,7 +114,7 @@ export async function PATCH(request: NextRequest) {
       })
     } else if (body.action === 'read_all') {
       await prisma.notificationRecipient.updateMany({
-        where: { userId: session.user.id, dismissedAt: null, readAt: null },
+        where: { userId: session.user.id, dismissedAt: null, readAt: null, resolvedAt: null },
         data: { readAt: now },
       })
     } else if (body.action === 'dismiss') {
@@ -134,7 +139,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const unread = await prisma.notificationRecipient.count({
-      where: { userId: session.user.id, dismissedAt: null, readAt: null },
+      where: { userId: session.user.id, dismissedAt: null, readAt: null, resolvedAt: null },
     })
     return NextResponse.json({ ok: true, unread })
   })

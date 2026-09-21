@@ -37,7 +37,9 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'crm.opportunity.close_due': POLICY(['in_app', 'push'], 'warning', { cooldownHours: 24 }),
   'sales.quote.approval_required': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 120 }),
   'sales.quote.expiring': POLICY(['in_app'], 'warning', { cooldownHours: 24 }),
-  'sales.order.confirmed': POLICY(['in_app'], 'success'),
+  'sales.order.confirmed': POLICY(['in_app', 'push'], 'success'),
+  'sales.invoice.payment': POLICY(['in_app'], 'success'),
+  'sales.invoice.paid': POLICY(['in_app', 'push'], 'success'),
   'sales.followup.overdue': POLICY(['in_app'], 'warning', { cooldownHours: 24 }),
 
   // ── Repairs (customer-facing) ────────────────────────────────────────────
@@ -100,7 +102,9 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'hr.salary_advance.rejected': POLICY(['in_app', 'sms'], 'warning'),
   'hr.salary_advance.disbursed': POLICY(['in_app', 'sms'], 'success'),
   'hr.payroll.approval_required': POLICY(['in_app', 'push', 'email', 'sms'], 'critical', { recipientRoles: ['director', 'finance_officer'], requiresAcknowledgement: true, escalationMinutes: 120, mandatory: true, mandatoryChannels: ['sms'] }),
-  'hr.payslip.ready': POLICY(['in_app'], 'success'),
+  'hr.payroll.approved': POLICY(['in_app', 'push'], 'attention', { recipientRoles: ['finance_officer'] }),
+  'hr.payslip.ready': POLICY(['in_app', 'push'], 'success'),
+  'hr.salary.paid': POLICY(['in_app', 'push', 'sms'], 'success'),
   'hr.contract.expiring': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 168 }),
   'hr.attendance.missing': POLICY(['in_app'], 'info', { cooldownHours: 12 }),
 

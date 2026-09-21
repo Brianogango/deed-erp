@@ -294,6 +294,17 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error('[payments] receipt notify failed:', err)
     }
+    if (direction !== 'outbound') {
+      const { notifyInvoicePayment } = await import('@/lib/notifications/business-events')
+      for (const alloc of createdAllocations) {
+        await notifyInvoicePayment({
+          invoiceId: alloc.invoiceId,
+          paymentId: `${payment.id}:${alloc.invoiceId}`,
+          amount: Number(alloc.amount),
+          actorUserId: actor.id,
+        })
+      }
+    }
 
     return NextResponse.json({
       payment,

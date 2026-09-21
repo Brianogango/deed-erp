@@ -4,6 +4,7 @@ import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { cashAccountRoleForBankId, labelForRole } from '@/lib/accounting/coa-roles'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
+import { notifyPayrollPaid } from '@/lib/notifications/business-events'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,6 +113,7 @@ export async function POST(
       return posted
     }, { isolationLevel: 'Serializable' })
 
+    await notifyPayrollPaid(params.id, actorId)
     return NextResponse.json({
       ok: true,
       journal: {
