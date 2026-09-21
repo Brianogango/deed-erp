@@ -95,11 +95,18 @@ afterEach(() => {
 })
 
 describe('storeBackend()', () => {
-  it('defaults to prisma', () => {
-    expect(storeBackend()).toBe('prisma')
+  it('defaults to the legacy app_state store', () => {
+    expect(storeBackend()).toBe('app_state')
   })
 
-  it('accepts dual and app_state aliases', () => {
+  it('fails safe to app_state for unknown values', () => {
+    process.env.STORE_BACKEND = 'prsima'
+    expect(storeBackend()).toBe('app_state')
+  })
+
+  it('accepts prisma, dual and app_state aliases', () => {
+    process.env.STORE_BACKEND = 'prisma'
+    expect(storeBackend()).toBe('prisma')
     process.env.STORE_BACKEND = 'dual'
     expect(storeBackend()).toBe('dual')
     process.env.STORE_BACKEND = 'blob'

@@ -8,6 +8,8 @@ import {
   loadPrismaState,
   savePrismaStateEntries,
 } from './prisma-state-store'
+import { readsPrismaState, storeBackend, writesLegacyAppState, writesPrismaState } from './store-backend'
+import { BulkDeleteRefusedError, assessCollectionShrink } from './store-bulk-delete-guard'
 
 let _tableReady = false
 const ensureTable = async () => {
@@ -59,6 +61,8 @@ async function loadStateWithLegacyFallback(keys?: string[]): Promise<AppStateMap
   // Existing unit tests use a lightweight sql mock and intentionally do not
   // start PostgreSQL or construct a complete Prisma mock.
   if (process.env.NODE_ENV === 'test') return loadLegacyAppState(keys)
+  // STORE_BACKEND=app_state|dual: app_state is authoritative for reads.
+  if (!readsPrismaState()) return loadLegacyAppState(keys)
   let projected: AppStateMap
   try {
     projected = await loadPrismaState(keys)
@@ -151,7 +155,9 @@ export async function loadInitialAppState(): Promise<AppStateMap> {
  */
 export async function getAppStateVersion(keys: string[]): Promise<string> {
   try {
-    const prismaVersion = process.env.NODE_ENV === 'test' ? '' : await getPrismaStateVersion(keys)
+    const prismaVersion = process.env.NODE_ENV === 'test' || !readsPrismaState()
+      ? ''
+      : await getPrismaStateVersion(keys)
     await ensureTable()
     const { rows } = await sql`
       SELECT COALESCE(MAX(updated_at), '') AS latest, COUNT(*) AS n
@@ -167,7 +173,9 @@ export async function getAppStateVersion(keys: string[]): Promise<string> {
 
 export async function getLatestAppStateUpdatedAt(): Promise<string> {
   try {
-    const prismaLatest = process.env.NODE_ENV === 'test' ? '' : await getLatestPrismaStateUpdatedAt()
+    const prismaLatest = process.env.NODE_ENV === 'test' || !readsPrismaState()
+      ? ''
+      : await getLatestPrismaStateUpdatedAt()
     await ensureTable()
     const { rows } = await sql`
       SELECT COALESCE(MAX(updated_at), '') AS updated_at
@@ -192,7 +200,7 @@ export async function loadChangedStoreKeysSince(
 }> {
   try {
     const wanted = keys?.filter(Boolean)
-    const projected = process.env.NODE_ENV === 'test'
+    const projected = process.env.NODE_ENV === 'test' || !readsPrismaState()
       ? { keys: [] as string[], latestUpdatedAt: sinceUpdatedAt }
       : await getPrismaStateChangedKeysSince(sinceUpdatedAt, wanted)
     await ensureTable()
@@ -262,10 +270,80 @@ export async function withAppStateKeyLock<T>(key: string, fn: () => Promise<T>):
   }
 }
 
-export async function saveStoreKeys(entries: Record<string, string>): Promise<void> {
+export type SaveStoreKeysOptions = {
+  /**
+   * Keys (or `true` for every key) whose save may intentionally remove more
+   * than BULK_DELETE_MAX_REMOVALS records. Without it such a save is refused.
+   */
+  allowBulkDelete?: boolean | string[]
+}
+
+function bulkDeleteAllowed(key: string, opts?: SaveStoreKeysOptions): boolean {
+  const allow = opts?.allowBulkDelete
+  if (allow === true) return true
+  return Array.isArray(allow) && allow.includes(key)
+}
+
+/**
+ * Refuse whole-collection saves that would delete many records at once.
+ * `loadCurrent` is injected so the rule is unit-testable without a database.
+ */
+export async function assertNoBulkDeletes(
+  entries: Record<string, string>,
+  loadCurrent: (keys: string[]) => Promise<AppStateMap>,
+  opts?: SaveStoreKeysOptions,
+): Promise<void> {
+  const incomingByKey = new Map<string, unknown[]>()
+  for (const [key, raw] of Object.entries(entries)) {
+    if (bulkDeleteAllowed(key, opts)) continue
+    let parsed: unknown
+    try { parsed = JSON.parse(raw) } catch { continue }
+    if (Array.isArray(parsed)) incomingByKey.set(key, parsed)
+  }
+  if (incomingByKey.size === 0) return
+  const current = await loadCurrent([...incomingByKey.keys()])
+  for (const [key, incoming] of incomingByKey) {
+    const shrink = assessCollectionShrink(current[key], incoming)
+    if (shrink.isBulkDelete) throw new BulkDeleteRefusedError(key, shrink)
+  }
+}
+
+let _storeRecordsTableChecked: boolean | null = null
+async function storeRecordsTableExists(): Promise<boolean> {
+  if (_storeRecordsTableChecked !== null) return _storeRecordsTableChecked
   try {
-    // Binary payloads stay outside the database; all structured ERP state is
-    // persisted through Prisma, one business record per row.
+    const { rows } = await sql`SELECT to_regclass('public.store_records') IS NOT NULL AS present`
+    _storeRecordsTableChecked = Boolean((rows?.[0] as { present?: boolean } | undefined)?.present)
+  } catch {
+    _storeRecordsTableChecked = false
+  }
+  if (!_storeRecordsTableChecked) {
+    console.warn(
+      '[server-store] store_records table is missing; skipping store_records writes. '
+      + 'Run `npm run migrate:store-records:safe` (see docs/PRISMA_STATE_CUTOVER.md).',
+    )
+  }
+  return _storeRecordsTableChecked
+}
+
+async function writeLegacyAppState(entries: Record<string, string>): Promise<void> {
+  await ensureTable()
+  const keys = Object.keys(entries)
+  const now = new Date().toISOString()
+  const values = keys.map(key => entries[key])
+  await sql`
+    INSERT INTO app_state (key, value, updated_at)
+    SELECT k, v, ${now} FROM unnest(${keys}::text[], ${values}::text[]) AS t(k, v)
+    ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+  `
+}
+
+export async function saveStoreKeys(
+  entries: Record<string, string>,
+  opts?: SaveStoreKeysOptions,
+): Promise<void> {
+  try {
+    // Binary payloads stay outside the database.
     const blobWrites = Object.entries(entries).filter(([key]) => isBlobKey(key))
     if (blobWrites.length > 0) {
       await Promise.all(blobWrites.map(([key, value]) => writeBlob(key, value)))
@@ -277,24 +355,26 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
     if (keys.length === 0) return
 
     if (process.env.NODE_ENV === 'test') {
-      await ensureTable()
       // Database-free unit fixtures still exercise the historical sql mock.
-      // This branch is removed from production bundles by the environment
-      // constant and is never an application persistence path.
-      const now = new Date().toISOString()
-      const values = keys.map(key => structuredEntries[key])
-      await sql`
-        INSERT INTO app_state (key, value, updated_at)
-        SELECT k, v, ${now} FROM unnest(${keys}::text[], ${values}::text[]) AS t(k, v)
-        ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
-      `
+      await writeLegacyAppState(structuredEntries)
     } else {
-      await savePrismaStateEntries(structuredEntries)
-      await import('./prisma-store')
-        .then(m => m.writeStoreRecords(structuredEntries))
-        .catch(err => console.error('[server-store] store_records write failed:', err))
-      // Reuse the existing LISTEN channel as a wake-up only; business payloads
-      // are no longer written to app_state.
+      // Absence from a whole-collection save is not a delete. Refuse saves
+      // that would drop many records (paginated / partial client state).
+      await assertNoBulkDeletes(structuredEntries, loadAppStateForWrite, opts)
+
+      const backend = storeBackend()
+      if (writesLegacyAppState(backend)) {
+        await writeLegacyAppState(structuredEntries)
+      }
+      if (writesPrismaState(backend)) {
+        await savePrismaStateEntries(structuredEntries)
+        if (await storeRecordsTableExists()) {
+          await import('./prisma-store')
+            .then(m => m.writeStoreRecords(structuredEntries))
+            .catch(err => console.error('[server-store] store_records write failed:', err))
+        }
+      }
+      // Wake SSE listeners on the existing LISTEN channel.
       await sql`SELECT pg_notify('app_state_changed', ${keys.join(',')})`.catch(() => null)
     }
 
