@@ -128,6 +128,7 @@ import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergeCollectionById } from '@/lib/collection-merge'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 import { fetchCollection } from '@/lib/api-pagination'
+import { fetchAndApplyStoreKeys } from '@/lib/client-store-hydrate'
 import {
   registerSaleOrderDraftPersistApi,
   scheduleDraftSaleOrderLinePersist,
@@ -6018,83 +6019,43 @@ export function StoreProvider({
             break
           }
           case 'contacts': {
-            const results = await Promise.allSettled([
-              fetchCollection('/api/contacts?limit=200'),
-              fetchCollection('/api/companies?limit=200'),
-              fetchCollection('/api/contact-persons?limit=200'),
-            ])
-            const list = (r: PromiseSettledResult<unknown[]>) =>
-              r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : null
-            const dc = list(results[0] as PromiseSettledResult<unknown[]>)
-            const dco = list(results[1] as PromiseSettledResult<unknown[]>)
-            const dcp = list(results[2] as PromiseSettledResult<unknown[]>)
-            if (dc) setContacts(prev => preferExistingArray(prev, dc as typeof prev))
-            if (dco) setCompanies(prev => preferExistingArray(prev, dco as typeof prev))
-            if (dcp) setContactPersons(prev => preferExistingArray(prev, dcp as typeof prev))
+            const result = await fetchAndApplyStoreKeys({
+              keys: ['deed_contacts', 'deed_companies', 'deed_contactPersons'],
+              etagStorageKey: 'deed_boot_etag_contacts',
+            })
+            if (result === 'error') throw new Error('contacts hydrate failed')
             break
           }
           case 'sales': {
-            if (window.localStorage.getItem('deed_saleOrders')) break
-            const results = await Promise.allSettled([
-              fetchCollection('/api/quotes?limit=200'),
-              fetchCollection('/api/sale-orders?limit=200'),
-              fetchCollection('/api/payments?limit=200'),
-              fetchCollection('/api/deliveries?limit=200'),
-            ])
-            const val = (r: PromiseSettledResult<unknown>) =>
-              r.status === 'fulfilled' && r.value != null ? r.value : null
-            const dq = val(results[0])
-            const dso = val(results[1])
-            const dpay = val(results[2])
-            const ddel = val(results[3])
-            if (Array.isArray(dq)) {
-              setQuotes(prev => preferExistingArray(prev, normalizeQuotesForClient(dq) as Quote[]))
-            }
-            if (Array.isArray(dso) && dso.length > 0) {
-              const incoming = normalizeSaleOrdersForClient(dso) as SaleOrder[]
-              setSaleOrders(prev => mergeSaleOrdersPreservingDraftEdits(prev, incoming))
-            }
-            if (Array.isArray(dpay)) {
-              setPayments(prev => preferExistingArray(prev, dpay as typeof prev))
-            }
-            if (Array.isArray(ddel)) {
-              setDeliveries(prev => preferExistingArray(prev, ddel as typeof prev))
-            }
+            const result = await fetchAndApplyStoreKeys({
+              keys: ['deed_quotes', 'deed_saleOrders', 'deed_payments', 'deed_deliveries'],
+              etagStorageKey: 'deed_boot_etag_sales',
+            })
+            if (result === 'error') throw new Error('sales hydrate failed')
             break
           }
           case 'crm': {
-            const results = await Promise.allSettled([
-              fetchCollection('/api/opportunities?limit=200'),
-              fetchCollection('/api/opportunity-activities?limit=200'),
-            ])
-            const val = (r: PromiseSettledResult<unknown>) =>
-              r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : null
-            const dopp = val(results[0])
-            const doa = val(results[1])
-            if (dopp) setOpportunities(prev => preferExistingArray(prev, normalizeOpportunitiesForClient(dopp) as Opportunity[]))
-            if (doa) setOpportunityActivities(prev => preferExistingArray(prev, doa as typeof prev))
+            const result = await fetchAndApplyStoreKeys({
+              keys: ['deed_opportunities', 'deed_oppActivities'],
+              etagStorageKey: 'deed_boot_etag_crm',
+            })
+            if (result === 'error') throw new Error('crm hydrate failed')
             break
           }
           case 'repairs': {
-            if (window.localStorage.getItem('deed_repairs_v2')) break
-            const list = await fetchCollection('/api/repairs?limit=200')
-            if (list.length > 0) {
-              setRepairs(prev => mergeRepairsStoreWrite(prev, list) as RepairOrder[])
-            }
+            const result = await fetchAndApplyStoreKeys({
+              keys: ['deed_repairs_v2'],
+              etagStorageKey: 'deed_boot_etag_repairs',
+            })
+            if (result === 'error') throw new Error('repairs hydrate failed')
             break
           }
           case 'purchases': {
-            if (window.localStorage.getItem('deed_purchaseOrders')) break
-            const results = await Promise.allSettled([
-              fetchCollection('/api/purchase-orders?limit=200'),
-              fetchCollection('/api/receipts?limit=200'),
-            ])
-            const val = (r: PromiseSettledResult<unknown>) =>
-              r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : null
-            const dpo = val(results[0])
-            const drc = val(results[1])
-            if (dpo) setPurchaseOrders(prev => preferExistingArray(prev, dpo as typeof prev))
-            if (drc) setReceipts(prev => preferExistingArray(prev, drc as typeof prev))
+            const result = await fetchAndApplyStoreKeys({
+              keys: ['deed_purchaseOrders', 'deed_receipts'],
+              etagStorageKey: 'deed_boot_etag_purchases',
+            })
+            if (result === 'error') throw new Error('purchases hydrate failed')
             break
           }
           case 'employees': {
@@ -6136,17 +6097,11 @@ export function StoreProvider({
             break
           }
           case 'stock_moves': {
-            if (window.localStorage.getItem('deed_stockMoves') && window.localStorage.getItem('deed_serials')) break
-            const [list, serialList] = await Promise.all([
-              fetchCollection('/api/stock-moves?limit=200'),
-              fetchCollection('/api/serials?limit=200'),
-            ])
-            if (list.length > 0) {
-              setStockMoves(prev => mergeCollectionById(prev, list as StockMove[]))
-            }
-            if (serialList.length > 0) {
-              setSerials(prev => preferExistingArray(prev, serialList as typeof prev))
-            }
+            const result = await fetchAndApplyStoreKeys({
+              keys: ['deed_stockMoves', 'deed_serials'],
+              etagStorageKey: 'deed_boot_etag_stock_moves',
+            })
+            if (result === 'error') throw new Error('stock_moves hydrate failed')
             break
           }
         }

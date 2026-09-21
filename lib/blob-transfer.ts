@@ -223,15 +223,9 @@ export async function mirrorKnownDomain(key: string, value: string, actorId: str
       return { upserted: rows.length, skipped: 0 }
     }
     if (key === 'deed_deliveries') {
-      const { mirrorDeliveryToPrisma } = await import('@/lib/delivery-mirror')
-      let upserted = 0
-      let skipped = 0
-      for (const delivery of rows) {
-        const result = await mirrorDeliveryToPrisma(delivery)
-        if (result.mirrored) upserted += 1
-        else skipped += 1
-      }
-      return { upserted, skipped }
+      const { mirrorDeliveriesToPrisma } = await import('@/lib/delivery-mirror')
+      await mirrorDeliveriesToPrisma(rows)
+      return { upserted: rows.length, skipped: 0 }
     }
     if (key === 'deed_purchaseOrders') {
       const { ensurePrismaPurchaseOrder } = await import('@/lib/purchase/po-prisma-sync')

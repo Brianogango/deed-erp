@@ -85,6 +85,11 @@ export async function mirrorStockReservationsToPrisma(input: unknown, opts: { fo
       }
     }
 
+    const activeIds = new Set(rows.map((r: any) => String(r?.id ?? '').trim()).filter(Boolean))
+    for (const id of Object.keys(nextHashes)) {
+      if (!activeIds.has(id)) { delete nextHashes[id]; dirty = true }
+    }
+
     if (dirty) await saveStoreKeys({ [HASH_KEY]: JSON.stringify(nextHashes) })
     return result
   } finally {

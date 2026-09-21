@@ -242,6 +242,11 @@ export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force
       }
     }
 
+    const activeRefs = new Set(repairs.map((r: any) => String(r?.ref ?? '').trim()).filter(Boolean))
+    for (const ref of Object.keys(nextHashes)) {
+      if (!activeRefs.has(ref)) { delete nextHashes[ref]; dirty = true }
+    }
+
     if (dirty) await saveStoreKeys({ [MIRROR_STATE_KEY]: JSON.stringify(nextHashes) })
   } catch (err) {
     console.error('[repair-mirror] mirror run failed:', err)
