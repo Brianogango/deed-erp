@@ -312,27 +312,27 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
       if (entries['deed_accounts']) {
         void import('./accounting/account-journal-mirror')
           .then(m => m.mirrorAccountsToPrisma(entries['deed_accounts']))
-          .catch(() => {})
+          .catch(err => console.error('[account-mirror] sync write failed:', err))
       }
       if (entries['deed_journalEntries']) {
         void import('./accounting/account-journal-mirror')
           .then(m => m.mirrorJournalEntriesToPrisma(entries['deed_journalEntries']))
-          .catch(() => {})
+          .catch(err => console.error('[journal-mirror] sync write failed:', err))
       }
       if (entries['deed_stockReservations']) {
         void import('./inventory/reservation-mirror')
           .then(m => m.mirrorStockReservationsToPrisma(entries['deed_stockReservations']))
-          .catch(() => {})
+          .catch(err => console.error('[reservation-mirror] sync write failed:', err))
       }
       if (entries['deed_deposits'] || entries['deed_deposits_v1']) {
         void import('./accounting/deposit-mirror')
           .then(m => m.mirrorDepositsToPrisma(entries['deed_deposits'] || entries['deed_deposits_v1']))
-          .catch(() => {})
+          .catch(err => console.error('[deposit-mirror] sync write failed:', err))
       }
       if (entries['deed_holdovers']) {
         void import('./accounting/holdover-mirror')
           .then(m => m.mirrorHoldoversToPrisma(entries['deed_holdovers']))
-          .catch(() => {})
+          .catch(err => console.error('[holdover-mirror] sync write failed:', err))
       }
       if (entries['deed_deliveries']) {
         void import('./delivery-mirror')
@@ -341,7 +341,7 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
             if (!Array.isArray(parsed)) return
             for (const delivery of parsed) await m.mirrorDeliveryToPrisma(delivery)
           })
-          .catch(() => {})
+          .catch(err => console.error('[delivery-mirror] sync write failed:', err))
       }
       const extraMirrors = ['deed_purchaseOrders', 'deed_serials', 'deed_stockMoves', 'deed_receipts'] as const
       if (extraMirrors.some(key => entries[key])) {
@@ -351,7 +351,7 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
               if (entries[key]) await m.mirrorKnownDomain(key, entries[key], null)
             }
           })
-          .catch(() => {})
+          .catch(err => console.error('[blob-transfer] mirror write failed:', err))
       }
     }
   } catch (err) {
