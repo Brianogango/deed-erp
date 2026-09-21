@@ -114,29 +114,38 @@ export async function mirrorDeliveriesToPrisma(deliveries: unknown[]): Promise<v
       if (hashes[c.blobId] === fp) continue
       changed.push({ blobId: c.blobId, mapped, fp })
     }
-    if (!changed.length) return
+    if (changed.length > 0) {
+      const changedBlobIds = changed.map(c => c.blobId)
+      await prisma.$transaction(async tx => {
+        for (const c of changed) {
+          const { lineItems, ...dnData } = c.mapped
+          await tx.deliveryNote.upsert({
+            where: { blobId: c.blobId },
+            create: { id: c.blobId, ...dnData },
+            update: dnData,
+          })
+        }
+        await tx.deliveryNoteItem.deleteMany({ where: { dnId: { in: changedBlobIds } } })
+        const allItems = changed.flatMap(c =>
+          c.mapped.lineItems.map(item => ({ dnId: c.blobId, ...item })),
+        )
+        if (allItems.length > 0) {
+          await tx.deliveryNoteItem.createMany({ data: allItems })
+        }
+      })
 
-    const changedBlobIds = changed.map(c => c.blobId)
-    await prisma.$transaction(async tx => {
-      for (const c of changed) {
-        const { lineItems, ...dnData } = c.mapped
-        await tx.deliveryNote.upsert({
-          where: { blobId: c.blobId },
-          create: { id: c.blobId, ...dnData },
-          update: dnData,
-        })
-      }
-      await tx.deliveryNoteItem.deleteMany({ where: { dnId: { in: changedBlobIds } } })
-      const allItems = changed.flatMap(c =>
-        c.mapped.lineItems.map(item => ({ dnId: c.blobId, ...item })),
-      )
-      if (allItems.length > 0) {
-        await tx.deliveryNoteItem.createMany({ data: allItems })
-      }
-    })
+      for (const c of changed) hashes[c.blobId] = c.fp
+    }
 
-    for (const c of changed) hashes[c.blobId] = c.fp
-    await saveStoreKeys({ [HASH_KEY]: JSON.stringify(hashes) })
+    const activeIds = new Set(deliveries.map(d => String((d as Record<string, any>)?.id ?? '').trim()).filter(Boolean))
+    let evicted = 0
+    for (const id of Object.keys(hashes)) {
+      if (!activeIds.has(id)) { delete hashes[id]; evicted++ }
+    }
+
+    if (changed.length > 0 || evicted > 0) {
+      await saveStoreKeys({ [HASH_KEY]: JSON.stringify(hashes) })
+    }
   } catch (err) {
     console.error('[delivery-mirror] batch failed:', err)
   }

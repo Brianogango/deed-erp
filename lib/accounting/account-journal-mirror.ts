@@ -65,6 +65,11 @@ export async function mirrorAccountsToPrisma(accountsInput: unknown, opts: { for
       }
     }
 
+    const activeCodes = new Set(accounts.map((a: any) => String(a?.code ?? '').trim()).filter(Boolean))
+    for (const code of Object.keys(nextHashes)) {
+      if (!activeCodes.has(code)) { delete nextHashes[code]; dirty = true }
+    }
+
     if (dirty) {
       await saveStoreKeys({ [ACCOUNT_HASH_KEY]: JSON.stringify(nextHashes) })
     }
@@ -125,6 +130,11 @@ export async function mirrorJournalEntriesToPrisma(entriesInput: unknown, opts: 
       } catch {
         result.failed++
       }
+    }
+
+    const activeRefs = new Set(entries.map((e: any) => String(e?.ref ?? '').trim()).filter(Boolean))
+    for (const ref of Object.keys(nextHashes)) {
+      if (!activeRefs.has(ref)) { delete nextHashes[ref]; dirty = true }
     }
 
     if (dirty) {

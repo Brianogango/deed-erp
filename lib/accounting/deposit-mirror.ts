@@ -101,6 +101,11 @@ export async function mirrorDepositsToPrisma(input: unknown, opts: { force?: boo
       }
     }
 
+    const activeIds = new Set(rows.map((d: any) => String(d?.id ?? '').trim()).filter(Boolean))
+    for (const id of Object.keys(nextHashes)) {
+      if (!activeIds.has(id)) { delete nextHashes[id]; dirty = true }
+    }
+
     if (dirty) await saveStoreKeys({ [HASH_KEY]: JSON.stringify(nextHashes) })
     return result
   } finally {

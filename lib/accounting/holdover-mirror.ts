@@ -70,6 +70,11 @@ export async function mirrorHoldoversToPrisma(input: unknown, opts: { force?: bo
       }
     }
 
+    const activeIds = new Set(rows.map((h: any) => String(h?.id ?? '').trim()).filter(Boolean))
+    for (const id of Object.keys(nextHashes)) {
+      if (!activeIds.has(id)) { delete nextHashes[id]; dirty = true }
+    }
+
     if (dirty) await saveStoreKeys({ [HASH_KEY]: JSON.stringify(nextHashes) })
     return result
   } finally {
