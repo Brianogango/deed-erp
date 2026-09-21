@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
+import { prismaPgConfig } from '@/lib/prisma-pg-config'
 
 declare global {
   var prismaGlobal: PrismaClient | undefined
@@ -13,7 +14,7 @@ function getPrismaClient(): PrismaClient {
       throw new Error('DATABASE_URL is required to initialize Prisma')
     }
 
-    const adapter = new PrismaPg({ connectionString })
+    const adapter = new PrismaPg(prismaPgConfig(connectionString))
     globalThis.prismaGlobal = new PrismaClient({ adapter })
   }
   return globalThis.prismaGlobal

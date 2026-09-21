@@ -2,6 +2,7 @@ import 'server-only'
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import operationalPrisma from '@/lib/prisma'
+import { prismaPgConfig } from '@/lib/prisma-pg-config'
 
 declare global {
   var reportingPrismaGlobal: PrismaClient | undefined
@@ -26,7 +27,7 @@ function getReplicaClient(): PrismaClient {
       throw new Error('REPORTING_DATABASE_URL is required to initialize the reporting replica client')
     }
     globalThis.reportingPrismaGlobal = new PrismaClient({
-      adapter: new PrismaPg({ connectionString }),
+      adapter: new PrismaPg(prismaPgConfig(connectionString)),
     })
   }
   return globalThis.reportingPrismaGlobal
