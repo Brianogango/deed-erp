@@ -18,6 +18,7 @@ import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 import { assertSafeStoreValue, InputSecurityError, readSafeJson } from '@/lib/input-security'
 import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
 import { recordHttpMetric } from '@/lib/http-metrics'
+import { guardCollectionWrite } from '@/lib/store-bulk-delete-guard'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -419,6 +420,39 @@ export async function POST(request: Request) {
     }
   }
 
+  // A browser can only ever send what it has loaded. When it hydrated a
+  // collection from a paginated page (`?limit=200`) or a stale cache, records
+  // it never saw are absent from the payload — that is "not loaded", not
+  // "deleted". Any collection write that would drop more than a handful of
+  // stored records is merged by id instead of replacing the collection.
+  const bulkDeleteBlockedKeys: string[] = []
+  {
+    const collectionKeys: string[] = []
+    const incomingByKey = new Map<string, unknown[]>()
+    for (const [key, raw] of Object.entries(entries)) {
+      let parsed: unknown
+      try { parsed = JSON.parse(raw) } catch { continue }
+      if (Array.isArray(parsed)) {
+        collectionKeys.push(key)
+        incomingByKey.set(key, parsed)
+      }
+    }
+    if (collectionKeys.length > 0) {
+      const currentState = await loadAppStateForWrite(collectionKeys)
+      for (const key of collectionKeys) {
+        const guarded = guardCollectionWrite(currentState[key], incomingByKey.get(key))
+        if (!guarded.blocked) continue
+        entries[key] = JSON.stringify(guarded.value)
+        bulkDeleteBlockedKeys.push(key)
+        console.warn(
+          `[api/store] merged ${key} instead of replacing: payload would have deleted `
+          + `${guarded.shrink.removed} of ${guarded.shrink.existing} records `
+          + `(received ${guarded.shrink.incoming}) — user ${session.user.id}`,
+        )
+      }
+    }
+  }
+
   const savedKeys = Object.keys(entries)
   if (savedKeys.length === 0) {
     await appendStoreAudit(session, [], skippedKeys, deniedKeys, rejectedPostedInvoiceEdits)
@@ -435,7 +469,7 @@ export async function POST(request: Request) {
   const version = await getAppStateVersion(savedKeys)
   const etag = buildStoreEtag(session, savedKeys, version)
   return NextResponse.json(
-    { ok: true, savedKeys: savedKeys.length, skippedKeys, deniedKeys, unknownKeys: unknownStoreKeys, rejectedPostedInvoiceEdits, version },
+    { ok: true, savedKeys: savedKeys.length, skippedKeys, deniedKeys, unknownKeys: unknownStoreKeys, rejectedPostedInvoiceEdits, bulkDeleteBlockedKeys, version },
     { headers: { ETag: etag } },
   )
 }

@@ -214,6 +214,7 @@ import {
 import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { evaluateCustomerCreditGate } from '@/lib/customer-credit-gate'
 import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
+import { fetchAndApplyStoreKeys } from '@/lib/client-store-hydrate'
 import {
   nextSseRetryMs,
   nextSyncRetryMs,
@@ -6136,17 +6137,17 @@ export function StoreProvider({
             break
           }
           case 'stock_moves': {
-            if (window.localStorage.getItem('deed_stockMoves') && window.localStorage.getItem('deed_serials')) break
-            const [list, serialList] = await Promise.all([
-              fetchCollection('/api/stock-moves?limit=200'),
-              fetchCollection('/api/serials?limit=200'),
-            ])
-            if (list.length > 0) {
-              setStockMoves(prev => mergeCollectionById(prev, list as StockMove[]))
-            }
-            if (serialList.length > 0) {
-              setSerials(prev => preferExistingArray(prev, serialList as typeof prev))
-            }
+            // deed_stockMoves / deed_serials are saved back as WHOLE collections.
+            // Hydrating them from a paginated REST page (?limit=200) put a
+            // partial list into synced state, and the next save replaced the
+            // stored collection with it (production truncation, 21 Sep 2026).
+            // Load the complete collections as a remote update, which neither
+            // marks the keys dirty nor syncs them back to the server.
+            const result = await fetchAndApplyStoreKeys({
+              keys: ['deed_stockMoves', 'deed_serials'],
+              etagStorageKey: 'deed_boot_etag_stock_moves',
+            })
+            if (result === 'error') throw new Error('stock_moves hydrate failed')
             break
           }
         }
