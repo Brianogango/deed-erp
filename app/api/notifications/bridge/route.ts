@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
+import prisma from '@/lib/prisma'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { runNotificationWorker } from '@/lib/notifications/worker'
 import type { NotificationChannel } from '@/lib/notifications/types'
 
 export const dynamic = 'force-dynamic'
+
+const MAX_RECIPIENTS = 50
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession()
@@ -20,9 +23,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'title and body required' }, { status: 400 })
     }
 
-    const userIds = (recipients as unknown[]).filter(
-      (id): id is string => typeof id === 'string' && id.length > 0,
-    )
+    const rawIds = (recipients as unknown[])
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      .slice(0, MAX_RECIPIENTS)
+    if (!rawIds.length) return NextResponse.json({ ok: true })
+
+    const validUsers = await prisma.user.findMany({
+      where: { id: { in: rawIds }, isActive: true },
+      select: { id: true },
+    })
+    const userIds = validUsers.map(u => u.id)
     if (!userIds.length) return NextResponse.json({ ok: true })
 
     const keyParts = String(entityKey || '').split(':')
@@ -36,7 +46,7 @@ export async function POST(request: NextRequest) {
       eventType: `app.${entityType}.${action}`,
       entityType,
       entityId,
-      actorUserId: excludeUserId || session.user.id,
+      actorUserId: session.user.id,
       userIds,
       channels: ['in_app', 'push'] as NotificationChannel[],
       severity: 'info',
