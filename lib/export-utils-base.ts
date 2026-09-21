@@ -44,7 +44,7 @@ export async function exportToExcel(
   const sheetData = [
     [co.name],
     [title],
-    [`Generated: ${new Date().toLocaleString()}`],
+    [`Generated: ${new Date().toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' })}`],
     [],
     headers,
     ...rows.map(r => r.map(c => c ?? '')),
@@ -113,7 +113,7 @@ export function exportToPDF(
     y -= 14
     lines.push(`BT /F2 8 Tf 1 0 0 1 ${margin} ${y} Tm (${escape(title)}) Tj ET`)
     y -= 10
-    const dateStr = `Generated: ${new Date().toLocaleString()}`
+    const dateStr = `Generated: ${new Date().toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' })}`
     lines.push(`BT /F1 6 Tf 1 0 0 1 ${margin} ${y} Tm (${escape(dateStr)}) Tj ET`)
     y -= 16
     return y

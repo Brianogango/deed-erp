@@ -205,7 +205,7 @@ function formatDate(value: string) {
   const d = new Date(`${value}T00:00:00`)
   return Number.isNaN(d.getTime())
     ? value
-    : d.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })
+    : d.toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function AnimatedAmount({ value, compact = true }: { value: number; compact?: boolean }) {
@@ -684,7 +684,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                 Financial controls: <strong>{data.integrity.passedCount}/{data.integrity.total}</strong> controls passing
               </span>
             </div>
-            <span>Updated {new Date(data.meta.generatedAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>Updated {new Date(data.meta.generatedAt).toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         </>
       ) : null}

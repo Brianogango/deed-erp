@@ -56,7 +56,7 @@ function stepIndex(status: PortalRepairStatus) {
 }
 
 const fmt = (d?: string) =>
-  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+  d ? new Date(d).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi', day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 
 const fmtKes = (n: number) =>
   'KES ' + n.toLocaleString('en-KE', { minimumFractionDigits: 0 })
@@ -634,8 +634,8 @@ export default function RepairTrackDetail() {
                     <p style={{ fontSize: 12, color: '#E4E7F0', lineHeight: 1.5 }}>{m.text}</p>
                   </div>
                   <p style={{ fontSize: 10, color: '#444A60', paddingLeft: isStaff ? 4 : 0, paddingRight: isStaff ? 0 : 4 }}>
-                    {isStaff ? `🔧 ${m.senderName}` : `You · ${m.senderName}`} · {new Date(m.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}{' '}
-                    {new Date(m.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    {isStaff ? `🔧 ${m.senderName}` : `You · ${m.senderName}`} · {new Date(m.timestamp).toLocaleTimeString('en-GB', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}{' '}
+                    {new Date(m.timestamp).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi', day: 'numeric', month: 'short' })}
                   </p>
                 </div>
               )

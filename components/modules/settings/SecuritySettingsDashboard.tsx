@@ -797,7 +797,7 @@ export default function SecuritySettingsDashboard({
               <div className="space-y-0">
                 {auditRows.slice(0, 4).map(row => (
                   <div key={row.id} className="grid grid-cols-[68px_minmax(0,1fr)_72px] gap-2 border-b border-[#F0F3F7] py-2 text-[8px] last:border-b-0">
-                    <span className="truncate text-[#667085]">{row.createdAt ? new Date(row.createdAt).toLocaleDateString('en-KE', { day: '2-digit', month: 'short' }) : '—'}</span>
+                    <span className="truncate text-[#667085]">{row.createdAt ? new Date(row.createdAt).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short' }) : '—'}</span>
                     <span className="truncate font-semibold text-[#263247]">{codeLabel(row.action)}</span>
                     <span className="truncate text-right font-mono text-[#667085]">{row.ipAddress}</span>
                   </div>
@@ -1052,7 +1052,7 @@ export default function SecuritySettingsDashboard({
                   <div className="divide-y divide-[#EDF1F6]">
                     {auditRows.length ? auditRows.map(row => (
                       <div key={row.id} className="grid gap-1 px-4 py-3 text-[9px] sm:grid-cols-[110px_minmax(0,1fr)_110px] sm:gap-3">
-                        <span className="text-[#667085]">{row.createdAt ? new Date(row.createdAt).toLocaleString('en-KE') : '—'}</span>
+                        <span className="text-[#667085]">{row.createdAt ? new Date(row.createdAt).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' }) : '—'}</span>
                         <span className="min-w-0 truncate font-semibold text-[#263247]">{codeLabel(row.action)} · {row.entityType || row.entityKey || 'security'}</span>
                         <span className="font-mono text-[#667085] sm:text-right">{row.ipAddress}</span>
                       </div>
@@ -1088,7 +1088,7 @@ export default function SecuritySettingsDashboard({
               {detailPanel === 'securityAudit' && (
                 <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div><p className="text-[13px] font-bold text-[#111827]">Security posture snapshot</p><p className="mt-0.5 text-[9.5px] text-[#8995A7]">Generated {overview?.generatedAt ? new Date(overview.generatedAt).toLocaleString('en-KE') : '—'}</p></div>
+                    <div><p className="text-[13px] font-bold text-[#111827]">Security posture snapshot</p><p className="mt-0.5 text-[9.5px] text-[#8995A7]">Generated {overview?.generatedAt ? new Date(overview.generatedAt).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' }) : '—'}</p></div>
                     <StatusPill tone={overview?.ok ? 'green' : 'amber'}>{overview?.ok ? 'Healthy' : 'Review'}</StatusPill>
                   </div>
                   <div className="mt-4">

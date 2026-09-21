@@ -20,11 +20,11 @@ function monthKey(d: string) {
 }
 function fmtMonth(key: string) {
   const [y, m] = key.split('-')
-  return new Date(Number(y), Number(m) - 1).toLocaleDateString('en-KE', { month: 'short', year: '2-digit' })
+  return new Date(Number(y), Number(m) - 1).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', month: 'short', year: '2-digit' })
 }
 function fmtMonthFull(key: string) {
   const [y, m] = key.split('-')
-  return new Date(Number(y), Number(m) - 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
+  return new Date(Number(y), Number(m) - 1).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', month: 'long', year: 'numeric' })
 }
 
 const CHART_COLORS = ['#1B2762', '#00B0D7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444', '#6B7280']

@@ -21156,7 +21156,7 @@ export const fmtKes = (n: number | string | null | undefined) => {
   const v = typeof n === 'string' ? Number(n.replace(/,/g, '')) : Number(n ?? 0)
   return `KSh ${Math.round(Number.isFinite(v) ? v : 0).toLocaleString('en-KE')}`
 }
-export const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return d } }
+export const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' }) } catch { return d } }
 export const fmtDateTime = (d: string) => {
   try {
     const raw = String(d || '')
@@ -21164,9 +21164,10 @@ export const fmtDateTime = (d: string) => {
     const dt = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
     if (Number.isNaN(dt.getTime())) return raw
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      return dt.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })
+      return dt.toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' })
     }
     return dt.toLocaleString('en-KE', {
+      timeZone: 'Africa/Nairobi',
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit', hour12: false,
     })

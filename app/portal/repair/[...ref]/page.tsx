@@ -80,7 +80,7 @@ function fmtKes(n: number) {
 }
 function fmtDate(s?: string) {
   if (!s) return '—'
-  try { return new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
+  try { return new Date(s).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' }) }
   catch { return s }
 }
 function fmtDateTime(s?: string) {
@@ -90,9 +90,10 @@ function fmtDateTime(s?: string) {
     const d = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
     if (Number.isNaN(d.getTime())) return raw
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      return d.toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' })
     }
     return d.toLocaleString('en-GB', {
+      timeZone: 'Africa/Nairobi',
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit', hour12: false,
     })
@@ -772,7 +773,7 @@ export default function RepairPortalPage() {
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 13, color: '#34D399', fontWeight: 700 }}>QC Report Available</p>
                   <p style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{repair.qcReportName}</p>
-                  {repair.qcReportUploadedAt && <p style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Uploaded {new Date(repair.qcReportUploadedAt).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>}
+                  {repair.qcReportUploadedAt && <p style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Uploaded {new Date(repair.qcReportUploadedAt).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>}
                 </div>
                 <span style={{ fontSize: 12, color: '#10B981', fontWeight: 700, whiteSpace: 'nowrap' }}>Download ↓</span>
               </a>
@@ -865,7 +866,7 @@ export default function RepairPortalPage() {
                       <p style={{ fontSize: 13, color: '#E5E7EB', lineHeight: 1.5 }}>{m.text}</p>
                     </div>
                     <p style={{ fontSize: 10, color: '#374151', marginTop: 3, fontWeight: 500 }}>
-                      {isCust ? 'You' : m.senderName} · {new Date(m.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      {isCust ? 'You' : m.senderName} · {new Date(m.timestamp).toLocaleTimeString('en-GB', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 )

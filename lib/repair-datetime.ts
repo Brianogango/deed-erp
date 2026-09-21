@@ -34,9 +34,10 @@ export function formatIntakeDateTime(value: string | null | undefined): string {
     const d = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
     if (Number.isNaN(d.getTime())) return raw
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      return d.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })
+      return d.toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' })
     }
     return d.toLocaleString('en-KE', {
+      timeZone: 'Africa/Nairobi',
       day: '2-digit',
       month: 'short',
       year: 'numeric',

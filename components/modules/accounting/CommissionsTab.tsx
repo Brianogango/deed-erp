@@ -41,7 +41,7 @@ function currentPeriod() {
 function monthOptions() {
   return Array.from({ length: 12 }, (_, i) => ({
     value: String(i + 1),
-    label: new Date(2026, i, 1).toLocaleDateString('en-KE', { month: 'long' }),
+    label: new Date(2026, i, 1).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', month: 'long' }),
   }))
 }
 

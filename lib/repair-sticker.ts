@@ -165,9 +165,10 @@ export async function printRepairSticker(job: RepairOrder): Promise<void> {
     if (Number.isNaN(d.getTime())) return String(job.intakeDate || '')
     const raw = String(job.intakeDate || '')
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      return d.toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' })
     }
     return d.toLocaleString('en-GB', {
+      timeZone: 'Africa/Nairobi',
       day: '2-digit',
       month: 'short',
       year: 'numeric',

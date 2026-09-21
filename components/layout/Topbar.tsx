@@ -1204,12 +1204,14 @@ export default function Topbar() {
     const updateClock = () => {
       const now = new Date()
       setDateLabel(now.toLocaleDateString('en-KE', {
+        timeZone: 'Africa/Nairobi',
         weekday: 'short',
         day: 'numeric',
         month: 'short',
         year: 'numeric',
       }))
       setTimeLabel(now.toLocaleTimeString('en-KE', {
+        timeZone: 'Africa/Nairobi',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
@@ -1520,7 +1522,7 @@ export default function Topbar() {
 
           {/* Sync state — only surfaced when something needs attention */}
           {syncBadge && (
-            <div className={syncBadge.className} title={syncStatus.message || (syncStatus.lastSyncedAt ? `Last synced ${new Date(syncStatus.lastSyncedAt).toLocaleString('en-KE')}` : 'No sync timestamp available')}>
+            <div className={syncBadge.className} title={syncStatus.message || (syncStatus.lastSyncedAt ? `Last synced ${new Date(syncStatus.lastSyncedAt).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' })}` : 'No sync timestamp available')}>
               {syncBadge.label}
             </div>
           )}

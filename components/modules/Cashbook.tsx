@@ -14,7 +14,7 @@ import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export function monthLabel(ym: string) {
   const [y, m] = ym.split('-')
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', month: 'long', year: 'numeric' })
 }
 
 export function toYM(d: string) { return d.slice(0, 7) }

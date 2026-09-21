@@ -344,7 +344,7 @@ export default function FinancialReportTab() {
           </div>
 
           <p className="text-[10px] text-[var(--text-4)]">
-            Generated {new Date(report.generatedAt).toLocaleString('en-KE')} · Trial balance {report.trialBalance.balanced ? 'balanced' : 'OUT OF BALANCE'} as at {report.trialBalance.asOf} · Source: posted GL journals (Prisma).
+            Generated {new Date(report.generatedAt).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' })} · Trial balance {report.trialBalance.balanced ? 'balanced' : 'OUT OF BALANCE'} as at {report.trialBalance.asOf} · Source: posted GL journals (Prisma).
           </p>
         </>
       )}

@@ -570,7 +570,7 @@ function ExtendModal({
 
 // ── Detail View ───────────────────────────────────────────────────────────────
 
-const fmtDate = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+const fmtDate = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 
 function HoldoverDetail({ holdover, onClose, onExtend, onReturn }: { holdover: Holdover; onClose: () => void; onExtend: () => void; onReturn: () => void }) {
   const isActive = holdover.status !== 'returned'

@@ -1331,7 +1331,7 @@ export default function RepairDetailView() {
                       <p className="text-[12px] font-black text-emerald-900 truncate">{r.qcReportName || 'QC report attached'}</p>
                       <p className="text-[10px] text-emerald-700 font-semibold">
                         Stored as a download link{r.qcReportSize ? ` • ${(r.qcReportSize / 1024 / 1024).toFixed(2)} MB` : ''}
-                        {r.qcReportUploadedAt ? ` • ${new Date(r.qcReportUploadedAt).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
+                        {r.qcReportUploadedAt ? ` • ${new Date(r.qcReportUploadedAt).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
                       </p>
                     </div>
                     {(r.qcReportUrl || r.qcReportData) && (

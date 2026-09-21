@@ -87,7 +87,7 @@ function formatDateIn(iso: string | null | undefined): string {
     const s = String(iso).trim()
     return s || '—'
   }
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
+  return d.toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
 }
 
 function formatCpu(config: Partial<DeviceConfigFields> | null | undefined, specsText?: string | null): string {

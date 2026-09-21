@@ -526,7 +526,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                 Items left the building. Received by <strong>{release.receivedBy || receivedBy}</strong>.
               </p>
               {release.releasedAt && (
-                <p className="text-[10px] text-green-600">{new Date(release.releasedAt).toLocaleString('en-KE')}</p>
+                <p className="text-[10px] text-green-600">{new Date(release.releasedAt).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' })}</p>
               )}
             </div>
 
@@ -544,7 +544,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-[10px] text-[var(--text-3)]">{log.performedByName ?? log.performedById}</p>
-                      <p className="text-[9px] text-[var(--text-4)]">{new Date(log.performedAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</p>
+                      <p className="text-[9px] text-[var(--text-4)]">{new Date(log.performedAt).toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </div>
                 ))}

@@ -40,7 +40,7 @@ function fmtPeriodKey(key: string): string {
   if (key.includes('-W')) return `Week ${key.split('-W')[1]}, ${key.split('-W')[0]}`
   if (key.includes('-Q')) return `Q${key.split('-Q')[1]} ${key.split('-Q')[0]}`
   const [yr, mo] = key.split('-')
-  return new Date(Number(yr), Number(mo) - 1, 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
+  return new Date(Number(yr), Number(mo) - 1, 1).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', month: 'long', year: 'numeric' })
 }
 
 // ── Auto-evaluation ───────────────────────────────────────────────────────────

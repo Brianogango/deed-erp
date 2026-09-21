@@ -76,7 +76,7 @@ const when = (value?: string | null) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime())
     ? '—'
-    : date.toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
+    : date.toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function initials(name: string | null, phone: string) {

@@ -63,7 +63,7 @@ export function formatPosReceiptProduct(
 
 function fmtTicketDate(date: string): string {
   try {
-    return new Date(date).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })
+    return new Date(date).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' })
   } catch {
     return date
   }
@@ -74,6 +74,7 @@ export function ticketWhen(order: PosHistoryTicket): string {
     const at = new Date(order.createdAt)
     if (!Number.isNaN(at.getTime())) {
       return at.toLocaleString('en-KE', {
+        timeZone: 'Africa/Nairobi',
         day: 'numeric',
         month: 'short',
         hour: '2-digit',

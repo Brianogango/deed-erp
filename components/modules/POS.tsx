@@ -111,7 +111,7 @@ function ReceiptPrintView({
         </div>
         <div className="text-right">
           <p>Date: {fmtDate(order.date)}</p>
-          <p>Time: {order.createdAt ? new Date(order.createdAt).toLocaleTimeString('en-KE', {hour: '2-digit', minute: '2-digit'}) : '--:--'}</p>
+          <p>Time: {order.createdAt ? new Date(order.createdAt).toLocaleTimeString('en-KE', {timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit'}) : '--:--'}</p>
         </div>
       </div>
       <div className="flex flex-col gap-1.5 mb-4">
@@ -472,7 +472,7 @@ export default function PointOfSale() {
   })
   const activeSession = posSessions.find(session => session.id === posSessionId)
   const sessionOpenedTime = activeSession?.openedAt
-    ? new Date(activeSession.openedAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })
+    ? new Date(activeSession.openedAt).toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })
     : null
 
   useEffect(() => {

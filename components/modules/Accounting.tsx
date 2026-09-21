@@ -236,6 +236,7 @@ const addDays = (d: string, n: number) => {
 }
 const FISCAL_YEAR = new Date().getFullYear().toString()
 const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
+  timeZone: 'Africa/Nairobi',
   day: 'numeric',
   month: 'short',
   year: 'numeric',

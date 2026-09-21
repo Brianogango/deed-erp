@@ -63,7 +63,7 @@ export function CalendarView({ items, initialMonth, className }: Props) {
     return cells
   }, [year, month])
 
-  const monthLabel = new Date(year, month, 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
+  const monthLabel = new Date(year, month, 1).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', month: 'long', year: 'numeric' })
 
   function shiftMonth(delta: number) {
     const d = new Date(year, month + delta, 1)
