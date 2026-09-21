@@ -104,9 +104,25 @@ export async function savePrismaStateEntries(entries: Record<string, string>): P
           create: { key, kind: 'collection', version: 1 },
           update: { kind: 'collection', value: Prisma.DbNull, version: { increment: 1 } },
         })
-        await tx.erpStateRecord.deleteMany({ where: { key } })
         const rows = buildProjectionRows(key, value)
-        if (rows.length) await tx.erpStateRecord.createMany({ data: rows })
+        const incomingRecordKeys = rows.map(r => r.recordKey)
+        if (rows.length) {
+          const recordKeys = rows.map(r => r.recordKey)
+          const positions = rows.map(r => r.position)
+          const payloads = rows.map(r => JSON.stringify(r.payload))
+          await tx.$executeRawUnsafe(
+            `INSERT INTO erp_state_records (id, key, record_key, position, payload, created_at, updated_at)
+             SELECT gen_random_uuid()::text, $1, unnest($2::text[]), unnest($3::int[]), unnest($4::jsonb[]), NOW(), NOW()
+             ON CONFLICT (key, record_key) DO UPDATE SET
+               position = EXCLUDED.position,
+               payload = EXCLUDED.payload,
+               updated_at = NOW()`,
+            key, recordKeys, positions, payloads,
+          )
+        }
+        await tx.erpStateRecord.deleteMany({
+          where: { key, ...(incomingRecordKeys.length ? { recordKey: { notIn: incomingRecordKeys } } : {}) },
+        })
       } else {
         await tx.erpStateRecord.deleteMany({ where: { key } })
         await tx.erpStateKey.upsert({

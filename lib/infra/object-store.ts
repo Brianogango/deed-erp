@@ -27,6 +27,7 @@ export type ObjectStore = {
   get(bucket: string, key: string): Promise<Buffer | null>
   delete(bucket: string, key: string): Promise<void>
   exists(bucket: string, key: string): Promise<boolean>
+  list(bucket: string, prefix?: string): Promise<string[]>
 }
 
 const KEY_SEGMENT = /[^A-Za-z0-9._-]/g
@@ -113,6 +114,22 @@ function createFsStore(): ObjectStore {
         return false
       }
     },
+    async list(bucket, prefix) {
+      try {
+        const dir = bucket === 'blobs'
+          ? blobRoot()
+          : bucket === 'uploads'
+            ? uploadsRoot()
+            : path.join(uploadsRoot(), sanitizeBucket(bucket))
+        const entries: string[] = await fs.readdir(dir)
+        const keys = entries.map(name =>
+          bucket === 'blobs' ? name.replace(/\.blob$/, '') : name,
+        ).filter(Boolean)
+        return prefix ? keys.filter(k => k.startsWith(prefix)) : keys
+      } catch {
+        return []
+      }
+    },
   }
 }
 
@@ -144,6 +161,7 @@ export function signS3Request(input: {
   contentType: string
   now?: Date
   pathStyle?: boolean
+  queryParams?: Record<string, string>
 }): { url: string; headers: Record<string, string> } {
   const now = input.now ?? new Date()
   const amzDate = isoBasic(now)
@@ -164,10 +182,15 @@ export function signS3Request(input: {
   const signedHeaderNames = Object.keys(headers).sort()
   const canonicalHeaders = signedHeaderNames.map(name => `${name}:${headers[name]}\n`).join('')
   const signedHeaders = signedHeaderNames.join(';')
+  const canonicalQueryString = input.queryParams
+    ? Object.keys(input.queryParams).sort()
+        .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(input.queryParams![k])}`)
+        .join('&')
+    : ''
   const canonicalRequest = [
     input.method,
     canonicalUri,
-    '',
+    canonicalQueryString,
     canonicalHeaders,
     signedHeaders,
     payloadHash,
@@ -185,7 +208,8 @@ export function signS3Request(input: {
   const kSigning = hmacHex(kService, 'aws4_request')
   const signature = createHmac('sha256', kSigning).update(stringToSign, 'utf8').digest('hex')
   headers.authorization = `AWS4-HMAC-SHA256 Credential=${input.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
-  const url = `${endpoint.protocol}//${host}${canonicalUri}`
+  const qs = canonicalQueryString ? `?${canonicalQueryString}` : ''
+  const url = `${endpoint.protocol}//${host}${canonicalUri}${qs}`
   return { url, headers }
 }
 
@@ -268,6 +292,44 @@ function createS3Store(): ObjectStore {
       if (!res.ok) throw new Error(`S3 head failed (${res.status})`)
       return true
     },
+    async list(bucket, prefix) {
+      const results: string[] = []
+      const objPrefix = [objectPrefix(), sanitizeBucket(bucket)].filter(Boolean).join('/')
+      const fullPrefix = prefix ? `${objPrefix}/${prefix}` : `${objPrefix}/`
+      let continuationToken: string | undefined
+      do {
+        const params: Record<string, string> = {
+          'list-type': '2',
+          'max-keys': '1000',
+          prefix: fullPrefix,
+        }
+        if (continuationToken) params['continuation-token'] = continuationToken
+        const signed = signS3Request({
+          method: 'GET',
+          endpoint: cfg.endpoint,
+          region: cfg.region,
+          bucket: cfg.bucket,
+          key: '',
+          accessKeyId: cfg.accessKeyId,
+          secretAccessKey: cfg.secretAccessKey,
+          body: Buffer.alloc(0),
+          contentType: 'application/xml',
+          pathStyle: cfg.pathStyle,
+          queryParams: params,
+        })
+        const res = await fetch(signed.url, { method: 'GET', headers: signed.headers })
+        if (!res.ok) break
+        const xml = await res.text()
+        for (const m of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) {
+          const relative = m[1].startsWith(objPrefix + '/') ? m[1].slice(objPrefix.length + 1) : m[1]
+          results.push(relative)
+        }
+        const truncated = xml.includes('<IsTruncated>true</IsTruncated>')
+        const tokenMatch = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)
+        continuationToken = truncated && tokenMatch ? tokenMatch[1] : undefined
+      } while (continuationToken)
+      return results
+    },
   }
 }
 
@@ -302,4 +364,8 @@ export async function deleteObject(bucket: string, key: string): Promise<void> {
 
 export async function objectExists(bucket: string, key: string): Promise<boolean> {
   return getObjectStore().exists(bucket, key)
+}
+
+export async function listObjects(bucket: string, prefix?: string): Promise<string[]> {
+  return getObjectStore().list(bucket, prefix)
 }
