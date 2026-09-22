@@ -178,6 +178,14 @@ describe('module landing behaviour', () => {
     expect(resolveSettingsSection(null)).toBe('general')
     expect(resolveSettingsSection('bogus')).toBe('general')
   })
+
+  it('every Settings menu item opens its own section (REGRESSION: Notifications fell back to General)', async () => {
+    const fs = await import('node:fs')
+    const src = fs.readFileSync('components/modules/Settings.tsx', 'utf8')
+    const navIds = [...src.matchAll(/\{ id: '([a-z_]+)'(?: as Section)?, label:/g)].map(m => m[1])
+    expect(navIds).toContain('notifications')
+    for (const id of navIds) expect(resolveSettingsSection(id)).toBe(id)
+  })
 })
 
 describe('navigation defaults', () => {
