@@ -1,6 +1,7 @@
 import 'server-only'
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
+import { bankAccountFk } from '@/lib/accounting/bank-account-ref'
 import { invoiceResidual, roundMoney } from '@/lib/accounting/money'
 import { createJournalEntryInTx, type CreateJournalEntryInput } from '@/lib/accounting/journal-service'
 import {
@@ -300,7 +301,7 @@ export async function recordPaymentWithAllocations(opts: {
         amountBase: round2(opts.amount * (opts.exchangeRateToBase ?? 1)),
         paymentType: opts.paymentType ?? 'customer_receipt',
         partnerId: opts.partnerId ?? null,
-        bankAccountId: opts.bankAccountId ?? null,
+        bankAccountId: bankAccountFk(opts.bankAccountId),
         journalId: opts.journalId ?? null,
         currencyCode: opts.currencyCode ?? 'KES',
         exchangeRateToBase: opts.exchangeRateToBase ?? 1,

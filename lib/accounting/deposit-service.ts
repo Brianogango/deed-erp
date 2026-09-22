@@ -6,6 +6,7 @@ import { cashAccountRoleForBankId, cashAccountRoleForMethod, labelForRole } from
 import { isUuid } from '@/lib/legacy-compat'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { paymentUnallocated } from '@/lib/accounting/residuals'
+import { bankAccountFk } from '@/lib/accounting/bank-account-ref'
 
 const money = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100
 
@@ -97,7 +98,7 @@ export async function createDepositWithReceipt(input: {
         externalReference: input.paymentRef ?? null,
         idempotencyKey: input.idempotencyKey ?? null,
         paymentType: 'receipt',
-        bankAccountId: input.bankAccountId ?? null,
+        bankAccountId: bankAccountFk(input.bankAccountId),
         currencyCode: 'KES',
         recordedBy: input.actor.name,
         createdById: input.actor.id,
@@ -160,7 +161,7 @@ export async function addDepositReceipt(input: {
         externalReference: input.paymentRef ?? null,
         idempotencyKey: input.idempotencyKey ?? null,
         paymentType: 'receipt',
-        bankAccountId: input.bankAccountId ?? null,
+        bankAccountId: bankAccountFk(input.bankAccountId),
         currencyCode: deposit.currencyCode,
         recordedBy: input.actor.name,
         createdById: input.actor.id,
@@ -326,7 +327,7 @@ export async function refundDeposit(input: {
         paymentRef: input.reference ?? null,
         externalReference: input.reference ?? null,
         paymentType: 'refund',
-        bankAccountId: input.bankAccountId ?? null,
+        bankAccountId: bankAccountFk(input.bankAccountId),
         currencyCode: deposit.currencyCode,
         recordedBy: input.actor.name,
         createdById: input.actor.id,
