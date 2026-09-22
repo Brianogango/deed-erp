@@ -1,12 +1,14 @@
 /**
  * Automation #2: after a customer invoice payment is recorded, notify the
- * customer (email required; WhatsApp/SMS when a phone exists).
+ * customer by email, plus WhatsApp/SMS when a phone exists and that provider
+ * is configured.
  *
  * Never throws into the payment transaction path — callers must catch.
  */
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { publishNotificationEvent } from '@/lib/notifications/service'
+import { configuredPhoneChannels } from '@/lib/notifications/channel-availability'
 
 export type PaymentReceiptNotifyInput = {
   invoiceId: string
@@ -143,9 +145,12 @@ export async function notifyCustomerPaymentReceived(
     balance,
   })
 
+  // Email always (when the client has an address); WhatsApp / SMS only once
+  // their provider keys are configured.
   const channels: Array<'email' | 'whatsapp' | 'sms'> = []
   if (email) channels.push('email')
-  if (phone) channels.push('whatsapp', 'sms')
+  if (phone) channels.push(...configuredPhoneChannels())
+  if (!channels.length) return { sent: false, skipped: 'no_deliverable_channel' }
 
   try {
     await publishNotificationEvent({
