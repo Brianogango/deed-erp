@@ -50,14 +50,19 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'repair.uncollected': POLICY(['email', 'whatsapp', 'sms'], 'warning', { fallbackSms: true, cooldownHours: 72 }),
 
   // ── Repairs (internal) ──────────────────────────────────────────────────
-  'repair.unassigned': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['technical_lead'], requiresAcknowledgement: true, escalationMinutes: 30, escalationRoles: ['director'], mandatory: true, cooldownHours: 4 }),
+  // Workshop alerts go to the Technical Lead only and stay open until the job
+  // is assigned / back on schedule. Directors no longer get a per-job
+  // escalation 30–60 min later; they get `repair.director_digest` instead.
+  'repair.unassigned': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['technical_lead'], mandatory: true, cooldownHours: 4 }),
   'repair.assignment': POLICY(['in_app', 'push'], 'attention'),
-  'repair.diagnosis_overdue': POLICY(['in_app', 'push'], 'warning', { escalationMinutes: 120, escalationRoles: ['technical_lead', 'director'], cooldownHours: 24 }),
+  'repair.diagnosis_overdue': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['technical_lead'], cooldownHours: 24 }),
   'repair.customer_approval': POLICY(['in_app'], 'attention'),
   'repair.quote_declined': POLICY(['in_app'], 'warning'),
   'repair.parts_requested': POLICY(['in_app'], 'attention', { recipientRoles: ['inventory_officer'] }),
   'repair.parts_received': POLICY(['in_app', 'push'], 'attention'),
-  'repair.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead'], requiresAcknowledgement: true, escalationMinutes: 60, escalationRoles: ['director'], mandatory: true, cooldownHours: 12 }),
+  'repair.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead'], mandatory: true, cooldownHours: 12 }),
+  // One summary per working day for the directors (see scanRepairs).
+  'repair.director_digest': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['director'] }),
 
   // ── Purchasing ──────────────────────────────────────────────────────────
   'purchase.rfq_ready': POLICY(['in_app'], 'attention'),

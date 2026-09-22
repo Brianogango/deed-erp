@@ -593,6 +593,13 @@ export async function processNotificationEscalations(limit = 50) {
     }
 
     const policy = defaultNotificationPolicy(event.eventType)
+    // The policy no longer escalates (e.g. repair alerts moved to a daily
+    // director digest): drop escalations queued under the old policy instead
+    // of falling back to the directors.
+    if (!policy.escalationMinutes) {
+      await prisma.notificationEvent.update({ where: { id: event.id }, data: { escalateAt: null } })
+      continue
+    }
     const roles = policy.escalationRoles?.length ? policy.escalationRoles : ['director']
     // Escalate only to people who did NOT already receive the original. When
     // the original went to the directors (quote approvals, leave, payroll),

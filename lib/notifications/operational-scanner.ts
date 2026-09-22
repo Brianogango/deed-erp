@@ -315,7 +315,71 @@ async function scanRepairs() {
   await resolveInactive('repair.sla_breach', 'repair', slaIds)
   await resolveInactive('repair.ready', 'repair', readyIds)
   await resolveInactive('repair.uncollected', 'repair', uncollectedIds)
+  // Per-job escalations to directors were replaced by the daily digest below;
+  // close any that are still open so they leave the directors' inboxes.
+  await resolveInactive('system.escalation', 'repair', [])
+
+  emitted += await publishRepairDirectorDigest(repairs, current)
   return emitted
+}
+
+type DigestRepair = {
+  id: string
+  jobNumber: string
+  status: unknown
+  assignedToId: string | null
+  createdAt: Date
+  promisedDate: Date | null
+  deviceBrand?: string | null
+  deviceModel?: string | null
+  deviceType?: string | null
+}
+
+/** Weekday calendar dates (Nairobi) after `from`, up to and including `to`'s date. */
+export function workingDaysSince(from: Date, to: Date) {
+  const day = (d: Date) => new Date(`${nairobiDate(d)}T00:00:00.000Z`)
+  let cursor = day(from)
+  const end = day(to)
+  let count = 0
+  while (cursor < end) {
+    cursor = new Date(cursor.getTime() + DAY)
+    const wd = cursor.getUTCDay()
+    if (wd !== 0 && wd !== 6) count++
+  }
+  return count
+}
+
+/**
+ * What the directors need from the workshop: jobs nobody picked up by the
+ * next working morning, and jobs past their promised date. One notification
+ * per working day (after 09:00 Nairobi) instead of one per job.
+ */
+export function buildRepairDirectorDigestItems(repairs: DigestRepair[], current: Date): DigestItem[] {
+  const device = (r: DigestRepair) => `${r.deviceBrand || ''} ${r.deviceModel || r.deviceType || ''}`.trim()
+  const unassigned = repairs
+    .filter(r => !r.assignedToId && ['intake', 'diagnosis'].includes(String(r.status)))
+    .map(r => ({ r, days: workingDaysSince(r.createdAt, current) }))
+    .filter(x => x.days >= 1)
+    .sort((a, b) => b.days - a.days)
+    .map(({ r, days }) => ({ id: r.id, line: `${r.jobNumber} — unassigned ${days} working day${days === 1 ? '' : 's'}${device(r) ? ` (${device(r)})` : ''}` }))
+  const late = repairs
+    .filter(r => r.promisedDate && r.promisedDate < current && !['ready', 'collected', 'verified_released'].includes(String(r.status)))
+    .sort((a, b) => a.promisedDate!.getTime() - b.promisedDate!.getTime())
+    .map(r => ({ id: r.id, line: `${r.jobNumber} — past promised date ${dateOnly(r.promisedDate!)} (${String(r.status).replaceAll('_', ' ')})` }))
+  return [...unassigned, ...late]
+}
+
+async function publishRepairDirectorDigest(repairs: DigestRepair[], current: Date) {
+  const clock = nairobiClock()
+  if (!['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(clock.weekday) || clock.hour < 9) return 0
+  const items = buildRepairDirectorDigestItems(repairs, current)
+  return publishDigest({
+    eventType: 'repair.director_digest',
+    legacyEntityType: 'repair',
+    items,
+    title: n => `${n} repair${n === 1 ? '' : 's'} need attention`,
+    actionUrl: '/repairs',
+  })
 }
 
 async function scanPurchasing() {
@@ -675,6 +739,10 @@ async function scanFinance() {
   }
 
   return emitted
+}
+
+function nairobiDate(date: Date) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
 }
 
 function nairobiClock() {

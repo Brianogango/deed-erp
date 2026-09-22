@@ -164,3 +164,42 @@ describe('daily digests replace per-item floods', () => {
     expect(body).toContain('…and 13 more.')
   })
 })
+
+describe('repair alerts: Technical Lead first, directors get one daily summary', () => {
+  it('repair alerts no longer escalate per job to directors', () => {
+    for (const t of ['repair.unassigned', 'repair.sla_breach', 'repair.diagnosis_overdue']) {
+      const p = NOTIFICATION_POLICIES[t]
+      expect(p.recipientRoles).toEqual(['technical_lead'])
+      expect(p.escalationMinutes).toBeUndefined()
+      expect(p.escalationRoles ?? []).not.toContain('director')
+    }
+    expect(NOTIFICATION_POLICIES['repair.director_digest'].recipientRoles).toEqual(['director'])
+  })
+
+  it('counts working days, skipping weekends (Nairobi dates)', async () => {
+    const { workingDaysSince } = await import('@/lib/notifications/operational-scanner')
+    const fri = new Date('2026-09-18T14:00:00+03:00')
+    expect(workingDaysSince(fri, new Date('2026-09-18T17:00:00+03:00'))).toBe(0) // same day
+    expect(workingDaysSince(fri, new Date('2026-09-20T10:00:00+03:00'))).toBe(0) // Sunday
+    expect(workingDaysSince(fri, new Date('2026-09-21T09:30:00+03:00'))).toBe(1) // Monday
+    expect(workingDaysSince(fri, new Date('2026-09-23T09:30:00+03:00'))).toBe(3) // Wednesday
+    // 23:30 EAT is still the same Nairobi day even though UTC is 20:30
+    expect(workingDaysSince(new Date('2026-09-21T23:30:00+03:00'), new Date('2026-09-22T00:30:00+03:00'))).toBe(1)
+  })
+
+  it('lists jobs unassigned since before today and jobs past their promised date', async () => {
+    const { buildRepairDirectorDigestItems } = await import('@/lib/notifications/operational-scanner')
+    const now = new Date('2026-09-22T09:30:00+03:00') // Tuesday
+    const base = { deviceBrand: 'HP', deviceModel: 'EliteBook 840', deviceType: 'laptop', promisedDate: null }
+    const items = buildRepairDirectorDigestItems([
+      { ...base, id: 'a', jobNumber: 'RJ-1', status: 'intake', assignedToId: null, createdAt: new Date('2026-09-22T08:00:00+03:00') }, // today: not yet
+      { ...base, id: 'b', jobNumber: 'RJ-2', status: 'intake', assignedToId: null, createdAt: new Date('2026-09-21T15:00:00+03:00') }, // yesterday
+      { ...base, id: 'c', jobNumber: 'RJ-3', status: 'diagnosis', assignedToId: null, createdAt: new Date('2026-09-17T10:00:00+03:00') },
+      { ...base, id: 'd', jobNumber: 'RJ-4', status: 'in_repair', assignedToId: 'tech', createdAt: new Date('2026-09-10T10:00:00+03:00'), promisedDate: new Date('2026-09-19T00:00:00Z') },
+      { ...base, id: 'e', jobNumber: 'RJ-5', status: 'ready', assignedToId: 'tech', createdAt: new Date('2026-09-10T10:00:00+03:00'), promisedDate: new Date('2026-09-19T00:00:00Z') },
+    ], now)
+    expect(items.map(i => i.id)).toEqual(['c', 'b', 'd'])
+    expect(items[0].line).toBe('RJ-3 — unassigned 3 working days (HP EliteBook 840)')
+    expect(items[2].line).toContain('past promised date 2026-09-19 (in repair)')
+  })
+})
