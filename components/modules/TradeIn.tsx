@@ -224,7 +224,8 @@ function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'custome
 // BUY-BACKS
 // ══════════════════════════════════════════════════════════════════════════════
 
-type BBLine = { productId: string; productName: string; qty: number; condition: 'good'|'fair'|'poor'; unitPrice: number; serialIds: string[]; notes: string }
+// qty / condition / unitPrice start empty ('') on a new line — the user sets them.
+type BBLine = { productId: string; productName: string; qty: number | ''; condition: 'good'|'fair'|'poor'|''; unitPrice: number | ''; serialIds: string[]; notes: string }
 type DetailTabProps = { detailId: string | null; onOpenDetail: (id: string | null) => void }
 type BuyBackBulkRow = {
   batchRef: string; customerId: string; customerName: string; originalSORef: string
@@ -258,11 +259,11 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const [customerId, setCustomerId]   = useState('')
   const [customerName, setCustomerName] = useState('')
   const [originalSORef, setOriginalSORef] = useState('')
-  const [destination, setDestination] = useState<LocationId>('warehouse')
+  const [destination, setDestination] = useState<LocationId | ''>('')
   const [notes, setNotes]             = useState('')
   const [lines, setLines]             = useState<BBLine[]>([])
   const [payModal, setPayModal]       = useState<string | null>(null)
-  const [payMethod, setPayMethod]     = useState('cash')
+  const [payMethod, setPayMethod]     = useState('')
   const [creditModal, setCreditModal] = useState<string | null>(null)
   const [crediting, setCrediting]     = useState(false)
   const [showBulk, setShowBulk]       = useState(false)
@@ -274,11 +275,11 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
     originalSORef ? saleOrders.find(s => s.ref.toLowerCase() === originalSORef.toLowerCase()) : undefined,
     [originalSORef, saleOrders])
 
-  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setDestination('warehouse'); setNotes(''); setLines([]) }
+  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setDestination(''); setNotes(''); setLines([]) }
   function resetBulk() { setBulkRows([]); if (bulkFileRef.current) bulkFileRef.current.value = '' }
 
   function addLine() {
-    setLines(l => [...l, { productId: '', productName: '', qty: 1, condition: 'good', unitPrice: 0, serialIds: [], notes: '' }])
+    setLines(l => [...l, { productId: '', productName: '', qty: '', condition: '', unitPrice: '', serialIds: [], notes: '' }])
   }
 
   function updLine(i: number, patch: Partial<BBLine>) {
@@ -287,17 +288,21 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
 
   function submit() {
     if (!customerId) { showToast('Select a customer', 'error'); return }
+    if (!destination) { showToast('Select the destination location', 'error'); return }
     if (!lines.length || lines.some(l => !l.productId)) { showToast('Add product lines', 'error'); return }
     for (const line of lines) {
       const product = products.find(p => p.id === line.productId)
       if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); return }
-      if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+      if (!line.condition) { showToast(`Select the condition for ${product.name}`, 'error'); return }
+      if (line.qty === '' || !Number.isFinite(line.qty) || line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+      if (line.unitPrice === '' || !Number.isFinite(line.unitPrice) || line.unitPrice < 0) { showToast(`Enter the amount we pay (0 or more) for ${product.name}`, 'error'); return }
       if (product.requiresSerial && line.serialIds.length !== line.qty) {
         showToast(`Select ${line.qty} serial number(s) for ${product.name}`, 'error')
         return
       }
     }
-    createBuyBack(customerId, customerName, lines, destination, notes || undefined, originalSO?.id, originalSO?.ref)
+    const readyLines = lines.map(l => ({ ...l, qty: Number(l.qty), unitPrice: Number(l.unitPrice), condition: l.condition as 'good'|'fair'|'poor' }))
+    createBuyBack(customerId, customerName, readyLines, destination, notes || undefined, originalSO?.id, originalSO?.ref)
     setShowNew(false); reset()
   }
 
@@ -478,7 +483,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
               </button>
             )}
             {bb.status === 'approved' && (
-              <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => setPayModal(bb.id)}>
+              <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => { setPayMethod(''); setPayModal(bb.id) }}>
                 <Fa icon={faMoneyBillWave} aria-hidden="true" /> Pay
               </button>
             )}
@@ -592,8 +597,8 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
               </Field>
             </RowGrid>
             <RowGrid>
-              <Field label="Destination Location">
-                <Select value={destination} onChange={v => setDestination(v as LocationId)} options={DEST_OPTS} />
+              <Field label="Destination Location *">
+                <Select value={destination} onChange={v => setDestination(v as LocationId | '')} options={[{ value: '', label: 'Select…' }, ...DEST_OPTS]} />
               </Field>
               <Field label="Notes">
                 <Input value={notes} onChange={setNotes} placeholder="Optional notes" />
@@ -617,7 +622,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
 
             {lines.length > 0 && (
               <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, marginTop: 8 }}>
-                Total: {fmtKes(lines.reduce((s, l) => s + l.unitPrice * l.qty, 0))}
+                Total: {fmtKes(lines.reduce((s, l) => s + (Number(l.unitPrice) || 0) * (Number(l.qty) || 0), 0))}
               </div>
             )}
           </div>
@@ -629,12 +634,15 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
           <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
             Cash leaves the till or bank. This buy-back cannot also be added as store credit.
           </p>
-          <Field label="Payment Method">
-            <Select value={payMethod} onChange={setPayMethod} options={PAY_OPTS} />
+          <Field label="Payment Method *">
+            <Select value={payMethod} onChange={setPayMethod} options={[{ value: '', label: 'Select…' }, ...PAY_OPTS]} />
           </Field>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
             <button className="btn-secondary text-[11px]" onClick={() => setPayModal(null)}>Cancel</button>
-            <button className="btn-primary text-[11px]" onClick={() => { payBuyBack(payModal, payMethod as BuyBack['paymentMethod']); setPayModal(null) }}>Confirm Payment</button>
+            <button className="btn-primary text-[11px]" onClick={() => {
+              if (!payMethod) { showToast('Select a payment method', 'error'); return }
+              payBuyBack(payModal, payMethod as BuyBack['paymentMethod']); setPayModal(null)
+            }}>Confirm Payment</button>
           </div>
         </Modal>
       )}
@@ -701,7 +709,7 @@ function BBLineEditor({ line, onChange, onRemove, products, customerId, saleOrde
             items={productItems}
             selectedLabel={line.productName || undefined}
             formatSelected={p => p.name}
-            onSelect={p => onChange({ productId: p.id, productName: p.name, serialIds: [], unitPrice: line.unitPrice || p.salePrice || 0 })}
+            onSelect={p => onChange({ productId: p.id, productName: p.name, serialIds: [], unitPrice: line.unitPrice !== '' ? line.unitPrice : (p.salePrice || '') })}
             renderItem={p => (
               <div>
                 <p className="font-medium text-xs text-t1">{p.name}</p>
@@ -710,14 +718,14 @@ function BBLineEditor({ line, onChange, onRemove, products, customerId, saleOrde
             )}
           />
         </Field>
-        <Field label="Condition">
-          <Select value={line.condition} onChange={v => onChange({ condition: v as 'good'|'fair'|'poor' })} options={CONDITION_OPTS.map(c => ({ value: c.value, label: c.value }))} />
+        <Field label="Condition *">
+          <Select value={line.condition} onChange={v => onChange({ condition: v as BBLine['condition'] })} options={[{ value: '', label: 'Select…' }, ...CONDITION_OPTS.map(c => ({ value: c.value, label: c.value }))]} />
         </Field>
-        <Field label="Qty">
-          <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: Number(v) })} />
+        <Field label="Qty *">
+          <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: v === '' ? '' : Number(v) })} />
         </Field>
-        <Field label="We Pay (KSh)">
-          <Input type="number" value={String(line.unitPrice)} onChange={v => onChange({ unitPrice: Number(v) })} />
+        <Field label="We Pay (KSh) *">
+          <Input type="number" value={String(line.unitPrice)} onChange={v => onChange({ unitPrice: v === '' ? '' : Number(v) })} />
         </Field>
         <button onClick={onRemove} style={{ fontSize: 14, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
       </div>
@@ -748,7 +756,7 @@ function BBLineEditor({ line, onChange, onRemove, products, customerId, saleOrde
 // DONATIONS
 // ══════════════════════════════════════════════════════════════════════════════
 
-type DonLine = { productId: string; productName: string; qty: number; serialIds: string[] }
+type DonLine = { productId: string; productName: string; qty: number | ''; serialIds: string[] }
 
 // ── Bulk upload row (parsed from CSV/XLSX) ───────────────────────────────────
 type BulkRow = {
@@ -784,9 +792,9 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
 
   const [showNew, setShowNew] = useState(false)
   const [showBulk, setShowBulk] = useState(false)
-  const [donType, setDonType] = useState<'in' | 'out'>('in')
+  const [donType, setDonType] = useState<'in' | 'out' | ''>('')
   const [party, setParty]     = useState('')
-  const [location, setLocation] = useState<LocationId>('warehouse')
+  const [location, setLocation] = useState<LocationId | ''>('')
   const [notes, setNotes]     = useState('')
   const [lines, setLines]     = useState<DonLine[]>([])
 
@@ -822,16 +830,18 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
     { key: 'status', label: 'Status', priority: 1, width: '140px', render: don => <StatusPill status={don.status} />, accessor: don => don.status },
   ]
 
-  function reset() { setParty(''); setLocation('warehouse'); setNotes(''); setLines([]) }
+  function reset() { setDonType(''); setParty(''); setLocation(''); setNotes(''); setLines([]) }
   function resetBulk() { setBulkRows([]); if (fileRef.current) fileRef.current.value = '' }
 
   function submit() {
+    if (!donType) { showToast('Select the donation type (In or Out)', 'error'); return }
     if (!party) { showToast('Enter donor / recipient name', 'error'); return }
+    if (!location) { showToast(donType === 'in' ? 'Select where to receive the donation into' : 'Select where to take the donation from', 'error'); return }
     if (!lines.length || lines.some(l => !l.productId)) { showToast('Add valid product lines', 'error'); return }
     for (const line of lines) {
       const product = products.find(p => p.id === line.productId)
       if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); return }
-      if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+      if (line.qty === '' || !Number.isFinite(line.qty) || line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
       if (product.requiresSerial && donType === 'in' && line.serialIds.length !== line.qty) {
         showToast(`Select or register ${line.qty} serial number(s) for donation-in of ${product.name}`, 'error')
         return
@@ -841,7 +851,7 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
         return
       }
     }
-    createDonation(donType, party, location, lines, notes || undefined)
+    createDonation(donType, party, location, lines.map(l => ({ ...l, qty: Number(l.qty) })), notes || undefined)
     setShowNew(false); reset()
   }
 
@@ -1094,11 +1104,11 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
               ))}
             </div>
             <RowGrid>
-              <Field label={donType === 'in' ? 'Donor Name *' : 'Recipient / Beneficiary *'}>
-                <Input value={party} onChange={setParty} placeholder={donType === 'in' ? 'e.g. USAID Kenya' : 'e.g. St. Mary School'} />
+              <Field label={donType === 'in' ? 'Donor Name *' : donType === 'out' ? 'Recipient / Beneficiary *' : 'Donor / Recipient Name *'}>
+                <Input value={party} onChange={setParty} placeholder={donType === 'in' ? 'e.g. USAID Kenya' : donType === 'out' ? 'e.g. St. Mary School' : ''} />
               </Field>
-              <Field label={donType === 'in' ? 'Receive Into' : 'Take From'}>
-                <Select value={location} onChange={v => setLocation(v as LocationId)} options={DEST_OPTS} />
+              <Field label={donType === 'in' ? 'Receive Into *' : donType === 'out' ? 'Take From *' : 'Location *'}>
+                <Select value={location} onChange={v => setLocation(v as LocationId | '')} options={[{ value: '', label: 'Select…' }, ...DEST_OPTS]} />
               </Field>
             </RowGrid>
             <Field label="Notes">
@@ -1108,7 +1118,7 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
             <div style={{ borderTop: '1px solid var(--border-lt)', paddingTop: 12, marginTop: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <p style={{ fontSize: 12, fontWeight: 700 }}>Items</p>
-                <button className="btn-secondary text-[10px] py-1" onClick={() => setLines(l => [...l, { productId: '', productName: '', qty: 1, serialIds: [] }])}>+ Add</button>
+                <button className="btn-secondary text-[10px] py-1" onClick={() => setLines(l => [...l, { productId: '', productName: '', qty: '', serialIds: [] }])}>+ Add</button>
               </div>
               {lines.map((line, i) => (
                 <DonationLineEditor
@@ -1136,8 +1146,8 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
 function DonationLineEditor({ line, products, donationType, location, onChange, onRemove }: {
   line: DonLine
   products: ReturnType<typeof useAfterSalesStore>['products']
-  donationType: 'in' | 'out'
-  location: LocationId
+  donationType: 'in' | 'out' | ''
+  location: LocationId | ''
   onChange: (patch: Partial<DonLine>) => void
   onRemove: () => void
 }) {
@@ -1155,8 +1165,8 @@ function DonationLineEditor({ line, products, donationType, location, onChange, 
             {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </Field>
-        <Field label="Qty">
-          <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: Number(v) })} />
+        <Field label="Qty *">
+          <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: v === '' ? '' : Number(v) })} />
         </Field>
         <button onClick={onRemove} style={{ fontSize: 14, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
       </div>
@@ -1173,7 +1183,7 @@ function DonationLineEditor({ line, products, donationType, location, onChange, 
                 onAdd={id => onChange({ serialIds: [...line.serialIds, id] })}
                 onRemove={id => onChange({ serialIds: line.serialIds.filter(s => s !== id) })}
                 mode="stock_out"
-                location={location}
+                location={location || undefined}
               />
             </div>
           )}
@@ -1207,7 +1217,7 @@ function DonationLineEditor({ line, products, donationType, location, onChange, 
 // CLIENT EXCHANGES
 // ══════════════════════════════════════════════════════════════════════════════
 
-type ELine = { productId: string; productName: string; qty: number; unitPrice: number; serialIds: string[] }
+type ELine = { productId: string; productName: string; qty: number | ''; unitPrice: number | ''; serialIds: string[] }
 type ExchangeBulkRow = {
   batchRef: string; customerId: string; customerName: string; originalSORef: string
   returnProductId: string; returnProductName: string; returnQty: number; returnUnitPrice: number; returnSerialIds: string[]; returnPendingIntake: string[]
@@ -1287,7 +1297,8 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
     for (const line of returnLines) {
       const product = products.find(p => p.id === line.productId)
       if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); return }
-      if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+      if (line.unitPrice === '' || !Number.isFinite(line.unitPrice) || line.unitPrice < 0) { showToast(`Enter the price (0 or more) for ${product.name}`, 'error'); return }
+      if (line.qty === '' || !Number.isFinite(line.qty) || line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
       if (product.requiresSerial && line.serialIds.length !== line.qty) {
         showToast(`Select ${line.qty} returned serial number(s) for ${product.name}`, 'error')
         return
@@ -1296,13 +1307,15 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
     for (const line of newLines) {
       const product = products.find(p => p.id === line.productId)
       if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); return }
-      if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+      if (line.unitPrice === '' || !Number.isFinite(line.unitPrice) || line.unitPrice < 0) { showToast(`Enter the price (0 or more) for ${product.name}`, 'error'); return }
+      if (line.qty === '' || !Number.isFinite(line.qty) || line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
       if (product.requiresSerial && line.serialIds.length !== line.qty) {
         showToast(`Select ${line.qty} outgoing serial number(s) for ${product.name}`, 'error')
         return
       }
     }
-    createExchange(customerId, customerName, returnLines, newLines, notes || undefined, originalSO?.id, originalSO?.ref)
+    const toReady = (l: ELine) => ({ ...l, qty: Number(l.qty), unitPrice: Number(l.unitPrice) })
+    createExchange(customerId, customerName, returnLines.map(toReady), newLines.map(toReady), notes || undefined, originalSO?.id, originalSO?.ref)
     setShowNew(false); reset()
   }
 
@@ -1390,8 +1403,8 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
     }
   }
 
-  const returnTotal = returnLines.reduce((s, l) => s + l.unitPrice * l.qty, 0)
-  const newTotal    = newLines.reduce((s, l) => s + l.unitPrice * l.qty, 0)
+  const returnTotal = returnLines.reduce((s, l) => s + (Number(l.unitPrice) || 0) * (Number(l.qty) || 0), 0)
+  const newTotal    = newLines.reduce((s, l) => s + (Number(l.unitPrice) || 0) * (Number(l.qty) || 0), 0)
   const diff        = newTotal - returnTotal
 
   if (detail) {
@@ -1553,7 +1566,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
             <div style={{ border: '1px solid #FEE2E2', borderRadius: 10, padding: 12, marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: '#991B1B' }}>↩ Items Customer Returns</p>
-                <button className="btn-secondary text-[10px] py-1" onClick={() => setReturnLines(l => [...l, { productId: '', productName: '', qty: 1, unitPrice: 0, serialIds: [] }])}>+ Add</button>
+                <button className="btn-secondary text-[10px] py-1" onClick={() => setReturnLines(l => [...l, { productId: '', productName: '', qty: '', unitPrice: '', serialIds: [] }])}>+ Add</button>
               </div>
               {returnLines.map((line, i) => (
                 <ELineEditor key={i} line={line} products={products}
@@ -1570,7 +1583,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
             <div style={{ border: '1px solid #DCFCE7', borderRadius: 10, padding: 12, marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-text)' }}>New items for customer</p>
-                <button className="btn-secondary text-[10px] py-1" onClick={() => setNewLines(l => [...l, { productId: '', productName: '', qty: 1, unitPrice: 0, serialIds: [] }])}>+ Add</button>
+                <button className="btn-secondary text-[10px] py-1" onClick={() => setNewLines(l => [...l, { productId: '', productName: '', qty: '', unitPrice: '', serialIds: [] }])}>+ Add</button>
               </div>
               {newLines.map((line, i) => (
                 <ELineEditor key={i} line={line} products={products}
@@ -1638,11 +1651,11 @@ function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_retu
             )}
           />
         </Field>
-        <Field label="Qty">
-          <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: Number(v) })} />
+        <Field label="Qty *">
+          <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: v === '' ? '' : Number(v) })} />
         </Field>
-        <Field label="Price (KSh)">
-          <Input type="number" value={String(line.unitPrice)} onChange={v => onChange({ unitPrice: Number(v) })} />
+        <Field label="Price (KSh) *">
+          <Input type="number" value={String(line.unitPrice)} onChange={v => onChange({ unitPrice: v === '' ? '' : Number(v) })} />
         </Field>
         <button onClick={onRemove} style={{ fontSize: 14, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
       </div>

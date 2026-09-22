@@ -12,7 +12,7 @@ import { useUrlUiState } from '@/hooks/useUrlRecordId'
 export default function HRPayrollTab() {
   const {
     users, currentUserId, payrollRuns, payslips, journalEntries, bankAccounts,
-    createPayrollRun, approvePayrollRun, postPayrollRun, payPayrollRun, systemSettings,
+    createPayrollRun, approvePayrollRun, postPayrollRun, payPayrollRun, systemSettings, showToast,
   } = useApp()
   const { employees, departments } = useHrStore()
 
@@ -61,18 +61,30 @@ export default function HRPayrollTab() {
   const setPayslipSearch = (value: string) => setPayslipSearchValue(value, { queryPatch: { payslipPage: null } })
   const setPayslipPage = (page: number) => setPayslipPageValue(String(Math.max(1, page)))
   const [showPayrollModal, setShowPayrollModal] = useState(false)
-  const [payrollMonth, setPayrollMonth] = useState(new Date().toISOString().slice(5, 7))
-  const [payrollYear, setPayrollYear]   = useState(String(new Date().getFullYear()))
+  const [payrollMonth, setPayrollMonth] = useState('')
+  const [payrollYear, setPayrollYear]   = useState('')
   const [payingRunId, setPayingRunId] = useState<string | null>(null)
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payReference, setPayReference] = useState('')
-  const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [payDate, setPayDate] = useState('')
 
   const payrollPaymentFor = (runId: string) =>
     journalEntries.find(j => j.payrollRunId === runId && j.ref.startsWith('JRN/PAYROLL-PAY/'))
 
+  const openPayrollModal = () => {
+    setPayrollMonth('')
+    setPayrollYear('')
+    setShowPayrollModal(true)
+  }
+
   const createPayroll = () => {
-    createPayrollRun(payrollMonth, Number(payrollYear))
+    const missing: string[] = []
+    if (!payrollMonth) missing.push('Month')
+    if (!payrollYear.trim()) missing.push('Year')
+    if (missing.length) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
+    const year = Number(payrollYear)
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) { showToast('Year must be a valid four-digit year', 'error'); return }
+    createPayrollRun(payrollMonth, year)
     setShowPayrollModal(false)
   }
 
@@ -207,9 +219,9 @@ export default function HRPayrollTab() {
             onClick={e => {
               e.stopPropagation()
               setPayingRunId(run.id)
-              setPayBankAccountId(bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa')?.id ?? bankAccounts.find(a => a.active)?.id ?? '')
+              setPayBankAccountId('')
               setPayReference('')
-              setPayDate(new Date().toISOString().slice(0, 10))
+              setPayDate('')
             }}
           >
             <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Pay Payroll
@@ -294,7 +306,7 @@ export default function HRPayrollTab() {
           <input className="form-input text-[11px] py-1.5" style={{ width: 160 }}
             placeholder="Search ref, period…" value={payrollSearch} onChange={e => setPayrollSearch(e.target.value)} />
           {canManageHR && (
-            <button className="btn-primary text-[11px]" onClick={() => setShowPayrollModal(true)}>+ Create Payroll Run</button>
+            <button className="btn-primary text-[11px]" onClick={openPayrollModal}>+ Create Payroll Run</button>
           )}
         </PanelHeader>
         <DataTable
@@ -420,8 +432,9 @@ export default function HRPayrollTab() {
             This will calculate payroll for all {employees.filter(e => e.status === 'active').length} active employees based on their current salary data.
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Month">
+            <Field label="Month" required>
               <Select value={payrollMonth} onChange={setPayrollMonth} options={[
+                { value: '', label: 'Select month…' },
                 { value: '01', label: 'January' },  { value: '02', label: 'February' },
                 { value: '03', label: 'March' },    { value: '04', label: 'April' },
                 { value: '05', label: 'May' },      { value: '06', label: 'June' },
@@ -430,7 +443,7 @@ export default function HRPayrollTab() {
                 { value: '11', label: 'November' }, { value: '12', label: 'December' },
               ]} />
             </Field>
-            <Field label="Year"><Input value={payrollYear} onChange={setPayrollYear} type="number" /></Field>
+            <Field label="Year" required><Input value={payrollYear} onChange={setPayrollYear} type="number" placeholder="e.g. 2026" /></Field>
           </div>
           <div className="hr-modal-actions flex justify-end gap-2 mt-2">
             <button className="btn-outline" onClick={() => setShowPayrollModal(false)}>Cancel</button>

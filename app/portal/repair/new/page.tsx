@@ -27,8 +27,8 @@ export default function NewRepairPortalPage() {
     serialNumber: '',
     issueDescription: '',
     accessories: '',
-    repairPath: 'diagnosis_first',
-    deviceType: 'laptop',
+    repairPath: '',
+    deviceType: '',
     liabilityWaiverAccepted: false,
   })
   const [submitting, setSubmitting] = useState(false)
@@ -40,6 +40,11 @@ export default function NewRepairPortalPage() {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     setError('')
+    const missing: string[] = []
+    if (!form.deviceType) missing.push('Device Type')
+    if (!form.repairPath) missing.push('Repair Path (Diagnosis First or Direct Repair)')
+    if (missing.length) { setError(`Please select: ${missing.join(', ')}`); return }
+    if (form.repairPath === 'direct_repair' && !form.liabilityWaiverAccepted) { setError('Please accept the liability waiver to proceed with direct repair'); return }
     setSubmitting(true)
     try {
       const res = await fetch('/api/portal/intake', {

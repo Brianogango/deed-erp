@@ -117,7 +117,7 @@ export default function LeadsPanel({
     companyName: '',
     email: '',
     phone: '',
-    source: 'website',
+    source: '',
     ownerId: currentUserId ?? '',
     notes: '',
   })
@@ -141,8 +141,9 @@ export default function LeadsPanel({
   useEffect(() => { void load({ soft: false }) }, [load])
 
   async function createLead() {
-    if (!form.name.trim()) {
-      showToast('Lead name is required', 'error')
+    const missing = [!form.name.trim() && 'Lead name', !form.source && 'Source'].filter(Boolean)
+    if (missing.length) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
       return
     }
     try {
@@ -157,7 +158,7 @@ export default function LeadsPanel({
       }
       showToast('Lead created', 'success')
       setShowForm(false)
-      setForm({ name: '', companyName: '', email: '', phone: '', source: 'website', ownerId: currentUserId ?? '', notes: '' })
+      setForm({ name: '', companyName: '', email: '', phone: '', source: '', ownerId: currentUserId ?? '', notes: '' })
       await load({ soft: true })
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Create failed', 'error')
@@ -548,8 +549,8 @@ export default function LeadsPanel({
               <Field label="Phone"><Input value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Source">
-                <Select value={form.source} onChange={v => setForm(f => ({ ...f, source: v }))} options={SOURCE_OPTIONS} />
+              <Field label="Source *">
+                <Select value={form.source} onChange={v => setForm(f => ({ ...f, source: v }))} options={[{ value: '', label: 'Select…' }, ...SOURCE_OPTIONS]} />
               </Field>
               <Field label="Owner">
                 <Select

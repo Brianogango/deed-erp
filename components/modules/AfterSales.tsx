@@ -116,14 +116,14 @@ function AfterSalesContent() {
   const [showCreateRMA, setShowCreateRMA] = useState(false)
   const [rmaSORef, setRmaSORef]           = useState('')
   const [rmaReason, setRmaReason]         = useState('')
-  const [rmaLines, setRmaLines]           = useState<{ productId: string; productName: string; qty: string; serialIds: string[]; condition: ReturnOrderLine['condition']; reason: string }[]>([])
+  const [rmaLines, setRmaLines]           = useState<{ productId: string; productName: string; qty: string; serialIds: string[]; condition: ReturnOrderLine['condition'] | ''; reason: string }[]>([])
 
   // Process modal
   const [showProcess, setShowProcess]         = useState(false)
   const [processRMA, setProcessRMA]           = useState<ReturnOrder | null>(null)
-  const [resolution, setResolution]           = useState<RMAResolution>('refund')
+  const [resolution, setResolution]           = useState<RMAResolution | ''>('')
   const [refundAmount, setRefundAmount]       = useState('')
-  const [refundPaymentMethod, setRefundPaymentMethod] = useState<'cash' | 'mpesa' | 'bank_transfer'>('cash')
+  const [refundPaymentMethod, setRefundPaymentMethod] = useState<'' | 'cash' | 'mpesa' | 'bank_transfer'>('')
   const [processNotes, setProcessNotes]       = useState('')
 
   // Reject modal
@@ -221,28 +221,30 @@ function AfterSalesContent() {
   }
 
   function addRMALine() {
-    if (!matchedSO) return
-    const firstLine = matchedSO.lines[0]
-    const prod = products.find(p => p.id === firstLine?.productId)
+    if (!matchedSO) { showToast('Enter a valid sale order / invoice reference first', 'error'); return }
+    // New return line starts empty — the user picks product, qty and condition.
     setRmaLines(prev => [...prev, {
-      productId: firstLine?.productId ?? '',
-      productName: firstLine?.productName ?? '',
-      qty: '1',
+      productId: '',
+      productName: '',
+      qty: '',
       serialIds: [],
-      condition: 'good',
+      condition: '',
       reason: '',
     }])
   }
 
   function submitRMA() {
     if (!matchedSO || !rmaReason.trim() || rmaLines.length === 0) {
-      showToast('Fill in all required fields', 'error'); return
+      const missing = [!matchedSO && 'Sale order reference', !rmaReason.trim() && 'Return reason', rmaLines.length === 0 && 'At least one return item'].filter(Boolean)
+      showToast(`Required: ${missing.join(', ')}`, 'error'); return
     }
-    for (const line of rmaLines) {
-      if (!line.productId) { showToast('Each return line needs a product', 'error'); return }
+    for (const [index, line] of rmaLines.entries()) {
+      if (!line.productId) { showToast(`Select a product for return item ${index + 1}`, 'error'); return }
       const product = products.find(p => p.id === line.productId)
-      const qty = Number(line.qty) || 0
-      if (qty <= 0) { showToast(`Quantity must be greater than zero for ${line.productName || 'item'}`, 'error'); return }
+      if (line.qty.trim() === '') { showToast(`Enter a quantity for ${line.productName || `return item ${index + 1}`}`, 'error'); return }
+      const qty = Number(line.qty)
+      if (!Number.isFinite(qty) || qty <= 0) { showToast(`Quantity must be greater than zero for ${line.productName || 'item'}`, 'error'); return }
+      if (!line.condition) { showToast(`Select the condition for ${line.productName || `return item ${index + 1}`}`, 'error'); return }
       if (product?.requiresSerial && line.serialIds.length !== qty) {
         showToast(`Select ${qty} returned serial number(s) for ${product.name}`, 'error')
         return
@@ -250,8 +252,8 @@ function AfterSalesContent() {
     }
     const lines = rmaLines.map(l => ({
       productId: l.productId, productName: l.productName,
-      qty: Number(l.qty) || 1, serialIds: l.serialIds,
-      condition: l.condition, reason: l.reason,
+      qty: Number(l.qty), serialIds: l.serialIds,
+      condition: l.condition as ReturnOrderLine['condition'], reason: l.reason,
     }))
     try {
       const order = createReturnOrder(
@@ -268,11 +270,18 @@ function AfterSalesContent() {
 
   function handleProcess() {
     if (!processRMA) return
+    if (!resolution) { showToast('Select a resolution', 'error'); return }
+    const amountText = refundAmount.trim()
+    if ((resolution === 'refund' || resolution === 'credit_note') && amountText !== '') {
+      const amt = Number(amountText)
+      if (!Number.isFinite(amt) || amt <= 0) { showToast('Amount must be a number greater than zero', 'error'); return }
+    }
+    if (resolution === 'refund' && !refundPaymentMethod) { showToast('Select the refund payment method', 'error'); return }
     processReturn(
       processRMA.id, resolution,
-      refundAmount ? Number(refundAmount) : undefined,
+      amountText ? Number(amountText) : undefined,
       processNotes || undefined,
-      resolution === 'refund' ? refundPaymentMethod : undefined,
+      resolution === 'refund' && refundPaymentMethod ? refundPaymentMethod : undefined,
     )
     setShowProcess(false)
     setProcessRMA(null)
@@ -514,14 +523,14 @@ function AfterSalesContent() {
             {rma.status === 'received' && (
               <button className="btn-primary text-[11px] px-4 py-2 flex items-center gap-1.5"
                 onClick={() => {
-                  const defaultRes: RMAResolution = rma.requiresCreditNote || (Number(rma.creditTotalHint) || 0) > 0
-                    ? 'credit_note'
-                    : 'refund'
+                  // Resolution and refund method are the user's choice; the amount
+                  // hint comes from the source invoice/credit total of this RMA.
                   const amount = Number(rma.creditTotalHint) > 0
                     ? String(rma.creditTotalHint)
                     : ''
                   setProcessRMA(rma)
-                  setResolution(defaultRes)
+                  setResolution('')
+                  setRefundPaymentMethod('')
                   setRefundAmount(amount)
                   setProcessNotes('')
                   setShowProcess(true)
@@ -877,7 +886,7 @@ function AfterSalesContent() {
                     <div key={i} className="rounded-lg p-3 space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[9px] text-t3 block mb-0.5">Product</label>
+                          <label className="text-[9px] text-t3 block mb-0.5">Product *</label>
                           <select aria-label={`Product for return item ${i + 1}`} className="form-input w-full text-[11px]"
                             value={line.productId}
                             onChange={e => {
@@ -891,10 +900,11 @@ function AfterSalesContent() {
                           </select>
                         </div>
                         <div>
-                          <label className="text-[9px] text-t3 block mb-0.5">Condition</label>
+                          <label className="text-[9px] text-t3 block mb-0.5">Condition *</label>
                           <select aria-label={`Condition for return item ${i + 1}`} className="form-input w-full text-[11px]"
                             value={line.condition}
                             onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, condition: e.target.value as ReturnOrderLine['condition'] } : l))}>
+                            <option value="" disabled>Select…</option>
                             <option value="good">Good</option>
                             <option value="damaged">Damaged</option>
                             <option value="defective">Defective</option>
@@ -903,7 +913,7 @@ function AfterSalesContent() {
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[9px] text-t3 block mb-0.5">Qty</label>
+                          <label className="text-[9px] text-t3 block mb-0.5">Qty *</label>
                           <input
                             aria-label={`Qty for return item ${i + 1}`}
                             className="form-input w-full text-[11px]"
@@ -1010,7 +1020,7 @@ function AfterSalesContent() {
               )}
               {resolution === 'refund' && (
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method *</label>
                   <div className="flex gap-2">
                     {([['cash','Cash',faMoneyBill],['mpesa','M-Pesa',faMobileScreenButton],['bank_transfer','Bank Transfer',faBuildingColumns]] as const).map(([val, lbl, icon]) => (
                       <button key={val} onClick={() => setRefundPaymentMethod(val)}

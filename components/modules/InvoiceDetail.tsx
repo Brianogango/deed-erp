@@ -39,7 +39,6 @@ import {
 import { fetchMpesaStatus, sendMpesaStk, waitForMpesaStk } from '@/lib/mpesa/client'
 import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
 
-const today = () => new Date().toISOString().slice(0, 10)
 
 export default function InvoiceDetail() {
   const mounted = useMounted()
@@ -103,10 +102,10 @@ export default function InvoiceDetail() {
 
   const [showPayModal, setShowPayModal] = useState(false)
   const [payAmount, setPayAmount] = useState('')
-  const [payMethod, setPayMethod] = useState('mpesa')
+  const [payMethod, setPayMethod] = useState('')
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payReference, setPayReference] = useState('')
-  const [payDate, setPayDate] = useState(today())
+  const [payDate, setPayDate] = useState('')
   const [payPhone, setPayPhone] = useState('')
   const [darajaReady, setDarajaReady] = useState(false)
   const [stkBusy, setStkBusy] = useState(false)
@@ -380,15 +379,20 @@ export default function InvoiceDetail() {
   ].sort((a, b) => String(b.date).localeCompare(String(a.date)))
 
   const handlePayment = () => {
-    if (!payAmount || Number(payAmount) <= 0) return
     if (balance <= 0) { showToast(`${docLabel} is already fully settled`, 'info'); return }
+    const missing: string[] = []
+    if (!payDate) missing.push(invoice.type === 'customer_invoice' ? 'Receipt date' : 'Payment date')
+    if (!payAmount || !Number.isFinite(Number(payAmount)) || Number(payAmount) <= 0) missing.push('Amount (greater than 0)')
+    if (!payMethod) missing.push(invoice.type === 'customer_invoice' ? 'Receipt method' : 'Payment method')
+    if (missing.length) { showToast(`Required: ${missing.join(', ')}`, 'error'); return }
     if (payMethod === 'bank_transfer' && !payBankAccountId) { showToast('Select a bank account for bank transfer payments', 'error'); return }
     registerPayment(invoice.id, financePaymentPreview(payAmount, balance).applied, payMethod, payBankAccountId || undefined, payReference, payDate)
     setShowPayModal(false)
     focusDetailTab('payments')
     setPayAmount('')
     setPayReference('')
-    setPayDate(today())
+    setPayDate('')
+    setPayMethod('')
     setStkStatus('')
   }
 
@@ -396,6 +400,7 @@ export default function InvoiceDetail() {
     if (!invoice || invoice.type !== 'customer_invoice') return
     const amount = Number(payAmount)
     if (!amount || amount <= 0) { showToast('Enter the amount to collect', 'error'); return }
+    if (!payDate) { showToast('Required: Receipt date', 'error'); return }
     const phone = normalizeMpesaPhone(payPhone)
     if (!phone) { showToast('Enter a valid M-Pesa number (07XX …)', 'error'); return }
     setStkBusy(true)
@@ -422,7 +427,8 @@ export default function InvoiceDetail() {
       setShowPayModal(false)
       setPayAmount('')
       setPayReference('')
-      setPayDate(today())
+      setPayDate('')
+      setPayMethod('')
       setStkStatus('')
       showToast(`M-Pesa ${receipt} recorded`)
     } catch (error) {
@@ -1205,7 +1211,7 @@ export default function InvoiceDetail() {
               </div>
             </div>
 
-            <Field label={invoice.type === 'customer_invoice' ? 'Receipt date' : 'Payment date'}>
+            <Field label={invoice.type === 'customer_invoice' ? 'Receipt date *' : 'Payment date *'}>
               <Input type="date" value={payDate} onChange={setPayDate} />
             </Field>
 
@@ -1237,11 +1243,12 @@ export default function InvoiceDetail() {
               </div>
             </div>
 
-            <Field label={invoice.type === 'customer_invoice' ? 'Receipt method' : 'Payment method'}>
+            <Field label={invoice.type === 'customer_invoice' ? 'Receipt method *' : 'Payment method *'}>
               <Select
                 value={payMethod}
                 onChange={setPayMethod}
                 options={[
+                  { value: '', label: 'Select method…' },
                   { value: 'mpesa', label: 'M-Pesa' },
                   { value: 'bank_transfer', label: 'Bank Transfer' },
                   { value: 'cash', label: 'Cash' },
@@ -1256,7 +1263,10 @@ export default function InvoiceDetail() {
                 <Select
                   value={payBankAccountId}
                   onChange={setPayBankAccountId}
-                  options={activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id }))}
+                  options={[
+                    { value: '', label: 'Select account…' },
+                    ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id })),
+                  ]}
                 />
               </Field>
             )}

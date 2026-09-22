@@ -9,7 +9,6 @@ import {
 } from '@/lib/store'
 import type { ProductKind } from '@/lib/product-kind'
 import {
-  defaultProductCreationCategory,
   inventoryCategoryFilterOptions,
   resolveProductCreationCategoryOptions,
 } from '@/lib/product-categories'
@@ -90,7 +89,7 @@ type OpeningStockLine = {
   qty: string
   serials: string
   serialSkus: string
-  location: LocationId
+  location: LocationId | ''
 }
 
 const INTERNAL_LOCS = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map(k => ({
@@ -122,30 +121,30 @@ function applyCostBandPrices<T extends Record<string, any>>(
   }
 }
 
-const blankProduct = (formDefaults?: { minStock?: number; warrantyMonths?: number; category?: string }) => {
-  const category = (formDefaults?.category || 'Laptops') as CategoryId
-  const defaults = applyCategoryAccountDefaults(category, {})
-  const productKind = defaults.productKind
-  const trackingMethod = defaultTrackingForKind(productKind, category)
+// New products start empty: category, and everything derived from it
+// (product kind, tracking, unit, account codes), is only filled in after the
+// user picks a category. Numbers/choices (min stock, warranty, VAT, condition,
+// invoicing policy) must be set explicitly — see validateNewProductFields.
+const blankProduct = () => {
   return {
-    name: '', sku: '', barcode: '', category,
-    productKind,
-    trackingMethod,
-    salePrice: '', costPrice: '', wholesalePrice: '', commissionRatePercent: '', taxRate: '0',
-    minStock: String(formDefaults?.minStock ?? 5),
-    unit: defaultUnitForKind(productKind, trackingMethod),
-    invoicePolicy: 'order' as 'order' | 'delivery',
+    name: '', sku: '', barcode: '', category: '',
+    productKind: '',
+    trackingMethod: '',
+    salePrice: '', costPrice: '', wholesalePrice: '', commissionRatePercent: '', taxRate: '',
+    minStock: '',
+    unit: '',
+    invoicePolicy: '' as 'order' | 'delivery' | '',
     pricingCategoryId: '',
-    productType: 'refurbished',
+    productType: '',
     description: '', canBeSold: true, canBePurchased: true, image: '',
-    isActive: true, warrantyMonths: String(formDefaults?.warrantyMonths ?? 6),
-    saleAccountCode: defaults.saleAccountCode || '',
-    costAccountCode: defaults.costAccountCode || '',
-    inventoryAccountCode: defaults.inventoryAccountCode || '',
-    cogsAccountCode: defaults.cogsAccountCode || '',
-    adjustmentAccountCode: defaults.adjustmentAccountCode || '',
-    writeOffAccountCode: defaults.writeOffAccountCode || '',
-    priceDifferenceAccountCode: defaults.priceDifferenceAccountCode || '',
+    isActive: true, warrantyMonths: '',
+    saleAccountCode: '',
+    costAccountCode: '',
+    inventoryAccountCode: '',
+    cogsAccountCode: '',
+    adjustmentAccountCode: '',
+    writeOffAccountCode: '',
+    priceDifferenceAccountCode: '',
     parentId: '',
     deviceRamGb: '',
     deviceStorageGb: '',
@@ -310,7 +309,7 @@ function InventoryContent() {
   const setCatalogCatFilter = (value: string) =>
     setCatalogCatFilterValue(value, { queryPatch: { page: null } })
   const setCatalogPage = (value: number) => setCatalogPageValue(String(Math.max(1, value)))
-  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
+  const [reportMonth, setReportMonth] = useState('')
   const [reportProductId, setReportProductId] = useState('All')
   const [serialLookupQuery, setSerialLookupQuery] = useState('')
   const [serialReportStatus, setSerialReportStatus] = useState<'all' | SerialNumber['status']>('all')
@@ -321,11 +320,6 @@ function InventoryContent() {
   const [openArchivedToken, setOpenArchivedToken] = useState(0)
   const [editId, setEditId] = useUrlRecordId({ param: 'edit' })
   const [form, setForm] = useState<any>(blankProduct())
-  const productFormDefaults = {
-    minStock: systemSettings.invDefaultMinStock ?? 5,
-    warrantyMonths: systemSettings.invDefaultWarrantyMonths ?? 6,
-    category: defaultProductCreationCategory((systemSettings as any).invProductCategories),
-  }
   const emptyPhotoSlots = (): Record<ProductImageSlot, { url: string | null; source: 'upload' | 'catalog' | null; pending?: boolean }> => ({
     1: { url: null, source: null },
     2: { url: null, source: null },
@@ -338,11 +332,11 @@ function InventoryContent() {
   const [openingLines, setOpeningLines] = useState<OpeningStockLine[]>([])
 
   const [showTransfer, setShowTransfer] = useState(false)
-  const [tFrom, setTFrom] = useState<LocationId>('warehouse')
-  const [tTo, setTTo] = useState<LocationId>('shop')
+  const [tFrom, setTFrom] = useState<LocationId | ''>('')
+  const [tTo, setTTo] = useState<LocationId | ''>('')
   const [tNotes, setTNotes] = useState('')
   const [tProd, setTProd] = useState<Product | null>(null)
-  const [tQty, setTQty] = useState('1')
+  const [tQty, setTQty] = useState('')
   const [tSerials, setTSerials] = useState<string[]>([])
   const [tScanInput, setTScanInput] = useState('')
 
@@ -378,8 +372,8 @@ function InventoryContent() {
   const [adjFilter, setAdjFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [adjForm, setAdjForm] = useState<{
     productId: string; productName: string
-    type: 'add' | 'subtract'; qty: string; reason: AdjReason; notes: string
-  }>({ productId: '', productName: '', type: 'subtract', qty: '', reason: 'count_correction', notes: '' })
+    type: 'add' | 'subtract' | ''; qty: string; reason: AdjReason | ''; notes: string
+  }>({ productId: '', productName: '', type: '', qty: '', reason: '', notes: '' })
   const [adjSearch, setAdjSearch] = useState('')
   const [adjRemoteHits, setAdjRemoteHits] = useState<Product[]>([])
 
@@ -390,7 +384,7 @@ function InventoryContent() {
 
   // Product label print state
   const [labelProduct, setLabelProduct] = useState<Product | null>(null)
-  const [labelQty, setLabelQty] = useState('1')
+  const [labelQty, setLabelQty] = useState('')
 
   // Product catalog / price list state
   const priceImportRef = useRef<HTMLInputElement>(null)
@@ -398,7 +392,7 @@ function InventoryContent() {
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null)
   const [showPriceImport, setShowPriceImport] = useState(false)
   const [priceRows, setPriceRows] = useState<PriceUpdateRow[]>([])
-  const [priceForm, setPriceForm] = useState({ salePrice: '', costPrice: '', reason: '', effectiveDate: new Date().toISOString().slice(0, 10) })
+  const [priceForm, setPriceForm] = useState({ salePrice: '', costPrice: '', reason: '', effectiveDate: '' })
 
   // Duplicate & variant state
   const [dupConfirm, setDupConfirm] = useState(false)
@@ -766,7 +760,7 @@ function InventoryContent() {
       salePrice: String(saleSeed ?? 0),
       costPrice: String(product.costPrice ?? 0),
       reason: '',
-      effectiveDate: new Date().toISOString().slice(0, 10),
+      effectiveDate: '',
     })
   }
 
@@ -775,8 +769,9 @@ function InventoryContent() {
     const salePrice = Number(priceForm.salePrice)
     // Cost is not editable here — keep the product's current cost (purchase-driven).
     const costPrice = Number(priceProduct.costPrice) || 0
-    if (!Number.isFinite(salePrice) || salePrice < 0) { showToast('Enter a valid sale price', 'error'); return }
+    if (!priceForm.salePrice.trim() || !Number.isFinite(salePrice) || salePrice < 0) { showToast('Enter a valid sale price', 'error'); return }
     if (!priceForm.reason.trim()) { showToast('Enter a reason for the price update', 'error'); return }
+    if (!priceForm.effectiveDate) { showToast('Select the effective date for the price update', 'error'); return }
     updateProductPrice(priceProduct.id, salePrice, costPrice, priceForm.reason, priceForm.effectiveDate)
     setPriceProduct(null)
   }
@@ -898,7 +893,7 @@ function InventoryContent() {
   }
 
   const openNew = () => {
-    setForm(blankProduct(productFormDefaults))
+    setForm(blankProduct())
     setPhotoSlots(emptyPhotoSlots())
     setEditId(null)
     setDupConfirm(false)
@@ -979,7 +974,7 @@ function InventoryContent() {
   const openVariant = (parent: Product) => {
     const kind = inferProductKind(parent)
     setForm({
-      ...blankProduct(productFormDefaults),
+      ...blankProduct(),
       name: parent.name,
       category: parent.category,
       productKind: kind,
@@ -1012,6 +1007,21 @@ function InventoryContent() {
   const saveProduct = async () => {
     if (!form.name.trim()) { showToast('Product name is required', 'error'); return }
     if (form.name.trim().length < 3) { showToast('Product name must be at least 3 characters', 'error'); return }
+    {
+      const isServiceForm = form.productKind === 'service' || form.category === 'Services'
+      const isNum = (v: unknown) => String(v ?? '').trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0
+      const missing: string[] = []
+      if (!form.category) missing.push('Category')
+      if (!form.productKind) missing.push('Product Type')
+      if (!isSerialOnlyCategory(form.category) && !form.trackingMethod) missing.push('Tracking Method')
+      if (!form.unit) missing.push('Unit of Measure')
+      if (form.productKind !== 'service' && !isNum(form.minStock)) missing.push('Min Stock')
+      if (!isServiceForm && !form.productType) missing.push('Condition')
+      if (String(form.taxRate ?? '').trim() === '') missing.push('VAT / Tax Rate')
+      if (!isNum(form.warrantyMonths)) missing.push('Warranty (Months)')
+      if (!form.invoicePolicy) missing.push('Invoicing Policy')
+      if (missing.length) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
+    }
 
     // SKU is internal; generate one when omitted.
     const skuTrimmed = form.sku.trim() || buildProductSku(form.name, products)
@@ -1458,10 +1468,10 @@ function InventoryContent() {
         return {
           productId: product?.id || '',
           productName: product?.name || name || sku,
-          qty: col(row, 'Qty', 'qty', 'Quantity', 'quantity') || '1',
+          qty: col(row, 'Qty', 'qty', 'Quantity', 'quantity'),
           serials: col(row, 'Serials', 'serials', 'Serial Numbers', 'serial_numbers'),
           serialSkus: col(row, 'Serial SKUs', 'serial_skus', 'Unit SKUs', 'unit_skus', 'Unit SKU', 'unit_sku'),
-          location: (locMap[locRaw] || 'warehouse') as LocationId,
+          location: (locMap[locRaw] || '') as LocationId | '',
         }
       })
       setOpeningImportErrors(errors)
@@ -1474,7 +1484,7 @@ function InventoryContent() {
 
   const openOpeningStockModal = () => {
     if (openingLines.length === 0) {
-      setOpeningLines([{ productId: '', productName: '', qty: '1', serials: '', serialSkus: '', location: 'warehouse' }])
+      setOpeningLines([{ productId: '', productName: '', qty: '', serials: '', serialSkus: '', location: '' }])
     }
     setShowOpening(true)
   }
@@ -1482,13 +1492,21 @@ function InventoryContent() {
   const handleOpeningPost = () => {
     const splitSerials = (value: string) => value.split(/[\n,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean)
     const splitSerialSkus = (value: string) => value.split(/[\n,;]+/).map(s => s.trim().toUpperCase())
-    const items = openingLines.filter(line => line.productId).map(line => ({
-      productId: line.productId, qty: Number(line.qty) || 0,
+    const chosen = openingLines.filter(line => line.productId)
+    if (!chosen.length) { showToast('Add at least one opening stock line', 'error'); return }
+    for (const line of chosen) {
+      const missing: string[] = []
+      const qtyNum = Number(line.qty)
+      if (!line.qty.trim() || !Number.isFinite(qtyNum) || qtyNum < 0 || !Number.isInteger(qtyNum)) missing.push('Qty (whole number)')
+      if (!line.location) missing.push('Location')
+      if (missing.length) { showToast(`${line.productName || 'Opening stock line'}: enter ${missing.join(' and ')}`, 'error'); return }
+    }
+    const items = chosen.map(line => ({
+      productId: line.productId, qty: Number(line.qty),
       serials: line.serials ? splitSerials(line.serials) : undefined,
       serialSkus: line.serialSkus ? splitSerialSkus(line.serialSkus) : undefined,
-      location: line.location,
+      location: line.location as LocationId,
     }))
-    if (!items.length) { showToast('Add at least one opening stock line', 'error'); return }
     importOpeningStock(items)
     setShowOpening(false)
     setOpeningLines([])
@@ -1498,6 +1516,7 @@ function InventoryContent() {
     const parsed = parseScanPayload(tScanInput)
     if (!parsed.candidates.length) return
     if (!tProd) { showToast('Select a product first', 'error'); return }
+    if (!tFrom) { showToast('Select the source location first', 'error'); return }
     const existing = serials.find(s =>
       s.productId === tProd.id
       && s.location === tFrom
@@ -1513,13 +1532,18 @@ function InventoryContent() {
   }
 
   const handleTransfer = async () => {
-    if (!tProd) { showToast('Select a product to transfer', 'error'); return }
+    const missing: string[] = []
+    if (!tFrom) missing.push('Source Location')
+    if (!tTo) missing.push('Destination Location')
+    if (!tProd) missing.push('Product')
+    if (missing.length || !tFrom || !tTo || !tProd) { showToast(`Please select: ${missing.join(', ')}`, 'error'); return }
     if (tFrom === tTo) { showToast('Source and destination must differ', 'error'); return }
-    const qty = tProd.requiresSerial ? tSerials.length : Number(tQty) || 0
-    if (qty <= 0) { showToast('Enter a valid transfer quantity', 'error'); return }
+    if (!tProd.requiresSerial && (!tQty.trim() || !Number.isFinite(Number(tQty)))) { showToast('Enter the transfer quantity', 'error'); return }
+    const qty = tProd.requiresSerial ? tSerials.length : Number(tQty)
+    if (!(qty > 0)) { showToast(tProd.requiresSerial ? 'Scan at least one serial to transfer' : 'Enter a valid transfer quantity', 'error'); return }
     const serialIds = tProd.requiresSerial ? serials.filter(s => tSerials.includes(s.serial) && s.productId === tProd.id).map(s => s.id) : []
     const ok = await submitTransfer(tFrom, tTo, tProd.id, tProd.name, qty, serialIds, tNotes)
-    if (ok) { setShowTransfer(false); setTProd(null); setTQty('1'); setTSerials([]); setTScanInput(''); setTNotes('') }
+    if (ok) { setShowTransfer(false); setTFrom(''); setTTo(''); setTProd(null); setTQty(''); setTSerials([]); setTScanInput(''); setTNotes('') }
   }
 
   if (!mounted) return <ModuleSkeleton />
@@ -2321,7 +2345,7 @@ function InventoryContent() {
                   <Field label="Reason" required>
                     <Input value={priceForm.reason} onChange={v => setPriceForm(f => ({ ...f, reason: v }))} placeholder="e.g. Supplier price change, promo, clearance" />
                   </Field>
-                  <Field label="Effective Date">
+                  <Field label="Effective Date" required>
                     <Input type="date" value={priceForm.effectiveDate} onChange={v => setPriceForm(f => ({ ...f, effectiveDate: v }))} />
                   </Field>
                   {Number(priceForm.salePrice) < Number(priceProduct.costPrice) && Number(priceProduct.costPrice) > 0 && (
@@ -2743,10 +2767,13 @@ function InventoryContent() {
 
         const submitAdj = () => {
           const qty = Number(adjForm.qty)
+          const { type, reason } = adjForm
+          if (!type) { showToast('Select the adjustment type (Remove Stock or Add Stock)', 'error'); return }
           if (!adjForm.productId) { showToast('Select a product', 'error'); return }
-          if (!qty || qty <= 0)   { showToast('Enter a valid quantity', 'error'); return }
-          createAdjustment(adjForm.productId, adjForm.productName, adjForm.type, qty, adjForm.reason, adjForm.notes)
-          setAdjForm({ productId: '', productName: '', type: 'subtract', qty: '', reason: 'count_correction', notes: '' })
+          if (!adjForm.qty.trim() || !Number.isFinite(qty) || qty <= 0)   { showToast('Enter a valid quantity', 'error'); return }
+          if (!reason) { showToast('Select a reason', 'error'); return }
+          createAdjustment(adjForm.productId, adjForm.productName, type, qty, reason, adjForm.notes)
+          setAdjForm({ productId: '', productName: '', type: '', qty: '', reason: '', notes: '' })
           setAdjSearch('')
           setShowAdjForm(false)
         }
@@ -2907,7 +2934,7 @@ function InventoryContent() {
                 <div className="flex flex-col gap-4">
                   {/* Type selector */}
                   <div>
-                    <p className="text-[11px] font-bold text-text-3 uppercase mb-2">Adjustment Type</p>
+                    <p className="text-[11px] font-bold text-text-3 uppercase mb-2">Adjustment Type <span className="text-destructive">*</span></p>
                     <div className="grid grid-cols-2 gap-3">
                       {(['subtract', 'add'] as const).map(t => (
                         <button key={t} onClick={() => setAdjForm(f => ({ ...f, type: t }))}
@@ -2956,6 +2983,7 @@ function InventoryContent() {
                         value={adjForm.reason}
                         onChange={v => setAdjForm(f => ({ ...f, reason: v as AdjReason }))}
                         options={[
+                          { value: '', label: 'Select…' },
                           { value: 'count_correction', label: 'Stock Count Correction' },
                           { value: 'damage',           label: 'Damage / Write-off' },
                           { value: 'theft',            label: 'Theft / Loss' },
@@ -2976,8 +3004,7 @@ function InventoryContent() {
 
                   <div className="flex gap-3 justify-end">
                     <button className="btn-secondary px-6" onClick={() => setShowAdjForm(false)}>Cancel</button>
-                    <button className="btn-primary px-8" onClick={submitAdj}
-                      disabled={!adjForm.productId || !adjForm.qty || Number(adjForm.qty) <= 0}>
+                    <button className="btn-primary px-8" onClick={submitAdj}>
                       Submit for Approval
                     </button>
                   </div>
@@ -3147,7 +3174,7 @@ function InventoryContent() {
 
           <div className="card p-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Field label="Month"><Select value={reportMonth} onChange={value => setReportMonth(value)} options={MONTH_OPTS} /></Field>
+              <Field label="Month"><Select value={reportMonth} onChange={value => setReportMonth(value)} options={[{ value: '', label: 'Select month…' }, ...MONTH_OPTS]} /></Field>
               <Field label="Category"><Select value={catFilter} onChange={value => setCatFilter(value)} options={[{ value: 'All', label: 'All categories' }, ...inventoryCategoryFilterOptions((systemSettings as any).invProductCategories)]} /></Field>
               <Field label="Product"><Select value={reportProductId} onChange={value => setReportProductId(value)} options={[{ value: 'All', label: 'All products' }, ...stockableProducts.map(p => ({ value: p.id, label: p.name }))]} /></Field>
             </div>
@@ -3223,7 +3250,14 @@ function InventoryContent() {
             </div>
           )}
 
-          {reportTab === 'opening_closing' && (
+          {(reportTab === 'opening_closing' || reportTab === 'movements') && !reportMonth && (
+            <div className="card p-10 text-center" role="status">
+              <p className="text-sm font-bold text-text-1 m-0">Select a period</p>
+              <p className="text-xs text-text-3 mt-1 mb-0">Choose a month above to see {reportTab === 'movements' ? 'stock movements' : 'opening vs closing stock'} for that period.</p>
+            </div>
+          )}
+
+          {reportTab === 'opening_closing' && !!reportMonth && (
             <div className="card overflow-hidden">
               <PanelHeader title="Opening vs Closing Stock" count={reportFilteredProducts.length} />
               <DataTable
@@ -3276,7 +3310,7 @@ function InventoryContent() {
             </div>
           )}
 
-          {reportTab === 'movements' && (
+          {reportTab === 'movements' && !!reportMonth && (
             <div className="card overflow-hidden">
               <PanelHeader title="Stock Movements" count={filteredReportMoves.length} />
               <DataTable
@@ -3667,7 +3701,7 @@ function InventoryContent() {
             </div>
 
             {/* Quantity selector */}
-            <Field label="How many labels?">
+            <Field label="How many labels?" required>
               <div className="flex gap-2 flex-wrap">
                 {[1, 5, 10, 20, 50].map(n => (
                   <button key={n} onClick={() => setLabelQty(String(n))}
@@ -3683,18 +3717,21 @@ function InventoryContent() {
                   placeholder="Custom"
                 />
               </div>
-              <p className="text-[10px] text-text-4 mt-1.5">Labels print 3-per-row on A4. {Math.ceil(Number(labelQty) / 3)} row{Math.ceil(Number(labelQty) / 3) !== 1 ? 's' : ''} needed.</p>
+              <p className="text-[10px] text-text-4 mt-1.5">Labels print 3-per-row on A4.{Number(labelQty) >= 1 ? ` ${Math.ceil(Number(labelQty) / 3)} row${Math.ceil(Number(labelQty) / 3) !== 1 ? 's' : ''} needed.` : ''}</p>
             </Field>
 
             <div className="flex gap-3 justify-end mt-2">
               <button className="btn-secondary px-6" onClick={() => setLabelProduct(null)}>Cancel</button>
               <button
                 className="btn-primary px-8 flex items-center gap-2"
-                disabled={!labelQty || Number(labelQty) < 1}
-                onClick={() => { printProductLabels(labelProduct, Number(labelQty) || 1); setLabelProduct(null) }}
+                onClick={() => {
+                  const n = Number(labelQty)
+                  if (!labelQty.trim() || !Number.isInteger(n) || n < 1) { showToast('Enter how many labels to print (1 or more)', 'error'); return }
+                  printProductLabels(labelProduct, n); setLabelProduct(null); setLabelQty('')
+                }}
               >
                 <Fa icon={faPrint} className="text-xs" />
-                Print {labelQty || 1} Label{Number(labelQty) !== 1 ? 's' : ''}
+                Print {labelQty || ''} Label{Number(labelQty) !== 1 ? 's' : ''}
               </button>
             </div>
           </div>
@@ -3877,8 +3914,9 @@ function InventoryContent() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Product Type" required>
                 <Select
-                  value={form.productKind || inferProductKind(form)}
+                  value={form.productKind || ''}
                   onChange={(value) => {
+                    if (!value) { setF('productKind')(''); return }
                     const kind = value as ProductKind
                     const tracking = defaultTrackingForKind(kind, form.category)
                     setForm((prev: any) => ({
@@ -3891,13 +3929,17 @@ function InventoryContent() {
                         : {}),
                     }))
                   }}
-                  options={PRODUCT_KIND_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                  options={[{ value: '', label: 'Select…' }, ...PRODUCT_KIND_OPTIONS.map(o => ({ value: o.value, label: o.label }))]}
                 />
               </Field>
-              <Field label="Category">
+              <Field label="Category" required>
                 <Select
                   value={form.category}
                   onChange={(value) => {
+                    if (!value) {
+                      setForm((prev: any) => ({ ...prev, category: '' }))
+                      return
+                    }
                     const defaults = applyCategoryAccountDefaults(value, {
                       productKind: form.productKind,
                       saleAccountCode: '',
@@ -3926,6 +3968,7 @@ function InventoryContent() {
                       }, systemSettings))
                   }}
                   options={[
+                    { value: '', label: 'Select…' },
                     ...resolveProductCreationCategoryOptions((systemSettings as any).invProductCategories),
                     ...(
                       form.category &&
@@ -3936,7 +3979,7 @@ function InventoryContent() {
                   ]}
                 />
               </Field>
-              <Field label="Tracking Method">
+              <Field label="Tracking Method" required>
                 <Select
                   value={isSerialOnlyCategory(form.category) ? 'SERIAL' : form.trackingMethod}
                   onChange={(value) => {
@@ -3949,6 +3992,7 @@ function InventoryContent() {
                     isSerialOnlyCategory(form.category)
                       ? [{ value: 'SERIAL', label: 'SERIAL (unit tracked) — required for this category' }]
                       : [
+                          { value: '', label: 'Select…' },
                           { value: 'NONE', label: 'NONE (non-stock/service)' },
                           { value: 'QUANTITY', label: 'QUANTITY (bulk qty)' },
                           { value: 'BATCH', label: 'BATCH (lot tracked)' },
@@ -3959,11 +4003,11 @@ function InventoryContent() {
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Field label="Unit of Measure">
+              <Field label="Unit of Measure" required>
                 <Select
-                  value={form.unit || 'pcs'}
+                  value={form.unit || ''}
                   onChange={setF('unit')}
-                  options={UOM_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                  options={[{ value: '', label: 'Select…' }, ...UOM_OPTIONS.map(o => ({ value: o.value, label: o.label }))]}
                 />
               </Field>
               <Field label="Barcode">
@@ -3972,7 +4016,7 @@ function InventoryContent() {
                   <button type="button" className="btn-secondary px-3 text-[11px] whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku || form.name, form.name, products, editId || undefined))}>Generate</button>
                 </div>
               </Field>
-              <Field label="Min Stock">
+              <Field label="Min Stock" required={form.productKind !== 'service'}>
                 <Input type="number" value={form.minStock} onChange={setF('minStock')} disabled={form.productKind === 'service'} />
               </Field>
             </div>
@@ -4003,13 +4047,14 @@ function InventoryContent() {
             )}
             {form.productKind !== 'service' && form.category !== 'Services' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Condition" hint="Printed on labels · selects New vs Refurb pricing band">
+                <Field label="Condition" required hint="Printed on labels · selects New vs Refurb pricing band">
                   <Select
-                    value={form.productType === 'new' ? 'new' : 'refurbished'}
+                    value={form.productType || ''}
                     onChange={v => {
                       setForm((prev: any) => applyCostBandPrices({ ...prev, productType: v }, systemSettings))
                     }}
                     options={[
+                      { value: '', label: 'Select…' },
                       { value: 'refurbished', label: 'Refurbished' },
                       { value: 'new', label: 'Brand new' },
                     ]}
@@ -4035,7 +4080,7 @@ function InventoryContent() {
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-4">
               <div className="mb-3">
                 <p className="text-[11px] font-black uppercase tracking-wider text-[var(--navy)]">Pricing and tax</p>
-                <p className="text-[10px] text-[var(--text-3)] mt-0.5">VAT is off by default and only applies when explicitly selected.</p>
+                <p className="text-[10px] text-[var(--text-3)] mt-0.5">Select the VAT rate explicitly — 16% only when VAT applies.</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <Field label="Cost Price" hint="Sale and wholesale update from cost">
@@ -4068,11 +4113,13 @@ function InventoryContent() {
                   })()}
                 />
               </Field>
-              <Field label="VAT / Tax Rate" hint="Defaults to 0%. Select 16% only when VAT applies.">
+              <Field label="VAT / Tax Rate" required hint="Select 16% only when VAT applies.">
                 <Select
-                  value={String(form.taxRate ?? '0')}
+                  value={String(form.taxRate ?? '')}
                   onChange={setF('taxRate')}
                   options={[
+                    ...(['', '0', '16'].includes(String(form.taxRate ?? '')) ? [] : [{ value: String(form.taxRate), label: `${form.taxRate}%` }]),
+                    { value: '', label: 'Select…' },
                     { value: '0', label: '0% — No VAT' },
                     { value: '16', label: '16% — VAT' },
                   ]}
@@ -4119,15 +4166,16 @@ function InventoryContent() {
               }
               return null
             })()}
-            <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
+            <Field label="Warranty (Months)" required><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
             <ProductPhotoFields
               productId={editId}
               slots={photoSlots}
               onSlotsChange={setPhotoSlots}
               onToast={showToast}
             />
-            <Field label="Invoicing Policy">
+            <Field label="Invoicing Policy" required>
               <Select value={form.invoicePolicy} onChange={setF('invoicePolicy')} options={[
+                { value: '', label: 'Select…' },
                 { value: 'order', label: 'Ordered Quantities — invoice after order confirmation' },
                 { value: 'delivery', label: 'Delivered Quantities — invoice only what has been delivered' },
               ]} />
@@ -4387,7 +4435,7 @@ function InventoryContent() {
                         <button className="text-[10px] font-black text-indigo-700 underline hover:text-indigo-900 transition-colors" onClick={() => {
                           setOpeningLines(prev => {
                             const without = prev.filter((_, row) => row !== index)
-                            const variantLines = lineVariants.map(v => ({ productId: v.id, productName: v.name, qty: '0', serials: '', serialSkus: '', location: line.location }))
+                            const variantLines = lineVariants.map(v => ({ productId: v.id, productName: v.name, qty: '', serials: '', serialSkus: '', location: line.location }))
                             return [...without.slice(0, index), ...variantLines, ...without.slice(index)]
                           })
                         }}>
@@ -4405,7 +4453,7 @@ function InventoryContent() {
                       renderItem={product => `${product.name} (${product.sku})`}
                     />
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-text-3 uppercase">{isBulk ? 'Qty ★' : 'Qty'}</label>
+                      <label className="text-[10px] font-bold text-text-3 uppercase">Qty ★</label>
                       <Input type="number" value={line.qty}
                         onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, qty: value } : entry))} placeholder="Qty" />
                       {isBulk && <span className="text-[9px] text-primary-600 font-semibold">Only field needed</span>}
@@ -4443,9 +4491,9 @@ function InventoryContent() {
                       )}
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-text-3 uppercase">Location</label>
+                      <label className="text-[10px] font-bold text-text-3 uppercase">Location ★</label>
                       <Select value={line.location}
-                        onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, location: value as LocationId } : entry))} options={locationOpts} />
+                        onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, location: value as LocationId | '' } : entry))} options={[{ value: '', label: 'Select…' }, ...locationOpts]} />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-bold text-text-3 uppercase opacity-0 select-none">Del</label>
@@ -4458,7 +4506,7 @@ function InventoryContent() {
             })}
           </div>
           
-          <button onClick={() => setOpeningLines(prev => [...prev, { productId: '', productName: '', qty: '1', serials: '', serialSkus: '', location: 'warehouse' }])}
+          <button onClick={() => setOpeningLines(prev => [...prev, { productId: '', productName: '', qty: '', serials: '', serialSkus: '', location: '' }])}
             className="w-full mt-4 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-text-4 text-xs font-bold hover:border-primary-300 hover:text-primary-600 transition-all">
             + Add Row Manually
           </button>
@@ -4475,13 +4523,13 @@ function InventoryContent() {
         <Modal title="Internal Stock Transfer" onClose={() => setShowTransfer(false)}>
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Source Location"><Select value={tFrom} onChange={value => setTFrom(value as LocationId)} options={locationOpts} /></Field>
-              <Field label="Destination Location"><Select value={tTo} onChange={value => setTTo(value as LocationId)} options={locationOpts} /></Field>
+              <Field label="Source Location" required><Select value={tFrom} onChange={value => { setTFrom(value as LocationId | ''); setTSerials([]) }} options={[{ value: '', label: 'Select…' }, ...locationOpts]} /></Field>
+              <Field label="Destination Location" required><Select value={tTo} onChange={value => setTTo(value as LocationId | '')} options={[{ value: '', label: 'Select…' }, ...locationOpts]} /></Field>
             </div>
             <Field label="Product">
               <SearchPicker label="" placeholder="Select product..." items={stockableProducts} onSelect={product => { setTProd(product); setTSerials([]) }} renderItem={product => `${product.name} (on hand: ${product.stockQty})`} />
             </Field>
-            {tProd && !tProd.requiresSerial && <Field label="Quantity"><Input type="number" value={tQty} onChange={setTQty} /></Field>}
+            {tProd && !tProd.requiresSerial && <Field label="Quantity" required><Input type="number" value={tQty} onChange={setTQty} /></Field>}
             {tProd?.requiresSerial && (
               <Field label={`Serial Numbers (${tSerials.length} scanned)`}>
                 <ScanInputRow
@@ -4493,6 +4541,7 @@ function InventoryContent() {
                     // Defer so state updates before add runs with latest input via direct parse
                     const parsed = parseScanPayload(code)
                     if (!parsed.candidates.length || !tProd) return
+                    if (!tFrom) { showToast('Select the source location first', 'error'); return }
                     const existing = serials.find(s =>
                       s.productId === tProd.id
                       && s.location === tFrom

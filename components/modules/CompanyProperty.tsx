@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useFinanceStore, fmtDate, fmtKes, type CompanyAsset, type CompanyAssetInput } from '@/lib/store'
+import { useApp, useFinanceStore, fmtDate, fmtKes, type CompanyAsset, type CompanyAssetInput } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, hasModuleAccess } from '@/lib/auth/access'
 import {
@@ -32,7 +32,6 @@ import {
   bookNbv,
   defaultBookMethod,
   defaultUsefulLifeMonths,
-  periodKey,
 } from '@/lib/company-property-ppe'
 import { kraClassLabel } from '@/lib/tax/kra-capital-allowances'
 import { printAssetTags } from '@/lib/product-label'
@@ -46,8 +45,8 @@ import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlReco
 type FormState = {
   name: string
   description: string
-  category: CompanyAssetCategory
-  assetClass: CompanyAssetClass
+  category: CompanyAssetCategory | ''
+  assetClass: CompanyAssetClass | ''
   ppeAccountCode: string
   qty: string
   unit: string
@@ -56,17 +55,17 @@ type FormState = {
   locationName: string
   customLocation: string
   custodianEmployeeId: string
-  status: 'draft' | 'in_use' | 'in_storage'
-  condition: CompanyAssetCondition
+  status: 'draft' | 'in_use' | 'in_storage' | ''
+  condition: CompanyAssetCondition | ''
   acquiredDate: string
-  acquiredVia: CompanyAssetAcquiredVia
+  acquiredVia: CompanyAssetAcquiredVia | ''
   supplierName: string
   purchaseOrderRef: string
   billRef: string
   costKes: string
   usefulLifeMonths: string
   residualKes: string
-  depreciationMethod: 'straight_line' | 'reducing_balance'
+  depreciationMethod: 'straight_line' | 'reducing_balance' | ''
   accumDeprKes: string
   serialId: string
   notes: string
@@ -74,34 +73,32 @@ type FormState = {
 
 type ActionKind = 'move' | 'custodian' | 'repair' | 'dispose' | 'writeoff' | 'delete' | 'depreciate' | 'link-serial' | null
 
-const today = () => new Date().toISOString().slice(0, 10)
-
 function emptyForm(): FormState {
   return {
     name: '',
     description: '',
-    category: 'furniture',
-    assetClass: 'capital',
-    ppeAccountCode: '1702',
-    qty: '1',
-    unit: 'each',
+    category: '',
+    assetClass: '',
+    ppeAccountCode: '',
+    qty: '',
+    unit: '',
     assetTag: '',
     serialNumber: '',
-    locationName: 'Reception',
+    locationName: '',
     customLocation: '',
     custodianEmployeeId: '',
-    status: 'in_use',
-    condition: 'good',
-    acquiredDate: today(),
-    acquiredVia: 'purchase',
+    status: '',
+    condition: '',
+    acquiredDate: '',
+    acquiredVia: '',
     supplierName: '',
     purchaseOrderRef: '',
     billRef: '',
     costKes: '',
-    usefulLifeMonths: '96',
-    residualKes: '0',
-    depreciationMethod: 'straight_line',
-    accumDeprKes: '0',
+    usefulLifeMonths: '',
+    residualKes: '',
+    depreciationMethod: '',
+    accumDeprKes: '',
     serialId: '',
     notes: '',
   }
@@ -143,13 +140,49 @@ function resolvedLocation(form: FormState): string {
   return form.locationName === 'Other' ? form.customLocation.trim() : form.locationName
 }
 
+const isNonNegativeNumber = (value: string) => value.trim() !== '' && Number.isFinite(Number(value)) && Number(value) >= 0
+
+/** Returns a user-facing error, or null when the form can be saved. */
+function validateForm(form: FormState, allowStatus: boolean): string | null {
+  const capital = form.assetClass === 'capital'
+  const missing: string[] = []
+  if (!form.name.trim()) missing.push('Item name')
+  if (!form.category) missing.push('Category')
+  if (!form.assetClass) missing.push('Class')
+  if (capital && !form.ppeAccountCode) missing.push('PPE account')
+  if (!form.qty.trim()) missing.push('Quantity')
+  if (!form.unit.trim()) missing.push('Unit')
+  if (!form.locationName) missing.push('Location')
+  if (form.locationName === 'Other' && !form.customLocation.trim()) missing.push('Room / area')
+  if (allowStatus && !form.status) missing.push('Status')
+  if (!form.condition) missing.push('Condition')
+  if (!form.acquiredDate) missing.push('Acquired date')
+  if (!form.acquiredVia) missing.push('Acquired via')
+  if (capital && !form.usefulLifeMonths.trim()) missing.push('Useful life (months)')
+  if (capital && !form.residualKes.trim()) missing.push('Residual (KES)')
+  if (capital && !form.depreciationMethod) missing.push('Book method')
+  if (capital && form.acquiredVia === 'opening' && !form.accumDeprKes.trim()) missing.push('Opening accum. depr. (KES)')
+  if (missing.length) return `Please fill in: ${missing.join(', ')}`
+  const qty = Number(form.qty)
+  if (!Number.isFinite(qty) || qty <= 0) return 'Quantity must be a number greater than zero'
+  if (form.costKes.trim() && !isNonNegativeNumber(form.costKes)) return 'Cost must be a number of zero or more'
+  if (capital) {
+    const life = Number(form.usefulLifeMonths)
+    if (!Number.isInteger(life) || life <= 0) return 'Useful life must be a whole number of months greater than zero'
+    if (!isNonNegativeNumber(form.residualKes)) return 'Residual must be a number of zero or more'
+    if (form.acquiredVia === 'opening' && !isNonNegativeNumber(form.accumDeprKes)) return 'Opening accum. depr. must be a number of zero or more'
+  }
+  return null
+}
+
+/** Only call after validateForm() returned null, so the selects are non-empty. */
 function toInput(form: FormState, employees: Array<{ id: string; fullName: string }>): CompanyAssetInput {
   const custodian = employees.find(e => e.id === form.custodianEmployeeId)
   return {
     name: form.name,
     description: form.description,
-    category: form.category,
-    assetClass: form.assetClass,
+    category: form.category as CompanyAssetCategory,
+    assetClass: form.assetClass as CompanyAssetClass,
     ppeAccountCode: form.assetClass === 'capital' ? form.ppeAccountCode : undefined,
     qty: Number(form.qty),
     unit: form.unit,
@@ -158,17 +191,17 @@ function toInput(form: FormState, employees: Array<{ id: string; fullName: strin
     locationName: resolvedLocation(form),
     custodianEmployeeId: form.custodianEmployeeId || undefined,
     custodianName: custodian?.fullName,
-    status: form.status,
-    condition: form.condition,
+    status: form.status || undefined,
+    condition: form.condition as CompanyAssetCondition,
     acquiredDate: form.acquiredDate,
-    acquiredVia: form.acquiredVia,
+    acquiredVia: form.acquiredVia as CompanyAssetAcquiredVia,
     supplierName: form.supplierName,
     purchaseOrderRef: form.purchaseOrderRef,
     billRef: form.billRef,
     costKes: Number(form.costKes) || 0,
     usefulLifeMonths: Number(form.usefulLifeMonths) || undefined,
     residualKes: Number(form.residualKes) || 0,
-    depreciationMethod: form.depreciationMethod,
+    depreciationMethod: form.depreciationMethod || undefined,
     accumDeprKes: Number(form.accumDeprKes) || 0,
     serialId: form.serialId || undefined,
     notes: form.notes,
@@ -204,6 +237,7 @@ function PropertyFormFields({
         <Select
           value={form.category}
           onChange={category => {
+            if (!category) { patch({ category: '' }); return }
             const next = category as CompanyAssetCategory
             patch({
               category: next,
@@ -212,7 +246,7 @@ function PropertyFormFields({
               depreciationMethod: defaultBookMethod(next),
             })
           }}
-          options={COMPANY_ASSET_CATEGORIES.map(value => ({ value, label: CATEGORY_LABELS[value] }))}
+          options={[{ value: '', label: 'Select category…' }, ...COMPANY_ASSET_CATEGORIES.map(value => ({ value, label: CATEGORY_LABELS[value] }))]}
         />
       </Field>
       <Field label="Class" required hint="Capital sits on PPE. Expensed items are recorded for control only.">
@@ -222,10 +256,10 @@ function PropertyFormFields({
             const next = assetClass as CompanyAssetClass
             patch({
               assetClass: next,
-              ppeAccountCode: next === 'capital' ? (defaultPpeAccountCode(form.category) ?? '1702') : '',
+              ppeAccountCode: next === 'capital' && form.category ? (defaultPpeAccountCode(form.category) ?? '') : '',
             })
           }}
-          options={COMPANY_ASSET_CLASSES.map(value => ({ value, label: CLASS_LABELS[value] }))}
+          options={[{ value: '', label: 'Select class…' }, ...COMPANY_ASSET_CLASSES.map(value => ({ value, label: CLASS_LABELS[value] }))]}
         />
       </Field>
       {form.assetClass === 'capital' && (
@@ -233,14 +267,14 @@ function PropertyFormFields({
           <Select
             value={form.ppeAccountCode}
             onChange={ppeAccountCode => patch({ ppeAccountCode })}
-            options={Object.entries(PPE_ACCOUNT_LABELS).map(([value, label]) => ({ value, label }))}
+            options={[{ value: '', label: 'Select PPE account…' }, ...Object.entries(PPE_ACCOUNT_LABELS).map(([value, label]) => ({ value, label }))]}
           />
         </Field>
       )}
       <Field label="Quantity" required>
         <Input type="number" value={form.qty} onChange={qty => patch({ qty })} />
       </Field>
-      <Field label="Unit">
+      <Field label="Unit" required>
         <Input value={form.unit} onChange={unit => patch({ unit })} placeholder="each" />
       </Field>
       <Field label="Asset tag" hint="Unique when set. Use for tagged desks and machines.">
@@ -263,6 +297,7 @@ function PropertyFormFields({
           value={form.locationName}
           onChange={locationName => patch({ locationName })}
           options={[
+            { value: '', label: 'Select location…' },
             ...COMPANY_PROPERTY_LOCATIONS.map(value => ({ value, label: value })),
             { value: 'Other', label: 'Other…' },
           ]}
@@ -277,11 +312,12 @@ function PropertyFormFields({
         <Select value={form.custodianEmployeeId} onChange={custodianEmployeeId => patch({ custodianEmployeeId })} options={employeeOptions} />
       </Field>
       {allowStatus && (
-        <Field label="Status">
+        <Field label="Status" required>
           <Select
             value={form.status}
             onChange={status => patch({ status: status as FormState['status'] })}
             options={[
+              { value: '', label: 'Select status…' },
               { value: 'draft', label: 'Draft' },
               { value: 'in_use', label: 'In use' },
               { value: 'in_storage', label: 'In storage' },
@@ -289,11 +325,11 @@ function PropertyFormFields({
           />
         </Field>
       )}
-      <Field label="Condition">
+      <Field label="Condition" required>
         <Select
           value={form.condition}
           onChange={condition => patch({ condition: condition as CompanyAssetCondition })}
-          options={COMPANY_ASSET_CONDITIONS.map(value => ({ value, label: CONDITION_LABELS[value] }))}
+          options={[{ value: '', label: 'Select condition…' }, ...COMPANY_ASSET_CONDITIONS.map(value => ({ value, label: CONDITION_LABELS[value] }))]}
         />
       </Field>
       <Field label="Acquired date" required>
@@ -303,7 +339,7 @@ function PropertyFormFields({
         <Select
           value={form.acquiredVia}
           onChange={acquiredVia => patch({ acquiredVia: acquiredVia as CompanyAssetAcquiredVia })}
-          options={COMPANY_ASSET_ACQUIRED_VIA.map(value => ({ value, label: ACQUIRED_VIA_LABELS[value] }))}
+          options={[{ value: '', label: 'Select how acquired…' }, ...COMPANY_ASSET_ACQUIRED_VIA.map(value => ({ value, label: ACQUIRED_VIA_LABELS[value] }))]}
         />
       </Field>
       <Field label="Cost (KES)" hint={
@@ -319,17 +355,18 @@ function PropertyFormFields({
       </Field>
       {form.assetClass === 'capital' && (
         <>
-          <Field label="Useful life (months)" hint="Furniture 96, office equipment 60, IT 36.">
+          <Field label="Useful life (months)" required hint="Furniture 96, office equipment 60, IT 36.">
             <Input type="number" value={form.usefulLifeMonths} onChange={usefulLifeMonths => patch({ usefulLifeMonths })} />
           </Field>
-          <Field label="Residual (KES)">
+          <Field label="Residual (KES)" required hint="Enter 0 if there is no residual value.">
             <Input type="number" value={form.residualKes} onChange={residualKes => patch({ residualKes })} placeholder="0" />
           </Field>
-          <Field label="Book method" hint="KRA wear-and-tear is a separate tax track and is never posted to 6517.">
+          <Field label="Book method" required hint="KRA wear-and-tear is a separate tax track and is never posted to 6517.">
             <Select
               value={form.depreciationMethod}
               onChange={depreciationMethod => patch({ depreciationMethod: depreciationMethod as FormState['depreciationMethod'] })}
               options={[
+                { value: '', label: 'Select method…' },
                 { value: 'straight_line', label: 'Straight line' },
                 { value: 'reducing_balance', label: 'Reducing balance' },
               ]}
@@ -338,7 +375,7 @@ function PropertyFormFields({
         </>
       )}
       {form.acquiredVia === 'opening' && form.assetClass === 'capital' && (
-        <Field label="Opening accum. depr. (KES)" hint="Optional. Records book accum. already on 175x so NBV is right without posting.">
+        <Field label="Opening accum. depr. (KES)" required hint="Records book accum. already on 175x so NBV is right without posting. Enter 0 if none.">
           <Input type="number" value={form.accumDeprKes} onChange={accumDeprKes => patch({ accumDeprKes })} placeholder="0" />
         </Field>
       )}
@@ -385,6 +422,7 @@ export default function CompanyProperty() {
     serials,
   } = useFinanceStore()
   const { employees } = useHrStore()
+  const { showToast } = useApp()
 
   const canOpen = hasModuleAccess(currentUser, 'company_property')
   const canManage = canManageCompanyPropertyRole(currentUser?.role)
@@ -411,11 +449,11 @@ export default function CompanyProperty() {
   const [actionLocation, setActionLocation] = useState('')
   const [actionCustomLocation, setActionCustomLocation] = useState('')
   const [actionCustodianId, setActionCustodianId] = useState('')
-  const [actionQty, setActionQty] = useState('1')
+  const [actionQty, setActionQty] = useState('')
   const [actionProceeds, setActionProceeds] = useState('')
   const [actionCreateRepair, setActionCreateRepair] = useState(false)
   const [actionSerialId, setActionSerialId] = useState('')
-  const [actionPeriod, setActionPeriod] = useState(periodKey())
+  const [actionPeriod, setActionPeriod] = useState('')
 
   const items = Array.isArray(companyAssets) ? companyAssets : []
   const selected = items.find(a => a.id === recordId) ?? null
@@ -538,6 +576,9 @@ export default function CompanyProperty() {
   }
 
   const saveForm = () => {
+    const editingAsset = editingId ? items.find(a => a.id === editingId) : null
+    const error = validateForm(form, !editingAsset || editingAsset.status === 'draft')
+    if (error) { showToast(error, 'error'); return }
     const input = toInput(form, employees)
     if (editingId) updateCompanyAsset(editingId, input)
     else {
@@ -553,15 +594,38 @@ export default function CompanyProperty() {
     setActionLocation('')
     setActionCustomLocation('')
     setActionCustodianId('')
-    setActionQty('1')
+    setActionQty('')
     setActionProceeds('')
     setActionCreateRepair(false)
     setActionSerialId('')
-    setActionPeriod(periodKey())
+    setActionPeriod('')
+  }
+
+  /** Validates the open action modal; shows a toast and returns false when a required value is missing. */
+  const validateAction = (): boolean => {
+    const fail = (msg: string) => { showToast(msg, 'error'); return false }
+    if (action === 'move') {
+      if (!actionLocation) return fail('Please fill in: New location')
+      if (actionLocation === 'Other' && !actionCustomLocation.trim()) return fail('Please fill in: Room / area')
+    } else if (action === 'dispose') {
+      if (!actionQty.trim()) return fail('Please fill in: Quantity to dispose')
+      const qty = Number(actionQty)
+      if (!Number.isFinite(qty) || qty <= 0) return fail('Quantity to dispose must be a number greater than zero')
+      if (selected && qty > selected.qty) return fail(`Quantity to dispose cannot exceed ${selected.qty}`)
+      if (actionProceeds.trim() && (!Number.isFinite(Number(actionProceeds)) || Number(actionProceeds) < 0)) return fail('Proceeds must be a number of zero or more')
+    } else if (action === 'writeoff') {
+      if (!actionNote.trim()) return fail('Please fill in: Reason')
+    } else if (action === 'depreciate') {
+      if (!actionPeriod) return fail('Please fill in: Period')
+    } else if (action === 'link-serial') {
+      if (!actionSerialId) return fail('Please fill in: Available serial')
+    }
+    return true
   }
 
   const runAction = () => {
     if (!selected) return
+    if (!validateAction()) return
     if (action === 'move') {
       const location = actionLocation === 'Other' ? actionCustomLocation : actionLocation
       moveCompanyAsset(selected.id, location, actionNote || undefined)
@@ -585,7 +649,7 @@ export default function CompanyProperty() {
     } else if (action === 'depreciate') {
       runCompanyAssetDepreciation(actionPeriod)
     } else if (action === 'link-serial') {
-      if (actionSerialId) linkSerialToCompanyAsset(selected.id, actionSerialId)
+      linkSerialToCompanyAsset(selected.id, actionSerialId)
     }
     closeAction()
   }
@@ -615,7 +679,7 @@ export default function CompanyProperty() {
           onBack={() => setRecordId(null)}
           backLabel="All assets"
           primaryAction={canManage && live ? (
-            <PrimaryActionButton onClick={() => { setActionLocation(selected.locationName); setAction('move') }}>
+            <PrimaryActionButton onClick={() => { setActionLocation(''); setActionCustomLocation(''); setAction('move') }}>
               Move
             </PrimaryActionButton>
           ) : canManage && selected.status === 'draft' ? (
@@ -632,7 +696,7 @@ export default function CompanyProperty() {
                 { id: 'lost', label: 'Mark lost', onClick: () => setCompanyAssetStatus(selected.id, 'lost'), hidden: !live || selected.status === 'lost' },
                 { id: 'storage', label: 'Move to storage', onClick: () => setCompanyAssetStatus(selected.id, 'in_storage'), hidden: selected.status !== 'in_use' },
                 { id: 'use', label: 'Put in use', onClick: () => setCompanyAssetStatus(selected.id, 'in_use'), hidden: selected.status !== 'in_storage' && selected.status !== 'draft' && selected.status !== 'lost' && selected.status !== 'under_repair' },
-                { id: 'dispose', label: 'Dispose…', onClick: () => { setActionQty(String(selected.qty)); setAction('dispose') }, hidden: !live, danger: true },
+                { id: 'dispose', label: 'Dispose…', onClick: () => { setActionQty(''); setAction('dispose') }, hidden: !live, danger: true },
                 { id: 'writeoff', label: 'Write off…', onClick: () => setAction('writeoff'), hidden: !live && selected.status !== 'lost', danger: true },
                 { id: 'delete', label: 'Delete draft', onClick: () => setAction('delete'), hidden: !canDeleteCompanyAsset(selected.status), danger: true },
               ]}
@@ -750,6 +814,7 @@ export default function CompanyProperty() {
                     value={actionLocation}
                     onChange={setActionLocation}
                     options={[
+                      { value: '', label: 'Select location…' },
                       ...COMPANY_PROPERTY_LOCATIONS.map(value => ({ value, label: value })),
                       { value: 'Other', label: 'Other…' },
                     ]}
@@ -788,7 +853,7 @@ export default function CompanyProperty() {
               </div>
             )}
             {action === 'link-serial' && (
-              <Field label="Available serial" hint="Takes the unit off stock. Posts Dr PPE / Cr 1200 if this row is not already capitalised.">
+              <Field label="Available serial" required hint="Takes the unit off stock. Posts Dr PPE / Cr 1200 if this row is not already capitalised.">
                 <Select
                   value={actionSerialId}
                   onChange={setActionSerialId}
@@ -801,7 +866,7 @@ export default function CompanyProperty() {
                 <p className="text-[12px] text-[var(--text-3)]">
                   Posts cash + accum. depr. 175x, clears cost 170x, and plugs gain 5203 or loss 6515.
                 </p>
-                <Field label="Quantity to dispose" required>
+                <Field label="Quantity to dispose" required hint={`On register: ${selected.qty} ${selected.unit}`}>
                   <Input type="number" value={actionQty} onChange={setActionQty} />
                 </Field>
                 <Field label="Proceeds (KES)">
@@ -814,7 +879,7 @@ export default function CompanyProperty() {
               <Field label="Reason" required><Textarea value={actionNote} onChange={setActionNote} rows={3} placeholder="Lost, damaged beyond repair, stolen…" /></Field>
             )}
             {action === 'depreciate' && (
-              <Field label="Period" hint="One combined journal JRN/AST-DEP/YYYY-MM. Tax WDV is updated once per calendar year and is not posted.">
+              <Field label="Period" required hint="One combined journal JRN/AST-DEP/YYYY-MM. Tax WDV is updated once per calendar year and is not posted.">
                 <Input type="month" value={actionPeriod} onChange={setActionPeriod} />
               </Field>
             )}
@@ -840,7 +905,7 @@ export default function CompanyProperty() {
             Record item
           </PrimaryActionButton>
         ) : canRunDepreciation ? (
-          <PrimaryActionButton onClick={() => { setActionPeriod(periodKey()); setAction('depreciate') }}>
+          <PrimaryActionButton onClick={() => { setActionPeriod(''); setAction('depreciate') }}>
             Run depreciation
           </PrimaryActionButton>
         ) : undefined}
@@ -860,7 +925,7 @@ export default function CompanyProperty() {
         </CompactInfoNotice>
         {canManage && (
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-secondary" onClick={() => { setActionPeriod(periodKey()); setAction('depreciate') }}>
+            <button type="button" className="btn-secondary" onClick={() => { setActionPeriod(''); setAction('depreciate') }}>
               Run monthly depreciation
             </button>
           </div>
@@ -932,11 +997,11 @@ export default function CompanyProperty() {
           footer={
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={closeAction}>Cancel</button>
-              <button type="button" className="btn-primary" onClick={() => { runCompanyAssetDepreciation(actionPeriod); closeAction() }}>Post</button>
+              <button type="button" className="btn-primary" onClick={() => { if (!validateAction()) return; runCompanyAssetDepreciation(actionPeriod); closeAction() }}>Post</button>
             </div>
           }
         >
-          <Field label="Period" hint="One combined journal JRN/AST-DEP/YYYY-MM. Tax WDV is updated once per calendar year and is not posted.">
+          <Field label="Period" required hint="One combined journal JRN/AST-DEP/YYYY-MM. Tax WDV is updated once per calendar year and is not posted.">
             <Input type="month" value={actionPeriod} onChange={setActionPeriod} />
           </Field>
         </Modal>

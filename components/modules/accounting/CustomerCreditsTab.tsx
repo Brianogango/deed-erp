@@ -21,7 +21,7 @@ export default function CustomerCreditsTab() {
   const { customerCredits, invoices } = useFinanceStore()
   const router = useRouter()
   const [creditSearch, setCreditSearch] = useUrlUiState('creditQ', '')
-  const [creditStatus, setCreditStatus] = useUrlUiState('creditStatus', 'open')
+  const [creditStatus, setCreditStatus] = useUrlUiState('creditStatus', 'all')
   const [selectedCredit, setSelectedCredit] = useState<CustomerCreditLike | null>(null)
   const openTotal = useMemo(() => totalOpenStoreCredit(customerCredits), [customerCredits])
   const clientsWithCredit = useMemo(() => {
@@ -133,8 +133,8 @@ export default function CustomerCreditsTab() {
           <option value="used">Used</option>
           <option value="void">Void</option>
         </select>
-        {(creditSearch || creditStatus !== 'open') && (
-          <button type="button" className="btn-secondary text-[11px]" onClick={() => { setCreditSearch(''); setCreditStatus('open') }}>
+        {(creditSearch || creditStatus !== 'all') && (
+          <button type="button" className="btn-secondary text-[11px]" onClick={() => { setCreditSearch(''); setCreditStatus('all') }}>
             Clear filters
           </button>
         )}

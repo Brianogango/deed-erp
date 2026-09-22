@@ -133,7 +133,7 @@ export default function RepairDetailView() {
   const [waiveFeeReason, setWaiveFeeReason] = useState('')
   const [showWaiveFeeModal, setShowWaiveFeeModal] = useState(false)
   const [showNoChargeModal, setShowNoChargeModal] = useState(false)
-  const [noChargeReason, setNoChargeReason] = useState('company_mistake')
+  const [noChargeReason, setNoChargeReason] = useState('')
   const [noChargeNotes, setNoChargeNotes] = useState('')
 
   // Find existing ORC for this repair
@@ -150,7 +150,7 @@ export default function RepairDetailView() {
   const [unrepairableReason, setUnrepairableReason] = useState('')
   const [showLeaveDeviceModal, setShowLeaveDeviceModal] = useState(false)
   const [leaveDeviceNotes, setLeaveDeviceNotes] = useState('')
-  const [leaveConvertMode, setLeaveConvertMode] = useState<'none' | 'donation' | 'buyback'>('donation')
+  const [leaveConvertMode, setLeaveConvertMode] = useState<'none' | 'donation' | 'buyback' | ''>('')
   const [showTradeInModal, setShowTradeInModal] = useState(false)
   const [tradeInPrice, setTradeInPrice] = useState('')
   const [tradeInCondition, setTradeInCondition] = useState<'good' | 'fair' | 'poor'>('good')
@@ -347,14 +347,14 @@ export default function RepairDetailView() {
   })
 
   const openNoCharge = () => {
-    setNoChargeReason('company_mistake')
+    setNoChargeReason('')
     setNoChargeNotes('')
     setShowNoChargeModal(true)
   }
 
   const openLeaveDevice = () => {
     setLeaveDeviceNotes('')
-    setLeaveConvertMode('donation')
+    setLeaveConvertMode('')
     setShowLeaveDeviceModal(true)
   }
 
@@ -2163,7 +2163,7 @@ export default function RepairDetailView() {
               />
             </div>
             <div className="space-y-2">
-              <p className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest">Convert device</p>
+              <p className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest">Convert device (required)</p>
               {([
                 { v: 'donation' as const, label: 'Donation in → warehouse', sub: 'Creates a confirmed donation linked to this repair' },
                 { v: 'buyback' as const, label: 'Buy-back stock (KES 0)', sub: 'Free buy-back stocked at warehouse, linked to this repair' },
@@ -2197,6 +2197,7 @@ export default function RepairDetailView() {
                 className="btn-primary"
                 style={{ background: '#57534E' }}
                 onClick={() => {
+                  if (!leaveConvertMode) { showToast('Select what to do with the device (Donation, Buy-back or Retain only)', 'error'); return }
                   leaveDeviceWithDeed(r.id, {
                     convertToDonation: leaveConvertMode === 'donation',
                     convertToStock: leaveConvertMode === 'buyback',
@@ -2331,12 +2332,13 @@ export default function RepairDetailView() {
               zeroes the customer total, and sets the diagnosis fee to not applicable. Parts may still be
               requested internally.
             </p>
-            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)]">Reason</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)]">Reason (required)</label>
             <select
               className="form-input"
               value={noChargeReason}
               onChange={e => setNoChargeReason(e.target.value)}
             >
+              <option value="">Select…</option>
               {(Object.keys(BILLING_EXEMPT_REASON_LABELS) as BillingExemptReason[]).map(key => (
                 <option key={key} value={key}>{BILLING_EXEMPT_REASON_LABELS[key]}</option>
               ))}
@@ -2353,6 +2355,8 @@ export default function RepairDetailView() {
               <button
                 className="btn-primary"
                 onClick={() => {
+                  if (!noChargeReason) { showToast('Select a no-charge reason', 'error'); return }
+                  if (!noChargeNotes.trim()) { showToast('Enter notes explaining the no-charge decision', 'error'); return }
                   markRepairNoCharge(r.id, {
                     reason: noChargeReason as BillingExemptReason,
                     notes: noChargeNotes,

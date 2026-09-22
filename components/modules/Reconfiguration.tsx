@@ -46,7 +46,8 @@ type WorkOrderListItem = {
 
 type SlotDraft = {
   action: BenchActionKind
-  moduleCount: number
+  /** '' until the user (or the device's own installed config) says how many are fitted. */
+  moduleCount: number | ''
   outgoingProductId: string
   incomingProductId: string
 }
@@ -81,7 +82,17 @@ const ACTIONS: Array<{ value: BenchActionKind; label: string }> = [
 ]
 
 function emptySlot(): SlotDraft {
-  return { action: 'none', moduleCount: 1, outgoingProductId: '', incomingProductId: '' }
+  return { action: 'none', moduleCount: '', outgoingProductId: '', incomingProductId: '' }
+}
+
+/** Module count sent to the bench engine; pull_one always needs at least two fitted. */
+function slotModuleCount(slot: SlotDraft): number {
+  const n = Number(slot.moduleCount) || 0
+  return slot.action === 'pull_one' ? Math.max(2, n) : n
+}
+
+function slotNeedsModuleCount(slot: SlotDraft): boolean {
+  return slot.action !== 'none' && slot.moduleCount === ''
 }
 
 function findPart(
@@ -260,8 +271,10 @@ export default function Reconfiguration() {
       const ssdCount = (cfg?.installed || []).filter(
         (i: any) => i.category === 'storage' || i.slotType === 'm2_slot' || i.slotType === 'sata_bay',
       ).length
-      setRam({ ...emptySlot(), moduleCount: ramCount || 1 })
-      setStorage({ ...emptySlot(), moduleCount: ssdCount || 1 })
+      // Device-derived counts are real data; when the device reports none the
+      // user must say how many are fitted.
+      setRam({ ...emptySlot(), moduleCount: ramCount || '' })
+      setStorage({ ...emptySlot(), moduleCount: ssdCount || '' })
     } catch (e: any) {
       setError(e.message)
     }
@@ -274,6 +287,7 @@ export default function Reconfiguration() {
 
   const preview = useMemo(() => {
     if (!deviceConfig) return null
+    if (slotNeedsModuleCount(ram) || slotNeedsModuleCount(storage)) return null
     const ramIn = findPart(ram.incomingProductId, [ramParts, partProducts])
     const ssdIn = findPart(storage.incomingProductId, [storageParts, partProducts])
     return applyBenchJob({
@@ -292,7 +306,7 @@ export default function Reconfiguration() {
       ram: {
         action: ram.action,
         currentTotalGb: currentRamGb,
-        moduleCount: ram.action === 'pull_one' ? Math.max(2, ram.moduleCount) : ram.moduleCount,
+        moduleCount: slotModuleCount(ram),
         outgoingProductId: ram.outgoingProductId || undefined,
         incoming:
           ram.incomingProductId
@@ -310,7 +324,7 @@ export default function Reconfiguration() {
       storage: {
         action: storage.action,
         currentTotalGb: currentStorageGb,
-        moduleCount: storage.action === 'pull_one' ? Math.max(2, storage.moduleCount) : storage.moduleCount,
+        moduleCount: slotModuleCount(storage),
         outgoingProductId: storage.outgoingProductId || undefined,
         incoming:
           storage.incomingProductId
@@ -331,6 +345,8 @@ export default function Reconfiguration() {
 
   const applyBlocked = useMemo(() => {
     if (!deviceConfig) return null
+    if (slotNeedsModuleCount(ram)) return 'Select how many RAM modules are fitted now.'
+    if (slotNeedsModuleCount(storage)) return 'Select how many SSD/HDD drives are fitted now.'
     if (!preview) return 'Choose a RAM or SSD action.'
     if (preview.error) return preview.error
     if (unresolved && ram.action !== 'none' && !currentRamGb) {
@@ -340,7 +356,7 @@ export default function Reconfiguration() {
       return 'Enter the current SSD size in GB so the new total can be calculated.'
     }
     return null
-  }, [deviceConfig, preview, unresolved, ram.action, storage.action, currentRamGb, currentStorageGb])
+  }, [deviceConfig, preview, unresolved, ram, storage, currentRamGb, currentStorageGb])
 
   async function applyNow() {
     if (!wizSerialId || !preview || preview.error || applyBlocked) return
@@ -356,7 +372,7 @@ export default function Reconfiguration() {
           serialId: wizSerialId,
           ram: {
             action: ram.action,
-            moduleCount: ram.action === 'pull_one' ? Math.max(2, ram.moduleCount) : ram.moduleCount,
+            moduleCount: slotModuleCount(ram),
             outgoingProductId: ram.outgoingProductId || undefined,
             incomingProductId: ram.incomingProductId || undefined,
             incomingCapacityGb: ram.incomingProductId
@@ -369,7 +385,7 @@ export default function Reconfiguration() {
           },
           storage: {
             action: storage.action,
-            moduleCount: storage.action === 'pull_one' ? Math.max(2, storage.moduleCount) : storage.moduleCount,
+            moduleCount: slotModuleCount(storage),
             outgoingProductId: storage.outgoingProductId || undefined,
             incomingProductId: storage.incomingProductId || undefined,
             incomingCapacityGb: storage.incomingProductId
@@ -920,7 +936,7 @@ function SlotEditor(props: {
                 onChange({
                   ...draft,
                   action: a.value,
-                  moduleCount: a.value === 'pull_one' ? Math.max(2, draft.moduleCount) : draft.moduleCount,
+                  moduleCount: a.value === 'pull_one' && draft.moduleCount !== '' ? Math.max(2, draft.moduleCount) : draft.moduleCount,
                 })
               }
             />
@@ -935,8 +951,9 @@ function SlotEditor(props: {
           <select
             className="form-select w-full"
             value={draft.moduleCount}
-            onChange={e => onChange({ ...draft, moduleCount: Number(e.target.value) })}
+            onChange={e => onChange({ ...draft, moduleCount: e.target.value === '' ? '' : Number(e.target.value) })}
           >
+            <option value="">Select…</option>
             <option value={1}>1</option>
             <option value={2}>2</option>
           </select>

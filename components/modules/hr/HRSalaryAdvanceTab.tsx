@@ -40,9 +40,9 @@ export default function HRSalaryAdvanceTab() {
 
   const [showApply, setShowApply] = useState(false)
   const [amount, setAmount] = useState('')
-  const [paymentTerms, setPaymentTerms] = useState<SalaryAdvance['paymentTerms']>('payroll_deduction')
-  const [repaymentMonths, setRepaymentMonths] = useState('1')
-  const [repaymentStartPeriod, setRepaymentStartPeriod] = useState(new Date().toISOString().slice(0, 7))
+  const [paymentTerms, setPaymentTerms] = useState<SalaryAdvance['paymentTerms'] | ''>('')
+  const [repaymentMonths, setRepaymentMonths] = useState('')
+  const [repaymentStartPeriod, setRepaymentStartPeriod] = useState('')
   const [neededByDate, setNeededByDate] = useState('')
   const [reason, setReason] = useState('')
   const [decisionId, setDecisionId] = useState<string | null>(null)
@@ -76,9 +76,9 @@ export default function HRSalaryAdvanceTab() {
 
   const resetForm = () => {
     setAmount('')
-    setPaymentTerms('payroll_deduction')
-    setRepaymentMonths('1')
-    setRepaymentStartPeriod(new Date().toISOString().slice(0, 7))
+    setPaymentTerms('')
+    setRepaymentMonths('')
+    setRepaymentStartPeriod('')
     setNeededByDate('')
     setReason('')
   }
@@ -87,9 +87,16 @@ export default function HRSalaryAdvanceTab() {
     if (!myEmployee) { showToast('No employee record linked. Contact HR.', 'error'); return }
     const advanceAmount = Number(amount)
     const months = Number(repaymentMonths)
-    if (!advanceAmount || advanceAmount <= 0) { showToast('Enter a valid amount', 'error'); return }
-    if (!months || months <= 0) { showToast('Select a repayment period', 'error'); return }
-    if (!reason.trim()) { showToast('Enter a reason for the advance', 'error'); return }
+    const missing: string[] = []
+    if (!amount.trim()) missing.push('Amount (KES)')
+    if (!paymentTerms) missing.push('Payment Terms')
+    if (!repaymentMonths) missing.push('Repayment Period')
+    if (!repaymentStartPeriod) missing.push('Deduction Start Period')
+    if (!reason.trim()) missing.push('Reason')
+    if (missing.length) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
+    if (!paymentTerms) return
+    if (!Number.isFinite(advanceAmount) || advanceAmount <= 0) { showToast('Enter a valid amount', 'error'); return }
+    if (!Number.isFinite(months) || months <= 0) { showToast('Select a repayment period', 'error'); return }
     try {
       applySalaryAdvance({
         employeeId: myEmployee.id,
@@ -286,12 +293,14 @@ export default function HRSalaryAdvanceTab() {
             </Field>
             <Field label="Payment Terms" required>
               <Select value={paymentTerms} onChange={value => setPaymentTerms(value as SalaryAdvance['paymentTerms'])} options={[
+                { value: '', label: 'Select payment terms…' },
                 { value: 'payroll_deduction', label: 'Deduct from payroll' },
                 { value: 'manual_repayment', label: 'Manual repayment' },
               ]} />
             </Field>
             <Field label="Repayment Period" required>
               <Select value={repaymentMonths} onChange={setRepaymentMonths} options={[
+                { value: '', label: 'Select repayment period…' },
                 { value: '1', label: '1 month' },
                 { value: '2', label: '2 months' },
                 { value: '3', label: '3 months' },

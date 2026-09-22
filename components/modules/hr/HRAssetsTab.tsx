@@ -14,30 +14,30 @@ type AssignForm = {
   productId: string
   serialId: string
   qty: string
-  handoverCondition: EmployeeAssetAssignment['handoverCondition']
+  handoverCondition: EmployeeAssetAssignment['handoverCondition'] | ''
   handoverNotes: string
 }
 
 type ReturnForm = {
   assignmentId: string
-  returnLocation: LocationId
-  condition: 'good' | 'fair' | 'damaged'
+  returnLocation: LocationId | ''
+  condition: 'good' | 'fair' | 'damaged' | ''
   notes: string
 }
 
-const emptyAssignForm = (employeeId = '', productId = ''): AssignForm => ({
-  employeeId,
-  productId,
+const emptyAssignForm = (): AssignForm => ({
+  employeeId: '',
+  productId: '',
   serialId: '',
-  qty: '1',
-  handoverCondition: 'good',
+  qty: '',
+  handoverCondition: '',
   handoverNotes: '',
 })
 
 const emptyReturnForm = (assignmentId = ''): ReturnForm => ({
   assignmentId,
-  returnLocation: 'warehouse',
-  condition: 'good',
+  returnLocation: '',
+  condition: '',
   notes: '',
 })
 
@@ -88,7 +88,7 @@ export default function HRAssetsTab() {
     })
   }, [products, serials])
 
-  const [assignForm, setAssignForm] = useState<AssignForm>(() => emptyAssignForm(activeEmployees[0]?.id ?? '', assignableProducts[0]?.id ?? ''))
+  const [assignForm, setAssignForm] = useState<AssignForm>(emptyAssignForm)
   const selectedProduct = assignableProducts.find(p => p.id === assignForm.productId)
   const availableSerials = serials.filter(s => s.productId === assignForm.productId && s.status === 'available')
   const selectedReturn = returnForm && isAdmin ? employeeAssetAssignments.find(a => a.id === returnForm.assignmentId) : null
@@ -110,7 +110,7 @@ export default function HRAssetsTab() {
   }
 
   const openAssignModal = () => {
-    setAssignForm(emptyAssignForm(activeEmployees[0]?.id ?? '', assignableProducts[0]?.id ?? ''))
+    setAssignForm(emptyAssignForm())
     setAssignDirty(false)
     setAssignError(null)
     setShowAssignModal(true)
@@ -131,9 +131,14 @@ export default function HRAssetsTab() {
   const submitAssign = async () => {
     const product = assignableProducts.find(p => p.id === assignForm.productId)
     const qty = product?.requiresSerial ? 1 : Number(assignForm.qty)
-    if (!assignForm.employeeId) { setAssignError('Select an employee for the asset assignment.'); return }
-    if (!product) { setAssignError('Select an available asset to assign.'); return }
-    if (product.requiresSerial && !assignForm.serialId) { setAssignError('Select the serial number being assigned.'); return }
+    const missing: string[] = []
+    if (!assignForm.employeeId) missing.push('Employee')
+    if (!product) missing.push('Asset')
+    if (product?.requiresSerial && !assignForm.serialId) missing.push('Serial Number')
+    if (product && !product.requiresSerial && !assignForm.qty.trim()) missing.push('Quantity')
+    if (!assignForm.handoverCondition) missing.push('Handover Condition')
+    if (missing.length) { setAssignError(`Please fill in: ${missing.join(', ')}.`); return }
+    if (!product || !assignForm.handoverCondition) return
     if (!product.requiresSerial && (!Number.isFinite(qty) || qty <= 0)) { setAssignError('Quantity must be greater than zero.'); return }
     if (!product.requiresSerial && qty > product.stockQty) { setAssignError('Quantity exceeds available stock.'); return }
 
@@ -153,7 +158,12 @@ export default function HRAssetsTab() {
   const submitReturn = async () => {
     if (!returnForm) return
     if (!returnForm.assignmentId) { setReturnError('Select an asset assignment to return.'); return }
-    if (!returnForm.notes.trim()) { setReturnError('Return inspection notes are required.'); return }
+    const missingReturn: string[] = []
+    if (!returnForm.returnLocation) missingReturn.push('Return Location')
+    if (!returnForm.condition) missingReturn.push('Return Condition')
+    if (!returnForm.notes.trim()) missingReturn.push('Inspection Notes')
+    if (missingReturn.length) { setReturnError(`Please fill in: ${missingReturn.join(', ')}.`); return }
+    if (!returnForm.returnLocation || !returnForm.condition) return
     await Promise.resolve(returnEmployeeAsset(returnForm.assignmentId, returnForm.returnLocation, returnForm.condition, returnForm.notes.trim()))
     setReturnDirty(false)
     setReturnForm(null)
@@ -246,22 +256,22 @@ export default function HRAssetsTab() {
       {showAssignModal && (
         <Modal title="Assign Asset" subtitle="Issue company property to an employee and sync the assignment to the server" onClose={closeAssignModal} width={620}>
           <FormField label="Employee" required>
-            <Select value={assignForm.employeeId} onChange={employeeId => updateAssign({ employeeId })} options={employeeOptions.length ? employeeOptions : [{ value: '', label: 'No active employees available' }]} />
+            <Select value={assignForm.employeeId} onChange={employeeId => updateAssign({ employeeId })} options={employeeOptions.length ? [{ value: '', label: 'Select employee…' }, ...employeeOptions] : [{ value: '', label: 'No active employees available' }]} />
           </FormField>
           <FormField label="Asset" required>
-            <Select value={assignForm.productId} onChange={productId => updateAssign({ productId, serialId: '', qty: '1' })} options={productOptions.length ? productOptions : [{ value: '', label: 'No assignable stock available' }]} />
+            <Select value={assignForm.productId} onChange={productId => updateAssign({ productId, serialId: '', qty: '' })} options={productOptions.length ? [{ value: '', label: 'Select asset…' }, ...productOptions] : [{ value: '', label: 'No assignable stock available' }]} />
           </FormField>
           {selectedProduct?.requiresSerial ? (
             <FormField label="Serial Number" required>
-              <Select value={assignForm.serialId} onChange={serialId => updateAssign({ serialId })} options={serialOptions.length ? serialOptions : [{ value: '', label: 'No available serials' }]} />
+              <Select value={assignForm.serialId} onChange={serialId => updateAssign({ serialId })} options={serialOptions.length ? [{ value: '', label: 'Select serial…' }, ...serialOptions] : [{ value: '', label: 'No available serials' }]} />
             </FormField>
           ) : (
             <FormField label="Quantity" required hint={selectedProduct ? `Available: ${selectedProduct.stockQty} ${selectedProduct.unit}` : undefined}>
               <Input type="number" value={assignForm.qty} onChange={qty => updateAssign({ qty })} />
             </FormField>
           )}
-          <FormField label="Handover Condition">
-            <Select value={assignForm.handoverCondition} onChange={handoverCondition => updateAssign({ handoverCondition: handoverCondition as EmployeeAssetAssignment['handoverCondition'] })} options={[{ value: 'new', label: 'New' }, { value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' }]} />
+          <FormField label="Handover Condition" required>
+            <Select value={assignForm.handoverCondition} onChange={handoverCondition => updateAssign({ handoverCondition: handoverCondition as EmployeeAssetAssignment['handoverCondition'] })} options={[{ value: '', label: 'Select condition…' }, { value: 'new', label: 'New' }, { value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' }]} />
           </FormField>
           <FormField label="Handover Notes" hint="Record accessories or any condition notes given at handover.">
             <Textarea value={assignForm.handoverNotes} onChange={handoverNotes => updateAssign({ handoverNotes })} placeholder="Optional handover notes or accessories issued." />
@@ -278,11 +288,11 @@ export default function HRAssetsTab() {
 
       {returnForm && isAdmin && (
         <Modal title="Return Asset" subtitle={selectedReturn ? `${selectedReturn.productName} assigned to ${selectedReturn.employeeName}` : undefined} onClose={closeReturnModal} width={520}>
-          <FormField label="Return Location">
-            <Select value={returnForm.returnLocation} onChange={returnLocation => updateReturn({ returnLocation: returnLocation as LocationId })} options={[{ value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'Shop' }, { value: 'repair_unit', label: 'Repair Unit' }]} />
+          <FormField label="Return Location" required>
+            <Select value={returnForm.returnLocation} onChange={returnLocation => updateReturn({ returnLocation: returnLocation as LocationId })} options={[{ value: '', label: 'Select location…' }, { value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'Shop' }, { value: 'repair_unit', label: 'Repair Unit' }]} />
           </FormField>
           <FormField label="Return Condition" required>
-            <Select value={returnForm.condition} onChange={condition => updateReturn({ condition: condition as ReturnForm['condition'] })} options={[{ value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' }]} />
+            <Select value={returnForm.condition} onChange={condition => updateReturn({ condition: condition as ReturnForm['condition'] })} options={[{ value: '', label: 'Select condition…' }, { value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' }]} />
           </FormField>
           <FormField label="Inspection Notes" required error={returnError ?? undefined} hint="Record condition, missing accessories, or damage before returning stock.">
             <Textarea value={returnForm.notes} onChange={notes => updateReturn({ notes })} placeholder="Record the condition and any accessories returned." />

@@ -314,15 +314,21 @@ function EmptyValue({ children = 'Not configured' }: { children?: ReactNode }) {
 }
 
 export default function AccountingDashboard({ onNavigate }: Props) {
-  const now = new Date()
-  const [dateFrom, setDateFrom] = useState(`${now.getFullYear()}-01-01`)
-  const [dateTo, setDateTo] = useState(now.toISOString().slice(0, 10))
+  // Decision period starts empty — the user picks From/To explicitly.
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const periodSelected = !!dateFrom && !!dateTo
   const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async (soft = false) => {
+    if (!dateFrom || !dateTo) {
+      setData(null)
+      setError(null)
+      return
+    }
     soft ? setRefreshing(true) : setLoading(true)
     setError(null)
     try {
@@ -374,7 +380,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
             <span>To</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </label>
-          <button type="button" onClick={() => void load(true)} disabled={refreshing}>
+          <button type="button" onClick={() => void load(true)} disabled={refreshing || !periodSelected}>
             <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
             <span>{refreshing ? 'Refreshing' : 'Refresh'}</span>
           </button>
@@ -389,7 +395,12 @@ export default function AccountingDashboard({ onNavigate }: Props) {
         </div>
       ) : null}
 
-      {data ? (
+      {!periodSelected ? (
+        <div className="accounting-dashboard__loading" role="status">
+          <strong>Select a period to view this report</strong>
+          <span>Pick a From and To date above.</span>
+        </div>
+      ) : data ? (
         <>
           <div className="accounting-dashboard__kpis">
             {data.kpis.map((kpi, index) => {

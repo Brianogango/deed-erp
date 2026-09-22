@@ -87,8 +87,8 @@ function KilimallContent() {
     ? kilimallOrders.find(o => o.id === detailId) ?? null
     : null
   const [newOrder, setNewOrder] = useState({
-    kilimallRef: '', orderDate: nairobiDateKey(),
-    customerName: '', productId: '', productName: '', qty: '1',
+    kilimallRef: '', orderDate: '',
+    customerName: '', productId: '', productName: '', qty: '',
     unitPrice: '', notes: '',
   })
 
@@ -99,7 +99,7 @@ function KilimallContent() {
   const [substituteProductId, setSubstituteProductId] = useState('')
   const [substitutionReason, setSubstitutionReason] = useState('')
   const [dispatchCourier, setDispatchCourier] = useState('')
-  const [dispatchDate, setDispatchDate] = useState(nairobiDateKey())
+  const [dispatchDate, setDispatchDate] = useState('')
   const [dispatchTracking, setDispatchTracking] = useState('')
   const [dispatchNotes, setDispatchNotes] = useState('')
 
@@ -111,7 +111,7 @@ function KilimallContent() {
   const [settlForm, setSettlForm] = useState({
     weekPeriod: '', weekStart: '', weekEnd: '',
     grossAmount: '', deductions: '', netPaid: '',
-    paymentDate: '', paymentRef: '', paymentMethod: 'mpesa' as 'mpesa' | 'bank',
+    paymentDate: '', paymentRef: '', paymentMethod: '' as '' | 'mpesa' | 'bank',
   })
   const [settlLines, setSettlLines] = useState<{ kilimallRef: string; amount: string }[]>([
     { kilimallRef: '', amount: '' },
@@ -458,7 +458,7 @@ function KilimallContent() {
     setSubstituteProductId('')
     setSubstitutionReason('')
     setDispatchCourier('')
-    setDispatchDate(nairobiDateKey())
+    setDispatchDate('')
     setDispatchTracking('')
     setDispatchNotes('')
   }
@@ -469,8 +469,15 @@ function KilimallContent() {
   const handleCreateOrder = () => {
     const qty = Number(newOrder.qty)
     const unitPrice = Number(newOrder.unitPrice)
-    if (!newOrder.kilimallRef.trim() || !newOrder.productId || !newOrder.productName.trim()) {
-      showToast('Kilimall reference and a product selected from the catalogue are required', 'error')
+    const missing = [
+      !newOrder.kilimallRef.trim() && 'Kilimall order ID',
+      !newOrder.orderDate && 'Order date',
+      (!newOrder.productId || !newOrder.productName.trim()) && 'Product (from the catalogue)',
+      !newOrder.qty.trim() && 'Quantity',
+      !newOrder.unitPrice.trim() && 'Unit price',
+    ].filter(Boolean)
+    if (missing.length) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
       return
     }
     if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(unitPrice) || unitPrice <= 0) {
@@ -490,7 +497,7 @@ function KilimallContent() {
     })
     if (!created) return
     setShowNewOrder(false)
-    setNewOrder({ kilimallRef: '', orderDate: nairobiDateKey(), customerName: '', productId: '', productName: '', qty: '1', unitPrice: '', notes: '' })
+    setNewOrder({ kilimallRef: '', orderDate: '', customerName: '', productId: '', productName: '', qty: '', unitPrice: '', notes: '' })
   }
 
   const handleDispatch = () => {
@@ -545,6 +552,21 @@ function KilimallContent() {
   }
 
   const handleCreateSettlement = () => {
+    const missing = [
+      !settlForm.weekPeriod.trim() && 'Week period',
+      !settlForm.paymentMethod && 'Payment method',
+      settlForm.grossAmount.trim() === '' && 'Gross amount',
+    ].filter(Boolean)
+    if (missing.length) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
+      return
+    }
+    const paymentMethod = settlForm.paymentMethod
+    if (!paymentMethod) return
+    if (!Number.isFinite(Number(settlForm.grossAmount)) || Number(settlForm.grossAmount) < 0) {
+      showToast('Gross amount must be a number of 0 or more', 'error')
+      return
+    }
     const grossAmount = Number(settlForm.grossAmount)
     const deductions = Number(settlForm.deductions) || 0
     const netPaid = settlForm.netPaid === '' ? grossAmount - deductions : Number(settlForm.netPaid)
@@ -566,12 +588,12 @@ function KilimallContent() {
       netPaid,
       paymentDate: settlForm.paymentDate || undefined,
       paymentRef: settlForm.paymentRef.trim() || undefined,
-      paymentMethod: settlForm.paymentMethod,
+      paymentMethod,
       lines,
     })
     if (!created) return
     setShowNewSettlement(false)
-    setSettlForm({ weekPeriod: '', weekStart: '', weekEnd: '', grossAmount: '', deductions: '', netPaid: '', paymentDate: '', paymentRef: '', paymentMethod: 'mpesa' })
+    setSettlForm({ weekPeriod: '', weekStart: '', weekEnd: '', grossAmount: '', deductions: '', netPaid: '', paymentDate: '', paymentRef: '', paymentMethod: '' })
     setSettlLines([{ kilimallRef: '', amount: '' }])
   }
 
@@ -824,7 +846,7 @@ function KilimallContent() {
                   The selected serial is reserved and removed from available stock when dispatch is confirmed.
                 </div>
                 <button className="btn-primary inline-flex items-center gap-1.5" onClick={handleDispatch}
-                  disabled={!dispatchSerial || !dispatchCourier.trim() || !dispatchDate || availableSerials.length === 0 || (useSubstitution && !substituteProductId)}>
+                  disabled={availableSerials.length === 0}>
                   <Fa icon={faCheck} aria-hidden="true" /> Confirm Dispatch
                 </button>
                 <button className="btn-outline text-[11px]" onClick={resetDispatchForm}>
@@ -1299,9 +1321,9 @@ function KilimallContent() {
             <Field label="Week Period" required hint='e.g. "1–7 Apr 2026"'>
               <Input value={settlForm.weekPeriod} onChange={v => setSettlForm(p => ({ ...p, weekPeriod: v }))} placeholder="1–7 Apr 2026" />
             </Field>
-            <Field label="Payment Method">
+            <Field label="Payment Method" required>
               <Select value={settlForm.paymentMethod} onChange={v => setSettlForm(p => ({ ...p, paymentMethod: v as any }))}
-                options={[{ value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank Transfer' }]} />
+                options={[{ value: '', label: 'Select…' }, { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank Transfer' }]} />
             </Field>
             <Field label="Week Start"><Input value={settlForm.weekStart} onChange={v => setSettlForm(p => ({ ...p, weekStart: v }))} type="date" /></Field>
             <Field label="Week End"><Input value={settlForm.weekEnd} onChange={v => setSettlForm(p => ({ ...p, weekEnd: v }))} type="date" /></Field>

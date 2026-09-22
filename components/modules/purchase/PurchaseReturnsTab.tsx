@@ -153,7 +153,7 @@ export default function PurchaseReturnsTab() {
   function returnRowActions(r: PurchaseReturn) {
     return !r.collectedByName && canManageProcurement ? (
       <button className="btn-primary text-[10px] py-1.5 px-3"
-        onClick={e => { e.stopPropagation(); setPickupReturnId(r.id); setPickupCollectedBy(''); setPickupCollectedDate(new Date().toISOString().slice(0,10)); setPickupNotes(''); setShowPickupModal(true) }}>
+        onClick={e => { e.stopPropagation(); setPickupReturnId(r.id); setPickupCollectedBy(''); setPickupCollectedDate(''); setPickupNotes(''); setShowPickupModal(true) }}>
         Log Pickup
       </button>
     ) : null
@@ -219,7 +219,7 @@ export default function PurchaseReturnsTab() {
                 {r.pickupNotes && <div className="mt-1 p-2 rounded text-[10px] text-t2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>{r.pickupNotes}</div>}
                 {canManageProcurement && (
                   <button className="btn-outline text-[10px] py-1 mt-1"
-                    onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(r.collectedByUserId ?? ''); setPickupCollectedDate(r.collectedDate ?? new Date().toISOString().slice(0,10)); setPickupNotes(r.pickupNotes ?? ''); setShowPickupModal(true) }}>
+                    onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(r.collectedByUserId ?? ''); setPickupCollectedDate(r.collectedDate ?? ''); setPickupNotes(r.pickupNotes ?? ''); setShowPickupModal(true) }}>
                     ✏ Edit Pickup Details
                   </button>
                 )}
@@ -229,7 +229,7 @@ export default function PurchaseReturnsTab() {
                 <p className="text-[11px] text-t3 text-center">Pickup not yet logged</p>
                 {canManageProcurement && (
                   <button className="btn-primary text-[11px] py-1.5"
-                    onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(''); setPickupCollectedDate(new Date().toISOString().slice(0,10)); setPickupNotes(''); setShowPickupModal(true) }}>
+                    onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(''); setPickupCollectedDate(''); setPickupNotes(''); setShowPickupModal(true) }}>
                     + Log Pickup
                   </button>
                 )}

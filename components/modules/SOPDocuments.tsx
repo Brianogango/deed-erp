@@ -84,9 +84,9 @@ const uid = () => crypto.randomUUID()
 
 function emptyDoc(): Omit<SOPDoc, 'id' | 'createdByName' | 'createdAt' | 'updatedAt'> {
   return {
-    title: '', category: 'general', department: 'operations', purpose: '', scope: '',
+    title: '', category: '', department: '', purpose: '', scope: '',
     steps: [{ id: uid(), order: 1, instruction: '', note: '' }],
-    tags: [], version: '1.0', status: 'draft', reviewDate: '',
+    tags: [], version: '', status: 'draft', reviewDate: '',
   }
 }
 
@@ -136,7 +136,7 @@ function SOPDocumentsContent() {
 
   const [search, setSearch] = useUrlUiState('q', '')
   const [filterDept, setFilterDept] = useUrlUiState('dept', 'all')
-  const [filterStatus, setFilterStatus] = useUrlUiState('status', 'active')
+  const [filterStatus, setFilterStatus] = useUrlUiState('status', 'all')
   const [viewId, setViewId]           = useUrlRecordId()
   const [editId, setEditId]           = useUrlRecordId({ param: 'edit', clearKeys: ['id'] })
   const [editDoc, setEditDoc]         = useState<Partial<SOPDoc> & { steps: SOPStep[] } | null>(null)
@@ -208,7 +208,12 @@ function SOPDocumentsContent() {
 
   async function saveDoc() {
     if (!editDoc) return
-    if (!editDoc.title?.trim()) { alert('Title is required'); return }
+    const missing: string[] = []
+    if (!editDoc.title?.trim()) missing.push('SOP Title')
+    if (!editDoc.department) missing.push('Department')
+    if (!editDoc.category) missing.push('Category')
+    if (!editDoc.version?.trim()) missing.push('Version')
+    if (missing.length) { alert(`Please fill in: ${missing.join(', ')}`); return }
     if (!editDoc.steps?.some(s => s.instruction.trim())) { alert('At least one step is required'); return }
 
     const now = new Date().toISOString()
@@ -253,13 +258,13 @@ function SOPDocumentsContent() {
       const newDoc: SOPDoc = {
         id: sopId,
         title: editDoc.title!.trim(),
-        category: editDoc.category ?? 'general',
-        department: editDoc.department ?? 'operations',
+        category: editDoc.category!,
+        department: editDoc.department!,
         purpose: editDoc.purpose?.trim() ?? '',
         scope: editDoc.scope?.trim() ?? '',
         steps: cleanSteps,
         tags: editDoc.tags ?? [],
-        version: editDoc.version ?? '1.0',
+        version: editDoc.version!.trim(),
         status: editDoc.status ?? 'draft',
         reviewDate: editDoc.reviewDate ?? '',
         ...fileFields,
@@ -514,16 +519,18 @@ function SOPDocumentsContent() {
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Department</label>
-                <select aria-label="SOP department" className="form-input w-full" value={editDoc.department ?? 'operations'}
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Department *</label>
+                <select aria-label="SOP department" className="form-input w-full" value={editDoc.department ?? ''}
                   onChange={e => setEditDoc(d => d ? { ...d, department: e.target.value } : d)}>
+                  <option value="">Select department…</option>
                   {SOP_DEPARTMENTS.map(dep => <option key={dep.id} value={dep.id}>{dep.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Category</label>
-                <select aria-label="SOP category" className="form-input w-full" value={editDoc.category ?? 'general'}
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Category *</label>
+                <select aria-label="SOP category" className="form-input w-full" value={editDoc.category ?? ''}
                   onChange={e => setEditDoc(d => d ? { ...d, category: e.target.value } : d)}>
+                  <option value="">Select category…</option>
                   {SOP_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
@@ -539,9 +546,9 @@ function SOPDocumentsContent() {
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Version</label>
-                <input className="form-input w-full" placeholder="1.0"
-                  value={editDoc.version ?? '1.0'} onChange={e => setEditDoc(d => d ? { ...d, version: e.target.value } : d)} />
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Version *</label>
+                <input className="form-input w-full" placeholder="e.g. 1.0"
+                  value={editDoc.version ?? ''} onChange={e => setEditDoc(d => d ? { ...d, version: e.target.value } : d)} />
               </div>
               <div>
                 <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Review Date</label>

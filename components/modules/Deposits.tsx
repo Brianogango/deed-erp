@@ -42,6 +42,9 @@ function ProgressBar({ paid, total }: { paid: number; total: number }) {
 }
 
 // ── New Deposit Modal ──────────────────────────────────────────────────────────
+/** Draft line: qty / price stay blank until the user (or the chosen product) sets them. */
+type DraftDepositItem = Omit<DepositItem, 'qty' | 'unitPrice'> & { qty: number | ''; unitPrice: number | '' }
+
 function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Deposit) => void }) {
   const { contacts, products, createDeposit, showToast } = useFinanceStore()
   const customers = useMemo(() => (contacts || []).filter(c => c.isCustomer), [contacts])
@@ -51,16 +54,16 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
   const [customerId, setCustomerId] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
-  const [items, setItems] = useState<DepositItem[]>([])
+  const [items, setItems] = useState<DraftDepositItem[]>([])
   const [initialPayment, setInitialPayment] = useState('')
-  const [payMethod, setPayMethod] = useState<DepositPayment['method']>('cash')
+  const [payMethod, setPayMethod] = useState<DepositPayment['method'] | ''>('')
   const [payRef, setPayRef] = useState('')
 
   const customer = customers.find(c => c.id === customerId)
   const totalValue = items.reduce((s, i) => s + i.total, 0)
   const deposit = Number(initialPayment) || 0
 
-  const addItem = () => setItems(p => [...p, { productId: '', productName: '', sku: '', qty: 1, unitPrice: 0, total: 0 }])
+  const addItem = () => setItems(p => [...p, { productId: '', productName: '', sku: '', qty: '', unitPrice: '', total: 0 }])
   const removeItem = (idx: number) => setItems(p => p.filter((_, i) => i !== idx))
   const updateItem = (idx: number, field: string, value: any) => setItems(p => p.map((item, i) => {
     if (i !== idx) return item
@@ -70,20 +73,50 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
       if (prod) {
         updated.productName = prod.name
         updated.sku = prod.sku || prod.code || ''
+        // Keep: the unit price comes from the product the user selected.
         updated.unitPrice = prod.salePrice || 0
-        updated.total = (prod.salePrice || 0) * updated.qty
+        updated.total = (prod.salePrice || 0) * (Number(updated.qty) || 0)
       }
     }
-    if (field === 'qty' || field === 'unitPrice') updated.total = (updated.qty || 0) * (updated.unitPrice || 0)
+    if (field === 'qty' || field === 'unitPrice') updated.total = (Number(updated.qty) || 0) * (Number(updated.unitPrice) || 0)
     return updated
   }))
 
-  const handleSave = async () => {
-    if (!customer || items.length === 0 || deposit <= 0 || saving) return
-    if (items.some(item => !item.productId || item.qty <= 0 || item.unitPrice < 0)) {
-      showToast('Every reserved item needs a product, a positive quantity, and a valid price.', 'error')
+  const itemIssues = (): string[] => {
+    const missing: string[] = []
+    if (!customer) missing.push('Customer')
+    if (items.length === 0) missing.push('At least one item')
+    items.forEach((item, idx) => {
+      if (!item.productId) missing.push(`Item ${idx + 1} product`)
+      if (item.qty === '' || !Number.isFinite(Number(item.qty)) || Number(item.qty) <= 0) missing.push(`Item ${idx + 1} quantity (greater than 0)`)
+      if (item.unitPrice === '' || !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0) missing.push(`Item ${idx + 1} unit price`)
+    })
+    return missing
+  }
+
+  const goToPayment = () => {
+    const missing = itemIssues()
+    if (missing.length) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
       return
     }
+    setStep(2)
+  }
+
+  const handleSave = async () => {
+    if (saving) return
+    const missing = itemIssues()
+    if (!initialPayment.trim() || !Number.isFinite(Number(initialPayment)) || deposit <= 0) missing.push('Deposit amount (greater than 0)')
+    if (!payMethod) missing.push('Payment method')
+    if (missing.length || !customer || !payMethod) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
+      return
+    }
+    const finalItems: DepositItem[] = items.map(item => {
+      const qty = Number(item.qty)
+      const unitPrice = Number(item.unitPrice)
+      return { ...item, qty, unitPrice, total: qty * unitPrice }
+    })
     if (deposit > totalValue) {
       showToast(`Initial payment (${fmtKes(deposit)}) cannot exceed total value (${fmtKes(totalValue)})`, 'error')
       return
@@ -94,7 +127,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
         customerId: customer.id,
         customerName: customer.name,
         customerPhone: customer.phone,
-        items,
+        items: finalItems,
         totalValue,
         dueDate: dueDate || undefined,
         notes: notes || undefined,
@@ -182,11 +215,11 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
                       </div>
                       <div className="col-span-2">
                         <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Qty</p>
-                        <input type="number" aria-label={`Quantity for item ${idx + 1}`} min={1} value={item.qty} onChange={e => updateItem(idx, 'qty', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(1, e.currentTarget.valueAsNumber) : 1)} className="form-input text-xs w-full text-center" />
+                        <input type="number" aria-label={`Quantity for item ${idx + 1}`} min={1} value={item.qty} onChange={e => updateItem(idx, 'qty', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(1, e.currentTarget.valueAsNumber) : '')} className="form-input text-xs w-full text-center" />
                       </div>
                       <div className="col-span-3">
                         <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Unit Price</p>
-                        <input type="number" aria-label={`Unit price for item ${idx + 1}`} value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(0, e.currentTarget.valueAsNumber) : 0)} className="form-input text-xs w-full text-right" />
+                        <input type="number" aria-label={`Unit price for item ${idx + 1}`} value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(0, e.currentTarget.valueAsNumber) : '')} className="form-input text-xs w-full text-right" />
                       </div>
                       <div className="col-span-2 flex items-center justify-between">
                         <span className="text-[11px] font-black text-[var(--text-1)] font-mono">{fmtKes(item.total)}</span>
@@ -230,8 +263,9 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
                   {deposit > 0 && <p className="text-[10px] text-emerald-600 mt-1 font-bold">Balance: {fmtKes(totalValue - deposit)}</p>}
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Method</label>
+                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Method *</label>
                   <select aria-label="Payment method" value={payMethod} onChange={e => setPayMethod(e.target.value as any)} className="form-input w-full text-xs">
+                    <option value="" disabled>Select payment method…</option>
                     {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
                 </div>
@@ -253,7 +287,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
           {step === 1 ? (
             <button
               disabled={!customerId || items.length === 0 || items.some(i => !i.productId)}
-              onClick={() => setStep(2)}
+              onClick={goToPayment}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 disabled:pointer-events-none shadow-lg shadow-blue-200"
             >
               Next →
@@ -278,7 +312,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
 function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClose: () => void; onSave: () => void }) {
   const { users, currentUserId, addDepositPayment, showToast } = useFinanceStore()
   const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState<DepositPayment['method']>('cash')
+  const [method, setMethod] = useState<DepositPayment['method'] | ''>('')
   const [ref, setRef] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -287,8 +321,12 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
   const newBalance = maxAmount - paying
 
   const handleSave = () => {
-    if (paying <= 0 || saving) {
-      showToast('Enter a payment amount greater than zero.', 'error')
+    if (saving) return
+    const missing: string[] = []
+    if (paying <= 0) missing.push('Amount (greater than 0)')
+    if (!method) missing.push('Method')
+    if (missing.length || !method) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
       return
     }
     setSaving(true)
@@ -327,8 +365,9 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
             <input type="number" aria-label="Payment amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Max ${fmtKes(maxAmount)}`} min="0.01" step="0.01" max={maxAmount} className="form-input w-full text-xs font-mono text-right" />
           </div>
           <div>
-            <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Method</label>
+            <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Method *</label>
             <select aria-label="Payment method" value={method} onChange={e => setMethod(e.target.value as any)} className="form-input w-full text-xs">
+              <option value="" disabled>Select method…</option>
               {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
           </div>

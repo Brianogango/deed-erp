@@ -32,7 +32,7 @@ export default function MyDocuments() {
   const [showModal, setShowModal]     = useState(false)
   const [editSop, setEditSop]         = useState<RefSOP | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
-  const [form, setForm]               = useState({ category: 'sales' as RefSOPCategory, title: '', content: '', fileName: '', fileData: '' })
+  const [form, setForm]               = useState({ category: '' as RefSOPCategory | '', title: '', content: '', fileName: '', fileData: '' })
 
   function toggleExpand(id: string) {
     setExpanded(prev => {
@@ -44,7 +44,7 @@ export default function MyDocuments() {
 
   function openCreate() {
     setEditSop(null)
-    setForm({ category: 'sales', title: '', content: '', fileName: '', fileData: '' })
+    setForm({ category: '', title: '', content: '', fileName: '', fileData: '' })
     setShowModal(true)
   }
 
@@ -55,11 +55,16 @@ export default function MyDocuments() {
   }
 
   function handleSave() {
-    if (!form.title.trim() || !form.content.trim()) return
+    const missing: string[] = []
+    if (!form.category) missing.push('Category')
+    if (!form.title.trim()) missing.push('Title')
+    if (!form.content.trim()) missing.push('Procedure Steps')
+    if (missing.length || !form.category) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
+    const data = { ...form, category: form.category }
     if (editSop) {
-      updateRefSop(editSop.id, form)
+      updateRefSop(editSop.id, data)
     } else {
-      addRefSop(form)
+      addRefSop(data)
     }
     setShowModal(false)
   }
@@ -199,7 +204,8 @@ export default function MyDocuments() {
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Category *</label>
                 <select className="form-input w-full text-[12px]" value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value as RefSOPCategory }))}>
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value as RefSOPCategory | '' }))}>
+                  <option value="">Select category…</option>
                   {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>

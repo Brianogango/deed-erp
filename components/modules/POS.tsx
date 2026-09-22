@@ -255,7 +255,7 @@ export default function PointOfSale() {
   const [scanInput, setScanInput] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
-  const [payMethod, setPayMethod] = useState<'cash' | 'mpesa' | 'bank'>('mpesa')
+  const [payMethod, setPayMethod] = useState<'' | 'cash' | 'mpesa' | 'bank'>('')
   const [mpesaPhone, setMpesaPhone] = useState('')
   const [darajaReady, setDarajaReady] = useState(false)
   const [stkStatus, setStkStatus] = useState('')
@@ -266,7 +266,7 @@ export default function PointOfSale() {
   const [walkInBuyerName, setWalkInBuyerName] = useState('')
   const [showOpenSession, setShowOpenSession] = useState(false)
   const [showCloseSession, setShowCloseSession] = useState(false)
-  const [openingCash, setOpeningCash] = useState('50000')
+  const [openingCash, setOpeningCash] = useState('')
   const [closingCash, setClosingCash] = useState('')
   const [receiptOrder, setReceiptOrder] = useState<typeof posOrders[0] | null>(null)
   const [cartOpen, setCartOpen] = useState(false)
@@ -501,7 +501,12 @@ export default function PointOfSale() {
       return
     }
 
-    const selectedBankId = bankAccountId || tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || ''
+    if (!payMethod) {
+      showToast('Select a payment method (M-Pesa, Cash or Bank)', 'error')
+      return
+    }
+    const tender = payMethod
+    const selectedBankId = bankAccountId
     if (paymentDue > 0 && payMethod === 'bank' && !selectedBankId) {
       showToast('Select a bank account before charging', 'error')
       return
@@ -550,7 +555,7 @@ export default function PointOfSale() {
           serialId: i.serialId,
           serialNumber: i.serialNumber
         })) as any,
-        payMethod,
+        tender,
         customerId || undefined,
         (customerName || walkInBuyerName.trim()) || undefined,
         pointsToRedeem || 0,
@@ -575,6 +580,8 @@ export default function PointOfSale() {
         setWalkInBuyerName('')
         setRedeemPoints('')
         setPaymentReference('')
+        setPayMethod('')
+        setBankAccountId('')
         setUseClientCredit(false)
         setClientCreditInput('')
         setStkStatus('')
@@ -607,15 +614,21 @@ export default function PointOfSale() {
           <button type="button" className="pos-boot-action" onClick={() => setShowOpenSession(true)}>Open new session</button>
           {showOpenSession && (
             <Modal title="Open Session" subtitle="Enter opening cash balance" width={380} onClose={() => setShowOpenSession(false)}>
-              <Field label="Opening Cash Count (KES)"><Input value={openingCash} onChange={setOpeningCash} type="number" autoFocus /></Field>
+              <Field label="Opening Cash Count (KES)" required><Input value={openingCash} onChange={setOpeningCash} type="number" autoFocus /></Field>
               <button
                 type="button"
                 className="pos-session-submit"
                 disabled={openingSession}
                 onClick={() => {
+                  const opening = openingCash.trim() === '' ? NaN : Number(openingCash)
+                  if (!Number.isFinite(opening) || opening < 0) {
+                    showToast(openingCash.trim() === '' ? 'Enter the opening cash count (KES) — use 0 if the till is empty' : 'Opening cash must be a number of 0 or more', 'error')
+                    return
+                  }
                   setOpeningSession(true)
                   try {
-                    openPOSSession(Number(openingCash))
+                    openPOSSession(opening)
+                    setOpeningCash('')
                     setShowOpenSession(false)
                   } finally {
                     setOpeningSession(false)
@@ -1007,9 +1020,6 @@ export default function PointOfSale() {
                 {(['mpesa', 'cash', 'bank'] as const).map(m => (
                   <button key={m} type="button" onClick={() => {
                     setPayMethod(m)
-                    if (m === 'bank' && !bankAccountId) {
-                      setBankAccountId(tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || '')
-                    }
                   }}
                     className="pos-payment-method"
                     style={{
@@ -1037,11 +1047,11 @@ export default function PointOfSale() {
               )}
               {payMethod === 'bank' && (
                 <div className="pos-bank-payment">
-                  <Field label="Bank account">
+                  <Field label="Bank account" required>
                     <Select
-                      value={bankAccountId || tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || ''}
+                      value={bankAccountId}
                       onChange={setBankAccountId}
-                      options={tenderBanks.map(b => ({ value: b.id, label: b.bankName || b.name }))}
+                      options={[{ value: '', label: 'Select bank account…' }, ...tenderBanks.map(b => ({ value: b.id, label: b.bankName || b.name }))]}
                     />
                   </Field>
                   <Field label="Payment reference (optional)">

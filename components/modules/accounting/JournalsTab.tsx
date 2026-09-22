@@ -27,7 +27,7 @@ export default function JournalsTab() {
   const [showManual, setShowManual] = useState(false)
   const [saving, setSaving] = useState(false)
   const [manualRef, setManualRef] = useState('')
-  const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [manualDate, setManualDate] = useState('')
   const [manualDesc, setManualDesc] = useState('')
   const [manualLines, setManualLines] = useState<DraftLine[]>([emptyLine(), emptyLine()])
   const prismaReports = usePrismaAccountingReports(source === 'prisma' && canViewJournals)
@@ -111,8 +111,12 @@ export default function JournalsTab() {
       .filter(l => l.account && (l.debit > 0 || l.credit > 0))
     const debit = lines.reduce((s, l) => s + l.debit, 0)
     const credit = lines.reduce((s, l) => s + l.credit, 0)
-    if (!manualRef.trim() || !manualDesc.trim()) {
-      showToast?.('Reference and description are required', 'error')
+    const missing: string[] = []
+    if (!manualRef.trim()) missing.push('Reference')
+    if (!manualDate) missing.push('Date')
+    if (!manualDesc.trim()) missing.push('Description')
+    if (missing.length) {
+      showToast?.(`Required: ${missing.join(', ')}`, 'error')
       return
     }
     if (lines.length < 2) {
@@ -141,6 +145,7 @@ export default function JournalsTab() {
       showToast?.('Manual journal posted to Prisma', 'success')
       setShowManual(false)
       setManualRef('')
+      setManualDate('')
       setManualDesc('')
       setManualLines([emptyLine(), emptyLine()])
       prismaReports.refresh?.()
@@ -322,7 +327,7 @@ export default function JournalsTab() {
                 <input className="form-input w-full text-[11px]" value={manualRef} onChange={e => setManualRef(e.target.value)} placeholder="JRN/ADJ/001" />
               </label>
               <label className="text-[11px] space-y-1">
-                <span className="font-semibold">Date</span>
+                <span className="font-semibold">Date *</span>
                 <input type="date" className="form-input w-full text-[11px]" value={manualDate} onChange={e => setManualDate(e.target.value)} />
               </label>
             </div>

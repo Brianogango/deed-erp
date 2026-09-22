@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Badge, Field, Modal, Select } from '@/components/ui'
+import { Badge, EmptyState, Field, Modal, Select } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { CompactInfoNotice, OperationalSummary, TablePageLayout } from '@/components/erp'
 import { fmtDate, fmtKes } from '@/lib/store'
@@ -33,11 +33,6 @@ type CloserSaleLine = {
   closerName: string
 }
 
-function currentPeriod() {
-  const d = new Date()
-  return { year: d.getFullYear(), month: d.getMonth() + 1 }
-}
-
 function monthOptions() {
   return Array.from({ length: 12 }, (_, i) => ({
     value: String(i + 1),
@@ -51,9 +46,10 @@ function yearOptions() {
 }
 
 export default function CommissionsTab() {
-  const now = currentPeriod()
-  const [year, setYear] = useUrlUiState('commissionYear', String(now.year))
-  const [month, setMonth] = useUrlUiState('commissionMonth', String(now.month))
+  // Period starts empty — the user picks the month and year explicitly.
+  const [year, setYear] = useUrlUiState('commissionYear', '')
+  const [month, setMonth] = useUrlUiState('commissionMonth', '')
+  const periodSelected = !!year && !!month
   const [paidFilterValue, setPaidFilter] = useUrlUiState('commissionStatus', 'all')
   const paidFilter = (['all', 'accrued', 'paid'].includes(paidFilterValue) ? paidFilterValue : 'all') as 'all' | 'accrued' | 'paid'
   const [selectedCloser, setSelectedCloser] = useState<CloserSalesRow | null>(null)
@@ -63,12 +59,22 @@ export default function CommissionsTab() {
   const [closers, setClosers] = useState<CloserSalesRow[]>([])
   const [saleLines, setSaleLines] = useState<CloserSaleLine[]>([])
   const [salesSummary, setSalesSummary] = useState({ salesCount: 0, saleAmount: 0, commissionAmount: 0 })
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setSelectedCloser(null)
     setSelectedCommission(null)
+    if (!year || !month) {
+      setItems([])
+      setSummary(null)
+      setClosers([])
+      setSaleLines([])
+      setSalesSummary({ salesCount: 0, saleAmount: 0, commissionAmount: 0 })
+      setError(null)
+      setLoading(false)
+      return
+    }
     const params = new URLSearchParams({
       summary: '1',
       periodYear: year,
@@ -193,12 +199,15 @@ export default function CommissionsTab() {
     >
       <div className="flex flex-wrap gap-3 px-4 pt-3">
         <Field label="Month">
-          <Select value={month} onChange={setMonth} options={monthOptions()} />
+          <Select value={month} onChange={setMonth} options={[{ value: '', label: 'Select month…' }, ...monthOptions()]} />
         </Field>
         <Field label="Year">
-          <Select value={year} onChange={setYear} options={yearOptions()} />
+          <Select value={year} onChange={setYear} options={[{ value: '', label: 'Select year…' }, ...yearOptions()]} />
         </Field>
       </div>
+      {!periodSelected ? (
+        <EmptyState title="Select a period to view this report" subtitle="Choose a month and year above." />
+      ) : (<>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-lt)] px-4 pb-2 pt-4">
         <div>
           <h3 className="text-sm font-semibold text-t1">Salespeople overview</h3>
@@ -320,6 +329,7 @@ export default function CommissionsTab() {
         exportTitle="Sales commissions"
         exportFilename="sales-commissions"
       />
+      </>)}
 
       {selectedCommission && (
         <Modal

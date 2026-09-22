@@ -133,9 +133,9 @@ function OutsourceContent() {
     repairOrderId: '',        // linked repair order (optional)
     deviceDescription: '',
     serial: '',
-    serviceType: 'bios_repair' as OutsourceServiceType,
+    serviceType: '' as OutsourceServiceType | '',
     issueDescription: '',
-    sentDate: new Date().toISOString().slice(0, 10),
+    sentDate: '',
     quotedCost: '',
     notes: '',
   })
@@ -181,11 +181,11 @@ function OutsourceContent() {
   // ── Return modal ──
   const [returnJobId, setReturnJobId] = useState<string | null>(null)
   const [returnForm, setReturnForm] = useState({
-    returnedDate: new Date().toISOString().slice(0, 10),
-    isResolved: true,
+    returnedDate: '',
+    isResolved: null as boolean | null,
     returnNotes: '',
     finalCost: '',
-    repairNextStep: 'keep' as 'keep' | 'in_repair' | 'unrepairable',
+    repairNextStep: '' as 'keep' | 'in_repair' | 'unrepairable' | '',
   })
 
   // ── Vendor modal ──
@@ -200,10 +200,10 @@ function OutsourceContent() {
   // ── Payment modal ──
   const [payVendorId, setPayVendorId] = useState<string | null>(null)
   const [payAmount, setPayAmount] = useState('')
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10))
+  const [payDate, setPayDate] = useState('')
   const [payNotes, setPayNotes] = useState('')
   const [payBankAccountId, setPayBankAccountId] = useState('')
-  const [payMethod, setPayMethod] = useState('bank')
+  const [payMethod, setPayMethod] = useState('')
   const [payReference, setPayReference] = useState('')
 
   // ── Derived data ─────────────────────────────────────────────────────────
@@ -250,7 +250,7 @@ function OutsourceContent() {
   // ── Handlers ─────────────────────────────────────────────────────────────
 
   function openNewJob() {
-    setJobForm({ vendorId: '', repairOrderId: '', deviceDescription: '', serial: '', serviceType: 'bios_repair', issueDescription: '', sentDate: new Date().toISOString().slice(0, 10), quotedCost: '', notes: '' })
+    setJobForm({ vendorId: '', repairOrderId: '', deviceDescription: '', serial: '', serviceType: '', issueDescription: '', sentDate: '', quotedCost: '', notes: '' })
     setRepairSearch('')
     setVendorSearch('')
     setShowJobModal(true)
@@ -259,7 +259,10 @@ function OutsourceContent() {
   function submitJob() {
     if (!jobForm.vendorId) { showToast('Select a vendor', 'error'); return }
     if (!jobForm.deviceDescription.trim()) { showToast('Enter device description', 'error'); return }
+    if (!jobForm.serviceType) { showToast('Select a service type', 'error'); return }
     if (!jobForm.issueDescription.trim()) { showToast('Describe the issue', 'error'); return }
+    if (!jobForm.sentDate) { showToast('Select the date sent', 'error'); return }
+    if (jobForm.quotedCost.trim() && (!Number.isFinite(Number(jobForm.quotedCost)) || Number(jobForm.quotedCost) < 0)) { showToast('Quoted cost must be a number of 0 or more', 'error'); return }
     if (jobForm.repairOrderId) {
       const linked = repairs.find(r => r.id === jobForm.repairOrderId)
       if (!linked) { showToast('Linked repair was not found', 'error'); return }
@@ -279,7 +282,7 @@ function OutsourceContent() {
         ? `${deviceDescription}${deviceDescription.includes(linkedRepair.ref) ? '' : ` (${linkedRepair.ref})`}`
         : deviceDescription,
       serial: jobForm.serial.trim() || undefined,
-      serviceType: jobForm.serviceType,
+      serviceType: jobForm.serviceType as OutsourceServiceType,
       issueDescription: jobForm.issueDescription.trim(),
       sentDate: jobForm.sentDate,
       quotedCost: jobForm.quotedCost ? Number(jobForm.quotedCost) : undefined,
@@ -290,17 +293,27 @@ function OutsourceContent() {
 
   function openReturn(jobId: string) {
     setReturnJobId(jobId)
-    setReturnForm({ returnedDate: new Date().toISOString().slice(0, 10), isResolved: true, returnNotes: '', finalCost: '', repairNextStep: 'keep' })
+    setReturnForm({ returnedDate: '', isResolved: null, returnNotes: '', finalCost: '', repairNextStep: '' })
   }
 
   function submitReturn() {
     if (!returnJobId) return
+    const returningJob = outsourceJobs.find(j => j.id === returnJobId)
+    const hasLinkedRepair = !!(returningJob?.repairOrderId && repairs.some(r => r.id === returningJob.repairOrderId))
+    if (!returnForm.returnedDate) { showToast('Select the return date', 'error'); return }
+    if (returnForm.isResolved === null) { showToast('Select whether the issue was resolved', 'error'); return }
+    if (returnForm.isResolved === false && hasLinkedRepair && !returnForm.repairNextStep) {
+      showToast('Select what should happen to the linked repair', 'error'); return
+    }
+    if (returnForm.finalCost.trim() && (!Number.isFinite(Number(returnForm.finalCost)) || Number(returnForm.finalCost) < 0)) {
+      showToast('Final cost must be a number of 0 or more', 'error'); return
+    }
     returnOutsourceJob(returnJobId, {
       returnedDate: returnForm.returnedDate,
       isResolved: returnForm.isResolved,
       returnNotes: returnForm.returnNotes.trim() || undefined,
       finalCost: returnForm.finalCost ? Number(returnForm.finalCost) : undefined,
-      repairNextStep: returnForm.repairNextStep,
+      repairNextStep: returnForm.isResolved === false && returnForm.repairNextStep ? returnForm.repairNextStep : undefined,
     })
     setReturnJobId(null)
   }
@@ -346,7 +359,8 @@ function OutsourceContent() {
   function openPayVendor(vendorId: string) {
     setPayVendorId(vendorId)
     setPayAmount('')
-    setPayDate(new Date().toISOString().slice(0, 10))
+    setPayDate('')
+    setPayMethod('')
     setPayNotes('')
     setPayBankAccountId('')
     setPayReference('')
@@ -356,6 +370,8 @@ function OutsourceContent() {
     if (!payVendorId) return
     const amt = Number(payAmount)
     if (!amt || amt <= 0) { showToast('Enter a valid amount', 'error'); return }
+    if (!payMethod) { showToast('Select a payment method', 'error'); return }
+    if (!payDate) { showToast('Select the payment date', 'error'); return }
     const vendor = outsourceVendors.find(v => v.id === payVendorId)!
     const billed = vendorBilled(payVendorId)
     const paid   = vendorPaid(payVendorId)
@@ -1030,7 +1046,8 @@ function OutsourceContent() {
             <div>
               <label htmlFor="outsource-service-type" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Service Type *</label>
               <select id="outsource-service-type" className="form-input h-11 w-full text-sm" value={jobForm.serviceType}
-                onChange={e => setJobForm(f => ({ ...f, serviceType: e.target.value as OutsourceServiceType }))}>
+                onChange={e => setJobForm(f => ({ ...f, serviceType: e.target.value as OutsourceServiceType | '' }))}>
+                <option value="">Select…</option>
                 {OUTSOURCE_SERVICE_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
@@ -1098,7 +1115,7 @@ function OutsourceContent() {
             </div>
 
             <fieldset>
-              <legend className="mb-2 block text-[13px] font-semibold text-slate-700">Was the issue resolved?</legend>
+              <legend className="mb-2 block text-[13px] font-semibold text-slate-700">Was the issue resolved? *</legend>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {[
                   { v: true, label: 'Yes – Fixed', icon: '✓', activeClass: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
@@ -1110,7 +1127,7 @@ function OutsourceContent() {
                       key={String(opt.v)}
                       type="button"
                       aria-pressed={selected}
-                      onClick={() => setReturnForm(f => ({ ...f, isResolved: opt.v, repairNextStep: 'keep' }))}
+                      onClick={() => setReturnForm(f => ({ ...f, isResolved: opt.v, repairNextStep: '' }))}
                       className={`flex min-h-11 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                         selected ? opt.activeClass : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
                       }`}
@@ -1123,13 +1140,13 @@ function OutsourceContent() {
               </div>
             </fieldset>
 
-            {!returnForm.isResolved && job.repairOrderId && (() => {
+            {returnForm.isResolved === false && job.repairOrderId && (() => {
               const linkedRepair = repairs.find(r => r.id === job.repairOrderId)
               if (!linkedRepair) return null
               return (
                 <fieldset className="rounded-xl border border-amber-200 bg-amber-50/80 p-4">
                   <legend className="px-1 text-[13px] font-semibold text-amber-900">
-                    What should happen to repair <span className="font-mono">{linkedRepair.ref}</span>?
+                    What should happen to repair <span className="font-mono">{linkedRepair.ref}</span>? *
                   </legend>
                   <div className="mt-2 flex flex-col gap-2">
                     {([
@@ -1311,8 +1328,9 @@ function OutsourceContent() {
                 </select>
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
+                <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method *</label>
                 <select aria-label="Payment method" className="form-input w-full text-[12px]" value={payMethod} onChange={e => setPayMethod(e.target.value)}>
+                  <option value="">Select…</option>
                   <option value="bank">Bank Transfer</option>
                   <option value="mpesa">M-Pesa</option>
                   <option value="cash">Cash</option>
@@ -1325,7 +1343,7 @@ function OutsourceContent() {
                   <input className="form-input w-full text-[12px]" placeholder="e.g. 000123" value={payReference} onChange={e => setPayReference(e.target.value)} />
                 </div>
               )}
-              {payMethod !== 'cheque' && payMethod !== 'cash' && (
+              {payMethod && payMethod !== 'cheque' && payMethod !== 'cash' && (
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Transaction Reference (optional)</label>
                   <input className="form-input w-full text-[12px]" placeholder="e.g. Bank/M-Pesa Ref" value={payReference} onChange={e => setPayReference(e.target.value)} />

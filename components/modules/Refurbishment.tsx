@@ -103,8 +103,8 @@ function RefurbishmentContent() {
   const [notesText, setNotesText]           = useState('')
   const [writeOffReason, setWriteOffReason] = useState('')
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
-  const [partForm, setPartForm] = useState<Omit<RefurbPart, 'id'>>({
-    partName: '', productId: undefined, qty: 1, estimatedCost: 0, status: 'needed', notes: '', installAction: undefined,
+  const [partForm, setPartForm] = useState<Omit<RefurbPart, 'id' | 'qty'> & { qty: number | '' }>({
+    partName: '', productId: undefined, qty: '', estimatedCost: 0, status: 'needed', notes: '', installAction: undefined,
   })
 
   const job = activeId ? refurbishmentJobs.find(j => j.id === activeId) ?? null : null
@@ -336,7 +336,7 @@ function RefurbishmentContent() {
                 <button className="btn-primary text-xs py-1"
                   onClick={() => {
                     setEditPartId(null)
-                    setPartForm({ partName: '', qty: 1, estimatedCost: 0, status: 'needed', notes: '', installAction: undefined })
+                    setPartForm({ partName: '', qty: '', estimatedCost: 0, status: 'needed', notes: '', installAction: undefined })
                     setShowPartModal(true)
                   }}>
                   <Fa icon={faPlus} className="mr-1" />Add Part
@@ -549,8 +549,8 @@ function RefurbishmentContent() {
                     ))}
                   </select>
                   {linkedProd && (
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: linkedProd.stockQty >= partForm.qty ? 'var(--success-bg)' : 'var(--danger-bg)', color: linkedProd.stockQty >= partForm.qty ? 'var(--success-text)' : '#991B1B' }}>
-                      <span className="inline-flex items-center gap-1">{linkedProd.stockQty >= partForm.qty ? <><Fa icon={faCheck} aria-hidden="true" /> {linkedProd.stockQty} in stock</> : <><Fa icon={faTriangleExclamation} aria-hidden="true" /> Only {linkedProd.stockQty}</>}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: linkedProd.stockQty >= Number(partForm.qty) ? 'var(--success-bg)' : 'var(--danger-bg)', color: linkedProd.stockQty >= Number(partForm.qty) ? 'var(--success-text)' : '#991B1B' }}>
+                      <span className="inline-flex items-center gap-1">{linkedProd.stockQty >= Number(partForm.qty) ? <><Fa icon={faCheck} aria-hidden="true" /> {linkedProd.stockQty} in stock</> : <><Fa icon={faTriangleExclamation} aria-hidden="true" /> Only {linkedProd.stockQty}</>}</span>
                     </span>
                   )}
                 </div>
@@ -570,9 +570,9 @@ function RefurbishmentContent() {
                       })
                     }} />
                 </Field>
-                <Field label="Qty">
+                <Field label="Qty *">
                   <input className="form-input" type="number" min={1} value={partForm.qty}
-                    onChange={e => setPartForm(p => ({ ...p, qty: Number(e.target.value) }))} />
+                    onChange={e => setPartForm(p => ({ ...p, qty: e.target.value === '' ? '' : Number(e.target.value) }))} />
                 </Field>
               </div>
               <Field label="Notes (optional)">
@@ -584,7 +584,7 @@ function RefurbishmentContent() {
                 if (!slot) return null
                 const draftParts = [
                   ...job.partsNeeded.filter(p => p.id !== editPartId),
-                  { ...partForm, status: partForm.status || 'needed' },
+                  { ...partForm, qty: Number(partForm.qty) || 0, status: partForm.status || 'needed' },
                 ]
                 const preview = applyRefurbPartsToUnitName({
                   productName: job.productName,
@@ -605,9 +605,12 @@ function RefurbishmentContent() {
                 <button className="btn-outline" onClick={() => setShowPartModal(false)}>Cancel</button>
                 <button className="btn-primary" onClick={() => {
                   if (!partForm.partName.trim()) { showToast('Enter part name', 'error'); return }
+                  const qty = Number(partForm.qty)
+                  if (partForm.qty === '' || !Number.isInteger(qty) || qty < 1) { showToast('Enter the part quantity (1 or more)', 'error'); return }
                   const slot = refurbFitSlotForForm({ partName: partForm.partName, productId: partForm.productId, products })
                   const payload = {
                     ...partForm,
+                    qty,
                     installAction: slot ? (partForm.installAction || defaultRefurbInstallAction(slot)) : undefined,
                   }
                   if (editPartId) {

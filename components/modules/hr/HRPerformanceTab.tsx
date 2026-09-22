@@ -13,27 +13,24 @@ type TargetForm = {
   targetValue: string
   currentValue: string
   unit: string
-  period: PerfPeriod
+  period: PerfPeriod | ''
   periodLabel: string
   dueDate: string
-  status: PerfStatus
+  status: PerfStatus | ''
 }
 
 const uid = () => crypto.randomUUID()
-const today = () => new Date().toISOString().slice(0, 10)
-const monthLabel = () => new Date().toLocaleString(undefined, { month: 'long', year: 'numeric' })
-
-const emptyTargetForm = (employeeId = ''): TargetForm => ({
-  employeeId,
+const emptyTargetForm = (): TargetForm => ({
+  employeeId: '',
   metric: '',
   description: '',
   targetValue: '',
-  currentValue: '0',
+  currentValue: '',
   unit: '',
-  period: 'monthly',
-  periodLabel: monthLabel(),
-  dueDate: today(),
-  status: 'on_track',
+  period: '',
+  periodLabel: '',
+  dueDate: '',
+  status: '',
 })
 
 export default function HRPerformanceTab() {
@@ -56,14 +53,14 @@ export default function HRPerformanceTab() {
   }, [currentUser, employees])
   const visibleTargets = canViewAllTargets ? hrPerfTargets : hrPerfTargets.filter(t => currentEmployee && t.employeeId === currentEmployee.id)
   const [showTargetModal, setShowTargetModal] = useState(false)
-  const [targetForm, setTargetForm] = useState<TargetForm>(() => emptyTargetForm(employees.find(e => e.status !== 'exited')?.id ?? employees[0]?.id ?? ''))
+  const [targetForm, setTargetForm] = useState<TargetForm>(emptyTargetForm)
 
   const employeeOptions = employees
     .filter(e => e.status !== 'exited')
     .map(e => ({ value: e.id, label: `${e.fullName} · ${e.jobTitle}` }))
 
   const openTargetModal = () => {
-    setTargetForm(emptyTargetForm(employees.find(e => e.status !== 'exited')?.id ?? employees[0]?.id ?? ''))
+    setTargetForm(emptyTargetForm())
     setShowTargetModal(true)
   }
 
@@ -72,14 +69,21 @@ export default function HRPerformanceTab() {
     const metric = targetForm.metric.trim()
     const description = targetForm.description.trim()
     const targetValue = Number(targetForm.targetValue)
-    const currentValue = Number(targetForm.currentValue || 0)
+    const currentValue = Number(targetForm.currentValue)
 
-    if (!employee) { showToast('Select an employee for this target', 'error'); return }
-    if (!metric) { showToast('Target metric is required', 'error'); return }
-    if (!Number.isFinite(targetValue) || targetValue <= 0) { showToast('Target value must be greater than zero', 'error'); return }
-    if (!Number.isFinite(currentValue) || currentValue < 0) { showToast('Current value cannot be negative', 'error'); return }
-    if (!targetForm.periodLabel.trim()) { showToast('Period label is required', 'error'); return }
-    if (!targetForm.dueDate) { showToast('Due date is required', 'error'); return }
+    const missing: string[] = []
+    if (!employee) missing.push('Employee')
+    if (!metric) missing.push('Metric')
+    if (!targetForm.targetValue.trim()) missing.push('Target Value')
+    if (!targetForm.currentValue.trim()) missing.push('Current Value')
+    if (!targetForm.period) missing.push('Period')
+    if (!targetForm.periodLabel.trim()) missing.push('Period Label')
+    if (!targetForm.dueDate) missing.push('Due Date')
+    if (!targetForm.status) missing.push('Initial Status')
+    if (missing.length) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
+    if (!employee || !targetForm.period || !targetForm.status) return
+    if (!Number.isFinite(targetValue) || targetValue <= 0) { showToast('Target value must be a number greater than zero', 'error'); return }
+    if (!Number.isFinite(currentValue) || currentValue < 0) { showToast('Current value must be a number of zero or more', 'error'); return }
 
     const calculatedStatus: PerfStatus = currentValue >= targetValue ? 'achieved' : targetForm.status
     const target: PerformanceTarget = {
@@ -214,16 +218,16 @@ export default function HRPerformanceTab() {
 
       {showTargetModal && (
         <Modal title="Set New Target" subtitle="Create an employee performance target and sync it to the server" onClose={() => setShowTargetModal(false)} width={620}>
-          <Field label="Employee" required><Select value={targetForm.employeeId} onChange={employeeId => setTargetForm(p => ({ ...p, employeeId }))} options={employeeOptions.length ? employeeOptions : [{ value: '', label: 'No active employees available' }]} /></Field>
+          <Field label="Employee" required><Select value={targetForm.employeeId} onChange={employeeId => setTargetForm(p => ({ ...p, employeeId }))} options={employeeOptions.length ? [{ value: '', label: 'Select employee…' }, ...employeeOptions] : [{ value: '', label: 'No active employees available' }]} /></Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Metric" required><Input autoFocus value={targetForm.metric} onChange={metric => setTargetForm(p => ({ ...p, metric }))} placeholder="e.g. Closed sales" /></Field>
             <Field label="Unit"><Input value={targetForm.unit} onChange={unit => setTargetForm(p => ({ ...p, unit }))} placeholder="e.g. KSh, orders, calls" /></Field>
             <Field label="Target Value" required><Input type="number" value={targetForm.targetValue} onChange={targetValue => setTargetForm(p => ({ ...p, targetValue }))} /></Field>
-            <Field label="Current Value"><Input type="number" value={targetForm.currentValue} onChange={currentValue => setTargetForm(p => ({ ...p, currentValue }))} /></Field>
-            <Field label="Period"><Select value={targetForm.period} onChange={period => setTargetForm(p => ({ ...p, period: period as PerfPeriod }))} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'quarterly', label: 'Quarterly' }, { value: 'annual', label: 'Annual' }]} /></Field>
+            <Field label="Current Value" required><Input type="number" value={targetForm.currentValue} onChange={currentValue => setTargetForm(p => ({ ...p, currentValue }))} /></Field>
+            <Field label="Period" required><Select value={targetForm.period} onChange={period => setTargetForm(p => ({ ...p, period: period as PerfPeriod }))} options={[{ value: '', label: 'Select period…' }, { value: 'monthly', label: 'Monthly' }, { value: 'quarterly', label: 'Quarterly' }, { value: 'annual', label: 'Annual' }]} /></Field>
             <Field label="Period Label" required><Input value={targetForm.periodLabel} onChange={periodLabel => setTargetForm(p => ({ ...p, periodLabel }))} placeholder="e.g. May 2026" /></Field>
             <Field label="Due Date" required><Input type="date" value={targetForm.dueDate} onChange={dueDate => setTargetForm(p => ({ ...p, dueDate }))} /></Field>
-            <Field label="Initial Status"><Select value={targetForm.status} onChange={status => setTargetForm(p => ({ ...p, status: status as PerfStatus }))} options={[{ value: 'on_track', label: 'On Track' }, { value: 'at_risk', label: 'At Risk' }, { value: 'achieved', label: 'Achieved' }, { value: 'missed', label: 'Missed' }]} /></Field>
+            <Field label="Initial Status" required><Select value={targetForm.status} onChange={status => setTargetForm(p => ({ ...p, status: status as PerfStatus }))} options={[{ value: '', label: 'Select status…' }, { value: 'on_track', label: 'On Track' }, { value: 'at_risk', label: 'At Risk' }, { value: 'achieved', label: 'Achieved' }, { value: 'missed', label: 'Missed' }]} /></Field>
           </div>
           <Field label="Description"><Textarea value={targetForm.description} onChange={description => setTargetForm(p => ({ ...p, description }))} placeholder="Describe the target and any measurement rules." /></Field>
           <div className="hr-modal-actions flex justify-end gap-2 pt-2">

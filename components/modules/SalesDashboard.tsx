@@ -42,10 +42,8 @@ export default function SalesDashboard() {
   // even though it is real, already-recognized revenue.
   const posSales = posOrders ?? []
 
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  })
+  // Period starts empty — the user picks the month to report on.
+  const [selectedMonth, setSelectedMonth] = useState<string>('')
 
   const availableMonths = useMemo(() => {
     const set = new Set<string>()
@@ -58,6 +56,7 @@ export default function SalesDashboard() {
   }, [visibleOrders])
 
   const lastMonth = useMemo(() => {
+    if (!selectedMonth) return ''
     const [y, m] = selectedMonth.split('-').map(Number)
     const d = new Date(y, m - 2, 1)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -79,6 +78,7 @@ export default function SalesDashboard() {
     const months: string[] = []
     const revMap = new Map<string, number>()
     const ordMap = new Map<string, number>()
+    if (!selectedMonth) return []
 
     const [y, m] = selectedMonth.split('-').map(Number)
     for (let i = 5; i >= 0; i--) {
@@ -209,12 +209,21 @@ export default function SalesDashboard() {
           value={selectedMonth}
           onChange={e => setSelectedMonth(e.target.value)}
         >
+          <option value="" disabled>Select month…</option>
           {availableMonths.map(m => (
             <option key={m} value={m}>{fmtMonthFull(m)}</option>
           ))}
         </select>
       </div>
 
+      {!selectedMonth ? (
+      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="card p-8 text-center" role="status">
+          <p className="text-sm font-bold text-text-1">Select a period</p>
+          <p className="text-xs text-t3 mt-1">Choose a month above to see revenue, pipeline and top customers.</p>
+        </div>
+      </div>
+      ) : (
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
       {/* Revenue Chart + Pipeline */}
@@ -368,7 +377,8 @@ export default function SalesDashboard() {
           exportFilename="recent-orders"
         />
       </div>
-      </div>{/* mod-body */}
+      </div>
+      )}{/* mod-body */}
     </div>
   )
 }

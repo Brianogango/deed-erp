@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo, useEffect, Suspense, useCallback, useRef, startTransition } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
+import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate, type CustomerContract } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import ClientDetail from '@/components/crm/ClientDetail'
@@ -73,6 +73,50 @@ function formatOptionalDate(value?: string | null) {
   const normalized = value?.trim()
   if (!normalized) return 'Not set'
   return Number.isNaN(new Date(normalized).getTime()) ? 'Not set' : fmtDate(normalized)
+}
+
+// New-record forms start empty: the user must choose every date, dropdown and number.
+type CompanySegment = 'enterprise' | 'sme' | 'startup' | 'government'
+type PreferredChannel = 'email' | 'phone' | 'whatsapp'
+type ContractType = CustomerContract['type']
+type ContractPaymentSchedule = CustomerContract['paymentSchedule']
+type ContractSlaTier = NonNullable<CustomerContract['slaTier']>
+
+const EMPTY_COMPANY_FORM = {
+  name: '', taxId: '', industry: '', email: '', phone: '', website: '', physicalAddress: '', city: '',
+  country: '', paymentTerms: '', creditLimit: '', segment: '' as CompanySegment | '', tags: '',
+}
+const EMPTY_CONTACT_FORM = {
+  companyId: '', companyName: '', firstName: '', lastName: '', jobTitle: '', department: '', email: '', phone: '', mobile: '',
+  isPrimary: false, isDecisionMaker: false, isBillingContact: false, isTechnicalContact: false,
+  preferredChannel: '' as PreferredChannel | '', linkedIn: '', notes: '',
+}
+const EMPTY_CONTRACT_FORM = {
+  companyId: '', companyName: '', contactPersonId: '', contactPersonName: '',
+  type: '' as ContractType | '', contractValue: '', startDate: '', endDate: '', renewalDate: '',
+  noticePeriod: '', paymentSchedule: '' as ContractPaymentSchedule | '', autoRenewal: false,
+  slaTier: '' as ContractSlaTier | '', notes: '',
+}
+
+/** Parse a required non-negative number field; returns null when blank or not numeric. */
+function parseRequiredNumber(raw: string): number | null {
+  if (raw.trim() === '') return null
+  const n = Number(raw)
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+/** Validate the company form's commercial fields; returns missing/invalid field labels. */
+function companyFormProblems(form: typeof EMPTY_COMPANY_FORM): string[] {
+  const problems: string[] = []
+  if (!form.name) problems.push('Company name')
+  if (!form.taxId) problems.push('Tax ID')
+  if (!form.email) problems.push('Email')
+  if (!form.phone) problems.push('Phone')
+  if (!form.country.trim()) problems.push('Country')
+  if (parseRequiredNumber(form.paymentTerms) === null) problems.push('Payment terms (days)')
+  if (parseRequiredNumber(form.creditLimit) === null) problems.push('Credit limit')
+  if (!form.segment) problems.push('Segment')
+  return problems
 }
 
 export default function CRM() {
@@ -204,63 +248,32 @@ function CRMContent() {
     contactPersonName: '',
     expectedValue: '',
     expectedCloseDate: '',
-    leadSource: 'website' as LeadSource,
+    leadSource: '' as LeadSource | '',
     description: '',
     customerNeeds: '',
     tags: '',
   })
 
-  const [companyForm, setCompanyForm] = useState({
-    name: '',
-    taxId: '',
-    industry: '',
-    email: '',
-    phone: '',
-    website: '',
-    physicalAddress: '',
-    city: '',
-    country: 'Kenya',
-    paymentTerms: '30',
-    creditLimit: '1000000',
-    segment: 'sme' as const,
-    tags: '',
-  })
+  const [companyForm, setCompanyForm] = useState(EMPTY_COMPANY_FORM)
 
-  const [contactForm, setContactForm] = useState({
-    companyId: '',
-    companyName: '',
-    firstName: '',
-    lastName: '',
-    jobTitle: '',
-    department: '',
-    email: '',
-    phone: '',
-    mobile: '',
-    isPrimary: false,
-    isDecisionMaker: false,
-    isBillingContact: false,
-    isTechnicalContact: false,
-    preferredChannel: 'email' as const,
-    linkedIn: '',
-    notes: '',
-  })
+  const [contactForm, setContactForm] = useState(EMPTY_CONTACT_FORM)
 
   const [activityForm, setActivityForm] = useState<{
     opportunityId: string
-    type: 'call' | 'email' | 'meeting' | 'demo' | 'proposal' | 'note' | 'task'
+    type: '' | 'call' | 'email' | 'meeting' | 'demo' | 'proposal' | 'note' | 'task'
     subject: string
     description: string
     outcome: string
     scheduledDate: string
-    status: 'completed' | 'scheduled'
+    status: '' | 'completed' | 'scheduled'
   }>({
     opportunityId: '',
-    type: 'call',
+    type: '',
     subject: '',
     description: '',
     outcome: '',
     scheduledDate: '',
-    status: 'completed',
+    status: '',
   })
 
   const [winForm, setWinForm] = useState({
@@ -274,22 +287,7 @@ function CRMContent() {
     competitor: '',
   })
 
-  const [contractForm, setContractForm] = useState({
-    companyId: '',
-    companyName: '',
-    contactPersonId: '',
-    contactPersonName: '',
-    type: 'sales' as const,
-    contractValue: '',
-    startDate: new Date().toISOString().slice(0, 10),
-    endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-    renewalDate: new Date(Date.now() + 335 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-    noticePeriod: '30',
-    paymentSchedule: 'monthly' as const,
-    autoRenewal: false,
-    slaTier: 'silver' as const,
-    notes: '',
-  })
+  const [contractForm, setContractForm] = useState(EMPTY_CONTRACT_FORM)
 
   const [showContractModal, setShowContractModal] = useState(false)
 
@@ -473,10 +471,18 @@ function CRMContent() {
 
   // Handlers
   const handleCreateOpportunity = async () => {
-    if (!oppForm.name || !oppForm.companyId || !oppForm.contactPersonId) {
-      showToast('Name, company, and contact person are required', 'error')
+    const missingOpp: string[] = []
+    if (!oppForm.name) missingOpp.push('Opportunity name')
+    if (!oppForm.companyId) missingOpp.push('Company')
+    if (!oppForm.contactPersonId) missingOpp.push('Contact person')
+    if (!oppForm.expectedCloseDate) missingOpp.push('Expected close date')
+    if (!oppForm.leadSource) missingOpp.push('Lead source')
+    if (missingOpp.length) {
+      showToast(`Required: ${missingOpp.join(', ')}`, 'error')
       return
     }
+    const leadSource = oppForm.leadSource
+    if (!leadSource) return
     if (creatingOpp) return
     setCreatingOpp(true)
     try {
@@ -492,8 +498,8 @@ function CRMContent() {
       stage: 'prospecting',
       probability: 10,
       expectedValue: Number(oppForm.expectedValue) || 0,
-      expectedCloseDate: oppForm.expectedCloseDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-      leadSource: oppForm.leadSource,
+      expectedCloseDate: oppForm.expectedCloseDate,
+      leadSource,
       description: oppForm.description,
       customerNeeds: oppForm.customerNeeds,
       tags: oppForm.tags.split(',').map(t => t.trim()).filter(Boolean),
@@ -508,7 +514,7 @@ function CRMContent() {
       contactPersonName: '',
       expectedValue: '',
       expectedCloseDate: '',
-      leadSource: 'website',
+      leadSource: '',
       description: '',
       customerNeeds: '',
       tags: '',
@@ -521,8 +527,9 @@ function CRMContent() {
   }
 
   const handleCreateCompany = () => {
-    if (!companyForm.name || !companyForm.taxId || !companyForm.email || !companyForm.phone) {
-      showToast('Name, tax ID, email, and phone are required', 'error')
+    const companyProblems = companyFormProblems(companyForm)
+    if (companyProblems.length || !companyForm.segment) {
+      showToast(`Required: ${companyProblems.join(', ')}`, 'error')
       return
     }
 
@@ -535,9 +542,9 @@ function CRMContent() {
       website: companyForm.website,
       physicalAddress: companyForm.physicalAddress,
       city: companyForm.city,
-      country: companyForm.country,
-      paymentTerms: Number(companyForm.paymentTerms) || 30,
-      creditLimit: Number(companyForm.creditLimit) || 0,
+      country: companyForm.country.trim(),
+      paymentTerms: Number(companyForm.paymentTerms),
+      creditLimit: Number(companyForm.creditLimit),
       accountManagerId: currentUserId ?? undefined,
       accountManagerName: currentUser?.name ?? undefined,
       tags: companyForm.tags.split(',').map(t => t.trim()).filter(Boolean),
@@ -546,29 +553,20 @@ function CRMContent() {
     })
 
     setShowNewCompanyModal(false)
-    setCompanyForm({
-      name: '',
-      taxId: '',
-      industry: '',
-      email: '',
-      phone: '',
-      website: '',
-      physicalAddress: '',
-      city: '',
-      country: 'Kenya',
-      paymentTerms: '30',
-      creditLimit: '1000000',
-      segment: 'sme',
-      tags: '',
-    })
+    setCompanyForm(EMPTY_COMPANY_FORM)
     setActiveCompanyId(company.id)
   }
 
   const handleCreateContact = () => {
-    if (!contactForm.companyId || !contactForm.firstName || !contactForm.lastName || !contactForm.email) {
-      showToast('Company, name, and email are required', 'error')
+    if (!contactForm.companyId || !contactForm.firstName || !contactForm.lastName || !contactForm.email || !contactForm.preferredChannel) {
+      const missing = [
+        !contactForm.companyId && 'Company', !contactForm.firstName && 'First name', !contactForm.lastName && 'Last name',
+        !contactForm.email && 'Email', !contactForm.preferredChannel && 'Preferred channel',
+      ].filter(Boolean)
+      showToast(`Required: ${missing.join(', ')}`, 'error')
       return
     }
+    const preferredChannel = contactForm.preferredChannel
 
     const contact = createContactPerson({
       clientId: contactForm.companyId, companyId: contactForm.companyId,
@@ -584,53 +582,42 @@ function CRMContent() {
       isDecisionMaker: contactForm.isDecisionMaker,
       isBillingContact: contactForm.isBillingContact,
       isTechnicalContact: contactForm.isTechnicalContact,
-      preferredChannel: contactForm.preferredChannel,
+      preferredChannel,
       linkedIn: contactForm.linkedIn,
       notes: contactForm.notes,
     })
 
     setShowNewContactModal(false)
-    setContactForm({
-      companyId: '',
-      companyName: '',
-      firstName: '',
-      lastName: '',
-      jobTitle: '',
-      department: '',
-      email: '',
-      phone: '',
-      mobile: '',
-      isPrimary: false,
-      isDecisionMaker: false,
-      isBillingContact: false,
-      isTechnicalContact: false,
-      preferredChannel: 'email',
-      linkedIn: '',
-      notes: '',
-    })
+    setContactForm(EMPTY_CONTACT_FORM)
   }
 
   const handleCreateCompanyForOpp = () => {
-    if (!companyForm.name || !companyForm.taxId || !companyForm.email || !companyForm.phone) {
-      showToast('Name, tax ID, email, and phone are required', 'error'); return
+    const companyProblems = companyFormProblems(companyForm)
+    if (companyProblems.length || !companyForm.segment) {
+      showToast(`Required: ${companyProblems.join(', ')}`, 'error'); return
     }
     const company = createCompany({
       name: companyForm.name, taxId: companyForm.taxId, industry: companyForm.industry,
       email: companyForm.email, phone: companyForm.phone, website: companyForm.website,
-      physicalAddress: companyForm.physicalAddress, city: companyForm.city, country: companyForm.country,
-      paymentTerms: Number(companyForm.paymentTerms) || 30, creditLimit: Number(companyForm.creditLimit) || 0,
+      physicalAddress: companyForm.physicalAddress, city: companyForm.city, country: companyForm.country.trim(),
+      paymentTerms: Number(companyForm.paymentTerms), creditLimit: Number(companyForm.creditLimit),
       accountManagerId: currentUserId ?? undefined, accountManagerName: currentUser?.name ?? undefined,
       tags: companyForm.tags.split(',').map(t => t.trim()).filter(Boolean), segment: companyForm.segment, status: 'active',
     })
     setOppForm(p => ({ ...p, companyId: company.id, companyName: company.name }))
     setShowOppCompanyModal(false)
-    setCompanyForm({ name: '', taxId: '', industry: '', email: '', phone: '', website: '', physicalAddress: '', city: '', country: 'Kenya', paymentTerms: '30', creditLimit: '1000000', segment: 'sme', tags: '' })
+    setCompanyForm(EMPTY_COMPANY_FORM)
   }
 
   const handleCreateContactForOpp = () => {
-    if (!contactForm.companyId || !contactForm.firstName || !contactForm.lastName || !contactForm.email) {
-      showToast('Company, first name, last name, and email are required', 'error'); return
+    if (!contactForm.companyId || !contactForm.firstName || !contactForm.lastName || !contactForm.email || !contactForm.preferredChannel) {
+      const missing = [
+        !contactForm.companyId && 'Company', !contactForm.firstName && 'First name', !contactForm.lastName && 'Last name',
+        !contactForm.email && 'Email', !contactForm.preferredChannel && 'Preferred channel',
+      ].filter(Boolean)
+      showToast(`Required: ${missing.join(', ')}`, 'error'); return
     }
+    const preferredChannel = contactForm.preferredChannel
     const contact = createContactPerson({
       clientId: contactForm.companyId, companyId: contactForm.companyId, companyName: contactForm.companyName,
       firstName: contactForm.firstName, lastName: contactForm.lastName,
@@ -638,46 +625,54 @@ function CRMContent() {
       email: contactForm.email, phone: contactForm.phone, mobile: contactForm.mobile,
       isPrimary: contactForm.isPrimary, isDecisionMaker: contactForm.isDecisionMaker,
       isBillingContact: contactForm.isBillingContact, isTechnicalContact: contactForm.isTechnicalContact,
-      preferredChannel: contactForm.preferredChannel, linkedIn: contactForm.linkedIn, notes: contactForm.notes,
+      preferredChannel, linkedIn: contactForm.linkedIn, notes: contactForm.notes,
     })
     setOppForm(p => ({ ...p, contactPersonId: contact.id, contactPersonName: `${contact.firstName} ${contact.lastName}` }))
     setShowOppContactModal(false)
-    setContactForm({ companyId: '', companyName: '', firstName: '', lastName: '', jobTitle: '', department: '', email: '', phone: '', mobile: '', isPrimary: false, isDecisionMaker: false, isBillingContact: false, isTechnicalContact: false, preferredChannel: 'email', linkedIn: '', notes: '' })
+    setContactForm(EMPTY_CONTACT_FORM)
   }
 
   const handleLogActivity = () => {
     const oppId = activityForm.opportunityId || activeOppId;
-    if (!oppId || !activityForm.subject) {
-      showToast('Opportunity and subject are required', 'error')
+    const activityType = activityForm.type
+    const activityStatus = activityForm.status
+    if (!oppId || !activityForm.subject || !activityType || !activityStatus) {
+      const missing = [!oppId && 'Opportunity', !activityType && 'Type', !activityForm.subject && 'Subject', !activityStatus && 'Status'].filter(Boolean)
+      showToast(`Required: ${missing.join(', ')}`, 'error')
       return
     }
 
     logActivity({
       opportunityId: oppId,
-      type: activityForm.type,
+      type: activityType,
       subject: activityForm.subject,
       description: activityForm.description,
       outcome: activityForm.outcome,
       scheduledDate: activityForm.scheduledDate,
-      status: activityForm.status,
+      status: activityStatus,
     })
 
     setShowActivityModal(false)
     setActivityForm({
       opportunityId: '',
-      type: 'call',
+      type: '',
       subject: '',
       description: '',
       outcome: '',
       scheduledDate: '',
-      status: 'completed',
+      status: '',
     })
   }
 
   const handleMarkWon = () => {
     const oppId = winForm.opportunityId || activeOppId;
-    if (!oppId) return
-    markOpportunityWon(oppId, Number(winForm.actualValue) || 0)
+    if (!oppId) { showToast('No opportunity selected', 'error'); return }
+    const actualValue = winForm.actualValue.trim() === '' ? NaN : Number(winForm.actualValue)
+    if (!Number.isFinite(actualValue) || actualValue <= 0) {
+      showToast('Enter the actual won value (KES), greater than zero', 'error')
+      return
+    }
+    markOpportunityWon(oppId, actualValue)
     setShowWinModal(false)
     setWinForm({ opportunityId: '', actualValue: '' })
   }
@@ -694,10 +689,33 @@ function CRMContent() {
   }
 
   const handleCreateContract = () => {
-    if (!contractForm.companyId || !contractForm.contactPersonId || !contractForm.contractValue) {
-      showToast('Company, contact and contract value are required', 'error')
+    const missingContract: string[] = []
+    if (!contractForm.companyId) missingContract.push('Company')
+    if (!contractForm.contactPersonId) missingContract.push('Contact person')
+    if (!contractForm.type) missingContract.push('Contract type')
+    if (parseRequiredNumber(contractForm.contractValue) === null) missingContract.push('Contract value')
+    if (!contractForm.startDate) missingContract.push('Start date')
+    if (!contractForm.endDate) missingContract.push('End date')
+    if (!contractForm.renewalDate) missingContract.push('Renewal date')
+    if (parseRequiredNumber(contractForm.noticePeriod) === null) missingContract.push('Notice period (days)')
+    if (!contractForm.paymentSchedule) missingContract.push('Payment schedule')
+    if (!contractForm.slaTier) missingContract.push('SLA tier')
+    if (missingContract.length) {
+      showToast(`Required: ${missingContract.join(', ')}`, 'error')
       return
     }
+    if (contractForm.endDate <= contractForm.startDate) {
+      showToast('End date must be after the start date', 'error')
+      return
+    }
+    if (contractForm.renewalDate < contractForm.startDate || contractForm.renewalDate > contractForm.endDate) {
+      showToast('Renewal date must fall between the start and end dates', 'error')
+      return
+    }
+    const contractType = contractForm.type
+    const paymentSchedule = contractForm.paymentSchedule
+    const slaTier = contractForm.slaTier
+    if (!contractType || !paymentSchedule || !slaTier) return
 
     const slaMap = {
       bronze: { response: 48, resolution: 120 },
@@ -706,22 +724,22 @@ function CRMContent() {
       platinum: { response: 1, resolution: 8 },
     }
 
-    const sla = slaMap[contractForm.slaTier]
+    const sla = slaMap[slaTier]
 
     createCustomerContract({
       companyId: contractForm.companyId,
       companyName: contractForm.companyName,
       contactPersonId: contractForm.contactPersonId,
       contactPersonName: contractForm.contactPersonName,
-      type: contractForm.type,
+      type: contractType,
       contractValue: Number(contractForm.contractValue),
       startDate: contractForm.startDate,
       endDate: contractForm.endDate,
       renewalDate: contractForm.renewalDate,
       noticePeriod: Number(contractForm.noticePeriod),
-      paymentSchedule: contractForm.paymentSchedule,
+      paymentSchedule,
       autoRenewal: contractForm.autoRenewal,
-      slaTier: contractForm.slaTier,
+      slaTier,
       responseTimeHours: sla.response,
       resolutionTimeHours: sla.resolution,
       status: 'active',
@@ -731,22 +749,7 @@ function CRMContent() {
     })
 
     setShowContractModal(false)
-    setContractForm({
-      companyId: '',
-      companyName: '',
-      contactPersonId: '',
-      contactPersonName: '',
-      type: 'sales',
-      contractValue: '',
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-      renewalDate: new Date(Date.now() + 335 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-      noticePeriod: '30',
-      paymentSchedule: 'monthly',
-      autoRenewal: false,
-      slaTier: 'silver',
-      notes: '',
-    })
+    setContractForm(EMPTY_CONTRACT_FORM)
   }
 
   if (!mounted) return <ModuleSkeleton />
@@ -1057,7 +1060,10 @@ function CRMContent() {
                 </div>
               </Field>
               <Field label="Expected Value (KES)"><Input type="number" value={oppForm.expectedValue} onChange={v => setOppForm(p => ({ ...p, expectedValue: v }))} /></Field>
-              <Field label="Expected Close Date"><Input type="date" value={oppForm.expectedCloseDate} onChange={v => setOppForm(p => ({ ...p, expectedCloseDate: v }))} /></Field>
+              <Field label="Expected Close Date" required><Input type="date" value={oppForm.expectedCloseDate} onChange={v => setOppForm(p => ({ ...p, expectedCloseDate: v }))} /></Field>
+              <Field label="Lead Source" required>
+                <Select value={oppForm.leadSource} onChange={v => setOppForm(p => ({ ...p, leadSource: v as LeadSource | '' }))} options={[{ value: '', label: 'Select…' }, ...LEAD_SOURCE_OPTIONS]} />
+              </Field>
             </div>
             <Field label="Description">
               <Textarea value={oppForm.description} onChange={v => setOppForm(p => ({ ...p, description: v }))} rows={2} />
@@ -1068,7 +1074,7 @@ function CRMContent() {
                 type="button"
                 className="btn-primary"
                 onClick={() => { void handleCreateOpportunity() }}
-                disabled={creatingOpp || !oppForm.name || !oppForm.companyId || !oppForm.contactPersonId}
+                disabled={creatingOpp}
               >
                 {creatingOpp ? 'Creating…' : 'Create Opportunity'}
               </button>
@@ -1083,6 +1089,12 @@ function CRMContent() {
               <Field label="Phone" required><Input value={companyForm.phone} onChange={v => setCompanyForm(p => ({...p, phone: v}))} type="tel" /></Field>
               <Field label="Tax ID / PIN" required><Input value={companyForm.taxId} onChange={v => setCompanyForm(p => ({...p, taxId: v}))} placeholder="P051234567A" /></Field>
               <Field label="Industry"><Input value={companyForm.industry} onChange={v => setCompanyForm(p => ({...p, industry: v}))} /></Field>
+              <Field label="Country" required><Input value={companyForm.country} onChange={v => setCompanyForm(p => ({...p, country: v}))} /></Field>
+              <Field label="Segment" required>
+                <Select value={companyForm.segment} onChange={v => setCompanyForm(p => ({...p, segment: v as CompanySegment | ''}))} options={[{ value: '', label: 'Select…' }, { value: 'enterprise', label: 'Enterprise' }, { value: 'sme', label: 'SME' }, { value: 'startup', label: 'Startup' }, { value: 'government', label: 'Government' }]} />
+              </Field>
+              <Field label="Payment Terms (days)" required><Input type="number" value={companyForm.paymentTerms} onChange={v => setCompanyForm(p => ({...p, paymentTerms: v}))} /></Field>
+              <Field label="Credit Limit (KES)" required><Input type="number" value={companyForm.creditLimit} onChange={v => setCompanyForm(p => ({...p, creditLimit: v}))} /></Field>
             </div>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowOppCompanyModal(false)}>Cancel</button>
@@ -1101,6 +1113,9 @@ function CRMContent() {
               <Field label="Last Name" required><Input value={contactForm.lastName} onChange={v => setContactForm(p => ({...p, lastName: v}))} /></Field>
               <Field label="Email" required><Input type="email" value={contactForm.email} onChange={v => setContactForm(p => ({...p, email: v}))} /></Field>
               <Field label="Phone"><Input value={contactForm.phone} onChange={v => setContactForm(p => ({...p, phone: v}))} type="tel" /></Field>
+              <Field label="Preferred Channel" required>
+                <Select value={contactForm.preferredChannel} onChange={v => setContactForm(p => ({...p, preferredChannel: v as PreferredChannel | ''}))} options={[{ value: '', label: 'Select…' }, { value: 'email', label: 'Email' }, { value: 'phone', label: 'Phone' }, { value: 'whatsapp', label: 'WhatsApp' }]} />
+              </Field>
             </div>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowOppContactModal(false)}>Cancel</button>
@@ -1110,21 +1125,24 @@ function CRMContent() {
         )}
         {showActivityModal && activeOpp && (
           <Modal title="Log Activity" onClose={() => setShowActivityModal(false)} width={500}>
-            <Field label="Type">
-              <Select value={activityForm.type} onChange={v => setActivityForm(p => ({...p, type: v as any}))} options={[{value:'call',label:'Call'},{value:'email',label:'Email'},{value:'meeting',label:'Meeting'}]} />
+            <Field label="Type" required>
+              <Select value={activityForm.type} onChange={v => setActivityForm(p => ({...p, type: v as any}))} options={[{value:'',label:'Select…'},{value:'call',label:'Call'},{value:'email',label:'Email'},{value:'meeting',label:'Meeting'}]} />
             </Field>
-            <Field label="Subject"><Input value={activityForm.subject} onChange={v => setActivityForm(p => ({...p, subject: v}))} /></Field>
+            <Field label="Status" required>
+              <Select value={activityForm.status} onChange={v => setActivityForm(p => ({...p, status: v as '' | 'completed' | 'scheduled'}))} options={[{value:'',label:'Select…'},{value:'completed',label:'Completed'},{value:'scheduled',label:'Scheduled'}]} />
+            </Field>
+            <Field label="Subject" required><Input value={activityForm.subject} onChange={v => setActivityForm(p => ({...p, subject: v}))} /></Field>
             <Field label="Description"><Textarea value={activityForm.description} onChange={v => setActivityForm(p => ({...p, description: v}))} rows={3} /></Field>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowActivityModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleLogActivity} disabled={!activityForm.subject}>Save Activity</button>
+              <button className="btn-primary" onClick={handleLogActivity}>Save Activity</button>
             </div>
           </Modal>
         )}
         {showWinModal && activeOpp && (
           <Modal title="Mark as Won" onClose={() => setShowWinModal(false)}>
-            <Field label="Actual Value (KES)">
-              <Input type="number" value={winForm.actualValue || String(activeOpp.expectedValue)} onChange={v => setWinForm(p => ({...p, actualValue: v}))} />
+            <Field label="Actual Value (KES)" required>
+              <Input type="number" value={winForm.actualValue} placeholder={activeOpp.expectedValue ? `Expected: ${activeOpp.expectedValue}` : undefined} onChange={v => setWinForm(p => ({...p, actualValue: v}))} />
             </Field>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowWinModal(false)}>Cancel</button>
@@ -1266,8 +1284,19 @@ function CRMContent() {
                  <Select value={contractForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setContractForm(p => ({ ...p, contactPersonId: v, contactPersonName: c ? `${c.firstName} ${c.lastName}` : '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => (c.companyId ?? c.clientId) === contractForm.companyId).map(c => ({value:c.id, label:`${c.firstName} ${c.lastName}`}))]} />
                </Field>
                <Field label="Contract Value (KES)"><Input type="number" value={contractForm.contractValue} onChange={v => setContractForm(p => ({...p, contractValue: v}))} /></Field>
-               <Field label="Start Date"><Input type="date" value={contractForm.startDate} onChange={v => setContractForm(p => ({...p, startDate: v}))} /></Field>
-               <Field label="End Date"><Input type="date" value={contractForm.endDate} onChange={v => setContractForm(p => ({...p, endDate: v}))} /></Field>
+               <Field label="Contract Type" required>
+                 <Select value={contractForm.type} onChange={v => setContractForm(p => ({...p, type: v as ContractType | ''}))} options={[{value:'',label:'Select…'},{value:'sales',label:'Sales'},{value:'maintenance',label:'Maintenance'},{value:'support',label:'Support'},{value:'rental',label:'Rental'},{value:'subscription',label:'Subscription'}]} />
+               </Field>
+               <Field label="Start Date" required><Input type="date" value={contractForm.startDate} onChange={v => setContractForm(p => ({...p, startDate: v}))} /></Field>
+               <Field label="End Date" required><Input type="date" value={contractForm.endDate} onChange={v => setContractForm(p => ({...p, endDate: v}))} /></Field>
+               <Field label="Renewal Date" required><Input type="date" value={contractForm.renewalDate} onChange={v => setContractForm(p => ({...p, renewalDate: v}))} /></Field>
+               <Field label="Notice Period (days)" required><Input type="number" value={contractForm.noticePeriod} onChange={v => setContractForm(p => ({...p, noticePeriod: v}))} /></Field>
+               <Field label="Payment Schedule" required>
+                 <Select value={contractForm.paymentSchedule} onChange={v => setContractForm(p => ({...p, paymentSchedule: v as ContractPaymentSchedule | ''}))} options={[{value:'',label:'Select…'},{value:'monthly',label:'Monthly'},{value:'quarterly',label:'Quarterly'},{value:'annual',label:'Annual'},{value:'one-time',label:'One-time'}]} />
+               </Field>
+               <Field label="SLA Tier" required>
+                 <Select value={contractForm.slaTier} onChange={v => setContractForm(p => ({...p, slaTier: v as ContractSlaTier | ''}))} options={[{value:'',label:'Select…'},{value:'bronze',label:'Bronze'},{value:'silver',label:'Silver'},{value:'gold',label:'Gold'},{value:'platinum',label:'Platinum'}]} />
+               </Field>
              </div>
              <div className="flex gap-2 justify-end mt-4">
                <button className="btn-outline" onClick={() => setShowContractModal(false)}>Cancel</button>
@@ -1313,6 +1342,12 @@ function CRMContent() {
                <Field label="Phone"><Input value={companyForm.phone} onChange={v => setCompanyForm(p => ({...p, phone: v}))} type="tel" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
                <Field label="Tax ID"><Input value={companyForm.taxId} onChange={v => setCompanyForm(p => ({...p, taxId: v}))} /></Field>
                <Field label="Industry"><Input value={companyForm.industry} onChange={v => setCompanyForm(p => ({...p, industry: v}))} /></Field>
+              <Field label="Country" required><Input value={companyForm.country} onChange={v => setCompanyForm(p => ({...p, country: v}))} /></Field>
+              <Field label="Segment" required>
+                <Select value={companyForm.segment} onChange={v => setCompanyForm(p => ({...p, segment: v as CompanySegment | ''}))} options={[{ value: '', label: 'Select…' }, { value: 'enterprise', label: 'Enterprise' }, { value: 'sme', label: 'SME' }, { value: 'startup', label: 'Startup' }, { value: 'government', label: 'Government' }]} />
+              </Field>
+              <Field label="Payment Terms (days)" required><Input type="number" value={companyForm.paymentTerms} onChange={v => setCompanyForm(p => ({...p, paymentTerms: v}))} /></Field>
+              <Field label="Credit Limit (KES)" required><Input type="number" value={companyForm.creditLimit} onChange={v => setCompanyForm(p => ({...p, creditLimit: v}))} /></Field>
              </div>
              <div className="flex gap-2 justify-end mt-4">
                <button className="btn-outline" onClick={() => setShowNewCompanyModal(false)}>Cancel</button>
@@ -1365,6 +1400,9 @@ function CRMContent() {
                <Field label="Last Name"><Input value={contactForm.lastName} onChange={v => setContactForm(p => ({...p, lastName: v}))} /></Field>
                <Field label="Email"><Input value={contactForm.email} onChange={v => setContactForm(p => ({...p, email: v}))} type="email" maxLength={100} /></Field>
                <Field label="Phone"><Input value={contactForm.phone} onChange={v => setContactForm(p => ({...p, phone: v}))} type="tel" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
+               <Field label="Preferred Channel" required>
+                <Select value={contactForm.preferredChannel} onChange={v => setContactForm(p => ({...p, preferredChannel: v as PreferredChannel | ''}))} options={[{ value: '', label: 'Select…' }, { value: 'email', label: 'Email' }, { value: 'phone', label: 'Phone' }, { value: 'whatsapp', label: 'WhatsApp' }]} />
+              </Field>
              </div>
              <div className="flex gap-2 justify-end mt-4">
                <button className="btn-outline" onClick={() => setShowNewContactModal(false)}>Cancel</button>

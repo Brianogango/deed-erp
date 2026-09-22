@@ -34,9 +34,10 @@ type IntegrityReport = {
 }
 
 export default function IntegrityDashboard() {
-  const [asOf, setAsOf] = useUrlUiState('integrityAsOf', new Date().toISOString().slice(0, 10))
+  // As-of date and result filter start empty ("all") — no preselected period.
+  const [asOf, setAsOf] = useUrlUiState('integrityAsOf', '')
   const [gateSearch, setGateSearch] = useUrlUiState('integrityQ', '')
-  const [gateStatus, setGateStatus] = useUrlUiState('integrityStatus', 'failed')
+  const [gateStatus, setGateStatus] = useUrlUiState('integrityStatus', 'all')
   const [selectedGate, setSelectedGate] = useState<Gate | null>(null)
   const [report, setReport] = useState<IntegrityReport | null>(null)
   const [loading, setLoading] = useState(false)
@@ -45,6 +46,11 @@ export default function IntegrityDashboard() {
 
   const refresh = useCallback(async () => {
     setSelectedGate(null)
+    if (!asOf) {
+      setReport(null)
+      setError('Select an as-of date before running the gates.')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -59,9 +65,20 @@ export default function IntegrityDashboard() {
     }
   }, [asOf])
 
-  useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    if (!asOf) {
+      setReport(null)
+      setError(null)
+      return
+    }
+    void refresh()
+  }, [asOf, refresh])
 
   async function certify() {
+    if (!asOf) {
+      setError('Select an as-of date before certifying month-end.')
+      return
+    }
     setCertifying(true)
     setError(null)
     try {
@@ -124,7 +141,7 @@ export default function IntegrityDashboard() {
           <AsyncActionButton
             action={refresh}
             pendingLabel="Checking…"
-            disabled={loading || certifying}
+            disabled={loading || certifying || !asOf}
           >
             Run gates
           </AsyncActionButton>
@@ -196,7 +213,12 @@ export default function IntegrityDashboard() {
         </>
       )}
 
-      {!report && !loading ? (
+      {!asOf ? (
+        <EmptyState
+          title="Select a period to view this report"
+          description="Choose an as-of date above, then run the month-end control gates."
+        />
+      ) : !report && !loading ? (
         <EmptyState
           title="No integrity results yet"
           description="Choose an as-of date and run the month-end control gates before certification."

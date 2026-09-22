@@ -59,7 +59,7 @@ const PO_STEP_IDX: Record<string, number> = {
 
 // CSV template columns
 const CSV_HEADERS = ['Product Name', 'Quantity', 'Unit Price (KES)', 'Tax Rate (%)', 'Serial Numbers', 'Specifications', 'Notes']
-const newRfqLine = (): RfqDraftLine => ({ id: crypto.randomUUID(), productId: '', productName: '', description: '', qty: '1', unitPrice: '0', taxRate: '0' })
+const newRfqLine = (): RfqDraftLine => ({ id: crypto.randomUUID(), productId: '', productName: '', description: '', qty: '', unitPrice: '', taxRate: '' })
 
 // ── CSV parser ──────────────────────────────────────────────────────────────
 const REQUIRED_CSV_COLS = ['Product Name', 'Quantity', 'Unit Price (KES)']
@@ -166,7 +166,7 @@ function PurchaseContent() {
   const [showNewRFQ,    setShowNewRFQ]    = useState(false)
   const [newVendorId,   setNewVendorId]   = useState('')
   const [newVendorName, setNewVendorName] = useState('')
-  const [newRfqExpectedDate, setNewRfqExpectedDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+  const [newRfqExpectedDate, setNewRfqExpectedDate] = useState('')
   const [newRfqNotes, setNewRfqNotes] = useState('')
   const [newRfqLines, setNewRfqLines] = useState<RfqDraftLine[]>([newRfqLine()])
   const [showNewVendorModal, setShowNewVendorModal] = useState(false)
@@ -180,7 +180,7 @@ function PurchaseContent() {
   // ── Add single line ────────────────────────────────────────────────────────
   const [showAddLine, setShowAddLine] = useState(false)
   const [addProd,     setAddProd]     = useState<typeof products[0] | null>(null)
-  const [addQty,      setAddQty]      = useState('1')
+  const [addQty,      setAddQty]      = useState('')
   const [addPrice,    setAddPrice]    = useState('')
   const [addVAT,      setAddVAT]      = useState(false)
 
@@ -212,7 +212,7 @@ function PurchaseContent() {
   const [showValidateReview,   setShowValidateReview]   = useState(false)
   const [receiptOrigin,        setReceiptOrigin]        = useState<'list' | 'po'>('list')
   const [grnLines,             setGrnLines]             = useState<Receipt['lines']>([])
-  const [destLocation,         setDestLocation]         = useState<LocationId>('warehouse')
+  const [destLocation,         setDestLocation]         = useState<LocationId | ''>('')
   const [serialInputs,         setSerialInputs]         = useState<Record<number, string>>({})
   const [bulkSerialInputs,     setBulkSerialInputs]     = useState<Record<number, string>>({})
   // accessories per serial string: { 'SN001': ['Charger','Bag'] }
@@ -227,11 +227,11 @@ function PurchaseContent() {
   const [showReturnModal,    setShowReturnModal]    = useState(false)
   const [confirmingReturn,   setConfirmingReturn]    = useState(false)
   const [returnReceiptId,    setReturnReceiptId]    = useState('')
-  const [returnReason,       setReturnReason]       = useState<'damaged' | 'wrong_supply' | 'excess' | 'other'>('damaged')
+  const [returnReason,       setReturnReason]       = useState<'damaged' | 'wrong_supply' | 'excess' | 'other' | ''>('')
   const [returnLines,        setReturnLines]        = useState<{ productId: string; productName: string; qty: string; serials: string[]; requiresSerial: boolean }[]>([])
   const [returnScanInput,    setReturnScanInput]    = useState<Record<number, string>>({})
   const [returnCollectedBy,  setReturnCollectedBy]  = useState('')
-  const [returnCollectedDate,setReturnCollectedDate]= useState(new Date().toISOString().slice(0, 10))
+  const [returnCollectedDate,setReturnCollectedDate]= useState('')
   const [returnPickupNotes,  setReturnPickupNotes]  = useState('')
 
   // ── Return list filters ────────────────────────────────────────────────────
@@ -245,7 +245,7 @@ function PurchaseContent() {
   const [showPickupModal,  setShowPickupModal]  = useState(false)
   const [pickupReturnId,   setPickupReturnId]   = useState('')
   const [pickupCollectedBy,  setPickupCollectedBy]  = useState('')
-  const [pickupCollectedDate,setPickupCollectedDate]= useState(new Date().toISOString().slice(0, 10))
+  const [pickupCollectedDate,setPickupCollectedDate]= useState('')
   const [pickupNotes,        setPickupNotes]        = useState('')
 
 
@@ -326,7 +326,8 @@ function PurchaseContent() {
       const unitPrice = Number(line.unitPrice)
       const normalizedQty = Number.isFinite(qty) && qty > 0 ? qty : 0
       const normalizedPrice = Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0
-      const taxRate = Number(line.taxRate) || 0
+      const taxRateSet = String(line.taxRate).trim() !== '' && Number.isFinite(Number(line.taxRate))
+      const taxRate = taxRateSet ? Number(line.taxRate) : 0
       const subtotal = normalizedQty * normalizedPrice
       const taxAmount = Math.round(subtotal * taxRate / 100)
       return {
@@ -340,7 +341,7 @@ function PurchaseContent() {
         subtotal,
         taxAmount,
         total: subtotal + taxAmount,
-        valid: !!line.productId && !!line.description.trim() && normalizedQty > 0 && normalizedPrice > 0,
+        valid: !!line.productId && !!line.description.trim() && normalizedQty > 0 && normalizedPrice > 0 && taxRateSet,
       }
     })
     const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
@@ -352,20 +353,22 @@ function PurchaseContent() {
       taxTotal,
       total: subtotal + taxTotal,
       invalidLineIndexes,
-      canSave: !!newVendorId && invalidLineIndexes.length === 0 && lines.length > 0,
+      canSave: !!newVendorId && !!newRfqExpectedDate && invalidLineIndexes.length === 0 && lines.length > 0,
       blockedReason: !newVendorId
         ? 'Select a vendor before creating the RFQ.'
-        : invalidLineIndexes.length > 0
-          ? 'Every RFQ line needs a product, description, quantity greater than zero, and price greater than zero.'
-          : '',
+        : !newRfqExpectedDate
+          ? 'Select the expected response / delivery date.'
+          : invalidLineIndexes.length > 0
+            ? 'Every RFQ line needs a product, description, quantity greater than zero, price greater than zero, and a VAT rate.'
+            : '',
     }
-  }, [newRfqLines, newVendorId])
+  }, [newRfqLines, newVendorId, newRfqExpectedDate])
 
   const resetRfqForm = () => {
     setShowNewRFQ(false)
     setNewVendorId('')
     setNewVendorName('')
-    setNewRfqExpectedDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+    setNewRfqExpectedDate('')
     setNewRfqNotes('')
     setNewRfqLines([newRfqLine()])
   }
@@ -418,9 +421,18 @@ function PurchaseContent() {
 
   // ── Add single line ────────────────────────────────────────────────────────
   const handleAddLine = () => {
-    if (!addProd || !activeId) return
-    addPOLine(activeId, addProd, Number(addQty) || 1, Number(addPrice) || addProd.costPrice, addVAT ? (addProd.taxRate || 16) : 0)
-    setShowAddLine(false); setAddProd(null); setAddQty('1'); setAddPrice(''); setAddVAT(false)
+    if (!activeId) return
+    if (!addProd) { showToast('Select a product', 'error'); return }
+    const qty = Number(addQty)
+    const price = Number(addPrice)
+    const missing: string[] = []
+    if (!addQty.trim() || !Number.isFinite(qty) || qty <= 0) missing.push('Quantity (greater than 0)')
+    if (!addPrice.trim() || !Number.isFinite(price) || price <= 0) missing.push('Unit Cost (greater than 0)')
+    if (missing.length) { showToast(`Enter a valid ${missing.join(' and ')}`, 'error'); return }
+    const vatRate = addVAT ? Number(addProd.taxRate || companySettings.vatRate) : 0
+    if (addVAT && !(vatRate > 0)) { showToast('No VAT rate is configured for this product or company — untick VAT or set a rate', 'error'); return }
+    addPOLine(activeId, addProd, qty, price, vatRate)
+    setShowAddLine(false); setAddProd(null); setAddQty(''); setAddPrice(''); setAddVAT(false)
   }
 
   const readFileAsDataUrl = (file: File) => readGuardedImageAsDataUrl(file, { label: 'Purchase document image', maxBytes: 8 * 1024 * 1024 })
@@ -565,7 +577,9 @@ function PurchaseContent() {
     })
     setActiveReceiptId(draft.id)
     setGrnLines(preLines)
-    setDestLocation(draft.destinationLocation)
+    // Destination is a per-receipt user choice; the draft's stored value is the
+    // store's creation default, not a selection, so the receiver must pick it.
+    setDestLocation('')
     setSerialInputs({})
     setBulkSerialInputs({})
     setSerialSpecs(preSpecs)
@@ -673,6 +687,7 @@ function PurchaseContent() {
 
   const handleValidateReceipt = async () => {
     if (!activeReceiptId || isValidatingReceipt) return
+    if (!destLocation) { showToast('Select the destination location', 'error'); return }
     for (const line of grnLines) {
       if (line.requiresSerial && line.serials.length < line.qtyReceived) {
         showToast(`Enter all ${line.qtyReceived} serials for ${line.productName} (${line.serials.length} done)`, 'error'); return
@@ -704,10 +719,11 @@ function PurchaseContent() {
     const latest = receipts.filter(r => r.poId === activePO.id && r.status === 'validated').pop()
     if (!latest) { showToast('No validated receipt found', 'error'); return }
     setReturnReceiptId(latest.id)
-    setReturnLines(latest.lines.filter(l => l.qtyReceived > 0).map(l => ({ productId: l.productId, productName: l.productName, qty: '1', serials: [], requiresSerial: l.requiresSerial })))
+    setReturnLines(latest.lines.filter(l => l.qtyReceived > 0).map(l => ({ productId: l.productId, productName: l.productName, qty: '', serials: [], requiresSerial: l.requiresSerial })))
+    setReturnReason('')
     setReturnScanInput({})
     setReturnCollectedBy('')
-    setReturnCollectedDate(new Date().toISOString().slice(0, 10))
+    setReturnCollectedDate('')
     setReturnPickupNotes('')
     setShowReturnModal(true)
   }
@@ -725,6 +741,10 @@ function PurchaseContent() {
 
   const handleConfirmReturn = async () => {
     if (confirmingReturn) return
+    if (!returnReason) { showToast('Select a return reason', 'error'); return }
+    const badQtyLine = returnLines.find(l => !l.requiresSerial && l.qty.trim() !== '' && !(Number(l.qty) > 0))
+    if (badQtyLine) { showToast(`Enter a valid quantity for ${badQtyLine.productName} (greater than 0), or leave it blank to skip`, 'error'); return }
+    if (returnCollectedBy && !returnCollectedDate) { showToast('Select the collection date', 'error'); return }
     const hasItems = returnLines.some(l => l.requiresSerial ? l.serials.length > 0 : Number(l.qty) > 0)
     if (!hasItems) { showToast('Add at least one item to return', 'error'); return }
     const preparedLines = returnLines
@@ -743,7 +763,7 @@ function PurchaseContent() {
     }
     setConfirmingReturn(true)
     try {
-      const ret = createPurchaseReturn(returnReceiptId, returnReason)
+      const ret = createPurchaseReturn(returnReceiptId, returnReason as Exclude<typeof returnReason, ''>)
       if (!ret) return
       preparedLines.forEach(l => {
         if (l.qty > 0) addReturnLine(ret.id, l.productId, l.productName, l.qty, l.serialIds, l.requiresSerial)
@@ -956,8 +976,8 @@ function PurchaseContent() {
 
         <div className="card p-4 flex items-start gap-4 flex-wrap">
           <div>
-            <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Destination</p>
-            <Select value={destLocation} onChange={v => setDestLocation(v as LocationId)} options={LOC_OPTS} />
+            <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Destination *</p>
+            <Select value={destLocation} onChange={v => setDestLocation(v as LocationId | '')} options={[{ value: '', label: 'Select…' }, ...LOC_OPTS]} />
           </div>
           <div className="flex-1 p-3 rounded-lg text-xs" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
             <p className="font-semibold mb-1.5 text-t1"><Fa icon={faClipboardList} /> Receiving Instructions</p>
@@ -1164,7 +1184,7 @@ function PurchaseContent() {
               <Fa icon={faPrint} /> Print Labels
             </button>
             <button className="btn-primary" style={{ background: allComplete ? 'var(--success)' : 'var(--border)', cursor: allComplete && !isValidatingReceipt ? 'pointer' : 'not-allowed' }}
-              onClick={() => setShowValidateReview(true)} disabled={!allComplete || isValidatingReceipt} aria-busy={isValidatingReceipt}>
+              onClick={() => { if (!destLocation) { showToast('Select the destination location', 'error'); return } setShowValidateReview(true) }} disabled={!allComplete || isValidatingReceipt} aria-busy={isValidatingReceipt}>
               {isValidatingReceipt ? 'Updating stock and purchase…' : 'Receive Goods & Update Inventory'}
             </button>
           </div>
@@ -1176,7 +1196,7 @@ function PurchaseContent() {
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="card p-3"><p className="text-[9px] uppercase text-t4">Receiving</p><p className="text-lg font-bold text-t1">{receivingQty}</p></div>
                 <div className="card p-3"><p className="text-[9px] uppercase text-t4">Remaining</p><p className="text-lg font-bold text-t1">{remainingQty}</p></div>
-                <div className="card p-3"><p className="text-[9px] uppercase text-t4">Destination</p><p className="text-xs font-bold text-t1 mt-1">{LOCATIONS[destLocation].name}</p></div>
+                <div className="card p-3"><p className="text-[9px] uppercase text-t4">Destination</p><p className="text-xs font-bold text-t1 mt-1">{destLocation ? LOCATIONS[destLocation].name : '—'}</p></div>
               </div>
               <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-lt)' }}>
                 {grnLines.filter(line => line.qtyReceived > 0).map(line => (
@@ -1234,7 +1254,7 @@ function PurchaseContent() {
     // Scan
     showScanModal, setShowScanModal, scanFile, setScanFile, isScanningScan, setIsScanningScan, scanFileRef,
     // GRN
-    activeReceiptId, setActiveReceiptId, receiptOrigin, openReceiptDetail, closeReceiptDetail, startReceive, openReceive, grnLines, setGrnLines, destLocation, setDestLocation,
+    activeReceiptId, setActiveReceiptId, receiptOrigin, openReceiptDetail, closeReceiptDetail, startReceive, openReceive, grnLines, setGrnLines, destLocation: destLocation as LocationId, setDestLocation,
     serialInputs, setSerialInputs, serialAccessories, setSerialAccessories,
     serialAccessoryNotes, setSerialAccessoryNotes, serialSpecs, setSerialSpecs, serialIssues, setSerialIssues, serialRefs,
     // Return
@@ -1401,7 +1421,7 @@ function PurchaseContent() {
                     <button className="text-[10px] underline cursor-pointer" style={{ color: 'var(--accent)' }} onClick={() => openNewVendorForm()}>+ Create New Vendor</button>
                   </div>
                 </div>
-                <Field label="Expected Response / Delivery">
+                <Field label="Expected Response / Delivery *">
                   <input className="form-input text-xs" type="date" value={newRfqExpectedDate} onChange={e => setNewRfqExpectedDate(e.target.value)} />
                 </Field>
                 <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
@@ -1482,14 +1502,15 @@ function PurchaseContent() {
                               </td>
                               <td className="px-3 py-2">
                                 <input type="number" min={1} className="form-input text-xs text-center w-20" value={line.qty} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, qty: e.target.value } : x))} />
-                                {isInvalid && Number(line.qty) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
+                                {isInvalid && !(Number(line.qty) > 0) && <p className="text-[9px] text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <input type="number" min={0} className="form-input text-xs text-right w-28" value={line.unitPrice} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, unitPrice: e.target.value } : x))} />
-                                {isInvalid && Number(line.unitPrice) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
+                                {isInvalid && !(Number(line.unitPrice) > 0) && <p className="text-[9px] text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <select className="form-select text-xs w-20" value={line.taxRate} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, taxRate: e.target.value } : x))}>
+                                  <option value="">Select…</option>
                                   <option value="0">0%</option>
                                   <option value={String(companySettings.vatRate ?? 16)}>{companySettings.vatRate ?? 16}%</option>
                                 </select>
@@ -1584,6 +1605,7 @@ function PurchaseContent() {
             <button className="btn-primary"
               onClick={() => {
                 if (!pickupCollectedBy) { showToast('Select who collected the return', 'error'); return }
+                if (!pickupCollectedDate) { showToast('Select the collection date', 'error'); return }
                 const u = users.find(x => x.id === pickupCollectedBy)
                 logReturnPickup(pickupReturnId, pickupCollectedBy, u?.name ?? pickupCollectedBy, pickupCollectedDate, pickupNotes || undefined)
                 setShowPickupModal(false)
@@ -1603,8 +1625,8 @@ function PurchaseContent() {
           above the RFQ/PO detail form (Return to Vendor + Scan are triggered there). */}
       {showReturnModal && (
         <Modal title="Return to Vendor" subtitle="Select products and quantities to return" width={580} onClose={() => setShowReturnModal(false)}>
-          <Field label="Return Reason">
-            <Select value={returnReason} onChange={v => setReturnReason(v as any)} options={REASON_OPTS} />
+          <Field label="Return Reason *">
+            <Select value={returnReason} onChange={v => setReturnReason(v as any)} options={[{ value: '', label: 'Select…' }, ...REASON_OPTS]} />
           </Field>
           <Divider label="Products to return" />
           {returnLines.map((l, idx) => (
@@ -1660,7 +1682,7 @@ function PurchaseContent() {
               <Select value={returnCollectedBy} onChange={setReturnCollectedBy}
                 options={[{ value: '', label: '— Select staff member —' }, ...users.map(u => ({ value: u.id, label: u.name }))]} />
             </Field>
-            <Field label="Collection date">
+            <Field label={returnCollectedBy ? 'Collection date *' : 'Collection date'}>
               <input className="form-input" type="date" value={returnCollectedDate} onChange={e => setReturnCollectedDate(e.target.value)} />
             </Field>
           </div>

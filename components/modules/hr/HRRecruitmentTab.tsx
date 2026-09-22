@@ -12,7 +12,7 @@ type JobForm = {
   title: string
   departmentId: string
   location: string
-  type: JobPosting['type']
+  type: JobPosting['type'] | ''
   status: JobPosting['status']
   closingDate: string
   description: string
@@ -29,18 +29,18 @@ type CandidateForm = {
   notes: string
 }
 
-const emptyJobForm = (departmentId = ''): JobForm => ({
+const emptyJobForm = (): JobForm => ({
   title: '',
-  departmentId,
+  departmentId: '',
   location: '',
-  type: 'full_time',
+  type: '',
   status: 'open',
   closingDate: '',
   description: '',
 })
 
-const emptyCandidateForm = (jobId = ''): CandidateForm => ({
-  jobId,
+const emptyCandidateForm = (): CandidateForm => ({
+  jobId: '',
   firstName: '',
   lastName: '',
   email: '',
@@ -63,19 +63,19 @@ export default function HRRecruitmentTab() {
   const setCandidatePage = (page: number) => setCandidatePageValue(String(Math.max(1, page)))
   const [showJobModal, setShowJobModal] = useState(false)
   const [showCandidateModal, setShowCandidateModal] = useState(false)
-  const [jobForm, setJobForm] = useState<JobForm>(() => emptyJobForm(departments[0]?.id ?? ''))
-  const [candidateForm, setCandidateForm] = useState<CandidateForm>(() => emptyCandidateForm(jobPostings.find(j => j.status === 'open')?.id ?? jobPostings[0]?.id ?? ''))
+  const [jobForm, setJobForm] = useState<JobForm>(emptyJobForm)
+  const [candidateForm, setCandidateForm] = useState<CandidateForm>(emptyCandidateForm)
 
   const departmentOptions = departments.map(d => ({ value: d.id, label: d.name }))
   const jobOptions = jobPostings.map(j => ({ value: j.id, label: `${j.title} (${j.status})` }))
 
   const openCreate = () => {
     if (subTab === 'jobs') {
-      setJobForm(emptyJobForm(departments[0]?.id ?? ''))
+      setJobForm(emptyJobForm())
       setShowJobModal(true)
       return
     }
-    setCandidateForm(emptyCandidateForm(jobPostings.find(j => j.status === 'open')?.id ?? jobPostings[0]?.id ?? ''))
+    setCandidateForm(emptyCandidateForm())
     setShowCandidateModal(true)
   }
 
@@ -83,10 +83,14 @@ export default function HRRecruitmentTab() {
     const title = jobForm.title.trim()
     const location = jobForm.location.trim()
     const description = jobForm.description.trim()
-    if (!title) { showToast('Job title is required', 'error'); return }
-    if (!jobForm.departmentId) { showToast('Select a department for this posting', 'error'); return }
-    if (!location) { showToast('Job location is required', 'error'); return }
-    if (!description) { showToast('Job description is required', 'error'); return }
+    const missing: string[] = []
+    if (!title) missing.push('Job Title')
+    if (!jobForm.departmentId) missing.push('Department')
+    if (!location) missing.push('Location')
+    if (!jobForm.type) missing.push('Employment Type')
+    if (!description) missing.push('Description')
+    if (missing.length) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
+    if (!jobForm.type) return
 
     addJobPosting({
       title,
@@ -239,9 +243,9 @@ export default function HRRecruitmentTab() {
         <Modal title="New Job Posting" subtitle="Create a recruitment posting and sync it to the server" onClose={() => setShowJobModal(false)} width={620}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Job Title" required><Input autoFocus value={jobForm.title} onChange={title => setJobForm(p => ({ ...p, title }))} placeholder="e.g. Sales Executive" /></Field>
-            <Field label="Department" required><Select value={jobForm.departmentId} onChange={departmentId => setJobForm(p => ({ ...p, departmentId }))} options={departmentOptions.length ? departmentOptions : [{ value: '', label: 'No departments available' }]} /></Field>
+            <Field label="Department" required><Select value={jobForm.departmentId} onChange={departmentId => setJobForm(p => ({ ...p, departmentId }))} options={departmentOptions.length ? [{ value: '', label: 'Select department…' }, ...departmentOptions] : [{ value: '', label: 'No departments available' }]} /></Field>
             <Field label="Location" required><Input value={jobForm.location} onChange={location => setJobForm(p => ({ ...p, location }))} placeholder="e.g. Nairobi" /></Field>
-            <Field label="Employment Type"><Select value={jobForm.type} onChange={type => setJobForm(p => ({ ...p, type: type as JobPosting['type'] }))} options={[{ value: 'full_time', label: 'Full Time' }, { value: 'part_time', label: 'Part Time' }, { value: 'contract', label: 'Contract' }]} /></Field>
+            <Field label="Employment Type" required><Select value={jobForm.type} onChange={type => setJobForm(p => ({ ...p, type: type as JobPosting['type'] }))} options={[{ value: '', label: 'Select type…' }, { value: 'full_time', label: 'Full Time' }, { value: 'part_time', label: 'Part Time' }, { value: 'contract', label: 'Contract' }]} /></Field>
             <Field label="Status"><Select value={jobForm.status} onChange={status => setJobForm(p => ({ ...p, status: status as JobPosting['status'] }))} options={[{ value: 'open', label: 'Open' }, { value: 'draft', label: 'Draft' }, { value: 'closed', label: 'Closed' }]} /></Field>
             <Field label="Closing Date"><Input type="date" value={jobForm.closingDate} onChange={closingDate => setJobForm(p => ({ ...p, closingDate }))} /></Field>
           </div>
@@ -255,7 +259,7 @@ export default function HRRecruitmentTab() {
 
       {showCandidateModal && (
         <Modal title="Add Candidate" subtitle="Register a candidate against a job posting and sync it to the server" onClose={() => setShowCandidateModal(false)} width={620}>
-          <Field label="Job Posting" required><Select value={candidateForm.jobId} onChange={jobId => setCandidateForm(p => ({ ...p, jobId }))} options={jobOptions.length ? jobOptions : [{ value: '', label: 'No job postings available' }]} /></Field>
+          <Field label="Job Posting" required><Select value={candidateForm.jobId} onChange={jobId => setCandidateForm(p => ({ ...p, jobId }))} options={jobOptions.length ? [{ value: '', label: 'Select job posting…' }, ...jobOptions] : [{ value: '', label: 'No job postings available' }]} /></Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="First Name" required><Input autoFocus value={candidateForm.firstName} onChange={firstName => setCandidateForm(p => ({ ...p, firstName }))} /></Field>
             <Field label="Last Name" required><Input value={candidateForm.lastName} onChange={lastName => setCandidateForm(p => ({ ...p, lastName }))} /></Field>

@@ -10,9 +10,9 @@ type Data = { products: Product[]; serials: Serial[]; bulk: Array<{ productId: s
 type Mode = 'request' | 'reject' | 'close'
 
 const EMPTY: Data = { products: [], serials: [], bulk: [], checkouts: [], canApprove: false, currentUserId: '' }
-const blank = () => ({ productId: '', qty: '1', serialIds: [] as string[], sourceLocation: 'warehouse', receiverName: '', purpose: 'Refurbishment', relatedJob: '', deviceRef: '', deviceSerial: '', expectedReturnDate: '', notes: '', outcome: 'consumed', reason: '' })
-const locations = [{ value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'With Issues' }, { value: 'repair_unit', label: 'Refurbishment' }]
-const purposes = ['Refurbishment', 'Repair', 'Testing', 'Internal installation', 'Other'].map(value => ({ value, label: value }))
+const blank = () => ({ productId: '', qty: '', serialIds: [] as string[], sourceLocation: '', receiverName: '', purpose: '', relatedJob: '', deviceRef: '', deviceSerial: '', expectedReturnDate: '', notes: '', outcome: '', reason: '' })
+const locations = [{ value: '', label: 'Select source…' }, { value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'With Issues' }, { value: 'repair_unit', label: 'Refurbishment' }]
+const purposes = [{ value: '', label: 'Select purpose…' }, ...['Refurbishment', 'Repair', 'Testing', 'Internal installation', 'Other'].map(value => ({ value, label: value }))]
 const statusLabel: Record<string, string> = { pending: 'Pending approval', approved: 'Approved', issued: 'Checked out', partially_closed: 'Partially closed', completed: 'Closed', rejected: 'Rejected' }
 
 export default function StockCheckoutPanel() {
@@ -38,7 +38,7 @@ export default function StockCheckoutPanel() {
   const patch = (key: keyof ReturnType<typeof blank>, value: string | string[]) => setForm(v => ({ ...v, [key]: value }))
   const toggle = (id: string) => patch('serialIds', form.serialIds.includes(id) ? form.serialIds.filter(x => x !== id) : [...form.serialIds, id])
   const open = (next: Mode, row?: Checkout) => {
-    setForm({ ...blank(), qty: row ? String(outstanding(row)) : '1' })
+    setForm({ ...blank(), qty: row ? String(outstanding(row)) : '' })
     setProductSearch('')
     setRequestItems({})
     setSelected(row || null)
@@ -56,10 +56,10 @@ export default function StockCheckoutPanel() {
       delete next[productId]
       return next
     }
-    return { ...items, [productId]: { qty: '1', serialIds: [] } }
+    return { ...items, [productId]: { qty: '', serialIds: [] } }
   })
   const patchRequestItem = (productId: string, value: Partial<{ qty: string; serialIds: string[] }>) =>
-    setRequestItems(items => ({ ...items, [productId]: { ...(items[productId] ?? { qty: '1', serialIds: [] }), ...value } }))
+    setRequestItems(items => ({ ...items, [productId]: { ...(items[productId] ?? { qty: '', serialIds: [] }), ...value } }))
 
   const send = async (action: string, extra: Record<string, unknown> = {}) => {
     setSaving(true); setError('')
@@ -70,12 +70,14 @@ export default function StockCheckoutPanel() {
   const submitRequest = async () => {
     const items = Object.entries(requestItems)
     if (!items.length) return setError('Select at least one product')
+    if (!form.sourceLocation) return setError('Select the source location')
     for (const [productId, item] of items) {
       const selectedProduct = data.products.find(p => p.id === productId)
       if (selectedProduct?.serialized && !item.serialIds.length) return setError(`Select serial numbers for ${selectedProduct.name}`)
-      if (!selectedProduct?.serialized && Number(item.qty) < 1) return setError(`Enter a valid quantity for ${selectedProduct?.name || 'each product'}`)
+      if (!selectedProduct?.serialized && (!item.qty.trim() || !Number.isFinite(Number(item.qty)) || Number(item.qty) < 1)) return setError(`Enter a valid quantity for ${selectedProduct?.name || 'each product'}`)
     }
     if (!form.receiverName.trim()) return setError('Enter the receiving person or holder')
+    if (!form.purpose) return setError('Select a purpose')
     setSaving(true); setError('')
     try {
       for (const [productId, item] of items) {
@@ -91,7 +93,11 @@ export default function StockCheckoutPanel() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not submit checkout request') }
     finally { setSaving(false) }
   }
-  const submitClose = () => send('close', { outcome: form.outcome, qty: form.qty, notes: form.notes, serialIds: form.serialIds })
+  const submitClose = () => {
+    if (!form.outcome) return setError('Select an outcome')
+    if (!form.qty.trim() || !Number.isFinite(Number(form.qty)) || Number(form.qty) < 1) return setError('Enter a valid quantity')
+    return send('close', { outcome: form.outcome, qty: form.qty, notes: form.notes, serialIds: form.serialIds })
+  }
 
   const active = data.checkouts.filter(r => ['pending', 'approved', 'issued', 'partially_closed'].includes(r.status)).length
   const checkedOut = data.checkouts.filter(r => ['issued', 'partially_closed'].includes(r.status)).reduce((n, r) => n + outstanding(r), 0)
@@ -142,6 +148,6 @@ export default function StockCheckoutPanel() {
       <div className="flex justify-end gap-2"><button className="btn-secondary px-4" onClick={() => setMode(null)}>Cancel</button><button className="btn-primary px-5" disabled={saving} onClick={() => void submitRequest()}>{saving ? 'Submitting…' : `Submit ${Object.keys(requestItems).length || ''} request${Object.keys(requestItems).length === 1 ? '' : 's'}`}</button></div>
     </div></Modal>}
         {mode === 'reject' && selected && <Modal title={`Reject ${selected.ref}`} onClose={() => setMode(null)}><div className="space-y-4">{error && <p className="text-xs text-red-700">{error}</p>}<Field label="Reason" required><Textarea value={form.reason} onChange={v => patch('reason', v)} rows={3} /></Field><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => setMode(null)}>Cancel</button><button className="btn-primary" disabled={saving || !form.reason.trim()} onClick={() => void send('reject', { reason: form.reason })}>Reject request</button></div></div></Modal>}
-    {mode === 'close' && selected && <Modal title={`Close stock · ${selected.ref}`} subtitle={`${outstanding(selected)} unit(s) outstanding`} onClose={() => setMode(null)} width={640}><div className="space-y-4">{error && <p className="text-xs text-red-700">{error}</p>}<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Outcome" required><Select value={form.outcome} onChange={v => patch('outcome', v)} options={[{ value: 'consumed', label: 'Consumed / installed' }, { value: 'returned', label: 'Returned to source' }, { value: 'exception', label: 'Missing / damaged / exception' }]} /></Field><Field label="Quantity" required><Input type="number" value={form.qty} onChange={v => patch('qty', v)} /></Field></div>{selected.serialIds.length > 0 && <Field label="Serials to close" required hint={`${form.serialIds.length} selected`}><div className="max-h-36 overflow-y-auto rounded-lg border border-border-lt divide-y divide-border-lt">{selected.serialIds.map((id, i) => <label key={id} className="flex items-center gap-3 px-3 py-2"><input type="checkbox" checked={form.serialIds.includes(id)} onChange={() => toggle(id)} />{selected.serialNumbers[i] || id}</label>)}</div></Field>}<Field label="Closure notes"><Textarea value={form.notes} onChange={v => patch('notes', v)} rows={3} /></Field><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => setMode(null)}>Cancel</button><button className="btn-primary" disabled={saving} onClick={() => void submitClose()}>{saving ? 'Saving…' : 'Record outcome'}</button></div></div></Modal>}
+    {mode === 'close' && selected && <Modal title={`Close stock · ${selected.ref}`} subtitle={`${outstanding(selected)} unit(s) outstanding`} onClose={() => setMode(null)} width={640}><div className="space-y-4">{error && <p className="text-xs text-red-700">{error}</p>}<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Outcome" required><Select value={form.outcome} onChange={v => patch('outcome', v)} options={[{ value: '', label: 'Select outcome…' }, { value: 'consumed', label: 'Consumed / installed' }, { value: 'returned', label: 'Returned to source' }, { value: 'exception', label: 'Missing / damaged / exception' }]} /></Field><Field label="Quantity" required><Input type="number" value={form.qty} onChange={v => patch('qty', v)} /></Field></div>{selected.serialIds.length > 0 && <Field label="Serials to close" required hint={`${form.serialIds.length} selected`}><div className="max-h-36 overflow-y-auto rounded-lg border border-border-lt divide-y divide-border-lt">{selected.serialIds.map((id, i) => <label key={id} className="flex items-center gap-3 px-3 py-2"><input type="checkbox" checked={form.serialIds.includes(id)} onChange={() => toggle(id)} />{selected.serialNumbers[i] || id}</label>)}</div></Field>}<Field label="Closure notes"><Textarea value={form.notes} onChange={v => patch('notes', v)} rows={3} /></Field><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => setMode(null)}>Cancel</button><button className="btn-primary" disabled={saving} onClick={() => void submitClose()}>{saving ? 'Saving…' : 'Record outcome'}</button></div></div></Modal>}
   </section>
 }

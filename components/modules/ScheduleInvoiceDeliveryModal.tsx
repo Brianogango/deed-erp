@@ -43,15 +43,19 @@ export function ScheduleInvoiceDeliveryModal({
 }) {
   const [form, setForm] = useState<ScheduleInvoiceDeliveryForm>({
     deliveryAddress: invoice.deliveryAddress || '',
-    scheduledDate: new Date().toISOString().slice(0, 10),
+    // The user picks the delivery date; nothing is assumed.
+    scheduledDate: '',
     riderId: '',
     riderFee: '',
     deliveryFee: '',
     notes: '',
   })
 
-  const set = (k: keyof ScheduleInvoiceDeliveryForm, v: string) =>
+  const [formError, setFormError] = useState('')
+  const set = (k: keyof ScheduleInvoiceDeliveryForm, v: string) => {
     setForm(p => ({ ...p, [k]: v }))
+    if (formError) setFormError('')
+  }
 
   const handleRiderChange = (id: string) => {
     const rider = riders.find(r => r.id === id)
@@ -60,18 +64,19 @@ export function ScheduleInvoiceDeliveryModal({
       riderId: id,
       riderFee: suggestRiderFeePrefill(p.riderFee, rider?.ratePerDelivery),
     }))
+    if (formError) setFormError('')
   }
 
   const riderFee = parseRiderFeeInput(form.riderFee)
   const deliveryFee = form.deliveryFee.trim() === ''
     ? null
     : parseRiderFeeInput(form.deliveryFee)
-  const canSubmit =
-    form.deliveryAddress.trim().length > 0
-    && form.scheduledDate
-    && riderFee !== null
-    && deliveryFee !== null
-    && deliveryFee > 0
+  const missingFields = [
+    !form.deliveryAddress.trim() && 'Delivery address',
+    !form.scheduledDate && 'Scheduled date',
+    (deliveryFee === null || deliveryFee <= 0) && 'Delivery charge (greater than zero)',
+    riderFee === null && 'Rider fee',
+  ].filter((v): v is string => Boolean(v))
 
   return (
     <Modal
@@ -154,14 +159,19 @@ export function ScheduleInvoiceDeliveryModal({
           />
         </Field>
 
+        {formError && (
+          <p role="alert" className="text-[11px] font-semibold text-red-600 -mb-2">{formError}</p>
+        )}
         <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border-lt)]">
           <button type="button" className="btn-outline text-xs" onClick={onClose}>Cancel</button>
           <button
             type="button"
             className="btn-primary text-xs flex items-center gap-1.5"
-            disabled={!canSubmit}
             onClick={() => {
-              if (riderFee === null || deliveryFee === null || deliveryFee <= 0) return
+              if (missingFields.length > 0 || riderFee === null || deliveryFee === null || deliveryFee <= 0) {
+                setFormError(`Please fill in: ${missingFields.join(', ')}`)
+                return
+              }
               onConfirm({
                 deliveryAddress: form.deliveryAddress.trim(),
                 scheduledDate: form.scheduledDate,

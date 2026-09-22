@@ -29,10 +29,10 @@ export function MarginCalculatorTool({
   const [categoryId, setCategoryId] = useState(
     initialCategoryId && policy.categories.some(c => c.id === initialCategoryId)
       ? initialCategoryId
-      : policy.categories.find(c => c.id === 'repair_parts')?.id || policy.categories[0]?.id || '',
+      : '',
   )
   const [buyCost, setBuyCost] = useState(
-    initialCost !== undefined && initialCost !== '' ? String(initialCost) : '5000',
+    initialCost !== undefined && initialCost !== '' ? String(initialCost) : '',
   )
 
   const overheadPct = overheadRateFromPolicy(policy) * 100
@@ -61,11 +61,11 @@ export function MarginCalculatorTool({
         <div>
           <p className="text-[11px] font-bold text-[var(--text-2)] mb-2">Select category</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Category">
+            <Field label="Category" required>
               <Select
                 value={categoryId}
                 onChange={setCategoryId}
-                options={policy.categories.map(c => ({ value: c.id, label: c.name }))}
+                options={[{ value: '', label: 'Select category…' }, ...policy.categories.map(c => ({ value: c.id, label: c.name }))]}
               />
             </Field>
             <Field label="Target profit min">
@@ -84,7 +84,7 @@ export function MarginCalculatorTool({
         <div>
           <p className="text-[11px] font-bold text-[var(--text-2)] mb-2">Enter buy (cost) price</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Buy price (KES, ex VAT)">
+            <Field label="Buy price (KES, ex VAT)" required>
               <Input
                 type="number"
                 value={buyCost}
@@ -110,7 +110,15 @@ export function MarginCalculatorTool({
           <p className="text-[11px] font-bold text-[var(--text-2)] mb-2">Recommended selling prices</p>
           {!quote?.ok ? (
             <p className="text-[12px] text-[var(--text-3)] m-0">
-              {quote && !quote.ok ? quote.error : 'Enter a buy price to calculate.'}
+              {quote && !quote.ok
+                ? quote.error
+                : !categoryId && !buyCost.trim()
+                  ? 'Select a category and enter a buy price to calculate.'
+                  : !categoryId
+                    ? 'Select a category to calculate.'
+                    : !buyCost.trim()
+                      ? 'Enter a buy price to calculate.'
+                      : 'Buy price must be a number greater than zero.'}
             </p>
           ) : (
             <div className="overflow-x-auto">

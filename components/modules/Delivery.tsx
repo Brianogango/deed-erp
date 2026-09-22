@@ -242,13 +242,14 @@ function JobModal({
   assignRiderToJob: ReturnType<typeof useDeliveryStore>['assignRiderToJob']
   showToast: ReturnType<typeof useDeliveryStore>['showToast']
 }) {
+  // New job starts empty: type, date and addresses are the user's to set.
   const [form, setForm] = useState({
-    type: 'sales_delivery' as DeliveryJobType,
+    type: '' as DeliveryJobType | '',
     saleOrderId: '', repairOrderId: '',
     riderId: '',
     customerName: '', customerPhone: '',
     pickupAddress: '', deliveryAddress: '',
-    scheduledDate: new Date().toISOString().slice(0, 10),
+    scheduledDate: '',
     riderFee: '',
     notes: '',
   })
@@ -275,31 +276,44 @@ function JobModal({
     }))
   }
 
-  function handleSourceChange(type: DeliveryJobType, id: string) {
+  function handleSourceChange(type: DeliveryJobType | '', id: string) {
     if (type === 'sales_delivery') {
       const so = saleOrders.find(s => s.id === id)
       if (so) setForm(p => ({ ...p, saleOrderId: id, customerName: so.customerName }))
     } else if (type === 'repair_dropoff') {
       const r = repairs.find(r => r.id === id)
+      // Recipient comes from the chosen repair; addresses are typed by the user
+      // (no placeholder text stored as a real address).
       if (r) setForm(p => ({
         ...p, repairOrderId: id,
         customerName: r.customerName, customerPhone: r.customerPhone,
-        pickupAddress: 'Deed Technologies, CBD',
-        deliveryAddress: r.customerName + ', Customer Address',
       }))
     }
   }
 
   async function submit() {
-    if (!form.customerName || !form.pickupAddress || !form.deliveryAddress || !form.scheduledDate) return
+    const missing = [
+      !form.type && 'Job type',
+      !form.customerName.trim() && 'Customer name',
+      !form.pickupAddress.trim() && 'Pickup address',
+      !form.deliveryAddress.trim() && 'Delivery address',
+      !form.scheduledDate && 'Scheduled date',
+      !form.riderFee.trim() && 'Rider fee',
+    ].filter(Boolean)
+    if (missing.length) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
+      return
+    }
+    const jobType = form.type
+    if (!jobType) return
     const fee = parseRiderFeeInput(form.riderFee)
     if (fee === null) {
       showToast('Enter the rider fee for this job (amount can vary per trip)', 'error')
       return
     }
-    const isGeneral = isGeneralDeliveryJob(form.type)
+    const isGeneral = isGeneralDeliveryJob(jobType)
     const job = await createDeliveryJob({
-      type: form.type,
+      type: jobType,
       saleOrderId:   !isGeneral && form.saleOrderId ? form.saleOrderId : undefined,
       saleOrderRef:  !isGeneral && form.saleOrderId
         ? saleOrders.find(s => s.id === form.saleOrderId)?.ref
@@ -342,7 +356,7 @@ function JobModal({
               </button>
             ))}
           </div>
-          {isGeneralDeliveryJob(form.type) && (
+          {form.type && isGeneralDeliveryJob(form.type) && (
             <p className="text-[10px] text-t4 mt-1.5">
               No sale order, repair, or invoice link. Use notes to describe the trip (courier, supplier pickup, internal move, etc.).
             </p>
@@ -385,7 +399,7 @@ function JobModal({
         <p className="text-[10px] text-t4 -mt-1">Fee is per job and can vary. Selecting a rider only suggests their default rate when this field is empty.</p>
 
         <Field label="Notes / Instructions">
-          <textarea className="form-input text-xs w-full" rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder={isGeneralDeliveryJob(form.type) ? 'Why this trip: courier docs, supplier pickup, shop transfer, etc.' : 'Special instructions, fragile items, gate code, etc.'} />
+          <textarea className="form-input text-xs w-full" rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder={form.type && isGeneralDeliveryJob(form.type) ? 'Why this trip: courier docs, supplier pickup, shop transfer, etc.' : 'Special instructions, fragile items, gate code, etc.'} />
         </Field>
       </div>
       <div className="flex justify-end gap-2 mt-4">
@@ -920,12 +934,12 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
 
 // ── Riders Tab ─────────────────────────────────────────────────────────────────
 function RidersTab() {
-  const { riders, addRider, updateRider, deliveryJobs } = useDeliveryStore()
+  const { riders, addRider, updateRider, deliveryJobs, showToast } = useDeliveryStore()
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     name: '', phone: '', idNumber: '',
-    vehicle: 'motorcycle' as Rider['vehicle'],
+    vehicle: '' as Rider['vehicle'] | '',
     vehicleReg: '',
     ratePerDelivery: '',
   })
@@ -933,16 +947,26 @@ function RidersTab() {
   function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })) }
 
   function submit() {
-    if (!form.name || !form.phone) return
+    const missing = [!form.name.trim() && 'Name', !form.phone.trim() && 'Phone', !form.vehicle && 'Vehicle'].filter(Boolean)
+    if (missing.length) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
+      return
+    }
+    const vehicle = form.vehicle
+    if (!vehicle) return
+    if (form.ratePerDelivery.trim() !== '' && parseRiderFeeInput(form.ratePerDelivery) === null) {
+      showToast('Default rate per delivery must be a number of 0 or more', 'error')
+      return
+    }
     const rate = parseRiderFeeInput(form.ratePerDelivery)
     addRider({
       name: form.name, phone: form.phone, idNumber: form.idNumber,
-      vehicle: form.vehicle, vehicleReg: form.vehicleReg || undefined,
+      vehicle, vehicleReg: form.vehicleReg || undefined,
       active: true,
       // Optional suggestion only — jobs still require their own fee.
       ratePerDelivery: rate ?? 0,
     })
-    setForm({ name: '', phone: '', idNumber: '', vehicle: 'motorcycle', vehicleReg: '', ratePerDelivery: '' })
+    setForm({ name: '', phone: '', idNumber: '', vehicle: '', vehicleReg: '', ratePerDelivery: '' })
     setShowForm(false)
   }
 
@@ -1048,9 +1072,10 @@ function RidersTab() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Vehicle</p>
+              <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Vehicle *</p>
               <select aria-label="Rider vehicle" className="form-select text-xs w-full" value={form.vehicle}
                 onChange={e => set('vehicle', e.target.value)}>
+                <option value="" disabled>Select…</option>
                 <option value="motorcycle">Motorcycle</option>
                 <option value="bicycle">Bicycle</option>
                 <option value="car">Car</option>
@@ -1102,26 +1127,19 @@ function WeeklyPayTab() {
   const [printPay, setPrintPay] = useState<RiderWeeklyPay | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
-  // Default to current week Monday
-  function currentWeekMonday() {
-    const d = new Date()
-    const day = d.getDay()
-    const diff = (day === 0 ? -6 : 1 - day)
-    const mon = new Date(d); mon.setDate(d.getDate() + diff)
-    return mon.toISOString().slice(0, 10)
-  }
-
-  const [weekStart, setWeekStart] = useState(currentWeekMonday)
+  // Week starts empty — the user picks which week to review / pay.
+  const [weekStart, setWeekStart] = useState('')
   const [selectedRiderId, setSelectedRiderId] = useState<string>('all')
 
   const weekEnd = useMemo(() => {
+    if (!weekStart) return ''
     const d = new Date(weekStart); d.setDate(d.getDate() + 6)
     return d.toISOString().slice(0, 10)
   }, [weekStart])
 
   // Per-rider summary for the selected week
   const riderSummaries = useMemo(() =>
-    riders.filter(r => r.active).map(rider => {
+    !weekStart ? [] : riders.filter(r => r.active).map(rider => {
       const jobs = deliveryJobs.filter(j =>
         j.riderId === rider.id &&
         j.status === 'delivered' &&
@@ -1159,9 +1177,11 @@ function WeeklyPayTab() {
           <input type="date" aria-label="Week starting date" className="form-input text-xs" value={weekStart}
             onChange={e => setWeekStart(e.target.value)} style={{ width: 160 }} />
         </div>
-        <div className="text-xs" style={{ color: 'var(--text-3)' }}>
-          Week: <strong>{fmtDate(weekStart)}</strong> — <strong>{fmtDate(weekEnd)}</strong>
-        </div>
+        {weekStart && (
+          <div className="text-xs" style={{ color: 'var(--text-3)' }}>
+            Week: <strong>{fmtDate(weekStart)}</strong> — <strong>{fmtDate(weekEnd)}</strong>
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-4)' }}>Rider:</p>
           <select aria-label="Filter pay statements by rider" className="form-select text-xs" value={selectedRiderId}
@@ -1173,6 +1193,13 @@ function WeeklyPayTab() {
           </select>
         </div>
       </div>
+
+      {!weekStart && (
+        <div className="card p-6 text-center" role="status">
+          <p className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>Select a period</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>Pick the week starting date above to see rider deliveries and generate pay.</p>
+        </div>
+      )}
 
       {/* Summary cards per rider */}
       <div className="delivery-pay-cards">

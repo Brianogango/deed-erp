@@ -31,9 +31,15 @@ const INTAKE_ERROR_FOCUS: Array<{ key: string; id: string }> = [
   { key: 'contactPerson', id: 'intake-contactPerson' },
   { key: 'personFirstName', id: 'intake-personFirstName' },
   { key: 'personPhone', id: 'intake-personPhone' },
+  { key: 'deviceType', id: 'intake-deviceType' },
+  { key: 'customDeviceType', id: 'intake-customDeviceType' },
   { key: 'brand', id: 'intake-brand' },
   { key: 'model', id: 'intake-model' },
   { key: 'serialExceptionReason', id: 'intake-serialExceptionReason' },
+  { key: 'deviceCondition', id: 'intake-deviceCondition' },
+  { key: 'priority', id: 'intake-priority' },
+  { key: 'intakeChannel', id: 'intake-intakeChannel' },
+  { key: 'repairPath', id: 'intake-repairPath' },
   { key: 'consentSignature', id: 'intake-consentSignature' },
   { key: 'agreeTerms', id: 'intake-agreeTerms' },
 ]
@@ -119,13 +125,13 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
   // ── Device & job fields ────────────────────────────────────────────────────
   const [device, setDevice] = useState({
-    deviceType: 'laptop', customDeviceType: '',
+    deviceType: '', customDeviceType: '',
     brand: '', model: '', serial: '',
-    deviceCondition: 'good' as 'good' | 'fair' | 'poor' | 'damaged',
+    deviceCondition: '' as 'good' | 'fair' | 'poor' | 'damaged' | '',
     accessoriesChecked: new Set<string>(), accessoriesOther: '', issueDesc: '', clientLaptopPassword: '',
-    priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
-    intakeChannel: 'walk_in' as 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup',
-    repairPath: 'diagnosis_first' as 'diagnosis_first' | 'direct_repair',
+    priority: '' as 'low' | 'normal' | 'high' | 'urgent' | '',
+    intakeChannel: '' as 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup' | '',
+    repairPath: '' as 'diagnosis_first' | 'direct_repair' | '',
     estimatedCompletion: '',
     consentSignature: '', agreeTerms: false,
     serialWarrantyException: false,
@@ -136,6 +142,12 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   const setD = (k: keyof typeof device, v: string | boolean) => {
     setDevice(p => ({ ...p, [k]: v }))
     if (k === 'brand') clearFieldError('brand')
+    else if (k === 'deviceType') clearFieldError('deviceType')
+    else if (k === 'customDeviceType') clearFieldError('customDeviceType')
+    else if (k === 'deviceCondition') clearFieldError('deviceCondition')
+    else if (k === 'priority') clearFieldError('priority')
+    else if (k === 'intakeChannel') clearFieldError('intakeChannel')
+    else if (k === 'repairPath') clearFieldError('repairPath')
     else if (k === 'model') clearFieldError('model')
     else if (k === 'serialWarrantyExceptionReason') clearFieldError('serialExceptionReason')
     else if (k === 'consentSignature') clearFieldError('consentSignature')
@@ -274,11 +286,17 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       }
     }
 
+    if (!device.deviceType) errors.deviceType = 'Select the device type'
+    else if (device.deviceType === 'other' && !device.customDeviceType.trim()) errors.customDeviceType = 'Specify the device type'
     if (!device.brand) errors.brand = 'Brand is required'
     if (!device.model) errors.model = 'Model is required'
     if (device.serialWarrantyException && !device.serialWarrantyExceptionReason) {
       errors.serialExceptionReason = 'Select why the serial/warranty information cannot be verified'
     }
+    if (!device.deviceCondition) errors.deviceCondition = 'Select the device condition'
+    if (!device.priority) errors.priority = 'Select the priority'
+    if (!device.intakeChannel) errors.intakeChannel = 'Select the intake channel'
+    if (!device.repairPath) errors.repairPath = 'Select a workflow path (Diagnosis First or Direct Repair)'
     if (device.repairPath === 'direct_repair') {
       if (!device.consentSignature.trim()) errors.consentSignature = 'Customer signature is required'
       if (!device.agreeTerms) errors.agreeTerms = 'Terms agreement is required'
@@ -533,7 +551,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
             type="button"
             onClick={() => {
               setSuccessData(null)
-              setDevice(p => ({ ...p, brand: '', model: '', serial: '', issueDesc: '', accessoriesChecked: new Set<string>(), accessoriesOther: '', clientLaptopPassword: '' }))
+              setDevice(p => ({ ...p, deviceType: '', customDeviceType: '', deviceCondition: '', priority: '', intakeChannel: '', repairPath: '', consentSignature: '', agreeTerms: false, brand: '', model: '', serial: '', issueDesc: '', accessoriesChecked: new Set<string>(), accessoriesOther: '', clientLaptopPassword: '' }))
             }}
             className="btn-outline px-8 py-3"
           >
@@ -892,12 +910,12 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-2)' }}>Device Specifications</h3>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Device Type" required>
+                <Field label="Device Type" required id="intake-deviceType" error={fieldErrors.deviceType}>
                   <Select value={device.deviceType} onChange={v => setD('deviceType', v)}
-                    options={DEVICE_TYPES.map(dt => ({ value: dt.id, label: dt.label }))} />
+                    options={[{ value: '', label: 'Select…' }, ...DEVICE_TYPES.map(dt => ({ value: dt.id, label: dt.label }))]} />
                 </Field>
                 {device.deviceType === 'other' && (
-                  <Field label="Specify Type" required>
+                  <Field label="Specify Type" required id="intake-customDeviceType" error={fieldErrors.customDeviceType}>
                     <Input value={device.customDeviceType} onChange={v => setD('customDeviceType', v)} placeholder="e.g. Smart TV" />
                   </Field>
                 )}
@@ -950,9 +968,10 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     )}
                   </div>
                 </Field>
-                <Field label="Condition">
+                <Field label="Condition" required id="intake-deviceCondition" error={fieldErrors.deviceCondition}>
                   <Select value={device.deviceCondition} onChange={v => setD('deviceCondition', v)}
                     options={[
+                      { value: '', label: 'Select…' },
                       { value: 'good',    label: 'Good — Clean' },
                       { value: 'fair',    label: 'Fair — Scratches' },
                       { value: 'poor',    label: 'Poor — Dents' },
@@ -1070,18 +1089,20 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
             <section className="card p-5">
               <p className="text-[10px] font-black uppercase tracking-widest mb-4" style={{ color: 'var(--text-3)' }}>Priority & Channel</p>
               <div className="space-y-3">
-                <Field label="Priority">
+                <Field label="Priority" required id="intake-priority" error={fieldErrors.priority}>
                   <Select value={device.priority} onChange={v => setD('priority', v)}
                     options={[
+                      { value: '', label: 'Select…' },
                       { value: 'low',    label: 'Low' },
                       { value: 'normal', label: 'Normal' },
                       { value: 'high',   label: 'High' },
                       { value: 'urgent', label: '🔴 Urgent' },
                     ]} />
                 </Field>
-                <Field label="Intake Channel">
+                <Field label="Intake Channel" required id="intake-intakeChannel" error={fieldErrors.intakeChannel}>
                   <Select value={device.intakeChannel} onChange={v => setD('intakeChannel', v)}
                     options={[
+                      { value: '', label: 'Select…' },
                       { value: 'walk_in',      label: 'Walk-in' },
                       { value: 'rider_pickup', label: 'Rider Pickup' },
                       { value: 'website',      label: 'Website' },
@@ -1098,8 +1119,8 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
             {/* Workflow Selection */}
             <section className="card p-5">
-              <p className="text-[10px] font-black uppercase tracking-widest mb-4" style={{ color: 'var(--text-3)' }}>Workflow Path</p>
-              <div className="flex flex-col gap-3">
+              <p className="text-[10px] font-black uppercase tracking-widest mb-4" style={{ color: 'var(--text-3)' }}>Workflow Path <span style={{ color: 'var(--danger)' }}>*</span></p>
+              <div className="flex flex-col gap-3" id="intake-repairPath">
                 {([
                   { value: 'diagnosis_first', icon: faMagnifyingGlass, title: 'Diagnosis First', desc: 'Tech inspects before quoting. Flat diagnosis fee applies.' },
                   { value: 'direct_repair',   icon: faScrewdriverWrench, title: 'Direct Repair',   desc: 'Decline diagnosis — no fee; work only what the client asked.' },
@@ -1122,6 +1143,9 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                   </button>
                 ))}
               </div>
+              {fieldErrors.repairPath && (
+                <p role="alert" className="mt-2 text-[11px] font-semibold" style={{ color: 'var(--danger)' }}>{fieldErrors.repairPath}</p>
+              )}
 
               {device.repairPath === 'diagnosis_first' && isDiagnosisFeePolicyInEffect(new Date().toISOString()) && (
                 <div className="mt-4 p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>

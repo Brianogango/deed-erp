@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DataTable } from '@/components/data-table'
 import { fmtKes } from '@/lib/store'
+import { EmptyState } from '@/components/ui'
 
 type Row = { code: string; name: string; amount: number; section: string }
 
@@ -21,14 +22,20 @@ type CashFlowResponse = {
 }
 
 export default function CashFlowPanel() {
-  const year = new Date().getFullYear()
-  const [dateFrom, setDateFrom] = useState(`${year}-01-01`)
-  const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10))
+  // Period starts empty — the user picks From/To explicitly.
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const periodSelected = !!dateFrom && !!dateTo
   const [report, setReport] = useState<CashFlowResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const refresh = useCallback(async () => {
+    if (!dateFrom || !dateTo) {
+      setReport(null)
+      setError(null)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -72,6 +79,9 @@ export default function CashFlowPanel() {
         </div>
       </div>
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">{error}</div>}
+      {!periodSelected ? (
+        <EmptyState title="Select a period to view this report" subtitle="Pick a From and To date above." />
+      ) : (
       <DataTable
         tableId="finance-cash-flow"
         hideSearch
@@ -87,6 +97,7 @@ export default function CashFlowPanel() {
         exportTitle="Cash flow statement"
         exportFilename="cash-flow"
       />
+      )}
     </div>
   )
 }

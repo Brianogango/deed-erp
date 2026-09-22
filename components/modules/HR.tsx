@@ -283,8 +283,8 @@ function HRContent() {
   }
   const blankEmp = (): EmpFormState => ({
     fullName: '', employeeNo: '', email: '', phone: '', nationalId: '',
-    kraPin: '', nssfNumber: '', gender: '', departmentId: DEPARTMENTS[0].value, jobTitle: '',
-    shift: '', startDate: new Date().toISOString().slice(0, 10),
+    kraPin: '', nssfNumber: '', gender: '', departmentId: '', jobTitle: '',
+    shift: '', startDate: '',
     status: 'active', basicSalary: '', housingAllowance: '',
     transportAllowance: '', bankName: '', bankAccount: '',
   })
@@ -300,8 +300,11 @@ function HRContent() {
       showToast('Full name and employee number are required', 'error')
       return
     }
-    if (!empForm.departmentId) {
-      showToast('Department is required', 'error')
+    const missingEmp: string[] = []
+    if (!empForm.departmentId) missingEmp.push('Department')
+    if (!empForm.startDate) missingEmp.push('Start Date')
+    if (missingEmp.length) {
+      showToast(`Please fill in: ${missingEmp.join(', ')}`, 'error')
       return
     }
     if (saving) return
@@ -781,7 +784,7 @@ function HRContent() {
                 <Select
                   value={empForm.departmentId}
                   onChange={setEF('departmentId')}
-                  options={DEPARTMENTS}
+                  options={[{ value: '', label: 'Select department…' }, ...DEPARTMENTS]}
                 />
               </Field>
               <Field label="Job Title">
@@ -789,7 +792,7 @@ function HRContent() {
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Start Date">
+              <Field label="Start Date" required>
                 <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
               </Field>
               <Field label="Status">

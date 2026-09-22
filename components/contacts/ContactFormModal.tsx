@@ -23,7 +23,7 @@ export const CONTACT_INDUSTRIES = [
   'Government', 'NGO / Non-profit', 'Media & Entertainment', 'Other',
 ] as const
 
-/** Standard payment-terms presets (days). Default remains 30; 0 = cash / due immediately. */
+/** Standard payment-terms presets (days); 0 = cash / due immediately. New contacts start with none selected. */
 export const PAYMENT_TERMS_DAY_OPTIONS = [
   { value: '0', label: 'Cash / due immediately (0 days)' },
   { value: '7', label: '7 days' },
@@ -40,9 +40,10 @@ export function blankCompanyContact(overrides: Partial<ContactFormValues> = {}):
   return {
     type: 'company', name: '', tradingName: '', registrationNumber: '', vatNumber: '',
     industry: '', email: '', phone: '', mobile: '', website: '',
-    address: '', postalAddress: '', city: '', country: 'Kenya',
+    address: '', postalAddress: '', city: '', country: '',
     isCustomer: true, isVendor: false, tags: [],
-    paymentTermsDays: DEFAULT_CONTACT_PAYMENT_TERMS_DAYS, creditLimit: 0,
+    // Country, payment terms and credit limit start empty — the user must set them.
+    paymentTermsDays: undefined, creditLimit: undefined,
     bankName: '', bankAccount: '', bankBranch: '',
     notes: '',
     ...overrides,
@@ -53,10 +54,10 @@ export function blankIndividualContact(overrides: Partial<ContactFormValues> = {
   return {
     type: 'individual', name: '', jobTitle: '', idNumber: '', vatNumber: '',
     email: '', phone: '', mobile: '',
-    address: '', city: '', country: 'Kenya',
+    address: '', city: '', country: '',
     companyId: undefined,
     isCustomer: true, isVendor: false, tags: [],
-    paymentTermsDays: DEFAULT_CONTACT_PAYMENT_TERMS_DAYS,
+    paymentTermsDays: undefined,
     notes: '',
     ...overrides,
   }
@@ -90,7 +91,9 @@ export default function ContactFormModal({
   const { contacts, addContact, updateContact, showToast } = useCrmStore()
   const [form, setForm] = useState<ContactFormValues>(() => ({
     ...initial,
-    paymentTermsDays: initial.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS,
+    // Editing keeps the record's value (legacy rows fall back to the house default);
+    // a new contact starts with no payment terms selected.
+    paymentTermsDays: editId ? initial.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS : initial.paymentTermsDays,
     ...(forceCustomer ? { isCustomer: true } : {}),
     ...(forceVendor ? { isVendor: true } : {}),
   }))
@@ -139,7 +142,12 @@ export default function ContactFormModal({
       return rows.filter((_, i) => i !== index)
     })
   }
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name', string>>>({})
+  type ErrorField = 'name' | 'country' | 'paymentTermsDays' | 'creditLimit'
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<ErrorField, string>>>({})
+  // Credit limit is edited as text so a new record can stay blank until the user types it.
+  const [creditLimitText, setCreditLimitText] = useState(() =>
+    initial.creditLimit == null ? (editId ? '0' : '') : String(initial.creditLimit),
+  )
   // React 18's DetailsHTMLAttributes has `open`/`onToggle` but not `defaultOpen`.
   const [moreDetailsOpen, setMoreDetailsOpen] = useState(() => Boolean(editId))
 
@@ -171,13 +179,13 @@ export default function ContactFormModal({
     }
   }, [form.type, activeDetailsTab])
 
-  const paymentTermsValue = String(form.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS)
+  const paymentTermsValue = form.paymentTermsDays == null ? '' : String(form.paymentTermsDays)
   const paymentTermsOptions = useMemo(() => {
-    const base: Array<{ value: string; label: string }> = PAYMENT_TERMS_DAY_OPTIONS.map(o => ({
-      value: o.value,
-      label: o.label,
-    }))
-    if (!base.some(o => o.value === paymentTermsValue)) {
+    const base: Array<{ value: string; label: string }> = [
+      { value: '', label: 'Select payment terms…' },
+      ...PAYMENT_TERMS_DAY_OPTIONS.map(o => ({ value: o.value, label: o.label })),
+    ]
+    if (paymentTermsValue && !base.some(o => o.value === paymentTermsValue)) {
       base.push({ value: paymentTermsValue, label: `${paymentTermsValue} days` })
     }
     return base
@@ -185,7 +193,9 @@ export default function ContactFormModal({
 
   const f = (k: keyof ContactFormValues) => (v: unknown) => {
     setForm(prev => ({ ...prev, [k]: v }))
-    if (k === 'name' && fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: undefined }))
+    if ((k === 'name' || k === 'country' || k === 'paymentTermsDays') && fieldErrors[k]) {
+      setFieldErrors(prev => ({ ...prev, [k]: undefined }))
+    }
   }
 
   const switchType = (type: 'company' | 'individual') => {
@@ -202,8 +212,8 @@ export default function ContactFormModal({
       isCustomer: forceCustomer ? true : form.isCustomer,
       isVendor: forceVendor ? true : form.isVendor,
       tags: form.tags,
-      paymentTermsDays: form.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS,
-      creditLimit: form.creditLimit ?? 0,
+      paymentTermsDays: form.paymentTermsDays,
+      creditLimit: form.creditLimit,
     }
     setForm(type === 'company'
       ? blankCompanyContact(shared)
@@ -211,10 +221,23 @@ export default function ContactFormModal({
   }
 
   const save = async () => {
-    if (!form.name.trim()) {
-      setFieldErrors({ name: form.type === 'company' ? 'Company name is required' : 'Full name is required' })
-      showToast('Please fix the highlighted fields', 'error')
-      requestAnimationFrame(() => focusFieldControl('contact-name'))
+    const errors: Partial<Record<ErrorField, string>> = {}
+    if (!form.name.trim()) errors.name = form.type === 'company' ? 'Company name is required' : 'Full name is required'
+    if (!(form.country ?? '').trim()) errors.country = 'Country is required'
+    if (form.paymentTermsDays == null || !Number.isFinite(form.paymentTermsDays)) errors.paymentTermsDays = 'Payment terms are required'
+    const creditLimitNum = creditLimitText.trim() === '' ? NaN : Number(creditLimitText)
+    if (form.type === 'company' && (!Number.isFinite(creditLimitNum) || creditLimitNum < 0)) {
+      errors.creditLimit = creditLimitText.trim() === '' ? 'Credit limit is required (enter 0 for none)' : 'Credit limit must be a number of 0 or more'
+    }
+    const errorKeys = Object.keys(errors) as ErrorField[]
+    if (errorKeys.length) {
+      setFieldErrors(errors)
+      const labels: Record<ErrorField, string> = { name: form.type === 'company' ? 'Company name' : 'Full name', country: 'Country', paymentTermsDays: 'Payment terms', creditLimit: 'Credit limit' }
+      showToast(`Please fill in: ${errorKeys.map(k => labels[k]).join(', ')}`, 'error')
+      const first = errorKeys[0]
+      if (first === 'country') setActiveDetailsTab('address')
+      else if (first === 'paymentTermsDays' || first === 'creditLimit') setActiveDetailsTab('other')
+      requestAnimationFrame(() => focusFieldControl(first === 'name' ? 'contact-name' : `contact-${first}`))
       return
     }
     setFieldErrors({})
@@ -223,6 +246,8 @@ export default function ContactFormModal({
       const payload: ContactFormValues = {
         ...form,
         name: form.name.trim(),
+        country: (form.country ?? '').trim(),
+        ...(form.type === 'company' ? { creditLimit: creditLimitNum } : {}),
         ...(forceCustomer ? { isCustomer: true } : {}),
         ...(forceVendor ? { isVendor: true } : {}),
       }
@@ -428,11 +453,11 @@ export default function ContactFormModal({
                     <Field label="Currency" hint="Defaults to your base currency">
                       <Input value="KES — Kenyan Shilling" onChange={() => {}} disabled />
                     </Field>
-                    <Field label="Credit limit (KES)" hint="Maximum approved account exposure">
-                      <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="0.00" />
+                    <Field label="Credit limit (KES)" required id="contact-creditLimit" error={fieldErrors.creditLimit} hint="Maximum approved account exposure (0 for none)">
+                      <Input type="number" value={creditLimitText} onChange={v => { setCreditLimitText(String(v)); if (fieldErrors.creditLimit) setFieldErrors(prev => ({ ...prev, creditLimit: undefined })) }} placeholder="0.00" />
                     </Field>
-                    <Field label="Payment terms" hint="Used to calculate invoice due dates">
-                      <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(Number(v))} options={paymentTermsOptions} />
+                    <Field label="Payment terms" required id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays} hint="Used to calculate invoice due dates">
+                      <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
                     </Field>
                   </>
                 ) : (
@@ -440,8 +465,8 @@ export default function ContactFormModal({
                     <Field label="National ID / Passport Number" hint="For identification where required">
                       <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="National ID or passport number" />
                     </Field>
-                    <Field label="Payment terms" hint="Used when this individual buys on account">
-                      <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(Number(v))} options={paymentTermsOptions} />
+                    <Field label="Payment terms" required id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays} hint="Used when this individual buys on account">
+                      <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
                     </Field>
                   </>
                 )}
@@ -458,7 +483,7 @@ export default function ContactFormModal({
                 <div className="contacts-form-wide"><Field label="Physical Address"><Input value={form.address} onChange={f('address')} placeholder="Street / Building, Area" /></Field></div>
                 {form.type === 'company' && <Field label="Postal Address"><Input value={form.postalAddress ?? ''} onChange={f('postalAddress')} placeholder="P.O. Box 00000-00100" /></Field>}
                 <Field label="City"><Input value={form.city ?? ''} onChange={f('city')} placeholder="e.g. Nairobi" /></Field>
-                <Field label="Country"><Input value={form.country ?? ''} onChange={f('country')} placeholder="e.g. Kenya" /></Field>
+                <Field label="Country" required id="contact-country" error={fieldErrors.country}><Input value={form.country ?? ''} onChange={f('country')} placeholder="e.g. Kenya" /></Field>
               </div>
             )}
 

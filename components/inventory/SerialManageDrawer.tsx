@@ -67,10 +67,8 @@ export default function SerialManageDrawer({
   const [busy, setBusy] = useState(false)
   const [showIntake, setShowIntake] = useState(false)
   const [intakeRaw, setIntakeRaw] = useState('')
-  const [intakeLocation, setIntakeLocation] = useState<OnHandLocation>('warehouse')
-  const [intakeReason, setIntakeReason] = useState(
-    openingStockPosted ? 'Physical count / found stock' : 'Opening balance — not previously posted',
-  )
+  const [intakeLocation, setIntakeLocation] = useState<OnHandLocation | ''>('')
+  const [intakeReason, setIntakeReason] = useState('')
   const parsedIntake = useMemo(() => parseSerialList(intakeRaw), [intakeRaw])
 
   const scoped = useMemo(() => {
@@ -196,6 +194,10 @@ export default function SerialManageDrawer({
       showToast('Paste or type at least one serial number', 'error')
       return
     }
+    if (!intakeLocation) {
+      showToast('Select a location for this intake', 'error')
+      return
+    }
     if (!intakeReason.trim()) {
       showToast('Enter a reason for this intake', 'error')
       return
@@ -211,6 +213,8 @@ export default function SerialManageDrawer({
       if (result) {
         setShowIntake(false)
         setIntakeRaw('')
+        setIntakeLocation('')
+        setIntakeReason('')
         setStatusFilter('available')
       }
     } finally {
@@ -529,8 +533,8 @@ export default function SerialManageDrawer({
             <Field label="Location" required>
               <Select
                 value={intakeLocation}
-                onChange={v => setIntakeLocation(v as OnHandLocation)}
-                options={ON_HAND_LOCATIONS.map(loc => ({ value: loc, label: LOCATIONS[loc]?.name || loc }))}
+                onChange={v => setIntakeLocation(v as OnHandLocation | '')}
+                options={[{ value: '', label: 'Select…' }, ...ON_HAND_LOCATIONS.map(loc => ({ value: loc, label: LOCATIONS[loc]?.name || loc }))]}
               />
             </Field>
             <Field label="Serial numbers (one per line, or comma-separated)" required>
@@ -548,7 +552,7 @@ export default function SerialManageDrawer({
               <Input
                 value={intakeReason}
                 onChange={v => setIntakeReason(v)}
-                placeholder="Opening balance / physical count / found stock"
+                placeholder={openingStockPosted ? 'e.g. Physical count / found stock' : 'e.g. Opening balance — not previously posted'}
               />
             </Field>
             <div className="flex justify-end gap-2 pt-2">
@@ -556,7 +560,7 @@ export default function SerialManageDrawer({
               <button
                 className="btn-primary text-[11px]"
                 onClick={() => { void submitIntake() }}
-                disabled={busy || parsedIntake.length === 0 || !intakeReason.trim()}
+                disabled={busy}
               >
                 {busy ? 'Adding…' : `Add ${parsedIntake.length || ''} unit${parsedIntake.length === 1 ? '' : 's'}`}
               </button>

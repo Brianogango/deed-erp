@@ -183,11 +183,12 @@ function ExpensesContent() {
   const reviewPage = Math.max(1, Number.parseInt(reviewPageValue, 10) || 1)
   const setReviewPage = (page: number) => setReviewPageValue(String(Math.max(1, page)))
 
-  const [reviewStatusValue, setReviewStatusValue] = useUrlUiState('status', 'submitted')
+  // Review status filter starts at "all" (no preselected status).
+  const [reviewStatusValue, setReviewStatusValue] = useUrlUiState('status', 'all')
   const reviewStatus: Expense['status'] | 'all' =
     ['all', 'submitted', 'approved', 'rejected', 'paid', 'reimbursed'].includes(reviewStatusValue)
       ? reviewStatusValue as Expense['status'] | 'all'
-      : 'submitted'
+      : 'all'
   const setReviewStatus = (value: Expense['status'] | 'all') =>
     setReviewStatusValue(value, { queryPatch: { reviewPage: null } })
 
@@ -207,12 +208,13 @@ function ExpensesContent() {
 
   // ── Submit modal ──
   const [showSubmit, setShowSubmit] = useState(false)
+  // New expense: category, date and payment route start empty (required on submit).
   const [form, setForm] = useState({
-    category:      'other' as ExpenseCategory,
+    category:      '' as ExpenseCategory | '',
     description:   '',
     amount:        '',
-    expenseDate:   new Date().toISOString().slice(0, 10),
-    paymentMethod: 'reimbursement' as ExpensePaymentMethod,
+    expenseDate:   '',
+    paymentMethod: '' as ExpensePaymentMethod | '',
     notes:         '',
   })
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -221,7 +223,7 @@ function ExpensesContent() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   function openSubmit() {
-    setForm({ category: 'other', description: '', amount: '', expenseDate: new Date().toISOString().slice(0, 10), paymentMethod: 'reimbursement', notes: '' })
+    setForm({ category: '', description: '', amount: '', expenseDate: '', paymentMethod: '', notes: '' })
     setReceiptFile(null)
     setIsScanning(false)
     setShowSubmit(true)
@@ -268,8 +270,9 @@ function ExpensesContent() {
       setForm(prev => ({
         ...prev,
         amount:      prev.amount      || (data.amount ? String(data.amount) : prev.amount),
-        expenseDate: prev.expenseDate !== new Date().toISOString().slice(0, 10) ? prev.expenseDate : (data.date || prev.expenseDate),
-        category:    prev.category === 'other' ? ((data.category as ExpenseCategory) ?? prev.category) : prev.category,
+        // OCR only fills fields the user has not set yet.
+        expenseDate: prev.expenseDate || data.date || prev.expenseDate,
+        category:    prev.category || ((data.category as ExpenseCategory) ?? prev.category),
         description: prev.description || data.description || prev.description,
       }))
       const confidence = typeof data.confidence === 'number' ? ` (${data.confidence}% confidence)` : ''
@@ -282,17 +285,27 @@ function ExpensesContent() {
   }
 
   function handleSubmit() {
-    if (!form.description.trim())    { showToast('Enter a description', 'error'); return }
     const amt = Number(form.amount)
-    if (!amt || amt <= 0)            { showToast('Enter a valid amount', 'error'); return }
+    const missing: string[] = []
+    if (!form.category) missing.push('Category')
+    if (!form.expenseDate) missing.push('Expense Date')
+    if (!form.description.trim()) missing.push('Description')
+    if (!form.amount.trim() || !Number.isFinite(amt) || amt <= 0) missing.push('Amount (greater than 0)')
+    if (!form.paymentMethod) missing.push('Payment route / funding source')
+    if (missing.length || !form.category || !form.paymentMethod) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
+      return
+    }
+    const category = form.category
+    const paymentMethod = form.paymentMethod
 
     const save = (dataUrl?: string, meta?: { name: string; size: number; type: string }) => {
       submitExpense({
-        category:        form.category,
+        category,
         description:     form.description.trim(),
         amount:          amt,
         expenseDate:     form.expenseDate,
-        paymentMethod:   form.paymentMethod,
+        paymentMethod,
         notes:           form.notes.trim() || undefined,
         receiptDataUrl:  dataUrl,
         receiptFileName: meta?.name,
@@ -325,9 +338,9 @@ function ExpensesContent() {
   const [reimbursingId, setReimbursingId] = useState<string | null>(null)
   const [reimburseNote, setReimburseNote] = useState('')
   const [reimburseBankAccountId, setReimburseBankAccountId] = useState('')
-  const [reimburseMethod, setReimburseMethod] = useState('bank')
+  const [reimburseMethod, setReimburseMethod] = useState('')
   const [reimburseReference, setReimburseReference] = useState('')
-  const [reimburseDate, setReimburseDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [reimburseDate, setReimburseDate] = useState('')
 
   // ── Receipt preview ──
   const [previewExp, setPreviewExp] = useState<Expense | null>(null)
@@ -476,10 +489,10 @@ function ExpensesContent() {
             onReimburse={e => {
               setReimbursingId(e.id)
               setReimburseNote('')
-              setReimburseMethod('bank')
+              setReimburseMethod('')
               setReimburseBankAccountId('')
               setReimburseReference('')
-              setReimburseDate(new Date().toISOString().slice(0, 10))
+              setReimburseDate('')
             }}
             onView={e => setReviewingId(e.id)}
               />
@@ -510,10 +523,10 @@ function ExpensesContent() {
                       onClick={() => {
                         setReimbursingId(exp.id)
                         setReimburseNote('')
-                        setReimburseMethod('bank')
+                        setReimburseMethod('')
                         setReimburseBankAccountId('')
                         setReimburseReference('')
-                        setReimburseDate(new Date().toISOString().slice(0, 10))
+                        setReimburseDate('')
                       }}
                     >
                       <span><strong>{exp.submittedByName}</strong><small>{exp.ref}</small></span>
@@ -549,6 +562,7 @@ function ExpensesContent() {
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Category *</label>
                   <select aria-label="Expense category" className="form-input w-full text-[12px]" value={form.category}
                     onChange={e => setForm(f => ({ ...f, category: e.target.value as ExpenseCategory }))}>
+                    <option value="" disabled>Select category…</option>
                     {EXPENSE_CATEGORIES.map(c => (
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
@@ -803,15 +817,16 @@ function ExpensesContent() {
 
               <div className="expenses-reimburse-form space-y-3 mb-4">
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account *</label>
                   <select aria-label="Expense payment account" className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
                     <option value="">— Select Bank Account —</option>
                     {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method *</label>
                   <select aria-label="Expense payment method" className="form-input w-full text-[12px]" value={reimburseMethod} onChange={e => setReimburseMethod(e.target.value)}>
+                    <option value="" disabled>Select payment method…</option>
                     <option value="bank">Bank Transfer</option>
                     <option value="mpesa">M-Pesa</option>
                     <option value="cash">Cash</option>
@@ -819,7 +834,7 @@ function ExpensesContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Date</label>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Date *</label>
                   <input
                     type="date"
                     aria-label="Expense payment date"
@@ -843,8 +858,15 @@ function ExpensesContent() {
               <div className="expenses-modal-actions flex gap-2 justify-end">
                 <button onClick={() => { setReimbursingId(null); setReimburseReference(''); setReimburseBankAccountId('') }} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
                 <button
-                  disabled={!reimburseBankAccountId || !reimburseDate}
                   onClick={() => {
+                  const missing: string[] = []
+                  if (!reimburseBankAccountId) missing.push('Bank Account')
+                  if (!reimburseMethod) missing.push('Payment Method')
+                  if (!reimburseDate) missing.push('Payment Date')
+                  if (missing.length) {
+                    showToast(`Required: ${missing.join(', ')}`, 'error')
+                    return
+                  }
                   const reference = reimburseReference.trim() || undefined
                   const bankAccountId = reimburseBankAccountId || undefined
                   const note = reimburseNote.trim() || undefined
@@ -857,7 +879,8 @@ function ExpensesContent() {
                   setReimburseReference('')
                   setReimburseBankAccountId('')
                   setReimburseNote('')
-                  setReimburseDate(new Date().toISOString().slice(0, 10))
+                  setReimburseMethod('')
+                  setReimburseDate('')
                 }}
                   className="btn-primary text-[11px] py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: 'var(--accent-cyan)' }}>
                   {isReimbursable(exp.paymentMethod) ? 'Confirm Reimbursement' : 'Confirm Payment'}

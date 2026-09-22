@@ -40,7 +40,7 @@ type UserFormState = {
   modules: string[]; active: boolean; actsAsTechnician: boolean; password: string
 }
 const blankUser: UserFormState = {
-  id: '', employeeId: '', username: '', name: '', role: 'sales_rep', modules: ['dashboard'], active: true, actsAsTechnician: false, password: '',
+  id: '', employeeId: '', username: '', name: '', role: '', modules: ['dashboard'], active: true, actsAsTechnician: false, password: '',
 }
 
 const SettingLabelContext = createContext('setting')
@@ -164,7 +164,7 @@ export default function Settings() {
     setSectionValue(next, opts)
   }, [setSectionValue])
 
-  const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: '' })
+  const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: '', openingBalance: '', openingDate: '' })
   const [editingBankId, setEditingBankId] = useState<string | null>(null)
   const [showBankModal, setShowBankModal] = useState(false)
 
@@ -255,7 +255,7 @@ export default function Settings() {
       showToast('Only Finance or the Director can manage bank accounts.', 'error')
       return
     }
-    setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: '' })
+    setBankForm({ name: '', bankName: '', accountNo: '', currency: '', openingBalance: '', openingDate: '' })
     setEditingBankId(null); setShowBankModal(true)
   }
   const openEditBank = (id: string) => {
@@ -274,8 +274,19 @@ export default function Settings() {
       return
     }
     const openingBalance = Number(bankForm.openingBalance)
-    if (!bankForm.name.trim() || !bankForm.bankName.trim() || !bankForm.accountNo.trim() || !bankForm.openingDate || !Number.isFinite(openingBalance)) {
-      showToast('Complete the account name, bank, account number, opening balance, and opening date.', 'error')
+    const missing: string[] = []
+    if (!bankForm.name.trim()) missing.push('Account Name')
+    if (!bankForm.bankName.trim()) missing.push('Bank Name')
+    if (!bankForm.accountNo.trim()) missing.push('Account Number')
+    if (!editingBankId && !bankForm.currency) missing.push('Currency')
+    if (!bankForm.openingDate) missing.push('Opening Date')
+    if (!bankForm.openingBalance.trim()) missing.push('Opening Balance')
+    if (missing.length) {
+      showToast(`Please fill in: ${missing.join(', ')}`, 'error')
+      return
+    }
+    if (!Number.isFinite(openingBalance)) {
+      showToast('Opening balance must be a number', 'error')
       return
     }
     const data = {
@@ -331,6 +342,10 @@ export default function Settings() {
   const saveUser = async () => {
     if (!canManageSystemUsers) {
       showToast('Only the Director can create, edit, or update system users.', 'error')
+      return
+    }
+    if (!userForm.role) {
+      showToast('Please fill in: Role', 'error')
       return
     }
     try {
@@ -1358,21 +1373,22 @@ export default function Settings() {
       {/* ── Bank Modal ── */}
       {showBankModal && (
         <Modal title={editingBankId ? 'Edit Bank Account' : 'Add Bank Account'} onClose={() => setShowBankModal(false)} width={480}>
-          <Field label="Account Name"><Input value={bankForm.name} onChange={v => setBankForm(p => ({ ...p, name: v }))} placeholder="e.g. NCBA Current Account" /></Field>
-          <Field label="Bank Name"><Input value={bankForm.bankName} onChange={v => setBankForm(p => ({ ...p, bankName: v }))} placeholder="e.g. NCBA Bank Kenya PLC" /></Field>
-          <Field label="Account Number"><Input value={bankForm.accountNo} onChange={v => setBankForm(p => ({ ...p, accountNo: v }))} /></Field>
+          <Field label="Account Name" required><Input value={bankForm.name} onChange={v => setBankForm(p => ({ ...p, name: v }))} placeholder="e.g. NCBA Current Account" /></Field>
+          <Field label="Bank Name" required><Input value={bankForm.bankName} onChange={v => setBankForm(p => ({ ...p, bankName: v }))} placeholder="e.g. NCBA Bank Kenya PLC" /></Field>
+          <Field label="Account Number" required><Input value={bankForm.accountNo} onChange={v => setBankForm(p => ({ ...p, accountNo: v }))} /></Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Currency">
+            <Field label="Currency" required>
               <Select value={bankForm.currency} onChange={v => setBankForm(p => ({ ...p, currency: v }))} options={[
+                { value: '', label: 'Select currency…' },
                 { value: 'KES', label: 'KES' }, { value: 'USD', label: 'USD' }, { value: 'EUR', label: 'EUR' },
               ]} />
             </Field>
-            <Field label="Opening Date"><Input type="date" value={bankForm.openingDate} onChange={v => setBankForm(p => ({ ...p, openingDate: v }))} /></Field>
+            <Field label="Opening Date" required><Input type="date" value={bankForm.openingDate} onChange={v => setBankForm(p => ({ ...p, openingDate: v }))} /></Field>
           </div>
-          <Field label="Opening Balance (KES)"><Input type="number" value={bankForm.openingBalance} onChange={v => setBankForm(p => ({ ...p, openingBalance: v }))} /></Field>
+          <Field label="Opening Balance (KES)" required hint="Enter 0 if the account opens empty."><Input type="number" value={bankForm.openingBalance} onChange={v => setBankForm(p => ({ ...p, openingBalance: v }))} /></Field>
           <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowBankModal(false)}>Cancel</button>
-            <button className="btn-primary" disabled={!bankForm.name || !bankForm.accountNo} onClick={saveBank}>
+            <button className="btn-primary" onClick={saveBank}>
               {editingBankId ? 'Save Changes' : 'Add Account'}
             </button>
           </div>
@@ -1396,7 +1412,7 @@ export default function Settings() {
               </>
             )}
             <Field label="Role" required>
-              <Select value={userForm.role} onChange={v => setUserForm(p => ({ ...p, role: v }))} options={roleOptions} />
+              <Select value={userForm.role} onChange={v => setUserForm(p => ({ ...p, role: v }))} options={userForm.id ? roleOptions : [{ value: '', label: 'Select role…' }, ...roleOptions]} />
             </Field>
             {userForm.id && (
               <Field label="Status">

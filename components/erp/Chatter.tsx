@@ -46,7 +46,8 @@ export default function Chatter({
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [activitySummary, setActivitySummary] = useState('')
-  const [activityType, setActivityType] = useState<'call' | 'meeting' | 'email' | 'todo'>('todo')
+  const [activityType, setActivityType] = useState<'call' | 'meeting' | 'email' | 'todo' | ''>('')
+  const [activityError, setActivityError] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const fetchChatter = useCallback(async () => {
@@ -99,7 +100,12 @@ export default function Chatter({
   }
 
   const handleAddActivity = async () => {
-    if (!activitySummary.trim() || sending) return
+    if (sending) return
+    const missing: string[] = []
+    if (!activityType) missing.push('Activity type')
+    if (!activitySummary.trim()) missing.push('Activity summary')
+    if (missing.length) { setActivityError(`Please fill in: ${missing.join(', ')}`); return }
+    setActivityError('')
     setSending(true)
     try {
       const res = await fetch('/api/chatter', {
@@ -115,7 +121,10 @@ export default function Chatter({
       })
       if (res.ok) {
         setActivitySummary('')
+        setActivityType('')
         await fetchChatter()
+      } else {
+        setActivityError('Could not save the activity. Please try again.')
       }
     } finally {
       setSending(false)
@@ -194,8 +203,9 @@ export default function Chatter({
             aria-label="Activity type"
             className="form-input text-[10px] w-24 shrink-0"
             value={activityType}
-            onChange={e => setActivityType(e.target.value as typeof activityType)}
+            onChange={e => { setActivityType(e.target.value as typeof activityType); setActivityError('') }}
           >
+            <option value="">Type…</option>
             <option value="todo">To-do</option>
             <option value="call">Call</option>
             <option value="meeting">Meeting</option>
@@ -207,18 +217,21 @@ export default function Chatter({
             className="form-input text-xs flex-1"
             placeholder="Log a follow-up activity…"
             value={activitySummary}
-            onChange={e => setActivitySummary(e.target.value)}
+            onChange={e => { setActivitySummary(e.target.value); setActivityError('') }}
             onKeyDown={e => e.key === 'Enter' && handleAddActivity()}
           />
           <button
             type="button"
             onClick={handleAddActivity}
-            disabled={!activitySummary.trim() || sending}
+            disabled={sending}
             className="px-3 py-2 rounded-xl bg-violet-100 text-violet-700 text-[10px] font-bold uppercase disabled:opacity-40"
           >
             Activity
           </button>
         </div>
+        {activityError && (
+          <p role="alert" className="text-[10px] text-[var(--danger-text)]">{activityError}</p>
+        )}
         <div className="flex items-center gap-2">
           <input
             type="text"

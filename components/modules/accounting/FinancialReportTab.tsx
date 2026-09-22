@@ -67,7 +67,7 @@ function presetRange(preset: Preset, customFrom: string, customTo: string): { da
     case 'this_week': return { dateFrom: weekStartIso(), dateTo: today }
     case 'this_month': return { dateFrom: `${today.slice(0, 7)}-01`, dateTo: today }
     case 'this_year': return { dateFrom: `${today.slice(0, 4)}-01-01`, dateTo: today }
-    case 'custom': return { dateFrom: customFrom || today, dateTo: customTo || today }
+    case 'custom': return { dateFrom: customFrom, dateTo: customTo }
   }
 }
 
@@ -81,19 +81,30 @@ const PRESETS: Array<{ id: Preset; label: string }> = [
 
 export default function FinancialReportTab() {
   const router = useRouter()
-  const [presetValue, setPresetValue] = useUrlUiState('reportPeriod', 'this_month')
-  const preset: Preset = PRESETS.some(option => option.id === presetValue) ? presetValue as Preset : 'this_month'
+  // No period is preselected — the user picks a preset or a custom range.
+  const [presetValue, setPresetValue] = useUrlUiState('reportPeriod', '')
+  const preset: Preset | '' = PRESETS.some(option => option.id === presetValue) ? presetValue as Preset : ''
   const setPreset = (next: Preset) => setPresetValue(next)
   const [customFrom, setCustomFrom] = useUrlUiState('reportFrom', '')
   const [customTo, setCustomTo] = useUrlUiState('reportTo', '')
   const [report, setReport] = useState<Report | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
-  const range = useMemo(() => presetRange(preset, customFrom, customTo), [preset, customFrom, customTo])
+  const range = useMemo(
+    () => (preset ? presetRange(preset, customFrom, customTo) : { dateFrom: '', dateTo: '' }),
+    [preset, customFrom, customTo],
+  )
+  const periodSelected = !!range.dateFrom && !!range.dateTo
 
   const load = useCallback(async () => {
+    if (!range.dateFrom || !range.dateTo) {
+      setReport(null)
+      setError(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -217,6 +228,14 @@ export default function FinancialReportTab() {
         </div>
       </div>
 
+      {!periodSelected && (
+        <div className="card p-8 text-center">
+          <p className="text-sm font-semibold text-[var(--text-2)]">Select a period to view this report</p>
+          <p className="text-xs text-[var(--text-4)] mt-1">
+            {preset === 'custom' ? 'Pick both a From and To date.' : 'Choose Today, This week, This month, This year or a Custom range above.'}
+          </p>
+        </div>
+      )}
       {loading && <div className="card p-8 text-center text-xs text-[var(--text-4)]">Building the report from posted journals…</div>}
       {error && (
         <div className="card p-4 flex items-center justify-between gap-3">

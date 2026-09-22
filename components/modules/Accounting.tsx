@@ -63,6 +63,7 @@ import {
   RecordCard,
   TabBar,
   StatePanel,
+  EmptyState,
 } from '@/components/ui'
 import { PrimaryActionButton, WorkflowStageBar } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -242,7 +243,7 @@ const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
   year: 'numeric',
 })
 type ManualInvoiceLine = { type: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount: string }
-const newManualInvoiceLine = (): ManualInvoiceLine => ({ type: 'item', desc: '', qty: '1', price: '', tax: '0', discount: '0' })
+const newManualInvoiceLine = (): ManualInvoiceLine => ({ type: 'item', desc: '', qty: '', price: '', tax: '', discount: '' })
 const newManualSectionLine = (): ManualInvoiceLine => ({ type: 'section', desc: '', qty: '0', price: '0', tax: '0', discount: '0' })
 // Odoo-style invoice badge: the document state (Draft/Posted/Cancelled) with
 // the computed payment status shown for posted documents; Overdue is a
@@ -481,21 +482,27 @@ function AccountingContent() {
   const [plSource, setPlSource] = useState<'blob' | 'prisma'>('prisma')
   const [bsSource, setBsSource] = useState<'blob' | 'prisma'>('prisma')
   const [vatSource, setVatSource] = useState<'blob' | 'prisma'>('prisma')
+  // P&L period filter starts empty — the user picks the period explicitly.
+  const [pnlDateFrom, setPnlDateFrom] = useState('')
+  const [pnlDateTo, setPnlDateTo] = useState('')
+  const pnlPeriodSelected = !!pnlDateFrom && !!pnlDateTo
+  // The CoA "current year net profit" line is not a user filter — it keeps
+  // using the fiscal-year window. Only the P&L report uses the user's period.
   const fiscalYearStart = `${new Date().getFullYear()}-01-01`
-  const [pnlDateFrom, setPnlDateFrom] = useState(fiscalYearStart)
-  const [pnlDateTo, setPnlDateTo] = useState(today())
+  const plReportActive = plSource === 'prisma' && reportTab === 'pl' && tab !== 'coa'
+  const plReportFetch = plReportActive && pnlPeriodSelected
   const prismaReportsEnabled = (tbSource === 'prisma' && reportTab === 'trial_balance')
-    || (plSource === 'prisma' && reportTab === 'pl')
+    || plReportFetch
     || (bsSource === 'prisma' && reportTab === 'bs')
     || (vatSource === 'prisma' && reportTab === 'vat')
     || tab === 'coa'
   const prismaReports = usePrismaAccountingReports(prismaReportsEnabled, {
     trialBalance: tbSource === 'prisma' && reportTab === 'trial_balance',
-    profitLoss: (plSource === 'prisma' && reportTab === 'pl') || tab === 'coa',
+    profitLoss: plReportFetch || tab === 'coa',
     balanceSheet: bsSource === 'prisma' && reportTab === 'bs',
     vatControl: vatSource === 'prisma' && reportTab === 'vat',
-    plDateFrom: ((plSource === 'prisma' && reportTab === 'pl') || tab === 'coa') ? pnlDateFrom : null,
-    plDateTo: ((plSource === 'prisma' && reportTab === 'pl') || tab === 'coa') ? pnlDateTo : null,
+    plDateFrom: tab === 'coa' ? fiscalYearStart : plReportFetch ? pnlDateFrom : null,
+    plDateTo: tab === 'coa' ? today() : plReportFetch ? pnlDateTo : null,
     plView: 'management',
   })
 
@@ -569,16 +576,16 @@ function AccountingContent() {
   const [showBulkPayModal, setShowBulkPayModal] = useState(false)
   const [bulkDownloading, setBulkDownloading] = useState(false)
   const [payAmount, setPayAmount] = useState('')
-  const [payMethod, setPayMethod] = useState('mpesa')
+  const [payMethod, setPayMethod] = useState('')
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payReference, setPayReference] = useState('')
-  const [payDate, setPayDate] = useState(today())
+  const [payDate, setPayDate] = useState('')
   const [showNewForm, setShowNewForm] = useState(false)
   const [editingInvId, setEditingInvId] = useState<string | null>(null)
   const [newPartnerId, setNewPartnerId] = useState('')
   const [newPartnerName, setNewPartnerName] = useState('')
-  const [newDocumentDate, setNewDocumentDate] = useState(today())
-  const [newDueDate, setNewDueDate] = useState(today())
+  const [newDocumentDate, setNewDocumentDate] = useState('')
+  const [newDueDate, setNewDueDate] = useState('')
   const [newLines, setNewLines] = useState<ManualInvoiceLine[]>([newManualInvoiceLine()])
   const moveNewLine = (index: number, direction: -1 | 1) => {
     setNewLines(prev => {
@@ -622,14 +629,15 @@ function AccountingContent() {
   const setCoaTypeFilter = (next: 'all' | Account['type']) => setCoaTypeFilterValue(next)
   const [showAccountForm, setShowAccountForm] = useState(false)
   const [editAccountId, setEditAccountId] = useState<string | null>(null)
-  const [accountForm, setAccountForm] = useState<Omit<Account, 'id'>>({
+  // New-account form: type/group/balance start blank and are required on save.
+  const [accountForm, setAccountForm] = useState<Omit<Account, 'id' | 'type' | 'balance'> & { type: Account['type'] | ''; balance: number | '' }>({
     code: '',
     name: '',
-    type: 'asset',
+    type: '',
     group: '',
     subGroup: '',
     isActive: true,
-    balance: 0,
+    balance: '',
     notes: '',
   })
 
@@ -642,7 +650,7 @@ function AccountingContent() {
   const [plPartner, setPlPartner] = useUrlUiState('partner', '')
   const [plDateFrom, setPlDateFrom] = useUrlUiState('partnerFrom', '')
   const [plDateTo, setPlDateTo] = useUrlUiState('partnerTo', '')
-  const [monthlyReportMonth, setMonthlyReportMonth] = useUrlUiState('monthlyPeriod', today().slice(0, 7))
+  const [monthlyReportMonth, setMonthlyReportMonth] = useUrlUiState('monthlyPeriod', '')
   const [monthlyReportView, setMonthlyReportView] = useUrlUiState('monthlyView', 'overview')
   const activeMonthlyReportView = ['overview', 'sales', 'costs'].includes(monthlyReportView) ? monthlyReportView : 'overview'
 
@@ -702,6 +710,10 @@ function AccountingContent() {
       const normalizedQty = Number.isFinite(qty) && qty > 0 ? qty : 0
       const normalizedPrice = Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : -1
       const taxRate = applyVat ? invoiceVatRate : (Number(line.tax) || 0)
+      const taxMissing = !applyVat && String(line.tax ?? '').trim() === ''
+      const discountRaw = String(line.discount ?? '').trim()
+      const discountNum = Number(discountRaw)
+      const discountInvalid = discountRaw === '' || !Number.isFinite(discountNum) || discountNum < 0 || discountNum > 100
       const discountPct = Math.min(100, Math.max(0, Number(line.discount) || 0))
       const gross = normalizedQty > 0 && normalizedPrice >= 0 ? normalizedQty * normalizedPrice : 0
       const discountAmount = Math.round(gross * discountPct) / 100
@@ -719,7 +731,9 @@ function AccountingContent() {
         subtotal,
         taxAmount,
         total: subtotal + taxAmount,
-        valid: !!line.desc.trim() && normalizedQty > 0 && normalizedPrice > 0,
+        taxMissing,
+        discountInvalid,
+        valid: !!line.desc.trim() && normalizedQty > 0 && normalizedPrice > 0 && !taxMissing && !discountInvalid,
       }
     })
     const grossTotal = lines.reduce((sum, line) => sum + (line.subtotal + (line.discountAmount ?? 0)), 0)
@@ -740,7 +754,7 @@ function AccountingContent() {
       blockedReason: !newPartnerId
         ? `Select a ${tab === 'bills' ? 'vendor' : 'customer'} before saving.`
         : invalidLineIndexes.length > 0
-          ? 'Every item line needs a description, quantity greater than zero, and price greater than zero.'
+          ? 'Every item line needs a description, quantity greater than zero, price greater than zero, a tax rate, and a discount % (0–100; enter 0 for none).'
           : itemLines.length === 0
             ? 'Add at least one billable line item.'
             : '',
@@ -1028,17 +1042,7 @@ function AccountingContent() {
     }
   }, [monthlyReportMonth, products, customerInvoices, posOrders, expenses, vendorBills])
 
-  // Auto-select bank account when payment method changes
-  useEffect(() => {
-    if (payMethod === 'mpesa') {
-      setPayBankAccountId('mpesa')
-    } else if (payMethod === 'cash') {
-      setPayBankAccountId('cash')
-    } else {
-      const def = bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa')
-      if (def) setPayBankAccountId(def.id)
-    }
-  }, [payMethod, bankAccounts])
+  // No auto-selection of the bank / account: the user picks it explicitly.
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const resetInvForm = (opts?: { navigateToInvoiceId?: string | null }) => {
@@ -1046,8 +1050,8 @@ function AccountingContent() {
     setEditingInvId(null)
     setNewPartnerId('')
     setNewPartnerName('')
-    setNewDocumentDate(today())
-    setNewDueDate(today())
+    setNewDocumentDate('')
+    setNewDueDate('')
     setNewLines([newManualInvoiceLine()])
     setNewNotes('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -1080,8 +1084,8 @@ function AccountingContent() {
     setEditingInvId(inv.id)
     setNewPartnerId(inv.partnerId)
     setNewPartnerName(inv.partnerName)
-    setNewDocumentDate(inv.date || today())
-    setNewDueDate(inv.dueDate || today())
+    setNewDocumentDate(inv.date || '')
+    setNewDueDate(inv.dueDate || '')
     setNewLines((inv.lines || []).map(l => ({
       type: l.lineType === 'section' ? 'section' : 'item',
       desc: l.description,
@@ -1318,6 +1322,13 @@ function AccountingContent() {
       showToast(invoicePreview.blockedReason || 'Please complete the document before saving', 'error')
       return
     }
+    const missingDates: string[] = []
+    if (!newDocumentDate) missingDates.push('Document Date')
+    if (!newDueDate) missingDates.push('Due Date')
+    if (missingDates.length) {
+      showToast(`Required: ${missingDates.join(', ')}`, 'error')
+      return
+    }
     const type = tab === 'invoices' ? 'customer_invoice' : 'vendor_bill'
     const vatRate = applyVat ? invoiceVatRate : 0
     let savedId: string | null = null
@@ -1366,15 +1377,22 @@ function AccountingContent() {
   }
 
   const saveAccount = () => {
-    if (!accountForm.code || !accountForm.name) {
-      showToast('Code and Name are required', 'error')
+    const missing: string[] = []
+    if (!accountForm.code) missing.push('Code')
+    if (!accountForm.name) missing.push('Name')
+    if (!accountForm.type) missing.push('Type')
+    if (!accountForm.group) missing.push('Group')
+    if (accountForm.balance === '' || !Number.isFinite(Number(accountForm.balance))) missing.push('Opening balance')
+    if (missing.length || !accountForm.type) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
       return
     }
+    const payload: Omit<Account, 'id'> = { ...accountForm, type: accountForm.type, balance: Number(accountForm.balance) }
     if (editAccountId) {
-      updateAccount(editAccountId, accountForm)
+      updateAccount(editAccountId, payload)
       showToast('Account updated', 'success')
     } else {
-      addAccount({ ...accountForm })
+      addAccount({ ...payload })
       showToast('Account created', 'success')
     }
     setShowAccountForm(false)
@@ -1440,27 +1458,16 @@ function AccountingContent() {
               <PrimaryActionButton
                 icon={<Fa icon={faPlus} />}
                 onClick={() => {
-                  const type = coaTypeFilter === 'all' ? 'asset' : coaTypeFilter
-                  const prefix =
-                    type === 'asset' ? '2'
-                    : type === 'liability' ? '3'
-                    : type === 'equity' ? '4'
-                    : type === 'revenue' ? '5'
-                    : '6'
-                  const nums = accounts
-                    .map(a => a.code)
-                    .filter(c => c.startsWith(prefix) && /^\d+$/.test(c))
-                    .map(c => Number(c))
-                    .filter(n => Number.isFinite(n))
-                  const code = String(nums.length ? Math.max(...nums) + 1 : Number(`${prefix}001`))
+                  // Type, group, code and opening balance start blank — the
+                  // form shows the next free code as a placeholder only.
                   setAccountForm({
-                    code,
+                    code: '',
                     name: '',
-                    type,
-                    group: type === 'asset' ? 'Cash at Bank' : '',
+                    type: '',
+                    group: '',
                     subGroup: '',
                     isActive: true,
-                    balance: 0,
+                    balance: '',
                     notes: '',
                   })
                   setEditAccountId(null)
@@ -1945,14 +1952,15 @@ function AccountingContent() {
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <Field label="Report month">
-                    <Select value={monthlyReportMonth} onChange={setMonthlyReportMonth} options={reportMonthOptions.map(value => ({ value, label: monthLabel(value) }))} />
+                    <Select value={monthlyReportMonth} onChange={setMonthlyReportMonth} options={[{ value: '', label: 'Select month…' }, ...reportMonthOptions.map(value => ({ value, label: monthLabel(value) }))]} />
                   </Field>
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className="btn-secondary" onClick={() => setTab('pl')}>Open official P&amp;L</button>
                     <button
                       type="button"
                       className="btn-secondary flex items-center gap-2"
-                      onClick={() => { void exportToExcel(
+                      disabled={!monthlyReportMonth}
+                      onClick={() => { if (!monthlyReportMonth) return; void exportToExcel(
                         `Monthly Management Report — ${monthlyReport.label}`,
                         ['Metric', 'Amount'],
                         [
@@ -1979,6 +1987,9 @@ function AccountingContent() {
                 </div>
               </div>
 
+              {!monthlyReportMonth ? (
+                <EmptyState title="Select a period to view this report" subtitle="Choose a report month above." />
+              ) : (<>
               <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-[var(--border-lt)] bg-card sm:grid-cols-3 xl:grid-cols-5">
                 {[
                   { label: 'Revenue', value: monthlyReport.totalRevenue, tone: 'text-text-1' },
@@ -2093,6 +2104,7 @@ function AccountingContent() {
                   />
                 </div>
               )}
+              </>)}
             </div>
           ) : activeTab === 'pl' ? (
             <div className="p-6">
@@ -2139,7 +2151,11 @@ function AccountingContent() {
                     <option value="prisma">Official: Prisma (KES posted)</option>
                     <option value="blob">Legacy: client blob</option>
                   </select>
-                  <button className="btn-secondary flex items-center gap-2" onClick={() => {
+                  <button className="btn-secondary flex items-center gap-2" disabled={plSource === 'prisma' && !pnlPeriodSelected} onClick={() => {
+                    if (plSource === 'prisma' && !pnlPeriodSelected) {
+                      showToast('Select a From and To date before exporting the P&L', 'error')
+                      return
+                    }
                     const pl = prismaReports.profitLoss
                     const rev = plSource === 'prisma'
                       ? (pl?.totalIncome ?? pl?.totalRevenue ?? 0)
@@ -2185,7 +2201,9 @@ function AccountingContent() {
                 </div>
               </div>
               <div className="max-w-2xl mx-auto">
-                {plSource === 'prisma' ? (
+                {plSource === 'prisma' && !pnlPeriodSelected ? (
+                  <EmptyState title="Select a period to view this report" subtitle="Pick a From and To date above." />
+                ) : plSource === 'prisma' ? (
                   prismaReports.loading ? (
                     <p className="text-sm text-[var(--text-3)]">Loading Prisma P&L…</p>
                   ) : (
@@ -2580,11 +2598,12 @@ function AccountingContent() {
                   </div>
                 </div>
 
-                <Field label="Payment Date">
+                <Field label="Payment Date *">
                   <Input type="date" value={payDate} onChange={setPayDate} />
                 </Field>
-                <Field label="Payment Method">
+                <Field label="Payment Method *">
                   <Select value={payMethod} onChange={setPayMethod} options={[
+                    { value: '', label: 'Select payment method…' },
                     { value: 'mpesa', label: 'M-Pesa' },
                     { value: 'bank_transfer', label: 'Bank Transfer' },
                     { value: 'cash', label: 'Cash' },
@@ -2593,7 +2612,7 @@ function AccountingContent() {
                   ]} />
                 </Field>
                 {activeBanks.length > 0 && (
-                  <Field label={tab === 'invoices' ? 'Bank / Account Received Into' : 'Bank / Account Paid From'}>
+                  <Field label={tab === 'invoices' ? 'Bank / Account Received Into *' : 'Bank / Account Paid From *'}>
                     <Select value={payBankAccountId} onChange={setPayBankAccountId} options={[
                       { value: '', label: tab === 'invoices' ? '— Select receiving account —' : '— Select paying account —' },
                       ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id }))
@@ -2610,8 +2629,12 @@ function AccountingContent() {
                     className="btn-primary"
                     style={{ background: 'var(--primary)' }}
                     onClick={() => {
-                      if (payMethod === 'bank_transfer' && !payBankAccountId) {
-                        showToast('Select a bank account for bank transfer payments', 'error')
+                      const missing: string[] = []
+                      if (!payDate) missing.push('Payment Date')
+                      if (!payMethod) missing.push('Payment Method')
+                      if (activeBanks.length > 0 && !payBankAccountId) missing.push(tab === 'invoices' ? 'Bank / Account Received Into' : 'Bank / Account Paid From')
+                      if (missing.length) {
+                        showToast(`Required: ${missing.join(', ')}`, 'error')
                         return
                       }
                       selItems.forEach(b => {
@@ -2622,7 +2645,8 @@ function AccountingContent() {
                       setSelectedInvIds(new Set())
                       setPayReference('')
                       setPayBankAccountId('')
-                      setPayMethod('mpesa')
+                      setPayMethod('')
+                      setPayDate('')
                       showToast(`${selItems.length} payment${selItems.length !== 1 ? 's' : ''} recorded successfully`, 'success')
                     }}
                   >
@@ -2705,7 +2729,7 @@ function AccountingContent() {
                   />
                   </div>
                 )}
-                <Field label="Document Date">
+                <Field label="Document Date *">
                   <input
                     type="date"
                     className="form-input text-xs"
@@ -2713,7 +2737,7 @@ function AccountingContent() {
                     onChange={e => setNewDocumentDate(e.target.value)}
                   />
                 </Field>
-                <Field label="Due Date">
+                <Field label="Due Date *">
                   <input
                     type="date"
                     className="form-input text-xs"
@@ -2869,8 +2893,10 @@ function AccountingContent() {
                                   aria-label={`Discount percent for line ${i + 1}`}
                                   className="form-input text-xs text-center w-16"
                                   value={l.discount}
+                                  placeholder="0"
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, discount: e.target.value } : x)))}
                                 />
+                                {isInvalid && previewLine?.lineType === 'item' && previewLine.discountInvalid && <p className="text-[9px] text-red-600 font-semibold mt-1 text-center">Disc % required</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <select
@@ -2879,9 +2905,11 @@ function AccountingContent() {
                                   disabled={applyVat}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, tax: e.target.value } : x)))}
                                 >
+                                  <option value="" disabled>Select…</option>
                                   <option value="0">0%</option>
                                   <option value={String(invoiceVatRate)}>{invoiceVatRate}%</option>
                                 </select>
+                                {isInvalid && previewLine?.lineType === 'item' && previewLine.taxMissing && <p className="text-[9px] text-red-600 font-semibold mt-1 text-right">Tax required</p>}
                               </td>
                               <td className="px-3 py-2 text-right">
                                 <p className="text-xs font-black text-[var(--text-1)] font-mono">{fmtKes(previewLine?.total ?? 0)}</p>
@@ -3121,14 +3149,26 @@ function BSSectionSub({ title, children }: { title: string; children: React.Reac
 }
 function FxRevaluationPanel({ showToast }: { showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
   const [ref, setRef] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [balanceAccountLabel, setBalanceAccountLabel] = useState('1800 - Accounts Receivable')
+  const [date, setDate] = useState('')
+  const [balanceAccountLabel, setBalanceAccountLabel] = useState('')
   const [amountBase, setAmountBase] = useState('')
   const [amountForeign, setAmountForeign] = useState('')
   const [rate, setRate] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function submit() {
+    const missing: string[] = []
+    if (!ref.trim()) missing.push('Reference')
+    if (!date) missing.push('Date')
+    if (!balanceAccountLabel.trim()) missing.push('Balance account')
+    const isNum = (v: string) => v.trim() !== '' && Number.isFinite(Number(v))
+    if (!isNum(amountBase)) missing.push('Booked amount (KES base)')
+    if (!isNum(amountForeign)) missing.push('Foreign amount')
+    if (!isNum(rate) || Number(rate) <= 0) missing.push('Closing rate (> 0)')
+    if (missing.length) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
+      return
+    }
     setBusy(true)
     try {
       const res = await fetch('/api/accounting/fx-revaluation', {
@@ -3161,22 +3201,22 @@ function FxRevaluationPanel({ showToast }: { showToast: (msg: string, type?: 'su
         Posts a Prisma gain/loss journal when foreign × rate differs from booked KES base. Official books only.
       </p>
       <div className="space-y-3">
-        <Field label="Reference">
+        <Field label="Reference *">
           <Input value={ref} onChange={setRef} placeholder="AR-USD-2026-08" />
         </Field>
-        <Field label="Date">
+        <Field label="Date *">
           <Input type="date" value={date} onChange={setDate} />
         </Field>
-        <Field label="Balance account">
+        <Field label="Balance account *">
           <Input value={balanceAccountLabel} onChange={setBalanceAccountLabel} placeholder="1800 - Accounts Receivable" />
         </Field>
-        <Field label="Booked amount (KES base)">
+        <Field label="Booked amount (KES base) *">
           <Input type="number" value={amountBase} onChange={setAmountBase} />
         </Field>
-        <Field label="Foreign amount">
+        <Field label="Foreign amount *">
           <Input type="number" value={amountForeign} onChange={setAmountForeign} />
         </Field>
-        <Field label="Closing rate (foreign → KES)">
+        <Field label="Closing rate (foreign → KES) *">
           <Input type="number" value={rate} onChange={setRate} />
         </Field>
         <button type="button" className="btn-primary" disabled={busy} onClick={() => void submit()}>

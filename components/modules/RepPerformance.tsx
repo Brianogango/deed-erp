@@ -38,17 +38,6 @@ function periodBounds(key: string): { start: string; end: string } {
   }
 }
 
-function currentMonthKey() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-function currentQuarterKey() {
-  const d = new Date()
-  const q = Math.ceil((d.getMonth() + 1) / 3)
-  return `${d.getFullYear()}-Q${q}`
-}
-
 function lastNMonths(n: number): string[] {
   const keys: string[] = []
   const d = new Date()
@@ -60,6 +49,7 @@ function lastNMonths(n: number): string[] {
 }
 
 function fmtPeriodLabel(key: string): string {
+  if (!key) return 'No period selected'
   if (key.includes('-Q')) {
     const [yr, q] = key.split('-Q')
     return `Q${q} ${yr}`
@@ -100,9 +90,8 @@ function RepPerformanceContent() {
   useEffect(() => { setMounted(true) }, [])
 
   const [periodMode, setPeriodMode] = useState<'month' | 'quarter'>('month')
-  const [selectedPeriod, setSelectedPeriod] = useState(() =>
-    periodMode === 'month' ? currentMonthKey() : currentQuarterKey()
-  )
+  // Period starts empty — the user picks which month/quarter to report on.
+  const [selectedPeriod, setSelectedPeriod] = useState('')
   const [selectedRep, setSelectedRep] = useUrlRecordId({ param: 'rep' })
   const [ledgerByEmployee, setLedgerByEmployee] = useState<Record<string, number>>({})
 
@@ -132,9 +121,9 @@ function RepPerformanceContent() {
   }, [periodMode])
 
   // Active period key
-  const periodKey = periodOptions.includes(selectedPeriod) ? selectedPeriod : periodOptions[periodOptions.length - 1]
-  const { start, end } = periodBounds(periodKey)
-  const inPeriod = (d?: string) => !!d && d >= start && d <= end
+  const periodKey = periodOptions.includes(selectedPeriod) ? selectedPeriod : ''
+  const { start, end } = periodKey ? periodBounds(periodKey) : { start: '', end: '' }
+  const inPeriod = (d?: string) => !!periodKey && !!d && d >= start && d <= end
 
   useEffect(() => {
     let cancelled = false
@@ -384,7 +373,7 @@ function RepPerformanceContent() {
           {(['month', 'quarter'] as const).map(m => (
             <button key={m} onClick={() => {
               setPeriodMode(m)
-              setSelectedPeriod(m === 'month' ? currentMonthKey() : currentQuarterKey())
+              setSelectedPeriod('')
             }} style={{
               fontSize: 11, fontWeight: periodMode === m ? 700 : 400, padding: '4px 12px',
               borderRadius: 6, border: 'none', cursor: 'pointer',
@@ -401,6 +390,7 @@ function RepPerformanceContent() {
           value={periodKey}
           onChange={e => setSelectedPeriod(e.target.value)}
           style={{ fontSize: 11, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', color: 'var(--text-3)', background: '#fff' }}>
+          <option value="" disabled>Select period…</option>
           {periodOptions.map(k => (
             <option key={k} value={k}>{fmtPeriodLabel(k)}</option>
           ))}
@@ -410,6 +400,12 @@ function RepPerformanceContent() {
         </span>
       </div>
 
+      {!periodKey ? (
+        <div role="status" style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 32, textAlign: 'center' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>Select a period</p>
+          <p style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 4 }}>Choose a month or quarter above to see sales by closer and commissions.</p>
+        </div>
+      ) : (<>
       {/* Leaderboard table */}
       <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--bg-muted)' }}>
@@ -527,6 +523,7 @@ function RepPerformanceContent() {
           <Link href="/finance?tab=commissions" className="underline underline-offset-2">Finance → Salespeople</Link>.
         </p>
       </div>
+      </>)}
 
     </div>
   )

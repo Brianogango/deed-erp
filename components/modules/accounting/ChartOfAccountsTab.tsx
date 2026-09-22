@@ -70,6 +70,9 @@ function suggestNextBankCode(accounts: Account[], kind: 'bank' | 'cash'): string
 
 const FISCAL_YEAR = new Date().getFullYear().toString()
 
+/** Account form state: type and opening balance may be blank on a NEW account. */
+type AccountFormState = Omit<Account, 'id' | 'type' | 'balance'> & { type: AccountType | ''; balance: number | '' }
+
 type BankForm = {
   name: string
   bankName: string
@@ -77,7 +80,7 @@ type BankForm = {
   currency: string
   openingBalance: string
   openingDate: string
-  kind: 'bank' | 'cash'
+  kind: 'bank' | 'cash' | ''
   mpesaPaybill: string
   mpesaAccount: string
 }
@@ -86,10 +89,10 @@ const EMPTY_BANK: BankForm = {
   name: '',
   bankName: '',
   accountNo: '',
-  currency: 'KES',
-  openingBalance: '0',
+  currency: '',
+  openingBalance: '',
   openingDate: '',
-  kind: 'bank',
+  kind: '',
   mpesaPaybill: '',
   mpesaAccount: '',
 }
@@ -100,8 +103,9 @@ export default function ChartOfAccountsTab() {
     currentYearNetProfit, currentYearNetProfitLoading, currentYearNetProfitError,
     coaSearch, setCoaSearch, coaTypeFilter, setCoaTypeFilter,
     showAccountForm, setShowAccountForm, editAccountId, setEditAccountId,
-    accountForm, setAccountForm, addAccount, updateAccount, addBankAccount, showToast,
+    accountForm: accountFormRaw, setAccountForm, addAccount, updateAccount, addBankAccount, showToast,
   } = useAccounting()
+  const accountForm = accountFormRaw as unknown as AccountFormState
 
   const router = useRouter()
   const [selectedId, setSelectedId] = useUrlRecordId({ param: 'accountId' })
@@ -141,17 +145,19 @@ export default function ChartOfAccountsTab() {
     )
 
   const openNewAccount = () => {
-    const type: AccountType = coaTypeFilter === 'all' ? 'asset' : coaTypeFilter
-    setAccountForm({
-      code: suggestNextCode(accounts, type),
+    // Type, group, code and opening balance start blank; the next free code
+    // for the chosen type is only shown as a placeholder.
+    const blank: AccountFormState = {
+      code: '',
       name: '',
-      type,
-      group: GROUP_SUGGESTIONS[type][0] || '',
+      type: '',
+      group: '',
       subGroup: '',
       isActive: true,
-      balance: 0,
+      balance: '',
       notes: '',
-    })
+    }
+    setAccountForm(blank)
     setEditAccountId(null)
     setShowAccountForm(true)
   }
@@ -174,20 +180,28 @@ export default function ChartOfAccountsTab() {
   }
 
   const saveAccount = () => {
-    if (!accountForm.code.trim() || !accountForm.name.trim()) {
-      showToast('Code and name are required', 'error')
+    const missing: string[] = []
+    if (!accountForm.code.trim()) missing.push('Code')
+    if (!accountForm.name.trim()) missing.push('Account name')
+    if (!accountForm.type) missing.push('Type')
+    if (!String(accountForm.group ?? '').trim()) missing.push('Group')
+    const balanceRaw = accountForm.balance
+    if (balanceRaw === '' || balanceRaw === null || balanceRaw === undefined || !Number.isFinite(Number(balanceRaw))) missing.push('Opening balance')
+    if (missing.length || !accountForm.type) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
       return
     }
+    const payload: Omit<Account, 'id'> = { ...accountForm, type: accountForm.type, balance: Number(balanceRaw) }
     const dup = accounts.find(a => a.code === accountForm.code.trim() && a.id !== editAccountId)
     if (dup) {
       showToast(`Code ${accountForm.code} already exists`, 'error')
       return
     }
     if (editAccountId) {
-      updateAccount(editAccountId, accountForm)
+      updateAccount(editAccountId, payload)
       showToast('Account updated', 'success')
     } else {
-      const created = addAccount({ ...accountForm })
+      const created = addAccount({ ...payload })
       setSelectedId(created.id)
       showToast('Account created', 'success')
     }
@@ -200,20 +214,30 @@ export default function ChartOfAccountsTab() {
   }
 
   const saveBank = () => {
-    if (!bankForm.name.trim() || !bankForm.accountNo.trim() || !bankForm.openingDate) {
-      showToast('Account name, number, and opening date are required', 'error')
+    const missing: string[] = []
+    if (!bankForm.kind) missing.push('Wallet type')
+    if (!bankForm.currency) missing.push('Currency')
+    if (!bankForm.name.trim()) missing.push('Account name')
+    if (!bankForm.accountNo.trim()) missing.push('Account number')
+    if (!bankForm.openingDate) missing.push('Opening date')
+    const openingRaw = bankForm.openingBalance.trim()
+    if (openingRaw === '' || !Number.isFinite(Number(openingRaw))) missing.push('Opening balance')
+    if (missing.length || !bankForm.kind) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
       return
     }
-    const code = suggestNextBankCode(accounts, bankForm.kind)
-    const group = bankForm.kind === 'cash' ? 'Cash in Hand' : 'Cash at Bank'
+    const kind = bankForm.kind
+    const openingBalance = Number(openingRaw)
+    const code = suggestNextBankCode(accounts, kind)
+    const group = kind === 'cash' ? 'Cash in Hand' : 'Cash at Bank'
     const subGroup = group
 
     const bankPayload: Omit<BankAccount, 'id'> = {
       name: bankForm.name.trim(),
       bankName: (bankForm.bankName || bankForm.name).trim(),
       accountNo: bankForm.accountNo.trim(),
-      currency: bankForm.currency || 'KES',
-      openingBalance: Number(bankForm.openingBalance) || 0,
+      currency: bankForm.currency,
+      openingBalance,
       openingDate: bankForm.openingDate,
       active: true,
       mpesaPaybill: bankForm.mpesaPaybill.trim() || undefined,
@@ -229,7 +253,7 @@ export default function ChartOfAccountsTab() {
       group,
       subGroup,
       isActive: true,
-      balance: Number(bankForm.openingBalance) || 0,
+      balance: openingBalance,
       notes: `Liquidity account for cashbook wallet ${createdBankId}`,
       bankAccountId: createdBankId,
     })
@@ -441,42 +465,37 @@ export default function ChartOfAccountsTab() {
             <Field label="Code *">
               <Input
                 value={accountForm.code}
-                onChange={v => setAccountForm((p: Account) => ({ ...p, code: v }))}
-                placeholder="e.g. 2203"
+                onChange={v => setAccountForm((p: AccountFormState) => ({ ...p, code: v }))}
+                placeholder={!editAccountId && accountForm.type ? `Next free: ${suggestNextCode(accounts, accountForm.type)}` : 'e.g. 2203'}
               />
             </Field>
             <Field label="Account name *">
               <Input
                 value={accountForm.name}
-                onChange={v => setAccountForm((p: Account) => ({ ...p, name: v }))}
+                onChange={v => setAccountForm((p: AccountFormState) => ({ ...p, name: v }))}
                 placeholder="e.g. ABSA Current"
               />
             </Field>
-            <Field label="Type">
+            <Field label="Type *">
               <Select
                 value={accountForm.type}
                 onChange={v => {
-                  const type = v as AccountType
-                  setAccountForm((p: Account) => ({
-                    ...p,
-                    type,
-                    group: p.group || GROUP_SUGGESTIONS[type][0] || '',
-                    code: editAccountId ? p.code : suggestNextCode(accounts, type),
-                  }))
+                  const type = v as AccountType | ''
+                  setAccountForm((p: AccountFormState) => ({ ...p, type }))
                 }}
-                options={ACCOUNT_TYPE_SELECT}
+                options={[{ value: '', label: 'Select type…' }, ...ACCOUNT_TYPE_SELECT]}
               />
             </Field>
-            <Field label="Group">
+            <Field label="Group *">
               <input
                 className="form-input w-full"
                 value={accountForm.group}
-                onChange={e => setAccountForm((p: Account) => ({ ...p, group: e.target.value }))}
+                onChange={e => setAccountForm((p: AccountFormState) => ({ ...p, group: e.target.value }))}
                 placeholder="e.g. Cash at Bank"
                 list="coa-group-suggestions"
               />
               <datalist id="coa-group-suggestions">
-                {GROUP_SUGGESTIONS[accountForm.type as AccountType]?.map(g => (
+                {(accountForm.type ? GROUP_SUGGESTIONS[accountForm.type] : [])?.map(g => (
                   <option key={g} value={g} />
                 ))}
               </datalist>
@@ -484,15 +503,16 @@ export default function ChartOfAccountsTab() {
             <Field label="Sub-group">
               <Input
                 value={accountForm.subGroup ?? ''}
-                onChange={v => setAccountForm((p: Account) => ({ ...p, subGroup: v }))}
+                onChange={v => setAccountForm((p: AccountFormState) => ({ ...p, subGroup: v }))}
                 placeholder="Optional"
               />
             </Field>
-            <Field label="Opening balance">
+            <Field label="Opening balance *">
               <Input
                 type="number"
-                value={String(accountForm.balance ?? 0)}
-                onChange={v => setAccountForm((p: Account) => ({ ...p, balance: Number(v) || 0 }))}
+                value={accountForm.balance === '' || accountForm.balance == null ? '' : String(accountForm.balance)}
+                onChange={v => setAccountForm((p: AccountFormState) => ({ ...p, balance: v.trim() === '' ? '' : Number(v) }))}
+                placeholder="Enter 0 if none"
               />
             </Field>
             <div className="sm:col-span-2 flex items-center gap-2 pt-1">
@@ -500,7 +520,7 @@ export default function ChartOfAccountsTab() {
                 id="coa-active"
                 type="checkbox"
                 checked={Boolean(accountForm.isActive)}
-                onChange={e => setAccountForm((p: Account) => ({ ...p, isActive: e.target.checked }))}
+                onChange={e => setAccountForm((p: AccountFormState) => ({ ...p, isActive: e.target.checked }))}
                 style={{ accentColor: 'var(--primary)' }}
               />
               <label htmlFor="coa-active" className="text-xs text-t2">Active</label>
@@ -521,21 +541,23 @@ export default function ChartOfAccountsTab() {
             Creates a cashbook wallet and a matching Chart of Accounts liquidity line (same pattern as Odoo Accounting → Banks).
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Wallet type">
+            <Field label="Wallet type *">
               <Select
                 value={bankForm.kind}
-                onChange={v => setBankForm(p => ({ ...p, kind: v as 'bank' | 'cash' }))}
+                onChange={v => setBankForm(p => ({ ...p, kind: v as BankForm['kind'] }))}
                 options={[
+                  { value: '', label: 'Select wallet type…' },
                   { value: 'bank', label: 'Bank account' },
                   { value: 'cash', label: 'Cash / M-Pesa' },
                 ]}
               />
             </Field>
-            <Field label="Currency">
+            <Field label="Currency *">
               <Select
                 value={bankForm.currency}
                 onChange={v => setBankForm(p => ({ ...p, currency: v }))}
                 options={[
+                  { value: '', label: 'Select currency…' },
                   { value: 'KES', label: 'KES' },
                   { value: 'USD', label: 'USD' },
                   { value: 'EUR', label: 'EUR' },
@@ -565,18 +587,19 @@ export default function ChartOfAccountsTab() {
                 placeholder="Account / till number"
               />
             </Field>
-            <Field label="Opening date">
+            <Field label="Opening date *">
               <Input
                 type="date"
                 value={bankForm.openingDate}
                 onChange={v => setBankForm(p => ({ ...p, openingDate: v }))}
               />
             </Field>
-            <Field label="Opening balance (KES)">
+            <Field label={`Opening balance${bankForm.currency ? ` (${bankForm.currency})` : ''} *`}>
               <Input
                 type="number"
                 value={bankForm.openingBalance}
                 onChange={v => setBankForm(p => ({ ...p, openingBalance: v }))}
+                placeholder="Enter 0 if none"
               />
             </Field>
             <Field label="M-Pesa paybill">

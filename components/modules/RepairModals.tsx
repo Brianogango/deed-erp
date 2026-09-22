@@ -152,21 +152,31 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
     findings: existingDiagnosis?.findings ?? '',
     faultDescription: existingDiagnosis?.faultDescription ?? '',
     recommendedAction: existingDiagnosis?.recommendedAction ?? '',
-    estimatedHours: String(existingDiagnosis?.estimatedHours ?? '2'),
-    revisionType: 'update' as 'update' | 'correction',
+    estimatedHours: existingDiagnosis?.estimatedHours != null ? String(existingDiagnosis.estimatedHours) : '',
+    revisionType: '' as 'update' | 'correction' | '',
     revisionReason: '',
     clientCausedDamage: false, clientDamageReason: '',
   })
-  const [warrantyCoverage, setWarrantyCoverage] = useState<'full' | 'partial' | 'void'>(
-    repair.warrantyCoverage ?? 'full'
+  const [warrantyCoverage, setWarrantyCoverage] = useState<'full' | 'partial' | 'void' | ''>(
+    repair.warrantyCoverage ?? ''
   )
 
   const handleLogDiagnosis = () => {
     if (!diagForm.findings || !diagForm.faultDescription) {
       showToast('Findings and fault description are required', 'error'); return
     }
+    if (isRevision && !diagForm.revisionType) {
+      showToast('Select the update type', 'error'); return
+    }
     if (isRevision && !diagForm.revisionReason.trim()) {
       showToast('Please explain why this diagnosis is being updated', 'error'); return
+    }
+    const estimatedHours = Number(diagForm.estimatedHours)
+    if (!diagForm.estimatedHours.trim() || !Number.isFinite(estimatedHours) || estimatedHours < 0) {
+      showToast('Enter the estimated labour hours', 'error'); return
+    }
+    if (repair.underWarranty && !diagForm.clientCausedDamage && !warrantyCoverage) {
+      showToast('Select the warranty coverage (Full, Partial or Voided)', 'error'); return
     }
     if (diagForm.clientCausedDamage && !diagForm.clientDamageReason) {
       showToast('Please select the type of client-caused damage', 'error'); return
@@ -174,7 +184,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
     logDiagnosis(repair.id, {
       findings: diagForm.findings, faultDescription: diagForm.faultDescription,
       recommendedAction: diagForm.recommendedAction,
-      estimatedHours: Number(diagForm.estimatedHours) || 0,
+      estimatedHours,
       revisionType: isRevision ? diagForm.revisionType : 'initial',
       revisionReason: isRevision ? diagForm.revisionReason.trim() : undefined,
     } as any, diagForm.clientCausedDamage
@@ -186,7 +196,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
           warrantyVerificationStatus: 'excluded_client_damage',
         }
       : repair.underWarranty
-        ? { warrantyCoverage }
+        ? { warrantyCoverage: warrantyCoverage || undefined }
         : undefined)
     onClose()
   }
@@ -207,7 +217,8 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
         {isRevision && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Update Type" required>
-              <select className="form-input text-xs font-medium" value={diagForm.revisionType} onChange={e => setDiagForm(p => ({ ...p, revisionType: e.target.value as 'update' | 'correction' }))}>
+              <select className="form-input text-xs font-medium" value={diagForm.revisionType} onChange={e => setDiagForm(p => ({ ...p, revisionType: e.target.value as 'update' | 'correction' | '' }))}>
+                <option value="">Select…</option>
                 <option value="update">Additional findings / update</option>
                 <option value="correction">Correction to previous diagnosis</option>
               </select>
@@ -228,7 +239,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
             <Field label="Recommended Action">
               <Input value={diagForm.recommendedAction} onChange={v => setDiagForm(p => ({ ...p, recommendedAction: v }))} placeholder="e.g. Component level repair" />
             </Field>
-            <Field label="Est. Labour Hours">
+            <Field label="Est. Labour Hours" required>
               <Input value={diagForm.estimatedHours} onChange={v => setDiagForm(p => ({ ...p, estimatedHours: v }))} type="number" />
             </Field>
           </div>
@@ -303,7 +314,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
           {diagForm.clientCausedDamage && (
             <div className="px-4 pb-4" style={{ animation: 'fadeIn 0.18s ease both' }}>
               <div className="p-3 rounded-xl bg-[var(--bg-card)] border border-amber-200 shadow-sm space-y-3">
-                <Field label="Damage Category">
+                <Field label="Damage Category" required>
                   <select className="form-input text-xs font-medium" value={diagForm.clientDamageReason}
                     onChange={e => setDiagForm(p => ({ ...p, clientDamageReason: e.target.value }))}>
                     <option value="">— Select damage type —</option>
@@ -515,7 +526,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const feeResolved = resolveDiagnosisFee(repair, systemSettings)
   const chargeFee = shouldChargeDiagnosisFee(repair) && feeResolved.amount > 0
   const [quoteLines, setQuoteLines] = useState<{
-    type: 'part'|'labor'|'software'|'license'|'logistics'|'service'
+    type: 'part'|'labor'|'software'|'license'|'logistics'|'service'|''
     description: string
     qty: string
     unitPrice: string
@@ -532,7 +543,8 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           productId: l.productId,
           isDiagnosisFee: !!l.isDiagnosisFee || isDiagnosisFeeLine(l),
         }))
-      : [{ type: 'labor' as const, description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
+      // No seed line for a new quote — the technician adds every line.
+      : []
     if (!chargeFee) return seed.filter(l => !isDiagnosisFeeLine(l))
     const without = seed.filter(l => !isDiagnosisFeeLine(l))
     return [
@@ -550,16 +562,27 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const requiresInventory = (type: string) => INVENTORY_REQUIRED_TYPES.includes(type as InventoryRequiredType)
   const editableLines = quoteLines.filter(l => !l.isDiagnosisFee && !isDiagnosisFeeLine(l))
   const unlinkedInventoryLines = editableLines.filter(l => requiresInventory(l.type) && !l.productId)
-  const invalidQuoteLines = editableLines.filter(l => !l.description.trim() || Number(l.qty) <= 0 || Number(l.unitPrice) < 0)
+  const isBlankOrNaN = (v: string) => !String(v ?? '').trim() || !Number.isFinite(Number(v))
+  const isInvalidQuoteLine = (l: { type: string; description: string; qty: string; unitPrice: string }) =>
+    !l.type || !l.description.trim() || isBlankOrNaN(l.qty) || Number(l.qty) <= 0 || isBlankOrNaN(l.unitPrice) || Number(l.unitPrice) < 0
+  const invalidQuoteLines = editableLines.filter(isInvalidQuoteLine)
   const outOfStockLines = editableLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 0) === 0)
-  const canSubmit = unlinkedInventoryLines.length === 0 && invalidQuoteLines.length === 0 && quoteLines.length > 0
+  const canSubmit = unlinkedInventoryLines.length === 0 && invalidQuoteLines.length === 0 && editableLines.length > 0
+  const quoteBlockedReason = editableLines.length === 0
+    ? 'Add at least one quote line (type, description, quantity and unit price).'
+    : invalidQuoteLines.length > 0
+      ? 'Every line needs a type, description, quantity greater than 0 and a unit price (0 or more).'
+      : unlinkedInventoryLines.length > 0
+        ? 'Hardware part and license lines must be selected from inventory.'
+        : ''
 
   const handleGenerateQuote = async () => {
     setSubmitted(true)
-    if (!canSubmit || saving) return
+    if (saving) return
+    if (!canSubmit) { showToast(quoteBlockedReason || 'Complete the quote lines first', 'error'); return }
     const lines = quoteLines.map(line => {
       const qty = Number(line.qty)
-      const unitPrice = Number(line.unitPrice) || 0
+      const unitPrice = Number(line.unitPrice)
       return {
         type: line.type,
         description: line.description,
@@ -609,7 +632,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           <div className="divide-y divide-[var(--border-lt)]">
             {quoteLines.map((line, i) => {
               const locked = !!(line.isDiagnosisFee || isDiagnosisFeeLine(line))
-              const hasInvalidLine = !locked && (!line.description.trim() || Number(line.qty) <= 0 || Number(line.unitPrice) < 0)
+              const hasInvalidLine = !locked && isInvalidQuoteLine(line)
               return (
               <div key={i} className={`grid grid-cols-1 sm:grid-cols-[120px_1fr_72px_120px_36px] gap-2 px-3 py-3 sm:py-2 items-center ${hasInvalidLine && submitted ? 'bg-red-50/70' : locked ? 'bg-amber-50/40' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
                 <select
@@ -618,6 +641,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                   disabled={locked}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
                 >
+                  <option value="">Select type…</option>
                   <option value="part">Hardware Part</option>
                   <option value="labor">Labour</option>
                   <option value="software">Software</option>
@@ -670,7 +694,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                 <button
                   type="button"
                   className="text-[var(--text-4)] hover:text-red-500 disabled:opacity-30"
-                  disabled={locked || quoteLines.length <= 1}
+                  disabled={locked}
                   title={locked ? 'Diagnosis fee is locked' : 'Remove line'}
                   onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))}
                 >
@@ -685,7 +709,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           <button
             type="button"
             className="btn-outline text-xs"
-            onClick={() => setQuoteLines(prev => [...prev, { type: 'labor', description: '', qty: '1', unitPrice: '0' }])}
+            onClick={() => setQuoteLines(prev => [...prev, { type: '', description: '', qty: '', unitPrice: '' }])}
           >
             + Add line
           </button>
@@ -702,7 +726,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
         </div>
 
         {(submitted && (!canSubmit)) && (
-          <p className="text-[11px] text-red-600 font-semibold">Fix invalid or unlinked inventory lines before generating the quote.</p>
+          <p className="text-[11px] text-red-600 font-semibold">{quoteBlockedReason || 'Fix invalid or unlinked inventory lines before generating the quote.'}</p>
         )}
 
         {outOfStockLines.length > 0 && (
@@ -720,7 +744,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
 
         <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.35)" disabled={saving || (submitted && !canSubmit)}>
+          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.35)" disabled={saving}>
             <Fa icon={faFileInvoiceDollar} /> {saving ? 'Saving…' : repair.quote ? 'Update Quote' : 'Generate Quote'}
           </ActionBtn>
         </div>
@@ -866,11 +890,12 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
  * LeaveDeviceModal — customer leaves device with Deed (terminal retained)
  */
 export function LeaveDeviceModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { leaveDeviceWithDeed } = useRepairStore()
+  const { leaveDeviceWithDeed, showToast } = useRepairStore()
   const [notes, setNotes] = useState('')
-  const [convertMode, setConvertMode] = useState<'none' | 'donation' | 'buyback'>('donation')
+  const [convertMode, setConvertMode] = useState<'none' | 'donation' | 'buyback' | ''>('')
 
   const handleConfirm = () => {
+    if (!convertMode) { showToast('Select what to do with the device (Donation, Buy-back or Retain only)', 'error'); return }
     leaveDeviceWithDeed(repair.id, {
       convertToDonation: convertMode === 'donation',
       convertToStock: convertMode === 'buyback',
@@ -894,7 +919,7 @@ export function LeaveDeviceModal({ repair, onClose }: { repair: RepairOrder, onC
           <Textarea value={notes} onChange={setNotes} placeholder="e.g. Customer donated the laptop after declining repair" rows={3} />
         </Field>
         <div className="flex flex-col gap-2">
-          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Convert device</p>
+          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Convert device <span className="text-red-500">*</span></p>
           {([
             { v: 'donation' as const, label: 'Donation in → warehouse' },
             { v: 'buyback' as const, label: 'Buy-back stock (KES 0)' },
@@ -921,19 +946,26 @@ export function LeaveDeviceModal({ repair, onClose }: { repair: RepairOrder, onC
  * ScheduleDeliveryModal
  */
 export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { riders, scheduleDelivery } = useRepairStore()
+  const { riders, scheduleDelivery, showToast } = useRepairStore()
   const [deliveryForm, setDeliveryForm] = useState({
-    method: 'pickup' as 'pickup' | 'delivery' | 'courier',
-    scheduledDate: new Date().toISOString().slice(0, 10),
+    method: '' as 'pickup' | 'delivery' | 'courier' | '',
+    scheduledDate: '',
     address: '',
     riderId: '',
     riderName: ''
   })
 
   const handleSchedule = async () => {
+    const { method } = deliveryForm
+    const missing: string[] = []
+    if (!method) missing.push('Method (pickup, delivery or courier)')
+    if (!deliveryForm.scheduledDate) missing.push('Scheduled Date')
+    if (method && method !== 'pickup' && !deliveryForm.address.trim()) missing.push('Delivery Address')
+    if (method === 'delivery' && !deliveryForm.riderId) missing.push('Rider')
+    if (missing.length || !method) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
     const scheduled = await scheduleDelivery(
       repair.id,
-      deliveryForm.method,
+      method,
       deliveryForm.scheduledDate,
       deliveryForm.address || undefined,
       deliveryForm.riderId || undefined,
@@ -968,7 +1000,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
             <Input type="date" value={deliveryForm.scheduledDate} onChange={v => setDeliveryForm(p => ({ ...p, scheduledDate: v }))} />
           </Field>
 
-          {deliveryForm.method !== 'pickup' && (
+          {deliveryForm.method && deliveryForm.method !== 'pickup' && (
             <>
               <Field label="Delivery Address" required>
                 <Textarea value={deliveryForm.address} onChange={v => setDeliveryForm(p => ({ ...p, address: v }))} placeholder="Enter full physical address for delivery..." rows={2} />
@@ -1107,14 +1139,27 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
  * ProcurementModal
  */
 export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { requestProcurement } = useRepairStore()
+  const { requestProcurement, showToast } = useRepairStore()
+  type ProcItem = { type: 'part' | 'software' | 'license' | ''; description: string; qty: string; estimatedCost: string }
+  const blankItem = (): ProcItem => ({ type: '', description: '', qty: '', estimatedCost: '' })
   const [form, setForm] = useState({
-    items: [{ type: 'part' as const, description: '', qty: '1', estimatedCost: '0' }],
-    urgency: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
+    items: [blankItem()] as ProcItem[],
+    urgency: '' as 'low' | 'normal' | 'high' | 'urgent' | '',
     notes: '',
   })
 
   const handleRequest = () => {
+    if (!form.items.length) { showToast('Add at least one item to request', 'error'); return }
+    const isNum = (v: string) => v.trim() !== '' && Number.isFinite(Number(v))
+    for (const [idx, item] of form.items.entries()) {
+      const missing: string[] = []
+      if (!item.type) missing.push('Type')
+      if (!item.description.trim()) missing.push('Description')
+      if (!isNum(item.qty) || Number(item.qty) <= 0) missing.push('Qty (greater than 0)')
+      if (!isNum(item.estimatedCost) || Number(item.estimatedCost) < 0) missing.push('Est. Cost (0 or more)')
+      if (missing.length) { showToast(`Item ${idx + 1}: enter ${missing.join(', ')}`, 'error'); return }
+    }
+    if (!form.urgency) { showToast('Select the urgency level', 'error'); return }
     requestProcurement(repair.id, form.items.map(i => ({ ...i, qty: Number(i.qty), estimatedCost: Number(i.estimatedCost) })), form.urgency, form.notes)
     onClose()
   }
@@ -1129,29 +1174,36 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
           {form.items.map((item, i) => (
             <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)]/50 items-end">
               <div className="sm:col-span-3">
-                <Field label="Type">
+                <Field label="Type" required>
                   <select className="form-input bg-[var(--bg-card)]" value={item.type}
                     onChange={e => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, type: e.target.value as any } : x) }))}>
+                    <option value="">Select…</option>
                     <option value="part">Hardware Part</option>
                     <option value="software">Software</option>
                     <option value="license">License</option>
                   </select>
                 </Field>
               </div>
-              <div className="sm:col-span-5">
-                <Field label="Description">
+              <div className="sm:col-span-4">
+                <Field label="Description" required>
                   <Input value={item.description}
                     onChange={v => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, description: v } : x) }))}
                     placeholder="e.g. Dell Latitude 5400 Screen" />
                 </Field>
               </div>
               <div className="sm:col-span-2">
-                <Field label="Qty">
+                <Field label="Qty" required>
                   <Input type="number" value={item.qty}
                     onChange={v => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, qty: v } : x) }))} />
                 </Field>
               </div>
-              <div className="sm:col-span-2 flex items-center gap-2">
+              <div className="sm:col-span-2">
+                <Field label="Est. Cost" required>
+                  <Input type="number" value={item.estimatedCost}
+                    onChange={v => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, estimatedCost: v } : x) }))} />
+                </Field>
+              </div>
+              <div className="sm:col-span-1 flex items-center gap-2">
                 <button
                   onClick={() => setForm(p => ({ ...p, items: p.items.filter((_, j) => j !== i) }))}
                   className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all active:scale-90">
@@ -1163,7 +1215,7 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
           <button
             className="text-[10px] font-black flex items-center gap-2 px-3 py-2 rounded-xl transition-all hover:scale-105 active:scale-95"
             style={{ color: '#EA580C', background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)' }}
-            onClick={() => setForm(p => ({ ...p, items: [...p.items, { type: 'part', description: '', qty: '1', estimatedCost: '0' }] }))}
+            onClick={() => setForm(p => ({ ...p, items: [...p.items, blankItem()] }))}
           >
             <Fa icon={faCartPlus} /> ADD ANOTHER ITEM
           </button>
@@ -1171,15 +1223,16 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <Field label="Urgency Level">
+            <Field label="Urgency Level" required>
               <select className="form-input" value={form.urgency} onChange={e => setForm(p => ({ ...p, urgency: e.target.value as any }))}>
+                <option value="">Select…</option>
                 <option value="low">Low</option>
                 <option value="normal">Normal</option>
                 <option value="high">High</option>
                 <option value="urgent">Urgent</option>
               </select>
             </Field>
-            {form.urgency !== 'low' && (
+            {form.urgency && form.urgency !== 'low' && (
               <div className="mt-2 flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: urgencyColors[form.urgency] }} />
                 <span className="text-[10px] font-bold capitalize" style={{ color: urgencyColors[form.urgency] }}>
@@ -1208,7 +1261,7 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
  * ReturnModal
  */
 export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { returnToCustomer, systemSettings } = useRepairStore()
+  const { returnToCustomer, systemSettings, showToast } = useRepairStore()
   const [reason, setReason] = useState('')
   const afterDecline = repair.status === 'declined'
   const resolved = resolveDiagnosisFee(repair, systemSettings)
@@ -1222,7 +1275,7 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
     !repair.diagnosisFeePaidAt
 
   const handleReturn = () => {
-    if (!reason.trim()) return
+    if (!reason.trim()) { showToast('Enter the reason for return', 'error'); return }
     returnToCustomer(repair.id, reason.trim())
     onClose()
   }
@@ -1262,11 +1315,11 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
  * DeclineModal
  */
 export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { declineQuote } = useRepairStore()
+  const { declineQuote, showToast } = useRepairStore()
   const [reason, setReason] = useState('')
 
   const handleDecline = () => {
-    if (!reason.trim()) return
+    if (!reason.trim()) { showToast('Enter the reason for declining', 'error'); return }
     void declineQuote(repair.id, reason.trim())
     onClose()
   }
@@ -1566,17 +1619,19 @@ export function StopAtDiagnosisModal({ repair, onClose }: { repair: RepairOrder,
  * Collector type: Client | Representative
  */
 export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { deliverRepair } = useRepairStore()
-  const [collectorType, setCollectorType] = useState<'client' | 'rep'>('client')
-  const [name, setName] = useState(repair.contactPersonName || repair.customerName || '')
-  const [phone, setPhone] = useState(repair.contactPersonPhone || repair.customerPhone || '')
+  const { deliverRepair, showToast } = useRepairStore()
+  // Collector type is the user's choice; picking "Client" then fills the
+  // name/phone from the repair record (real data, not a placeholder).
+  const [collectorType, setCollectorType] = useState<'client' | 'rep' | ''>('')
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
   const [relationship, setRelationship] = useState('')
   const [idNumber, setIdNumber] = useState('')
   const [closeAfter, setCloseAfter] = useState(() => shouldDefaultCloseAfterHandover(repair))
   const [loading, setLoading] = useState(false)
 
   const isRep = collectorType === 'rep'
-  const canSubmit = name.trim().length > 0 && (!isRep || relationship.trim().length > 0)
+  const canSubmit = !!collectorType && name.trim().length > 0 && (!isRep || relationship.trim().length > 0)
   const noCharge = isRepairNoCharge(repair)
 
   const RELATIONSHIPS = [
@@ -1590,6 +1645,9 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
   ]
 
   const handleConfirm = () => {
+    if (!collectorType) { showToast('Select who is collecting the device (Client or Representative)', 'error'); return }
+    if (!name.trim()) { showToast(isRep ? 'Enter the representative name' : 'Enter the client name', 'error'); return }
+    if (isRep && !relationship.trim()) { showToast('Select the relationship to the client', 'error'); return }
     if (!canSubmit) return
     setLoading(true)
     deliverRepair(repair.id, name.trim(), phone.trim(), isRep, relationship.trim() || undefined, idNumber.trim() || undefined, closeAfter)
@@ -1602,7 +1660,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
 
         {/* Collector type toggle */}
         <div>
-          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Who is collecting the device?</p>
+          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Who is collecting the device? <span className="text-red-500">*</span></p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               onClick={() => {
@@ -1640,9 +1698,9 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
         </div>
 
         {/* Client path */}
-        {!isRep && (
+        {collectorType === 'client' && (
           <>
-            <Field label="Client Name">
+            <Field label="Client Name" required>
               <Input value={name} onChange={setName} placeholder={repair.customerName} />
             </Field>
             <Field label="Phone (optional)">
@@ -1705,7 +1763,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
 
         <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn onClick={handleConfirm} disabled={!canSubmit || loading} color="linear-gradient(135deg,#059669,#10B981)" shadow="0 8px 24px rgba(16,185,129,0.4)">
+          <ActionBtn onClick={handleConfirm} disabled={loading} color="linear-gradient(135deg,#059669,#10B981)" shadow="0 8px 24px rgba(16,185,129,0.4)">
             <Fa icon={faTruck} /> Confirm Handover
           </ActionBtn>
         </div>
@@ -1748,7 +1806,7 @@ export function CancelRepairModal({ repair, onClose }: { repair: RepairOrder; on
             </p>
           </div>
         </div>
-        <Field label="Reason for Cancellation">
+        <Field label="Reason for Cancellation" required>
           <Textarea
             value={reason}
             onChange={v => setReason(v)}

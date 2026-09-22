@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { DataTable } from '@/components/data-table'
 import { fmtDate, fmtKes, type Invoice } from '@/lib/store'
 import { bucketOpenInvoices, type AgeingRow } from '@/lib/accounting/ageing'
+import { EmptyState } from '@/components/ui'
 
 type ViewMode = 'invoices' | 'partners'
 
@@ -23,7 +24,7 @@ function AgeingReport({
   const [partnerFilter, setPartnerFilter] = useState<string | null>(null)
 
   const report = useMemo(
-    () => bucketOpenInvoices(invoices, asOf || new Date().toISOString().slice(0, 10)),
+    () => bucketOpenInvoices(invoices, asOf),
     [invoices, asOf],
   )
 
@@ -210,11 +211,17 @@ export default function AgeingTab({
   customerInvoices: Invoice[]
   vendorBills: Invoice[]
 }) {
-  const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10))
+  // "As of" date starts empty — the user picks the reporting date.
+  const [asOf, setAsOf] = useState('')
   const [arApi, setArApi] = useState<Invoice[] | null>(null)
   const [apApi, setApApi] = useState<Invoice[] | null>(null)
 
   useEffect(() => {
+    if (!asOf) {
+      setArApi(null)
+      setApApi(null)
+      return
+    }
     let cancelled = false
     async function load() {
       try {
@@ -278,8 +285,14 @@ export default function AgeingTab({
           />
         </label>
       </div>
-      <AgeingReport title="Receivables ageing" kind="ar" invoices={arApi ?? customerInvoices} asOf={asOf} />
-      <AgeingReport title="Payables ageing" kind="ap" invoices={apApi ?? vendorBills} asOf={asOf} />
+      {!asOf ? (
+        <EmptyState title="Select a period to view this report" subtitle="Pick an “As of” date above." />
+      ) : (
+        <>
+          <AgeingReport title="Receivables ageing" kind="ar" invoices={arApi ?? customerInvoices} asOf={asOf} />
+          <AgeingReport title="Payables ageing" kind="ap" invoices={apApi ?? vendorBills} asOf={asOf} />
+        </>
+      )}
     </div>
   )
 }

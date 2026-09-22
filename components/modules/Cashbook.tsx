@@ -10,9 +10,11 @@ import { invoicePaymentStatus } from '@/lib/odoo-sales-flow'
 import { computeCashbookTotals } from '@/lib/finance-alerts'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { EmptyState } from '@/components/ui'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export function monthLabel(ym: string) {
+  if (!ym) return 'All months'
   const [y, m] = ym.split('-')
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', month: 'long', year: 'numeric' })
 }
@@ -323,9 +325,10 @@ function ReconPanel({
   } = useFinanceStore()
 
   // Local form state for adding a statement line
+  // Date and category start empty — the user sets them for each line.
   const [form, setForm] = useState({
-    date: `${month}-01`, description: '', reference: '',
-    debit: '', credit: '', balance: '', category: 'payment' as StatementLineCategory,
+    date: '', description: '', reference: '',
+    debit: '', credit: '', balance: '', category: '' as StatementLineCategory | '',
   })
   const [pendingMatch, setPendingMatch] = useState<string | null>(null) // statementId waiting for cashbook pick
   const [subTab, setSubTab] = useState<'statement' | 'matching' | 'recon'>('statement')
@@ -367,8 +370,13 @@ function ReconPanel({
     if (isLocked) { showToast('This reconciled bank period is locked. Reopen it before adding statement lines.', 'error'); return }
     const debitVal  = parseFloat(form.debit)  || 0
     const creditVal = parseFloat(form.credit) || 0
-    if (!form.description) { showToast('Enter a description', 'error'); return }
+    const missing: string[] = []
+    if (!form.date) missing.push('Date')
+    if (!form.description) missing.push('Description')
+    if (!form.category) missing.push('Category')
+    if (missing.length) { showToast(`Required: ${missing.join(', ')}`, 'error'); return }
     if (debitVal === 0 && creditVal === 0) { showToast('Enter a debit or credit amount', 'error'); return }
+    const category = form.category as StatementLineCategory
     addStatementLine({
       bankAccountId: account.id,
       month,
@@ -378,7 +386,7 @@ function ReconPanel({
       debit:       debitVal,
       credit:      creditVal,
       balance:     parseFloat(form.balance) || undefined,
-      category:    form.category,
+      category,
     })
     setForm(p => ({ ...p, description: '', reference: '', debit: '', credit: '', balance: '' }))
   }
@@ -490,7 +498,7 @@ function ReconPanel({
               Add Statement Line
             </p>
             <div className="finance-recon-entry-form grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[110px_minmax(180px,1fr)_120px_100px_110px_110px_100px_80px] gap-2">
-              <input type="date" className="form-input text-[10px]"
+              <input type="date" className="form-input text-[10px]" aria-label="Statement line date"
                 value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
               <input type="text" className="form-input text-[10px]" placeholder="Description / Narration"
                 value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
@@ -498,7 +506,9 @@ function ReconPanel({
               <input type="text" className="form-input text-[10px]" placeholder="Ref / Cheque No"
                 value={form.reference} onChange={e => setForm(p => ({ ...p, reference: e.target.value }))} />
               <select className="form-select text-[10px]"
-                value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value as StatementLineCategory }))}>
+                value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value as StatementLineCategory }))}
+                aria-label="Statement line category">
+                <option value="" disabled>Category…</option>
                 {STMT_CATS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
               <input type="number" className="form-input text-[10px]" placeholder="Debit (out)"
@@ -973,11 +983,9 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
     return Array.from(months).sort().reverse()
   }, [allEntries])
 
-  const currentMonth = (() => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  })()
-  const [activeMonth, setActiveMonth] = useUrlUiState('bankMonth', currentMonth)
+  // Month filter starts empty = all months (no date filtering) for the
+  // cashbook list; reconciliation asks the user to pick a month.
+  const [activeMonth, setActiveMonth] = useUrlUiState('bankMonth', '')
   const [activeTabValue, setActiveTabValue] = useUrlQueryState('bankView', 'cashbook')
   const activeTab: 'cashbook' | 'reconcile' = activeTabValue === 'reconcile' ? 'reconcile' : 'cashbook'
   const setActiveTab = (next: 'cashbook' | 'reconcile') => setActiveTabValue(next)
@@ -989,7 +997,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   const monthEntries = useMemo(() => {
     const res: CashbookEntry[] = []
     for (const e of allEntries) {
-      if (toYM(e.date) === activeMonth) res.push(e)
+      if (!activeMonth || toYM(e.date) === activeMonth) res.push(e)
     }
     return res
   }, [allEntries, activeMonth])
@@ -1008,7 +1016,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
     const map: Record<string, number> = {}
     for (const acc of bankAccounts) map[acc.id] = acc.openingBalance
     for (const e of allEntries) {
-      if (toYM(e.date) < activeMonth && map[e.bankAccountId] !== undefined) {
+      if (activeMonth && toYM(e.date) < activeMonth && map[e.bankAccountId] !== undefined) {
         map[e.bankAccountId] += (e.credit - e.debit)
       }
     }
@@ -1067,6 +1075,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             <span className="text-[10px] font-medium" style={{ color: 'var(--text-3)' }}>Month</span>
             <select className="form-select text-xs w-full min-h-[44px]"
               value={activeMonth} onChange={e => setActiveMonth(e.target.value)}>
+              <option value="">All months</option>
               {availableMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
             </select>
           </label>
@@ -1106,7 +1115,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
               </div>
               <p className="text-sm font-bold" style={{ color }}>{fmtKes(bookBal)}</p>
               <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>
-                Book · this month +{fmtKes(mCredit)} / −{fmtKes(mDebit)}
+                Book · {activeMonth ? 'this month' : 'all months'} +{fmtKes(mCredit)} / −{fmtKes(mDebit)}
               </p>
             </button>
           )
@@ -1270,6 +1279,9 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             Any difference indicates outstanding deposits, unpresented cheques, or bank charges not yet posted.
           </div>
 
+          {!activeMonth ? (
+            <EmptyState title="Select a period to view this report" subtitle="Choose a month above to reconcile." />
+          ) : (<>
           {bankAccounts.filter(a => a.active && (filterAccount === 'all' || a.id === filterAccount)).map(acc => {
             const accEntries = monthEntries.filter(e => e.bankAccountId === acc.id)
             const bookBal    = closingByAccount[acc.id] ?? 0
@@ -1375,6 +1387,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
               )
             })()}
           </div>
+          </>)}
         </div>
       )}
     </div>

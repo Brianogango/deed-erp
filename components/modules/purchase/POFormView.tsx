@@ -156,6 +156,11 @@ export default function POFormView() {
   }
 
   const submitPartialBill = async () => {
+    const badLine = Object.entries(billQtys).find(([, qty]) => qty.trim() !== '' && (!Number.isFinite(Number(qty)) || Number(qty) < 0))
+    if (badLine) {
+      showToast('Bill quantities must be numbers of zero or more', 'error')
+      return
+    }
     const overrides = Object.entries(billQtys)
       .map(([lineId, qty]) => ({ lineId, qty: Math.max(0, Number(qty) || 0) }))
       .filter(o => o.qty > 0)
@@ -182,8 +187,8 @@ export default function POFormView() {
     const latest = receipts.filter(r => r.poId === activePO.id && r.status === 'validated').pop()
     if (!latest) { showToast('No validated receipt found', 'error'); return }
     setReturnReceiptId(latest.id)
-    setReturnLines(latest.lines.filter(l => l.qtyReceived > 0).map(l => ({ productId: l.productId, productName: l.productName, qty: '1', serials: [], requiresSerial: l.requiresSerial })))
-    setReturnScanInput({}); setReturnCollectedBy(''); setReturnCollectedDate(new Date().toISOString().slice(0, 10)); setReturnPickupNotes(''); setShowReturnModal(true)
+    setReturnLines(latest.lines.filter(l => l.qtyReceived > 0).map(l => ({ productId: l.productId, productName: l.productName, qty: '', serials: [], requiresSerial: l.requiresSerial })))
+    setReturnReason(''); setReturnScanInput({}); setReturnCollectedBy(''); setReturnCollectedDate(''); setReturnPickupNotes(''); setShowReturnModal(true)
   }
 
     const canEdit        = activePO.status === 'draft' || activePO.status === 'sent'
@@ -961,8 +966,8 @@ export default function POFormView() {
             {addProd && (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="Quantity"><Input value={addQty} onChange={setAddQty} type="number" /></Field>
-                  <Field label="Unit Cost (KES)"><Input value={addPrice} onChange={setAddPrice} type="number" /></Field>
+                  <Field label="Quantity" required><Input value={addQty} onChange={setAddQty} type="number" /></Field>
+                  <Field label="Unit Cost (KES)" required><Input value={addPrice} onChange={setAddPrice} type="number" /></Field>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer text-xs select-none">
                   <input type="checkbox" checked={addVAT} onChange={e => setAddVAT(e.target.checked)}

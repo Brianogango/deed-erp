@@ -37,7 +37,8 @@ export default function EmailReviewPanel({
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
   salesReps: { id: string; name: string }[]
 }) {
-  const [status, setStatus] = useState('REVIEW_REQUIRED')
+  // Filter starts empty (= all statuses); the user narrows it down.
+  const [status, setStatus] = useState('')
   const [inbound, setInbound] = useState<InboundRow[]>([])
   const [reviewLeads, setReviewLeads] = useState<ReviewLead[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,7 +49,7 @@ export default function EmailReviewPanel({
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/crm/email-review?status=${encodeURIComponent(status)}`)
+      const res = await fetch(`/api/crm/email-review?status=${encodeURIComponent(status || 'all')}`)
       if (!res.ok) throw new Error('Failed to load review queue')
       const data = await res.json()
       setInbound(Array.isArray(data.inbound) ? data.inbound : [])
@@ -121,12 +122,12 @@ export default function EmailReviewPanel({
             value={status}
             onChange={e => setStatus(e.target.value)}
           >
+            <option value="">All statuses</option>
             <option value="REVIEW_REQUIRED">Review required</option>
             <option value="LEAD_CREATED">Created</option>
             <option value="FILTERED">Filtered</option>
             <option value="NON_SALES">Non-sales</option>
             <option value="CLASSIFIED">Classified (shadow)</option>
-            <option value="all">All audit</option>
           </select>
           <PrimaryActionButton onClick={() => void load()} disabled={loading}>
             Refresh

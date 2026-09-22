@@ -88,7 +88,7 @@ export default function LeaveApplication() {
   const [showForm, setShowForm] = useState(false)
 
   // Form state
-  const [fType, setFType]       = useState<StoreLeaveType>('annual')
+  const [fType, setFType]       = useState<StoreLeaveType | ''>('')
   const [fStart, setFStart]     = useState('')
   const [fEnd, setFEnd]         = useState('')
   const [fReason, setFReason]   = useState('')
@@ -109,7 +109,7 @@ export default function LeaveApplication() {
 
   // HR admin confirmations
   const [confirmAction, setConfirmAction] = useState<null | 'init' | 'closure' | 'expire'>(null)
-  const [actionYear, setActionYear] = useState(String(currentYear))
+  const [actionYear, setActionYear] = useState('')
 
   const getBalance = (type: StoreLeaveType) => {
     const b = myBalances.find(b => b.leaveType === type)
@@ -117,14 +117,15 @@ export default function LeaveApplication() {
     return { ...b, available: remainingBalance(b) }
   }
 
-  const computedDays = calcDaysForType(fType, fStart, fEnd)
+  const computedDays = fType && fStart && fEnd ? calcDaysForType(fType, fStart, fEnd) : 0
   const noticeGiven  = fStart ? noticeDaysGiven(fStart) : 0
-  const noticeReq    = requiredNotice(fType, computedDays)
+  const noticeReq    = fType ? requiredNotice(fType, computedDays) : 0
   const noticeLack   = noticeReq > 0 && computedDays > 0 && noticeGiven < noticeReq
-  const balanceForType = getBalance(fType)
+  const balanceForType = fType ? getBalance(fType) : null
   const balanceAvailable = balanceForType?.available ?? 0
-  const balanceExhausted = fType !== 'unpaid' && balanceAvailable <= 0
-  const balanceLack = fType !== 'unpaid' && computedDays > 0 && computedDays > balanceAvailable
+  const balanceExhausted = !!fType && fType !== 'unpaid' && balanceAvailable <= 0
+  const balanceLack = !!fType && fType !== 'unpaid' && computedDays > 0 && computedDays > balanceAvailable
+  const fTypeLabel = fType ? (LEAVE_LABELS[fType] ?? fType) : ''
   const todayLocal = formatLocalDate(new Date())
 
   const pendingAll  = managedLeaves.filter(r => r.status === 'pending_hr')
@@ -138,15 +139,19 @@ export default function LeaveApplication() {
 
   const handleSubmit = () => {
     if (!myEmployee) { showToast('No employee record linked. Contact HR.', 'error'); return }
-    if (!fStart || !fEnd) { showToast('Select start and end dates', 'error'); return }
+    const missing: string[] = []
+    if (!fType) missing.push('Leave Type')
+    if (!fStart) missing.push('Start Date')
+    if (!fEnd) missing.push('End Date')
+    if (!fReason.trim()) missing.push('Reason / Details')
+    if (missing.length || !fType) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
     if (computedDays <= 0) { showToast('End date must be after start date', 'error'); return }
-    if (!fReason.trim()) { showToast('Please provide a reason', 'error'); return }
     if (balanceExhausted) {
-      showToast(`No remaining ${LEAVE_LABELS[fType] ?? fType} balance — you cannot apply for this leave type`, 'error')
+      showToast(`No remaining ${fTypeLabel} balance — you cannot apply for this leave type`, 'error')
       return
     }
     if (balanceLack) {
-      showToast(`Insufficient ${LEAVE_LABELS[fType] ?? fType} balance — ${balanceAvailable} day(s) available, ${computedDays} requested`, 'error')
+      showToast(`Insufficient ${fTypeLabel} balance — ${balanceAvailable} day(s) available, ${computedDays} requested`, 'error')
       return
     }
     if (noticeLack) {
@@ -165,7 +170,7 @@ export default function LeaveApplication() {
         reason:       fReason.trim(),
       })
       setShowForm(false)
-      setFType('annual'); setFStart(''); setFEnd(''); setFReason('')
+      setFType(''); setFStart(''); setFEnd(''); setFReason('')
       setTab('my_leaves')
     } catch {
       // toast already shown by store
@@ -522,10 +527,11 @@ export default function LeaveApplication() {
           {tab === 'hr_admin' && isHRAdmin && (
             <div className="p-5 flex flex-col gap-6">
               <div>
-                <p className="text-xs font-bold text-[var(--text-1)] mb-1">Year</p>
+                <p className="text-xs font-bold text-[var(--text-1)] mb-1">Year *</p>
                 <input
                   type="number"
                   className="form-input w-32"
+                  placeholder="Year"
                   value={actionYear}
                   onChange={e => setActionYear(e.target.value)}
                 />
@@ -567,9 +573,14 @@ export default function LeaveApplication() {
                     <button
                       className="text-xs font-bold px-3 py-2 rounded-xl text-white"
                       style={{ background: a.color }}
-                      onClick={() => setConfirmAction(a.key)}
+                      onClick={() => {
+                        const yr = Number(actionYear)
+                        if (!actionYear.trim()) { showToast('Please fill in: Year', 'error'); return }
+                        if (!Number.isInteger(yr) || yr < 2000 || yr > 2100) { showToast('Year must be a valid four-digit year', 'error'); return }
+                        setConfirmAction(a.key)
+                      }}
                     >
-                      Run for {actionYear}
+                      {actionYear ? `Run for ${actionYear}` : 'Run'}
                     </button>
                   </div>
                 ))}
@@ -604,12 +615,12 @@ export default function LeaveApplication() {
                 <Field label="Leave Type *">
                   <Select
                     value={fType}
-                    onChange={v => { setFType(v as StoreLeaveType); setFStart(''); setFEnd('') }}
-                    options={employeeLeaveTypesFor(myEmployee?.gender).map(v => {
+                    onChange={v => { setFType(v as StoreLeaveType | ''); setFStart(''); setFEnd('') }}
+                    options={[{ value: '', label: 'Select leave type…' }, ...employeeLeaveTypesFor(myEmployee?.gender).map(v => {
                       const avail = getBalance(v)?.available
                       const suffix = v === 'unpaid' ? '' : avail === undefined ? '' : ` (${Math.max(0, avail)} left)`
                       return { value: v, label: `${LEAVE_LABELS[v]}${suffix}` }
-                    })}
+                    })]}
                   />
                 </Field>
               </div>
@@ -617,12 +628,12 @@ export default function LeaveApplication() {
               {balanceExhausted && (
                 <div className="col-span-2 px-3 py-2 rounded-lg text-[11px] bg-red-50 border border-red-200 text-red-700">
                   <Fa icon={faTriangleExclamation} className="mr-1" />
-                  Your <strong>{LEAVE_LABELS[fType]}</strong> balance is used up ({balanceAvailable} day(s) left). You cannot apply until HR adjusts the balance.
+                  Your <strong>{fTypeLabel}</strong> balance is used up ({balanceAvailable} day(s) left). You cannot apply until HR adjusts the balance.
                 </div>
               )}
 
               {/* Notice requirement hint */}
-              {!NOTICE_EXEMPT_TYPES.includes(fType) && (
+              {!!fType && !NOTICE_EXEMPT_TYPES.includes(fType) && (
                 <div className="col-span-2 px-3 py-2 rounded-lg text-[11px]"
                   style={{ background: 'var(--info-bg)', border: '1px solid var(--border)', color: 'var(--info-text)' }}>
                   <Fa icon={faCircleInfo} className="mr-1" />
@@ -645,7 +656,7 @@ export default function LeaveApplication() {
                 <div className={`col-span-2 px-3 py-2 rounded-lg text-[11px] ${noticeLack || balanceLack ? 'bg-red-50 border-red-200 text-red-700' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}
                   style={{ border: '1px solid' }}>
                   <p>
-                    <span className="font-bold">{computedDays} {CALENDAR_DAY_TYPES.includes(fType) ? 'calendar' : 'working'} day{computedDays !== 1 ? 's' : ''}</span>
+                    <span className="font-bold">{computedDays} {fType && CALENDAR_DAY_TYPES.includes(fType) ? 'calendar' : 'working'} day{computedDays !== 1 ? 's' : ''}</span>
                     {fType !== 'unpaid' && (
                       <span className="ml-2" style={{ color: (balanceLack || balanceExhausted) ? 'var(--danger)' : 'var(--success)' }}>
                         · {balanceAvailable} day{balanceAvailable !== 1 ? 's' : ''} available {(balanceLack || balanceExhausted) ? '(insufficient)' : ''}
@@ -692,7 +703,7 @@ export default function LeaveApplication() {
               <button className="btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
               <button
                 className="btn-primary"
-                disabled={submitting || computedDays <= 0 || !fReason.trim() || noticeLack || balanceLack || balanceExhausted}
+                disabled={submitting || noticeLack || balanceLack || balanceExhausted}
                 onClick={handleSubmit}
                 title={
                   balanceExhausted ? 'No leave balance remaining'
@@ -811,7 +822,8 @@ export default function LeaveApplication() {
                 className="btn-primary"
                 style={{ background: confirmAction === 'expire' ? 'var(--danger)' : 'var(--navy)' }}
                 onClick={() => {
-                  const yr = parseInt(actionYear)
+                  const yr = Number(actionYear)
+                  if (!Number.isInteger(yr) || yr < 2000 || yr > 2100) { showToast('Year must be a valid four-digit year', 'error'); return }
                   if (confirmAction === 'init')    initYearBalances(yr)
                   if (confirmAction === 'closure') applyDecemberClosure(yr)
                   if (confirmAction === 'expire')  expireYearEndBalances(yr)

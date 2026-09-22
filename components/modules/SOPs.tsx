@@ -222,8 +222,8 @@ function SOPsContent() {
   // ── Admin: Manage / Create ──
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editSopId, setEditSopId]             = useState<string | null>(null)
-  const [sopUserId, setSopUserId]             = useState(users[0]?.id ?? '')
-  const [sopPeriod, setSopPeriod]             = useState<SOP['period']>('monthly')
+  const [sopUserId, setSopUserId]             = useState('')
+  const [sopPeriod, setSopPeriod]             = useState<SOP['period'] | ''>('')
   const [sopNotes, setSopNotes]               = useState('')
   const [sopMetrics, setSopMetrics]           = useState<SOPMetric[]>([])
 
@@ -239,8 +239,8 @@ function SOPsContent() {
 
   function openCreate() {
     setEditSopId(null)
-    setSopUserId(users[0]?.id ?? '')
-    setSopPeriod('monthly')
+    setSopUserId('')
+    setSopPeriod('')
     setSopNotes('')
     setSopMetrics([{ id: uid(), label: '', metricType: 'custom', target: 0, unit: '', targetDir: 'min' }])
     setShowCreateModal(true)
@@ -284,7 +284,10 @@ function SOPsContent() {
 
   function saveSOP() {
     const u = users.find(x => x.id === sopUserId)
-    if (!u) { showToast('Select a user', 'error'); return }
+    const missing: string[] = []
+    if (!u) missing.push('Staff Member')
+    if (!sopPeriod) missing.push('Review Period')
+    if (missing.length || !u || !sopPeriod) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
     const metrics = sopMetrics.filter(m => m.label.trim() && m.target > 0)
     if (metrics.length === 0) { showToast('Add at least one metric with a label and target', 'error'); return }
 
@@ -694,13 +697,15 @@ function SOPsContent() {
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Staff Member *</label>
                   <select aria-label="Staff member" className="form-input w-full text-[12px]" value={sopUserId}
                     onChange={e => setSopUserId(e.target.value)} disabled={!!editSopId}>
+                    <option value="">Select staff member…</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Review Period *</label>
                   <select aria-label="Review period" className="form-input w-full text-[12px]" value={sopPeriod}
-                    onChange={e => setSopPeriod(e.target.value as SOP['period'])}>
+                    onChange={e => setSopPeriod(e.target.value as SOP['period'] | '')}>
+                    <option value="">Select period…</option>
                     <option value="monthly">Monthly</option>
                     <option value="weekly">Weekly</option>
                     <option value="quarterly">Quarterly</option>

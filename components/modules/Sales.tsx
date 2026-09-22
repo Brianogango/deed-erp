@@ -188,6 +188,8 @@ type SalesOrderView = SaleOrder & {
   paymentTerms?: string
   createdByName?: string
 }
+/** Optional product row on a new quotation; qty stays '' until the user enters it. */
+type OptionalProductDraft = { id: string; productId: string; productName: string; qty: number | ''; unitPrice: number }
 type DraftLine = {
   type: 'item' | 'section'
   id: string
@@ -428,7 +430,7 @@ function SalesContent() {
   const [draftDirtyTick, setDraftDirtyTick] = useState(0)
   const [newNotes, setNewNotes] = useState('')
   const [newTermsAndConditions, setNewTermsAndConditions] = useState('')
-  const [newOptionalProducts, setNewOptionalProducts] = useState<Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>>([])
+  const [newOptionalProducts, setNewOptionalProducts] = useState<OptionalProductDraft[]>([])
   const [newQuoteAttachments, setNewQuoteAttachments] = useState<File[]>([])
   const [newCustomerRef, setNewCustomerRef] = useState('')
   const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
@@ -436,7 +438,7 @@ function SalesContent() {
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
   const [quoteFieldErrors, setQuoteFieldErrors] = useState<{ customer?: string; validUntil?: string; lines?: string }>({})
-  const [newPricelist, setNewPricelist] = useState('RETAIL')
+  const [newPricelist, setNewPricelist] = useState('')
   const [newSalespersonId, setNewSalespersonId] = useState('')
   const [newSalespersonName, setNewSalespersonName] = useState('')
   const [availablePricelists, setAvailablePricelists] = useState<PriceListDef[]>(BUILTIN_PRICELISTS)
@@ -502,8 +504,8 @@ function SalesContent() {
   const [showResetDraftConfirm, setShowResetDraftConfirm] = useState(false)
   const [showPartialInvoiceModal, setShowPartialInvoiceModal] = useState(false)
   const [showInvoiceWizard, setShowInvoiceWizard] = useState(false)
-  const [invoiceWizardMode, setInvoiceWizardMode] = useState<'regular' | 'down_payment_percent' | 'down_payment_fixed' | 'final'>('regular')
-  const [invoiceWizardPercent, setInvoiceWizardPercent] = useState('30')
+  const [invoiceWizardMode, setInvoiceWizardMode] = useState<'' | 'regular' | 'down_payment_percent' | 'down_payment_fixed' | 'final'>('')
+  const [invoiceWizardPercent, setInvoiceWizardPercent] = useState('')
   const [invoiceWizardAmount, setInvoiceWizardAmount] = useState('')
   const [creatingWizardInvoice, setCreatingWizardInvoice] = useState(false)
   const [partialInvoiceQtys, setPartialInvoiceQtys] = useState<Record<string, string>>({})
@@ -518,8 +520,8 @@ function SalesContent() {
   const [compareVersions, setCompareVersions] = useState<{ a: SalesOrderView; b: SalesOrderView } | null>(null)
   const [loadingCompare, setLoadingCompare] = useState(false)
   const [showAddLine, setShowAddLine] = useState(false)
-  const [addLineQty, setAddLineQty] = useState('1')
-  const [addLineDiscount, setAddLineDiscount] = useState('0')
+  const [addLineQty, setAddLineQty] = useState('')
+  const [addLineDiscount, setAddLineDiscount] = useState('')
   const [addLineVat, setAddLineVat] = useState(false)
   const [addLineProduct, setAddLineProduct] = useState<(typeof products)[0] | null>(null)
   const [showDnModal, setShowDnModal] = useState(false)
@@ -1041,7 +1043,7 @@ function SalesContent() {
     setNewNotes(''); setNewCustomerRef('')
     setNewInvoiceAddress(''); setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
-    setNewPricelist('RETAIL')
+    setNewPricelist('')
     setNewSalespersonId(currentUser?.id || '')
     setNewSalespersonName(currentUser?.name || '')
     setNewDraftLines([]); setView('new')
@@ -1075,7 +1077,7 @@ function SalesContent() {
     setNewInvoiceAddress('')
     setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
-    setNewPricelist('RETAIL')
+    setNewPricelist('')
     setNewDraftLines([])
     setActiveId(null)
     setView('new')
@@ -1370,7 +1372,11 @@ function SalesContent() {
   }, [activeOrder, getStockByLocation, products])
 
   // ── Draft line helpers ──────────────────────────────────────────────────
-  const addDraftLine = () => setNewDraftLines(p => [...p, { type: 'item', id: uid(), productId: '', productName: '', description: '', qty: '1', unitPrice: '0', discount: '0', taxRate: '0' }])
+  const addDraftLine = () => setNewDraftLines(p => [...p, { type: 'item', id: uid(), productId: '', productName: '', description: '', qty: '', unitPrice: '', discount: '', taxRate: '' }])
+  // The pricelist picker is only rendered when pricelists are enabled and more than one is
+  // active; otherwise the single active list applies (not a user choice).
+  const pricelistSelectorVisible = !!systemSettings.salesPricelists && availablePricelists.filter(l => l.isActive).length > 1
+  const effectiveNewPricelist = newPricelist || (pricelistSelectorVisible ? '' : (pricelistSelectOptions(availablePricelists)[0]?.value ?? 'RETAIL'))
   const addDraftSection = () => setNewDraftLines(p => [...p, { type: 'section', id: uid(), productId: '', productName: '', description: '', qty: '0', unitPrice: '0', discount: '0', taxRate: '0' }])
   const updateDraftLine = (id: string, field: keyof DraftLine, value: string) =>
     setNewDraftLines(p => p.map(l => l.id === id ? { ...l, [field]: value } : l))
@@ -1386,7 +1392,7 @@ function SalesContent() {
     })
   const selectProductForDraftLine = (lineId: string, product: typeof products[0]) => {
     const qty = 1
-    const priced = resolveListPrice({ product, pricelist: newPricelist, qty, priceLists: availablePricelists })
+    const priced = resolveListPrice({ product, pricelist: effectiveNewPricelist, qty, priceLists: availablePricelists })
     // Unit price on the quote = catalog sales price (via active pricelist). Keep 0 when
     // the catalog price is 0 so the field stays editable instead of looking blank/broken.
     const unitPrice = Number.isFinite(priced.unitPrice) ? Math.max(0, priced.unitPrice) : Math.max(0, Number(product.salePrice) || 0)
@@ -1405,6 +1411,10 @@ function SalesContent() {
   const draftTotal = draftSubtotal + draftTaxTotal
   const validDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) > 0)
   const invalidQtyDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) <= 0)
+  const isBlankOrNotNumber = (v: string) => v.trim() === '' || !Number.isFinite(Number(v))
+  const missingPriceDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && isBlankOrNotNumber(l.unitPrice))
+  const missingTaxDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && isBlankOrNotNumber(l.taxRate))
+  const invalidOptionalProducts = newOptionalProducts.filter(item => item.qty === '' || !(Number(item.qty) > 0))
   // Mirrors the authoritative checks in saveNewQuotation so the Save button reflects
   // real validation state instead of always being enabled.
   const quoteSaveBlockedReason = savingNewQuote
@@ -1413,6 +1423,14 @@ function SalesContent() {
     ? 'Select a customer before saving'
     : !newValidUntil
       ? 'Set a valid-until date before saving'
+      : pricelistSelectorVisible && !newPricelist
+      ? 'Select a pricelist before saving'
+      : missingPriceDraftLines.length > 0
+      ? 'Enter a unit price for every quoted product'
+      : missingTaxDraftLines.length > 0
+      ? 'Select a tax rate for every quoted product'
+      : invalidOptionalProducts.length > 0
+      ? 'Enter a quantity greater than zero for every optional product'
       : invalidQtyDraftLines.length > 0
         ? 'Quantity must be greater than zero for every quoted product'
         : validDraftLines.length === 0
@@ -1437,7 +1455,7 @@ function SalesContent() {
         deliveryAddress?: string
         paymentDetails?: Partial<DocumentPaymentDetails>
         termsAndConditions?: string
-        optionalProducts?: Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>
+        optionalProducts?: OptionalProductDraft[]
         lines: DraftLine[]
       }
       if (parsed.customer) setNewCustomer(parsed.customer)
@@ -1514,8 +1532,21 @@ function SalesContent() {
     const errors: { customer?: string; validUntil?: string; lines?: string } = {}
     if (!newCustomer) errors.customer = 'Please select a customer'
     if (!newValidUntil) errors.validUntil = 'Please set when this quotation expires'
+    if (pricelistSelectorVisible && !newPricelist) {
+      showToast('Please select a pricelist', 'error')
+      document.getElementById('quote-pricelist')?.focus()
+      return
+    }
+    if (invalidOptionalProducts.length > 0) {
+      showToast(`Enter a quantity for optional product(s): ${invalidOptionalProducts.map(item => item.productName).join(', ')}`, 'error')
+      return
+    }
     if (invalidQtyDraftLines.length > 0) {
       errors.lines = 'Quantity must be greater than zero for every quoted product'
+    } else if (missingPriceDraftLines.length > 0) {
+      errors.lines = 'Enter a unit price for every quoted product'
+    } else if (missingTaxDraftLines.length > 0) {
+      errors.lines = 'Select a tax rate for every quoted product'
     } else if (validDraftLines.length === 0) {
       errors.lines = 'Add at least one product with quantity greater than zero'
     }
@@ -1575,7 +1606,7 @@ function SalesContent() {
       const typedPrice = Number(l.unitPrice)
       const priced = resolveListPrice({
         product,
-        pricelist: newPricelist,
+        pricelist: effectiveNewPricelist,
         qty,
         customPrice: Number.isFinite(typedPrice) ? typedPrice : undefined,
         priceLists: availablePricelists,
@@ -1601,13 +1632,13 @@ function SalesContent() {
       lines: builtLines as any,
       ...(newDeliveryDate ? { deliveryDate: newDeliveryDate } : {}),
       paymentTerms: serializeQuotationPaymentTerms(paymentTermsDays),
-      pricelist: newPricelist,
+      pricelist: effectiveNewPricelist,
       validUntil: newValidUntil,
       salespersonId: newSalespersonId || currentUser?.id,
       salespersonName: newSalespersonName || currentUser?.name,
       ...(newNotes ? { notes: newNotes } : {}),
       ...(newTermsAndConditions ? { termsAndConditions: newTermsAndConditions.trim() } : {}),
-      ...(newOptionalProducts.length ? { optionalProducts: newOptionalProducts } : {}),
+      ...(newOptionalProducts.length ? { optionalProducts: newOptionalProducts.map(item => ({ ...item, qty: Number(item.qty) })) } : {}),
       ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
       ...(newInvoiceAddress ? { invoiceAddress: newInvoiceAddress } : {}),
       ...(newDeliveryAddress ? { deliveryAddress: newDeliveryAddress } : {}),
@@ -1703,12 +1734,19 @@ function SalesContent() {
 
   // ── Add line handler ────────────────────────────────────────────────────
   const handleAddLine = () => {
-    if (!addLineProduct || !activeId) return
-    const qty = Math.max(0, Number(addLineQty) || 0)
-    const disc = Number(addLineDiscount) || 0
-    if (qty <= 0) { showToast('Quantity must be greater than zero', 'error'); return }
+    if (!activeId) return
+    const missing: string[] = []
+    if (!addLineProduct) missing.push('Product')
+    if (addLineQty.trim() === '') missing.push('Quantity')
+    if (canEditDiscount && addLineDiscount.trim() === '') missing.push('Discount %')
+    if (missing.length) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
+    if (!addLineProduct) return
+    const qty = Number(addLineQty)
+    if (!Number.isFinite(qty) || qty <= 0) { showToast('Quantity must be greater than zero', 'error'); return }
+    const disc = canEditDiscount ? Number(addLineDiscount) : 0
+    if (!Number.isFinite(disc) || disc < 0 || disc > 100) { showToast('Discount % must be between 0 and 100', 'error'); return }
     addSOLine(activeId, addLineProduct, qty, disc, addLineVat ? companySettings.vatRate : 0)
-    setShowAddLine(false); setAddLineProduct(null); setAddLineQty('1'); setAddLineDiscount('0'); setAddLineVat(false)
+    setShowAddLine(false); setAddLineProduct(null); setAddLineQty(''); setAddLineDiscount(''); setAddLineVat(false)
   }
 
   // ── Commercial document builders (real PDF downloads) ───────────────────
@@ -2366,8 +2404,8 @@ function SalesContent() {
                         void openDeliveryView()
                         return
                       }
-                      setInvoiceWizardMode('regular')
-                      setInvoiceWizardPercent('30')
+                      setInvoiceWizardMode('')
+                      setInvoiceWizardPercent('')
                       setInvoiceWizardAmount('')
                       setShowInvoiceWizard(true)
                     }}
@@ -2966,7 +3004,7 @@ function SalesContent() {
                                 })}
                                 {activeOrder.lines.length === 0 && (
                                   <tr><td colSpan={9} className="px-4 py-8 text-center text-xs text-[var(--text-4)]">
-                                    No products added yet.{activeOrder.status === 'quotation' && <button onClick={() => setShowAddLine(true)} className="ml-2 text-primary-600 font-semibold hover:underline">+ Add a product</button>}
+                                    No products added yet.{activeOrder.status === 'quotation' && <button onClick={() => { setAddLineProduct(null); setAddLineQty(''); setAddLineDiscount(''); setAddLineVat(false); setShowAddLine(true) }} className="ml-2 text-primary-600 font-semibold hover:underline">+ Add a product</button>}
                                   </td></tr>
                                 )}
                               </tbody>
@@ -2974,7 +3012,7 @@ function SalesContent() {
                           </div>
                           {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                             <div className="sp-line-actions">
-                              <button type="button" onClick={() => setShowAddLine(true)}>Add a line</button>
+                              <button type="button" onClick={() => { setAddLineProduct(null); setAddLineQty(''); setAddLineDiscount(''); setAddLineVat(false); setShowAddLine(true) }}>Add a line</button>
                               <button type="button" onClick={() => addSOSection(activeOrder.id)}>Add a section</button>
                               <button type="button" onClick={() => setDetailTab('Notes')}>Add a note</button>
                             </div>
@@ -3171,8 +3209,8 @@ function SalesContent() {
                                             void openDeliveryView()
                                             return
                                           }
-                                          setInvoiceWizardMode('regular')
-                                          setInvoiceWizardPercent('30')
+                                          setInvoiceWizardMode('')
+                                          setInvoiceWizardPercent('')
                                           setInvoiceWizardAmount('')
                                           setShowInvoiceWizard(true)
                                         }}
@@ -3391,8 +3429,8 @@ function SalesContent() {
               )}
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Quantity"><Input type="number" value={addLineQty} onChange={setAddLineQty} /></Field>
-              {canEditDiscount && <Field label="Discount %"><Input type="number" value={addLineDiscount} onChange={setAddLineDiscount} /></Field>}
+              <Field label="Quantity *"><Input type="number" value={addLineQty} onChange={setAddLineQty} /></Field>
+              {canEditDiscount && <Field label="Discount % *"><Input type="number" value={addLineDiscount} onChange={setAddLineDiscount} /></Field>}
             </div>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={addLineVat} onChange={e => setAddLineVat(e.target.checked)} className="w-4 h-4 rounded accent-primary-600" />
@@ -3428,7 +3466,7 @@ function SalesContent() {
             })()}
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
               <button className="btn-outline" onClick={() => setShowAddLine(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleAddLine} disabled={!addLineProduct || !Number(addLineQty)}>Add to Order</button>
+              <button className="btn-primary" onClick={handleAddLine}>Add to Order</button>
             </div>
           </div>
         </Modal>
@@ -3441,7 +3479,9 @@ function SalesContent() {
       {showInvoiceWizard && activeOrder && (() => {
         const unappliedDowns = sumUnappliedDownPayments(activeInvoices as any, activeOrder.id)
         const modeHelp =
-          invoiceWizardMode === 'regular'
+          invoiceWizardMode === ''
+            ? 'Select an invoice type to continue.'
+            : invoiceWizardMode === 'regular'
             ? canCreateInvoiceNow
               ? 'Bills invoiceable quantity per product policy (Ordered Quantities vs Delivered Quantities). Does not deduct deposits.'
               : 'No product quantity is eligible yet under the current policy. Use a down payment, or validate delivery for Delivered-policy lines.'
@@ -3465,6 +3505,7 @@ function SalesContent() {
                 value={invoiceWizardMode}
                 onChange={e => setInvoiceWizardMode(e.target.value as typeof invoiceWizardMode)}
               >
+                <option value="" disabled>Select invoice type…</option>
                 <option value="regular">Regular invoice (by line policy)</option>
                 <option value="down_payment_percent">Down payment — percentage</option>
                 <option value="down_payment_fixed">Down payment — fixed amount</option>
@@ -3509,17 +3550,31 @@ function SalesContent() {
               <button className="btn-outline" onClick={() => setShowInvoiceWizard(false)}>Cancel</button>
               <button
                 className="btn-primary"
-                disabled={creatingWizardInvoice || wizardBlocked}
+                disabled={creatingWizardInvoice || wizardBlocked || !invoiceWizardMode}
                 title={wizardBlocked ? 'No invoiceable product quantity yet' : undefined}
                 onClick={() => {
+                  if (!invoiceWizardMode) { showToast('Select an invoice type', 'error'); return }
+                  const wizardMode = invoiceWizardMode
+                  let percent: number | undefined
+                  let amount: number | undefined
+                  if (wizardMode === 'down_payment_percent') {
+                    const pct = invoiceWizardPercent.trim() === '' ? NaN : Number(invoiceWizardPercent)
+                    if (!Number.isFinite(pct) || pct <= 0 || pct > 100) { showToast('Enter a down payment percent between 1 and 100', 'error'); return }
+                    percent = pct
+                  }
+                  if (wizardMode === 'down_payment_fixed') {
+                    const amt = invoiceWizardAmount.trim() === '' ? NaN : Number(invoiceWizardAmount)
+                    if (!Number.isFinite(amt) || amt <= 0) { showToast('Enter a down payment amount greater than zero', 'error'); return }
+                    amount = amt
+                  }
                   void (async () => {
                     setCreatingWizardInvoice(true)
                     try {
                       const soPayment = getDocumentPaymentDetails(activeOrder.id)
                       const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id, {
-                        mode: invoiceWizardMode,
-                        percent: Number(invoiceWizardPercent) || undefined,
-                        amount: Number(invoiceWizardAmount) || undefined,
+                        mode: wizardMode,
+                        percent,
+                        amount,
                       }))
                       if (inv?.id) {
                         setDocumentPaymentDetails(inv.id, soPayment)
@@ -3908,8 +3963,8 @@ function NewQuotationForm({
   newValidUntil: string; setNewValidUntil: (v: string) => void
   newNotes: string; setNewNotes: (v: string) => void
   newTermsAndConditions: string; setNewTermsAndConditions: (v: string) => void
-  newOptionalProducts: Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>
-  setNewOptionalProducts: (value: Array<{ id: string; productId: string; productName: string; qty: number; unitPrice: number }>) => void
+  newOptionalProducts: OptionalProductDraft[]
+  setNewOptionalProducts: (value: OptionalProductDraft[]) => void
   newQuoteAttachments: File[]; setNewQuoteAttachments: (files: File[]) => void
   newCustomerRef: string; setNewCustomerRef: (v: string) => void
   newInvoiceAddress: string; setNewInvoiceAddress: (v: string) => void
@@ -4153,6 +4208,7 @@ function NewQuotationForm({
                   onChange={e => setNewPricelist(e.target.value)}
                   aria-label="Pricelist — determines the catalogue price lines use"
                 >
+                  <option value="" disabled>Select pricelist…</option>
                   {pricelistSelectOptions(availablePricelists).map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
@@ -4312,6 +4368,7 @@ function NewQuotationForm({
                         </td>
                         <td data-col="tax">
                           <select aria-label="Line item tax rate" className="w-20" value={line.taxRate} onChange={e => updateDraftLine(line.id, 'taxRate', e.target.value)}>
+                            <option value="" disabled>Select…</option>
                             <option value="0">0%</option>
                             <option value={String(companySettings.vatRate)}>{companySettings.vatRate}%</option>
                           </select>
@@ -4370,7 +4427,7 @@ function NewQuotationForm({
                   id: uid(),
                   productId: product.id,
                   productName: product.name,
-                  qty: 1,
+                  qty: '',
                   unitPrice: Number(product.salePrice) || 0,
                 }])
               }}
@@ -4387,7 +4444,7 @@ function NewQuotationForm({
                 {newOptionalProducts.map(item => (
                   <div key={item.id} className="grid grid-cols-1 gap-2 rounded-lg border border-[var(--sp-border)] p-3 sm:grid-cols-[minmax(0,1fr)_90px_140px_auto] sm:items-center">
                     <strong className="truncate text-xs text-[var(--sp-text)]">{item.productName}</strong>
-                    <input aria-label={`Quantity for ${item.productName}`} type="number" min={1} value={item.qty} onChange={event => setNewOptionalProducts(newOptionalProducts.map(row => row.id === item.id ? { ...row, qty: Math.max(1, Number(event.target.value) || 1) } : row))} />
+                    <input aria-label={`Quantity for ${item.productName}`} type="number" min={1} placeholder="Qty" value={item.qty} onChange={event => setNewOptionalProducts(newOptionalProducts.map(row => row.id === item.id ? { ...row, qty: event.target.value === '' ? '' : Math.max(0, Number(event.target.value) || 0) } : row))} />
                     <input aria-label={`Price for ${item.productName}`} type="number" min={0} value={item.unitPrice} onChange={event => setNewOptionalProducts(newOptionalProducts.map(row => row.id === item.id ? { ...row, unitPrice: Math.max(0, Number(event.target.value) || 0) } : row))} />
                     <button type="button" className="btn-outline" onClick={() => setNewOptionalProducts(newOptionalProducts.filter(row => row.id !== item.id))}>Remove</button>
                   </div>

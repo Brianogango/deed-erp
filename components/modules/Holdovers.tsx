@@ -86,7 +86,7 @@ function DaysTag({ h }: { h: Holdover }) {
 // ── New Holdover Modal ─────────────────────────────────────────────────────────
 
 function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h: Holdover) => void }) {
-  const { products, getAvailableSerials, contacts, getVisibleRepairs, users, currentUserId, updateSerial, holdovers } = useOperationsStore()
+  const { products, getAvailableSerials, contacts, getVisibleRepairs, users, currentUserId, updateSerial, holdovers, showToast } = useOperationsStore()
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [step, setStep] = useState(1)
@@ -99,11 +99,11 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
   const [showContactDrop, setShowContactDrop] = useState(false)
   const [productId, setProductId] = useState('')
   const [serialId, setSerialId] = useState('')
-  const [deviceCondition, setDeviceCondition] = useState<DeviceCondition>('good')
+  const [deviceCondition, setDeviceCondition] = useState<DeviceCondition | ''>('')
   const [accessories, setAccessories] = useState('')
 
   // Step 2
-  const [purpose, setPurpose] = useState<HoldoverPurpose>('short_term')
+  const [purpose, setPurpose] = useState<HoldoverPurpose | ''>('')
   const [purposeNote, setPurposeNote] = useState('')
   const [linkedRepairId, setLinkedRepairId] = useState('')
   const [expectedReturnDate, setExpectedReturnDate] = useState('')
@@ -137,12 +137,29 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
     [getVisibleRepairs]
   )
 
-  const step1Valid = clientName.trim() && clientPhone.trim() && productId && serialId
+  const step1Missing = [
+    !clientName.trim() && 'Full Name',
+    !clientPhone.trim() && 'Phone',
+    !productId && 'Product',
+    !serialId && 'Serial Number',
+    !deviceCondition && 'Condition when given',
+  ].filter(Boolean) as string[]
   const authorizedUser = users.find(u => u.id === authorizedByUserId)
-  const step2Valid = expectedReturnDate && authorizedByUserId
+  const step2Missing = [
+    !purpose && 'Purpose',
+    !authorizedByUserId && 'Authorized By',
+    !expectedReturnDate && 'Expected Return Date',
+  ].filter(Boolean) as string[]
+
+  const goToStep2 = () => {
+    if (step1Missing.length) { showToast(`Please fill in: ${step1Missing.join(', ')}`, 'error'); return }
+    setStep(2)
+  }
 
   const handleSave = () => {
-    if (!step2Valid || !selectedSerial) return
+    if (step1Missing.length) { showToast(`Please fill in: ${step1Missing.join(', ')}`, 'error'); setStep(1); return }
+    if (step2Missing.length) { showToast(`Please fill in: ${step2Missing.join(', ')}`, 'error'); return }
+    if (!selectedSerial || !deviceCondition || !purpose) return
     setSaving(true)
 
     const h: Holdover = {
@@ -293,9 +310,10 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Condition when given</label>
-                      <select aria-label="Device condition when given" value={deviceCondition} onChange={e => setDeviceCondition(e.target.value as DeviceCondition)}
+                      <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Condition when given *</label>
+                      <select aria-label="Device condition when given" value={deviceCondition} onChange={e => setDeviceCondition(e.target.value as DeviceCondition | '')}
                         className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                        <option value="">Select…</option>
                         {Object.entries(CONDITION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                     </div>
@@ -325,8 +343,9 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
 
               <div>
                 <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Purpose *</label>
-                <select aria-label="Holdover purpose" value={purpose} onChange={e => setPurpose(e.target.value as HoldoverPurpose)}
+                <select aria-label="Holdover purpose" value={purpose} onChange={e => setPurpose(e.target.value as HoldoverPurpose | '')}
                   className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                  <option value="">Select…</option>
                   {Object.entries(PURPOSE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
               </div>
@@ -378,7 +397,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
           {step === 1 ? (
             <>
               <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">Cancel</button>
-              <button onClick={() => setStep(2)} disabled={!step1Valid}
+              <button onClick={goToStep2}
                 className="flex-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
                 Continue →
               </button>
@@ -386,7 +405,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
           ) : (
             <>
               <button onClick={() => setStep(1)} className="px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">← Back</button>
-              <button onClick={handleSave} disabled={!step2Valid || saving}
+              <button onClick={handleSave} disabled={saving}
                 className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
                 {saving ? 'Issuing…' : 'Issue Device'}
               </button>
@@ -401,13 +420,15 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
 // ── Return Modal ──────────────────────────────────────────────────────────────
 
 function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onClose: () => void; onReturn: (patch: Partial<Holdover>) => void }) {
-  const { updateSerial } = useOperationsStore()
-  const [condition, setCondition] = useState<DeviceCondition>('good')
+  const { updateSerial, showToast } = useOperationsStore()
+  const [condition, setCondition] = useState<DeviceCondition | ''>('')
   const [notes, setNotes] = useState('')
-  const [returnLocation, setReturnLocation] = useState<'shop' | 'warehouse'>('shop')
+  const [returnLocation, setReturnLocation] = useState<'shop' | 'warehouse' | ''>('')
   const [saving, setSaving] = useState(false)
 
   const handleReturn = () => {
+    const missing = [!condition && 'Return Condition', !returnLocation && 'Return to'].filter(Boolean)
+    if (missing.length || !condition || !returnLocation) { showToast(`Please select: ${missing.join(', ')}`, 'error'); return }
     setSaving(true)
     onReturn({
       returnedDate: now(),
@@ -445,16 +466,18 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Return Condition</label>
-              <select aria-label="Return condition" value={condition} onChange={e => setCondition(e.target.value as DeviceCondition)}
+              <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Return Condition *</label>
+              <select aria-label="Return condition" value={condition} onChange={e => setCondition(e.target.value as DeviceCondition | '')}
                 className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                <option value="">Select…</option>
                 {Object.entries(CONDITION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Return to</label>
-              <select aria-label="Return location" value={returnLocation} onChange={e => setReturnLocation(e.target.value as 'shop' | 'warehouse')}
+              <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Return to *</label>
+              <select aria-label="Return location" value={returnLocation} onChange={e => setReturnLocation(e.target.value as 'shop' | 'warehouse' | '')}
                 className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                <option value="">Select…</option>
                 <option value="shop">Shop Floor</option>
                 <option value="warehouse">Warehouse</option>
               </select>

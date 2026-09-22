@@ -30,15 +30,16 @@ export function CurrencyRatesEditor({
 }) {
   const [rates, setRates] = useState<ExchangeRateRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [fromCurrency, setFromCurrency] = useState('USD')
+  // Rate form starts empty — currency, rate and effective date are required.
+  const [fromCurrency, setFromCurrency] = useState('')
   const [rate, setRate] = useState('')
-  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().slice(0, 10))
+  const [effectiveDate, setEffectiveDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [fxRef, setFxRef] = useState('')
   const [fxAmountBase, setFxAmountBase] = useState('')
   const [fxAmountForeign, setFxAmountForeign] = useState('')
   const [fxRate, setFxRate] = useState('')
-  const [fxBalanceAccount, setFxBalanceAccount] = useState('1100 - Accounts Receivable')
+  const [fxBalanceAccount, setFxBalanceAccount] = useState('')
   const [fxPosting, setFxPosting] = useState(false)
 
   const load = useCallback(async () => {
@@ -62,6 +63,14 @@ export function CurrencyRatesEditor({
       showToast('Only Director or Finance can set exchange rates', 'error')
       return
     }
+    const missing: string[] = []
+    if (!fromCurrency) missing.push('From currency')
+    if (!rate.trim() || !Number.isFinite(Number(rate)) || Number(rate) <= 0) missing.push('Rate to KES (greater than 0)')
+    if (!effectiveDate) missing.push('Effective date')
+    if (missing.length) {
+      showToast(`Required: ${missing.join(', ')}`, 'error')
+      return
+    }
     setSaving(true)
     try {
       const res = await fetch('/api/settings/exchange-rates', {
@@ -76,6 +85,8 @@ export function CurrencyRatesEditor({
       }
       showToast(`${fromCurrency}→KES rate saved`, 'success')
       setRate('')
+      setFromCurrency('')
+      setEffectiveDate('')
       await load()
     } catch {
       showToast('Could not save rate', 'error')
@@ -129,23 +140,26 @@ export function CurrencyRatesEditor({
         )}
         {canWrite && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <Field label="From">
+            <Field label="From *">
               <Select
                 value={fromCurrency}
                 onChange={setFromCurrency}
-                options={SUPPORTED_CURRENCIES.filter(c => c !== 'KES').map(c => ({ value: c, label: c }))}
+                options={[
+                  { value: '', label: 'Select currency…' },
+                  ...SUPPORTED_CURRENCIES.filter(c => c !== 'KES').map(c => ({ value: c, label: c })),
+                ]}
               />
             </Field>
-            <Field label="Rate to KES">
+            <Field label="Rate to KES *">
               <Input type="number" value={rate} onChange={setRate} placeholder="e.g. 129.5" />
             </Field>
-            <Field label="Effective">
+            <Field label="Effective *">
               <Input type="date" value={effectiveDate} onChange={setEffectiveDate} />
             </Field>
             <div className="sm:col-span-3">
               <button
                 type="button"
-                disabled={saving || !rate}
+                disabled={saving}
                 onClick={() => void saveRate()}
                 className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-navy-500 text-white border-none cursor-pointer disabled:opacity-50"
               >
@@ -182,8 +196,19 @@ export function CurrencyRatesEditor({
             <div className="flex items-end">
               <button
                 type="button"
-                disabled={fxPosting || !fxRef || !fxAmountBase || !fxAmountForeign || !fxRate || !fxBalanceAccount}
+                disabled={fxPosting}
                 onClick={() => {
+                  const missing: string[] = []
+                  const isNum = (v: string) => v.trim() !== '' && Number.isFinite(Number(v))
+                  if (!fxRef.trim()) missing.push('Reference')
+                  if (!fxBalanceAccount.trim()) missing.push('Balance account label')
+                  if (!isNum(fxAmountBase)) missing.push('Booked amount (KES)')
+                  if (!isNum(fxAmountForeign)) missing.push('Foreign amount')
+                  if (!isNum(fxRate) || Number(fxRate) <= 0) missing.push('Rate to KES (greater than 0)')
+                  if (missing.length) {
+                    showToast(`Required: ${missing.join(', ')}`, 'error')
+                    return
+                  }
                   void (async () => {
                     setFxPosting(true)
                     try {

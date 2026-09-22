@@ -410,14 +410,16 @@ export default function NotificationOperationsPanel({
   const [loading, setLoading] = useState(false)
   const [loadingSecondary, setLoadingSecondary] = useState(false)
   const [retryingId, setRetryingId] = useState<string | null>(null)
-  const [days, setDays] = useState(7)
+  // Report period starts empty: the admin picks it before any activity is loaded.
+  const [days, setDays] = useState<number | ''>('')
+  const periodText = days === '' ? 'No period selected' : (days === 1 ? 'Last 24 hours' : 'Last ' + days + ' days')
   const [query, setQuery] = useState('')
   const [channelFilter, setChannelFilter] = useState('all')
   const [page, setPage] = useState(1)
   const pageSize = 8
 
-  const [selectedEvent, setSelectedEvent] = useState('repair.ready')
-  const [templateChannel, setTemplateChannel] = useState<TemplateChannel>('sms')
+  const [selectedEvent, setSelectedEvent] = useState('')
+  const [templateChannel, setTemplateChannel] = useState<TemplateChannel | ''>('')
   const [templateSubject, setTemplateSubject] = useState('')
   const [templateBody, setTemplateBody] = useState('')
   const [savingTemplate, setSavingTemplate] = useState(false)
@@ -430,6 +432,7 @@ export default function NotificationOperationsPanel({
   const [savingPreference, setSavingPreference] = useState(false)
 
   const loadOps = useCallback(async () => {
+    if (days === '') { setOps(null); return }
     setLoading(true)
     try {
       const res = await fetch('/api/admin/notifications?days=' + days, { cache: 'no-store' })
@@ -585,12 +588,18 @@ export default function NotificationOperationsPanel({
   }, [policies, templates])
 
   useEffect(() => {
-    if (templateEvents.length > 0 && !templateEvents.includes(selectedEvent)) {
-      setSelectedEvent(templateEvents.includes('repair.ready') ? 'repair.ready' : templateEvents[0])
+    // Clear a selection whose event no longer exists; never auto-pick one for the user.
+    if (selectedEvent && templateEvents.length > 0 && !templateEvents.includes(selectedEvent)) {
+      setSelectedEvent('')
     }
   }, [templateEvents, selectedEvent])
 
   useEffect(() => {
+    if (!selectedEvent || !templateChannel) {
+      setTemplateSubject('')
+      setTemplateBody('')
+      return
+    }
     const existing = templates.find(template => template.eventType === selectedEvent && template.channel === templateChannel)
     const starter = STARTER_TEMPLATES[selectedEvent]
     setTemplateSubject(existing?.subjectTemplate || starter?.subject || '{{title}}')
@@ -624,8 +633,12 @@ export default function NotificationOperationsPanel({
   }
 
   const saveTemplate = async () => {
-    if (!selectedEvent || !templateBody.trim()) {
-      showToast('Select an event and enter a message body.', 'error')
+    const missing: string[] = []
+    if (!selectedEvent) missing.push('Template event')
+    if (!templateChannel) missing.push('Channel')
+    if (!templateBody.trim()) missing.push('Message Body')
+    if (missing.length) {
+      showToast('Please fill in: ' + missing.join(', '), 'error')
       return
     }
     setSavingTemplate(true)
@@ -734,7 +747,10 @@ export default function NotificationOperationsPanel({
             </button>
             <button
               type="button"
-              onClick={() => void loadOps()}
+              onClick={() => {
+                if (days === '') { showToast('Select a period to load notification activity', 'error'); return }
+                void loadOps()
+              }}
               disabled={loading}
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#00AEEF] px-4 text-[10px] font-black text-white shadow-sm transition hover:bg-[#009bd6] disabled:opacity-50"
             >
@@ -761,8 +777,13 @@ export default function NotificationOperationsPanel({
 
       {activeTab === 'overview' && (
         <div className="space-y-4">
+          {days === '' && (
+            <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10.5px] font-semibold text-amber-800">
+              Select a period (in Recent Notifications below) to load delivery activity.
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
-            <MetricCard icon={faPaperPlane} label="Sent" value={totals.sent.toLocaleString()} detail={'Last ' + days + ' days'} />
+            <MetricCard icon={faPaperPlane} label="Sent" value={totals.sent.toLocaleString()} detail={periodText} />
             <MetricCard icon={faClock} label="Queued / retrying" value={totals.queued.toLocaleString()} detail={(ops?.pendingDeliveries || 0) + ' delivery jobs pending'} tone="violet" />
             <MetricCard icon={faTriangleExclamation} label="Failed" value={totals.failed.toLocaleString()} detail={(ops?.deadLetters || 0) + ' unresolved dead letters'} tone="red" />
             <MetricCard icon={faChartLine} label="Delivery rate" value={totals.rate.toFixed(1) + '%'} detail="Provider delivery ledger" tone="green" />
@@ -824,9 +845,11 @@ export default function NotificationOperationsPanel({
                   </select>
                   <select
                     value={days}
-                    onChange={event => setDays(Number(event.target.value))}
+                    aria-label="Report period"
+                    onChange={event => setDays(event.target.value === '' ? '' : Number(event.target.value))}
                     className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold text-slate-600"
                   >
+                    <option value="">Select period…</option>
                     <option value={1}>24 hours</option>
                     <option value={7}>7 days</option>
                     <option value={30}>30 days</option>
@@ -927,7 +950,7 @@ export default function NotificationOperationsPanel({
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
                 <div className="flex items-center justify-between">
                   <h3 className="text-[11px] font-black text-[#14213D]">Delivery Analytics</h3>
-                  <span className="text-[9px] text-slate-400">Last {days} days</span>
+                  <span className="text-[9px] text-slate-400">{periodText}</span>
                 </div>
                 <div className="mt-4 flex items-center gap-4">
                   <div
@@ -1047,17 +1070,18 @@ export default function NotificationOperationsPanel({
               <label className="block">
                 <span className="text-[9px] font-black text-slate-600">Template event</span>
                 <select value={selectedEvent} onChange={event => setSelectedEvent(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-semibold text-slate-700">
+                  <option value="">Select event…</option>
                   {templateEvents.map(eventType => <option key={eventType} value={eventType}>{humanize(eventType)}</option>)}
                 </select>
               </label>
               <div>
                 <span className="text-[9px] font-black text-slate-600">Trigger event</span>
-                <div className="mt-1.5 flex h-10 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-[9px] text-slate-500">{selectedEvent}</div>
+                <div className="mt-1.5 flex h-10 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-[9px] text-slate-500">{selectedEvent || '—'}</div>
               </div>
             </div>
 
             <div className="mt-4">
-              <p className="text-[9px] font-black text-slate-600">Channel</p>
+              <p className="text-[9px] font-black text-slate-600">Channel {!templateChannel && <span className="font-normal text-slate-400">(select one)</span>}</p>
               <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {TEMPLATE_CHANNELS.map(channel => (
                   <button
@@ -1108,7 +1132,7 @@ export default function NotificationOperationsPanel({
             <section className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-[11px] font-black text-[#14213D]">Live Preview</h3>
-                <ChannelBadge channel={templateChannel} />
+                {templateChannel && <ChannelBadge channel={templateChannel} />}
               </div>
               <div className="mt-4 rounded-[28px] border-[6px] border-[#141927] bg-white p-2 shadow-sm">
                 <div className="rounded-[18px] bg-slate-50 px-3 py-3">
@@ -1264,7 +1288,7 @@ export default function NotificationOperationsPanel({
 
           <aside className="space-y-4">
             <MetricCard icon={faGear} label="Active Rules" value={policies.length.toLocaleString()} detail="Central policy registry" tone="green" />
-            <MetricCard icon={faTriangleExclamation} label="Failed Automations" value={(ops?.recentFailures.length || 0).toLocaleString()} detail={'Within the last ' + days + ' days'} tone="red" />
+            <MetricCard icon={faTriangleExclamation} label="Failed Automations" value={(ops?.recentFailures.length || 0).toLocaleString()} detail={days === '' ? 'Select a period on Overview' : periodText} tone="red" />
             <section className="rounded-2xl border border-slate-200 bg-white p-4">
               <h3 className="text-[11px] font-black text-[#14213D]">Most Triggered Events</h3>
               <div className="mt-3 space-y-2.5">
@@ -1288,7 +1312,7 @@ export default function NotificationOperationsPanel({
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
             <div className="border-b border-slate-100 px-4 py-3">
               <h3 className="text-[12px] font-black text-[#14213D]">Recent delivery exceptions</h3>
-              <p className="mt-0.5 text-[9px] text-slate-400">Failed, retrying and dead-letter deliveries from the last {days} days.</p>
+              <p className="mt-0.5 text-[9px] text-slate-400">Failed, retrying and dead-letter deliveries — {days === '' ? 'select a period on Overview' : periodText.toLowerCase()}.</p>
             </div>
             {(ops?.recentFailures || []).length === 0 ? (
               <div className="px-5 py-12 text-center">

@@ -14,28 +14,36 @@ import {
 // ── Training ──────────────────────────────────────────────────────────────────
 export function HRTrainingTab() {
   const { employees, trainingPrograms, employeeTrainings, addTrainingProgram, enrollEmployeeTraining, updateTrainingStatus } = useHrStore()
+  const { showToast } = useApp()
   const [showProgram, setShowProgram] = useState(false)
   const [showEnroll, setShowEnroll] = useState<string | null>(null)
-  const [form, setForm] = useState({ title: '', description: '', durationDays: '1', mandatoryForNewHires: false })
+  const emptyProgramForm = () => ({ title: '', description: '', durationDays: '', mandatoryForNewHires: false })
+  const [form, setForm] = useState(emptyProgramForm)
   const [enrollEmp, setEnrollEmp] = useState('')
 
   const empName = (id: string) => employees.find(e => e.id === id)?.fullName ?? 'Unknown'
   const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const saveProgram = () => {
-    if (!form.title.trim()) return
+    const missing: string[] = []
+    if (!form.title.trim()) missing.push('Title')
+    if (!form.durationDays.trim()) missing.push('Duration (days)')
+    if (missing.length) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
+    const durationDays = Number(form.durationDays)
+    if (!Number.isFinite(durationDays) || durationDays <= 0) { showToast('Duration must be a number of days greater than zero', 'error'); return }
     addTrainingProgram({
       title: form.title.trim(),
       description: form.description.trim(),
-      durationDays: Math.max(1, Number(form.durationDays) || 1),
+      durationDays,
       mandatoryForNewHires: form.mandatoryForNewHires,
     })
-    setForm({ title: '', description: '', durationDays: '1', mandatoryForNewHires: false })
+    setForm(emptyProgramForm())
     setShowProgram(false)
   }
 
   const doEnroll = () => {
-    if (!showEnroll || !enrollEmp) return
+    if (!showEnroll) return
+    if (!enrollEmp) { showToast('Please select an employee to enroll', 'error'); return }
     enrollEmployeeTraining(enrollEmp, showEnroll)
     setEnrollEmp('')
     setShowEnroll(null)
@@ -45,7 +53,7 @@ export function HRTrainingTab() {
     <div className="hr-submodule hr-training flex flex-col">
       <div className="hr-submodule-toolbar p-4 border-b border-[var(--border-lt)] flex items-center justify-between gap-4">
         <h3 className="text-sm font-bold text-[var(--text-1)] flex items-center gap-2"><Fa icon={faGraduationCap} /> Training Programs</h3>
-        <button className="btn-primary flex items-center gap-2" onClick={() => setShowProgram(true)}><Fa icon={faPlus} /> New Program</button>
+        <button className="btn-primary flex items-center gap-2" onClick={() => { setForm(emptyProgramForm()); setShowProgram(true) }}><Fa icon={faPlus} /> New Program</button>
       </div>
 
       <div className="hr-training-grid hr-submodule-content p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -77,7 +85,7 @@ export function HRTrainingTab() {
                   </div>
                 ))}
               </div>
-              <button className="btn-outline text-[11px] py-1 mt-1" onClick={() => setShowEnroll(p.id)}>+ Enroll employee</button>
+              <button className="btn-outline text-[11px] py-1 mt-1" onClick={() => { setEnrollEmp(''); setShowEnroll(p.id) }}>+ Enroll employee</button>
             </div>
           )
         })}
@@ -88,7 +96,7 @@ export function HRTrainingTab() {
           <div className="flex flex-col gap-4">
             <Field label="Title" required><Input value={form.title} onChange={set('title')} placeholder="e.g. Data Protection Induction" /></Field>
             <Field label="Description"><Textarea value={form.description} onChange={set('description')} rows={3} /></Field>
-            <Field label="Duration (days)"><Input type="number" value={form.durationDays} onChange={set('durationDays')} /></Field>
+            <Field label="Duration (days)" required><Input type="number" value={form.durationDays} onChange={set('durationDays')} /></Field>
             <label className="flex items-center gap-2 text-xs text-[var(--text-2)]">
               <input type="checkbox" checked={form.mandatoryForNewHires} onChange={e => setForm(f => ({ ...f, mandatoryForNewHires: e.target.checked }))} />
               Mandatory for new hires
@@ -104,7 +112,7 @@ export function HRTrainingTab() {
             <Field label="Employee" required>
               <Select value={enrollEmp} onChange={setEnrollEmp} options={[{ value: '', label: '— Select —' }, ...employees.filter(e => e.status === 'active').map(e => ({ value: e.id, label: e.fullName }))]} />
             </Field>
-            <div className="hr-modal-actions flex justify-end gap-2"><button className="btn-outline" onClick={() => setShowEnroll(null)}>Cancel</button><button className="btn-primary" onClick={doEnroll} disabled={!enrollEmp}>Enroll</button></div>
+            <div className="hr-modal-actions flex justify-end gap-2"><button className="btn-outline" onClick={() => setShowEnroll(null)}>Cancel</button><button className="btn-primary" onClick={doEnroll}>Enroll</button></div>
           </div>
         </Modal>
       )}
@@ -124,13 +132,19 @@ const DOC_TYPES = [
 
 export function HRDocumentsTab() {
   const { employees, hrDocuments, addHRDocument } = useHrStore()
+  const { showToast } = useApp()
   const [show, setShow] = useState(false)
-  const [form, setForm] = useState({ employeeId: '', type: 'contract', title: '', expiryDate: '', notes: '' })
+  const emptyDocForm = () => ({ employeeId: '', type: '', title: '', expiryDate: '', notes: '' })
+  const [form, setForm] = useState(emptyDocForm)
   const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }))
   const empName = (id: string) => employees.find(e => e.id === id)?.fullName ?? '—'
 
   const save = () => {
-    if (!form.title.trim() || !form.employeeId) return
+    const missing: string[] = []
+    if (!form.employeeId) missing.push('Employee')
+    if (!form.type) missing.push('Type')
+    if (!form.title.trim()) missing.push('Title')
+    if (missing.length) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
     addHRDocument({
       employeeId: form.employeeId,
       type: form.type as any,
@@ -141,7 +155,7 @@ export function HRDocumentsTab() {
       notes: form.notes.trim() || undefined,
       uploadedDate: new Date().toISOString(),
     })
-    setForm({ employeeId: '', type: 'contract', title: '', expiryDate: '', notes: '' })
+    setForm(emptyDocForm())
     setShow(false)
   }
 
@@ -157,7 +171,7 @@ export function HRDocumentsTab() {
     <div className="hr-submodule hr-documents flex flex-col">
       <div className="hr-submodule-toolbar p-4 border-b border-[var(--border-lt)] flex items-center justify-between gap-4">
         <h3 className="text-sm font-bold text-[var(--text-1)] flex items-center gap-2"><Fa icon={faFileLines} /> HR Documents</h3>
-        <button className="btn-primary flex items-center gap-2" onClick={() => setShow(true)}><Fa icon={faPlus} /> Add Document</button>
+        <button className="btn-primary flex items-center gap-2" onClick={() => { setForm(emptyDocForm()); setShow(true) }}><Fa icon={faPlus} /> Add Document</button>
       </div>
       <DataTable
         tableId="hr_documents"
@@ -175,7 +189,7 @@ export function HRDocumentsTab() {
               <Select value={form.employeeId} onChange={set('employeeId')} options={[{ value: '', label: '— Select —' }, ...employees.map(e => ({ value: e.id, label: e.fullName }))]} />
             </Field>
             <div className="hr-form-grid grid grid-cols-2 gap-4">
-              <Field label="Type"><Select value={form.type} onChange={set('type')} options={DOC_TYPES} /></Field>
+              <Field label="Type" required><Select value={form.type} onChange={set('type')} options={[{ value: '', label: 'Select type…' }, ...DOC_TYPES]} /></Field>
               <Field label="Expiry Date"><Input type="date" value={form.expiryDate} onChange={set('expiryDate')} /></Field>
             </div>
             <Field label="Title" required><Input value={form.title} onChange={set('title')} placeholder="e.g. Employment Contract 2026" /></Field>
