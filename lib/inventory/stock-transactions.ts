@@ -142,7 +142,37 @@ export async function applyDeliveryStockMutation(params: {
   const reservedReleaseByProduct = new Map<string, number>()
   const newMoves: BlobStockMove[] = []
 
+  // A delivery whose stock was already deducted by an earlier attempt of THIS
+  // same delivery must not be refused. Validating writes stock first and the
+  // delivery record afterwards, so an attempt that failed in between left the
+  // serials sold while the delivery stayed open — every retry then hit
+  // "serial … is not available for delivery" and the delivery could never be
+  // completed. A line whose stock move already carries this delivery ref is
+  // treated as done: it is neither re-validated nor deducted a second time.
+  const movedProductIds = new Set(
+    stockMoves
+      .filter(m => m.documentRef === params.deliveryRef && m.type === 'out')
+      .map(m => m.productId),
+  )
+
+  /**
+   * True when this line's stock has already left: either a stock move carries
+   * this delivery's ref, or every serial on the line is already sold against
+   * this same sale order. Both mean an earlier attempt deducted it, so the
+   * line is skipped rather than validated or deducted again.
+   */
+  const alreadyApplied = (line: { productId: string; serialIds?: string[] }) => {
+    if (movedProductIds.has(line.productId)) return true
+    const serialIds = Array.isArray(line.serialIds) ? line.serialIds : []
+    if (!serialIds.length) return false
+    return serialIds.every(id => {
+      const serial = serials.find(s => s.id === id)
+      return Boolean(serial && serial.status === 'sold' && serial.saleOrderId === params.saleOrderId)
+    })
+  }
+
   for (const line of params.lines) {
+    if (alreadyApplied(line)) continue
     const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
     if (qty <= 0) continue
 
@@ -203,6 +233,7 @@ export async function applyDeliveryStockMutation(params: {
   }
 
   for (const line of params.lines) {
+    if (alreadyApplied(line)) continue
     const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
     if (qty <= 0) continue
 

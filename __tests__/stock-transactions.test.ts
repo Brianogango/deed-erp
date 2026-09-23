@@ -158,6 +158,56 @@ beforeEach(() => {
 })
 
 describe('applyDeliveryStockMutation()', () => {
+  const SERIAL_ID = 'cccccccc-dddd-4eee-8fff-000000000001'
+  const serialState = (serialStatus: string, moves: unknown[], saleOrderId = 'so-1') => ({
+    deed_products: [{ id: PRODUCT_ID, name: 'Thinkpad E14', stockQty: 1, requiresSerial: true, unit: 'pcs' }],
+    deed_serials: [{ id: SERIAL_ID, serial: 'PC029ZQ9', productId: PRODUCT_ID, status: serialStatus, saleOrderId, location: serialStatus === 'sold' ? 'customer' : 'warehouse' }],
+    deed_bulkStock: [],
+    deed_stockMoves: moves,
+    deed_stockReservations: [],
+  })
+  const deliverOnce = () => applyDeliveryStockMutation({
+    deliveryId: 'del-190',
+    deliveryRef: 'DN/2026/0190',
+    saleOrderId: 'so-1',
+    lines: [{ productId: PRODUCT_ID, productName: 'Thinkpad E14', qty: 1, serialIds: [SERIAL_ID], sourceLocation: 'warehouse' }],
+    userId: 'user-1',
+  })
+
+  it('REGRESSION 23-Sep-2026: retrying a delivery whose stock already left succeeds', async () => {
+    // Validating writes stock first and the delivery record afterwards. An
+    // attempt that died in between left the serial sold with the delivery
+    // still open, and every retry answered "serial … is not available for
+    // delivery" — the delivery could never be completed.
+    mockLoadAppState.mockResolvedValue(serialState('sold', [
+      { id: 'mv-1', type: 'out', productId: PRODUCT_ID, productName: 'Thinkpad E14', qty: 1, reason: 'Delivery DN/2026/0190', serialNumbers: ['PC029ZQ9'], date: '2026-09-23T10:00:00.000Z', userId: 'user-1', documentRef: 'DN/2026/0190' },
+    ]))
+    await expect(deliverOnce()).resolves.toEqual({ ok: true })
+  })
+
+  it('does not deduct the same stock twice on that retry', async () => {
+    mockLoadAppState.mockResolvedValue(serialState('sold', [
+      { id: 'mv-1', type: 'out', productId: PRODUCT_ID, productName: 'Thinkpad E14', qty: 1, reason: 'Delivery DN/2026/0190', serialNumbers: ['PC029ZQ9'], date: '2026-09-23T10:00:00.000Z', userId: 'user-1', documentRef: 'DN/2026/0190' },
+    ]))
+    await deliverOnce()
+    const payload = mockSaveStoreKeys.mock.calls[0][0]
+    expect(JSON.parse(payload.deed_products)[0].stockQty).toBe(1)
+    expect(JSON.parse(payload.deed_stockMoves)).toHaveLength(1)
+  })
+
+  it('recovers even when the stock move was lost, using the serial itself', async () => {
+    mockLoadAppState.mockResolvedValue(serialState('sold', []))
+    await expect(deliverOnce()).resolves.toEqual({ ok: true })
+    expect(JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_products)[0].stockQty).toBe(1)
+  })
+
+  it('still refuses a serial sold to a DIFFERENT order', async () => {
+    mockLoadAppState.mockResolvedValue(serialState('sold', [], 'so-other'))
+    const result = await deliverOnce()
+    expect(result).toMatchObject({ ok: false })
+    if (!result.ok) expect(result.error).toContain('not available for delivery')
+  })
+
   it('deducts bulk stock and persists blob updates when stock is available', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_products: [{ id: PRODUCT_ID, name: 'Widget', stockQty: 10, requiresSerial: false, unit: 'pcs' }],
