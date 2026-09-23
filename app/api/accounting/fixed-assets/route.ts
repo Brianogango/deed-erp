@@ -9,7 +9,7 @@ const fixedAssetCreateSchema = z.object({
   assetNumber: z.string().trim().min(1).max(80),
   name: z.string().trim().min(1).max(240),
   assetClass: z.string().trim().min(1).max(40).default('furniture'),
-  acquisitionDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+  acquisitionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   acquisitionCost: z.coerce.number().finite().positive().max(99_999_999_999.99),
   residualValue: z.coerce.number().finite().nonnegative().max(99_999_999_999.99).default(0),
   usefulLifeMonths: z.coerce.number().int().positive().max(1200),

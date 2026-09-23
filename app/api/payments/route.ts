@@ -13,6 +13,7 @@ import {
   resolvePostingAccountLabel,
 } from '@/lib/accounting/posting-service'
 import { randomUUID } from 'node:crypto'
+import { isUuid } from '@/lib/legacy-compat'
 
 const safeLegacyText = (value: unknown, max: number) => {
   if (value == null) return ''
@@ -183,7 +184,9 @@ export async function POST(request: NextRequest) {
         where: {
           isVoided: false,
           OR: [
-            { id: idempotencyKey },
+            // `id` is a uuid column: comparing it with an arbitrary key threw
+            // 22P02 and failed the whole payment before anything was written.
+            ...(isUuid(idempotencyKey) ? [{ id: idempotencyKey }] : []),
             { reference: idempotencyKey },
             { notes: { contains: `idempotency:${idempotencyKey}` } },
           ],

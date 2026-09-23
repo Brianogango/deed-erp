@@ -7,7 +7,7 @@ import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
-const statementDate = z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/)
+const statementDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const bankStatementCreateSchema = z.object({
   bankAccountId: z.string().trim().min(1).max(80),
   statementRef: z.string().trim().min(1).max(160),

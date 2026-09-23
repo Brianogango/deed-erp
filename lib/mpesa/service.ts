@@ -5,6 +5,7 @@ import { parseStkCallback, stkStatusFromResultCode } from './callback'
 import { loadMpesaConfig } from './config'
 import { initiateStkPush, queryStkPush } from './daraja'
 import { normalizeMpesaPhone } from './phone'
+import { isUuid } from '@/lib/legacy-compat'
 
 export type StkRecord = {
   checkoutRequestId: string
@@ -73,7 +74,9 @@ export async function startStkPush(input: {
       accountReference: String(input.accountReference).slice(0, 12) || 'DEED',
       description: String(input.transactionDesc).slice(0, 80) || 'Payment',
       source: input.source,
-      invoiceId: input.invoiceId || null,
+      // The STK prompt has already been pushed to the customer's phone: a
+      // non-uuid blob invoice id must not throw away the request record.
+      invoiceId: isUuid(input.invoiceId) ? input.invoiceId : null,
       createdById: input.createdById && /^[0-9a-f-]{36}$/i.test(input.createdById) ? input.createdById : null,
       status: 'pending',
     },

@@ -16,10 +16,10 @@ const salaryAdvanceCreateSchema = z.object({
   amount: z.coerce.number().positive().max(9_999_999_999.99),
   paymentTerms: z.string().trim().min(1).max(30).optional(),
   repaymentMonths: z.coerce.number().int().min(1).max(60).optional(),
-  repaymentStartPeriod: z.string().regex(/^\\d{4}-\\d{2}$/).optional().or(z.literal('')),
+  repaymentStartPeriod: z.string().regex(/^\d{4}-\d{2}$/).optional().or(z.literal('')),
   monthlyDeduction: z.coerce.number().min(0).max(9_999_999_999.99).optional(),
   reason: z.string().trim().max(5_000).optional(),
-  neededByDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional().or(z.literal('')),
+  neededByDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
   // Kept as compatibility inputs only. The server never persists these values.
   id: z.string().max(64).optional(),
   ref: z.string().max(40).optional(),

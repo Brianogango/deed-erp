@@ -61,6 +61,40 @@ async function runSerializable<T>(fn: (tx: Prisma.TransactionClient) => Promise<
   throw last
 }
 
+/**
+ * `Payment.paymentMethod` is the `payment_method` enum: cash, mpesa,
+ * bank_transfer, card, credit, cheque. The app sends a few method names of its
+ * own — 'customer_credit' when a credit note is applied, 'deposit_apply' when a
+ * customer deposit settles an invoice — and Prisma rejected them at create
+ * time, rolling back the receipt, its journal and the audit row while the
+ * browser had already shown the invoice as settled.
+ *
+ * These map onto the enum's 'credit' member; the caller's own wording stays in
+ * the payment notes, so the screens and the audit trail keep the detail.
+ */
+const PAYMENT_METHOD_ALIASES: Record<string, string> = {
+  customer_credit: 'credit',
+  credit_note: 'credit',
+  deposit_apply: 'credit',
+  deposit: 'credit',
+  mobile_money: 'mpesa',
+  m_pesa: 'mpesa',
+  mpesa_stk: 'mpesa',
+  bank: 'bank_transfer',
+  transfer: 'bank_transfer',
+  eft: 'bank_transfer',
+  cheque_deposit: 'cheque',
+  check: 'cheque',
+}
+
+const PAYMENT_METHOD_ENUM = new Set(['cash', 'mpesa', 'bank_transfer', 'card', 'credit', 'cheque'])
+
+export function paymentMethodEnum(value: unknown): string {
+  const raw = String(value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (PAYMENT_METHOD_ENUM.has(raw)) return raw
+  return PAYMENT_METHOD_ALIASES[raw] ?? 'cash'
+}
+
 export type AllocationInput = { invoiceId: string; amount: number }
 
 export type ValidateAllocationOptions = {
@@ -290,6 +324,14 @@ export async function recordPaymentWithAllocations(opts: {
     })
     if (!validation.ok) throw taggedError(validation.error)
 
+    // Keep the caller's own method wording when it had to be remapped onto the
+    // enum, so 'customer_credit' / 'deposit_apply' are still visible on screen.
+    const method = paymentMethodEnum(opts.paymentMethod)
+    const rawMethod = String(opts.paymentMethod ?? '').trim()
+    const notes = rawMethod && rawMethod.toLowerCase() !== method
+      ? [opts.notes, `method:${rawMethod}`].filter(Boolean).join(' · ')
+      : opts.notes ?? null
+
     const primaryInvoiceId = opts.invoiceId ?? invoiceIds[0] ?? null
     const payment = await tx.payment.create({
       data: {
@@ -309,11 +351,11 @@ export async function recordPaymentWithAllocations(opts: {
         idempotencyKey: opts.idempotencyKey ?? null,
         reconciliationStatus: 'unreconciled',
         postingStatus: 'unposted',
-        paymentMethod: opts.paymentMethod as any,
+        paymentMethod: method as any,
         reference: opts.reference ?? null,
         mpesaPhone: opts.mpesaPhone ?? null,
         paidAt: opts.paidAt ?? new Date(),
-        notes: opts.notes ?? null,
+        notes,
         createdById: opts.createdById,
       },
     })
