@@ -66,7 +66,7 @@ import {
   TabBar,
   useMounted,
 } from '@/components/ui'
-import { PrimaryActionButton, StatusBadge } from '@/components/erp'
+import { DestructiveAction, PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import type { CommercialPdfInput } from '@/lib/commercial-pdf'
 import {
@@ -358,7 +358,7 @@ function SalesContent() {
     approvalRequests,
     createSaleOrder, updateSaleOrder, confirmSO, ensureWaitingDeliveryForSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine, moveSOLine, addSOSection,
-    assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
+    assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, reverseDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO, createNewSOVersion,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
@@ -1921,6 +1921,7 @@ function SalesContent() {
                   setSavingDelivery={setSavingDelivery}
                   prepareDelivery={prepareDelivery}
                   validateDelivery={validateDelivery}
+                  reverseDelivery={reverseDelivery}
                   markDeliveryNoteGenerated={markDeliveryNoteGenerated}
                   assignSerialsToSOLine={assignSerialsToSOLine}
                   unassignSerialFromSOLine={unassignSerialFromSOLine}
@@ -4530,7 +4531,7 @@ function NewQuotationForm({
 // ═══════════════════════════════════════════════════════════════════════════
 function DeliveryNoteView({
   order, deliveries, contacts = [], focusDeliveryId, serials, products, companySettings, bankAccounts, deliveryQtys, setDeliveryQtys, savingDelivery,
-  setSavingDelivery, prepareDelivery, validateDelivery, markDeliveryNoteGenerated, assignSerialsToSOLine, unassignSerialFromSOLine,
+  setSavingDelivery, prepareDelivery, validateDelivery, reverseDelivery, markDeliveryNoteGenerated, assignSerialsToSOLine, unassignSerialFromSOLine,
   updateDelivery, showToast, onBack, ensureWaitingDeliveryForSO,
   dnRecipientName, setDnRecipientName, dnRecipientPhone, setDnRecipientPhone,
   dnRecipientId, setDnRecipientId, dnAddress, setDnAddress, dnNotes, setDnNotes,
@@ -4542,6 +4543,7 @@ function DeliveryNoteView({
   savingDelivery: boolean; setSavingDelivery: (v: boolean) => void
   prepareDelivery: (id: string, qtysDone?: Record<string, number>) => boolean
   validateDelivery: (id: string, qtysDone?: Record<string, number>, opts?: { cancelRemaining?: boolean }) => void
+  reverseDelivery: (id: string, reason?: string) => Promise<boolean>
   markDeliveryNoteGenerated: (id: string) => Promise<boolean>
   assignSerialsToSOLine: (orderId: string, lineId: string, serialIds: string[]) => void
   unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
@@ -4579,6 +4581,9 @@ function DeliveryNoteView({
   const canPrepare = orderConfirmed && !!existingDelivery && isOpenDeliveryStatus(deliveryStatus)
     && ['draft', 'waiting', 'ready'].includes(deliveryStatus)
   const canValidate = orderConfirmed && !!existingDelivery && deliveryStatus === 'ready' && !!existingDelivery.preparedAt
+  // A delivery raised in error can be undone: a validated one returns its
+  // stock, serials and COGS journal; an open one is simply cancelled.
+  const canReverse = !!existingDelivery && deliveryStatus !== 'cancelled'
   const canCreateDelivery = orderConfirmed && !existingDelivery && (order.lines ?? []).some((l: any) => isDeliveryNoteLine(l))
   const [serialScan, setSerialScan] = useState('')
   const [creatingDelivery, setCreatingDelivery] = useState(false)
@@ -4795,6 +4800,15 @@ function DeliveryNoteView({
     finally { setSavingDelivery(false) }
   }
 
+  const handleReverse = async () => {
+    if (!existingDelivery) return
+    setSavingDelivery(true)
+    try {
+      const ok = await reverseDelivery(existingDelivery.id)
+      if (ok) onBack()
+    } finally { setSavingDelivery(false) }
+  }
+
   const handlePrintDN = () => {
     if (!existingDelivery) { showToast('No delivery record found. Validate delivery first.', 'error'); return }
     if (existingDelivery.status !== 'done') {
@@ -4856,6 +4870,22 @@ function DeliveryNoteView({
         <div className="sales-proto-actions sales-delivery-header-actions">
           {canGenerateDeliveryNote(existingDelivery) && (
             <MoreActionsMenu items={[{ label: 'Print delivery note', icon: faPrint, onClick: handlePrintDN }]} />
+          )}
+          {canReverse && (
+            <DestructiveAction
+              label="Reverse delivery"
+              confirmLabel={deliveryStatus === 'done' ? 'Reverse delivery' : 'Cancel delivery'}
+              warning={deliveryStatus === 'done'
+                ? `${existingDelivery?.ref ?? 'This delivery'} has already been delivered. Reversing it returns the quantities to stock, frees the serial numbers, restores the reservation and reverses the stock journal. Use this when the delivery was recorded in error.`
+                : `${existingDelivery?.ref ?? 'This delivery'} has not been delivered yet. Cancelling it releases the reserved stock and serial numbers; the order keeps its remaining quantities.`}
+              disabled={savingDelivery}
+              action={() => void handleReverse()}
+              trigger={
+                <button type="button" className="sp-btn sp-btn-ghost text-[var(--danger)]" disabled={savingDelivery}>
+                  {deliveryStatus === 'done' ? 'Reverse delivery' : 'Cancel delivery'}
+                </button>
+              }
+            />
           )}
           {canPrepare && (
             <button type="button" className="sp-btn sp-btn-primary" onClick={handlePrepare} disabled={savingDelivery}>

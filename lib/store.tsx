@@ -3623,6 +3623,8 @@ export interface AppState {
   prepareDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => boolean
   /** Validate a delivery; partial quantities create a backorder unless cancelRemaining is set. */
   validateDelivery: (deliveryId: string, qtysDone?: Record<string, number>, opts?: { cancelRemaining?: boolean }) => void
+  /** Undo a delivery: a validated one returns stock, serials and the COGS journal; an open one is simply cancelled. */
+  reverseDelivery: (deliveryId: string, reason?: string) => Promise<boolean>
   /** Persist successful final DN generation before enabling invoicing. */
   markDeliveryNoteGenerated: (deliveryId: string) => Promise<boolean>
   updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'status' | 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes' | 'deliveryNoteGeneratedAt' | 'deliveryNoteGeneratedByUserId'>>) => void
@@ -3999,6 +4001,7 @@ export type SalesStoreState = Pick<AppState,
   | 'postInvoice'
   | 'prepareDelivery'
   | 'validateDelivery'
+  | 'reverseDelivery'
   | 'markDeliveryNoteGenerated'
   | 'deleteSaleOrder'
   | 'showToast'
@@ -6890,6 +6893,7 @@ export function StoreProvider({
     postInvoice: (...args: Parameters<AppState['postInvoice']>) => storeCtxRef.current!.postInvoice(...args),
     prepareDelivery: (...args: Parameters<AppState['prepareDelivery']>) => storeCtxRef.current!.prepareDelivery(...args),
     validateDelivery: (...args: Parameters<AppState['validateDelivery']>) => storeCtxRef.current!.validateDelivery(...args),
+    reverseDelivery: (...args: Parameters<AppState['reverseDelivery']>) => storeCtxRef.current!.reverseDelivery(...args),
     markDeliveryNoteGenerated: (...args: Parameters<AppState['markDeliveryNoteGenerated']>) => storeCtxRef.current!.markDeliveryNoteGenerated(...args),
     deleteSaleOrder: (...args: Parameters<AppState['deleteSaleOrder']>) => storeCtxRef.current!.deleteSaleOrder(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
@@ -12717,6 +12721,36 @@ const storeCtx: AppState = {
       addAuditLog('prepare_delivery', del.ref, `Reserved ${totalPrepared} item(s) for delivery ${del.ref}`)
       showToast(`${del.ref} prepared — stock reserved and ready to validate`)
       return true
+    },
+    reverseDelivery: async (deliveryId, reason) => {
+      if (!canApproveInventoryAction(currentUser())) {
+        showToast('Only Inventory, Admin or a Director can reverse a delivery', 'error'); return false
+      }
+      const del = delRef.current.find(d => d.id === deliveryId)
+      if (!del) { showToast('This delivery is no longer loaded — refresh and try again', 'error'); return false }
+      try {
+        const res = await fetch(`/api/deliveries/${deliveryId}/reverse`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: reason ?? '' }),
+        })
+        const payload = await res.json().catch(() => null) as { error?: string; reversedStock?: boolean } | null
+        if (!res.ok) {
+          showToast(payload?.error || `Could not reverse delivery (${res.status})`, 'error')
+          return false
+        }
+        // The server rewrote stock, serials and reservations; the store stream
+        // brings those back. Reflect the delivery itself immediately.
+        setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, status: 'cancelled' as const } : d))
+        addAuditLog('reverse_delivery', del.ref, `Delivery reversed${reason ? ` — ${reason}` : ''}`)
+        showToast(payload?.reversedStock
+          ? `${del.ref} reversed — stock and serials returned`
+          : `${del.ref} cancelled`)
+        return true
+      } catch (err) {
+        showToast(`Could not reverse delivery — ${err instanceof Error ? err.message : 'unexpected error'}`, 'error')
+        return false
+      }
     },
     validateDelivery: async (deliveryId, qtysDone, opts) => {
       if (!canApproveInventoryAction(currentUser())) {
