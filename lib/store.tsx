@@ -264,6 +264,7 @@ import {
 } from '@/lib/diagnosis-fee'
 import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
+import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
 import {
@@ -17201,11 +17202,18 @@ const storeCtx: AppState = {
           showToast('Repair Sales Order is missing — align the quote before invoicing', 'error')
           return null
         }
-        const res = await fetch(`/api/sale-orders/${soId}/create-invoice`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'regular', source: 'repair' }),
+        const attempt = await requestSaleOrderInvoice({
+          saleOrderId: soId,
+          invoiceBody: { mode: 'regular', source: 'repair' },
+          localOrder: soRef.current.find(s => s.id === soId),
         })
+        const res = attempt.res
+        if (attempt.saleOrderId !== soId) {
+          // The server minted its own id for a legacy local one: follow it.
+          const recoveredId = attempt.saleOrderId
+          setSaleOrders(p => p.map(s => s.id === soId ? { ...s, id: recoveredId } : s))
+          soId = recoveredId
+        }
         const payload = await res.json().catch(() => null)
         if (!res.ok || !payload?.invoice) {
           showToast(payload?.error || 'Could not convert the Repair Sales Order to an invoice', 'error')
