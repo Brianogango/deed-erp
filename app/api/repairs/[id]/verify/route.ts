@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { RepairOrder } from '@/lib/store'
+import { isRoleAllowed } from '@/lib/auth/authorization'
 
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
 const VERIFY_ROLES = ['director', 'admin_officer', 'technical_lead']
@@ -9,7 +10,9 @@ const VERIFY_ROLES = ['director', 'admin_officer', 'technical_lead']
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!VERIFY_ROLES.includes(session.user.role)) {
+  // Normalized: a Technical Lead stored as `lead_tech`, or a Director stored
+  // as `super_admin`/`admin`, must not be locked out of their own module.
+  if (!isRoleAllowed(session.user.role, VERIFY_ROLES)) {
     return NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 })
   }
 

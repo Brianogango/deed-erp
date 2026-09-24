@@ -7,6 +7,7 @@ import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
 import { getServerSession } from '@/lib/auth/server'
 import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
+import { findRepairByPortalRef } from '@/lib/repair-ref'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +32,7 @@ export async function GET(
     const co = { ...DEFAULT_COMPANY_SETTINGS, ...(savedSettings ?? {}) }
     const logo = await loadLogoForPdfServer(typeof co.logoUrl === 'string' ? co.logoUrl : null)
 
-    const repair = repairs.find((r: any) => r.ref.toLowerCase() === ref.toLowerCase())
+    const repair = findRepairByPortalRef(repairs, ref)
     if (!repair) {
       return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
     }

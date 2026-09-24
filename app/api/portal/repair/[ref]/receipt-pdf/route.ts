@@ -6,6 +6,7 @@ import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
 import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
 import { getServerSession } from '@/lib/auth/server'
 import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
+import { findRepairByPortalRef } from '@/lib/repair-ref'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,7 @@ export async function GET(
     const banks = (state.deed_bankAccounts ?? DEFAULT_BANK_ACCOUNTS) as any[]
     const logo = await loadLogoForPdfServer(typeof co.logoUrl === 'string' ? co.logoUrl : null)
 
-    const repair = repairs.find((r: any) => r.ref?.toLowerCase() === ref.toLowerCase())
+    const repair = findRepairByPortalRef(repairs, ref)
     if (!repair) return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
 
     // Receipts carry payment detail — ref alone is not a capability.

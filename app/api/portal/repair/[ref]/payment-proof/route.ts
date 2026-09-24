@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { loadAppState } from '@/lib/server-store'
 import { getServerSession } from '@/lib/auth/server'
 import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
+import { findRepairByPortalRef } from '@/lib/repair-ref'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +34,7 @@ export async function GET(_req: NextRequest, { params }: { params: { ref: string
 
     // Payment screenshots are customer PII — ref alone is not a capability.
     const repairs = (state['deed_repairs_v2'] as any[]) || []
-    const repairForGate = repairs.find((r: any) => String(r.ref ?? '').toLowerCase() === ref.toLowerCase())
+    const repairForGate = findRepairByPortalRef(repairs, ref)
     const session = await getServerSession().catch(() => null)
     const allowed = await portalDocumentAccessAllowed(_req, repairForGate, {
       session,

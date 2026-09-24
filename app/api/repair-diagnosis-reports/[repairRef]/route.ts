@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import path from 'path'
 import { mkdir, writeFile } from 'fs/promises'
-import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { validateFileContent, logRejectedUpload } from '@/lib/file-validation'
+import { requireRepairAttachmentWriter } from '@/lib/repair-attachment-access'
 
 type DiagnosisReportMeta = {
   id: string
@@ -45,8 +45,10 @@ function publicUrl(ref: string, id: string) {
  * and store sync.
  */
 export async function POST(req: NextRequest, { params }: { params: { repairRef: string } }) {
-  const session = await getServerSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Uploading a QC / diagnosis report is a workshop action, not something
+  // any signed-in user may do to any repair reference.
+  const gate = await requireRepairAttachmentWriter()
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   const ref = decodeURIComponent(params.repairRef)
   let form: FormData
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: { repairRef: 
         fileName: originalName,
         size: file.size,
         reason: contentCheck.error,
-        userId: session.user.id,
+        userId: gate.user.id,
       })
       return NextResponse.json({ error: contentCheck.error }, { status: 415 })
     }

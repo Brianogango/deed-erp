@@ -135,37 +135,10 @@ export interface RepairMessage {
   read: boolean
 }
 
-export const repairMessages = new Map<string, RepairMessage[]>()
-
-export function getMessages(ref: string): RepairMessage[] {
-  return repairMessages.get(normaliseRef(ref)) ?? []
-}
-
-export function addMessage(
-  ref: string,
-  msg: Omit<RepairMessage, 'id' | 'repairRef'>
-): RepairMessage {
-  const key = normaliseRef(ref)
-  const message: RepairMessage = {
-    ...msg, id: Date.now().toString(36) + Math.random().toString(36).slice(2),
-    repairRef: decodeURIComponent(ref),
-  }
-  repairMessages.set(key, [...(repairMessages.get(key) ?? []), message])
-  return message
-}
-
-export function markMessagesRead(ref: string, byRole: 'customer' | 'staff') {
-  const key = normaliseRef(ref)
-  const msgs = repairMessages.get(key)
-  if (!msgs) return
-  repairMessages.set(key, msgs.map(m =>
-    m.sender !== byRole ? { ...m, read: true } : m
-  ))
-}
-
-function normaliseRef(ref: string) {
-  return decodeURIComponent(ref).toUpperCase()
-}
+// Message storage lives in lib/portal-repair-messages.ts, backed by app_state.
+// The in-memory Map that used to sit here was never persisted and was wiped by
+// every deploy and every process restart, so threads vanished at random.
+// RepairMessage above is still the shared shape.
 
 // ─── Dynamic repair registry (populated via /api/portal/repair/sync) ─────────
 // Pinned to `global` so Next.js hot-reloads don't wipe the Map between requests

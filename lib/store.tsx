@@ -5425,6 +5425,15 @@ export function StoreProvider({
     ] as const
     const CRITICAL_VISIBILITY_KEY_SET = new Set<string>(CRITICAL_VISIBILITY_KEYS)
 
+    // Publish a key to the running app. The localStorage write is a cache and
+    // is allowed to fail — the event carries the value, so the in-memory store
+    // updates either way. Dropping the event when the cache is full is what
+    // made a full quota look like "the ERP stopped seeing new records".
+    const publishRemoteKey = (key: string, value: string) => {
+      safeLocalStorageSet(key, value)
+      window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value } }))
+    }
+
     // Recovery pass: if browser cache is empty OR missing rows the server has
     // (common after creating an outsource job on another tab/device), pull/merge
     // server truth so Jobs lists stay complete.
@@ -5458,8 +5467,7 @@ export function StoreProvider({
             const nextStr = (localStr && typeof localCount === 'number' && localCount > 0 && missingRemoteRows)
               ? mergeArrayById(localStr, remoteStr)
               : remoteStr
-            window.localStorage.setItem(key, nextStr)
-            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: nextStr } }))
+            publishRemoteKey(key, nextStr)
           } catch {
             // best effort recovery only
           }
@@ -5502,9 +5510,7 @@ export function StoreProvider({
           const localStr  = window.localStorage.getItem(k)
           if (dirty.has(k)) {
             if (k === 'deed_posOrders') {
-              const merged = mergeDirtyPosOrdersBlob(localStr, remoteStr)
-              window.localStorage.setItem(k, merged)
-              window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: merged } }))
+              publishRemoteKey(k, mergeDirtyPosOrdersBlob(localStr, remoteStr))
               continue
             }
             const localCount = arrayCount(localStr)
@@ -5518,17 +5524,14 @@ export function StoreProvider({
             // Recover from stale-empty / incomplete local cache and clear dirty flag.
             removeDirtyKeys([k])
             if (missingRemoteRows && localStr && typeof localCount === 'number' && localCount > 0) {
-              const merged = mergeArrayById(localStr, remoteStr)
-              window.localStorage.setItem(k, merged)
-              window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: merged } }))
+              publishRemoteKey(k, mergeArrayById(localStr, remoteStr))
               continue
             }
           }
           if (localStr !== remoteStr) {
-            window.localStorage.setItem(k, remoteStr)
-            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
+            publishRemoteKey(k, remoteStr)
           }
-        } catch { /* quota — ignore */ }
+        } catch (err) { console.warn(`[store] could not hydrate key ${k}`, err) }
       }
       _serverHydrated = true
       emitSyncStatus('idle')
@@ -5539,15 +5542,18 @@ export function StoreProvider({
       const dirtyKeys   = getDirtyKeys()
       for (const [k, v] of Object.entries(remoteState)) {
         if (!k.startsWith('deed_')) continue
+        // Per-key isolation. This loop had no try/catch at all, so one failing
+        // key — a quota throw on the largest blob, most often — aborted the
+        // whole pass, skipped every remaining key, and escaped into the SSE
+        // listener, which killed live updates for the rest of the session.
+        try {
         // Skip THIS key when it has an unconfirmed local write — other keys in
         // the same SSE payload still apply. One pending key must not freeze the store.
         const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
         const local = window.localStorage.getItem(k)
         if (pendingKeys.has(k) || dirtyKeys.has(k) || _inFlightSyncKeys.has(k)) {
           if (k === 'deed_posOrders') {
-            const merged = mergeDirtyPosOrdersBlob(local, remoteStr)
-            window.localStorage.setItem(k, merged)
-            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: merged } }))
+            publishRemoteKey(k, mergeDirtyPosOrdersBlob(local, remoteStr))
             continue
           }
           const localCount = arrayCount(local)
@@ -5562,15 +5568,15 @@ export function StoreProvider({
           if (!shouldRecoverFromStaleEmpty && !missingRemoteRows) continue
           removeDirtyKeys([k])
           if (missingRemoteRows && local && typeof localCount === 'number' && localCount > 0) {
-            const merged = mergeArrayById(local, remoteStr)
-            window.localStorage.setItem(k, merged)
-            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: merged } }))
+            publishRemoteKey(k, mergeArrayById(local, remoteStr))
             continue
           }
         }
         if (local !== remoteStr) {
-          window.localStorage.setItem(k, remoteStr)
-          window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
+          publishRemoteKey(k, remoteStr)
+        }
+        } catch (err) {
+          console.warn(`[store] could not apply remote key ${k}`, err)
         }
       }
     }
@@ -16627,19 +16633,6 @@ const storeCtx: AppState = {
           }
         }
 
-        // Post the repair-parts COGS journal (Dr 6301 / Cr 1200) for the
-        // consumed parts. Idempotent per repair+product — safe on every pass.
-        if (consumptionEnabled && partsToConsume.length > 0) {
-          void fetch(`/api/repairs/${repairId}/parts-cogs`, { method: 'POST' })
-            .then(async res => {
-              if (!res.ok) {
-                const payload = await res.json().catch(() => null) as { error?: string } | null
-                showToast(payload?.error || 'Parts posted to accounting with warnings', 'error')
-              }
-            })
-            .catch(() => showToast('Parts cost journal could not post — finance can retry from the repair', 'error'))
-        }
-
         const passedRepair: RepairOrder = {
           ...repair,
           qcItems: updatedQCItems,
@@ -16660,6 +16653,30 @@ const storeCtx: AppState = {
         }
         setRepairs(p => p.map(r => r.id === repairId ? passedRepair : r))
         syncRepairToPortal(passedRepair, 'Device ready for collection')
+
+        // Post the repair-parts COGS journal (Dr 6301 / Cr 1200) for the parts
+        // this pass consumed. The consumed lines travel in the request body:
+        // the server's own copy of the repair is only updated by the async
+        // store sync that `setRepairs` above kicked off, so a server-side
+        // `usedDate` filter would read the pre-QC blob and find nothing to
+        // post — which is why repair COGS silently never reached the ledger.
+        // Idempotent per repair+product — safe on every pass.
+        if (consumptionEnabled && partsToConsume.length > 0) {
+          void fetch(`/api/repairs/${repairId}/parts-cogs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              parts: partsToConsume.map(part => ({ productId: part.productId, qty: part.qty })),
+            }),
+          })
+            .then(async res => {
+              if (!res.ok) {
+                const payload = await res.json().catch(() => null) as { error?: string } | null
+                showToast(payload?.error || 'Parts posted to accounting with warnings', 'error')
+              }
+            })
+            .catch(() => showToast('Parts cost journal could not post — finance can retry from the repair', 'error'))
+        }
 
         // QC owns workshop quality only. Billing remains independent: becoming
         // Ready must never create, confirm, post, or rewrite an invoice.

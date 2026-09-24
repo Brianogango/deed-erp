@@ -8,6 +8,8 @@ import { phoneMatches, isPortalPhoneVerificationRequired } from '@/lib/portal-ve
 import prisma from '@/lib/prisma'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { findExistingContact } from '@/lib/contact-prisma'
+import { isUUID } from '@/lib/utils'
+import { findRepairByPortalRef } from '@/lib/repair-ref'
 
 type ItemDecision = { lineId: string; decision: 'approved' | 'declined' | 'deferred' }
 
@@ -47,7 +49,15 @@ export async function POST(
     return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
   }
   const repairs = (appState['deed_repairs_v2'] as any[]) || []
-  const repairIndex = repairs.findIndex((r: any) => r.ref.toUpperCase() === ref.toUpperCase())
+  // Match the job lookupRepair already resolved, by id. Re-finding it by exact
+  // ref ignored previousRefs, so a customer holding a portal link minted before
+  // the official ticket was allocated could open the page and pass phone
+  // verification, then hit "Repair could not be synchronized" on approve. The
+  // ref comparison also assumed every row has one — a single ref-less row made
+  // this throw for every customer, not just that job.
+  const resolved = findRepairByPortalRef(repairs, ref)
+    ?? (repair.ref ? findRepairByPortalRef(repairs, repair.ref) : null)
+  const repairIndex = resolved ? repairs.indexOf(resolved) : -1
   if (repairIndex === -1) return NextResponse.json({ error: 'Repair could not be synchronized.' }, { status: 404 })
 
   const targetRepair = repairs[repairIndex]
@@ -104,8 +114,13 @@ export async function POST(
     prevTotal: undefined,
   }
 
+  // Set when the sale-order/invoice chain fails after the approval is taken.
+  let billingError: string | null = null
+
   if (approved) {
     targetRepair.total = approvedTotal
+    // A retry that succeeds must clear the previous failure marker.
+    delete targetRepair.billingSyncError
     targetRepair.laborCost = approvedLines.filter((line: any) => line.type === 'labor').reduce((sum: number, line: any) => sum + Number(line.subtotal ?? 0), 0)
     targetRepair.logisticsCost = approvedLines.filter((line: any) => line.type === 'logistics').reduce((sum: number, line: any) => sum + Number(line.subtotal ?? 0), 0)
 
@@ -131,7 +146,10 @@ export async function POST(
         const soItems = approvedLines.map((line: any) => ({ description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0) }))
         // Reuse the SO from a previous approval (quote revisions re-run this
         // flow) instead of creating a duplicate each time.
-        const existingSoId = targetRepair.linkedSaleOrderId ?? targetRepair.saleOrderId
+        // Both ids are uuid columns. An unguarded lookup turns a legacy or
+        // client-minted id into `invalid input syntax for type uuid`, which
+        // used to vanish into the catch below and cost the customer an invoice.
+        const existingSoId = [targetRepair.linkedSaleOrderId, targetRepair.saleOrderId].find(id => isUUID(id))
         let saleOrder = existingSoId ? await prisma.saleOrder.findUnique({ where: { id: existingSoId } }) : null
         if (saleOrder) {
           saleOrder = await prisma.saleOrder.update({
@@ -159,7 +177,7 @@ export async function POST(
 
         const invoiceItems = approvedLines.map((line: any) => ({ description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, lineSubtotal: Number(line.subtotal ?? line.unitPrice ?? 0), lineTax: 0, lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0) }))
         // Reuse the invoice from a previous approval instead of duplicating it.
-        const existingInvoiceId = targetRepair.linkedInvoiceId ?? targetRepair.invoiceId
+        const existingInvoiceId = [targetRepair.linkedInvoiceId, targetRepair.invoiceId].find(id => isUUID(id))
         let invoice = existingInvoiceId ? await prisma.invoice.findUnique({ where: { id: existingInvoiceId } }) : null
         // Preserve prior payments across quote revisions (e.g. paid 38k, revised to 17.2k).
         const preservedAmountPaid = roundMoney(
@@ -233,7 +251,16 @@ export async function POST(
         console.log(`[APPROVE] Upserted SO: ${saleOrder.orderNumber}, Invoice: ${invoice.invoiceNumber}, approved total: ${approvedTotal}, amountPaid: ${preservedAmountPaid}, residual: ${settlement.residualDue}`)
       }
     } catch (err) {
-      console.error('[APPROVE] Error creating Prisma SO/Invoice:', err)
+      // The customer's decision stands — they did approve, and making them
+      // approve twice is worse than a missing invoice. What must not happen is
+      // this failing quietly: the status was already moved to `approved` and
+      // persisted below, so a log-only catch produced a 200 "approved", a job
+      // sitting in approved/awaiting_parts, and no invoice anywhere, with
+      // nobody told. Record it on the repair so staff see it in the ERP, and
+      // tell the caller the billing half did not complete.
+      billingError = err instanceof Error ? err.message : String(err)
+      targetRepair.billingSyncError = { message: billingError, at: new Date().toISOString() }
+      console.error(`[APPROVE] Billing chain failed for ${targetRepair.ref ?? ref} — approval recorded, no invoice raised:`, err)
     }
 
     const procurementLines = approvedLines.filter((line: any) => ['part', 'software', 'license'].includes(line.type) && !line.reserved)
@@ -268,5 +295,13 @@ export async function POST(
   }
 
   const updated = await lookupRepair(ref)
-  return NextResponse.json({ repair: updated, approved, approvedTotal }, { status: 200 })
+  return NextResponse.json({
+    repair: updated,
+    approved,
+    approvedTotal,
+    ...(billingError ? {
+      billingPending: true,
+      warning: 'Your approval has been recorded. Our team will confirm the invoice with you shortly.',
+    } : {}),
+  }, { status: 200 })
 }

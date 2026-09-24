@@ -4,6 +4,7 @@ import { findRepairLinkedInvoice } from '@/lib/portal-invoice-link'
 import { saveStoreKeys, loadAppState, loadAppStateForWrite, withAppStateKeyLock } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { phoneMatches, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
+import { findRepairByPortalRef } from '@/lib/repair-ref'
 
 function parseAmount(text: string): number | null {
   const patterns = [
@@ -89,7 +90,8 @@ export async function POST(req: NextRequest, { params }: { params: { ref: string
     return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
   }
   const repairs = (appState['deed_repairs_v2'] as any[]) || []
-  const repairIndex = repairs.findIndex((r: any) => r.ref.toUpperCase() === ref.toUpperCase())
+  const resolvedRepair = findRepairByPortalRef(repairs, ref)
+  const repairIndex = resolvedRepair ? repairs.indexOf(resolvedRepair) : -1
   if (repairIndex === -1) return NextResponse.json({ error: 'Repair could not be synchronized.' }, { status: 404 })
 
   const targetRepair = repairs[repairIndex]

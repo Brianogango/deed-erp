@@ -17,7 +17,10 @@ import { resolveClientId } from './legacy-compat'
  */
 
 const MIRROR_STATE_KEY = 'repair_mirror_hashes_v1'
-const MIRROR_FINGERPRINT_VERSION = 2
+// Bumped when the blob → column mapping changes, so every repair re-mirrors
+// once and the corrected columns backfill themselves. v3: device
+// type/brand/model take their own fields, createdById takes createdByUserId.
+const MIRROR_FINGERPRINT_VERSION = 3
 
 let repairsPayloadCache: { at: number; data: any[] } | null = null
 // Short TTL so GET /api/repairs does not serve a 15s-stale list after another
@@ -60,14 +63,23 @@ function asDate(value: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-function mapRepair(r: any) {
+/** Blob repair → relational columns. Exported for tests. */
+export function mapRepair(r: any) {
   const partsCost = Array.isArray(r.partsUsed)
     ? r.partsUsed.reduce((sum: number, p: any) => sum + Number(p.qty ?? 0) * Number(p.price ?? 0), 0)
     : 0
   return {
     status: (STATUS_MAP[String(r.status ?? '')] ?? 'intake') as any,
-    deviceType: String(r.productName ?? 'Device').slice(0, 80),
-    deviceModel: r.deviceColor ? String(r.deviceColor).slice(0, 100) : null,
+    // Each device column takes its own field. These used to be filled from
+    // whatever was nearest to hand — productName into deviceType, the device
+    // COLOUR into deviceModel, deviceBrand left permanently null — which broke
+    // the repairs search (it queries all three) and put the colour into the
+    // staff notification text: "Silver requires technician assignment".
+    // productName stays as the deviceType fallback for rows booked before the
+    // intake form collected type/brand/model separately.
+    deviceType: String(r.deviceType || r.productName || 'Device').slice(0, 80),
+    deviceBrand: r.deviceBrand ? String(r.deviceBrand).slice(0, 80) : null,
+    deviceModel: r.deviceModel ? String(r.deviceModel).slice(0, 100) : null,
     serialNumber: r.serialNumber ? String(r.serialNumber).slice(0, 100) : null,
     reportedFault: String(r.issueDescription ?? 'Not specified'),
     observedFault: r.diagnosis?.faultDescription ? String(r.diagnosis.faultDescription) : null,
@@ -158,6 +170,36 @@ export async function findRepairInPrisma(refOrId: string): Promise<any | null> {
 }
 
 /**
+ * Delete a repair's relational row by current ref, prisma id, or blob id.
+ *
+ * The blob is no longer read — `loadAppState` overlays deed_repairs_v2 from
+ * this table — so removing the repair from the blob alone does nothing: the
+ * next read serves the row straight back and the following save writes it
+ * into the blob again. A delete has to reach the table or it is not a delete.
+ *
+ * Returns the number of rows removed. Never throws: the caller has already
+ * committed the blob delete and a failure here must not turn a successful
+ * response into a 500, but it does need reporting so the resurrection is
+ * visible instead of silent.
+ */
+export async function deleteRepairFromPrisma(refOrId: string): Promise<{ deleted: number; error?: string }> {
+  try {
+    const or: Array<Record<string, unknown>> = [
+      { jobNumber: refOrId },
+      { payload: { path: ['id'], equals: refOrId } },
+    ]
+    if (UUID_RE.test(refOrId)) or.unshift({ id: refOrId })
+    const { count } = await prisma.repair.deleteMany({ where: { OR: or } })
+    if (count > 0) invalidateRepairsPayloadCache()
+    return { deleted: count }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`[repair-mirror] Failed to delete ${refOrId}:`, message)
+    return { deleted: 0, error: message }
+  }
+}
+
+/**
  * Mirror repairs from the blob into the relational table.
  * Fire-and-forget safe: never throws; logs failures per repair.
  * Pass `force: true` to rewrite every repair regardless of fingerprints.
@@ -209,9 +251,25 @@ export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force
           invoiceId = inv?.id ?? null
         }
 
-        const createdById = UUID_RE.test(String(r.createdBy ?? '')) && userIds.has(r.createdBy) ? r.createdBy : systemUser.id
+        // The booking user's id lives in createdByUserId; createdBy is their
+        // USERNAME, so testing it for a UUID always failed and every mirrored
+        // repair was attributed to the system user — which is why the list
+        // route treats createdById as unreliable. createdBy is still checked
+        // second for rows written before the two fields were separated.
+        const createdByCandidate = [r.createdByUserId, r.createdBy]
+          .find(value => UUID_RE.test(String(value ?? '')) && userIds.has(value))
+        const createdById = createdByCandidate ?? systemUser.id
         // Phase 2a: carry the full blob repair so relational reads are lossless.
-        const data = { ...mapped, clientId, assignedToId, invoiceId, payload: r }
+        // createdById is only carried into an update when the blob names a real
+        // user — never overwrite a stored author with the system-user fallback.
+        const data = {
+          ...mapped,
+          clientId,
+          assignedToId,
+          invoiceId,
+          payload: r,
+          ...(createdByCandidate ? { createdById: createdByCandidate } : {}),
+        }
 
         // A repair renumbered after its first mirror (REP-445447 → REP/0306)
         // otherwise deadlocks the upsert: jobNumber misses, id collides.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
 import { mirrorRepairsToPrisma } from '@/lib/repair-mirror'
+import { isSuperAdminRole } from '@/lib/auth/authorization'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   if (!secretOk) {
     const session = await getServerSession()
-    if (!session || session.user.role !== 'director') {
+    if (!session || !isSuperAdminRole(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }

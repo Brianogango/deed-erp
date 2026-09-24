@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-import { getServerSession } from '@/lib/auth/server'
+import { repairAttachmentReadAllowed, requireRepairAttachmentWriter } from '@/lib/repair-attachment-access'
 import { ImageNormalizationError, normalizeUploadedRepairPhoto } from '@/lib/server-image-normalization'
 import { randomUUID } from 'crypto'
 
@@ -10,11 +10,16 @@ function stateKey(ref: string) {
   return `repair_photos_${decodeURIComponent(ref).toUpperCase().replace(/\//g, '_')}`
 }
 
-// Public — called by the client portal to show photos
+// Called by the client portal to show photos. Not public: a repair ref is
+// guessable, so the caller is either staff or the customer proving ownership
+// with the phone on file — the same gate the invoice/receipt PDFs use.
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { repairRef: string } }
 ) {
+  if (!await repairAttachmentReadAllowed(req, decodeURIComponent(params.repairRef))) {
+    return NextResponse.json({ error: 'Verification required to view these photos.' }, { status: 403 })
+  }
   try {
     const key = stateKey(params.repairRef)
     const state = await loadAppState([key])
@@ -30,8 +35,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { repairRef: string } }
 ) {
-  const session = await getServerSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireRepairAttachmentWriter()
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   let body: { url?: string; name?: string }
   try { body = await req.json() } catch {
@@ -80,8 +85,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { repairRef: string } }
 ) {
-  const session = await getServerSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireRepairAttachmentWriter()
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   let body: { id?: string }
   try { body = await req.json() } catch {

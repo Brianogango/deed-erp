@@ -7,8 +7,9 @@ import { repairDatesWriteError } from '@/lib/data-validation'
 import { canAccessRecord, filterStoreValueForRole, normalizePermissionRole } from '@/lib/auth/authorization'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { repairHardDeleteBlocker } from '@/lib/repair-delete'
+import { repairTransitionWriteError } from '@/lib/repair-transition-guard'
 import { findOpenRepairWithSerial, normalizeRepairSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
-import { findRepairInPrisma, loadRepairsFromPrisma } from '@/lib/repair-mirror'
+import { deleteRepairFromPrisma, findRepairInPrisma, loadRepairsFromPrisma } from '@/lib/repair-mirror'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
@@ -48,7 +49,8 @@ const config = {
       ...warrantyPatchFromDecision(decision),
     }
   },
-  validateWrite: (next: RepairOrder, previous?: RepairOrder) => repairDatesWriteError(next, new Date(), previous),
+  validateWrite: (next: RepairOrder, previous?: RepairOrder) =>
+    repairTransitionWriteError(next, previous) ?? repairDatesWriteError(next, new Date(), previous),
   validateDelete: (repair: RepairOrder) => repairHardDeleteBlocker(repair as any),
   recordAccess: (user: any, repair: RepairOrder, action: 'patch' | 'delete') => {
     const role = normalizePermissionRole(user.role)
@@ -67,7 +69,30 @@ const config = {
 }
 
 const handlers = makeDetailHandlers(config)
-export const DELETE = handlers.DELETE
+
+/**
+ * Delete the repair from the relational table as well as the blob.
+ *
+ * `loadAppState` overlays deed_repairs_v2 from Prisma, so the generic blob
+ * delete on its own is cosmetic — the row is served straight back on the next
+ * read and written into the blob again by the next save. The blob delete runs
+ * first because it carries the role, record-access and hard-delete-blocker
+ * checks; only once it has succeeded is the row removed for real.
+ */
+export async function DELETE(request: NextRequest, ctx: { params: RouteParams<{ id: string }> }) {
+  const response = await handlers.DELETE(request, ctx)
+  if (response.status < 200 || response.status >= 300) return response
+
+  const { id } = await resolveRouteParams(ctx.params)
+  const { deleted, error } = await deleteRepairFromPrisma(id)
+  if (error) {
+    return NextResponse.json(
+      { error: 'Repair could not be fully deleted and may reappear. Please retry.' },
+      { status: 500 },
+    )
+  }
+  return NextResponse.json({ ok: true, deleted })
+}
 
 /**
  * Prisma is the repair read SoT. If the blob backup is missing this job,

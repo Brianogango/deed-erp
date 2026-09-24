@@ -20,8 +20,10 @@ export async function GET(request: Request) {
     const releases = await prisma.outboundRelease.findMany({
       where: {
         ...(status  ? { status }  : {}),
-        ...(invoice ? { invoiceId: invoice } : {}),
-        ...(repair  ? { repairId: repair }   : {}),
+        // Both are uuid columns — an unguarded filter value turns a mistyped
+        // query string into a 500 instead of an empty list.
+        ...(isUUID(invoice) ? { invoiceId: invoice } : {}),
+        ...(isUUID(repair)  ? { repairId: repair }   : {}),
         ...(serial  ? { items: { some: { expectedSerial: { contains: serial, mode: 'insensitive' } } } } : {}),
       } as any,
       include: {
@@ -48,6 +50,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'At least one source document ID is required' }, { status: 400 })
     }
 
+    // clientId is a required uuid column and was the one id here not guarded.
+    // Repair intake stores customerId as free text and leaves it empty for
+    // walk-ins, so a repair release arrived with '' and Postgres answered
+    // `invalid input syntax for type uuid` — a 500 the storekeeper saw as the
+    // release simply refusing to open. Fall back to the source document's own
+    // client before giving up, since that is the same customer.
+    let clientId: string | null = isUUID(body.clientId) ? String(body.clientId) : null
+    if (!clientId && isUUID(body.repairId)) {
+      const repair = await prisma.repair.findUnique({
+        where: { id: String(body.repairId) },
+        select: { clientId: true },
+      })
+      clientId = repair?.clientId ?? null
+    }
+    if (!clientId && isUUID(body.invoiceId)) {
+      const invoice = await prisma.invoice.findUnique({
+        where: { id: String(body.invoiceId) },
+        select: { clientId: true },
+      })
+      clientId = invoice?.clientId ?? null
+    }
+    if (!clientId) {
+      return NextResponse.json({
+        error: 'This release has no customer on file. Attach a customer record to the repair or invoice before releasing the device.',
+      }, { status: 422 })
+    }
+
+    // serialNumberId is required, not optional. Spreading it conditionally
+    // dropped it for devices with no serial row — customer-owned repairs,
+    // mostly — and Prisma rejected the whole nested create. The `as any` on
+    // the call below is why the compiler never said so.
+    const serials = body.serials as { id?: string; serialNumberId?: string; expectedSerial?: string }[]
+    const unserialised = serials.filter(s => !isUUID(s?.serialNumberId))
+    if (unserialised.length > 0) {
+      const names = unserialised.map(s => String(s?.expectedSerial ?? 'unknown')).join(', ')
+      return NextResponse.json({
+        error: `These units are not in the serial register and cannot be released: ${names}. Add them to inventory first.`,
+      }, { status: 422 })
+    }
+
     const ref = await getNextOrcRef()
 
     const release = await prisma.outboundRelease.create({
@@ -57,14 +99,14 @@ export async function POST(request: Request) {
         ...(isUUID(body.invoiceId)      ? { invoiceId: body.invoiceId }           : {}),
         ...(isUUID(body.repairId)       ? { repairId: body.repairId }             : {}),
         ...(isUUID(body.deliveryNoteId) ? { deliveryNoteId: body.deliveryNoteId } : {}),
-        clientId:     body.clientId,
+        clientId,
         status:       'pending',
         initiatedById: actor.id,
         items: {
-          create: (body.serials as { id?: string; serialNumberId: string; expectedSerial: string }[]).map(s => ({
+          create: serials.map(s => ({
             ...(isUUID(s.id) ? { id: s.id } : {}),
-            ...(isUUID(s.serialNumberId) ? { serialNumberId: s.serialNumberId } : {}),
-            expectedSerial: s.expectedSerial,
+            serialNumberId: String(s.serialNumberId),
+            expectedSerial: String(s.expectedSerial ?? ''),
             status: 'picked',
           })),
         },
