@@ -745,11 +745,25 @@ model Client {
   loyaltyPoints Int      @default(0) @map("loyalty_points")
   notes         String?
   isActive      Boolean  @default(true) @map("is_active")
+
+  // A contact person IS an individual contact who works at a company: these
+  // two fields are what make that link real. The app's Contact type has
+  // always carried them, but the table had neither column and
+  // contactToClientData mapped neither, so an employer and job title were
+  // dropped on the first sync — which is why the "Contact persons" panel
+  // showed 0 even for people who had been linked. Contact persons therefore
+  // had to live in a separate contact_persons table that no other screen
+  // read. One concept, one place.
+  companyId     String?  @map("company_id") @db.Uuid
+  jobTitle      String?  @map("job_title") @db.VarChar(120)
+
   createdById   String?  @map("created_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   createdBy      User?            @relation(fields: [createdById], references: [id])
+  company        Client?          @relation("ClientEmployer", fields: [companyId], references: [id], onDelete: SetNull)
+  people         Client[]         @relation("ClientEmployer")
   quotes         Quote[]
   invoices       Invoice[]
   repairs        Repair[]         @relation("RepairClient")
@@ -769,6 +783,7 @@ model Client {
 
   @@index([phone], map: "idx_clients_phone")
   @@index([email], map: "idx_clients_email")
+  @@index([companyId], map: "idx_clients_company")
   @@map("clients")
 }
 

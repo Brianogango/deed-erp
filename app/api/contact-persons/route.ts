@@ -1,71 +1,51 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { saveStoreKeys } from '@/lib/server-store'
-import { isRoleAllowed } from '@/lib/auth/authorization'
-import {
-  CONTACT_PERSON_SELECT,
-  contactPersonFromDb,
-  contactPersonToDb,
-} from '@/lib/contact-person-map'
+import { clientToContact } from '@/lib/contact-prisma'
+import { deriveContactPersons } from '@/lib/contact-person-derive'
 
-export const CONTACT_PERSON_WRITE_ROLES = [
-  'director', 'admin_officer', 'sales_rep', 'technical_lead', 'technician',
-]
+// NOTE: companyId/jobTitle are declared on Client in prisma/schema.prisma
+// (migration 010). The narrow casts below let this compile against a Prisma
+// client generated before that change as well as after it; the field names
+// were checked against the schema directly.
+
+export const dynamic = 'force-dynamic'
 
 /**
- * Push the contact-person list into app_state for the browser store.
+ * Compatibility shim — read only.
  *
- * This used to `include: { client: true }`, embedding the entire client record
- * inside every contact person — a large blob for something the UI only needs a
- * name from, and one more thing filling the localStorage quota. It also wrote
- * raw Prisma rows, whose field names the app does not use.
+ * A contact person is an individual contact with an employer, so they live in
+ * the contacts directory (`clients`) like everyone else. The contact_persons
+ * table this route used to own was a second store for the same concept, and no
+ * other screen read it: a person added on the company form never appeared on
+ * that company's detail panel, which filtered the directory instead.
+ *
+ * Writes now go through the contacts API. This endpoint stays only so any
+ * caller not yet updated keeps reading sensible data, and should be deleted
+ * once nothing calls it.
  */
-export async function broadcastContactPersons() {
-  try {
-    const all = await prisma.contactPerson.findMany({
-      select: CONTACT_PERSON_SELECT,
-      orderBy: { firstName: 'asc' },
-    })
-    await saveStoreKeys({ deed_contactPersons: JSON.stringify(all.map(contactPersonFromDb)) })
-  } catch (error) {
-    console.error('[contact-persons] broadcast failed:', error)
-  }
-}
-
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const contacts = await prisma.contactPerson.findMany({
-      select: CONTACT_PERSON_SELECT,
-      orderBy: { firstName: 'asc' },
+    const clients = await prisma.client.findMany({
+      where: { clientType: 'individual', companyId: { not: null }, isActive: true } as any,
+      orderBy: { name: 'asc' },
     })
-    return NextResponse.json(contacts.map(contactPersonFromDb))
+    const companies = await prisma.client.findMany({
+      where: { id: { in: clients.map(c => (c as any).companyId as string).filter(Boolean) } },
+      select: { id: true, name: true, companyName: true },
+    })
+    const nameById = new Map(companies.map(c => [c.id, c.companyName || c.name]))
+    return NextResponse.json(
+      deriveContactPersons(clients.map(clientToContact), id => nameById.get(id)),
+    )
   })
 }
 
-export async function POST(request: Request) {
-  return withApiErrorHandling(async () => {
-    const session = await getRequiredSession()
-    // This route had no role check at all while PUT and DELETE required one,
-    // so anyone could create a contact person they could not then correct.
-    // Roles are normalized so `lead_tech` / `repair_tech` are not locked out;
-    // repair intake creates contact persons too.
-    if (!isRoleAllowed(session.user.role, CONTACT_PERSON_WRITE_ROLES)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+const GONE = {
+  error: 'Contact persons are saved as contacts now. Use /api/contacts with type "individual" and a companyId.',
+}
 
-    const body = await request.json().catch(() => ({}))
-    const data = contactPersonToDb(body, { includeId: true })
-    if (typeof data === 'string') {
-      return NextResponse.json({ error: data }, { status: 422 })
-    }
-
-    const contact = await prisma.contactPerson.create({
-      data: data as any,
-      select: CONTACT_PERSON_SELECT,
-    })
-    await broadcastContactPersons()
-    return NextResponse.json(contactPersonFromDb(contact), { status: 201 })
-  })
+export async function POST() {
+  return NextResponse.json(GONE, { status: 410 })
 }

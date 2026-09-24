@@ -61,7 +61,6 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
     'deed_quotes',
     'deed_contacts',
     'deed_companies',
-    'deed_contactPersons',
     'deed_opportunities',
     'deed_customerContracts',
     'deed_approvalRequests',

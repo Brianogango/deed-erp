@@ -283,7 +283,11 @@ function ContactsInner() {
   }, [saleOrders, repairs, posOrders])
 
   const getCompany = (id?: string) => id ? contacts.find(c => c.id === id) : null
-  const getLinkedPersons = (companyId: string) => contacts.filter(c => c.companyId === companyId)
+  // Individual contacts employed by this company. These ARE the contact
+  // persons — the company form writes them here now, rather than into a
+  // separate table this panel never read, which is why it always showed 0.
+  const getLinkedPersons = (companyId: string) =>
+    contacts.filter(c => c.type === 'individual' && c.companyId === companyId && !c.isArchived)
 
   const openNew = (type: 'company' | 'individual') => {
     setFormDraft(type === 'company' ? blankCompanyContact() : blankIndividualContact())

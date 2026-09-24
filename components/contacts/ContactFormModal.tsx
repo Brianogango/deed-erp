@@ -88,7 +88,10 @@ export default function ContactFormModal({
   forceCustomer = false,
   forceVendor = false,
 }: Props) {
-  const { contacts, addContact, updateContact, showToast } = useCrmStore()
+  const {
+    contacts, addContact, updateContact, showToast,
+    contactPersons: linkedPersons, createContactPerson, deleteContactPerson,
+  } = useCrmStore()
   const [form, setForm] = useState<ContactFormValues>(() => ({
     ...initial,
     // Editing keeps the record's value (legacy rows fall back to the house default);
@@ -111,25 +114,26 @@ export default function ContactFormModal({
       setDeletedPersonIds([])
       return
     }
-    let cancelled = false
-    fetch('/api/contact-persons', { cache: 'no-store' })
-      .then(res => res.ok ? res.json() : [])
-      .then((rows: any[]) => {
-        if (cancelled) return
-        setContactPersons(rows.filter(row => row.clientId === editId).map(row => ({
-          id: row.id,
-          salutation: row.salutation ?? '',
-          firstName: row.firstName ?? '',
-          lastName: row.lastName ?? '',
-          email: row.email ?? '',
-          phone: row.phone ?? '',
-          mobile: row.mobile ?? '',
-          position: row.jobTitle ?? row.position ?? '',
-        })))
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [editId, form.type])
+    // Contact persons are individual contacts with this company as employer,
+    // read straight from the directory. This used to fetch a separate
+    // contact_persons table, which is why what you added here never showed up
+    // on the company's detail panel — that panel reads the directory.
+    setContactPersons(
+      linkedPersons
+        .filter(person => person.clientId === editId)
+        .map(person => ({
+          id: person.id,
+          salutation: '',
+          firstName: person.firstName ?? '',
+          lastName: person.lastName ?? '',
+          email: person.email ?? '',
+          phone: person.phone ?? '',
+          mobile: person.mobile ?? '',
+          position: person.jobTitle ?? '',
+        })),
+    )
+    setDeletedPersonIds([])
+  }, [editId, form.type, linkedPersons])
 
   const updatePerson = (index: number, key: keyof PersonDraft, value: string) => {
     setContactPersons(rows => rows.map((row, i) => i === index ? { ...row, [key]: value } : row))
@@ -273,33 +277,29 @@ export default function ContactFormModal({
         ? contactPersons.filter(person => person.firstName.trim() || person.lastName.trim() || person.email.trim())
         : []
       try {
-        if (form.type === 'company') await Promise.all([
-        ...validPersons.map(person => fetch(person.id ? `/api/contact-persons/${person.id}` : '/api/contact-persons', {
-          method: person.id ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            // Send the draft's id so a person created here keeps one identity
-            // everywhere instead of being reissued a different one server-side.
-            ...(person.id ? { id: person.id } : {}),
-            clientId: savedContact.id,
-            firstName: [person.salutation, person.firstName].filter(Boolean).join(' ').trim(),
-            lastName: person.lastName.trim(),
-            email: person.email.trim() || null,
-            phone: person.phone.trim() || null,
-            mobile: person.mobile.trim() || null,
-            position: person.position.trim() || null,
-          }),
-        }).then(res => {
-          if (!res.ok) throw new Error('Could not save contact person')
-          return res
-        })),
-        ...deletedPersonIds.map(id => fetch(`/api/contact-persons/${id}`, { method: 'DELETE' }).then(res => {
-          if (!res.ok) throw new Error('Could not remove contact person')
-          return res
-        })),
-        ])
-      } catch {
-        showToast('Contact saved, but some contact-person changes could not be applied. Reopen the contact to retry.', 'error')
+        if (form.type === 'company') {
+          // Saved as directory contacts employed by this company, which is the
+          // single place contact persons live now — so the detail panel, the
+          // CRM pickers and this form all see the same people.
+          for (const person of validPersons) {
+            createContactPerson({
+              clientId: savedContact.id,
+              companyId: savedContact.id,
+              companyName: savedContact.name,
+              firstName: [person.salutation, person.firstName].filter(Boolean).join(' ').trim(),
+              lastName: person.lastName.trim(),
+              email: person.email.trim(),
+              phone: person.phone.trim(),
+              mobile: person.mobile.trim() || undefined,
+              jobTitle: person.position.trim() || undefined,
+            } as Parameters<typeof createContactPerson>[0])
+          }
+          for (const id of deletedPersonIds) deleteContactPerson(id)
+        }
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : ''
+        showToast(
+          detail || 'Contact saved, but some contact-person changes could not be applied. Reopen the contact to retry.', 'error')
       }
       onSaved(savedContact)
     } catch {

@@ -296,6 +296,7 @@ import {
   buildDeliveryChargeInvoiceLine,
 } from '@/lib/invoice-delivery-charge'
 import { safeLocalStorageSet } from '@/lib/client-store-cache'
+import { contactFromPersonInput, deriveContactPersons } from '@/lib/contact-person-derive'
 import {
   applyCustomerToInvoice,
   applyCustomerToQuote,
@@ -4379,6 +4380,7 @@ export type OperationsStoreState = Pick<AppState,
   | 'completeRelease'
   | 'completeVerification'
   | 'createContactPerson'
+  | 'deleteContactPerson'
   | 'createRefurbishmentJob'
   | 'createRepair'
   | 'getAvailableSerials'
@@ -5810,7 +5812,17 @@ export function StoreProvider({
   // creditLimit) via boot fetch, app_state sync, or old localStorage snapshots.
   // Normalize once here so every consumer sees a well-formed Company.
   const companies = useMemo(() => normalizeCompaniesForClient(companiesRaw) as Company[], [companiesRaw])
-  const [contactPersons, setContactPersons] = useLS<ContactPerson[]>('deed_contactPersons', seedContactPersons)
+  // Derived, not stored. A contact person is an individual contact with an
+  // employer, so the directory is the only place either concept lives now.
+  // Keeping the ContactPerson shape means every CRM call site — opportunity
+  // and contract pickers, LeadScore, the detail panels — works unchanged.
+  const contactPersons = useMemo(
+    () => deriveContactPersons(
+      contacts,
+      id => contacts.find(c => c.id === id)?.name,
+    ) as unknown as ContactPerson[],
+    [contacts],
+  )
   const [opportunities, setOpportunities] = useLS<Opportunity[]>('deed_opportunities', seedOpportunities)
   const [opportunityActivities, setOpportunityActivities] = useLS<OpportunityActivity[]>('deed_oppActivities', seedOpportunityActivities)
   const [quotes, setQuotes] = useLS<Quote[]>('deed_quotes', seedQuotes)
@@ -7168,6 +7180,7 @@ export function StoreProvider({
     completeRelease: (...args: Parameters<AppState['completeRelease']>) => storeCtxRef.current!.completeRelease(...args),
     completeVerification: (...args: Parameters<AppState['completeVerification']>) => storeCtxRef.current!.completeVerification(...args),
     createContactPerson: (...args: Parameters<AppState['createContactPerson']>) => storeCtxRef.current!.createContactPerson(...args),
+    deleteContactPerson: (...args: Parameters<AppState['deleteContactPerson']>) => storeCtxRef.current!.deleteContactPerson(...args),
     createRefurbishmentJob: (...args: Parameters<AppState['createRefurbishmentJob']>) => storeCtxRef.current!.createRefurbishmentJob(...args),
     createRepair: (...args: Parameters<AppState['createRepair']>) => storeCtxRef.current!.createRepair(...args),
     getAvailableSerials: (...args: Parameters<AppState['getAvailableSerials']>) => storeCtxRef.current!.getAvailableSerials(...args),
@@ -9947,82 +9960,92 @@ const storeCtx: AppState = {
     },
     
     // ── CRM - Contact Persons ──────────────────────────────────────────────────
+    //
+    // A contact person is an individual contact with an employer, so all three
+    // actions write to the contacts directory. They used to write a separate
+    // contact_persons table that no other screen read, which is why a person
+    // added on the company form never appeared on that company's detail panel.
     createContactPerson: (c) => {
+      const companyId = c.clientId || c.companyId || ''
+      const fullName = `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim()
+      if (!companyId) {
+        showToast('Pick a company before adding a contact person', 'error')
+        return null as unknown as ContactPerson
+      }
+      if (!fullName) {
+        showToast('A contact person needs a name', 'error')
+        return null as unknown as ContactPerson
+      }
+
       const existing = contactPersons.find(person =>
-        (person.clientId === c.clientId || person.companyId === c.companyId || person.companyId === c.clientId || person.clientId === c.companyId) &&
+        person.clientId === companyId &&
         (
           (c.email && person.email?.trim().toLowerCase() === c.email.trim().toLowerCase()) ||
           (c.phone && person.phone?.replace(/\D/g, '').slice(-9) === c.phone.replace(/\D/g, '').slice(-9)) ||
-          `${person.firstName} ${person.lastName}`.trim().toLowerCase() === `${c.firstName} ${c.lastName}`.trim().toLowerCase()
+          person.fullName.trim().toLowerCase() === fullName.toLowerCase()
         )
       )
-      if (existing) {
-        const updated = {
-          ...existing,
-          ...c,
-          id: existing.id,
-          fullName: `${c.firstName || existing.firstName} ${c.lastName || existing.lastName}`.trim(),
-        }
-        setContactPersons(prev => prev.map(person => person.id === existing.id ? updated : person))
-        syncOrWarn(
-          `/api/contact-persons/${existing.id}`,
-          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) },
-          message => showToast(message, 'error'),
-          `${updated.fullName} could not be saved — reopen the contact and try again`,
-        )
-        showToast(`${updated.fullName} updated`)
-        return updated
+
+      const id = existing?.id ?? uid()
+      const payload = contactFromPersonInput({
+        id,
+        companyId,
+        fullName,
+        jobTitle: c.jobTitle,
+        email: c.email,
+        phone: c.phone,
+        mobile: c.mobile,
+        notes: c.notes,
+      })
+
+      // The directory write is the record. It is fire-and-forget only in the
+      // sense that the caller is not awaited — failures are surfaced, never
+      // swallowed the way the old contact-person sync did.
+      void (existing
+        ? storeCtxRef.current!.updateContact(id, payload as Partial<Contact>)
+        : storeCtxRef.current!.addContact(payload as Omit<Contact, 'id' | 'createdAt'>)
+      ).catch(() => {
+        showToast(`${fullName} could not be saved — reopen the company and try again`, 'error')
+      })
+
+      if (!existing) {
+        addAuditLog('create_contact_person', fullName, `Contact person added for ${c.companyName ?? companyId}`)
       }
-      const contactPerson: ContactPerson = {
+      showToast(`${fullName} ${existing ? 'updated' : 'added'}`)
+
+      return {
         ...c,
-        id: uid(),
-        fullName: `${c.firstName} ${c.lastName}`,
-        createdDate: now(),
-      }
-      setContactPersons(p => [contactPerson, ...p])
-      // The id travels with the body: the server keeps it, so this record has
-      // one identity everywhere. Before, Postgres minted its own and the next
-      // broadcast swapped it underneath the open screen, after which every
-      // edit and delete addressed a row that did not exist.
-      syncOrWarn(
-        '/api/contact-persons',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(contactPerson) },
-        message => showToast(message, 'error'),
-        `${contactPerson.fullName} could not be saved — reopen the company and try again`,
-      )
-      addAuditLog('create_contact_person', contactPerson.fullName, `Contact person added for ${c.companyName}`)
-      showToast(`${contactPerson.fullName} added`)
-      return contactPerson
+        id,
+        clientId: companyId,
+        companyId,
+        fullName,
+        createdDate: existing?.createdDate ?? now(),
+      } as ContactPerson
     },
     updateContactPerson: (id, p) => {
-      setContactPersons(prev => {
-        const next = prev.map(c => {
-          if (c.id !== id) return c
-          const updated = { ...c, ...p }
-          if (p.firstName || p.lastName) {
-            updated.fullName = `${updated.firstName} ${updated.lastName}`
-          }
-          return updated
-        })
-        const updatedObj = next.find(c => c.id === id)
-        if (updatedObj) syncOrWarn(
-          `/api/contact-persons/${id}`,
-          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedObj) },
-          message => showToast(message, 'error'),
-          'Contact person could not be saved — reopen the contact and try again',
-        )
-        return next
+      const person = contactPersons.find(c => c.id === id)
+      if (!person) return
+      const fullName = (p.firstName !== undefined || p.lastName !== undefined)
+        ? `${p.firstName ?? person.firstName} ${p.lastName ?? person.lastName}`.trim()
+        : person.fullName
+      const patch: Partial<Contact> = {
+        ...(fullName !== person.fullName ? { name: fullName } : {}),
+        ...(p.jobTitle !== undefined ? { jobTitle: p.jobTitle } : {}),
+        ...(p.email !== undefined ? { email: p.email } : {}),
+        ...(p.phone !== undefined ? { phone: p.phone } : {}),
+        ...(p.mobile !== undefined ? { mobile: p.mobile } : {}),
+        ...(p.notes !== undefined ? { notes: p.notes } : {}),
+        ...(p.clientId || p.companyId ? { companyId: p.clientId || p.companyId } : {}),
+      }
+      void storeCtxRef.current!.updateContact(id, patch).catch(() => {
+        showToast('Contact person could not be saved — reopen the contact and try again', 'error')
       })
       showToast('Contact person updated')
     },
     deleteContactPerson: (id) => {
-      setContactPersons(p => p.filter(c => c.id !== id))
-      syncOrWarn(
-        `/api/contact-persons/${id}`,
-        { method: 'DELETE' },
-        message => showToast(message, 'error'),
-        'Contact person could not be removed — it will reappear on refresh',
-      )
+      void storeCtxRef.current!.deleteContact(id).catch(() => {
+        showToast('Contact person could not be removed — it will reappear on refresh', 'error')
+      })
       showToast('Contact person deleted')
     },
     

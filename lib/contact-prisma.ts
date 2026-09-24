@@ -96,6 +96,11 @@ export function clientToContact(client: any): Contact {
     registrationNumber: client.registrationNumber ?? undefined,
     vatNumber: client.kraPin ?? undefined,
     idNumber: client.idNumber ?? undefined,
+    // The employer link and job title that make an individual a "contact
+    // person". Both were dropped on every round trip before the columns
+    // existed, so the contact detail panel could only ever show zero.
+    companyId: client.companyId ?? undefined,
+    jobTitle: client.jobTitle ?? undefined,
     email: client.email ?? '',
     phone: client.phone ?? '',
     mobile: client.phoneAlt ?? undefined,
@@ -142,6 +147,12 @@ export function normalizeContact(body: ContactInput, existing?: Contact): Contac
     registrationNumber: cleanText(body.registrationNumber) ?? existing?.registrationNumber,
     vatNumber: cleanText(body.vatNumber ?? body.kraPin ?? body.taxId) ?? existing?.vatNumber,
     idNumber: cleanText(body.idNumber) ?? existing?.idNumber,
+    // companyId is a uuid foreign key now, so an empty string or a legacy
+    // value must become null rather than reaching Postgres — that is the
+    // `invalid input syntax for type uuid` failure that has bitten this
+    // codebase repeatedly. Only a company may be an employer.
+    companyId: isUuid(body.companyId) ? body.companyId : (isUuid(existing?.companyId) ? existing?.companyId : undefined),
+    jobTitle: cleanText(body.jobTitle) ?? existing?.jobTitle,
     email: cleanTextOrEmpty(body.email, existing?.email ?? ''),
     phone: cleanTextOrEmpty(body.phone, existing?.phone ?? ''),
     mobile: cleanText(body.mobile) ?? existing?.mobile,
@@ -176,6 +187,8 @@ export function contactToClientData(contact: Contact, includeCreateFields = fals
     registrationNumber: contact.registrationNumber ?? null,
     kraPin: contact.vatNumber ?? null,
     idNumber: contact.idNumber ?? null,
+    companyId: contact.companyId ?? null,
+    jobTitle: contact.jobTitle ?? null,
     email: contact.email || null,
     phone: contact.phone || null,
     phoneAlt: contact.mobile ?? null,
