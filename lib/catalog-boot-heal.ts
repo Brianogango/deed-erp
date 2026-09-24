@@ -1,13 +1,13 @@
 'use client'
 
-import { persistClientStoreValue } from '@/lib/client-store-cache'
+import { persistClientStoreValue, safeLocalStorageSet } from '@/lib/client-store-cache'
 import { readDirtyStoreKeys } from '@/lib/client-store-hydrate'
 
 const HEAL_FLAG_LS = 'deed_catalog_healed_v1'
 
 function markHealComplete() {
   try {
-    window.localStorage.setItem(HEAL_FLAG_LS, new Date().toISOString())
+    safeLocalStorageSet(HEAL_FLAG_LS, new Date().toISOString())
   } catch { /* ignore */ }
 }
 

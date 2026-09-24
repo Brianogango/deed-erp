@@ -3,6 +3,8 @@
  * Server routes should call getNextDocNumber from lib/doc-ref-counter directly.
  */
 
+import { safeLocalStorageSet } from '@/lib/client-store-cache'
+
 type DocKind =
   | 'quote'
   | 'quotation'
@@ -62,6 +64,6 @@ export function allocateDocNumberSync(prefix: string): string {
     ? parseInt(localStorage.getItem(lsKey) ?? '0', 10)
     : 0
   const next = (Number.isFinite(stored) ? stored : 0) + 1
-  if (typeof window !== 'undefined') localStorage.setItem(lsKey, String(next))
+  safeLocalStorageSet(lsKey, String(next))
   return `${prefix}/${year}/${String(next).padStart(4, '0')}`
 }

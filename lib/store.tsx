@@ -294,6 +294,7 @@ import {
   appendDeliveryChargeToInvoice,
   buildDeliveryChargeInvoiceLine,
 } from '@/lib/invoice-delivery-charge'
+import { safeLocalStorageSet } from '@/lib/client-store-cache'
 import {
   applyCustomerToInvoice,
   applyCustomerToQuote,
@@ -4418,7 +4419,7 @@ export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
   const fallback = C[key]
   const current = Number.isFinite(parsed) ? parsed : (Number.isFinite(fallback) ? fallback : NaN)
   const next = assertFiniteSequenceNext(current + 1, `${prefix} sequence`)
-  if (typeof window !== 'undefined') localStorage.setItem(lsKey, String(next))
+  safeLocalStorageSet(lsKey, String(next))
   C[key] = next
   return `${prefix}/${String(next).padStart(4, '0')}`
 }
@@ -4459,7 +4460,7 @@ export const docSeq = (prefix: string) => {
     if (Number.isFinite(stored) && stored > max) max = stored
   }
   const next = max + 1
-  if (typeof window !== 'undefined') localStorage.setItem(lsKey, String(next))
+  safeLocalStorageSet(lsKey, String(next))
   return `${prefix}/${year}/${String(next).padStart(4, '0')}`
 }
 

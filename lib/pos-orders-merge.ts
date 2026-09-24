@@ -9,6 +9,8 @@
  * `POSSESS/NNNN` session refs — those previously used the same localStorage key.
  */
 
+import { safeLocalStorageSet } from '@/lib/client-store-cache'
+
 export type PosOrderLike = {
   id?: unknown
   ref?: unknown
@@ -122,7 +124,7 @@ export function nextPrefixedRef(prefix: string, existingRefs: string[], storageK
     if (Number.isFinite(stored) && stored > max) max = stored
   }
   const next = max + 1
-  if (typeof window !== 'undefined') localStorage.setItem(storageKey, String(next))
+  safeLocalStorageSet(storageKey, String(next))
   return `${prefix}/${String(next).padStart(4, '0')}`
 }
 
