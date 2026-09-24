@@ -8,6 +8,7 @@ import { buildCashFlowStatement } from '@/lib/accounting/cash-flow.server'
 import { buildVatReturnFromTaxLedger } from '@/lib/accounting/vat-reports.server'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
 import { COA_ROLE_CODES } from '@/lib/accounting/coa-roles'
+import { invoiceOutstanding } from '@/lib/accounting/invoice-paid'
 
 export const dynamic = 'force-dynamic'
 
@@ -467,11 +468,14 @@ export async function GET(request: NextRequest) {
       },
     ] : []
 
+    // Summing allocations alone reported every invoice settled before
+    // payment_allocations existed as fully overdue. invoiceOutstanding falls
+    // back to the amountPaid cache for exactly those rows.
     const overdueCustomer = overdueCustomerInvoices
-      .map(inv => money(Number(inv.totalAmount) - inv.paymentAllocations.reduce((s, a) => s + Number(a.amount || 0), 0)))
+      .map(inv => money(invoiceOutstanding(inv)))
       .filter(v => v > 0.01)
     const overdueVendor = overdueVendorInvoices
-      .map(inv => money(Number(inv.totalAmount) - inv.paymentAllocations.reduce((s, a) => s + Number(a.amount || 0), 0)))
+      .map(inv => money(invoiceOutstanding(inv)))
       .filter(v => v > 0.01)
 
     const failedIntegrity = integrity.gates.filter(g => !g.passed)

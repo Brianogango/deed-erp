@@ -6,6 +6,7 @@ import 'server-only'
 import prisma from '@/lib/prisma'
 import { COA_ROLE_CODES } from '@/lib/accounting/coa-roles'
 import { round2, buildTrialBalance, netBalanceForType } from '@/lib/accounting/gl-reports'
+import { invoiceOutstanding } from '@/lib/accounting/invoice-paid'
 import { roundMoney } from '@/lib/accounting/money'
 
 export type IntegrityGate = {
@@ -170,14 +171,11 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
     }),
   ])
 
-  const arBalance = roundMoney(arInvoices.reduce((s, inv) => {
-    const paid = inv.paymentAllocations.reduce((a, x) => a + Number(x.amount || 0), 0)
-    return s + Math.max(0, Number(inv.totalAmount) - paid)
-  }, 0))
-  const apBalance = roundMoney(apInvoices.reduce((s, inv) => {
-    const paid = inv.paymentAllocations.reduce((a, x) => a + Number(x.amount || 0), 0)
-    return s + Math.max(0, Number(inv.totalAmount) - paid)
-  }, 0))
+  // These balances are gated against the GL, so the allocations-only sum made
+  // legacy-paid invoices look outstanding and could fail an otherwise sound
+  // ledger. invoiceOutstanding carries the amountPaid fallback.
+  const arBalance = roundMoney(arInvoices.reduce((s, inv) => s + invoiceOutstanding(inv), 0))
+  const apBalance = roundMoney(apInvoices.reduce((s, inv) => s + invoiceOutstanding(inv), 0))
 
   const unbalancedCount = unbalanced.filter(j => Math.abs(Number(j.totalDebit) - Number(j.totalCredit)) > 0.02).length
   const creditRemaining = roundMoney(Number(creditNotes._sum.amount || 0) - Number(creditApps._sum.amount || 0))

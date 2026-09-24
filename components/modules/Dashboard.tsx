@@ -37,6 +37,7 @@ import {
 } from '@/lib/dashboard-priority'
 import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
 import { saleOrderInvoiceStatus, invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, isInvoiceOverdue } from '@/lib/odoo-sales-flow'
+import { computeInvoiceStats, type InvoiceStats } from '@/lib/accounting/invoice-stats'
 import { onHandQtyAtStockLocations } from '@/lib/business-logic'
 import { isStockTracked, inferTrackingMethod } from '@/lib/inventory-identifiers'
 import { computeLowStockItems } from '@/lib/kpi-stock'
@@ -283,29 +284,28 @@ export function Dashboard() {
     [currentUser, repairs],
   )
 
-  const financeStats = useMemo(() => {
-    let revenue = 0
-    let outstanding = 0
-    let payables = 0
-    const overdueInvoices: typeof invoices = []
-    const pendingBills: typeof invoices = []
+  // Finance tiles, computed in Postgres. The same computeInvoiceStats runs on
+  // both sides, so the server's answer and the browser's are the same answer —
+  // the fallback below is a fallback, not a second opinion.
+  const [serverFinanceStats, setServerFinanceStats] = useState<InvoiceStats | null>(null)
 
-    for (const invoice of invoices) {
-      if (invoice.type === 'customer_invoice') {
-        if (invoicePaymentStatus(invoice) === 'paid') revenue += invoice.total
-        if (isOpenInvoice(invoice)) {
-          outstanding += invoiceResidual(invoice)
-          if (isInvoiceOverdue(invoice)) overdueInvoices.push(invoice)
-        }
-      }
-      if (invoice.type === 'vendor_bill' && isOpenInvoice(invoice)) {
-        payables += invoiceResidual(invoice)
-        pendingBills.push(invoice)
-      }
-    }
+  useEffect(() => {
+    let cancelled = false
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' })
+    fetch(`/api/invoices/stats?today=${today}`, { cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (cancelled || !data || typeof data.revenue !== 'number') return
+        setServerFinanceStats(data as InvoiceStats)
+      })
+      .catch(() => { /* the local computation below still renders */ })
+    return () => { cancelled = true }
+  }, [])
 
-    return { revenue, outstanding, payables, overdueInvoices, pendingBills }
-  }, [invoices])
+  const financeStats = useMemo(
+    () => serverFinanceStats ?? computeInvoiceStats(invoices as never),
+    [serverFinanceStats, invoices],
+  )
 
   const salesStats = useMemo(() => {
     // Odoo stages: Quotation → Quotation Sent → Sales Order, with invoicing
@@ -715,8 +715,8 @@ export function Dashboard() {
     if (isDirector) {
       return [
         { key: 'revenue', label: 'Revenue Paid', value: financeStats.revenue, sub: 'Company-wide collections', color: '#2563EB', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
-        { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueInvoices.length} overdue invoices`, color: '#2563EB', icon: <Fa icon={faFileInvoiceDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
-        { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} bills pending`, color: '#8B5CF6', icon: <Fa icon={faMoneyCheckDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
+        { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueCount} overdue invoices`, color: '#2563EB', icon: <Fa icon={faFileInvoiceDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
+        { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBillCount} bills pending`, color: '#8B5CF6', icon: <Fa icon={faMoneyCheckDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
         { key: 'open-orders', label: 'Open Sales', value: salesStats.openOrders, sub: `${salesStats.myQuotes.length} quotations active`, color: '#00B0D7', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('sales', '/sales') },
         { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#F97316', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/inventory') },
         { key: 'repairs', label: 'Open Repairs', value: repairStats.active.length, sub: `${repairStats.unassigned.length} waiting assignment${repairStats.aging.length > 0 ? ` · ${repairStats.aging.length} aging 7d+` : ''}`, color: '#16A34A', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
@@ -731,8 +731,8 @@ export function Dashboard() {
     if (isFinanceOfficer) {
       return [
         { key: 'revenue', label: 'Revenue Paid', value: financeStats.revenue, sub: 'Collected invoices', color: '#10B981', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
-        { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueInvoices.length} overdue invoices`, color: '#F59E0B', icon: <Fa icon={faArrowDown} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
-        { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} supplier bills pending`, color: '#EF4444', icon: <Fa icon={faArrowUp} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
+        { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueCount} overdue invoices`, color: '#F59E0B', icon: <Fa icon={faArrowDown} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
+        { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBillCount} supplier bills pending`, color: '#EF4444', icon: <Fa icon={faArrowUp} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
         { key: 'expenses', label: 'Expense Claims', value: selfServiceStats.pendingExpenseClaims.length, sub: 'Waiting review or reimbursement', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
         { key: 'payroll', label: 'Payroll Approval', value: selfServiceStats.pendingPayroll.length, sub: 'Runs pending approval', color: '#1B2762', icon: <Fa icon={faFileInvoiceDollar} />, onClick: () => handleNav('hr', '/hr?tab=payroll') },
         { key: 'settlements', label: 'Kilimall Settlement', value: kilimallStats.unsettled.length, sub: 'Delivered orders not settled', color: '#8B5CF6', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('kilimall', '/kilimall') },
@@ -1033,7 +1033,7 @@ export function Dashboard() {
               </div>
             </div>
             <p className="dashboard-week-summary">
-              {fmtKes(executiveSnapshot.paidThisWeek)} in paid invoice revenue across {executiveSnapshot.paidInvoiceCount} invoice{executiveSnapshot.paidInvoiceCount === 1 ? '' : 's'} this week. {financeStats.overdueInvoices.length} overdue customer invoice{financeStats.overdueInvoices.length === 1 ? '' : 's'} currently need collection.
+              {fmtKes(executiveSnapshot.paidThisWeek)} in paid invoice revenue across {executiveSnapshot.paidInvoiceCount} invoice{executiveSnapshot.paidInvoiceCount === 1 ? '' : 's'} this week. {financeStats.overdueCount} overdue customer invoice{financeStats.overdueCount === 1 ? '' : 's'} currently need collection.
             </p>
             <div className="dashboard-week-chips">
               <button type="button" onClick={() => handleNav('accounting', '/finance?tab=invoices')}>{executiveSnapshot.paidInvoiceCount} invoices paid this week</button>
