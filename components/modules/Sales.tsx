@@ -132,6 +132,7 @@ import {
   effectiveDeliveryLineQty,
   deliveryDeliveredTotal,
   canGenerateDeliveryNote,
+  reconcileInvoicedQty,
   saleOrderInvoiceStatus,
   saleOrderInvoicePrimaryAction,
   saleOrderFulfilmentStatus,
@@ -852,34 +853,6 @@ function SalesContent() {
       lineUnit: line.unit,
     })
   }, [products])
-  const activeInvoiceStatus = useMemo(() => {
-    if (!activeOrder) return 'no' as const
-    return saleOrderInvoiceStatus(
-      activeOrder.status,
-      (activeOrder.lines ?? []).map((l: any) => ({
-        qty: Number(l.qty) || 0,
-        qtyDelivered: Number(l.qtyDelivered) || 0,
-        qtyInvoiced: Number(l.qtyInvoiced) || 0,
-        invoicePolicy: activeLineInvoicePolicy(l),
-      })),
-    )
-  }, [activeOrder, activeLineInvoicePolicy])
-  /** True when at least one line can be invoiced now (respects ordered vs delivered policy). */
-  const canCreateInvoiceNow = useMemo(() => {
-    if (!activeOrder || activeOrder.status !== 'sale') return false
-    // Deed policy: a Sales Order cannot create a customer invoice before
-    // fulfilment is fully delivered. Pro-forma/deposit collection is separate.
-    if (saleOrderFulfilmentStatus(activeOrder.status, activeOrder.lines ?? []) !== 'delivered') return false
-    return (activeOrder.lines ?? []).some((l: any) => {
-      if (l.lineType === 'section') return false
-      return invoiceableQty({
-        qty: Number(l.qty) || 0,
-        qtyDelivered: Number(l.qtyDelivered) || 0,
-        qtyInvoiced: Number(l.qtyInvoiced) || 0,
-        invoicePolicy: activeLineInvoicePolicy(l),
-      }) > 0
-    })
-  }, [activeOrder, activeLineInvoicePolicy])
   const reservedByLineId = useMemo(() => {
     if (!activeOrder) return new Map<string, number>()
     const pool: Record<string, number> = {}
@@ -926,6 +899,43 @@ function SalesContent() {
     () => activeInvoices.filter(i => !['cancelled', 'voided', 'void'].includes(String(i.status))),
     [activeInvoices],
   )
+  /**
+   * Invoicing progress, ignoring counters that no invoice backs: an attempt
+   * that raised qtyInvoiced and then failed used to leave the order "Fully
+   * Invoiced" with no invoice, and Create invoice was never offered again.
+   */
+  const reconciledLines = useMemo(
+    () => reconcileInvoicedQty((activeOrder?.lines ?? []) as any[], liveInvoices.length),
+    [activeOrder, liveInvoices.length],
+  )
+  const activeInvoiceStatus = useMemo(() => {
+    if (!activeOrder) return 'no' as const
+    return saleOrderInvoiceStatus(
+      activeOrder.status,
+      reconciledLines.map((l: any) => ({
+        qty: Number(l.qty) || 0,
+        qtyDelivered: Number(l.qtyDelivered) || 0,
+        qtyInvoiced: Number(l.qtyInvoiced) || 0,
+        invoicePolicy: activeLineInvoicePolicy(l),
+      })),
+    )
+  }, [activeOrder, activeLineInvoicePolicy, reconciledLines])
+  /** True when at least one line can be invoiced now (respects ordered vs delivered policy). */
+  const canCreateInvoiceNow = useMemo(() => {
+    if (!activeOrder || activeOrder.status !== 'sale') return false
+    // Deed policy: a Sales Order cannot create a customer invoice before
+    // fulfilment is fully delivered. Pro-forma/deposit collection is separate.
+    if (saleOrderFulfilmentStatus(activeOrder.status, activeOrder.lines ?? []) !== 'delivered') return false
+    return reconciledLines.some((l: any) => {
+      if (l.lineType === 'section') return false
+      return invoiceableQty({
+        qty: Number(l.qty) || 0,
+        qtyDelivered: Number(l.qtyDelivered) || 0,
+        qtyInvoiced: Number(l.qtyInvoiced) || 0,
+        invoicePolicy: activeLineInvoicePolicy(l),
+      }) > 0
+    })
+  }, [activeOrder, activeLineInvoicePolicy, reconciledLines])
   const regularLiveInvoices = useMemo(
     // String(): 'customer_credit' is a legacy/loosely-typed value outside the
     // InvoiceType union; keep excluding it without tripping TS2367.
@@ -2413,7 +2423,9 @@ function SalesContent() {
                   >
                     {canCreateInvoiceNow
                       ? 'Create invoice'
-                      : visibleDeliveries.length === 0 ? 'Create delivery' : 'Complete delivery'}
+                      : visibleDeliveries.length === 0 ? 'Create delivery'
+                      : activeFulfilmentStatus === 'delivered' ? 'View delivery'
+                      : 'Complete delivery'}
                             </button>
                           )
                         ) : (

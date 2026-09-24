@@ -200,6 +200,26 @@ export function invoiceableQty(line: InvoiceableLine): number {
   return Math.max(0, invoiceBase - invoiced)
 }
 
+/**
+ * `qtyInvoiced` is raised when an invoice is created. An attempt that raised it
+ * and then failed — a browser that could not save, a request lost mid-flight —
+ * leaves the order claiming to be invoiced with no invoice anywhere. The order
+ * then shows "Fully Invoiced" beside "Invoices: None yet", and Create invoice
+ * is never offered again: the order can never be billed.
+ *
+ * An invoiced quantity that no invoice backs is not evidence of anything, so
+ * when an order has no live invoice at all the counters are read as zero.
+ * Orders that do have invoices keep their counters untouched (partial and
+ * credit-note cases depend on them).
+ */
+export function reconcileInvoicedQty<T extends InvoiceableLine>(
+  lines: readonly T[],
+  liveInvoiceCount: number,
+): T[] {
+  if (liveInvoiceCount > 0) return [...lines]
+  return lines.map(line => (Number(line.qtyInvoiced) || 0) > 0 ? { ...line, qtyInvoiced: 0 } : line)
+}
+
 export type SoInvoiceStatus = 'no' | 'to_invoice' | 'invoiced' | 'upselling'
 
 export const SO_INVOICE_STATUS_LABELS: Record<SoInvoiceStatus, string> = {
