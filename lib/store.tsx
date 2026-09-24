@@ -5144,6 +5144,30 @@ function stampCache(key: string) {
  * Array seeds reject non-array stored JSON (common corruption that used to
  * crash the authenticated shell with a blank white page after login).
  */
+/**
+ * How many audit entries the session keeps in memory. The durable record is
+ * written server-side by /api/audit/commercial; this is only a live mirror.
+ */
+export const SESSION_AUDIT_LOG_LIMIT = 200
+
+/**
+ * Keys the browser must not keep. deed_auditLogs was persisted by every client
+ * until it filled the quota; existing browsers still carry that copy, so it is
+ * evicted once on boot rather than waiting for a cache clear.
+ */
+export const RETIRED_LOCAL_KEYS = ['deed_auditLogs']
+
+export function evictRetiredLocalKeys() {
+  if (typeof window === 'undefined') return
+  for (const key of RETIRED_LOCAL_KEYS) {
+    try {
+      if (window.localStorage.getItem(key) !== null) {
+        window.localStorage.removeItem(key)
+      }
+    } catch { /* private mode / blocked storage — nothing to reclaim */ }
+  }
+}
+
 function useLS<T>(
   key: string,
   seed: T,
@@ -5457,6 +5481,11 @@ export function StoreProvider({
       safeLocalStorageSet(key, value)
       window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value } }))
     }
+
+    // Reclaim space from keys the browser no longer keeps, before any
+    // hydration writes compete for the same quota.
+    evictRetiredLocalKeys()
+    removeDirtyKeys(RETIRED_LOCAL_KEYS)
 
     // Recovery pass: if browser cache is empty OR missing rows the server has
     // (common after creating an outsource job on another tab/device), pull/merge
@@ -6218,7 +6247,19 @@ export function StoreProvider({
 
   // Approvals & Audit
   const [approvalRequests, setApprovalRequests] = useLS<ApprovalRequest[]>('deed_approvalRequests', [])
-  const [auditLogs, setAuditLogs]               = useLS<AuditLog[]>('deed_auditLogs', []) // To be migrated
+  // Audit log: session-local only, never persisted.
+  //
+  // This was a useLS collection, which meant every browser accumulated its own
+  // copy forever. It is write-only in three separate ways: no screen reads it,
+  // the server ignores client writes to deed_auditLogs (P0-SEC-002 — the real
+  // record is written by /api/audit/commercial), and nothing trims it. It was
+  // the largest single key in app_state at ~1.1 MB, and on the client it was
+  // pure ballast pushing the localStorage quota over — the failure that cost
+  // a week of half-written deliveries, payments and orders.
+  //
+  // The in-memory mirror stays so the optimistic UI and any same-session
+  // reader keep working, capped so a long shift cannot grow it without bound.
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [notifications, setNotifications] = useLS<AppNotification[]>(
     'deed_notifications',
     [],
@@ -6741,7 +6782,7 @@ export function StoreProvider({
   const addAuditLog = (action: string, documentRef: string, details: string) => {
     const actor = currentUser()?.username || 'system'
     const log: AuditLog = { id: uid(), date: now(), user: actor, action, documentRef, details }
-    setAuditLogs(p => [log, ...p])
+    setAuditLogs(p => [log, ...p].slice(0, SESSION_AUDIT_LOG_LIMIT))
     // P0-SEC-002: persist via server-authored endpoint (client store writes to
     // deed_auditLogs are ignored).
     void fetch('/api/audit/commercial', {
