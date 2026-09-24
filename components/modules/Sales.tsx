@@ -4757,8 +4757,14 @@ function DeliveryNoteView({
       const res = await fetch(`/api/sale-orders/${order.id}/deliver-lines`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lines }),
       })
-      const json = await res.json()
-      if (!res.ok) { showToast(json.error ?? 'Failed to save delivery', 'error'); return }
+      // A 500/502/504 can answer with HTML, not JSON: parsing it threw and the
+      // failure surfaced as "Network error saving delivery", hiding the real
+      // reason. Read the body defensively and report what the server said.
+      const json = await res.json().catch(() => null) as { error?: string } | null
+      if (!res.ok) {
+        showToast(json?.error ?? `Failed to save delivery (${res.status})`, 'error')
+        return
+      }
       if (dnRecipientName.trim()) {
         updateDelivery(existingDelivery.id, {
           recipientName: dnRecipientName.trim(),
@@ -4781,7 +4787,11 @@ function DeliveryNoteView({
       }))
       setShowPartialDialog(false)
       onBack()
-    } catch { showToast('Network error saving delivery', 'error') }
+    } catch (err) {
+      // Never swallow the reason: this catch also covers the validation step.
+      const detail = err instanceof Error && err.message ? err.message : 'unexpected error'
+      showToast(`Could not save delivery — ${detail}`, 'error')
+    }
     finally { setSavingDelivery(false) }
   }
 

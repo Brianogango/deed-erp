@@ -12723,8 +12723,16 @@ const storeCtx: AppState = {
         showToast('Only Inventory or Admin can validate deliveries', 'error'); return;
       }
       const cancelRemaining = opts?.cancelRemaining === true
-      const del = delRef.current.find(d => d.id === deliveryId)!
-      const so  = soRef.current.find(s => s.id === del.saleOrderId)!
+      const del = delRef.current.find(d => d.id === deliveryId)
+      if (!del) {
+        showToast('This delivery is no longer loaded — refresh the page and try again', 'error'); return
+      }
+      const so = soRef.current.find(s => s.id === del.saleOrderId)
+      if (!so) {
+        // Previously a non-null assertion: a delivery whose sale order had not
+        // loaded threw a TypeError that surfaced as "Network error".
+        showToast('The sale order for this delivery could not be loaded — refresh and try again', 'error'); return
+      }
       if (del.status !== 'ready' || !del.preparedAt) {
         showToast('Prepare and reserve this delivery before validation', 'error')
         return
