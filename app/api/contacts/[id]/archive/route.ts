@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { clientToContact } from '@/lib/contact-prisma'
+import { broadcastContacts, clientToContact } from '@/lib/contact-prisma'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
@@ -32,6 +32,9 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
       // audit best-effort
     }
 
+    // Without this the contacts blob keeps the old isActive value and the
+    // archive does not show until some unrelated write triggers a refresh.
+    await broadcastContacts(prisma)
     return NextResponse.json(clientToContact(updated))
   })
 }

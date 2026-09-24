@@ -5239,6 +5239,28 @@ const DATA_VERSION = 'v4'
 // Fire-and-forget server sync — swallows network errors so local state is never blocked
 const sync = (url: string, opts: RequestInit) => fetch(url, opts).catch(() => {})
 
+/**
+ * A write whose failure the user is told about.
+ *
+ * `sync` above discards everything — it does not even read res.ok — so a 403,
+ * a 404 or a 500 looks exactly like success and the caller's toast still says
+ * "saved". Use this wherever the user is being told their change was stored.
+ */
+const syncOrWarn = (
+  url: string,
+  opts: RequestInit,
+  onFailure: (message: string) => void,
+  fallbackMessage: string,
+) => {
+  void fetch(url, opts)
+    .then(async res => {
+      if (res.ok) return
+      const payload = await res.json().catch(() => null) as { error?: string } | null
+      onFailure(payload?.error || fallbackMessage)
+    })
+    .catch(() => onFailure(fallbackMessage))
+}
+
 async function patchSaleOrderPersist(
   id: string,
   order: Record<string, unknown>,
@@ -9942,7 +9964,12 @@ const storeCtx: AppState = {
           fullName: `${c.firstName || existing.firstName} ${c.lastName || existing.lastName}`.trim(),
         }
         setContactPersons(prev => prev.map(person => person.id === existing.id ? updated : person))
-        sync(`/api/contact-persons/${existing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        syncOrWarn(
+          `/api/contact-persons/${existing.id}`,
+          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) },
+          message => showToast(message, 'error'),
+          `${updated.fullName} could not be saved — reopen the contact and try again`,
+        )
         showToast(`${updated.fullName} updated`)
         return updated
       }
@@ -9953,7 +9980,16 @@ const storeCtx: AppState = {
         createdDate: now(),
       }
       setContactPersons(p => [contactPerson, ...p])
-      sync('/api/contact-persons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(contactPerson) })
+      // The id travels with the body: the server keeps it, so this record has
+      // one identity everywhere. Before, Postgres minted its own and the next
+      // broadcast swapped it underneath the open screen, after which every
+      // edit and delete addressed a row that did not exist.
+      syncOrWarn(
+        '/api/contact-persons',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(contactPerson) },
+        message => showToast(message, 'error'),
+        `${contactPerson.fullName} could not be saved — reopen the company and try again`,
+      )
       addAuditLog('create_contact_person', contactPerson.fullName, `Contact person added for ${c.companyName}`)
       showToast(`${contactPerson.fullName} added`)
       return contactPerson
@@ -9969,14 +10005,24 @@ const storeCtx: AppState = {
           return updated
         })
         const updatedObj = next.find(c => c.id === id)
-        if (updatedObj) sync(`/api/contact-persons/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedObj) })
+        if (updatedObj) syncOrWarn(
+          `/api/contact-persons/${id}`,
+          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedObj) },
+          message => showToast(message, 'error'),
+          'Contact person could not be saved — reopen the contact and try again',
+        )
         return next
       })
       showToast('Contact person updated')
     },
     deleteContactPerson: (id) => {
       setContactPersons(p => p.filter(c => c.id !== id))
-      sync(`/api/contact-persons/${id}`, { method: 'DELETE' })
+      syncOrWarn(
+        `/api/contact-persons/${id}`,
+        { method: 'DELETE' },
+        message => showToast(message, 'error'),
+        'Contact person could not be removed — it will reappear on refresh',
+      )
       showToast('Contact person deleted')
     },
     

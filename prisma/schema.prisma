@@ -1341,9 +1341,24 @@ model ContactPerson {
   firstName String    @map("first_name") @db.VarChar(80)
   lastName  String    @map("last_name") @db.VarChar(80)
   email     String?   @db.VarChar(150)
-  phone     String?   @db.VarChar(20)
+  // 20 was too tight for a number with a country code and an extension, and a
+  // VarChar overflow is an error, not a truncation.
+  phone     String?   @db.VarChar(40)
   position  String?   @db.VarChar(100)
   notes     String?   @db.Text
+
+  // The app has always carried these; the table had nowhere to put them, so
+  // every one was silently dropped the first time the server broadcast the
+  // contact person back. department was being collapsed into position.
+  department          String?  @db.VarChar(100)
+  mobile              String?  @db.VarChar(40)
+  linkedIn            String?  @map("linked_in") @db.VarChar(200)
+  isPrimary           Boolean  @default(false) @map("is_primary")
+  isDecisionMaker     Boolean  @default(false) @map("is_decision_maker")
+  isTechnicalContact  Boolean  @default(false) @map("is_technical_contact")
+  isBillingContact    Boolean  @default(false) @map("is_billing_contact")
+  preferredChannel    String?  @map("preferred_channel") @db.VarChar(20)
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 

@@ -124,7 +124,7 @@ export default function ContactFormModal({
           email: row.email ?? '',
           phone: row.phone ?? '',
           mobile: row.mobile ?? '',
-          position: row.position ?? '',
+          position: row.jobTitle ?? row.position ?? '',
         })))
       })
       .catch(() => {})
@@ -278,11 +278,15 @@ export default function ContactFormModal({
           method: person.id ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            // Send the draft's id so a person created here keeps one identity
+            // everywhere instead of being reissued a different one server-side.
+            ...(person.id ? { id: person.id } : {}),
             clientId: savedContact.id,
             firstName: [person.salutation, person.firstName].filter(Boolean).join(' ').trim(),
             lastName: person.lastName.trim(),
             email: person.email.trim() || null,
-            phone: person.phone.trim() || person.mobile.trim() || null,
+            phone: person.phone.trim() || null,
+            mobile: person.mobile.trim() || null,
             position: person.position.trim() || null,
           }),
         }).then(res => {
