@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { DataTable } from '@/components/data-table'
 import { fmtDate, fmtKes, type Invoice } from '@/lib/store'
-import { bucketOpenInvoices, type AgeingRow } from '@/lib/accounting/ageing'
+import {
+  bucketOpenInvoices,
+  type AgeingReport as AgeingReportShape,
+  type AgeingRow,
+} from '@/lib/accounting/ageing'
 import { EmptyState } from '@/components/ui'
 
 type ViewMode = 'invoices' | 'partners'
@@ -13,19 +17,31 @@ function AgeingReport({
   title,
   kind,
   invoices,
+  serverReport,
   asOf,
 }: {
   title: string
   kind: 'ar' | 'ap'
+  /** Blob fallback, used only when the API could not be reached. */
   invoices: Invoice[]
+  /** Buckets computed by Postgres from posted invoices and their allocations. */
+  serverReport?: AgeingReportShape | null
   asOf: string
 }) {
   const [mode, setMode] = useState<ViewMode>('partners')
   const [partnerFilter, setPartnerFilter] = useState<string | null>(null)
 
+  // Prefer the server's buckets. They are computed by the same
+  // bucketOpenInvoices function, but over the posted invoices and their real
+  // payment allocations rather than the browser's copy — so they are both more
+  // accurate and available without the invoice blob being loaded at all.
+  //
+  // This used to take the server's rows, rebuild a fake Invoice from each one
+  // (total = balance, amountPaid = 0) and re-bucket those, which threw away
+  // the answer the server had already produced and zeroed the paid amounts.
   const report = useMemo(
-    () => bucketOpenInvoices(invoices, asOf),
-    [invoices, asOf],
+    () => serverReport ?? bucketOpenInvoices(invoices, asOf),
+    [serverReport, invoices, asOf],
   )
 
   const invoiceRows = useMemo(() => {
@@ -213,8 +229,8 @@ export default function AgeingTab({
 }) {
   // "As of" date starts empty — the user picks the reporting date.
   const [asOf, setAsOf] = useState('')
-  const [arApi, setArApi] = useState<Invoice[] | null>(null)
-  const [apApi, setApApi] = useState<Invoice[] | null>(null)
+  const [arApi, setArApi] = useState<AgeingReportShape | null>(null)
+  const [apApi, setApApi] = useState<AgeingReportShape | null>(null)
 
   useEffect(() => {
     if (!asOf) {
@@ -223,43 +239,33 @@ export default function AgeingTab({
       return
     }
     let cancelled = false
+
+    // Keep the server's report as-is. It already carries rows, totals and
+    // partner subtotals in the exact shape this screen renders.
+    const readReport = async (res: Response): Promise<AgeingReportShape | null> => {
+      if (!res.ok) return null
+      const data = await res.json().catch(() => null)
+      if (!data || !Array.isArray(data.rows) || !data.totals) return null
+      return { rows: data.rows, totals: data.totals, partners: data.partners ?? [] }
+    }
+
     async function load() {
       try {
         const [arRes, apRes] = await Promise.all([
           fetch(`/api/accounting/ageing?kind=ar&asOf=${asOf}`),
           fetch(`/api/accounting/ageing?kind=ap&asOf=${asOf}`),
         ])
+        const [ar, ap] = await Promise.all([readReport(arRes), readReport(apRes)])
         if (cancelled) return
-        if (arRes.ok) {
-          const data = await arRes.json()
-          setArApi((data.rows || []).map((r: any) => ({
-            id: r.id,
-            ref: r.ref,
-            partnerId: r.partnerId,
-            partnerName: r.partnerName,
-            date: r.dueDate,
-            dueDate: r.dueDate,
-            total: r.balance,
-            amountPaid: 0,
-            status: 'posted',
-          })) as Invoice[])
-        }
-        if (apRes.ok) {
-          const data = await apRes.json()
-          setApApi((data.rows || []).map((r: any) => ({
-            id: r.id,
-            ref: r.ref,
-            partnerId: r.partnerId,
-            partnerName: r.partnerName,
-            date: r.dueDate,
-            dueDate: r.dueDate,
-            total: r.balance,
-            amountPaid: 0,
-            status: 'posted',
-          })) as Invoice[])
-        }
+        setArApi(ar)
+        setApApi(ap)
       } catch {
-        /* blob fallback */
+        if (!cancelled) {
+          // Leave both null so the blob fallback renders rather than an
+          // empty report that would read as "nothing is outstanding".
+          setArApi(null)
+          setApApi(null)
+        }
       }
     }
     void load()
@@ -289,8 +295,8 @@ export default function AgeingTab({
         <EmptyState title="Select a period to view this report" subtitle="Pick an “As of” date above." />
       ) : (
         <>
-          <AgeingReport title="Receivables ageing" kind="ar" invoices={arApi ?? customerInvoices} asOf={asOf} />
-          <AgeingReport title="Payables ageing" kind="ap" invoices={apApi ?? vendorBills} asOf={asOf} />
+          <AgeingReport title="Receivables ageing" kind="ar" invoices={customerInvoices} serverReport={arApi} asOf={asOf} />
+          <AgeingReport title="Payables ageing" kind="ap" invoices={vendorBills} serverReport={apApi} asOf={asOf} />
         </>
       )}
     </div>
