@@ -6,6 +6,7 @@ const {
   mockGetSession,
   mockPrismaPurchaseOrder,
   mockPrismaClient,
+  mockPrismaGrnItem,
   mockResolveClientId,
   mockGetNextDocNumber,
   mockLoadAppState,
@@ -23,6 +24,7 @@ const {
   mockPrismaClient: {
     updateMany: vi.fn().mockResolvedValue({ count: 0 }),
   },
+  mockPrismaGrnItem: { findMany: vi.fn() },
   mockResolveClientId: vi.fn(),
   mockGetNextDocNumber: vi.fn(),
   mockLoadAppState: vi.fn(),
@@ -47,7 +49,7 @@ vi.mock('@/lib/auth/api', () => ({
 }))
 
 vi.mock('@/lib/prisma', () => ({
-  default: { purchaseOrder: mockPrismaPurchaseOrder, client: mockPrismaClient },
+  default: { purchaseOrder: mockPrismaPurchaseOrder, client: mockPrismaClient, grnItem: mockPrismaGrnItem },
 }))
 
 vi.mock('@/lib/legacy-compat', () => ({
@@ -128,6 +130,7 @@ beforeEach(() => {
   mockLoadAppState.mockResolvedValue({ deed_purchaseOrders: [] })
   mockSaveStoreKeys.mockResolvedValue(undefined)
   mockPrismaClient.updateMany.mockResolvedValue({ count: 0 })
+  mockPrismaGrnItem.findMany.mockResolvedValue([])
 })
 
 describe('POST /api/purchase-orders', () => {
@@ -282,8 +285,72 @@ describe('PATCH /api/purchase-orders/:id', () => {
     }), { params: { id: PO_ID } })
 
     const updateCall = mockPrismaPurchaseOrder.update.mock.calls[0][0]
-    expect(updateCall.data.items.create[0].qtyReceived).toBe(6)
-    expect(updateCall.data.items.create[0].qtyBilled).toBe(4)
+    // The line is updated in place (see grn_items_po_item_id_fkey), not recreated.
+    expect(updateCall.data.items.update[0].where).toEqual({ id: ITEM_ID })
+    expect(updateCall.data.items.update[0].data.qtyReceived).toBe(6)
+    expect(updateCall.data.items.update[0].data.qtyBilled).toBe(4)
+  })
+
+  it('REGRESSION 24-Sep-2026: a PO with a goods receipt can still be edited', async () => {
+    // Replacing the lines wholesale violated grn_items_po_item_id_fkey, so any
+    // PO with a receipt against it could not be saved at all.
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue(existingWithItems)
+    mockPrismaPurchaseOrder.update.mockResolvedValue(dbPo)
+
+    const res = await PATCH(patchReq({
+      lockVersion: 2,
+      notes: 'Delivery moved to Friday',
+      lines: [{ id: ITEM_ID, productId: PRODUCT_ID, qty: 10, unitPrice: 100, taxRate: 16 }],
+    }), { params: { id: PO_ID } })
+
+    expect(res.status).toBe(200)
+    const data = mockPrismaPurchaseOrder.update.mock.calls[0][0].data
+    expect(data.items.create).toEqual([])
+    expect(data.items.deleteMany).toBeUndefined()
+    expect(data.items.update[0].data).not.toHaveProperty('existingId')
+  })
+
+  it('refuses to remove a line that has already been received', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue(existingWithItems)
+    const res = await PATCH(patchReq({ lockVersion: 2, lines: [] }), { params: { id: PO_ID } })
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('already been received') })
+    expect(mockPrismaPurchaseOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('refuses to remove a line a goods receipt points at, even with no progress recorded', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue({
+      ...dbPo,
+      lockVersion: 2,
+      items: [{ id: ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 10, qtyReceived: 0, qtyBilled: 0, description: 'Toner' }],
+    })
+    mockPrismaGrnItem.findMany.mockResolvedValue([{ poItemId: ITEM_ID }])
+    const res = await PATCH(patchReq({ lockVersion: 2, lines: [] }), { params: { id: PO_ID } })
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('Toner') })
+  })
+
+  it('deletes a line nothing points at, and creates a new one', async () => {
+    const UNTOUCHED = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue({
+      ...dbPo,
+      lockVersion: 2,
+      items: [{ id: UNTOUCHED, productId: PRODUCT_ID, qtyOrdered: 4, qtyReceived: 0, qtyBilled: 0, description: 'Cable' }],
+    })
+    mockPrismaPurchaseOrder.update.mockResolvedValue(dbPo)
+    mockPrismaGrnItem.findMany.mockResolvedValue([])
+
+    const OTHER_PRODUCT = '11111111-2222-4333-8444-555555555555'
+    const res = await PATCH(patchReq({
+      lockVersion: 2,
+      lines: [{ productId: OTHER_PRODUCT, qty: 2, unitPrice: 50, taxRate: 0 }],
+    }), { params: { id: PO_ID } })
+
+    expect(res.status).toBe(200)
+    const data = mockPrismaPurchaseOrder.update.mock.calls[0][0].data
+    expect(data.items.deleteMany).toEqual({ id: { in: [UNTOUCHED] } })
+    expect(data.items.create).toHaveLength(1)
+    expect(data.items.create[0]).not.toHaveProperty('existingId')
   })
 
   it('returns 409 on a lockVersion mismatch', async () => {
@@ -307,8 +374,8 @@ describe('PATCH /api/purchase-orders/:id', () => {
 
     expect(res.status).toBe(200)
     const data = mockPrismaPurchaseOrder.update.mock.calls[0][0].data
-    expect(data.items.create[0].qtyReceived).toBe(6)
-    expect(data.items.create[0].qtyBilled).toBe(4)
+    expect(data.items.update[0].data.qtyReceived).toBe(6)
+    expect(data.items.update[0].data.qtyBilled).toBe(4)
     expect(data.subtotal).toBe(1000)
     expect(data.taxAmount).toBe(160)
     expect(data.totalAmount).toBe(1160)

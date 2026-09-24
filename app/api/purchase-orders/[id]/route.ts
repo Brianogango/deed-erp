@@ -11,11 +11,14 @@ import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
 const PROTECTED_PO_STATUSES = new Set(['partial', 'received'])
 
 /**
- * Same shape as Sales' mapSaleOrderItems: a full-object PATCH always
- * deletes+recreates line items, so fulfilment progress (qtyReceived /
- * qtyBilled) must be preserved across the cycle by matching against the
- * existing rows — otherwise a stale client PATCH can wipe received/billed
- * counters back to 0.
+ * Match each submitted line to the row it replaces, keeping fulfilment
+ * progress (qtyReceived / qtyBilled) — a stale client PATCH can preserve
+ * progress but never advance it.
+ *
+ * `existingId` is what lets the PATCH update rows in place. Replacing the
+ * lines wholesale (deleteMany + create) violated `grn_items_po_item_id_fkey`
+ * as soon as a goods receipt pointed at one of them, so a PO with any receipt
+ * against it could not be saved at all — not even to change its date.
  */
 function mapPOItemsForUpdate(lines: any[], existingItems: any[]) {
   return lines
@@ -37,6 +40,7 @@ function mapPOItemsForUpdate(lines: any[], existingItems: any[]) {
       const qtyReceived = Math.min(qtyOrdered, Math.max(0, Number(prev?.qtyReceived) || 0))
       const qtyBilled = Math.min(qtyOrdered, Math.max(0, Number(prev?.qtyBilled) || 0))
       return {
+        existingId: prev?.id ? String(prev.id) : null,
         productId: optionalUuid(l.productId),
         description: l.productName ?? l.description
           ? String(l.productName ?? l.description).trim().slice(0, 1_000)
@@ -137,7 +141,47 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       const resolvedLines = await resolvePOLineProducts(mapPOItemsForUpdate(body.lines, existing.items))
       const safeLines = resolvedLines.filter(l => l.productId)
       const totals = computePOTotals(safeLines)
-      data.items = { deleteMany: {}, create: safeLines }
+
+      // Update the rows that survive, create the new ones, and delete only
+      // rows nothing points at — a goods receipt holds a foreign key to the
+      // PO line it received.
+      const keptIds = new Set(safeLines.map(l => l.existingId).filter(Boolean) as string[])
+      const dropped = existing.items.filter((item: any) => !keptIds.has(String(item.id)))
+      const droppedIds = dropped.map((item: any) => String(item.id))
+
+      const receivedDrop = dropped.filter((item: any) =>
+        Number(item.qtyReceived) > 0 || Number(item.qtyBilled) > 0)
+      const referencedDrop = droppedIds.length
+        ? await prisma.grnItem.findMany({
+            where: { poItemId: { in: droppedIds } },
+            select: { poItemId: true },
+          })
+        : []
+      const blockedIds = new Set([
+        ...receivedDrop.map((item: any) => String(item.id)),
+        ...referencedDrop.map(row => String(row.poItemId)),
+      ])
+      if (blockedIds.size > 0) {
+        const names = dropped
+          .filter((item: any) => blockedIds.has(String(item.id)))
+          .map((item: any) => String(item.description || 'line'))
+        return NextResponse.json(
+          {
+            error: `These lines have already been received and cannot be removed: ${names.join(', ')}. `
+              + 'Record a purchase return instead.',
+          },
+          { status: 409 },
+        )
+      }
+
+      const strip = ({ existingId: _ignored, ...rest }: typeof safeLines[number]) => rest
+      data.items = {
+        update: safeLines
+          .filter(l => l.existingId)
+          .map(l => ({ where: { id: l.existingId as string }, data: strip(l) })),
+        create: safeLines.filter(l => !l.existingId).map(strip),
+        ...(droppedIds.length ? { deleteMany: { id: { in: droppedIds } } } : {}),
+      }
       // Header money is always derived from the server-validated lines. Client
       // subtotal/tax/total fields are display hints only and are ignored.
       data.subtotal = totals.subtotal
