@@ -368,7 +368,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
 }) {
   const [query, setQuery] = useState(value)
   const [open, setOpen] = useState(false)
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number; openUp: boolean } | null>(null)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number; openUp: boolean; maxHeight: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -395,15 +395,31 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
   // coordinates (the dropdown renders, just at the wrong place, off-screen).
   // Portalling the dropdown to document.body sidesteps that entirely: it is
   // no longer a descendant of the transformed modal box.
+  /**
+   * Place the panel in the space that actually exists.
+   *
+   * The old rule picked a side from a fixed 280px guess and never bounded the
+   * panel's own height, so a full list (8 rows ≈ 540px) ran off the screen —
+   * upwards past the top, or downwards past the modal, where it looked like it
+   * was rendering "under" the dialog. The panel now takes the roomier side and
+   * is capped to that room, scrolling inside when the list is longer.
+   */
   const measure = () => {
     const rect = inputRef.current?.getBoundingClientRect()
     if (!rect) return null
-    const openUp = rect.bottom + 280 > window.innerHeight && rect.top > 300
+    const GAP = 6
+    const MIN_PANEL = 140
+    const MAX_PANEL = 320
+    const spaceBelow = window.innerHeight - rect.bottom - GAP - 8
+    const spaceAbove = rect.top - GAP - 8
+    const openUp = spaceBelow < MIN_PANEL && spaceAbove > spaceBelow
+    const room = Math.max(MIN_PANEL, openUp ? spaceAbove : spaceBelow)
     return {
-      top: openUp ? rect.top - 6 : rect.bottom + 6,
+      top: openUp ? rect.top - GAP : rect.bottom + GAP,
       left: rect.left,
       width: rect.width,
       openUp,
+      maxHeight: Math.min(MAX_PANEL, room),
     }
   }
 
@@ -438,6 +454,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
         setDropdownPos(prev =>
           prev && prev.top === next.top && prev.left === next.left
             && prev.width === next.width && prev.openUp === next.openUp
+            && prev.maxHeight === next.maxHeight
             ? prev
             : next)
       }
@@ -475,10 +492,12 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
       {open && dropdownPos && matches.length > 0 && typeof document !== 'undefined' && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9800] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden"
+          className="fixed z-[9900] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden"
           style={{
             left: dropdownPos.left,
             width: dropdownPos.width,
+            maxHeight: dropdownPos.maxHeight,
+            overflowY: 'auto',
             ...(dropdownPos.openUp ? { bottom: window.innerHeight - dropdownPos.top } : { top: dropdownPos.top }),
           }}
         >
@@ -515,10 +534,12 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
       {open && dropdownPos && query.length > 1 && matches.length === 0 && requireInventory && typeof document !== 'undefined' && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9800] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center"
+          className="fixed z-[9900] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center"
           style={{
             left: dropdownPos.left,
             width: dropdownPos.width,
+            maxHeight: dropdownPos.maxHeight,
+            overflowY: 'auto',
             ...(dropdownPos.openUp ? { bottom: window.innerHeight - dropdownPos.top } : { top: dropdownPos.top }),
           }}
         >
