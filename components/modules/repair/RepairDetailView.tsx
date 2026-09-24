@@ -186,11 +186,19 @@ export default function RepairDetailView() {
     // Lock quote editing once device is marked ready-for-collection or has been picked up.
     // `declined` is intentionally allowed — staff may revise and re-send another quote.
     && !['ready','invoiced','verified_released','delivered','closed','cancelled','unrepairable','returned','retained'].includes(r.status)
-  const canStart      = (
+  const startableNow = (
     billingExempt
       ? startableStatusesWhenBillingExempt()
       : startableStatusesForPath(r.repairPath)
-  ).includes(r.status) && isMyRepair && !pendingOutsourceJob
+  ).includes(r.status) && !pendingOutsourceJob
+  const canStart      = startableNow && isMyRepair
+  // Only the assigned technician can start or finish the work. For everyone
+  // else the job is not theirs to move — without this the guidance fell
+  // through to "Update or re-send the quote", which a director could repeat
+  // forever without the job ever advancing.
+  const awaitingAssignedTech = startableNow && !isMyRepair
+  const otherTechWorking = r.status === 'in_repair' && !isMyRepair
+  const technicianLabel = r.assignedTechnicianName || 'the assigned technician'
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
   const canPerformQA  = r.status === 'qc'
@@ -314,6 +322,8 @@ export default function RepairDetailView() {
       ? 'Align the draft invoice with the approved quote'
       : 'Create a draft invoice for Finance review')
     : canQuote && !r.quote ? 'Generate a repair quote'
+    : awaitingAssignedTech ? `Quote approved — waiting for ${technicianLabel} to start the repair`
+    : otherTechWorking ? `${technicianLabel} is working on this repair`
     : canQuote && r.quote ? 'Update or re-send the quote to move forward'
     : canCloseJob  ? 'Close the job after collection'
     : canMarkCollected ? 'Record pickup — mark collected when the device is handed over'
@@ -338,7 +348,7 @@ export default function RepairDetailView() {
     canCloseJob,
     canDiagnose,
     canUpdateDiagnosis,
-    canQuote,
+    canQuote: canQuote && !awaitingAssignedTech && !otherTechWorking,
     canAssign,
     quoteDeclinedReopenable: isQuoteDeclinedReopenable(r.status),
     noCharge,

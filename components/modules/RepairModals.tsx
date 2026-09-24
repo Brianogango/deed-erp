@@ -395,16 +395,20 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
   // coordinates (the dropdown renders, just at the wrong place, off-screen).
   // Portalling the dropdown to document.body sidesteps that entirely: it is
   // no longer a descendant of the transformed modal box.
-  const openDropdown = () => {
+  const measure = () => {
     const rect = inputRef.current?.getBoundingClientRect()
-    if (!rect) { setOpen(true); return }
+    if (!rect) return null
     const openUp = rect.bottom + 280 > window.innerHeight && rect.top > 300
-    setDropdownPos({
+    return {
       top: openUp ? rect.top - 6 : rect.bottom + 6,
       left: rect.left,
       width: rect.width,
       openUp,
-    })
+    }
+  }
+
+  const openDropdown = () => {
+    setDropdownPos(measure())
     setOpen(true)
   }
 
@@ -419,17 +423,29 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  // A fixed-position dropdown does not follow its input on its own. Measuring
+  // once on open left it stranded whenever the input moved afterwards — the
+  // modal's open animation settling, a line being added, the list scrolling —
+  // and the panel then sat far below the modal, out of reach of the field it
+  // belonged to. Re-measure every frame while it is open instead: it always sits
+  // on the input, and closing on scroll is no longer needed.
   useEffect(() => {
     if (!open) return
-    // A fixed-position dropdown doesn't track scroll/resize on its own —
-    // close it instead of letting it drift away from the input.
-    const close = () => setOpen(false)
-    window.addEventListener('scroll', close, true)
-    window.addEventListener('resize', close)
-    return () => {
-      window.removeEventListener('scroll', close, true)
-      window.removeEventListener('resize', close)
+    let frame = 0
+    const track = () => {
+      const next = measure()
+      if (next) {
+        setDropdownPos(prev =>
+          prev && prev.top === next.top && prev.left === next.left
+            && prev.width === next.width && prev.openUp === next.openUp
+            ? prev
+            : next)
+      }
+      frame = window.requestAnimationFrame(track)
     }
+    frame = window.requestAnimationFrame(track)
+    return () => window.cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const isError = requireInventory && submitted && !productId
@@ -459,7 +475,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
       {open && dropdownPos && matches.length > 0 && typeof document !== 'undefined' && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9700] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden"
+          className="fixed z-[9800] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden"
           style={{
             left: dropdownPos.left,
             width: dropdownPos.width,
@@ -499,7 +515,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
       {open && dropdownPos && query.length > 1 && matches.length === 0 && requireInventory && typeof document !== 'undefined' && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9700] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center"
+          className="fixed z-[9800] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center"
           style={{
             left: dropdownPos.left,
             width: dropdownPos.width,
