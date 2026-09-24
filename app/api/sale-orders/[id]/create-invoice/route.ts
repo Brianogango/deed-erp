@@ -238,7 +238,34 @@ export async function POST(
       return item
     }))
 
-    const fullyDelivered = healedItems
+    // qtyInvoiced is raised when an invoice is created. An attempt that raised
+    // it and then failed leaves the order claiming to be invoiced with no
+    // invoice anywhere, and every later attempt is refused with "Nothing to
+    // invoice" — the order can never be billed. The invoice records are the
+    // authority: with no live invoice, the counters mean nothing.
+    const liveInvoiceCount = await prisma.invoice.count({
+      where: {
+        saleOrderId: confirmed.id,
+        status: { notIn: ['cancelled', 'voided'] },
+      },
+    })
+    const phantomInvoiced = liveInvoiceCount === 0
+      && healedItems.some(item => (Number(item.qtyInvoiced) || 0) > 0)
+    if (phantomInvoiced) {
+      await prisma.saleOrderItem.updateMany({
+        where: { saleOrderId: confirmed.id },
+        data: { qtyInvoiced: 0 },
+      })
+      console.warn(
+        '[create-invoice] cleared invoiced quantities on %s — the order has no invoice',
+        confirmed.orderNumber,
+      )
+    }
+    const billableItems = phantomInvoiced
+      ? healedItems.map(item => ({ ...item, qtyInvoiced: 0 }))
+      : healedItems
+
+    const fullyDelivered = billableItems
       .filter(item => Number(item.qty) > 0)
       .every(item => Number(item.qtyDelivered) >= Number(item.qty))
 
@@ -248,7 +275,7 @@ export async function POST(
       }, { status: 409 })
     }
 
-    let invoiceable = healedItems.map(item => {
+    let invoiceable = billableItems.map(item => {
       const invoicePolicy = policyForItem(item)
       const maxQty = invoiceableQty({
         qty: Number(item.qty) || 0,
@@ -279,7 +306,7 @@ export async function POST(
     }
 
     if (invoiceable.length === 0) {
-      const anyDeliveryPolicy = healedItems.some(item => policyForItem(item) === 'delivery')
+      const anyDeliveryPolicy = billableItems.some(item => policyForItem(item) === 'delivery')
       return NextResponse.json({
         error: overrideQtyByItemId
           ? 'Select at least one line with a quantity greater than zero to invoice'

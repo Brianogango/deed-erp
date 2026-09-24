@@ -29,6 +29,7 @@ const {
     invoice: {
       create: vi.fn(),
       findMany: vi.fn(),
+      count: vi.fn(),
     },
     repair: {
       findUnique: vi.fn(),
@@ -116,6 +117,7 @@ beforeEach(() => {
   mockPrisma.saleOrder.findMany.mockResolvedValue([saleOrder])
   mockPrisma.client.findUnique.mockResolvedValue({ creditLimit: 0, name: 'Acme Ltd' })
   mockPrisma.invoice.findMany.mockResolvedValue([])
+  mockPrisma.invoice.count.mockResolvedValue(0)
   mockPrisma.repair.findUnique.mockResolvedValue(null)
   mockPrisma.repair.update.mockResolvedValue({ id: REPAIR_ID })
   // Default stockable products to delivered-qty policy (hardware-safe).
@@ -213,6 +215,49 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     expect((await res.json()).invoice.id).toBe(INVOICE_ID)
     expect(mockPrisma.invoice.create).toHaveBeenCalledOnce()
     expect(mockPrisma.saleOrderItem.updateMany).toHaveBeenCalledOnce()
+  })
+
+  it('REGRESSION 24-Sep-2026: bills an order whose invoiced counters no invoice backs', async () => {
+    // An invoice attempt that bumped qtyInvoiced and then failed left
+    // SO/2026/0190 refusing every later attempt with "Nothing to invoice".
+    mockPrisma.saleOrder.findUnique.mockResolvedValue({
+      ...saleOrder,
+      items: [{ ...saleOrder.items[0], qtyInvoiced: 1 }],
+    })
+    mockPrisma.invoice.count.mockResolvedValue(0)
+
+    const res = await POST(
+      new NextRequest('http://localhost', { method: 'POST' }),
+      { params: { id: ORDER_ID } },
+    )
+
+    expect(res.status).toBe(200)
+    // the stale counters are cleared before anything is billed
+    expect(mockPrisma.saleOrderItem.updateMany).toHaveBeenCalledWith({
+      where: { saleOrderId: ORDER_ID },
+      data: { qtyInvoiced: 0 },
+    })
+    expect(mockPrisma.invoice.create).toHaveBeenCalledOnce()
+  })
+
+  it('leaves the counters alone when the order really does have an invoice', async () => {
+    mockPrisma.saleOrder.findUnique.mockResolvedValue({
+      ...saleOrder,
+      items: [{ ...saleOrder.items[0], qtyInvoiced: 1 }],
+    })
+    mockPrisma.invoice.count.mockResolvedValue(1)
+
+    const res = await POST(
+      new NextRequest('http://localhost', { method: 'POST' }),
+      { params: { id: ORDER_ID } },
+    )
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('Nothing to invoice') })
+    expect(mockPrisma.saleOrderItem.updateMany).not.toHaveBeenCalledWith({
+      where: { saleOrderId: ORDER_ID },
+      data: { qtyInvoiced: 0 },
+    })
   })
 
   it('mirrors pretax line subtotals into deed_invoices (not tax-inclusive lineTotal)', async () => {
