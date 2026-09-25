@@ -144,7 +144,9 @@ export async function GET(_: Request, { params }: { params: RouteParams<{ id: st
     const { id } = await resolveRouteParams(params)
     const invoice = await prisma.invoice.findUnique({
       where: { id },
-      include: { items: true },
+      // Raw rows, so the sortOrder sort in mapDbInvoiceItemsToClientLines
+      // never runs — the order has to come from the query.
+      include: { items: { orderBy: { sortOrder: 'asc' } } },
     })
     if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(invoice)

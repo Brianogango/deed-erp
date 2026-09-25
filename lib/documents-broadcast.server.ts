@@ -4,6 +4,7 @@ import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
+import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
 
 // Sale orders, quotes (the CRM Quote entity), and invoices all embed a
 // snapshot of the client/vendor's name in their `deed_*` blob cache
@@ -48,7 +49,7 @@ function mapSaleOrderToClient(order: any) {
     discountAmount: Number(order.discountAmount ?? 0),
     amountPaid: Number(order.amountPaid ?? 0),
     lockVersion: Number(order.lockVersion ?? 0),
-    lines: (order.items ?? []).map((item: any) => {
+    lines: orderedSaleOrderItems(order.items).map((item: any) => {
       const qty = Number(item.qty ?? 0)
       const productId = item.productId ?? ''
       const lineType = qty === 0 && !productId && !(Number(item.unitPrice ?? 0) > 0) ? 'section' as const : undefined

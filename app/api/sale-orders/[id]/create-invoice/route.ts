@@ -28,6 +28,7 @@ import {
   ensureConfirmedSaleOrderForFulfillment,
 } from '@/lib/sale-order-confirm-heal.server'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
+import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
 import {
   findRepairForSaleOrder,
   isRepairFulfillmentReady,
@@ -214,7 +215,7 @@ export async function POST(
     // Allocate FIFO across duplicate product rows so each line does not receive
     // the full product total (that overstated invoiceable qty).
     const healedFromDeliveries = deliveredByProductFromDoneDeliveries(deliveries, orderId)
-    const itemsForHeal = (confirmed.items ?? []).map(item => ({
+    const itemsForHeal = orderedSaleOrderItems(confirmed.items).map(item => ({
       id: item.id,
       productId: item.productId ?? undefined,
       qty: Number(item.qty) || 0,
@@ -225,7 +226,7 @@ export async function POST(
     }))
     const allocated = allocateDeliveredQtyToOrderLines(itemsForHeal, healedFromDeliveries, 'max')
     const healedById = new Map(allocated.map(row => [row.id, Number(row.qtyDelivered) || 0]))
-    const healedItems = await Promise.all((confirmed.items ?? []).map(async item => {
+    const healedItems = await Promise.all(orderedSaleOrderItems(confirmed.items).map(async item => {
       const current = Number(item.qtyDelivered) || 0
       const healed = healedById.get(item.id) ?? current
       if (healed > current) {
@@ -427,7 +428,7 @@ export async function POST(
           notes: invoiceNotes,
           createdById: actor.id,
           items: {
-            create: lines.map(l => {
+            create: lines.map((l, index) => {
               const lineTax = Math.round(l.lineTotal * (l.taxRate || 0) / 100)
               return {
                 description: l.description,
@@ -439,6 +440,8 @@ export async function POST(
                 lineTotal: l.lineTotal + lineTax,
                 productId: l.productId,
                 serialNumberId: l.serialNumberId,
+                // Carry the order of the quotation onto the invoice.
+                sortOrder: index,
               }
             }),
           },
@@ -534,7 +537,7 @@ export async function POST(
           customerName: o.client?.name ?? '',
           status: normalizeSaleStatus(o.status),
           total: Number(o.totalAmount ?? 0),
-          lines: (o.items ?? []).map(item => ({
+          lines: orderedSaleOrderItems(o.items).map(item => ({
             id: item.id,
             productId: item.productId ?? '',
             productName: item.description ?? '',

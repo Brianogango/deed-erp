@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { normalizeSaleStatus, isQuotationStage } from '@/lib/odoo-sales-flow'
 import { saveStoreKeys } from '@/lib/server-store'
+import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
 
 // Same roles that may create/edit a quotation — versioning is a quoting-stage
 // action. Confirmed Sales Orders use the existing "Duplicate" action instead.
@@ -20,7 +21,7 @@ function mapSaleOrderToClient(order: any) {
     total: Number(order.totalAmount ?? 0),
     taxTotal: Number(order.taxAmount ?? 0),
     subtotal: Number(order.subtotal ?? 0),
-    lines: (order.items ?? []).map((item: any) => ({
+    lines: orderedSaleOrderItems(order.items).map((item: any) => ({
       id: item.id,
       productId: item.productId ?? '',
       productName: item.description ?? '',

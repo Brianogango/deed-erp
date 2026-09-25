@@ -182,7 +182,8 @@ export async function GET(request: Request) {
       prisma.invoice.count({ where }),
       prisma.invoice.findMany({
         where,
-        include: { items: true },
+        // Returned as raw rows, so line order has to come from the query.
+        include: { items: { orderBy: { sortOrder: 'asc' } } },
         orderBy: { [sort ?? 'invoiceDate']: order },
         skip,
         take: limit,

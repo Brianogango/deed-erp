@@ -14,6 +14,7 @@ import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
+import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
 
 const DELIVER_ROLES = ['director', 'admin_officer', 'inventory_officer', 'sales_rep']
 
@@ -32,7 +33,7 @@ async function broadcastSaleOrders() {
       total: Number(order.totalAmount ?? 0),
       taxTotal: Number(order.taxAmount ?? 0),
       subtotal: Number(order.subtotal ?? 0),
-      lines: (order.items ?? []).map((item: any) => ({
+      lines: orderedSaleOrderItems(order.items).map((item: any) => ({
         id: item.id,
         productId: item.productId ?? '',
         productName: item.description ?? '',

@@ -44,7 +44,20 @@ export function hydrateSaleOrderDraftEditsFromSession() {
 // Pull any ids from a previous soft navigation as soon as this module loads.
 hydrateSaleOrderDraftEditsFromSession()
 
-/** Stable fingerprint of commercial lines — used to detect in-flight persist races. */
+/**
+ * Stable fingerprint of commercial lines — used to detect in-flight persist
+ * races, and to decide whether a slower server reply may replace local lines.
+ *
+ * Order-SENSITIVE, deliberately. It used to sort the per-line keys, so two
+ * different orderings of the same lines hashed identically: a reorder-only
+ * save passed the "local still matches what I sent" guard and the server's
+ * copy overwrote the user's ordering. Reordering a document is an edit, and
+ * this has to be able to see it.
+ *
+ * Note this is not the same question as `hasCommercialChange` on the PATCH
+ * route, which stays order-insensitive on purpose — moving a line up does not
+ * reprice a sent quotation and must not trip its freeze checks.
+ */
 export function saleOrderLinesFingerprint(lines: unknown): string {
   if (!Array.isArray(lines)) return ''
   return lines
@@ -59,7 +72,6 @@ export function saleOrderLinesFingerprint(lines: unknown): string {
       Number(l.taxRate ?? 0),
       Number(l.lineTotal ?? l.subtotal ?? 0),
     ].join('|'))
-    .sort()
     .join(';')
 }
 

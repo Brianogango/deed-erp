@@ -26,6 +26,7 @@ import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/li
 import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
 import { canTrimFulfillmentQty, isFulfillmentQtyTrim } from '@/lib/sales/fulfillment-trim'
 import { notifySaleOrderConfirmed } from '@/lib/notifications/business-events'
+import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
 
 /** Serialize blob rewrites so a slower soft/findMany cannot overwrite a newer Save. */
 let broadcastSaleOrdersChain: Promise<void> = Promise.resolve()
@@ -101,7 +102,7 @@ function mapSaleOrderToClient(order: any) {
     discountAmount: Number(order.discountAmount ?? 0),
     amountPaid: Number(order.amountPaid ?? 0),
     lockVersion: Number(order.lockVersion ?? 0),
-    lines: (order.items ?? []).map((item: any) => {
+    lines: orderedSaleOrderItems(order.items).map((item: any) => {
       const qty = Number(item.qty ?? 0)
       const productId = item.productId ?? ''
       const unitPrice = Number(item.unitPrice ?? 0)

@@ -13,6 +13,7 @@ import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 import { calcSaleOrderLineMoney, calcSaleOrderTotals } from '@/lib/sales/line-calc'
 import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
+import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
 
 async function broadcastSaleOrders() {
   try {
@@ -61,7 +62,7 @@ function mapSaleOrderToClient(order: any) {
     discountAmount: Number(order.discountAmount ?? 0),
     amountPaid: Number(order.amountPaid ?? 0),
     lockVersion: Number(order.lockVersion ?? 0),
-    lines: (order.items ?? []).map((item: any) => {
+    lines: orderedSaleOrderItems(order.items).map((item: any) => {
       const qty = Number(item.qty ?? 0)
       const productId = item.productId ?? ''
       const lineType = qty === 0 && !productId && !(Number(item.unitPrice ?? 0) > 0) ? 'section' as const : undefined

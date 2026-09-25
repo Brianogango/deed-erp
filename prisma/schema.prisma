@@ -1558,6 +1558,10 @@ model SaleOrderItem {
   lineTotal     Decimal   @db.Decimal(14, 2)
   notes         String?   @db.Text
   serialNumberId String?  @map("serial_number_id") @db.Uuid
+  // Position of the line within its document. Without this the table had no
+  // ordering at all and an unordered SELECT returned physical row order, so a
+  // reorder in the UI had nowhere to persist and snapped back on reload.
+  sortOrder     Int       @default(0) @map("sort_order")
 
   saleOrder   SaleOrder     @relation(fields: [saleOrderId], references: [id], onDelete: Cascade)
   product     Product?      @relation(fields: [productId], references: [id])
@@ -1566,6 +1570,7 @@ model SaleOrderItem {
 
 
   @@index([saleOrderId], map: "idx_sale_order_items_sale_order")
+  @@index([saleOrderId, sortOrder], map: "idx_sale_order_items_order")
   @@index([productId], map: "idx_sale_order_items_product")
   @@map("sale_order_items")
 }

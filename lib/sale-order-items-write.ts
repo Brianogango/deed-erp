@@ -14,6 +14,12 @@ export type SaleOrderItemRow = {
   lineTotal: number
   notes: string | null
   serialNumberId: string | null
+  /**
+   * Position in the document, taken from the client array index. This is the
+   * only record of the user's ordering: the lines arrive as a positional JSON
+   * array and the table is read back with an ORDER BY on this column.
+   */
+  sortOrder: number
 }
 
 /**
@@ -38,7 +44,7 @@ export function isSaleOrderSectionLine(item: {
 
 export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): SaleOrderItemRow[] {
   const usedExisting = new Set<string>()
-  return lines.map((item: any) => {
+  return lines.map((item: any, index: number) => {
     let prev: any = null
     if (item.id) {
       prev = existingItems.find((row: any) => row.id === item.id) ?? null
@@ -69,6 +75,7 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
         lineTotal: 0,
         notes: item.notes ?? null,
         serialNumberId: null,
+        sortOrder: index,
       }
     }
     const demand = Math.max(0, Number(item.qty ?? 1) || 0)
@@ -103,6 +110,7 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
       serialNumberId: optionalUuid(
         item.serialNumberId ?? item.serialIds?.[0] ?? prev?.serialNumberId,
       ) ?? null,
+      sortOrder: index,
     }
   })
 }
@@ -110,6 +118,10 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
 /**
  * Build a Prisma nested write that upserts by id instead of deleteMany+create.
  * Prevents line UUID churn that breaks chatter / serial / fulfillment links.
+ *
+ * Every row carries sortOrder in its `data`, including the update branch. That
+ * matters: a reorder changes no other field, so before sortOrder existed the
+ * update list was a set of no-ops and the reorder never reached the database.
  */
 export function buildSaleOrderItemsNestedWrite(lines: any[], existingItems: any[] = []) {
   const mapped = mapSaleOrderItems(lines, existingItems)
