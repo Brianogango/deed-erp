@@ -7,6 +7,10 @@ import prisma from '@/lib/prisma'
 import { COA_ROLE_CODES } from '@/lib/accounting/coa-roles'
 import { round2, buildTrialBalance, netBalanceForType } from '@/lib/accounting/gl-reports'
 import { invoiceOutstanding } from '@/lib/accounting/invoice-paid'
+import {
+  loadJournalMirrorFailures,
+  sortJournalMirrorFailures,
+} from '@/lib/accounting/journal-mirror-failures'
 import { roundMoney } from '@/lib/accounting/money'
 
 export type IntegrityGate = {
@@ -178,6 +182,15 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
   const apBalance = roundMoney(apInvoices.reduce((s, inv) => s + invoiceOutstanding(inv), 0))
 
   const unbalancedCount = unbalanced.filter(j => Math.abs(Number(j.totalDebit) - Number(j.totalCredit)) > 0.02).length
+
+  // Journals the blob→Prisma mirror refused. They exist operationally and are
+  // absent from every figure above, so this gate has to fail loudly.
+  const mirrorFailures = sortJournalMirrorFailures(await loadJournalMirrorFailures())
+  const mirrorFailureDetail = mirrorFailures.length === 0
+    ? 'Every posted journal reached journal_entries'
+    : `${mirrorFailures.length} journal(s) missing from the ledger: ` +
+      mirrorFailures.slice(0, 3).map(f => `${f.ref} (${f.reason})`).join('; ') +
+      (mirrorFailures.length > 3 ? ` …and ${mirrorFailures.length - 3} more` : '')
   const creditRemaining = roundMoney(Number(creditNotes._sum.amount || 0) - Number(creditApps._sum.amount || 0))
   const outstandingReceipts = roundMoney(Number(receiptPay._sum.amount || 0) - Number(receiptAlloc._sum.amount || 0))
   const outstandingPayments = roundMoney(Number(vendorPay._sum.amount || 0) - Number(vendorAlloc._sum.amount || 0))
@@ -226,6 +239,16 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
       subledgerAmount: 0,
       difference: unbalancedCount,
       populationCount: unbalancedCount,
+    },
+    {
+      id: 'journal_mirror_backlog',
+      name: 'Every posted journal reached the ledger',
+      passed: mirrorFailures.length === 0,
+      ledgerAmount: mirrorFailures.length,
+      subledgerAmount: 0,
+      difference: mirrorFailures.length,
+      populationCount: mirrorFailures.length,
+      detail: mirrorFailureDetail,
     },
     gate('payroll_liabilities', 'Net payroll payable 3110', tbRowNet(tb, COA_ROLE_CODES.net_payroll_payable), Number(payrollRun?.totalNet || 0), payrollRun ? 1 : 0, undefined, 5),
     gate('outstanding_receipts', 'Unallocated receipts vs 1805', tbRowNet(tb, COA_ROLE_CODES.outstanding_receipts), outstandingReceipts, receiptPay._count),
