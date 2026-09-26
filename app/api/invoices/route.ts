@@ -93,6 +93,11 @@ function mapInvoiceBodyToDb(body: any, clientId: string) {
     deliveryAddress: body.deliveryAddress ?? null,
     paymentBlocked: Boolean(body.paymentBlocked),
     isPosInvoice: Boolean(body.isPosInvoice),
+    // Set at creation, not only when the document is posted. The column
+    // defaults to 'customer_invoice', so a draft vendor bill used to sit in
+    // the table claiming to be a receivable — and documentType is what every
+    // AR/AP split, the ageing report and the dashboard read.
+    documentType: body.type === 'vendor_bill' ? 'vendor_bill' : 'customer_invoice',
   }
 }
 
@@ -350,6 +355,14 @@ export async function POST(request: Request) {
     // draft → approved PATCH that posts commission for quotations.
     const createdPosted = invoice.status === 'approved' || invoice.status === 'invoiced'
     const isVendor = Boolean(isCreditNote) || body.type === 'vendor_bill'
+    // The real document type. This used to be hardcoded to 'customer_invoice'
+    // in both the journal input and the row update below, so a vendor bill or
+    // vendor credit note created already-posted booked Dr AR / Cr Revenue
+    // instead of touching payables, AND had its documentType rewritten to
+    // customer_invoice — which is the column every AR/AP split reads. Both
+    // overstated receivables and understated payables.
+    const documentType: 'vendor_bill' | 'customer_invoice' =
+      body.type === 'vendor_bill' ? 'vendor_bill' : 'customer_invoice'
 
     // An invoice created already-posted (repair billing, SO fast-path) must
     // post its GL journal here — it never passes through the PUT posting
@@ -368,7 +381,7 @@ export async function POST(request: Request) {
           totalAmount: Number(invoice.totalAmount),
           subtotal: Number(invoice.subtotal),
           taxAmount: Number(invoice.taxAmount),
-          type: 'customer_invoice',
+          type: documentType,
           repairId: invoice.repairId ?? undefined,
           partnerName: body.partnerName ?? body.clientName,
           lines: (invoice.items ?? []).map(i => ({
@@ -389,7 +402,7 @@ export async function POST(request: Request) {
             postedJournalEntryId: journal.id,
             postedAt: new Date(),
             postedById: actor.id,
-            documentType: 'customer_invoice',
+            documentType,
           },
         })
       } catch (err) {

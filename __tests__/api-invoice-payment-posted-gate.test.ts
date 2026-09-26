@@ -149,3 +149,58 @@ describe('POST /api/invoices/[id]/payments — posted-status gate', () => {
     expect(mockRecordPayment).not.toHaveBeenCalled()
   })
 })
+
+describe('POST /api/invoices/[id]/payments — which account the receipt debits', () => {
+  /** The journal the route hands to recordPaymentWithAllocations. */
+  const journalFor = (paymentId = 'pay-1') => {
+    const args = mockRecordPayment.mock.calls[0][0] as {
+      journal: (id: string) => { journalCode: string; lines: Array<{ accountLabel: string; debit: number }> }
+    }
+    return args.journal(paymentId)
+  }
+
+  beforeEach(() => {
+    mockFindUnique.mockResolvedValue(invoiceWithStatus('approved'))
+  })
+
+  it('debits customer credits, not petty cash, when a credit is applied', async () => {
+    // 'customer_credit' is not a bank method, so it fell through to the
+    // cash_mobile default and every applied credit debited 2211 — cash the
+    // business never received — while 3313 was never relieved.
+    // The invoice total is 1000, so the receipt is capped to it.
+    await POST(payReq({ amount: 750, paymentMethod: 'customer_credit' }), { params: { id: 'inv-1' } })
+    const journal = journalFor()
+    expect(journal.lines[0].accountLabel).toBe('3313 - Customer Credits')
+    expect(journal.lines[0].debit).toBe(750)
+  })
+
+  it('books a credit application to the general journal, not a cash book', async () => {
+    await POST(payReq({ amount: 4500, paymentMethod: 'customer_credit' }), { params: { id: 'inv-1' } })
+    expect(journalFor().journalCode).toBe('MISC')
+  })
+
+  it('ignores a bank account sent alongside a credit application', async () => {
+    // No cash moves, so a stray bankAccountId must not re-point the debit.
+    await POST(
+      payReq({ amount: 4500, paymentMethod: 'customer_credit', bankAccountId: 'ncba' }),
+      { params: { id: 'inv-1' } },
+    )
+    expect(journalFor().lines[0].accountLabel).toBe('3313 - Customer Credits')
+  })
+
+  it('still debits cash for an ordinary mobile-money receipt', async () => {
+    await POST(payReq({ amount: 4500, paymentMethod: 'mpesa' }), { params: { id: 'inv-1' } })
+    const journal = journalFor()
+    expect(journal.lines[0].accountLabel).toBe('2211 - Petty Cash / Mobile Money')
+    expect(journal.journalCode).toBe('CSH')
+  })
+
+  it('still resolves a named cashbook account for a bank receipt', async () => {
+    await POST(
+      payReq({ amount: 4500, paymentMethod: 'bank_transfer', bankAccountId: 'ncba' }),
+      { params: { id: 'inv-1' } },
+    )
+    expect(journalFor().lines[0].accountLabel).not.toBe('3313 - Customer Credits')
+    expect(journalFor().journalCode).toBe('BNK')
+  })
+})

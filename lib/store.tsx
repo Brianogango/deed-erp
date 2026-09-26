@@ -2851,27 +2851,12 @@ const buildInvoicePaymentJournal = (
   }
 }
 
-const buildDepositPaymentJournal = (deposit: Pick<Deposit, 'id' | 'ref' | 'customerName'>, payment: DepositPayment): JournalEntry => {
-  const bankAccountId = bankAccountIdForMethod(payment.method)
-  const bankAccount = bankAccountLabel(bankAccountId, payment.method)
-  const lines = [
-    accountLine(bankAccount, `Deposit receipt: ${deposit.ref}`, payment.amount, 0),
-    accountLine('3100 - Customer Deposits', `Customer deposit liability: ${deposit.customerName}`, 0, payment.amount),
-  ]
-  return {
-    id: uid(),
-    ref: `JRN/DEP/${deposit.ref}/${payment.id.slice(0, 8)}`,
-    date: isoDate(payment.date),
-    source: 'manual',
-    description: `Deposit payment — ${deposit.ref}`,
-    status: 'posted',
-    bankAccountId,
-    depositId: deposit.id,
-    lines,
-    totalDebit: payment.amount,
-    totalCredit: payment.amount,
-  } as JournalEntry & { depositId: string }
-}
+// buildDepositPaymentJournal was removed. It built a client-side copy of the
+// deposit receipt journal keyed on a truncated payment id, while
+// lib/accounting/deposit-service.ts posts the same receipt as
+// JRN/DEP/<ref>/<full payment id>. The refs never matched, so the mirror could
+// not recognise them as the same entry and every deposit receipt was posted to
+// the ledger twice. The server copy is the correct one.
 
 const buildExpenseApprovalJournal = (expense: Expense): JournalEntry => {
   const isReimbursement = expense.paymentMethod === 'reimbursement'
@@ -8537,10 +8522,11 @@ const storeCtx: AppState = {
 
       const deposit = body as Deposit
       setDeposits(prev => [deposit, ...prev])
-      const payment = deposit.payments[0]
-      if (payment) {
-        setJournalEntries(prev => [buildDepositPaymentJournal(deposit, payment), ...prev])
-      }
+      // No journal is built here. /api/deposits posted the receipt journal in
+      // the same transaction that created this deposit, as
+      // JRN/DEP/<ref>/<full payment id>. The local copy used a truncated id,
+      // so the two refs never matched, the mirror could not dedupe them, and
+      // every deposit receipt landed in the ledger twice.
 
       const soLines = deposit.items.map(item => ({
         id: uid(),
@@ -8599,16 +8585,21 @@ const storeCtx: AppState = {
         return updatedDeposit
       }))
       if (updatedDeposit && paymentToSync) {
-        setJournalEntries(prev => [buildDepositPaymentJournal(updatedDeposit!, paymentToSync!), ...prev])
-        sync(`/api/deposits/${depositId}/payments`, {
+        // The receipt journal is posted by /api/deposits/[id]/payments. The
+        // local copy keyed its ref on a truncated payment id that never
+        // matched the server's, so the ledger took the receipt twice.
+        // idempotencyKey makes a retry safe: the service returns the existing
+        // deposit rather than taking a second payment.
+        syncOrWarn(`/api/deposits/${depositId}/payments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             amount: paymentToSync.amount,
             method: paymentToSync.method,
             ref: paymentToSync.ref,
+            idempotencyKey: paymentToSync.id,
           }),
-        })
+        }, message => showToast(message, 'error'), 'Deposit payment could not be recorded — please retry')
         showToast('Payment recorded', 'success')
       } else {
         showToast('Payment must be greater than zero and within the remaining balance', 'error')
@@ -8686,28 +8677,18 @@ const storeCtx: AppState = {
       showToast('Deposit marked as collected — liability cleared', 'success')
     },
     cancelDeposit: (depositId, reason) => {
-      const deposit = deposits.find(d => d.id === depositId)
-      if (deposit && deposit.totalPaid > 0) {
-        const refundJournal: JournalEntry = {
-          id: uid(), ref: `JRN/REFUND/${deposit.ref}`,
-          date: now(), source: 'manual',
-          description: `Deposit refund — ${deposit.ref} (cancelled: ${reason})`, status: 'posted',
-          lines: [
-            { id: uid(), account: '3100 - Customer Deposits', description: `Reverse deposit liability: ${deposit.ref}`, debit: deposit.totalPaid, credit: 0 },
-            { id: uid(), account: '2211 - Petty Cash / Mobile Money', description: `Refund payable: ${deposit.ref}`, debit: 0, credit: deposit.totalPaid },
-          ],
-          totalDebit: deposit.totalPaid, totalCredit: deposit.totalPaid,
-        }
-        setJournalEntries(p => [refundJournal, ...p])
-      }
+      // The refund journal is posted by /api/deposits/[id]/cancel as
+      // JRN/DEP/REFUND/<ref>/<paymentId>. The local copy used
+      // JRN/REFUND/<ref> — a different ref, so the mirror added a second
+      // reversal and the deposit liability was cleared twice.
       setDeposits(prev => prev.map(d =>
         d.id === depositId ? { ...d, status: 'cancelled' as DepositStatus, cancelledAt: now(), cancelReason: reason } : d
       ))
-      sync(`/api/deposits/${depositId}/cancel`, {
+      syncOrWarn(`/api/deposits/${depositId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
-      })
+      }, message => showToast(message, 'error'), 'Deposit cancellation could not be recorded — please retry')
       showToast('Deposit cancelled', 'info')
     },
 

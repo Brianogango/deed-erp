@@ -279,6 +279,39 @@ describe('POST /api/invoices', () => {
     )
   })
 
+  it('stores documentType at creation so a draft vendor bill is never counted as a receivable', async () => {
+    // The column defaults to customer_invoice and used to be written only
+    // when the document was posted, so every draft vendor bill sat in the
+    // table claiming to be AR — which is what the ageing report, the
+    // dashboard and the AR/AP split all read.
+    mockPrismaInvoice.create.mockImplementation(({ data }: any) => Promise.resolve({ ...baseInvoice, ...data }))
+
+    await POST(postReq({ clientId: CLIENT_ID, type: 'vendor_bill' }))
+    expect(mockPrismaInvoice.create.mock.calls[0][0].data.documentType).toBe('vendor_bill')
+
+    mockPrismaInvoice.create.mockClear()
+    await POST(postReq({ clientId: CLIENT_ID }))
+    expect(mockPrismaInvoice.create.mock.calls[0][0].data.documentType).toBe('customer_invoice')
+  })
+
+  it('posts a vendor bill created already-posted against payables, not receivables', async () => {
+    // type was hardcoded to 'customer_invoice' here, so a vendor bill that
+    // skipped the draft → post PUT booked Dr AR / Cr Revenue and had its
+    // documentType rewritten to customer_invoice on the way out.
+    mockPrismaInvoice.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({ ...baseInvoice, ...data, status: 'approved', items: [] }))
+
+    await POST(postReq({ clientId: CLIENT_ID, type: 'vendor_bill', status: 'posted' }))
+
+    const { buildInvoiceJournalInput } = await import('@/lib/accounting/invoice-journals')
+    const journalInput = vi.mocked(buildInvoiceJournalInput).mock.calls[0]?.[0] as { type?: string } | undefined
+    expect(journalInput?.type).toBe('vendor_bill')
+    const postingUpdate = mockPrismaInvoice.update.mock.calls
+      .map(call => call[0]?.data)
+      .find(data => data?.postingStatus === 'posted')
+    expect(postingUpdate?.documentType).toBe('vendor_bill')
+  })
+
   it('maps status alias "posted" → "approved"', async () => {
     mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
     await POST(postReq({ clientId: CLIENT_ID, status: 'posted' }))
@@ -443,6 +476,18 @@ describe('POST /api/invoices — isCreditNote', () => {
     const res = await POST(postReq({ clientId: CLIENT_ID, isCreditNote: true, total: -0.5 }))
     expect(res.status).toBe(400)
     expect(mockPrismaInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it('marks a vendor credit note as a vendor document, not a receivable', async () => {
+    mockPrismaInvoice.create.mockImplementation(({ data }: any) => Promise.resolve({ ...baseInvoice, ...data }))
+    await POST(postReq({
+      clientId: CLIENT_ID,
+      type: 'vendor_bill',
+      isCreditNote: true,
+      total: -5800,
+      lines: [{ description: 'RETURN: Widget ×2', qty: 2, unitPrice: -2500, subtotal: -5000 }],
+    }))
+    expect(mockPrismaInvoice.create.mock.calls[0][0].data.documentType).toBe('vendor_bill')
   })
 
   it('a regular (non-credit-note) invoice still cannot be created with a negative total', async () => {

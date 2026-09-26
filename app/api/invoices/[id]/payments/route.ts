@@ -140,10 +140,19 @@ export async function POST(
     // Resolve the actual cash/bank GL server-side. A caller may select a business
     // bank account, but never supplies the GL label that will be posted.
     const method = String(paymentMethod).toLowerCase()
-    let cashAccountLabel = method === 'bank_transfer'
-      ? labelForRole('bank_absa')
-      : labelForRole('cash_mobile')
-    if (bankAccountId && isUuid(bankAccountId)) {
+    // Applying a customer credit moves no cash: it settles the receivable
+    // against the credit liability. Without this branch the method falls
+    // through to petty cash below and the receipt debits 2211, overstating
+    // cash and leaving 3313 untouched.
+    const isCreditApplication = method === 'customer_credit'
+    let cashAccountLabel = isCreditApplication
+      ? labelForRole('customer_credits')
+      : method === 'bank_transfer'
+        ? labelForRole('bank_absa')
+        : labelForRole('cash_mobile')
+    // A credit application is never re-pointed at a bank GL, whatever the
+    // caller sent as bankAccountId.
+    if (!isCreditApplication && bankAccountId && isUuid(bankAccountId)) {
       const bank = await prisma.bankAccount.findUnique({ where: { id: bankAccountId } })
       if (!bank || !bank.isActive) {
         return NextResponse.json({ error: 'Invalid or inactive bank account' }, { status: 400 })
@@ -153,7 +162,7 @@ export async function POST(
         return NextResponse.json({ error: 'Bank account is not mapped to an active GL account' }, { status: 409 })
       }
       cashAccountLabel = `${gl.code} - ${gl.name}`
-    } else if (bankAccountId) {
+    } else if (!isCreditApplication && bankAccountId) {
       // Blob cashbook id ('ncba', 'im', …) — resolve via the role map.
       cashAccountLabel = labelForRole(cashAccountRoleForBankId(bankAccountId))
     }
@@ -179,7 +188,10 @@ export async function POST(
       allocations: [{ invoiceId, amount: capped }],
       journal: paymentId => ({
         ref: `JRN/PAY/${invoice.invoiceNumber}/${paymentId}`.slice(0, 80),
-        journalCode: method === 'cash' || method === 'mpesa' ? 'CSH' : 'BNK',
+        // A credit application belongs in the general journal, not a cash book.
+        journalCode: isCreditApplication
+          ? 'MISC'
+          : method === 'cash' || method === 'mpesa' ? 'CSH' : 'BNK',
         date: paymentDate,
         description: `Customer receipt for ${invoice.invoiceNumber}`,
         sourceType: 'payment',
