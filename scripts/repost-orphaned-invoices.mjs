@@ -119,11 +119,26 @@ async function main() {
     return
   }
 
-  console.log(`\n  ${count} invoice(s) posted in the app but missing from the ledger — KES ${money(totalValue)}\n`)
+  console.log(`\n  ${count} invoice(s) whose GL journal was reversed and never replaced — KES ${money(totalValue)}\n`)
   for (const inv of invoices) {
     const date = new Date(inv.invoiceDate).toISOString().slice(0, 10)
     console.log(`    ${inv.invoiceNumber}  ${date}  KES ${money(inv.totalAmount)}  paid ${money(inv.amountPaid)}`)
     console.log(`      reversed journal: ${inv.reversedJournalRef ?? '(none found)'}`)
+  }
+
+  // A victim of the un-posting bug always has a reversed journal to point at.
+  // A row without one is an invoice that never reached the ledger — almost
+  // certainly pre-cutover — and re-posting it would invent revenue the opening
+  // balances already carry. The server refuses these individually; refusing the
+  // whole run here as well means a future widening of the filter cannot turn
+  // into a mass posting just because nobody read the list first.
+  const withoutReversal = invoices.filter(i => !i.reversedJournalRef)
+  if (withoutReversal.length > 0) {
+    fail(
+      `${withoutReversal.length} of these have no reversed journal, so they were never un-posted — they never reached the ledger at all.\n`
+      + '  Re-posting those would invent revenue. Refusing the whole run.\n'
+      + `  First few: ${withoutReversal.slice(0, 5).map(i => i.invoiceNumber).join(', ')}`,
+    )
   }
 
   if (!entryDate) {

@@ -47,19 +47,34 @@ export type OrphanedInvoice = {
 }
 
 /**
- * Is this row an invoice the ledger has lost?
+ * Is this row an invoice the ledger LOST — as opposed to one it never had?
  *
- * Pure, and separate from the query, because this predicate is the definition
- * of the defect and wants tests of its own. `posting` is a transient state the
- * PUT route sets inside its transaction, so it is NOT an orphan — treating it
- * as one would race a posting that is still in flight.
+ * The distinction is the whole predicate, and getting it wrong is expensive in
+ * one direction only. An earlier version asked merely "posted in the app, no
+ * live journal", which matched 291 invoices worth KES 9.68m instead of the 3
+ * the defect actually stranded. Almost all of them predate the 13 Sep finance
+ * cutover, from before there was a chart of accounts to post into: being absent
+ * from the GL is their correct and expected state, and they are accounted for
+ * in the opening balances taken on at the cutover. Re-posting them would have
+ * double-counted a year of trading.
+ *
+ * What distinguishes a victim of the un-posting bug is that its journal was
+ * REVERSED. It reached the ledger, then a stale tab's save took it out again.
+ * No reversal means no journal was ever taken away, which means there is
+ * nothing here to put back.
+ *
+ * `posting` is a transient state the PUT route sets inside its transaction, so
+ * it is not an orphan either — treating it as one would race a posting that is
+ * still in flight.
  */
 export function isOrphanedPostedInvoice(row: {
   status: string
   postingStatus: string
+  hasReversedJournal: boolean
 }): boolean {
   if (!PRISMA_POSTED_INVOICE_STATUSES.has(String(row.status))) return false
-  return String(row.postingStatus) === 'unposted'
+  if (String(row.postingStatus) !== 'unposted') return false
+  return row.hasReversedJournal === true
 }
 
 export async function findOrphanedPostedInvoices(): Promise<OrphanedInvoice[]> {
@@ -81,16 +96,17 @@ export async function findOrphanedPostedInvoices(): Promise<OrphanedInvoice[]> {
     orderBy: { invoiceDate: 'asc' },
   })
 
-  const orphans = candidates.filter(row =>
-    isOrphanedPostedInvoice({ status: String(row.status), postingStatus: row.postingStatus }),
-  )
-  if (orphans.length === 0) return []
+  if (candidates.length === 0) return []
 
-  // Which journal was reversed, for the operator's benefit. An invoice with no
-  // journal at all is still an orphan — it never reached the ledger either —
-  // so a missing row here is reported, not filtered out.
+  // The reversal is what identifies a victim, so this is a filter, not a
+  // decoration. `REV/` entries are excluded: the reversal itself is not
+  // reversed, and matching one would let any cancelled invoice in.
   const journals = await prisma.journalEntry.findMany({
-    where: { invoiceId: { in: orphans.map(o => o.id) }, isReversed: true },
+    where: {
+      invoiceId: { in: candidates.map(c => c.id) },
+      isReversed: true,
+      NOT: { ref: { startsWith: 'REV/' } },
+    },
     select: { invoiceId: true, ref: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   })
@@ -98,6 +114,14 @@ export async function findOrphanedPostedInvoices(): Promise<OrphanedInvoice[]> {
   for (const j of journals) {
     if (j.invoiceId && !byInvoice.has(j.invoiceId)) byInvoice.set(j.invoiceId, { ref: j.ref, createdAt: j.createdAt })
   }
+
+  const orphans = candidates.filter(row =>
+    isOrphanedPostedInvoice({
+      status: String(row.status),
+      postingStatus: row.postingStatus,
+      hasReversedJournal: byInvoice.has(row.id),
+    }),
+  )
 
   return orphans.map(row => ({
     id: row.id,
@@ -147,13 +171,30 @@ export async function repostOrphanedInvoice(params: {
 
   const label = invoice.invoiceNumber
 
-  // Re-check under current state: the list the operator saw may be minutes old
-  // and someone may have posted it in between.
-  if (!isOrphanedPostedInvoice({ status: String(invoice.status), postingStatus: invoice.postingStatus })) {
+  // Re-check under current state, including the reversal. The list the operator
+  // saw may be minutes old and someone may have posted it in between — and this
+  // function must refuse a pre-cutover invoice on its own account, not merely
+  // because the caller filtered it out. Posting one of those would invent
+  // revenue the opening balances already carry.
+  const reversed = await prisma.journalEntry.findFirst({
+    where: {
+      invoiceId: invoice.id,
+      isReversed: true,
+      NOT: { ref: { startsWith: 'REV/' } },
+    },
+    select: { id: true },
+  })
+  if (!isOrphanedPostedInvoice({
+    status: String(invoice.status),
+    postingStatus: invoice.postingStatus,
+    hasReversedJournal: Boolean(reversed),
+  })) {
     return {
       kind: 'skipped',
       invoiceNumber: label,
-      reason: `No longer orphaned (status ${invoice.status}, posting ${invoice.postingStatus})`,
+      reason: reversed
+        ? `No longer orphaned (status ${invoice.status}, posting ${invoice.postingStatus})`
+        : 'Never had a GL journal to lose — not an un-posting victim, so re-posting it would invent revenue',
     }
   }
 

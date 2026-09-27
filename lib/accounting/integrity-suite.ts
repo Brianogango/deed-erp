@@ -64,6 +64,34 @@ function tbRowNet(tb: Awaited<ReturnType<typeof buildTrialBalance>>, code: strin
   return netBalanceForType(row.type, debit, credit)
 }
 
+/**
+ * Posted invoices whose journal was reversed and never replaced.
+ *
+ * Two queries rather than a nested filter: journal_entries carries invoice_id
+ * but Prisma has no back-relation from Invoice, so the reversed set is fetched
+ * first and the invoices counted against it.
+ */
+async function countInvoicesWithReversedJournal(asOfDate: Date): Promise<number> {
+  const reversed = await prisma.journalEntry.findMany({
+    where: {
+      invoiceId: { not: null },
+      isReversed: true,
+      NOT: { ref: { startsWith: 'REV/' } },
+    },
+    select: { invoiceId: true },
+  })
+  const ids = Array.from(new Set(reversed.map(r => r.invoiceId).filter((id): id is string => Boolean(id))))
+  if (ids.length === 0) return 0
+  return prisma.invoice.count({
+    where: {
+      id: { in: ids },
+      status: { in: ['approved', 'invoiced', 'dispatched', 'delivered'] },
+      postingStatus: 'unposted',
+      invoiceDate: { lte: asOfDate },
+    },
+  })
+}
+
 export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteResult> {
   const tb = await buildTrialBalance({ asOf })
   const asOfDate = new Date(`${asOf}T23:59:59Z`)
@@ -130,20 +158,20 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
       _sum: { amount: true },
     }),
     prisma.journalEntry.count({ where: { isPosted: false } }),
-    // Invoices the business treats as posted that the ledger has no live
-    // journal for. Until 2026-09-27 a stale browser tab could un-post an
-    // invoice and reverse its GL journal silently, and nothing looked for the
+    // Invoices the business treats as posted whose GL journal was REVERSED and
+    // never replaced. Until 2026-09-27 a stale browser tab could un-post an
+    // invoice and reverse its journal silently, and nothing looked for the
     // result: 'unposted_journals' below counts journals that never posted, not
     // invoices that lost the journal they had. Three August invoices sat this
     // way for six weeks with their revenue and output VAT missing and their
     // customers' AR driven negative by receipts that still credited it.
-    prisma.invoice.count({
-      where: {
-        status: { in: ['approved', 'invoiced', 'dispatched', 'delivered'] },
-        postingStatus: 'unposted',
-        invoiceDate: { lte: asOfDate },
-      },
-    }),
+    //
+    // The reversal is required, not incidental. Without it this counts every
+    // invoice that predates the 13 Sep finance cutover — 291 of them, KES
+    // 9.68m, whose absence from the GL is correct because there was no chart of
+    // accounts then and the opening balances already carry them. A gate that
+    // fires on those would block every close from here to the end of time.
+    countInvoicesWithReversedJournal(asOfDate),
     prisma.journalEntry.findMany({
       where: { isPosted: true, entryDate: { lte: asOfDate } },
       select: { totalDebit: true, totalCredit: true },
