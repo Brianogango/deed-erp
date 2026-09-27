@@ -12,6 +12,7 @@ import {
   sortJournalMirrorFailures,
 } from '@/lib/accounting/journal-mirror-failures'
 import { roundMoney } from '@/lib/accounting/money'
+import { countPosSalesWithoutJournal } from '@/lib/accounting/pos-journal-gaps'
 
 export type IntegrityGate = {
   id: string
@@ -105,6 +106,7 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
     creditApps,
     unposted,
     orphanedInvoices,
+    posGaps,
     unbalanced,
     payrollRun,
     taxAgg,
@@ -172,6 +174,7 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
     // accounts then and the opening balances already carry them. A gate that
     // fires on those would block every close from here to the end of time.
     countInvoicesWithReversedJournal(asOfDate),
+    countPosSalesWithoutJournal(asOfDate),
     prisma.journalEntry.findMany({
       where: { isPosted: true, entryDate: { lte: asOfDate } },
       select: { totalDebit: true, totalCredit: true },
@@ -228,7 +231,12 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
 
   // Journals the blob→Prisma mirror refused. They exist operationally and are
   // absent from every figure above, so this gate has to fail loudly.
-  const mirrorFailures = sortJournalMirrorFailures(await loadJournalMirrorFailures())
+  // Dismissed failures stay on file but leave the gate: some refusals are
+  // permanent by construction (an aborted POS ticket with no lines can never
+  // satisfy the validator), and counting those would block every close forever.
+  const mirrorFailureMap = await loadJournalMirrorFailures()
+  const mirrorFailures = sortJournalMirrorFailures(mirrorFailureMap)
+    .filter(f => !f.dismissedAt)
   const mirrorFailureDetail = mirrorFailures.length === 0
     ? 'Every posted journal reached journal_entries'
     : `${mirrorFailures.length} journal(s) missing from the ledger: ` +
@@ -284,6 +292,18 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
       populationCount: orphanedInvoices,
       detail: orphanedInvoices > 0
         ? 'Posted invoices with no live GL journal — revenue and output VAT are missing and AR is understated. Re-post them before closing.'
+        : undefined,
+    },
+    {
+      id: 'pos_sales_without_journal',
+      name: 'Every till sale is in the ledger',
+      passed: posGaps === 0,
+      ledgerAmount: posGaps,
+      subledgerAmount: 0,
+      difference: posGaps,
+      populationCount: posGaps,
+      detail: posGaps > 0
+        ? 'POS sales with no GL journal. Their journal call failed and nothing recorded it — postingStatus reads "unposted" for every till sale, so it cannot show this.'
         : undefined,
     },
     {

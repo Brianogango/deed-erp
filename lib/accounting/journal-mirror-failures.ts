@@ -34,6 +34,21 @@ export type JournalMirrorFailure = {
   attempts: number
   firstFailedAt: string
   lastFailedAt: string
+  /**
+   * Set when a director has judged that this entry can never post and should
+   * stop being counted. A dismissed failure stays in the record — the history
+   * is the point — but leaves the backlog gate, so it cannot block a close
+   * forever.
+   *
+   * Needed because some refusals are permanent by construction. Two aborted
+   * POS tickets (JRN/POS/0083, JRN/POS/0108) carry a zero amount and fewer than
+   * two lines; the validator requires at least two, so they had failed 38 times
+   * each and would have failed every month-end from here on. Retrying was never
+   * going to help, and the gate had no way to say so.
+   */
+  dismissedAt?: string
+  dismissedBy?: string | null
+  dismissReason?: string
 }
 
 export type JournalMirrorFailureMap = Record<string, JournalMirrorFailure>
@@ -92,6 +107,47 @@ export function clearJournalMirrorFailure(
   const next = { ...map }
   delete next[ref]
   return next
+}
+
+/**
+ * Mark a failure as permanently unpostable. Pure.
+ *
+ * A dismissal is not a deletion: the ref, the reason and the attempt count stay
+ * on file, so the decision is auditable and the entry can be un-dismissed by a
+ * later retry that succeeds. What changes is that `outstandingMirrorFailures`
+ * stops counting it.
+ */
+export function dismissJournalMirrorFailure(
+  map: JournalMirrorFailureMap,
+  ref: string,
+  by: string | null,
+  reason: string,
+  now: string = new Date().toISOString(),
+): JournalMirrorFailureMap {
+  const failure = map[ref]
+  if (!failure) return map
+  return {
+    ...map,
+    [ref]: {
+      ...failure,
+      dismissedAt: now,
+      dismissedBy: by,
+      dismissReason: reason.slice(0, 300),
+    },
+  }
+}
+
+/**
+ * The failures that still demand attention — what the backlog gate counts.
+ *
+ * A dismissed entry is excluded here and nowhere else: it remains visible in
+ * any listing, because hiding the history would defeat the purpose of keeping
+ * the record at all.
+ */
+export function outstandingMirrorFailures(
+  map: JournalMirrorFailureMap,
+): JournalMirrorFailure[] {
+  return Object.values(map).filter(f => !f.dismissedAt)
 }
 
 /** Drop every ref no longer present in the blob, so the record cannot grow forever. */

@@ -20,6 +20,9 @@ const GATE_CONTROL_TYPES = [
   // revenue and output VAT missing from the period being closed. Closing over
   // it certifies figures that are known to be short.
   'invoices_without_journal',
+  // The same omission arriving by the till instead. Three POS sales worth KES
+  // 78,000 sat outside the ledger for six weeks because no check looked here.
+  'pos_sales_without_journal',
   'unbalanced_journals',
   'payroll_liabilities',
   'outstanding_receipts',
