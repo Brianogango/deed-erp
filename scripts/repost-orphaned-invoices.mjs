@@ -26,23 +26,72 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const ROOT = process.cwd()
-const ENDPOINT = process.env.REPOST_ENDPOINT
-  || 'http://127.0.0.1:3000/api/accounting/orphaned-invoice-journals'
+const PATH = '/api/accounting/orphaned-invoice-journals'
 
-function readEnvSecret() {
+let envCache = null
+function env() {
+  if (envCache) return envCache
   let raw
   try {
     raw = readFileSync(resolve(ROOT, '.env'), 'utf8')
   } catch {
     fail('Could not read .env — run this from /var/www/deed-erp.')
   }
+  envCache = new Map()
   for (const line of raw.split('\n')) {
-    const match = line.match(/^\s*INTERNAL_API_SECRET\s*=\s*(.*)\s*$/)
-    if (!match) continue
-    const value = match[1].trim().replace(/^["']|["']$/g, '')
-    if (value) return value
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/)
+    if (match) envCache.set(match[1], match[2].replace(/^["']|["']$/g, ''))
   }
+  return envCache
+}
+
+function readEnvSecret() {
+  const value = env().get('INTERNAL_API_SECRET')
+  if (value) return value
   fail('INTERNAL_API_SECRET is not set in .env. Add one, restart the app, and re-run.')
+}
+
+/**
+ * Where the app is listening.
+ *
+ * Guessing port 3000 and reporting Node's bare "fetch failed" was not good
+ * enough — it says nothing about what went wrong. So: the explicit override
+ * first, then PORT from .env, then the usual candidates, and finally the public
+ * host through nginx, which is reachable even when the local port is not what
+ * anyone expected. Each candidate is tried in turn and the failures are
+ * reported together if none answer.
+ */
+function candidateEndpoints() {
+  if (process.env.REPOST_ENDPOINT) return [process.env.REPOST_ENDPOINT]
+  const ports = []
+  const configured = env().get('PORT')
+  if (configured) ports.push(configured)
+  for (const p of ['3000', '3001', '8080']) if (!ports.includes(p)) ports.push(p)
+  return [
+    ...ports.map(p => `http://127.0.0.1:${p}${PATH}`),
+    `https://erp.deed.co.ke${PATH}`,
+  ]
+}
+
+async function resolveEndpoint(headers) {
+  const tried = []
+  for (const endpoint of candidateEndpoints()) {
+    try {
+      const res = await fetch(endpoint, { headers })
+      if (res.ok) return { endpoint, res }
+      if (res.status === 403) {
+        fail(`Reached ${endpoint} but it returned Forbidden.\n  The INTERNAL_API_SECRET in .env does not match the one the running app loaded.\n  Restart the app (pm2 reload deed-erp) so it picks up the current .env, then re-run.`)
+      }
+      if (res.status === 404) {
+        tried.push(`${endpoint} — 404, that build predates this route`)
+        continue
+      }
+      tried.push(`${endpoint} — HTTP ${res.status}`)
+    } catch (err) {
+      tried.push(`${endpoint} — ${err?.cause?.code ?? err?.message ?? 'unreachable'}`)
+    }
+  }
+  fail(`Could not reach the app. Tried:\n${tried.map(t => `    ${t}`).join('\n')}\n\n  Find the real port with:  sudo -u deedapp pm2 env 0 | grep -i '^PORT'\n  then re-run with:         REPOST_ENDPOINT=http://127.0.0.1:<port>${PATH} node scripts/repost-orphaned-invoices.mjs`)
 }
 
 function fail(message) {
@@ -62,10 +111,7 @@ async function main() {
   const secret = readEnvSecret()
   const headers = { 'x-internal-secret': secret, 'Content-Type': 'application/json' }
 
-  const listRes = await fetch(ENDPOINT, { headers })
-  if (!listRes.ok) {
-    fail(`Listing failed with HTTP ${listRes.status}. Is the app running and the build deployed?`)
-  }
+  const { endpoint, res: listRes } = await resolveEndpoint(headers)
   const { count, totalValue, invoices } = await listRes.json()
 
   if (count === 0) {
@@ -86,7 +132,7 @@ async function main() {
   }
 
   console.log(`\n  Re-posting, journal date: ${entryDate === 'today' ? 'today' : "each invoice's own date"} ...\n`)
-  const res = await fetch(ENDPOINT, {
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers,
     body: JSON.stringify({ invoiceIds: invoices.map(i => i.id), entryDate }),
