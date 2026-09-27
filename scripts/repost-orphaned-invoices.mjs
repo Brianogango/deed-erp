@@ -73,12 +73,18 @@ function candidateEndpoints() {
   ]
 }
 
-async function resolveEndpoint(headers) {
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+/** Still coming up, rather than genuinely wrong. */
+const STARTING_UP = new Set(['ECONNREFUSED', 'ECONNRESET', 'UND_ERR_SOCKET'])
+
+async function tryOnce(headers) {
   const tried = []
+  let transient = false
   for (const endpoint of candidateEndpoints()) {
     try {
       const res = await fetch(endpoint, { headers })
-      if (res.ok) return { endpoint, res }
+      if (res.ok) return { endpoint, res, tried, transient }
       if (res.status === 403) {
         fail(`Reached ${endpoint} but it returned Forbidden.\n  The INTERNAL_API_SECRET in .env does not match the one the running app loaded.\n  Restart the app (pm2 reload deed-erp) so it picks up the current .env, then re-run.`)
       }
@@ -86,12 +92,52 @@ async function resolveEndpoint(headers) {
         tried.push(`${endpoint} — 404, that build predates this route`)
         continue
       }
+      // 502/503/504 from nginx mean it has no upstream yet — the app is mid-boot.
+      if (res.status >= 502 && res.status <= 504) transient = true
       tried.push(`${endpoint} — HTTP ${res.status}`)
     } catch (err) {
-      tried.push(`${endpoint} — ${err?.cause?.code ?? err?.message ?? 'unreachable'}`)
+      const code = err?.cause?.code ?? err?.message ?? 'unreachable'
+      if (STARTING_UP.has(err?.cause?.code)) transient = true
+      tried.push(`${endpoint} — ${code}`)
     }
   }
-  fail(`Could not reach the app. Tried:\n${tried.map(t => `    ${t}`).join('\n')}\n\n  Find the real port with:  sudo -u deedapp pm2 env 0 | grep -i '^PORT'\n  then re-run with:         REPOST_ENDPOINT=http://127.0.0.1:<port>${PATH} node scripts/repost-orphaned-invoices.mjs`)
+  return { endpoint: null, res: null, tried, transient }
+}
+
+/**
+ * Wait for the app rather than racing it.
+ *
+ * `npm run build` rewrites .next underneath the running server, so the app
+ * crash-loops for the length of every build and then needs a few more seconds
+ * to boot after pm2 reload — Prisma client generation alone takes about five.
+ * Running this script straight after a deploy therefore hits ECONNREFUSED or a
+ * 502 from nginx and reports a failure that resolves itself moments later.
+ *
+ * So a connection refusal or a bad-gateway is treated as "not up yet" and
+ * retried for half a minute, while anything that will not fix itself — a 403,
+ * a 404 — still fails at once. (The underlying problem is the deploy building
+ * on top of the live directory; this only stops the script tripping over it.)
+ */
+async function resolveEndpoint(headers) {
+  const deadline = Date.now() + 30_000
+  let announced = false
+  for (;;) {
+    const { endpoint, res, tried, transient } = await tryOnce(headers)
+    if (endpoint) {
+      if (announced) console.log('  up.\n')
+      return { endpoint, res }
+    }
+    if (!transient || Date.now() >= deadline) {
+      fail(`Could not reach the app. Tried:\n${tried.map(t => `    ${t}`).join('\n')}\n\n  Find the real port with:  sudo -u deedapp pm2 env 0 | grep -i '^PORT'\n  then re-run with:         REPOST_ENDPOINT=http://127.0.0.1:<port>${PATH} node scripts/repost-orphaned-invoices.mjs`)
+    }
+    if (!announced) {
+      process.stdout.write('\n  App is still starting up, waiting ...')
+      announced = true
+    } else {
+      process.stdout.write('.')
+    }
+    await sleep(2000)
+  }
 }
 
 function fail(message) {
