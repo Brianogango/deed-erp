@@ -126,26 +126,71 @@ describe('repairBillingNeedsSync', () => {
     expect(state.saleOrderOpen).toBe(true)
   })
 
-  it('needs a rewrite when an unpaid invoice dropped quote lines', () => {
+  it('needs a rewrite when an unpaid DRAFT invoice dropped quote lines', () => {
     const state = repairBillingNeedsSync({
       salesQuoteStatus: 'sent',
       saleOrderStatus: 'quotation',
-      invoice: { total: 500, amountPaid: 0, lines: [{ qty: 1, unitPrice: 500, subtotal: 500 }] },
+      invoice: { status: 'draft', total: 500, amountPaid: 0, lines: [{ qty: 1, unitPrice: 500, subtotal: 500 }] },
       charges,
     })
     expect(state.canRewriteInvoice).toBe(true)
+    expect(state.requiresCreditNote).toBe(false)
     expect(state.needed).toBe(true)
   })
 
-  it('does not rewrite a paid mismatch', () => {
+  it('does not rewrite a paid mismatch, and calls for a credit note instead', () => {
     const state = repairBillingNeedsSync({
       salesQuoteStatus: 'accepted',
       saleOrderStatus: 'sale',
-      invoice: { total: 500, amountPaid: 500, lines: [{ qty: 1, unitPrice: 500, subtotal: 500 }] },
+      invoice: { status: 'paid', total: 500, amountPaid: 500, lines: [{ qty: 1, unitPrice: 500, subtotal: 500 }] },
       charges,
     })
     expect(state.canRewriteInvoice).toBe(false)
+    // The discrepancy is real and still worth surfacing — what changed is the
+    // remedy offered, not whether the repair is flagged.
+    expect(state.requiresCreditNote).toBe(true)
+    expect(state.needed).toBe(true)
+  })
+
+  it('will not offer to rewrite a POSTED invoice that nobody has paid (REP-499EXM5H)', () => {
+    // The bug this covers. canRewriteInvoice asked only whether anything had
+    // been paid, so a posted invoice billed on credit — nothing paid against it
+    // yet — was offered an "Align invoice with quote" button, and the server
+    // answered "posted and immutable — issue a credit/debit note". The UI was
+    // proposing an action that could never succeed. Posting freezes a document;
+    // payment is a separate question.
+    const state = repairBillingNeedsSync({
+      salesQuoteStatus: 'accepted',
+      saleOrderStatus: 'sale',
+      invoice: { status: 'posted', total: 500, amountPaid: 0, lines: [{ qty: 1, unitPrice: 500, subtotal: 500 }] },
+      charges,
+    })
+    expect(state.canRewriteInvoice).toBe(false)
+    expect(state.requiresCreditNote).toBe(true)
+    expect(state.needed).toBe(true)
+  })
+
+  it('leaves a posted invoice alone when it already matches the quote', () => {
+    const state = repairBillingNeedsSync({
+      salesQuoteStatus: 'accepted',
+      saleOrderStatus: 'sale',
+      invoice: { status: 'posted', total: 2000, amountPaid: 0, lines: [{ qty: 1, unitPrice: 2000, subtotal: 2000 }] },
+      charges,
+    })
+    expect(state.requiresCreditNote).toBe(false)
     expect(state.needed).toBe(false)
+  })
+
+  it('treats a cancelled invoice as missing, not as needing a credit note', () => {
+    const state = repairBillingNeedsSync({
+      salesQuoteStatus: 'accepted',
+      saleOrderStatus: 'sale',
+      invoice: { status: 'cancelled', total: 500, amountPaid: 0, lines: [{ qty: 1, unitPrice: 500, subtotal: 500 }] },
+      charges,
+    })
+    expect(state.missingInvoice).toBe(true)
+    expect(state.requiresCreditNote).toBe(false)
+    expect(state.canRewriteInvoice).toBe(false)
   })
 
   it('is done when quote, sale order, and invoice already match', () => {

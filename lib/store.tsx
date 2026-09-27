@@ -17236,10 +17236,42 @@ const storeCtx: AppState = {
       let existingInvoice = resolveExistingInvoice(repair)
       if (existingInvoice?.status === 'cancelled') existingInvoice = undefined
 
+      /**
+       * Attach the invoice and move `ready` on to `invoiced`.
+       *
+       * The status update used to be guarded by `if (!repair.invoiceId)`, so a
+       * repair that was ALREADY linked to its invoice never advanced — the one
+       * case where the link exists is exactly the case that needed moving on.
+       */
+      const linkInvoiceToRepair = (inv: { id: string }) => {
+        setRepairs(p => p.map(r => r.id === repairId
+          ? {
+            ...r,
+            invoiceId: inv.id,
+            invoiceDate: r.invoiceDate ?? now(),
+            status: r.status === 'ready' ? 'invoiced' : r.status,
+          }
+          : r))
+      }
+
       // Posted invoices are immutable even when unpaid. Corrections belong to
       // the Invoice module's credit/debit-note workflow.
+      //
+      // But refusing outright used to strand the job. The device is repaired,
+      // an invoice exists and sits on the customer's account, and the only
+      // route from `ready` to `invoiced` runs through here — so a repair whose
+      // posted invoice had drifted from the quote could never advance, and the
+      // workshop was held at "Ready" by an accounting discrepancy it cannot
+      // fix. The device would never reach release, collection or close.
+      //
+      // So the job moves on and the mismatch is reported as what it is: work
+      // for Finance, not a wall for the workshop.
       if (existingInvoice && existingInvoice.status !== 'draft' && !invoiceMatchesRepairCharges(existingInvoice, chargeLines)) {
-        showToast(`${existingInvoice.ref} is posted and immutable — issue a credit/debit note in the Invoice module.`, 'error')
+        linkInvoiceToRepair(existingInvoice)
+        showToast(
+          `${existingInvoice.ref} is posted and cannot be edited — issue a credit/debit note in the Invoice module. The repair has been marked invoiced so the device can be released.`,
+          'info',
+        )
         return existingInvoice
       }
 
@@ -17249,9 +17281,7 @@ const storeCtx: AppState = {
       const quoteAlreadyAccepted = !linkedSalesQuote || linkedSalesQuote.status === 'accepted'
       const soAlreadySale = !linkedSaleOrder || linkedSaleOrder.status === 'sale'
       if (existingInvoice && invoiceAlreadyMatches && quoteAlreadyAccepted && soAlreadySale) {
-        if (!repair.invoiceId) {
-          setRepairs(p => p.map(r => r.id === repairId ? { ...r, invoiceId: existingInvoice!.id, invoiceDate: r.invoiceDate ?? now(), status: r.status === 'ready' ? 'invoiced' : r.status } : r))
-        }
+        linkInvoiceToRepair(existingInvoice)
         showToast(`Invoice ${existingInvoice.ref} already exists for this repair`, 'info')
         return existingInvoice
       }

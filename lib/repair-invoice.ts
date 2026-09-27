@@ -194,9 +194,26 @@ export function invoiceMatchesRepairCharges(
 const ACCEPTED_QUOTE_STATUSES = new Set(['accepted', 'revised'])
 const OPEN_QUOTATION_STATUSES = new Set(['quotation', 'quotation_sent'])
 
+/**
+ * The only state in which an invoice's lines may still be rewritten in place.
+ *
+ * Posting is what freezes a document, not payment. `canRewriteInvoice` used to
+ * ask only whether anything had been paid, so a posted invoice with no payment
+ * against it — the ordinary case for a repair billed on credit — was offered an
+ * "Align invoice with quote" button that the server then refused with "posted
+ * and immutable". The UI was proposing an action that could never succeed.
+ */
+const REWRITABLE_INVOICE_STATUSES = new Set(['draft'])
+
 export type RepairBillingSyncState = {
   needed: boolean
   canRewriteInvoice: boolean
+  /**
+   * The invoice is frozen and no longer matches the approved charges. The
+   * correction is a credit or debit note in the Invoice module, which is a
+   * different action from rewriting a draft and belongs to Finance.
+   */
+  requiresCreditNote: boolean
   quoteOpen: boolean
   saleOrderOpen: boolean
   matchesInvoice: boolean
@@ -215,7 +232,11 @@ export function repairBillingNeedsSync(opts: {
   const missingInvoice = !opts.invoice || String(opts.invoice.status ?? '').toLowerCase() === 'cancelled'
   const matchesInvoice = !missingInvoice && invoiceMatchesRepairCharges(opts.invoice, opts.charges)
   const invoicePaid = money(opts.invoice?.amountPaid) > 0
-  const canRewriteInvoice = !missingInvoice && !invoicePaid && !matchesInvoice
-  const needed = missingInvoice || quoteOpen || saleOrderOpen || canRewriteInvoice
-  return { needed, canRewriteInvoice, quoteOpen, saleOrderOpen, matchesInvoice, invoicePaid, missingInvoice }
+  const invoiceRewritable = REWRITABLE_INVOICE_STATUSES.has(String(opts.invoice?.status ?? '').toLowerCase())
+  const canRewriteInvoice = !missingInvoice && !invoicePaid && invoiceRewritable && !matchesInvoice
+  // Frozen and out of step with the approved quote. Still worth surfacing —
+  // the discrepancy is real — but the remedy is a credit note, not an edit.
+  const requiresCreditNote = !missingInvoice && !invoiceRewritable && !matchesInvoice
+  const needed = missingInvoice || quoteOpen || saleOrderOpen || canRewriteInvoice || requiresCreditNote
+  return { needed, canRewriteInvoice, requiresCreditNote, quoteOpen, saleOrderOpen, matchesInvoice, invoicePaid, missingInvoice }
 }
