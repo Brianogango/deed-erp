@@ -12,84 +12,14 @@ import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 import { calcSaleOrderLineMoney, calcSaleOrderTotals } from '@/lib/sales/line-calc'
-import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
-import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
+import { quotationPaymentTermsDays } from '@/lib/sales/quotation-defaults'
+import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 
 async function broadcastSaleOrders() {
   try {
     const all = await prisma.saleOrder.findMany({ include: { client: true, items: true }, orderBy: { createdAt: 'desc' } })
     void saveStoreKeys({ deed_saleOrders: JSON.stringify(all.map(mapSaleOrderToClient)) })
   } catch {}
-}
-
-function mapSaleOrderToClient(order: any) {
-  // Never leave raw Prisma `items` on the client row — PATCH used to prefer
-  // that stale array over edited `lines` and resurrect deleted products.
-  const { items: _prismaItems, client: _client, ...orderRest } = order ?? {}
-  return {
-    ...orderRest,
-    ref: order.orderNumber,
-    quotationRef: order.quotationRef ?? undefined,
-    proformaRef: order.proformaRef ?? undefined,
-    pricelist: order.pricelist ?? undefined,
-    pricelistId: order.pricelistId ?? undefined,
-    currencyCode: order.currencyCode ?? 'KES',
-    baseCurrencyCode: order.baseCurrencyCode ?? 'KES',
-    exchangeRateToBase: Number(order.exchangeRateToBase ?? 1) || 1,
-    salespersonId: order.salespersonId ?? undefined,
-    salespersonName: order.salespersonName ?? undefined,
-    salesTeam: order.salesTeam ?? undefined,
-    sentMessage: order.sentMessage ?? undefined,
-    // paymentTermsDays is the durable column; the client historically reads a
-    // display string. Reconstruct it so the value survives a server round-trip
-    // instead of silently disappearing (it was never persisted before).
-    paymentTerms: order.paymentTermsDays != null
-      ? serializeQuotationPaymentTerms(Number(order.paymentTermsDays))
-      : undefined,
-    customerId: order.clientId,
-    customerName: order.client?.name ?? '',
-    date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
-    deliveryDate: order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : undefined,
-    validUntil: order.validUntil ? new Date(order.validUntil).toISOString().slice(0, 10) : undefined,
-    status: normalizeSaleStatus(order.status),
-    sentAt: order.sentAt ? new Date(order.sentAt).toISOString() : undefined,
-    acceptedAt: order.acceptedAt ? new Date(order.acceptedAt).toISOString() : undefined,
-    acceptedById: order.acceptedById ?? undefined,
-    confirmedAt: order.confirmedAt ? new Date(order.confirmedAt).toISOString() : undefined,
-    total: Number(order.totalAmount ?? 0),
-    taxTotal: Number(order.taxAmount ?? 0),
-    subtotal: Number(order.subtotal ?? 0),
-    discountAmount: Number(order.discountAmount ?? 0),
-    amountPaid: Number(order.amountPaid ?? 0),
-    lockVersion: Number(order.lockVersion ?? 0),
-    lines: orderedSaleOrderItems(order.items).map((item: any) => {
-      const qty = Number(item.qty ?? 0)
-      const productId = item.productId ?? ''
-      const lineType = qty === 0 && !productId && !(Number(item.unitPrice ?? 0) > 0) ? 'section' as const : undefined
-      return {
-        id: item.id,
-        productId,
-        productName: item.description ?? '',
-        description: item.description ?? '',
-        qty,
-        unitPrice: Number(item.unitPrice ?? 0),
-        taxRate: Number(item.taxRate ?? 0),
-        // discount/discountPercent both round-trip so a reopened line's edit
-        // form shows the original discount instead of resetting to 0 — before
-        // discountPct existed on the DB row, this was unrecoverable and saving
-        // an untouched line silently erased its discount.
-        discount: Number(item.discountPct ?? 0),
-        discountPercent: Number(item.discountPct ?? 0),
-        subtotal: Number(item.lineTotal ?? 0),
-        lineTotal: Number(item.lineTotal ?? 0),
-        serialIds: item.serialNumberId ? [item.serialNumberId] : [],
-        notes: item.notes ?? undefined,
-        qtyDelivered: Number(item.qtyDelivered ?? 0),
-        qtyInvoiced: Number(item.qtyInvoiced ?? 0),
-        ...(lineType ? { lineType } : {}),
-      }
-    }),
-  }
 }
 
 function normalizeOptionalProducts(value: unknown) {

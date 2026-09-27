@@ -23,10 +23,10 @@ import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
 import { extractRepairRefFromText } from '@/lib/repair/sale-order-link'
 import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
-import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
+import { quotationPaymentTermsDays } from '@/lib/sales/quotation-defaults'
 import { canTrimFulfillmentQty, isFulfillmentQtyTrim } from '@/lib/sales/fulfillment-trim'
 import { notifySaleOrderConfirmed } from '@/lib/notifications/business-events'
-import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
+import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 
 /** Serialize blob rewrites so a slower soft/findMany cannot overwrite a newer Save. */
 let broadcastSaleOrdersChain: Promise<void> = Promise.resolve()
@@ -63,73 +63,6 @@ function isRepairLinked(record: any) {
 function normalizeSaleOrderStatus(status: unknown) {
   if (typeof status !== 'string' || status.trim() === '') return undefined
   return normalizeSaleStatus(status)
-}
-
-function mapSaleOrderToClient(order: any) {
-  // Never leave raw Prisma `items` on the client row — PATCH used to prefer
-  // that stale array over edited `lines` and resurrect deleted products.
-  const { items: _prismaItems, client: _client, ...orderRest } = order ?? {}
-  return {
-    ...orderRest,
-    ref: order.orderNumber,
-    quotationRef: order.quotationRef ?? undefined,
-    proformaRef: order.proformaRef ?? undefined,
-    pricelist: order.pricelist ?? undefined,
-    pricelistId: order.pricelistId ?? undefined,
-    currencyCode: order.currencyCode ?? 'KES',
-    baseCurrencyCode: order.baseCurrencyCode ?? 'KES',
-    exchangeRateToBase: Number(order.exchangeRateToBase ?? 1) || 1,
-    salespersonId: order.salespersonId ?? undefined,
-    salespersonName: order.salespersonName ?? undefined,
-    salesTeam: order.salesTeam ?? undefined,
-    sentMessage: order.sentMessage ?? undefined,
-    paymentTerms: order.paymentTermsDays != null
-      ? serializeQuotationPaymentTerms(Number(order.paymentTermsDays))
-      : undefined,
-    customerId: order.clientId,
-    customerName: order.client?.name ?? '',
-    date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
-    deliveryDate: order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : undefined,
-    validUntil: order.validUntil ? new Date(order.validUntil).toISOString().slice(0, 10) : undefined,
-    status: normalizeSaleStatus(order.status),
-    sentAt: order.sentAt ? new Date(order.sentAt).toISOString() : undefined,
-    acceptedAt: order.acceptedAt ? new Date(order.acceptedAt).toISOString() : undefined,
-    acceptedById: order.acceptedById ?? undefined,
-    confirmedAt: order.confirmedAt ? new Date(order.confirmedAt).toISOString() : undefined,
-    total: Number(order.totalAmount ?? 0),
-    taxTotal: Number(order.taxAmount ?? 0),
-    subtotal: Number(order.subtotal ?? 0),
-    discountAmount: Number(order.discountAmount ?? 0),
-    amountPaid: Number(order.amountPaid ?? 0),
-    lockVersion: Number(order.lockVersion ?? 0),
-    lines: orderedSaleOrderItems(order.items).map((item: any) => {
-      const qty = Number(item.qty ?? 0)
-      const productId = item.productId ?? ''
-      const unitPrice = Number(item.unitPrice ?? 0)
-      // Section headings were historically persisted as qty=0 rows without lineType.
-      const lineType = qty === 0 && !productId && !(unitPrice > 0) ? 'section' as const : undefined
-      return {
-        id: item.id,
-        productId,
-        productName: item.description ?? '',
-        description: item.description ?? '',
-        qty,
-        qtyDelivered: Number(item.qtyDelivered ?? 0),
-        qtyInvoiced: Number(item.qtyInvoiced ?? 0),
-        unitPrice,
-        taxRate: Number(item.taxRate ?? 0),
-        // See app/api/sale-orders/route.ts's mapSaleOrderToClient for why this
-        // round-trips instead of being derived/omitted.
-        discount: Number(item.discountPct ?? 0),
-        discountPercent: Number(item.discountPct ?? 0),
-        subtotal: Number(item.lineTotal ?? 0),
-        lineTotal: Number(item.lineTotal ?? 0),
-        serialIds: item.serialNumberId ? [item.serialNumberId] : [],
-        notes: item.notes ?? undefined,
-        ...(lineType ? { lineType } : {}),
-      }
-    }),
-  }
 }
 
 function normalizeOptionalProducts(value: unknown) {

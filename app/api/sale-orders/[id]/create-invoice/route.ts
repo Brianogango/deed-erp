@@ -29,6 +29,7 @@ import {
 } from '@/lib/sale-order-confirm-heal.server'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
+import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import {
   findRepairForSaleOrder,
   isRepairFulfillmentReady,
@@ -529,27 +530,11 @@ export async function POST(
     try {
       const all = await prisma.saleOrder.findMany({ include: { client: true, items: true }, orderBy: { createdAt: 'desc' } })
       // Reuse broadcast shape from sale-orders route via store key
-      await saveStoreKeys({
-        deed_saleOrders: JSON.stringify(all.map(o => ({
-          ...o,
-          ref: o.orderNumber,
-          customerId: o.clientId,
-          customerName: o.client?.name ?? '',
-          status: normalizeSaleStatus(o.status),
-          total: Number(o.totalAmount ?? 0),
-          lines: orderedSaleOrderItems(o.items).map(item => ({
-            id: item.id,
-            productId: item.productId ?? '',
-            productName: item.description ?? '',
-            qty: Number(item.qty ?? 0),
-            qtyDelivered: Number(item.qtyDelivered ?? 0),
-            qtyInvoiced: Number(item.qtyInvoiced ?? 0),
-            unitPrice: Number(item.unitPrice ?? 0),
-            taxRate: Number(item.taxRate ?? 0),
-            subtotal: Number(item.lineTotal ?? 0),
-          })),
-        }))),
-      })
+      // The canonical shape, not a reduced copy. This writes the whole
+      // deed_saleOrders blob, so any field omitted here is erased from every
+      // order — per-line discount above all, whose loss makes the next save
+      // recompute the header upward with no user edit behind it.
+      await saveStoreKeys({ deed_saleOrders: JSON.stringify(all.map(mapSaleOrderToClient)) })
     } catch {}
 
     await writeFinancialAudit({

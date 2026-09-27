@@ -14,7 +14,7 @@ import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
-import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
+import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 
 const DELIVER_ROLES = ['director', 'admin_officer', 'inventory_officer', 'sales_rep']
 
@@ -24,31 +24,9 @@ async function broadcastSaleOrders() {
       include: { client: true, items: true },
       orderBy: { createdAt: 'desc' },
     })
-    const mapped = all.map((order: any) => ({
-      ...order,
-      ref: order.orderNumber,
-      customerId: order.clientId,
-      customerName: order.client?.name ?? '',
-      date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
-      total: Number(order.totalAmount ?? 0),
-      taxTotal: Number(order.taxAmount ?? 0),
-      subtotal: Number(order.subtotal ?? 0),
-      lines: orderedSaleOrderItems(order.items).map((item: any) => ({
-        id: item.id,
-        productId: item.productId ?? '',
-        productName: item.description ?? '',
-        description: item.description ?? '',
-        qty: Number(item.qty ?? 0),
-        qtyDelivered: Number(item.qtyDelivered ?? 0),
-        qtyInvoiced: Number(item.qtyInvoiced ?? 0),
-        unitPrice: Number(item.unitPrice ?? 0),
-        taxRate: Number(item.taxRate ?? 0),
-        subtotal: Number(item.lineTotal ?? 0),
-        lineTotal: Number(item.lineTotal ?? 0),
-        serialIds: item.serialNumberId ? [item.serialNumberId] : [],
-        notes: item.notes ?? undefined,
-      })),
-    }))
+    // Canonical shape — see sale-order-client-shape for why a reduced copy
+    // here silently erased per-line discounts from every order.
+    const mapped = all.map(mapSaleOrderToClient)
     void saveStoreKeys({ deed_saleOrders: JSON.stringify(mapped) })
   } catch {}
 }

@@ -3,38 +3,11 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { normalizeSaleStatus, isQuotationStage } from '@/lib/odoo-sales-flow'
 import { saveStoreKeys } from '@/lib/server-store'
-import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
+import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 
 // Same roles that may create/edit a quotation — versioning is a quoting-stage
 // action. Confirmed Sales Orders use the existing "Duplicate" action instead.
 const NEW_VERSION_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
-
-function mapSaleOrderToClient(order: any) {
-  return {
-    ...order,
-    ref: order.orderNumber,
-    customerId: order.clientId,
-    customerName: order.client?.name ?? '',
-    date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
-    validUntil: order.validUntil ? new Date(order.validUntil).toISOString().slice(0, 10) : undefined,
-    status: normalizeSaleStatus(order.status),
-    total: Number(order.totalAmount ?? 0),
-    taxTotal: Number(order.taxAmount ?? 0),
-    subtotal: Number(order.subtotal ?? 0),
-    lines: orderedSaleOrderItems(order.items).map((item: any) => ({
-      id: item.id,
-      productId: item.productId ?? '',
-      productName: item.description ?? '',
-      description: item.description ?? '',
-      qty: Number(item.qty ?? 0),
-      unitPrice: Number(item.unitPrice ?? 0),
-      taxRate: Number(item.taxRate ?? 0),
-      subtotal: Number(item.lineTotal ?? 0),
-      lineTotal: Number(item.lineTotal ?? 0),
-      notes: item.notes ?? undefined,
-    })),
-  }
-}
 
 async function broadcastSaleOrders() {
   try {
@@ -132,14 +105,22 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
             versionNumber: nextVersion,
             versionGroupId: rootId,
             items: {
-              create: source.items.map(item => ({
+              // discountPct and sortOrder must travel. Copying lineTotal
+              // without discountPct left the revision showing 0% against a
+              // discounted total: the next save recomputed the line from
+              // qty x unitPrice and quoted the customer the undiscounted
+              // price, with no visible edit behind it. Fulfilment counters
+              // deliberately do not carry — a revision starts uninvoiced.
+              create: source.items.map((item, index) => ({
                 productId: item.productId,
                 description: item.description,
                 qty: item.qty,
                 unitPrice: item.unitPrice,
                 taxRate: item.taxRate,
+                discountPct: item.discountPct,
                 lineTotal: item.lineTotal,
                 notes: item.notes,
+                sortOrder: index,
               })),
             },
           },

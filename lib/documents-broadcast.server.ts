@@ -4,76 +4,7 @@ import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
-import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
-
-// Sale orders, quotes (the CRM Quote entity), and invoices all embed a
-// snapshot of the client/vendor's name in their `deed_*` blob cache
-// (customerName / partnerName) rather than reading it live on every render —
-// the same denormalize-then-broadcast pattern used throughout this app. That
-// snapshot is only refreshed when the document itself is written, so editing
-// a Client/Contact's name or details leaves every quote/invoice/sale order
-// referencing them showing the old value until something unrelated happens
-// to re-save that specific document. These three refresh the caches for all
-// three document types after a client/vendor edit so the fix isn't "wait
-// for someone to touch the SO again."
-
-function mapSaleOrderToClient(order: any) {
-  const { items: _prismaItems, client: _client, ...orderRest } = order ?? {}
-  return {
-    ...orderRest,
-    ref: order.orderNumber,
-    quotationRef: order.quotationRef ?? undefined,
-    proformaRef: order.proformaRef ?? undefined,
-    pricelist: order.pricelist ?? undefined,
-    pricelistId: order.pricelistId ?? undefined,
-    currencyCode: order.currencyCode ?? 'KES',
-    baseCurrencyCode: order.baseCurrencyCode ?? 'KES',
-    exchangeRateToBase: Number(order.exchangeRateToBase ?? 1) || 1,
-    salespersonId: order.salespersonId ?? undefined,
-    salespersonName: order.salespersonName ?? undefined,
-    salesTeam: order.salesTeam ?? undefined,
-    sentMessage: order.sentMessage ?? undefined,
-    customerId: order.clientId,
-    customerName: order.client?.name ?? '',
-    date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
-    deliveryDate: order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : undefined,
-    validUntil: order.validUntil ? new Date(order.validUntil).toISOString().slice(0, 10) : undefined,
-    status: normalizeSaleStatus(order.status),
-    sentAt: order.sentAt ? new Date(order.sentAt).toISOString() : undefined,
-    acceptedAt: order.acceptedAt ? new Date(order.acceptedAt).toISOString() : undefined,
-    acceptedById: order.acceptedById ?? undefined,
-    confirmedAt: order.confirmedAt ? new Date(order.confirmedAt).toISOString() : undefined,
-    total: Number(order.totalAmount ?? 0),
-    taxTotal: Number(order.taxAmount ?? 0),
-    subtotal: Number(order.subtotal ?? 0),
-    discountAmount: Number(order.discountAmount ?? 0),
-    amountPaid: Number(order.amountPaid ?? 0),
-    lockVersion: Number(order.lockVersion ?? 0),
-    lines: orderedSaleOrderItems(order.items).map((item: any) => {
-      const qty = Number(item.qty ?? 0)
-      const productId = item.productId ?? ''
-      const lineType = qty === 0 && !productId && !(Number(item.unitPrice ?? 0) > 0) ? 'section' as const : undefined
-      return {
-        id: item.id,
-        productId,
-        productName: item.description ?? '',
-        description: item.description ?? '',
-        qty,
-        unitPrice: Number(item.unitPrice ?? 0),
-        taxRate: Number(item.taxRate ?? 0),
-        discount: Number(item.discountPct ?? 0),
-        discountPercent: Number(item.discountPct ?? 0),
-        subtotal: Number(item.lineTotal ?? 0),
-        lineTotal: Number(item.lineTotal ?? 0),
-        serialIds: item.serialNumberId ? [item.serialNumberId] : [],
-        notes: item.notes ?? undefined,
-        qtyDelivered: Number(item.qtyDelivered ?? 0),
-        qtyInvoiced: Number(item.qtyInvoiced ?? 0),
-        ...(lineType ? { lineType } : {}),
-      }
-    }),
-  }
-}
+import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 
 function mapDbInvoiceStatusToClient(status: string): string {
   if (status === 'approved') return 'posted'
