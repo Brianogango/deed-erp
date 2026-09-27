@@ -2389,7 +2389,12 @@ model OutboundRelease {
 model OutboundReleaseItem {
   id             String            @id @default(uuid()) @db.Uuid
   releaseId      String            @map("release_id") @db.Uuid
-  serialNumberId String            @map("serial_number_id") @db.Uuid
+  // Optional: a customer's own device in for repair is not in Deed's serial
+  // register, so there is no row to point at. expectedSerial carries the
+  // identity in that case and verification compares against it. Releases of
+  // Deed stock still require the link — enforced in the API, which knows
+  // whether the source document is a repair or a sale.
+  serialNumberId String?           @map("serial_number_id") @db.Uuid
   expectedSerial String            @map("expected_serial") @db.VarChar(100)
   confirmedSerial String?          @map("confirmed_serial") @db.VarChar(100)
   serialMatched  Boolean?          @map("serial_matched")
@@ -2398,7 +2403,7 @@ model OutboundReleaseItem {
   verifiedAt     DateTime?         @map("verified_at")
 
   release      OutboundRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
-  serialNumber SerialNumber    @relation("SerialOrcItems", fields: [serialNumberId], references: [id])
+  serialNumber SerialNumber?   @relation("SerialOrcItems", fields: [serialNumberId], references: [id])
   verifiedBy   User?           @relation("OrcItemVerifier", fields: [verifiedById], references: [id])
 
   @@index([releaseId],      map: "idx_orc_items_release")

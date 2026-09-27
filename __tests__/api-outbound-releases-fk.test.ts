@@ -59,19 +59,62 @@ describe('POST /api/outbound-releases FK guards', () => {
     expect(mockCreate.mock.calls[0][0].data.clientId).toBe(CLIENT)
   })
 
-  it('refuses a unit with no serial register entry instead of dropping the required column', async () => {
-    const res = await post({ clientId: CLIENT, repairId: REPAIR, serials: [{ expectedSerial: 'NO-SERIAL-ROW' }] })
-    expect(res.status).toBe(422)
-    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('NO-SERIAL-ROW') })
-    expect(mockCreate).not.toHaveBeenCalled()
-  })
-
-  it('always writes serialNumberId when it creates items', async () => {
+  it('links the serial register when the unit came out of Deed stock', async () => {
     const res = await post({ clientId: CLIENT, repairId: REPAIR, serials: [{ serialNumberId: SERIAL, expectedSerial: 'SN1' }] })
     expect(res.status).toBe(201)
     expect(mockCreate.mock.calls[0][0].data.items.create[0]).toMatchObject({
       serialNumberId: SERIAL,
       expectedSerial: 'SN1',
     })
+  })
+})
+
+describe('POST /api/outbound-releases — devices Deed never sold', () => {
+  it('releases a repaired customer-owned device with no register entry', async () => {
+    // This is the majority of repairs. Requiring a serial_numbers row refused
+    // every one of them: the device was never Deed stock and never will be.
+    const res = await post({
+      clientId: CLIENT,
+      repairId: REPAIR,
+      serials: [{ expectedSerial: 'CUSTOMER-OWNED-SN' }],
+    })
+    expect(res.status).toBe(201)
+    expect(mockCreate.mock.calls[0][0].data.items.create[0]).toMatchObject({
+      serialNumberId: null,
+      expectedSerial: 'CUSTOMER-OWNED-SN',
+    })
+  })
+
+  it('accepts a device identifier when the customer device has no serial at all', async () => {
+    const res = await post({
+      clientId: CLIENT,
+      repairId: REPAIR,
+      serials: [{ expectedSerial: 'HP EliteBook 840 (no serial)' }],
+    })
+    expect(res.status).toBe(201)
+    expect(mockCreate.mock.calls[0][0].data.items.create[0].serialNumberId).toBeNull()
+  })
+
+  it('still requires something identifying to hand over', async () => {
+    // Verification compares what the storekeeper reads off the device against
+    // this, so a blank line would make the check meaningless.
+    const res = await post({ clientId: CLIENT, repairId: REPAIR, serials: [{ expectedSerial: '   ' }] })
+    expect(res.status).toBe(422)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('serial or device identifier') })
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('still refuses an unregistered unit on a sale, where stock must decrement', async () => {
+    const INVOICE = '44444444-4444-4444-8444-444444444444'
+    const res = await post({ clientId: CLIENT, invoiceId: INVOICE, serials: [{ expectedSerial: 'NO-SERIAL-ROW' }] })
+    expect(res.status).toBe(422)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('NO-SERIAL-ROW') })
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('trims the identifier it stores', async () => {
+    const res = await post({ clientId: CLIENT, repairId: REPAIR, serials: [{ expectedSerial: '  SN-7  ' }] })
+    expect(res.status).toBe(201)
+    expect(mockCreate.mock.calls[0][0].data.items.create[0].expectedSerial).toBe('SN-7')
   })
 })

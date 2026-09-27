@@ -3480,7 +3480,7 @@ export interface AppState {
 
   // Outbound Release Checkpoint
   outboundReleases: OutboundRelease[]
-  initRelease: (p: { invoiceId?: string; repairId?: string; deliveryNoteId?: string; clientId: string; clientName: string; sourceRef: string; sourceType: OutboundRelease['sourceType']; serials: { serialNumberId: string; expectedSerial: string }[] }) => OutboundRelease
+  initRelease: (p: { invoiceId?: string; repairId?: string; deliveryNoteId?: string; clientId: string; clientName: string; sourceRef: string; sourceType: OutboundRelease['sourceType']; serials: { serialNumberId?: string; expectedSerial: string }[] }) => OutboundRelease
   pickRelease: (id: string) => void
   verifyReleaseItem: (releaseId: string, itemId: string, confirmedSerial: string) => void
   completeVerification: (id: string, p: { verifiedById: string; verifiedByName: string }) => void

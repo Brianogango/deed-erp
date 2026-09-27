@@ -77,17 +77,34 @@ export async function POST(request: Request) {
       }, { status: 422 })
     }
 
-    // serialNumberId is required, not optional. Spreading it conditionally
-    // dropped it for devices with no serial row — customer-owned repairs,
-    // mostly — and Prisma rejected the whole nested create. The `as any` on
-    // the call below is why the compiler never said so.
+    // A release line links to Deed's serial register when the unit came out of
+    // Deed stock, and does not when it is a customer's own device in for
+    // repair — that device was never in the register and never will be.
+    // Requiring the link refused every walk-in repair release.
+    //
+    // Verification compares the serial read off the device against the one
+    // recorded at intake, which works either way, so what is always required
+    // is an identifying serial — not a row in inventory.
     const serials = body.serials as { id?: string; serialNumberId?: string; expectedSerial?: string }[]
-    const unserialised = serials.filter(s => !isUUID(s?.serialNumberId))
-    if (unserialised.length > 0) {
-      const names = unserialised.map(s => String(s?.expectedSerial ?? 'unknown')).join(', ')
+    const isRepairRelease = isUUID(body.repairId)
+
+    const unidentified = serials.filter(s => !String(s?.expectedSerial ?? '').trim())
+    if (unidentified.length > 0) {
       return NextResponse.json({
-        error: `These units are not in the serial register and cannot be released: ${names}. Add them to inventory first.`,
+        error: 'Every unit being released needs its serial or device identifier recorded.',
       }, { status: 422 })
+    }
+
+    // Stock leaving on a sale or delivery must still come off a registered
+    // unit, or the release would not decrement anything.
+    if (!isRepairRelease) {
+      const unserialised = serials.filter(s => !isUUID(s?.serialNumberId))
+      if (unserialised.length > 0) {
+        const names = unserialised.map(s => String(s?.expectedSerial ?? 'unknown')).join(', ')
+        return NextResponse.json({
+          error: `These units are not in the serial register and cannot be released: ${names}. Add them to inventory first.`,
+        }, { status: 422 })
+      }
     }
 
     const ref = await getNextOrcRef()
@@ -105,8 +122,8 @@ export async function POST(request: Request) {
         items: {
           create: serials.map(s => ({
             ...(isUUID(s.id) ? { id: s.id } : {}),
-            serialNumberId: String(s.serialNumberId),
-            expectedSerial: String(s.expectedSerial ?? ''),
+            serialNumberId: isUUID(s.serialNumberId) ? String(s.serialNumberId) : null,
+            expectedSerial: String(s.expectedSerial ?? '').trim(),
             status: 'picked',
           })),
         },

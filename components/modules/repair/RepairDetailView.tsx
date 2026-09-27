@@ -382,16 +382,28 @@ export default function RepairDetailView() {
   }
 
   const openPrepareRelease = () => {
+    // A customer's own device is not in Deed's serial register, so there is
+    // often no SerialNumber row to link and sometimes no serial at all. The
+    // release still needs one line identifying what is going out the door —
+    // the serial when we have it, otherwise the device itself — or the panel
+    // refuses to open on the majority of repairs.
     const repairSerial = r.serialNumber
       ? serials.find(s => s.id === r.serialNumber || s.serial === r.serialNumber || s.barcode === r.serialNumber)
       : undefined
+    const deviceLabel = [r.deviceBrand, r.deviceModel].filter(Boolean).join(' ')
+      || r.deviceType
+      || r.productName
+      || 'Device'
     initRelease({
       repairId: r.id,
       clientId: r.customerId || '',
       clientName: r.customerName,
       sourceRef: r.ref,
       sourceType: 'repair',
-      serials: r.serialNumber ? [{ serialNumberId: repairSerial?.id || '', expectedSerial: r.serialNumber }] : [],
+      serials: [{
+        ...(repairSerial?.id ? { serialNumberId: repairSerial.id } : {}),
+        expectedSerial: r.serialNumber || `${deviceLabel} (no serial)`,
+      }],
     })
     setShowOrcPanel(true)
   }
