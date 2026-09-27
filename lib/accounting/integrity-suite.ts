@@ -76,6 +76,7 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
     creditNotes,
     creditApps,
     unposted,
+    orphanedInvoices,
     unbalanced,
     payrollRun,
     taxAgg,
@@ -129,6 +130,20 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
       _sum: { amount: true },
     }),
     prisma.journalEntry.count({ where: { isPosted: false } }),
+    // Invoices the business treats as posted that the ledger has no live
+    // journal for. Until 2026-09-27 a stale browser tab could un-post an
+    // invoice and reverse its GL journal silently, and nothing looked for the
+    // result: 'unposted_journals' below counts journals that never posted, not
+    // invoices that lost the journal they had. Three August invoices sat this
+    // way for six weeks with their revenue and output VAT missing and their
+    // customers' AR driven negative by receipts that still credited it.
+    prisma.invoice.count({
+      where: {
+        status: { in: ['approved', 'invoiced', 'dispatched', 'delivered'] },
+        postingStatus: 'unposted',
+        invoiceDate: { lte: asOfDate },
+      },
+    }),
     prisma.journalEntry.findMany({
       where: { isPosted: true, entryDate: { lte: asOfDate } },
       select: { totalDebit: true, totalCredit: true },
@@ -230,6 +245,18 @@ export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteRes
       subledgerAmount: 0,
       difference: unposted,
       populationCount: unposted,
+    },
+    {
+      id: 'invoices_without_journal',
+      name: 'Every posted invoice is in the ledger',
+      passed: orphanedInvoices === 0,
+      ledgerAmount: orphanedInvoices,
+      subledgerAmount: 0,
+      difference: orphanedInvoices,
+      populationCount: orphanedInvoices,
+      detail: orphanedInvoices > 0
+        ? 'Posted invoices with no live GL journal — revenue and output VAT are missing and AR is understated. Re-post them before closing.'
+        : undefined,
     },
     {
       id: 'unbalanced_journals',

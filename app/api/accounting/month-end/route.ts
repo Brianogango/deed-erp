@@ -16,6 +16,10 @@ const GATE_CONTROL_TYPES = [
   'credits_vs_gl',
   'grni_vs_gl',
   'unposted_journals',
+  // An invoice the business treats as posted but that has no live journal is
+  // revenue and output VAT missing from the period being closed. Closing over
+  // it certifies figures that are known to be short.
+  'invoices_without_journal',
   'unbalanced_journals',
   'payroll_liabilities',
   'outstanding_receipts',
