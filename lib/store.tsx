@@ -263,6 +263,7 @@ import {
   diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
 import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
+import { repairPriceChangeImpact, describeRepairPriceChange } from '@/lib/repair/document-impact'
 import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
@@ -16178,6 +16179,27 @@ const storeCtx: AppState = {
           customerNotified ? 'success' : 'info',
         )
       }
+
+      // Say what the re-price means for documents already raised from this job.
+      // Going back a stage and re-quoting is allowed and usually has nothing to
+      // do with money — but when it does, a confirmed sale order or a posted
+      // invoice quietly stops agreeing with the quote, and until now nothing
+      // mentioned it. The system cannot edit those itself, so the least it can
+      // do is name the follow-up at the moment the price moves.
+      if (isUpdate && prevQuote) {
+        const impact = repairPriceChangeImpact({
+          previousTotal: prevQuote.total,
+          nextTotal: quote.total,
+          saleOrder: findSaleOrderForRepair(soRef.current, repair),
+          invoice: repair.invoiceId
+            ? invRef.current.find(inv => inv.id === repair.invoiceId)
+            : invRef.current.find(inv => inv.repairId === repair.id),
+        })
+        if (impact.impacts.length > 0) {
+          showToast(describeRepairPriceChange(impact), impact.needsAttention ? 'error' : 'info')
+        }
+      }
+
       return quote
     },
     
