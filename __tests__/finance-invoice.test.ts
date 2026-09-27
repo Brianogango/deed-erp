@@ -439,6 +439,7 @@ describe('postedInvoicePutDecision', () => {
         amountPaid: 0,
         nextStatus: 'draft',
         role,
+        resetRequested: true,
       })).toEqual({ kind: 'reversal', nextStatus: 'draft' })
     }
   })
@@ -449,6 +450,7 @@ describe('postedInvoicePutDecision', () => {
       amountPaid: 6500,
       nextStatus: 'draft',
       role: 'finance_officer',
+      resetRequested: true,
     })
     expect(decision.kind).toBe('reject')
     if (decision.kind === 'reject') expect(decision.status).toBe(409)
@@ -469,6 +471,7 @@ describe('postedInvoicePutDecision', () => {
       amountPaid: 0,
       nextStatus: 'draft',
       role: 'technician',
+      resetRequested: true,
     })
     expect(decision.kind).toBe('forbidden')
     if (decision.kind === 'forbidden') expect(decision.status).toBe(403)
@@ -480,6 +483,52 @@ describe('postedInvoicePutDecision', () => {
       amountPaid: 0,
       nextStatus: 'posted',
       role: 'finance_officer',
+    }).kind).toBe('already_posted')
+  })
+
+  it('ignores a draft status from a stale tab that did not ask to reset', () => {
+    // Every browser copy of an invoice made before it was posted still says
+    // `draft`. An ordinary Save from such a tab therefore arrived as
+    // posted → draft, which used to reverse the GL journal and un-post a live
+    // invoice — with no visible failure, because the caller discards the
+    // response. Nothing but explicit intent distinguishes the two requests.
+    expect(postedInvoicePutDecision({
+      prismaStatus: 'approved',
+      amountPaid: 0,
+      nextStatus: 'draft',
+      role: 'finance_officer',
+    }).kind).toBe('already_posted')
+  })
+
+  it('still reverses when Reset to Draft asked for it', () => {
+    expect(postedInvoicePutDecision({
+      prismaStatus: 'approved',
+      amountPaid: 0,
+      nextStatus: 'draft',
+      role: 'finance_officer',
+      resetRequested: true,
+    })).toEqual({ kind: 'reversal', nextStatus: 'draft' })
+  })
+
+  it('does not gate cancellation, which no stale copy carries by default', () => {
+    // The guard exists because `draft` is the default stale value. `cancelled`
+    // is not, so requiring intent there would only break Cancel Invoice.
+    expect(postedInvoicePutDecision({
+      prismaStatus: 'approved',
+      amountPaid: 0,
+      nextStatus: 'cancelled',
+      role: 'finance_officer',
+    })).toEqual({ kind: 'reversal', nextStatus: 'cancelled' })
+  })
+
+  it('checks the role only once intent is established, so a stale tab cannot probe it', () => {
+    // A technician's stale save is absorbed as already_posted rather than
+    // answered with 403 — the request was never a reset attempt.
+    expect(postedInvoicePutDecision({
+      prismaStatus: 'approved',
+      amountPaid: 0,
+      nextStatus: 'draft',
+      role: 'technician',
     }).kind).toBe('already_posted')
   })
 

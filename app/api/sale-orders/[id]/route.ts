@@ -18,6 +18,10 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 import { buildSaleOrderItemsNestedWrite } from '@/lib/sale-order-items-write'
+import {
+  hasCommercialChange,
+  normalizeOptionalProducts,
+} from '@/lib/sales/sale-order-commercial-change'
 import { saleOrderLinesFromBody } from '@/lib/sale-order-body-lines'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
@@ -63,17 +67,6 @@ function isRepairLinked(record: any) {
 function normalizeSaleOrderStatus(status: unknown) {
   if (typeof status !== 'string' || status.trim() === '') return undefined
   return normalizeSaleStatus(status)
-}
-
-function normalizeOptionalProducts(value: unknown) {
-  if (!Array.isArray(value)) return []
-  return value.slice(0, 100).map((item: any) => ({
-    id: String(item?.id ?? '').slice(0, 120),
-    productId: String(item?.productId ?? '').slice(0, 120),
-    productName: String(item?.productName ?? '').slice(0, 300),
-    qty: Math.max(0, Number(item?.qty) || 0),
-    unitPrice: Math.max(0, Number(item?.unitPrice) || 0),
-  })).filter(item => item.productName && item.qty > 0)
 }
 
 async function buildSaleOrderUpdateData(body: any, existing: any) {
@@ -166,50 +159,6 @@ function canWrite(role: string) {
 // The client store applies the same rules for UX, but the API is the actual
 // gate: a crafted PATCH cannot skip states, cancel past dependent records,
 // or edit a locked order.
-
-/** Commercial content of a line for lock comparison (fulfilment fields ignored). */
-function commercialLineKey(line: any) {
-  return [
-    line.productId ?? '',
-    line.description ?? line.productName ?? '',
-    Number(line.qty ?? 0),
-    Number(line.unitPrice ?? 0),
-    Number(line.taxRate ?? 0),
-    Number(line.lineTotal ?? line.subtotal ?? 0),
-  ].join('|')
-}
-
-function hasCommercialChange(existing: any, body: any): boolean {
-  const changedScalar = (
-    (body.clientId !== undefined || body.customerId !== undefined) &&
-      String(body.clientId ?? body.customerId ?? '') !== String(existing.clientId ?? '')
-  ) || (
-    (body.subtotal !== undefined) && Number(body.subtotal) !== Number(existing.subtotal)
-  ) || (
-    (body.totalAmount !== undefined || body.total !== undefined) &&
-      Number(body.totalAmount ?? body.total) !== Number(existing.totalAmount)
-  ) || (
-    (body.taxAmount !== undefined || body.taxTotal !== undefined) &&
-      Number(body.taxAmount ?? body.taxTotal) !== Number(existing.taxAmount)
-  ) || (
-    body.discountAmount !== undefined && Number(body.discountAmount) !== Number(existing.discountAmount)
-  ) || (
-    body.termsAndConditions !== undefined &&
-      String(body.termsAndConditions ?? '') !== String(existing.termsAndConditions ?? '')
-  ) || (
-    body.optionalProducts !== undefined &&
-      JSON.stringify(normalizeOptionalProducts(body.optionalProducts)) !== JSON.stringify(existing.optionalProducts ?? [])
-  )
-  if (changedScalar) return true
-
-  const rawItems = Array.isArray(body.lines) ? body.lines : body.items
-  if (!Array.isArray(rawItems)) return false
-  const requested = rawItems
-    .filter((l: any) => l.lineType !== 'section')
-    .map(commercialLineKey).sort()
-  const current = (existing.items ?? []).map(commercialLineKey).sort()
-  return requested.length !== current.length || requested.some((key: string, i: number) => key !== current[i])
-}
 
 async function saleOrderBlockersFor(orderId: string): Promise<string[]> {
   const invoices = await prisma.invoice.findMany({

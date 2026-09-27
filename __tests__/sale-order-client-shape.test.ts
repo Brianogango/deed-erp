@@ -56,12 +56,12 @@ describe('mapSaleOrderToClient', () => {
     // deed_saleOrders blob from reduced copies that omitted it, and the next
     // save of an order then recomputed its header from lines claiming no
     // discount — re-pricing a 20%-off order upward with no user edit.
-    const line = mapSaleOrderToClient(prismaOrder()).lines.find(l => l.id === 'line-1')
+    const line = mapSaleOrderToClient(prismaOrder()).lines.find((l: any) => l.id === 'line-1')
     expect(line).toMatchObject({ discount: 20, discountPercent: 20, lineTotal: 80_000 })
   })
 
   it('returns lines in their stored order', () => {
-    expect(mapSaleOrderToClient(prismaOrder()).lines.map(l => l.id)).toEqual(['line-0', 'line-1'])
+    expect(mapSaleOrderToClient(prismaOrder()).lines.map((l: any) => l.id)).toEqual(['line-0', 'line-1'])
   })
 
   it('keeps the header figures a reduced copy used to drop', () => {
@@ -88,12 +88,12 @@ describe('mapSaleOrderToClient', () => {
   })
 
   it('recognises a qty-0 unpriced row as a section heading', () => {
-    const section = mapSaleOrderToClient(prismaOrder()).lines.find(l => l.id === 'line-0')
+    const section = mapSaleOrderToClient(prismaOrder()).lines.find((l: any) => l.id === 'line-0')
     expect(section).toMatchObject({ lineType: 'section' })
   })
 
   it('does not label a real product line as a section', () => {
-    const line = mapSaleOrderToClient(prismaOrder()).lines.find(l => l.id === 'line-1')
+    const line = mapSaleOrderToClient(prismaOrder()).lines.find((l: any) => l.id === 'line-1')
     expect(line).not.toHaveProperty('lineType')
   })
 
@@ -102,7 +102,7 @@ describe('mapSaleOrderToClient', () => {
   })
 
   it('carries fulfilment counters so invoiceable quantity is not lost', () => {
-    const line = mapSaleOrderToClient(prismaOrder()).lines.find(l => l.id === 'line-1')
+    const line = mapSaleOrderToClient(prismaOrder()).lines.find((l: any) => l.id === 'line-1')
     expect(line).toMatchObject({ qtyDelivered: 4, qtyInvoiced: 0 })
   })
 })

@@ -181,6 +181,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       amountPaid: Number(before.amountPaid),
       nextStatus: typeof body.status === 'string' ? body.status : undefined,
       role: actor.role,
+      resetRequested: body.resetToDraft === true,
     })
     if (putDecision.kind === 'forbidden' || putDecision.kind === 'reject') {
       return NextResponse.json({ error: putDecision.error }, { status: putDecision.status })

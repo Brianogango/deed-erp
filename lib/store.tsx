@@ -13958,7 +13958,11 @@ const storeCtx: AppState = {
           const res = await fetch(`/api/invoices/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(draft),
+            // Explicit intent. The server will not un-post an invoice on a
+            // status of 'draft' alone, because that is what every stale tab
+            // carries — an ordinary edit from one used to reverse the GL
+            // journal without anybody asking.
+            body: JSON.stringify({ ...draft, resetToDraft: true }),
           })
           if (!res.ok) {
             const data = await res.json().catch(() => null) as { error?: string } | null

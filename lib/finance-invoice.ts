@@ -308,12 +308,27 @@ export function postedInvoicePutDecision(args: {
   amountPaid: number
   nextStatus?: string
   role?: string | null
+  /**
+   * True only when the caller deliberately asked to reset this invoice to
+   * draft. Without it, a payload saying `draft` against a posted row is
+   * treated as a stale client rather than an instruction.
+   */
+  resetRequested?: boolean
 }): PostedInvoicePutDecision {
   if (!PRISMA_POSTED_INVOICE_STATUSES.has(String(args.prismaStatus))) return { kind: 'passthrough' }
 
   const mapped = mapClientInvoiceStatus(args.nextStatus)
   if (mapped && PRISMA_POSTED_INVOICE_STATUSES.has(mapped)) return { kind: 'already_posted' }
   if (!mapped || !REVERSAL_TARGET_STATUSES.has(mapped)) return { kind: 'stay_posted' }
+
+  // `draft` is the state every stale copy holds, so inferring "reset to
+  // draft" from it alone let an ordinary edit from a tab that had not seen
+  // the posting un-post the invoice and reverse its GL journal — silently,
+  // since the caller discards the response. The mirror-image case (a payload
+  // saying `posted` against a posted row) was already absorbed as stale
+  // above; this is the same treatment for the direction that does damage.
+  // Cancellation is not gated: no stale copy carries `cancelled` by default.
+  if (mapped === 'draft' && args.resetRequested !== true) return { kind: 'already_posted' }
 
   if (!canCancelOrResetInvoice(args.role)) {
     return {

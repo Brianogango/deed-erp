@@ -14,23 +14,13 @@ import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 import { calcSaleOrderLineMoney, calcSaleOrderTotals } from '@/lib/sales/line-calc'
 import { quotationPaymentTermsDays } from '@/lib/sales/quotation-defaults'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
+import { normalizeOptionalProducts } from '@/lib/sales/sale-order-commercial-change'
 
 async function broadcastSaleOrders() {
   try {
     const all = await prisma.saleOrder.findMany({ include: { client: true, items: true }, orderBy: { createdAt: 'desc' } })
     void saveStoreKeys({ deed_saleOrders: JSON.stringify(all.map(mapSaleOrderToClient)) })
   } catch {}
-}
-
-function normalizeOptionalProducts(value: unknown) {
-  if (!Array.isArray(value)) return []
-  return value.slice(0, 100).map((item: any) => ({
-    id: String(item?.id ?? '').slice(0, 120),
-    productId: String(item?.productId ?? '').slice(0, 120),
-    productName: String(item?.productName ?? '').slice(0, 300),
-    qty: Math.max(0, Number(item?.qty) || 0),
-    unitPrice: Math.max(0, Number(item?.unitPrice) || 0),
-  })).filter(item => item.productName && item.qty > 0)
 }
 
 function mapSaleOrderItems(lines: any[], knownProductIds?: Set<string>) {
