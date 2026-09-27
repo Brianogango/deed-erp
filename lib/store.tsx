@@ -5272,6 +5272,48 @@ const syncOrWarn = (
     .catch(() => onFailure(fallbackMessage))
 }
 
+/**
+ * Post a journal this action built into journal_entries.
+ *
+ * These flows had no server endpoint of their own, so the only thing putting
+ * their entries in the ledger was the blob mirror replaying
+ * deed_journalEntries — which made the blob load-bearing for the Trial
+ * Balance, the P&L and the Balance Sheet. The route dedupes on ref, so the
+ * local copy and this post describe the same entry rather than two.
+ */
+type SystemJournalKind =
+  | 'fixed_asset'
+  | 'pos_session'
+  | 'rma_refund'
+  | 'buyback_credit'
+  | 'sale_order_credit_note'
+  | 'invoice_adjustment'
+
+const postSystemJournal = (
+  kind: SystemJournalKind,
+  journal: JournalEntry,
+  onFailure: (message: string) => void,
+) => {
+  syncOrWarn('/api/accounting/system-journals', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      kind,
+      id: journal.id,
+      ref: journal.ref,
+      date: journal.date,
+      description: journal.description,
+      invoiceId: (journal as JournalEntry & { invoiceId?: string }).invoiceId,
+      lines: journal.lines.map(l => ({
+        account: l.account,
+        description: l.description,
+        debit: l.debit,
+        credit: l.credit,
+      })),
+    }),
+  }, onFailure, `${journal.ref} was not posted to the ledger — please retry`)
+}
+
 async function patchSaleOrderPersist(
   id: string,
   order: Record<string, unknown>,
@@ -7261,6 +7303,12 @@ const pushPpeJournal = (draft: PpeJournalDraft | null): string | undefined => {
   if (Math.abs(draft.totalDebit - draft.totalCredit) > 0.05) return undefined
   const journal = journalFromPpeDraft(draft)
   setJournalEntries(prev => (prev.some(j => j.ref === journal.ref) ? prev : [journal, ...prev]))
+  // Capitalisation, depreciation and disposal had no server endpoint at all,
+  // so the ledger only ever saw them if the blob mirror happened to replay it.
+  // Posting unconditionally is safe: the route dedupes on ref and returns the
+  // existing entry, which is also why the local guard above is not consulted —
+  // a setState updater has not run yet at this point.
+  postSystemJournal('fixed_asset', journal, message => showToast(message, 'error'))
   return journal.ref
 }
 
@@ -18585,6 +18633,9 @@ const storeCtx: AppState = {
         }
         journalId = journal.id
         setJournalEntries(p => [journal, ...p])
+        // No POS-session endpoint existed, so the tender control journal
+        // reached the ledger only if the blob mirror replayed it.
+        postSystemJournal('pos_session', journal, message => showToast(message, 'error'))
         addAuditLog('close_pos_session', sessionRef, journal.description)
       }
 
@@ -19253,6 +19304,9 @@ const storeCtx: AppState = {
             totalCredit: deltaTotal,
           }
           setJournalEntries(p => (p.some(j => j.ref === adj.ref) ? p : [adj, ...p]))
+          // The invoice is already posted, so the PUT cannot post this
+          // adjustment — only the blob mirror ever carried it.
+          postSystemJournal('invoice_adjustment', adj, message => showToast(message, 'error'))
           addAuditLog('post_invoice', inv.ref, `Delivery charge ${deltaTotal} posted to journal ${adj.ref}`)
         }
       } else {
@@ -19841,7 +19895,11 @@ const storeCtx: AppState = {
         applications: [],
       }
       setCustomerCredits(prev => [credit, ...prev])
-      setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, creditAmount), ...prev])
+      // No endpoint backs this flow, so the blob mirror was the only thing
+      // putting the credit note in the ledger.
+      const creditJournal = buildCustomerCreditJournal(sourceInvoice, ref, creditAmount)
+      setJournalEntries(prev => [creditJournal, ...prev])
+      postSystemJournal('sale_order_credit_note', creditJournal, message => showToast(message, 'error'))
       addAuditLog('sales_credit_note', so.ref, `Credit note ${ref} issued for ${fmtKes(creditAmount)}`)
       showToast(`Credit note ${ref} issued for ${fmtKes(creditAmount)}`, 'success')
       return ref
@@ -20352,6 +20410,9 @@ const storeCtx: AppState = {
           totalCredit: refundAmount,
         }
         setJournalEntries(p => [journal, ...p])
+        // The refund payout had no endpoint — ledger entry came from the
+        // blob mirror alone.
+        postSystemJournal('rma_refund', journal, message => showToast(message, 'error'))
 
         const payment: RefundPayment = {
           id: uid(),
@@ -20536,6 +20597,9 @@ const storeCtx: AppState = {
       }
       setCustomerCredits(prev => [credit, ...prev])
       setJournalEntries(prev => [journal, ...prev])
+      // Buy-back settlement writes blob state only, so this journal reached
+      // the ledger solely through the mirror.
+      postSystemJournal('buyback_credit', journal, message => showToast(message, 'error'))
       setBuyBacks(p => p.map(b => b.id === id
         ? { ...b, status: 'paid', paymentMethod: BUYBACK_STORE_CREDIT_METHOD, paidDate: at, creditId: credit.id, creditRef }
         : b))
