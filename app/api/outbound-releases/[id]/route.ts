@@ -96,6 +96,34 @@ async function finalizeAppStateRepairForRelease(releaseId: string, repairId: str
   return updatedRepair
 }
 
+/**
+ * Move the repair's status in the app_state payload as well as the column.
+ *
+ * Every read surface prefers payload.status over the Prisma enum (see
+ * app/api/repairs/route.ts and lib/repair-mirror.ts), because the enum is a
+ * lossy collapse of the blob's status set. verify and void updated only the
+ * column, so the payload kept whatever it had — the release looked verified on
+ * the ORC panel while the repair still read `ready` everywhere else. It only
+ * appeared to work because the browser patched the repair itself afterwards;
+ * a failed patch, or another user's screen, saw the stale value.
+ */
+async function setAppStateRepairStatus(repairId: string, status: string): Promise<void> {
+  try {
+    const state = await loadAppState(['deed_repairs_v2'])
+    const repairs = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as any[] : []
+    let changed = false
+    const next = repairs.map((repair: any) => {
+      if (repair?.id !== repairId || repair.status === status) return repair
+      changed = true
+      return { ...repair, status }
+    })
+    if (changed) await saveStoreKeys({ deed_repairs_v2: JSON.stringify(next) })
+  } catch (err) {
+    // The release itself already committed; never fail it over the mirror copy.
+    console.error(`[outbound-release] repair ${repairId} payload status not updated:`, err)
+  }
+}
+
 // ── GET single release ────────────────────────────────────────────────────────
 export async function GET(_: NextRequest, { params }: Params) {
   return withApiErrorHandling(async () => {
@@ -219,6 +247,7 @@ export async function verifyHandler(request: NextRequest, id: string) {
     // Advance repair to verified_released
     if (release.repairId) {
       await prisma.repair.update({ where: { id: release.repairId }, data: { status: 'verified_released' } })
+      await setAppStateRepairStatus(release.repairId, 'verified_released')
     }
 
     return NextResponse.json(updated)
@@ -309,6 +338,7 @@ export async function voidHandler(request: NextRequest, id: string) {
     // Roll back repair to ready if it was advanced
     if (release.repairId && release.status === 'verified') {
       await prisma.repair.update({ where: { id: release.repairId }, data: { status: 'ready' } })
+      await setAppStateRepairStatus(release.repairId, 'ready')
     }
 
     return NextResponse.json(updated)
