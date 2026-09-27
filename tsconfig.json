@@ -40,6 +40,8 @@
     "node_modules",
     "backups",
     ".next",
-    ".next-staging"
+    ".next-staging",
+    ".next-prev",
+    ".next-failed"
   ]
 }

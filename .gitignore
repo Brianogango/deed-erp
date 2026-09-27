@@ -3,6 +3,11 @@ node_modules/
 .next-staging/
 .next-previous/
 .next-old/
+# scripts/deploy.sh: staged build, the previous build kept for rollback, and a
+# failed build kept for inspection.
+.next-build/
+.next-prev/
+.next-failed/
 .env
 .env.local
 .env.production
