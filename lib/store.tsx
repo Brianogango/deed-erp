@@ -20361,21 +20361,26 @@ const storeCtx: AppState = {
           applications: [],
         }
         setCustomerCredits(prev => [credit, ...prev])
-        setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, amount), ...prev])
-        // Persist Prisma CreditNote when available (durable accounting object).
-        try {
-          await fetch(`/api/sale-orders/${rma.saleOrderId}/credit-note`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              invoiceId: sourceInvoice.id,
-              amount,
-              reason: `Return ${rma.ref}`,
-              creditNoteNumber: ref,
-              lines: allocation?.creditLines ?? [],
-            }),
-          })
-        } catch { /* blob CustomerCredit remains authoritative for UI */ }
+        // No journal is built here. createCustomerCreditNote posts this credit
+        // note as JRN/CN/<ref> while the local copy used JRN/<ref> — different
+        // refs, so the mirror could not dedupe them and the revenue reversal
+        // and customer credit were both booked twice.
+        //
+        // The call used to be wrapped in try/catch with no res.ok check, so a
+        // refusal was invisible; this route is director/finance only, and an
+        // admin officer processing a return got a silent 403. Now the failure
+        // is shown instead of leaving a credit with no entry behind it.
+        syncOrWarn(`/api/sale-orders/${rma.saleOrderId}/credit-note`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            invoiceId: sourceInvoice.id,
+            amount,
+            reason: `Return ${rma.ref}`,
+            creditNoteNumber: ref,
+            lines: allocation?.creditLines ?? [],
+          }),
+        }, message => showToast(message, 'error'), `Credit note ${ref} was not posted — please retry from Finance`)
         if (so && allocation) {
           const adjById = new Map(allocation.soLineAdjustments.map(a => [a.soLineId, a]))
           const lines = so.lines.map((l: any) => {
