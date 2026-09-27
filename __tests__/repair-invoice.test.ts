@@ -204,3 +204,65 @@ describe('repairBillingNeedsSync', () => {
     expect(state.matchesInvoice).toBe(true)
   })
 })
+
+describe('VAT is read from the quote, not recomputed from a hardcoded rule (REP-499EXM5H)', () => {
+  // The real repair. 3,000 labour + a 1,000 diagnosis fee, VAT 480 on the
+  // labour, invoiced at 4,480. The charge recomputation used to tax only
+  // part/software/license, so labour came back at 0 VAT, the job recomputed as
+  // 4,000, and the correctly-billed 4,480 invoice was reported as out of step
+  // with its own quote — permanently.
+  const repair = {
+    // Booked 24 Sept 2026 on the diagnosis-first path, which is what makes the
+    // diagnosis fee billable at all.
+    intakeDate: '2026-09-24',
+    repairPath: 'diagnosis_first' as const,
+    diagnosisFee: 1000,
+    diagnosisFeeStatus: 'applicable' as const,
+    underWarranty: false,
+    quote: {
+      subtotal: 4000,
+      tax: 480,
+      total: 4480,
+      lines: [
+        { type: 'service', description: 'Diagnosis Fee', qty: 1, unitPrice: 1000, subtotal: 1000, isDiagnosisFee: true, decision: 'approved' },
+        { type: 'labor', description: 'Power issue fix', qty: 1, unitPrice: 3000, subtotal: 3000, decision: 'approved' },
+      ],
+    },
+  }
+
+  it('reproduces the invoiced total exactly', () => {
+    const charges = buildRepairInvoiceCharges(repair as never, true, 16)
+    expect(repairInvoiceChargeTotal(charges)).toBe(4480)
+  })
+
+  it('recognises the invoice that billed it as matching', () => {
+    const charges = buildRepairInvoiceCharges(repair as never, true, 16)
+    const invoice = {
+      total: 4480,
+      lines: [
+        { qty: 1, unitPrice: 1000, subtotal: 1000 },
+        { qty: 1, unitPrice: 3000, subtotal: 3000 },
+      ],
+    }
+    expect(invoiceMatchesRepairCharges(invoice, charges)).toBe(true)
+  })
+
+  it('does not depend on the company VAT rate being loaded', () => {
+    // components pass `companySettings?.vatRate ?? 0`, so an unloaded setting
+    // used to zero the tax and break the comparison a second way.
+    const charges = buildRepairInvoiceCharges(repair as never, true, 0)
+    expect(repairInvoiceChargeTotal(charges)).toBe(4480)
+  })
+
+  it('still charges nothing on a quote that carried no VAT', () => {
+    const noVat = { ...repair, quote: { ...repair.quote, tax: 0, total: 4000 } }
+    const charges = buildRepairInvoiceCharges(noVat as never, true, 16)
+    expect(repairInvoiceChargeTotal(charges)).toBe(4000)
+  })
+
+  it('leaves the diagnosis fee untaxed', () => {
+    const charges = buildRepairInvoiceCharges(repair as never, true, 16)
+    const fee = charges.find(c => c.description.includes('Diagnosis Fee'))
+    expect(fee).toMatchObject({ subtotal: 1000, taxRate: 0 })
+  })
+})

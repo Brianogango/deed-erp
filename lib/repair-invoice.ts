@@ -43,9 +43,33 @@ function money(n: unknown): number {
   return Number.isFinite(v) ? v : 0
 }
 
-function vatForQuoteType(type: string | undefined, applyVat: boolean, vatRate: number): number {
-  if (!applyVat) return 0
-  return type === 'part' || type === 'software' || type === 'license' ? vatRate : 0
+/**
+ * The VAT rate this quote actually carries, read back from the quote itself.
+ *
+ * There were two contradictory VAT rules. Quotes are built by
+ * taxableQuoteSubtotal, which taxes every line except the diagnosis fee. This
+ * function used to tax only `part`, `software` and `license`, so a quote with
+ * VAT on labour — REP-499EXM5H: 3,000 labour, 480 VAT, 4,480 total — was
+ * recomputed here as 4,000, and the invoice that correctly billed 4,480 was
+ * reported as out of step with its own quote. Every such repair showed "Align
+ * invoice with quote" permanently, and on a draft invoice that button would
+ * have rewritten it to 4,000, stripping VAT that had been charged properly.
+ *
+ * Rather than replace one hardcoded rule with another, the rate comes from the
+ * document: tax ÷ taxable subtotal. A quote that carried no VAT still carries
+ * none, a quote taxed at a rate that has since changed in company settings
+ * still reconciles against what it actually charged, and the comparison no
+ * longer depends on settings being loaded — `companySettings?.vatRate ?? 0`
+ * silently yielded 0 and broke the same comparison a second way.
+ */
+function quoteEffectiveVatRate(repair: RepairInvoiceSource): number {
+  const tax = money(repair.quote?.tax)
+  if (tax <= 0) return 0
+  const taxable = (repair.quote?.lines ?? [])
+    .filter(line => line && !isDiagnosisFeeLine(line))
+    .reduce((sum, line) => sum + money(line.subtotal), 0)
+  if (taxable <= 0) return 0
+  return (tax / taxable) * 100
 }
 
 function quoteLineDescription(line: QuoteLikeLine): string {
@@ -106,7 +130,7 @@ function quoteCharges(
       description: quoteLineDescription(line),
       qty,
       unitPrice,
-      taxRate: quoteHasTax ? vatForQuoteType(line.type, applyVat, vatRate) : 0,
+      taxRate: quoteHasTax && applyVat ? quoteEffectiveVatRate(repair) : 0,
       subtotal: qty * unitPrice,
       productId: line.productId,
     }]
