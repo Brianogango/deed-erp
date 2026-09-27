@@ -8660,8 +8660,17 @@ const storeCtx: AppState = {
         showToast('Only fully paid deposits can be marked as collected', 'error')
         return
       }
-      // Clear 3100 liability into AR (linked invoice) or revenue when goods are collected.
-      // Distinct from SO down-payment invoices, which reduce AR at invoice time.
+      // A customer deposit is a liability until the sale is invoiced. Clearing
+      // 3100 straight into revenue skips VAT and the AR subledger, which is why
+      // /complete requires an invoice and refuses to recognise revenue itself.
+      //
+      // This used to build the entry locally — crediting 5000 when no invoice
+      // was linked — and POST to /complete with an empty body, which failed its
+      // schema every time. sync() swallowed the 422, so the liability looked
+      // cleared while the server had done nothing, and the only thing reaching
+      // the ledger was the blob mirror replaying the wrong journal.
+      let appliedAmount = 0
+      let appliedInvoiceId: string | undefined
       if (deposit.totalPaid > 0) {
         const linkedSo = saleOrders.find(s => (s.notes || '').includes(deposit.ref))
         const linkedInv = linkedSo
@@ -8671,58 +8680,47 @@ const storeCtx: AppState = {
               && i.saleOrderId === linkedSo.id
               && (i.total - i.amountPaid) > 0)
           : undefined
-        const amount = deposit.totalPaid
-        const clearJournal: JournalEntry = {
-          id: uid(),
-          ref: `JRN/DEPCLR/${deposit.ref}`,
-          date: now(),
-          source: 'manual',
-          description: `Deposit collected — clear liability ${deposit.ref}`,
-          status: 'posted',
-          invoiceId: linkedInv?.id,
-          lines: [
-            { id: uid(), account: '3100 - Customer Deposits', description: `Clear deposit: ${deposit.customerName}`, debit: amount, credit: 0 },
-            {
-              id: uid(),
-              account: linkedInv ? '1800 - Accounts Receivable' : '5000 - Sales Revenue',
-              description: linkedInv
-                ? `AR settlement via deposit ${deposit.ref} → ${linkedInv.ref}`
-                : `Revenue recognition on deposit collect ${deposit.ref}`,
-              debit: 0,
-              credit: amount,
-            },
-          ],
-          totalDebit: amount,
-          totalCredit: amount,
+        if (!linkedInv) {
+          showToast(
+            `Post the invoice for ${deposit.ref}'s sale order first — a deposit cannot be taken to revenue directly`,
+            'error',
+          )
+          return
         }
-        setJournalEntries(p => [clearJournal, ...p])
-        if (linkedInv) {
+        appliedInvoiceId = linkedInv.id
+        appliedAmount = Math.min(deposit.totalPaid, linkedInv.total - linkedInv.amountPaid)
+        if (appliedAmount > 0) {
           const payment: InvoicePayment = {
             id: uid(),
             date: now(),
-            amount: Math.min(amount, linkedInv.total - linkedInv.amountPaid),
+            amount: appliedAmount,
             method: 'deposit_apply',
             reference: deposit.ref,
             recordedBy: currentUser()?.name || 'Finance',
           }
-          if (payment.amount > 0) {
-            setInvoices(prev => prev.map(i => {
-              if (i.id !== linkedInv.id) return i
-              return {
-                ...i,
-                amountPaid: i.amountPaid + payment.amount,
-                payments: [...(i.payments || []), payment],
-                notes: `${i.notes || ''}\nApplied deposit ${deposit.ref} (${fmtKes(payment.amount)})`.trim(),
-              }
-            }))
-          }
+          setInvoices(prev => prev.map(i => {
+            if (i.id !== linkedInv.id) return i
+            return {
+              ...i,
+              amountPaid: i.amountPaid + payment.amount,
+              payments: [...(i.payments || []), payment],
+              notes: `${i.notes || ''}\nApplied deposit ${deposit.ref} (${fmtKes(payment.amount)})`.trim(),
+            }
+          }))
         }
       }
       setDeposits(prev => prev.map(d =>
         d.id === depositId ? { ...d, status: 'completed' as DepositStatus, completedAt: now() } : d
       ))
-      sync(`/api/deposits/${depositId}/complete`, { method: 'POST' })
-      showToast('Deposit marked as collected — liability cleared', 'success')
+      syncOrWarn(`/api/deposits/${depositId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId: appliedInvoiceId,
+          ...(appliedAmount > 0 ? { amount: appliedAmount } : {}),
+        }),
+      }, message => showToast(message, 'error'), 'Deposit could not be applied to its invoice — please retry')
+      showToast('Deposit applied to its invoice — liability cleared', 'success')
     },
     cancelDeposit: (depositId, reason) => {
       // The refund journal is posted by /api/deposits/[id]/cancel as
@@ -19649,6 +19647,17 @@ const storeCtx: AppState = {
           }
           setInvoices(prev => [invoice, ...prev])
           postInvoiceJournalOnce(invoice)
+          // The invoice was only ever created in the browser: /validate ignores
+          // autoInvoice and creates nothing, so this document never reached the
+          // invoices table — missing from AR, the ageing report and the
+          // dashboard, with its journal arriving only if the mirror replayed
+          // the blob. POSTing it here creates the row and posts JRN/<ref>,
+          // which is the same ref the local copy uses, so there is one entry.
+          syncOrWarn('/api/invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(invoice),
+          }, message => showToast(message, 'error'), `${invoice.ref} was not saved — please retry from Sales`)
           setSaleOrders(prev => {
             const next = prev.map(s => {
               if (s.id !== so.id) return s
@@ -19722,7 +19731,11 @@ const storeCtx: AppState = {
 
       setInvoices(prev => [invoice, ...prev])
       postInvoiceJournalOnce(invoice)
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      syncOrWarn('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(invoice),
+      }, message => showToast(message, 'error'), `${invoice.ref} was not saved — please retry`)
 
       setSaleOrders(prev => {
         const next = prev.map(s => {
