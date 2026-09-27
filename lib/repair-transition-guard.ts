@@ -61,3 +61,68 @@ export function repairTransitionWriteError(
   log(`[repair-transition] refused ${ref}: ${from} → ${to}`)
   return `Cannot move this repair from "${String(from).replace(/_/g, ' ')}" to "${String(to).replace(/_/g, ' ')}" — the workshop steps in between have not been completed.`
 }
+
+/**
+ * Observe the status changes arriving in a wholesale store write.
+ *
+ * The guard above runs on PATCH /api/repairs/[id], which only assignment and
+ * diagnosis call. Every other status change in the app — QC pass, mark ready,
+ * deliver, close, unrepairable, the progress stepper — reaches the server as
+ * part of the deed_repairs_v2 array through POST /api/store, which never
+ * consulted it. So the traffic the staging plan was written to observe has
+ * never been observed, and the logs staying quiet meant nothing.
+ *
+ * This deliberately only logs. Refusing here would reject whatever the
+ * workshop actually does the moment it is switched on, and there is no
+ * evidence yet that REPAIR_TRANSITIONS matches real practice — gathering that
+ * evidence is the point. `would-refuse` marks the ones that a future
+ * enforcement pass would block, so the decision can be made from data.
+ */
+const OBSERVE_LOG_LIMIT = 20
+
+export function observeRepairTransitions(
+  current: unknown,
+  incoming: unknown,
+  log: (message: string) => void = console.warn,
+): { checked: number; irregular: number; wouldRefuse: number } {
+  const result = { checked: 0, irregular: 0, wouldRefuse: 0 }
+  if (!Array.isArray(current) || !Array.isArray(incoming)) return result
+
+  const before = new Map<string, unknown>()
+  for (const row of current) {
+    const id = (row as { id?: unknown })?.id
+    if (typeof id === 'string' && id) before.set(id, (row as { status?: unknown }).status)
+  }
+
+  let logged = 0
+  for (const row of incoming) {
+    const record = row as { id?: unknown; ref?: unknown; status?: unknown }
+    const id = typeof record?.id === 'string' ? record.id : ''
+    if (!id || !before.has(id)) continue
+
+    const from = before.get(id)
+    const to = record.status
+    if (from === to) continue
+    if (!isKnownStatus(from) || !isKnownStatus(to)) continue
+
+    result.checked += 1
+    if (evaluateRepairTransition(from as string, to as string).allowed) continue
+
+    const guarded = GUARDED_TARGETS.has(to as string)
+    if (guarded) result.wouldRefuse += 1
+    else result.irregular += 1
+
+    if (logged < OBSERVE_LOG_LIMIT) {
+      logged += 1
+      log(
+        `[repair-transition] ${guarded ? 'would-refuse' : 'irregular'} via store `
+        + `${String(record.ref ?? id)}: ${String(from)} → ${String(to)}`,
+      )
+    }
+  }
+
+  if (logged === OBSERVE_LOG_LIMIT) {
+    log(`[repair-transition] …further transitions in this write not logged`)
+  }
+  return result
+}

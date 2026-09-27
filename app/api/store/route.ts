@@ -339,6 +339,14 @@ export async function POST(request: Request) {
         try { incoming = JSON.parse(entries[key]) } catch { continue }
         const { loadRepairTombstones, tombstoneIds } = await import('@/lib/repair-tombstones')
         const deletedIds = tombstoneIds(await loadRepairTombstones())
+        // Observe only. The state machine has never seen this path, which is
+        // where every status change other than assignment and diagnosis
+        // actually arrives, so refusing here would block real work on no
+        // evidence. Logs first, enforcement once they say what happens.
+        try {
+          const { observeRepairTransitions } = await import('@/lib/repair-transition-guard')
+          observeRepairTransitions(serverState[key], incoming)
+        } catch { /* observation must never fail a write */ }
         entries[key] = JSON.stringify(mergeRepairsStoreWrite(serverState[key], incoming, deletedIds))
         continue
       }
