@@ -10,7 +10,8 @@ const depositApplySchema = z.object({
   amount: z.coerce.number().finite().positive().max(9_999_999_999.99).optional(),
 }).strict()
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(['director', 'finance_officer'])
     const parsed = depositApplySchema.safeParse(await request.json().catch(() => ({})))
@@ -21,7 +22,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
     const body = parsed.data
     const result = await applyDepositToInvoice({
-      depositId: params.id,
+      depositId: resolvedParams.id,
       invoiceId: body.invoiceId,
       amount: body.amount,
       actor: { id: actor.id, name: actor.name },

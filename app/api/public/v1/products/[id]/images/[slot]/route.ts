@@ -24,14 +24,15 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string; slot: string } },
+  { params }: { params: Promise<{ id: string; slot: string }> },
 ) {
-  const slot = parseProductImageSlot(params.slot)
+  const resolvedParams = await params
+  const slot = parseProductImageSlot(resolvedParams.slot)
   if (!slot) {
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: partnerCorsHeaders(request) })
   }
 
-  const photos = await loadProductPhotos(params.id)
+  const photos = await loadProductPhotos(resolvedParams.id)
   const uploaded = photos.find(p => p.slot === slot)
   if (uploaded) {
     const parsed = parseDataUrl(uploaded.dataUrl)
@@ -48,7 +49,7 @@ export async function GET(
   }
 
   const product = await prisma.product.findUnique({
-    where: { id: params.id },
+    where: { id: resolvedParams.id },
     select: { name: true, sku: true },
   }).catch(() => null)
   const pack = product ? matchCatalogPhotoPack(product.name, product.sku) : null

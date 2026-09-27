@@ -33,12 +33,13 @@ function mapCompanyToClient(body: any) {
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const body = await request.json()
     const client = await prisma.client.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: mapCompanyToClient(body),
     })
     void broadcastCompanies()
@@ -46,10 +47,11 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   })
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    await prisma.client.delete({ where: { id: params.id } })
+    await prisma.client.delete({ where: { id: resolvedParams.id } })
     void broadcastCompanies()
     return NextResponse.json({ success: true })
   })

@@ -9,14 +9,15 @@ export const dynamic = 'force-dynamic'
 const WRITE_ROLES = ['director', 'admin_officer']
 
 /** Restore a soft-archived contact (P1-DEED-006). */
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const user = await requireRole(WRITE_ROLES)
-    const client = await prisma.client.findUnique({ where: { id: params.id } })
+    const client = await prisma.client.findUnique({ where: { id: resolvedParams.id } })
     if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const updated = await prisma.client.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: { isActive: true },
     })
 
@@ -25,7 +26,7 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
         userId: user.id,
         action: 'contact_restored',
         entityType: 'client',
-        entityId: params.id,
+        entityId: resolvedParams.id,
         newValues: { name: client.name, isActive: true },
       })
     } catch {

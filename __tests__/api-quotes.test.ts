@@ -356,7 +356,7 @@ describe('GET /api/quotes/:id', () => {
   it('returns 200 with the quote', async () => {
     mockPrismaQuote.findUnique.mockResolvedValue(baseQuote)
     const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`)
-    const res = await GET_ONE(req, { params: { id: QUOTE_ID } })
+    const res = await GET_ONE(req, { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(200)
     expect((await res.json()).id).toBe(QUOTE_ID)
   })
@@ -364,14 +364,14 @@ describe('GET /api/quotes/:id', () => {
   it('returns 404 when quote not found', async () => {
     mockPrismaQuote.findUnique.mockResolvedValue(null)
     const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`)
-    const res = await GET_ONE(req, { params: { id: QUOTE_ID } })
+    const res = await GET_ONE(req, { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(404)
   })
 
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(err401())
     const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`)
-    const res = await GET_ONE(req, { params: { id: QUOTE_ID } })
+    const res = await GET_ONE(req, { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(401)
   })
 })
@@ -380,13 +380,13 @@ describe('GET /api/quotes/:id', () => {
 describe('PUT /api/quotes/:id', () => {
   it('updates a quote and returns 200', async () => {
     mockPrismaQuote.update.mockResolvedValue({ ...baseQuote, status: 'pending_approval' })
-    const res = await PUT(idReq(QUOTE_ID, { status: 'sent' }), { params: { id: QUOTE_ID } })
+    const res = await PUT(idReq(QUOTE_ID, { status: 'sent' }), { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(200)
   })
 
   it('maps status alias on update (sent → pending_approval)', async () => {
     mockPrismaQuote.update.mockResolvedValue(baseQuote)
-    await PUT(idReq(QUOTE_ID, { status: 'sent' }), { params: { id: QUOTE_ID } })
+    await PUT(idReq(QUOTE_ID, { status: 'sent' }), { params: Promise.resolve({ id: QUOTE_ID }) })
     const updateData = mockPrismaQuote.update.mock.calls[0][0].data
     expect(updateData.status).toBe('pending_approval')
   })
@@ -394,7 +394,7 @@ describe('PUT /api/quotes/:id', () => {
   it('replaces items when lines are provided', async () => {
     mockPrismaQuote.update.mockResolvedValue(baseQuote)
     const lines = [{ description: 'Laptop', qty: 1, unitPrice: 50000 }]
-    await PUT(idReq(QUOTE_ID, { lines }), { params: { id: QUOTE_ID } })
+    await PUT(idReq(QUOTE_ID, { lines }), { params: Promise.resolve({ id: QUOTE_ID }) })
     const updateData = mockPrismaQuote.update.mock.calls[0][0].data
     expect(updateData.items).toHaveProperty('deleteMany')
     expect(updateData.items).toHaveProperty('create')
@@ -403,41 +403,41 @@ describe('PUT /api/quotes/:id', () => {
   it('rejects replacement lines with zero quantity', async () => {
     const res = await PUT(idReq(QUOTE_ID, {
       lines: [{ description: 'Laptop', qty: 0, unitPrice: 50000 }],
-    }), { params: { id: QUOTE_ID } })
+    }), { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(400)
     expect(mockPrismaQuote.update).not.toHaveBeenCalled()
   })
 
   it('does not touch items when lines are not provided', async () => {
     mockPrismaQuote.update.mockResolvedValue(baseQuote)
-    await PUT(idReq(QUOTE_ID, { subject: 'Updated' }), { params: { id: QUOTE_ID } })
+    await PUT(idReq(QUOTE_ID, { subject: 'Updated' }), { params: Promise.resolve({ id: QUOTE_ID }) })
     const updateData = mockPrismaQuote.update.mock.calls[0][0].data
     expect(updateData.items).toBeUndefined()
   })
 
   it('returns 404 when the quote does not exist (so callers can re-create it)', async () => {
     mockPrismaQuote.findUnique.mockResolvedValue(null)
-    const res = await PUT(idReq(QUOTE_ID, { subject: 'Updated' }), { params: { id: QUOTE_ID } })
+    const res = await PUT(idReq(QUOTE_ID, { subject: 'Updated' }), { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(404)
     expect(mockPrismaQuote.update).not.toHaveBeenCalled()
   })
 
   it('returns 403 for technician role', async () => {
     mockGetSession.mockResolvedValue(techSession)
-    const res = await PUT(idReq(QUOTE_ID, {}), { params: { id: QUOTE_ID } })
+    const res = await PUT(idReq(QUOTE_ID, {}), { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(403)
   })
 
   it('allows technician role for repair-linked quote updates', async () => {
     mockGetSession.mockResolvedValue(techSession)
     mockPrismaQuote.update.mockResolvedValue(baseQuote)
-    const res = await PUT(idReq(QUOTE_ID, { source: 'repair', repairId: 'rep_1', subject: 'Revised' }), { params: { id: QUOTE_ID } })
+    const res = await PUT(idReq(QUOTE_ID, { source: 'repair', repairId: 'rep_1', subject: 'Revised' }), { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(200)
   })
 
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(err401())
-    const res = await PUT(idReq(QUOTE_ID, {}), { params: { id: QUOTE_ID } })
+    const res = await PUT(idReq(QUOTE_ID, {}), { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(401)
   })
 })
@@ -448,7 +448,7 @@ describe('DELETE /api/quotes/:id', () => {
     mockPrismaQuote.findUnique.mockResolvedValue({ ...baseQuote, status: 'draft' })
     mockPrismaQuote.update.mockResolvedValue({ ...baseQuote, status: 'cancelled' })
     const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`, { method: 'DELETE' })
-    const res = await DELETE(req, { params: { id: QUOTE_ID } })
+    const res = await DELETE(req, { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(200)
     expect((await res.json()).ok).toBe(true)
     expect(mockPrismaQuote.delete).not.toHaveBeenCalled()
@@ -458,7 +458,7 @@ describe('DELETE /api/quotes/:id', () => {
   it('returns 409 for an approved quote', async () => {
     mockPrismaQuote.findUnique.mockResolvedValue({ ...baseQuote, status: 'approved' })
     const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`, { method: 'DELETE' })
-    const res = await DELETE(req, { params: { id: QUOTE_ID } })
+    const res = await DELETE(req, { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(409)
     expect(mockPrismaQuote.delete).not.toHaveBeenCalled()
     expect(mockPrismaQuote.update).not.toHaveBeenCalled()
@@ -471,7 +471,7 @@ describe('DELETE /api/quotes/:id', () => {
       convertedToId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     })
     const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`, { method: 'DELETE' })
-    const res = await DELETE(req, { params: { id: QUOTE_ID } })
+    const res = await DELETE(req, { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(409)
     expect(mockPrismaQuote.delete).not.toHaveBeenCalled()
   })
@@ -479,14 +479,14 @@ describe('DELETE /api/quotes/:id', () => {
   it('returns 403 for technician role', async () => {
     mockGetSession.mockResolvedValue(techSession)
     const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`, { method: 'DELETE' })
-    const res = await DELETE(req, { params: { id: QUOTE_ID } })
+    const res = await DELETE(req, { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(403)
   })
 
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(err401())
     const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`, { method: 'DELETE' })
-    const res = await DELETE(req, { params: { id: QUOTE_ID } })
+    const res = await DELETE(req, { params: Promise.resolve({ id: QUOTE_ID }) })
     expect(res.status).toBe(401)
   })
 })

@@ -27,14 +27,15 @@ function mapActivityToDb(body: any) {
   return data
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const body = await request.json()
     const activity = await prisma.opportunityActivity.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: mapActivityToDb(body),
     })
     void broadcastOppActivities()
@@ -42,15 +43,17 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   })
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return PUT(request, { params })
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    await prisma.opportunityActivity.delete({ where: { id: params.id } })
+    await prisma.opportunityActivity.delete({ where: { id: resolvedParams.id } })
     void broadcastOppActivities()
     return NextResponse.json({ ok: true })
   })

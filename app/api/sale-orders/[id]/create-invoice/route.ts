@@ -50,11 +50,12 @@ const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(WRITE_ROLES)
-    const orderId = params.id
+    const orderId = resolvedParams.id
 
     // Optional body:
     //   { mode, percent?, amount?, source?: 'repair', lines?: [{ itemId, qty }] }

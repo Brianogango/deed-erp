@@ -43,10 +43,11 @@ async function loadReports(ref: string): Promise<QcReportMeta[]> {
   return []
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { ref: string; id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ ref: string; id: string }> }) {
+  const resolvedParams = await params
   try {
-    const reports = await loadReports(params.ref)
-    const report = params.id === 'latest' ? reports[reports.length - 1] : reports.find(r => r.id === params.id)
+    const reports = await loadReports(resolvedParams.ref)
+    const report = resolvedParams.id === 'latest' ? reports[reports.length - 1] : reports.find(r => r.id === resolvedParams.id)
     if (!report) return NextResponse.json({ error: 'QC report not found' }, { status: 404 })
 
     if (report.storagePath) {
@@ -69,7 +70,7 @@ export async function GET(_req: NextRequest, { params }: { params: { ref: string
     if (report.url && /^https?:\/\//i.test(report.url)) return NextResponse.redirect(report.url, 302)
 
     const state = await loadAppState(['deed_repairs_v2', 'deed_repairs'])
-    const decoded = decodeURIComponent(params.ref)
+    const decoded = decodeURIComponent(resolvedParams.ref)
     const repairs = (Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] : state['deed_repairs']) as RepairOrder[] | undefined
     const repair = repairs?.find(r => r.ref?.toLowerCase() === decoded.toLowerCase())
     const parsed = repair?.qcReportData ? parseDataUrl(repair.qcReportData) : null

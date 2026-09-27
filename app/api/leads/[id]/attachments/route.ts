@@ -8,11 +8,12 @@ import { readLeadAttachmentFile, type LeadAttachmentMeta } from '@/lib/crm/lead-
  * List or download inbound email attachments for a lead.
  * ?file=<attachmentId> downloads the binary.
  */
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const lead = await prisma.lead.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       select: { id: true, emailAttachments: true },
     })
     if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })

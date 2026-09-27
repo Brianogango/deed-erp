@@ -22,11 +22,12 @@ function photoPayload(productId: string, slot: 1 | 2, uploaded: boolean, packId?
   return { slot, role: productImageRole(slot), url, source: uploaded ? 'upload' : packId ? 'catalog' : null }
 }
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
     const product = await prisma.product.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       select: { id: true, name: true, sku: true },
     })
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
@@ -42,11 +43,12 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   })
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
     const product = await prisma.product.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       select: { id: true },
     })
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
@@ -81,13 +83,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   })
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
     const url = new URL(request.url)
     const slot = parseProductImageSlot(url.searchParams.get('slot'))
     if (!slot) return NextResponse.json({ error: 'slot must be 1 (hero) or 2 (detail)' }, { status: 400 })
-    const product = await prisma.product.findUnique({ where: { id: params.id }, select: { id: true } })
+    const product = await prisma.product.findUnique({ where: { id: resolvedParams.id }, select: { id: true } })
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
     await deleteProductPhoto(product.id, slot)
     return NextResponse.json({ ok: true })

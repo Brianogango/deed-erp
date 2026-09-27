@@ -39,7 +39,7 @@ describe('POST /api/portal/quotes/[id]/accept — SaleOrder support', () => {
       deed_quotes: [],
       deed_saleOrders: [{ id: SO_ID, ref: 'SO/2026/0001', status: 'quotation_sent', notes: '', customerName: 'Acme Ltd' }],
     })
-    const res = await acceptRoute(req(`http://localhost/api/portal/quotes/${SO_ID}/accept?token=t`), { params: { id: SO_ID } })
+    const res = await acceptRoute(req(`http://localhost/api/portal/quotes/${SO_ID}/accept?token=t`), { params: Promise.resolve({ id: SO_ID }) })
     expect(res.status).toBe(200)
     const saved = mockSaveStoreKeys.mock.calls[0][0]
     const savedOrders = JSON.parse(saved.deed_saleOrders)
@@ -57,14 +57,14 @@ describe('POST /api/portal/quotes/[id]/accept — SaleOrder support', () => {
       deed_quotes: [],
       deed_saleOrders: [{ id: SO_ID, ref: 'SO/2026/0001', status: 'sale', notes: '' }],
     })
-    const res = await acceptRoute(req(`http://localhost/api/portal/quotes/${SO_ID}/accept?token=t`), { params: { id: SO_ID } })
+    const res = await acceptRoute(req(`http://localhost/api/portal/quotes/${SO_ID}/accept?token=t`), { params: Promise.resolve({ id: SO_ID }) })
     expect(res.status).toBe(409)
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 
   it('rejects an invalid/expired token', async () => {
     mockVerifyQuoteToken.mockReturnValue(false)
-    const res = await acceptRoute(req(`http://localhost/api/portal/quotes/${SO_ID}/accept?token=bad`), { params: { id: SO_ID } })
+    const res = await acceptRoute(req(`http://localhost/api/portal/quotes/${SO_ID}/accept?token=bad`), { params: Promise.resolve({ id: SO_ID }) })
     expect(res.status).toBe(401)
   })
 })
@@ -77,7 +77,7 @@ describe('POST /api/portal/quotes/[id]/reject — new path (previously absent fo
     })
     const res = await rejectRoute(
       req(`http://localhost/api/portal/quotes/${SO_ID}/reject?token=t`, { reason: 'Too expensive' }),
-      { params: { id: SO_ID } },
+      { params: Promise.resolve({ id: SO_ID }) },
     )
     expect(res.status).toBe(200)
     const saved = mockSaveStoreKeys.mock.calls[0][0]
@@ -92,7 +92,7 @@ describe('POST /api/portal/quotes/[id]/reject — new path (previously absent fo
       deed_quotes: [{ id: 'quote-1', ref: 'QUO/0001', status: 'sent' }],
       deed_saleOrders: [],
     })
-    const res = await rejectRoute(req('http://localhost/api/portal/quotes/quote-1/reject?token=t'), { params: { id: 'quote-1' } })
+    const res = await rejectRoute(req('http://localhost/api/portal/quotes/quote-1/reject?token=t'), { params: Promise.resolve({ id: 'quote-1' }) })
     expect(res.status).toBe(200)
     const saved = mockSaveStoreKeys.mock.calls[0][0]
     const savedQuotes = JSON.parse(saved.deed_quotes)
@@ -101,7 +101,7 @@ describe('POST /api/portal/quotes/[id]/reject — new path (previously absent fo
 
   it('returns 404 for an unknown id', async () => {
     mockLoadAppState.mockResolvedValue({ deed_quotes: [], deed_saleOrders: [] })
-    const res = await rejectRoute(req('http://localhost/api/portal/quotes/missing/reject?token=t'), { params: { id: 'missing' } })
+    const res = await rejectRoute(req('http://localhost/api/portal/quotes/missing/reject?token=t'), { params: Promise.resolve({ id: 'missing' }) })
     expect(res.status).toBe(404)
   })
 })

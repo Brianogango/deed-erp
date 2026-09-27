@@ -15,13 +15,14 @@ function stateKey(ref: string) {
 // with the phone on file — the same gate the invoice/receipt PDFs use.
 export async function GET(
   req: NextRequest,
-  { params }: { params: { repairRef: string } }
+  { params }: { params: Promise<{ repairRef: string }> }
 ) {
-  if (!await repairAttachmentReadAllowed(req, decodeURIComponent(params.repairRef))) {
+  const resolvedParams = await params
+  if (!await repairAttachmentReadAllowed(req, decodeURIComponent(resolvedParams.repairRef))) {
     return NextResponse.json({ error: 'Verification required to view these photos.' }, { status: 403 })
   }
   try {
-    const key = stateKey(params.repairRef)
+    const key = stateKey(resolvedParams.repairRef)
     const state = await loadAppState([key])
     const photos = (state[key] ?? []) as Photo[]
     return NextResponse.json({ photos })
@@ -33,8 +34,9 @@ export async function GET(
 // Authenticated — called by the ERP when staff upload a photo
 export async function POST(
   req: NextRequest,
-  { params }: { params: { repairRef: string } }
+  { params }: { params: Promise<{ repairRef: string }> }
 ) {
+  const resolvedParams = await params
   const gate = await requireRepairAttachmentWriter()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
@@ -45,7 +47,7 @@ export async function POST(
   if (!body.url) return NextResponse.json({ error: 'url is required' }, { status: 400 })
 
   try {
-    const key = stateKey(params.repairRef)
+    const key = stateKey(resolvedParams.repairRef)
     const state = await loadAppState([key])
     const existing = (state[key] ?? []) as Photo[]
     const photo: Photo = {
@@ -61,7 +63,7 @@ export async function POST(
     await saveStoreKeys({ [key]: JSON.stringify([...existing, photo]) })
     // Return a lightweight serving URL — NOT the base64 payload — so the
     // caller never embeds megabytes of image data back into the repair record.
-    const servingUrl = `/api/portal/repair/${encodeURIComponent(params.repairRef)}/photos/${encodeURIComponent(photo.id)}`
+    const servingUrl = `/api/portal/repair/${encodeURIComponent(resolvedParams.repairRef)}/photos/${encodeURIComponent(photo.id)}`
     return NextResponse.json({
       photo: { ...photo, url: servingUrl },
       normalized: {
@@ -83,8 +85,9 @@ export async function POST(
 // Authenticated — called by the ERP when staff delete a photo
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { repairRef: string } }
+  { params }: { params: Promise<{ repairRef: string }> }
 ) {
+  const resolvedParams = await params
   const gate = await requireRepairAttachmentWriter()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
@@ -95,7 +98,7 @@ export async function DELETE(
   if (!body.id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
   try {
-    const key = stateKey(params.repairRef)
+    const key = stateKey(resolvedParams.repairRef)
     const state = await loadAppState([key])
     const existing = (state[key] ?? []) as Photo[]
     await saveStoreKeys({ [key]: JSON.stringify(existing.filter(p => p.id !== body.id)) })

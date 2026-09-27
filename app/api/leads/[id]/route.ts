@@ -26,11 +26,12 @@ async function broadcastOpportunities() {
   } catch { /* best-effort SSE sync */ }
 }
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const lead = await prisma.lead.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: LEAD_INCLUDE,
     })
     if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -38,7 +39,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   })
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) {
@@ -57,7 +59,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.notes !== undefined) data.notes = body.notes
 
     const lead = await prisma.lead.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data,
       include: LEAD_INCLUDE,
     })
@@ -65,19 +67,21 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   })
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    await prisma.lead.delete({ where: { id: params.id } })
+    await prisma.lead.delete({ where: { id: resolvedParams.id } })
     return NextResponse.json({ ok: true })
   })
 }
 
 /** POST { action: 'convert', createContact?: boolean, expectedValue?: number } */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) {
@@ -89,7 +93,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Unsupported action — use { action: "convert" }' }, { status: 400 })
     }
 
-    const lead = await prisma.lead.findUnique({ where: { id: params.id } })
+    const lead = await prisma.lead.findUnique({ where: { id: resolvedParams.id } })
     if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
     if (lead.stage === 'converted') {
       return NextResponse.json({ error: 'Lead already converted' }, { status: 409 })

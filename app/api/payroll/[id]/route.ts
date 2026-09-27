@@ -21,7 +21,8 @@ const advanceAmount = (v: unknown) => Array.isArray(v)
   ? money(v.reduce((sum, row: any) => sum + Number(row?.amount ?? row?.deduction ?? 0), 0))
   : 0
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isRoleAllowed(session.user.role, WRITE_ROLES)) {
@@ -37,7 +38,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 
   const existing = await prisma.payrollRun.findUnique({
-    where: { id: params.id },
+    where: { id: resolvedParams.id },
     include: { payslips: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -61,21 +62,21 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const updated = await prisma.$transaction(async tx => {
       const row = await tx.payrollRun.update({
-        where: { id: params.id },
+        where: { id: resolvedParams.id },
         data: { status: 'approved', approvedById: actorId, approvedAt: new Date() },
       })
       await writeFinancialAuditInTx(tx, {
         userId: actorId,
         action: 'approve_payroll',
         entityType: 'payroll_run',
-        entityId: params.id,
+        entityId: resolvedParams.id,
         oldValues: { status: existing.status },
         newValues: { status: 'approved' },
       })
       return row
     }, { isolationLevel: 'Serializable' })
 
-    await notifyPayrollApproved(params.id, actorId)
+    await notifyPayrollApproved(resolvedParams.id, actorId)
     return NextResponse.json({ item: { id: updated.id, status: updated.status } })
   }
 
@@ -130,7 +131,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const journalRef = `JRN/PAYROLL/${existing.runReference}`.slice(0, 80)
 
     const posted = await prisma.$transaction(async tx => {
-      const current = await tx.payrollRun.findUniqueOrThrow({ where: { id: params.id } })
+      const current = await tx.payrollRun.findUniqueOrThrow({ where: { id: resolvedParams.id } })
       if (current.status !== 'approved') {
         throw new Error('Payroll status changed concurrently; posting aborted.')
       }
@@ -162,7 +163,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       })
 
       const row = await tx.payrollRun.update({
-        where: { id: params.id },
+        where: { id: resolvedParams.id },
         data: {
           status: 'posted',
           postingStatus: 'posted',
@@ -180,14 +181,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         },
       })
       await tx.payslip.updateMany({
-        where: { payrollRunId: params.id },
+        where: { payrollRunId: resolvedParams.id },
         data: { status: 'published' },
       })
       await writeFinancialAuditInTx(tx, {
         userId: actorId,
         action: 'post_payroll',
         entityType: 'payroll_run',
-        entityId: params.id,
+        entityId: resolvedParams.id,
         relatedJournalId: journal.id,
         oldValues: { status: existing.status },
         newValues: {
@@ -201,30 +202,30 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return row
     }, { isolationLevel: 'Serializable' })
 
-    await notifyPayrollPosted(params.id, actorId)
+    await notifyPayrollPosted(resolvedParams.id, actorId)
     return NextResponse.json({ item: { id: posted.id, status: posted.status, postedJournalId: posted.postedJournalId } })
   }
 
   if (nextStatus === 'pending_approval' && existing.status === 'draft') {
     const updated = await prisma.$transaction(async tx => {
-      const row = await tx.payrollRun.update({ where: { id: params.id }, data: { status: 'pending_approval' } })
+      const row = await tx.payrollRun.update({ where: { id: resolvedParams.id }, data: { status: 'pending_approval' } })
       await writeFinancialAuditInTx(tx, {
         userId: actorId,
         action: 'submit_payroll',
         entityType: 'payroll_run',
-        entityId: params.id,
+        entityId: resolvedParams.id,
         oldValues: { status: existing.status },
         newValues: { status: 'pending_approval' },
       })
       return row
     })
-    await notifyPayrollSubmitted(params.id, actorId)
+    await notifyPayrollSubmitted(resolvedParams.id, actorId)
     return NextResponse.json({ item: { id: updated.id, status: updated.status } })
   }
 
   return NextResponse.json({ item: { id: existing.id, status: existing.status } })
 }
 
-export async function PATCH(request: NextRequest, ctx: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return PUT(request, ctx)
 }

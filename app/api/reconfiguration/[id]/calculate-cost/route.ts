@@ -15,7 +15,8 @@ import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cos
  * POST /api/reconfiguration/[id]/calculate-cost
  * Recompute cost / recommended price / margin from work-order lines.
  */
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requirePermission('viewReconfigComponentCosts')
 
@@ -37,7 +38,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       // empty body is fine
     }
 
-    const wo = await getWorkOrder(params.id)
+    const wo = await getWorkOrder(resolvedParams.id)
     const costRemoved = (wo.removalLines ?? []).reduce(
       (sum, line) => sum + Number(line.existingCost ?? 0),
       0,

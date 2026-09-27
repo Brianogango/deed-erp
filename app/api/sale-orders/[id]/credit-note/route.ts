@@ -9,8 +9,9 @@ const WRITE_ROLES = ['director', 'finance_officer']
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(WRITE_ROLES)
     const body = await request.json().catch(() => null) as {
@@ -25,7 +26,7 @@ export async function POST(
     const reason = String(body.reason || '').trim()
     if (!reason) return NextResponse.json({ error: 'Credit-note reason is required' }, { status: 400 })
 
-    const order = await prisma.saleOrder.findUnique({ where: { id: params.id } })
+    const order = await prisma.saleOrder.findUnique({ where: { id: resolvedParams.id } })
     if (!order) return NextResponse.json({ error: 'Sale order not found' }, { status: 404 })
     if (normalizeSaleStatus(order.status) === 'cancelled') {
       return NextResponse.json({ error: 'Cannot credit a cancelled sale order' }, { status: 409 })
@@ -35,7 +36,7 @@ export async function POST(
       where: { id: body.invoiceId },
       include: { items: true },
     })
-    if (!invoice || invoice.saleOrderId !== params.id) {
+    if (!invoice || invoice.saleOrderId !== resolvedParams.id) {
       return NextResponse.json({ error: 'Invoice not found on this sale order' }, { status: 404 })
     }
     if (invoice.isDownPayment) {

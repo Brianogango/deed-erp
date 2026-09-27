@@ -46,12 +46,13 @@ function paymentProofKey(ref: string) {
   return `repair_payment_proof_${ref.toUpperCase().replace(/\//g, '_')}`
 }
 
-export async function POST(req: NextRequest, { params }: { params: { ref: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ ref: string }> }) {
+  const resolvedParams = await params
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
   const rl = await checkRateLimit(`portal-payment:${ip}`, 12, 3600)
   if (!rl.success) return NextResponse.json({ error: 'Too many payment confirmation attempts. Please wait before trying again.' }, { status: 429 })
 
-  const ref = decodeURIComponent(params.ref)
+  const ref = decodeURIComponent(resolvedParams.ref)
   const repair = await lookupRepair(ref)
   if (!repair) return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
 

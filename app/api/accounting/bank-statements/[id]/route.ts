@@ -3,16 +3,18 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { roundMoney } from '@/lib/accounting/money'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
     await requireRole(['director', 'finance_officer', 'admin_officer'])
-    const statement = await prisma.bankStatement.findUnique({ where: { id: params.id } })
+    const { id } = await resolveRouteParams(params)
+    const statement = await prisma.bankStatement.findUnique({ where: { id } })
     if (!statement) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const lines = await prisma.bankStatementLine.findMany({
-      where: { statementId: params.id },
+      where: { statementId: id },
       orderBy: { transactionDate: 'asc' },
     })
     const matches = await prisma.bankReconciliationMatch.findMany({
@@ -22,16 +24,17 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   })
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(['director', 'finance_officer'])
     const body = await request.json().catch(() => ({}))
     const action = String(body.action || 'match')
-    const statement = await prisma.bankStatement.findUnique({ where: { id: params.id } })
+    const { id } = await resolveRouteParams(params)
+    const statement = await prisma.bankStatement.findUnique({ where: { id } })
     if (!statement) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     if (action === 'reconcile') {
-      const lines = await prisma.bankStatementLine.findMany({ where: { statementId: params.id } })
+      const lines = await prisma.bankStatementLine.findMany({ where: { statementId: id } })
       const open = lines.filter(l => l.reconciliationStatus === 'unreconciled')
       if (open.length > 0) {
         return NextResponse.json(
@@ -40,14 +43,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         )
       }
       const next = await prisma.bankStatement.update({
-        where: { id: params.id },
+        where: { id: id },
         data: { status: 'reconciled', reconciledAt: new Date(), reconciledById: actor.id },
       })
       await writeFinancialAudit({
         userId: actor.id,
         action: 'reconcile_bank_statement',
         entityType: 'bank_statement',
-        entityId: params.id,
+        entityId: id,
       })
       return NextResponse.json({ statement: next })
     }
@@ -58,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'statementLineId and journalEntryId required' }, { status: 400 })
     }
     const line = await prisma.bankStatementLine.findUnique({ where: { id: statementLineId } })
-    if (!line || line.statementId !== params.id) {
+    if (!line || line.statementId !== id) {
       return NextResponse.json({ error: 'Statement line not found' }, { status: 404 })
     }
     const journal = await prisma.journalEntry.findUnique({ where: { id: journalEntryId }, select: { id: true, totalDebit: true } })
@@ -80,7 +83,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       userId: actor.id,
       action: 'match_bank_statement_line',
       entityType: 'bank_statement',
-      entityId: params.id,
+      entityId: id,
       relatedJournalId: journalEntryId,
       newValues: { statementLineId },
     })

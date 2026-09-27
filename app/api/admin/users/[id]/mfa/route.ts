@@ -7,12 +7,13 @@ import { findAuthUserById } from '@/lib/auth/users-repository'
 import { invalidateUserSessions } from '@/lib/auth/session-validity'
 import { checkRateLimit } from '@/lib/rate-limit'
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!hasPermission(session.user, 'manageUsers')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const targetId = String(params.id || '').trim()
+  const targetId = String(resolvedParams.id || '').trim()
   if (!targetId || targetId.length > 128) return NextResponse.json({ error: 'Invalid user id' }, { status: 400 })
 
   // A privileged user must not be able to remove their own second factor from

@@ -19,7 +19,8 @@ import { appendDocumentEmailSend, parseEmailList } from '@/lib/document-email-se
  *   pdfFilename?: string
  * }
  */
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(['director', 'finance_officer', 'admin_officer'])
 
@@ -27,7 +28,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     try { body = await request.json() } catch {}
 
     const invoice = await prisma.invoice.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { client: true, items: true },
     })
     if (!invoice) {

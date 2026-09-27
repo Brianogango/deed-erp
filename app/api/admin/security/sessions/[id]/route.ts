@@ -7,7 +7,8 @@ import { invalidateUserSessions } from '@/lib/auth/session-validity'
 
 const COOKIE_NAME = 'deed-session'
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (session.user.role !== 'director') {
@@ -17,7 +18,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   const { rows } = await sql`
     SELECT id, user_id, token_hash
     FROM user_sessions
-    WHERE id = ${params.id}
+    WHERE id = ${resolvedParams.id}
     LIMIT 1
   `
   const target = rows[0]

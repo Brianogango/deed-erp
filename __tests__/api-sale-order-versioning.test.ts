@@ -71,7 +71,7 @@ beforeEach(() => {
 
 describe('POST /api/sale-orders/:id/new-version', () => {
   it('creates v2, backfills the root versionGroupId, and suffixes the ref', async () => {
-    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(201)
     const body = await res.json()
     expect(body.orderNumber ?? body.ref).toBe('QUO/2026/0001-V2')
@@ -96,7 +96,7 @@ describe('POST /api/sale-orders/:id/new-version', () => {
       { id: ORDER_ID, versionNumber: 1, status: 'quotation' },
       { id: 'v2-id', versionNumber: 2, status: 'quotation' },
     ])
-    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: 'v2-id' } })
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: 'v2-id' }) })
     expect(res.status).toBe(201)
     const createArgs = mockPrismaSO.create.mock.calls[0][0]
     expect(createArgs.data.versionNumber).toBe(3)
@@ -114,7 +114,7 @@ describe('POST /api/sale-orders/:id/new-version', () => {
       { id: ORDER_ID, versionNumber: 1, status: 'quotation' },
       { id: 'v2-id', versionNumber: 2, status: 'quotation' },
     ])
-    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/Only the latest quotation revision/i)
     expect(mockPrismaSO.create).not.toHaveBeenCalled()
@@ -137,7 +137,7 @@ describe('POST /api/sale-orders/:id/new-version', () => {
       { id: ORDER_ID, versionNumber: 1, status: 'sale' },
       { id: 'v2-id', versionNumber: 2, status: 'quotation' },
     ])
-    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: 'v2-id' } })
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: 'v2-id' }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/already become a Sales Order/i)
     expect(mockPrismaSO.create).not.toHaveBeenCalled()
@@ -145,7 +145,7 @@ describe('POST /api/sale-orders/:id/new-version', () => {
 
   it('rejects versioning a confirmed Sales Order', async () => {
     mockPrismaSO.findUnique.mockResolvedValue({ ...baseQuotation, status: 'sale' })
-    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/controlled Sales Order amendment/i)
     expect(mockPrismaSO.create).not.toHaveBeenCalled()
@@ -153,21 +153,21 @@ describe('POST /api/sale-orders/:id/new-version', () => {
 
   it('rejects a role that cannot create quotations', async () => {
     mockGetSession.mockResolvedValue(sessionFor('technician'))
-    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(403)
     expect(mockPrismaSO.create).not.toHaveBeenCalled()
   })
 
   it('404s for a missing order', async () => {
     mockPrismaSO.findUnique.mockResolvedValue(null)
-    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(404)
   })
 
   it('returns a clean 409 (not a raw 500) when a concurrent request already claimed this version number', async () => {
     const conflict = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
     mockPrismaSO.create.mockRejectedValue(conflict)
-    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/refresh and try again/i)
   })
@@ -180,7 +180,7 @@ describe('GET /api/sale-orders/:id/versions', () => {
       { id: ORDER_ID, orderNumber: 'QUO/2026/0001', versionNumber: 1, status: 'quotation', totalAmount: 1160, createdAt: new Date('2026-01-01'), createdBy: { username: 'brian' } },
       { id: 'v2-id', orderNumber: 'QUO/2026/0001-V2', versionNumber: 2, status: 'quotation', totalAmount: 1200, createdAt: new Date('2026-01-02'), createdBy: { username: 'brian' } },
     ])
-    const res = await versionsGET(new NextRequest('http://localhost', { method: 'GET' }), { params: { id: 'v2-id' } })
+    const res = await versionsGET(new NextRequest('http://localhost', { method: 'GET' }), { params: Promise.resolve({ id: 'v2-id' }) })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.versions).toHaveLength(2)
@@ -191,7 +191,7 @@ describe('GET /api/sale-orders/:id/versions', () => {
 
   it('404s for a missing order', async () => {
     mockPrismaSO.findUnique.mockResolvedValue(null)
-    const res = await versionsGET(new NextRequest('http://localhost', { method: 'GET' }), { params: { id: ORDER_ID } })
+    const res = await versionsGET(new NextRequest('http://localhost', { method: 'GET' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(404)
   })
 })

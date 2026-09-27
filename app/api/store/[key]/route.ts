@@ -20,13 +20,14 @@ import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
 import { assertSafeStoreValue, InputSecurityError, readSafeJson } from '@/lib/input-security'
 
-type Params = { params: { key: string } }
+type Params = { params: Promise<{ key: string }> }
 
 export async function GET(_req: NextRequest, { params }: Params) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const key = decodeURIComponent(params.key)
+  const key = decodeURIComponent(resolvedParams.key)
   if (
     (!isKnownClientAppStateKey(key) && !CLIENT_IMMUTABLE_STORE_KEYS.has(key))
     || !/^deed_[A-Za-z0-9_]{1,120}$/.test(key)
@@ -45,6 +46,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PUT(request: NextRequest, { params }: Params) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -73,7 +75,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     throw error
   }
 
-  const key = decodeURIComponent(params.key)
+  const key = decodeURIComponent(resolvedParams.key)
   if (
     (!isKnownClientAppStateKey(key) && !CLIENT_IMMUTABLE_STORE_KEYS.has(key))
     || !/^deed_[A-Za-z0-9_]{1,120}$/.test(key)

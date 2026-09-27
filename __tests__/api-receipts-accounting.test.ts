@@ -44,7 +44,7 @@ describe('receipts API fail-closed valuation and delete', () => {
       body: JSON.stringify({ status: 'validated' }),
       headers: { 'Content-Type': 'application/json' },
     })
-    const res = await PATCH(req, { params: { id: 'r1' } })
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'r1' }) })
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.item.status).toBe('validated')
@@ -56,7 +56,7 @@ describe('receipts API fail-closed valuation and delete', () => {
       deed_receipts: [{ id: 'r1', status: 'validated' }],
     })
     const req = new NextRequest('http://localhost/api/receipts/r1', { method: 'DELETE' })
-    const res = await DELETE(req, { params: { id: 'r1' } })
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'r1' }) })
     expect(res.status).toBe(409)
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })

@@ -13,7 +13,7 @@ const VOID_AFTER_VERIFIED_ROLES = ['director']
 // open to the same operational roles allowed to initiate a release (see outbound-releases/route.ts INIT_ROLES).
 const OPERATIONAL_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
 
-type Params = { params: { id: string } }
+type Params = { params: Promise<{ id: string }> }
 
 function repairToPortalRepair(repair: any, note?: string): PortalRepair {
   const status = repair.status as PortalRepair['status']
@@ -126,10 +126,11 @@ async function setAppStateRepairStatus(repairId: string, status: string): Promis
 
 // ── GET single release ────────────────────────────────────────────────────────
 export async function GET(_: NextRequest, { params }: Params) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const release = await prisma.outboundRelease.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: {
         initiatedBy: { select: { id: true, username: true } },
         verifiedBy:  { select: { id: true, username: true } },
@@ -144,11 +145,12 @@ export async function GET(_: NextRequest, { params }: Params) {
 
 // ── PATCH — generic field update (e.g. item confirmedSerial) ─────────────────
 export async function PATCH(request: NextRequest, { params }: Params) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const body = await request.json()
     const release = await prisma.outboundRelease.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: body,
     })
     return NextResponse.json(release)

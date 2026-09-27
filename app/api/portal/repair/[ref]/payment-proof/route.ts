@@ -26,9 +26,10 @@ function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } 
  * Screenshots are stored under their own app-state key so the repairs blob
  * stays small; legacy repairs with an inline data URL are still supported.
  */
-export async function GET(_req: NextRequest, { params }: { params: { ref: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ ref: string }> }) {
+  const resolvedParams = await params
   try {
-    const ref = decodeURIComponent(params.ref)
+    const ref = decodeURIComponent(resolvedParams.ref)
     const key = paymentProofKey(ref)
     const state = await loadAppState([key, 'deed_repairs_v2', 'deed_systemSettings'])
 

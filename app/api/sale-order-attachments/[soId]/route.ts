@@ -67,11 +67,12 @@ async function readAttachmentBytes(soId: string, meta: AttachmentMeta): Promise<
   return null
 }
 
-export async function GET(req: NextRequest, { params }: { params: { soId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ soId: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const attachments = await listAttachments(params.soId)
+  const attachments = await listAttachments(resolvedParams.soId)
   const fileId = new URL(req.url).searchParams.get('file')
   if (!fileId) {
     return NextResponse.json({ attachments: attachments.map(toPublic) })
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest, { params }: { params: { soId: string
 
   const meta = attachments.find(a => a.id === fileId)
   if (!meta) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
-  const buffer = await readAttachmentBytes(params.soId, meta)
+  const buffer = await readAttachmentBytes(resolvedParams.soId, meta)
   if (!buffer) return NextResponse.json({ error: 'Attachment file is missing' }, { status: 404 })
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
@@ -89,7 +90,8 @@ export async function GET(req: NextRequest, { params }: { params: { soId: string
   })
 }
 
-export async function POST(req: NextRequest, { params }: { params: { soId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ soId: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -111,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: { soId: strin
   try {
     const id = randomUUID()
     const originalName = safeStem(file.name || 'attachment')
-    const objectKey = attachmentObjectKey(params.soId, id, originalName)
+    const objectKey = attachmentObjectKey(resolvedParams.soId, id, originalName)
     const buffer = Buffer.from(await file.arrayBuffer())
     const contentCheck = validateFileContent(buffer, contentType)
     if (!contentCheck.ok) {
@@ -132,7 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: { soId: strin
       contentType,
     })
 
-    const existing = await listAttachments(params.soId)
+    const existing = await listAttachments(resolvedParams.soId)
     const meta: AttachmentMeta = {
       id,
       name: originalName,
@@ -143,7 +145,7 @@ export async function POST(req: NextRequest, { params }: { params: { soId: strin
       storagePath: stored.uri,
       objectKey,
     }
-    await saveStoreKeys({ [stateKey(params.soId)]: JSON.stringify([...existing, meta]) })
+    await saveStoreKeys({ [stateKey(resolvedParams.soId)]: JSON.stringify([...existing, meta]) })
     return NextResponse.json({ attachment: toPublic(meta) }, { status: 201 })
   } catch (err) {
     console.error('[sale-order-attachments] upload failed:', err)
@@ -151,26 +153,27 @@ export async function POST(req: NextRequest, { params }: { params: { soId: strin
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { soId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ soId: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const fileId = new URL(req.url).searchParams.get('file')
   if (!fileId) return NextResponse.json({ error: 'file query parameter is required' }, { status: 400 })
 
-  const attachments = await listAttachments(params.soId)
+  const attachments = await listAttachments(resolvedParams.soId)
   const meta = attachments.find(a => a.id === fileId)
   if (!meta) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
 
   try {
-    await deleteObject('uploads', meta.objectKey || attachmentObjectKey(params.soId, meta.id, meta.name))
+    await deleteObject('uploads', meta.objectKey || attachmentObjectKey(resolvedParams.soId, meta.id, meta.name))
     if (meta.storagePath && !meta.storagePath.startsWith('file://') && !meta.storagePath.startsWith('s3://')) {
       const { unlink } = await import('fs/promises')
       await unlink(meta.storagePath).catch(() => {})
     }
   } catch { /* file already gone */ }
   await saveStoreKeys({
-    [stateKey(params.soId)]: JSON.stringify(attachments.filter(a => a.id !== fileId)),
+    [stateKey(resolvedParams.soId)]: JSON.stringify(attachments.filter(a => a.id !== fileId)),
   })
   return NextResponse.json({ ok: true })
 }

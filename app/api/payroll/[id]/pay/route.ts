@@ -14,8 +14,9 @@ const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(PAY_ROLES)
     const body = await request.json().catch(() => ({}))
@@ -32,7 +33,7 @@ export async function POST(
     }
 
     const payroll = await prisma.payrollRun.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       select: {
         id: true,
         runReference: true,
@@ -113,7 +114,7 @@ export async function POST(
       return posted
     }, { isolationLevel: 'Serializable' })
 
-    await notifyPayrollPaid(params.id, actorId)
+    await notifyPayrollPaid(resolvedParams.id, actorId)
     return NextResponse.json({
       ok: true,
       journal: {

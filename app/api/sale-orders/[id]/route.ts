@@ -311,11 +311,12 @@ async function enforceSaleWorkflow(
   return null
 }
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const order = await prisma.saleOrder.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { client: true, items: true },
     })
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -329,7 +330,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   })
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const body = await request.json()
@@ -340,7 +342,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const existing = await prisma.saleOrder.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { items: true },
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -439,7 +441,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         // unconfirmed quotation with an orphaned-but-recoverable reservation —
         // never a "confirmed" Sales Order silently holding zero reserved stock.
         try {
-          const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
+          const reserveResult = await reserveStockForSaleOrder(resolvedParams.id, session.user.id)
           if (!reserveResult.ok) {
             return NextResponse.json(
               { error: reserveResult.error || 'Could not reserve stock for this order' },
@@ -459,7 +461,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     data.lockVersion = nextLockVersion(existing.lockVersion)
 
     const order = await prisma.saleOrder.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data,
       include: { client: true, items: true },
     })
@@ -472,7 +474,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           userId: session.user.id,
           action: 'confirm_sale_order',
           entityType: 'SaleOrder',
-          entityId: params.id,
+          entityId: resolvedParams.id,
           oldValues: { status: from },
           newValues: { status: 'sale' },
         }).catch(() => {})
@@ -480,14 +482,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       if (to === 'cancelled' && from !== 'cancelled') {
         // Route already wrote cancelled; release reservations without re-validating status.
         await prisma.stockReservation.updateMany({
-          where: { saleOrderId: params.id, status: 'reserved' },
+          where: { saleOrderId: resolvedParams.id, status: 'reserved' },
           data: { status: 'cancelled', releasedAt: new Date() },
         }).catch(err => console.error('[sale-orders] reservation release failed:', err))
         await writeFinancialAudit({
           userId: session.user.id,
           action: 'cancel_sale_order',
           entityType: 'SaleOrder',
-          entityId: params.id,
+          entityId: resolvedParams.id,
           oldValues: { status: from },
           newValues: { status: 'cancelled' },
         }).catch(() => {})
@@ -507,11 +509,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       await broadcastSaleOrders()
     }
 
-    if (confirming) await notifySaleOrderConfirmed(params.id, session.user.id)
+    if (confirming) await notifySaleOrderConfirmed(resolvedParams.id, session.user.id)
 
     const fresh = confirming
       ? await prisma.saleOrder.findUnique({
-          where: { id: params.id },
+          where: { id: resolvedParams.id },
           include: { client: true, items: true },
         })
       : order
@@ -519,17 +521,19 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   })
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return PUT(request, { params })
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!canWrite(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const order = await prisma.saleOrder.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { items: true },
     })
     if (!order) return NextResponse.json({ error: 'Sale order not found' }, { status: 404 })

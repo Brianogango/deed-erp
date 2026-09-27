@@ -83,7 +83,7 @@ describe('partner key management', () => {
 
   it('revokes a key (soft delete)', async () => {
     mockGetSession.mockResolvedValue(director)
-    const res = await DELETE(new Request('http://localhost/api/partner-keys/key-1', { method: 'DELETE' }), { params: { id: 'key-1' } })
+    const res = await DELETE(new Request('http://localhost/api/partner-keys/key-1', { method: 'DELETE' }), { params: Promise.resolve({ id: 'key-1' }) })
     expect(res.status).toBe(200)
     const patch = mockPrisma.partnerApiKey.update.mock.calls[0][0].data
     expect(patch.isActive).toBe(false)

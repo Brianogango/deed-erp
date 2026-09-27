@@ -10,13 +10,14 @@ export const dynamic = 'force-dynamic'
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'technical_lead', 'inventory_officer']
 
 /** GET — analyze whether this SO needs / has a linked reconfiguration. */
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const analysis = await analyzeSaleOrderReconfig(params.id)
+    const analysis = await analyzeSaleOrderReconfig(resolvedParams.id)
     if (!analysis) {
       return NextResponse.json({
-        saleOrderId: params.id,
+        saleOrderId: resolvedParams.id,
         effects: [],
         workOrder: null,
         deliveryBlocked: false,
@@ -28,11 +29,12 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 }
 
 /** POST — create/update linked draft RCF from current SO lines. */
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(WRITE_ROLES)
     const result = await syncReconfigurationFromSaleOrder({
-      saleOrderId: params.id,
+      saleOrderId: resolvedParams.id,
       userId: actor.id,
     })
     return NextResponse.json(result)

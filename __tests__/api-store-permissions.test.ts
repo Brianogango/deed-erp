@@ -309,34 +309,34 @@ describe('POST /api/store — sensitive key gating', () => {
 describe('PUT /api/store/[key] — sensitive key gating', () => {
   it('rejects a sales_rep writing deed_journalEntries directly by key', async () => {
     mockGetSession.mockResolvedValue(salesSession)
-    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: { key: 'deed_journalEntries' } })
+    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: Promise.resolve({ key: 'deed_journalEntries' }) })
     expect(res.status).toBe(403)
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 
   it('allows a director writing deed_journalEntries directly by key', async () => {
     mockGetSession.mockResolvedValue(directorSession)
-    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: { key: 'deed_journalEntries' } })
+    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: Promise.resolve({ key: 'deed_journalEntries' }) })
     expect(res.status).toBe(200)
     expect(mockSaveStoreKeys).toHaveBeenCalled()
   })
 
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockResolvedValue(null)
-    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: { key: 'deed_journalEntries' } })
+    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: Promise.resolve({ key: 'deed_journalEntries' }) })
     expect(res.status).toBe(401)
   })
 
   it('rejects a technician overwriting deed_invoices by key', async () => {
     mockGetSession.mockResolvedValue(technicianSession)
-    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: { key: 'deed_invoices' } })
+    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: Promise.resolve({ key: 'deed_invoices' }) })
     expect(res.status).toBe(403)
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 
   it('blocks even a director from writing the server-managed audit timeline by key', async () => {
     mockGetSession.mockResolvedValue(directorSession)
-    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: { key: 'deed_audit_timeline_v1' } })
+    const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: Promise.resolve({ key: 'deed_audit_timeline_v1' }) })
     expect(res.status).toBe(403)
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
@@ -407,7 +407,7 @@ describe('GET /api/store — sensitive key READ gating', () => {
     mockLoadAppState.mockResolvedValue({ deed_payslips: [{ id: 'p1' }] })
     const res = await STORE_KEY_GET(
       new NR('http://localhost/api/store/deed_payslips', { method: 'GET' }),
-      { params: { key: 'deed_payslips' } },
+      { params: Promise.resolve({ key: 'deed_payslips' }) },
     )
     expect(res.status).toBe(400)
   })
@@ -475,7 +475,7 @@ describe('GET /api/store — financial ledger CONTENT filtering', () => {
     mockLoadAppState.mockResolvedValue({ deed_invoices: invoices })
     const res = await STORE_KEY_GET(
       new NR('http://localhost/api/store/deed_invoices', { method: 'GET' }),
-      { params: { key: 'deed_invoices' } },
+      { params: Promise.resolve({ key: 'deed_invoices' }) },
     )
     const body = await res.json()
     expect(body.value.map((i: any) => i.id)).toEqual(['i1'])
@@ -527,7 +527,7 @@ describe('GET /api/store — collaborative high-risk content filtering', () => {
     mockGetSession.mockResolvedValue({ user: { ...technicianSession.user, modules: ['dashboard'] } })
     const response = await STORE_KEY_GET(
       new NR('http://localhost/api/store/deed_contacts', { method: 'GET' }),
-      { params: { key: 'deed_contacts' } },
+      { params: Promise.resolve({ key: 'deed_contacts' }) },
     )
     expect(response.status).toBe(403)
     expect(mockLoadAppState).not.toHaveBeenCalled()
@@ -702,7 +702,7 @@ describe('POST /api/store — partial-view writes merge instead of replace', () 
       new NR('http://localhost/api/store/deed_invoices', {
         method: 'PUT', body: JSON.stringify({ value: tampered }), headers: { 'Content-Type': 'application/json' },
       }),
-      { params: { key: 'deed_invoices' } },
+      { params: Promise.resolve({ key: 'deed_invoices' }) },
     )
     expect(res.status).toBe(200)
     const savedCall = mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)

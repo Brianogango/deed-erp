@@ -6,7 +6,8 @@ import { cancelWorkOrder } from '@/lib/reconfiguration/service'
 /**
  * POST /api/reconfiguration/[id]/cancel
  */
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const user = await requirePermission('editReconfigurationDraft')
     const body = await request.json()
@@ -19,7 +20,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     const order = await cancelWorkOrder({
-      id: params.id,
+      id: resolvedParams.id,
       userId: user.id,
       ...parsed.data,
     })

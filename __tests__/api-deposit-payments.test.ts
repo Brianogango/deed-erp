@@ -65,7 +65,7 @@ beforeEach(() => {
 
 describe('POST /api/deposits/:id/payments', () => {
   it('maps the request body onto the service call', async () => {
-    const res = await POST(postReq(DEPOSIT_ID, { amount: 20000, method: 'mpesa', ref: 'ABC123', idempotencyKey: 'k-1' }), { params: { id: DEPOSIT_ID } })
+    const res = await POST(postReq(DEPOSIT_ID, { amount: 20000, method: 'mpesa', ref: 'ABC123', idempotencyKey: 'k-1' }), { params: Promise.resolve({ id: DEPOSIT_ID }) })
     expect(res.status).toBe(200)
     expect(mockAddDepositReceipt).toHaveBeenCalledWith(expect.objectContaining({
       depositId: DEPOSIT_ID,
@@ -78,7 +78,7 @@ describe('POST /api/deposits/:id/payments', () => {
   })
 
   it('defaults the method to cash and nulls optional fields', async () => {
-    await POST(postReq(DEPOSIT_ID, { amount: 1000 }), { params: { id: DEPOSIT_ID } })
+    await POST(postReq(DEPOSIT_ID, { amount: 1000 }), { params: Promise.resolve({ id: DEPOSIT_ID }) })
     expect(mockAddDepositReceipt).toHaveBeenCalledWith(expect.objectContaining({
       method: 'cash',
       paymentRef: null,
@@ -88,7 +88,7 @@ describe('POST /api/deposits/:id/payments', () => {
   })
 
   it('returns the updated deposit with numeric totals', async () => {
-    const res = await POST(postReq(DEPOSIT_ID, { amount: 20000 }), { params: { id: DEPOSIT_ID } })
+    const res = await POST(postReq(DEPOSIT_ID, { amount: 20000 }), { params: Promise.resolve({ id: DEPOSIT_ID }) })
     const body = await res.json()
     expect(body.ref).toBe('DEP/0001')
     expect(body.totalPaid).toBe(40000)
@@ -97,26 +97,26 @@ describe('POST /api/deposits/:id/payments', () => {
 
   it('returns 404 when the deposit does not exist', async () => {
     mockAddDepositReceipt.mockRejectedValue(Object.assign(new Error('No record found'), { code: 'P2025' }))
-    const res = await POST(postReq('missing-id', { amount: 100 }), { params: { id: 'missing-id' } })
+    const res = await POST(postReq('missing-id', { amount: 100 }), { params: Promise.resolve({ id: 'missing-id' }) })
     expect(res.status).toBe(404)
   })
 
   it('returns 422 when the deposit status rejects payments', async () => {
     mockAddDepositReceipt.mockRejectedValue(new Error('Cannot add payment to a deposit in this status'))
-    const res = await POST(postReq(DEPOSIT_ID, { amount: 100 }), { params: { id: DEPOSIT_ID } })
+    const res = await POST(postReq(DEPOSIT_ID, { amount: 100 }), { params: Promise.resolve({ id: DEPOSIT_ID }) })
     expect(res.status).toBe(422)
     expect(String((await res.json()).error)).toContain('status')
   })
 
   it('returns 422 for a zero amount rejected by the service', async () => {
     mockAddDepositReceipt.mockRejectedValue(new Error('Payment amount must be greater than zero'))
-    const res = await POST(postReq(DEPOSIT_ID, { amount: 0 }), { params: { id: DEPOSIT_ID } })
+    const res = await POST(postReq(DEPOSIT_ID, { amount: 0 }), { params: Promise.resolve({ id: DEPOSIT_ID }) })
     expect(res.status).toBe(422)
   })
 
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(Object.assign(new Error('Unauthorized'), { status: 401 }))
-    const res = await POST(postReq(DEPOSIT_ID, { amount: 100 }), { params: { id: DEPOSIT_ID } })
+    const res = await POST(postReq(DEPOSIT_ID, { amount: 100 }), { params: Promise.resolve({ id: DEPOSIT_ID }) })
     expect(res.status).toBe(401)
   })
 })

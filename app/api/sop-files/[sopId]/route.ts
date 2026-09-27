@@ -36,16 +36,17 @@ function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } 
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { sopId: string } }
+  { params }: { params: Promise<{ sopId: string }> }
 ) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
-    const state = await loadAppState([sopFileKey(params.sopId)])
-    const stored = state[sopFileKey(params.sopId)] as { dataUrl: string; fileName: string } | string | undefined
+    const state = await loadAppState([sopFileKey(resolvedParams.sopId)])
+    const stored = state[sopFileKey(resolvedParams.sopId)] as { dataUrl: string; fileName: string } | string | undefined
 
     if (!stored) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 })
@@ -89,8 +90,9 @@ export async function GET(
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { sopId: string } }
+  { params }: { params: Promise<{ sopId: string }> }
 ) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -133,7 +135,7 @@ export async function POST(
 
   try {
     await saveStoreKeys({
-      [sopFileKey(params.sopId)]: JSON.stringify({ dataUrl: body.dataUrl, fileName: body.fileName }),
+      [sopFileKey(resolvedParams.sopId)]: JSON.stringify({ dataUrl: body.dataUrl, fileName: body.fileName }),
     })
     return NextResponse.json({ ok: true, fileSize: parsed.buffer.length })
   } catch {
@@ -147,8 +149,9 @@ export async function POST(
  */
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { sopId: string } }
+  { params }: { params: Promise<{ sopId: string }> }
 ) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -160,7 +163,7 @@ export async function DELETE(
   }
 
   try {
-    await saveStoreKeys({ [sopFileKey(params.sopId)]: '' })
+    await saveStoreKeys({ [sopFileKey(resolvedParams.sopId)]: '' })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 })

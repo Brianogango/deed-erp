@@ -52,7 +52,7 @@ function postReq(body: unknown): any {
   })
 }
 
-const params = { params: { id: DELIVERY_ID } }
+const params = { params: Promise.resolve({ id: DELIVERY_ID }) }
 
 beforeEach(() => {
   vi.clearAllMocks()

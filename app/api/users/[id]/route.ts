@@ -7,13 +7,14 @@ import { assertPermission } from '@/lib/auth/authorization'
 import { isDirector } from '@/lib/auth/access'
 import { sendEmail } from '@/lib/integrations/email'
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const actor = session.user
     
     // Authorization: User can update themselves, or needs 'manageUsers' permission
-    if (actor.id !== params.id) {
+    if (actor.id !== resolvedParams.id) {
       assertPermission(actor, 'manageUsers')
     }
 
@@ -27,14 +28,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     // Validate using Zod
     const validated = await validate(userUpdateSchema, body)
 
-    const existingUser = await findAuthUserById(params.id)
+    const existingUser = await findAuthUserById(resolvedParams.id)
     if (!existingUser) {
       throw Object.assign(new Error('User not found'), { status: 404 })
     }
 
     // Security: Prevent privilege escalation
     // Non-admin users updating their own profile cannot change role, modules, or active status.
-    if (actor.id === params.id && !isDirector(actor.role)) {
+    if (actor.id === resolvedParams.id && !isDirector(actor.role)) {
       delete validated.role
       delete validated.modules
       delete validated.active
@@ -62,14 +63,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     // Perform update
     const passwordHash = validated.password ? await hashPassword(validated.password) : undefined
-    const updatedUser = await updateAuthUser(params.id, validated as any, passwordHash)
+    const updatedUser = await updateAuthUser(resolvedParams.id, validated as any, passwordHash)
     
     if (!updatedUser) {
       throw Object.assign(new Error('Update failed'), { status: 500 })
     }
 
     if (body.unlock) {
-      await clearFailedLogin(params.id)
+      await clearFailedLogin(resolvedParams.id)
     }
 
     // Security Alert Email
@@ -95,14 +96,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   })
 }
 
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requirePermission('manageUsers')
-    if (actor.id === params.id) {
+    if (actor.id === resolvedParams.id) {
       throw Object.assign(new Error('You cannot delete your own account'), { status: 400 })
     }
     
-    const deleted = await deleteAuthUser(params.id)
+    const deleted = await deleteAuthUser(resolvedParams.id)
     if (!deleted) {
       throw Object.assign(new Error('User not found or already deleted'), { status: 404 })
     }
@@ -113,10 +115,11 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
 
 // POST /api/users/[id]  body: { action: 'deactivate' | 'reactivate' }
 // Soft-delete (deactivate) or re-enable a user without removing the record.
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requirePermission('manageUsers')
-    if (actor.id === params.id) {
+    if (actor.id === resolvedParams.id) {
       throw Object.assign(new Error('You cannot deactivate your own account'), { status: 400 })
     }
     let body: any = {}
@@ -124,22 +127,22 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const action = body?.action as string | undefined
 
     if (action === 'deactivate') {
-      const result = await deactivateAuthUser(params.id)
+      const result = await deactivateAuthUser(resolvedParams.id)
       if (!result) throw Object.assign(new Error('User not found'), { status: 404 })
       return NextResponse.json({
         ok: true,
         user: { id: result.id, active: false },
-        audit: { action: 'deactivate_user', actor: sanitizeActor(actor), targetId: params.id },
+        audit: { action: 'deactivate_user', actor: sanitizeActor(actor), targetId: resolvedParams.id },
       })
     }
 
     if (action === 'reactivate') {
-      const result = await reactivateAuthUser(params.id)
+      const result = await reactivateAuthUser(resolvedParams.id)
       if (!result) throw Object.assign(new Error('User not found'), { status: 404 })
       return NextResponse.json({
         ok: true,
         user: { id: result.id, active: true },
-        audit: { action: 'reactivate_user', actor: sanitizeActor(actor), targetId: params.id },
+        audit: { action: 'reactivate_user', actor: sanitizeActor(actor), targetId: resolvedParams.id },
       })
     }
 

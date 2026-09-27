@@ -36,7 +36,8 @@ async function mergeReceipt(params: { id: string; body: Record<string, unknown>;
   return { item: receipts[idx], valuation }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!WRITE_ROLES.includes(session.user.role)) {
@@ -44,16 +45,17 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  const result = await mergeReceipt({ id: params.id, body, userId: session.user.id })
+  const result = await mergeReceipt({ id: resolvedParams.id, body, userId: session.user.id })
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: result.status })
   return NextResponse.json(result)
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return PATCH(request, { params })
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!WRITE_ROLES.includes(session.user.role)) {
@@ -61,7 +63,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   }
   const state = await loadAppState(['deed_receipts'])
   const receipts: any[] = Array.isArray(state.deed_receipts) ? state.deed_receipts as any[] : []
-  const existing = receipts.find(r => r.id === params.id)
+  const existing = receipts.find(r => r.id === resolvedParams.id)
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (existing.status === 'validated') {
     return NextResponse.json(
@@ -69,7 +71,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       { status: 409 },
     )
   }
-  const filtered = receipts.filter(r => r.id !== params.id)
+  const filtered = receipts.filter(r => r.id !== resolvedParams.id)
   await saveStoreKeys({ deed_receipts: JSON.stringify(filtered) })
   return NextResponse.json({ ok: true })
 }

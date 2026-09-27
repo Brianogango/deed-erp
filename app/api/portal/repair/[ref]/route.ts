@@ -42,9 +42,10 @@ function maskEmail(email: string | null | undefined): string {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { ref: string } }
+  { params }: { params: Promise<{ ref: string }> }
 ) {
-  const ref = decodeURIComponent(params.ref)
+  const resolvedParams = await params
+  const ref = decodeURIComponent(resolvedParams.ref)
   const repair = await lookupRepair(ref)
 
   if (!repair) {

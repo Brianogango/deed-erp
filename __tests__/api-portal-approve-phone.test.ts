@@ -56,7 +56,7 @@ describe('POST /api/portal/repair/:ref/approve phone verification', () => {
       body: JSON.stringify({ approved: true }),
       headers: { 'Content-Type': 'application/json' },
     })
-    const res = await POST(req, { params: { ref: 'REP/2026/0001' } })
+    const res = await POST(req, { params: Promise.resolve({ ref: 'REP/2026/0001' }) })
     expect(res.status).toBe(403)
   })
 
@@ -66,7 +66,7 @@ describe('POST /api/portal/repair/:ref/approve phone verification', () => {
       body: JSON.stringify({ approved: true, verifyPhone: '0799999999' }),
       headers: { 'Content-Type': 'application/json' },
     })
-    const res = await POST(req, { params: { ref: 'REP/2026/0001' } })
+    const res = await POST(req, { params: Promise.resolve({ ref: 'REP/2026/0001' }) })
     expect(res.status).toBe(403)
   })
 
@@ -91,7 +91,7 @@ describe('POST /api/portal/repair/:ref/approve phone verification', () => {
       body: JSON.stringify({ approved: true }),
       headers: { 'Content-Type': 'application/json' },
     })
-    const res = await POST(req, { params: { ref: 'REP/2026/0001' } })
+    const res = await POST(req, { params: Promise.resolve({ ref: 'REP/2026/0001' }) })
     expect(res.status).not.toBe(403)
   })
 })

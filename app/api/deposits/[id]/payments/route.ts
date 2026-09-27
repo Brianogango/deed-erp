@@ -22,7 +22,8 @@ function depositPaymentError(err: unknown): { message: string; status: number } 
   return { message, status: 500 }
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const parsed = depositPaymentSchema.safeParse(await request.json())
@@ -33,7 +34,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     let row
     try {
       row = await addDepositReceipt({
-        depositId: params.id,
+        depositId: resolvedParams.id,
         amount: body.amount,
         method: body.method,
         paymentRef: body.ref || null,

@@ -28,15 +28,16 @@ function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } 
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { expenseId: string } }
+  { params }: { params: Promise<{ expenseId: string }> }
 ) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    const state = await loadAppState([receiptKey(params.expenseId)])
-    const dataUrl = state[receiptKey(params.expenseId)] as string | undefined
+    const state = await loadAppState([receiptKey(resolvedParams.expenseId)])
+    const dataUrl = state[receiptKey(resolvedParams.expenseId)] as string | undefined
     if (!dataUrl) {
       return NextResponse.json({ error: 'Receipt not found' }, { status: 404 })
     }
@@ -67,8 +68,9 @@ export async function GET(
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { expenseId: string } }
+  { params }: { params: Promise<{ expenseId: string }> }
 ) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -83,7 +85,7 @@ export async function POST(
     return NextResponse.json({ error: 'dataUrl is required' }, { status: 400 })
   }
   try {
-    await saveStoreKeys({ [receiptKey(params.expenseId)]: body.dataUrl })
+    await saveStoreKeys({ [receiptKey(resolvedParams.expenseId)]: body.dataUrl })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Failed to save receipt' }, { status: 500 })
@@ -96,14 +98,15 @@ export async function POST(
  */
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { expenseId: string } }
+  { params }: { params: Promise<{ expenseId: string }> }
 ) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    await saveStoreKeys({ [receiptKey(params.expenseId)]: '' })
+    await saveStoreKeys({ [receiptKey(resolvedParams.expenseId)]: '' })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Failed to delete receipt' }, { status: 500 })

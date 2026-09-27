@@ -11,7 +11,8 @@ const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_
 
 // Approve / reject / cancel a leave request. Balance counters are recomputed
 // server-side from the transition — the client no longer supplies balances.
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isRoleAllowed(session.user.role, WRITE_ROLES)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -19,7 +20,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-  const existing = await prisma.leaveRequest.findUnique({ where: { id: params.id } })
+  const existing = await prisma.leaveRequest.findUnique({ where: { id: resolvedParams.id } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const requested = body.request ?? body
@@ -64,7 +65,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 
   const updated = await prisma.leaveRequest.update({
-    where: { id: params.id },
+    where: { id: resolvedParams.id },
     data: {
       status: nextStatus as any,
       reviewedByName: session.user.name,
@@ -78,7 +79,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     userId: session.user.id,
     action: 'decide_leave',
     entityType: 'leave_request',
-    entityId: params.id,
+    entityId: resolvedParams.id,
     oldValues: { status: existing.status },
     newValues: { status: nextStatus, employeeId: existing.employeeId },
   })
@@ -98,17 +99,19 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   return NextResponse.json({ item: toClientRequest(updated as any) })
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return PUT(request, { params })
 }
 
 // Soft-cancel: leave records are never hard-deleted (they hold approval history).
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isRoleAllowed(session.user.role, WRITE_ROLES)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const existing = await prisma.leaveRequest.findUnique({ where: { id: params.id } })
+  const existing = await prisma.leaveRequest.findUnique({ where: { id: resolvedParams.id } })
   if (!existing) return NextResponse.json({ ok: true })
 
   const year = new Date(existing.startDate).getFullYear()
@@ -117,8 +120,8 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   if (existing.status === 'pending_hr') await adjustBalance(existing.employeeId, leaveType, year, { pending: -days })
   else if (existing.status === 'approved') await adjustBalance(existing.employeeId, leaveType, year, { used: -days })
 
-  const cancelled = await prisma.leaveRequest.update({ where: { id: params.id }, data: { status: 'cancelled' as any } })
-  await writeFinancialAudit({ userId: session.user.id, action: 'cancel_leave', entityType: 'leave_request', entityId: params.id })
+  const cancelled = await prisma.leaveRequest.update({ where: { id: resolvedParams.id }, data: { status: 'cancelled' as any } })
+  await writeFinancialAudit({ userId: session.user.id, action: 'cancel_leave', entityType: 'leave_request', entityId: resolvedParams.id })
   await publishLeaveCancelled(cancelled as any, session.user.id)
   return NextResponse.json({ ok: true })
 }

@@ -505,14 +505,14 @@ describe('POST /api/invoices — isCreditNote', () => {
 describe('GET /api/invoices/:id', () => {
   it('returns 200 with the invoice', async () => {
     mockPrismaInvoice.findUnique.mockResolvedValue(baseInvoice)
-    const res = await GET_ONE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`), { params: { id: INVOICE_ID } })
+    const res = await GET_ONE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(200)
     expect((await res.json()).id).toBe(INVOICE_ID)
   })
 
   it('returns 404 when invoice not found', async () => {
     mockPrismaInvoice.findUnique.mockResolvedValue(null)
-    const res = await GET_ONE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`), { params: { id: INVOICE_ID } })
+    const res = await GET_ONE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(404)
   })
 
@@ -530,7 +530,7 @@ describe('GET /api/invoices/:id', () => {
 
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(err401())
-    const res = await GET_ONE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`), { params: { id: INVOICE_ID } })
+    const res = await GET_ONE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(401)
   })
 })
@@ -540,14 +540,14 @@ describe('PUT /api/invoices/:id', () => {
   it('updates an invoice and returns 200', async () => {
     mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, lockVersion: 0 })
     mockPrismaInvoice.update.mockResolvedValue({ ...baseInvoice, status: 'approved', lockVersion: 1 })
-    const res = await PUT(idReq(INVOICE_ID, { status: 'posted' }), { params: { id: INVOICE_ID } })
+    const res = await PUT(idReq(INVOICE_ID, { status: 'posted' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(200)
   })
 
   it('maps status alias on update (pending → pending_approval)', async () => {
     mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, lockVersion: 0 })
     mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
-    await PUT(idReq(INVOICE_ID, { status: 'pending' }), { params: { id: INVOICE_ID } })
+    await PUT(idReq(INVOICE_ID, { status: 'pending' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     // The guarded write goes through updateMany (optimistic lockVersion).
     const updateData = mockPrismaInvoice.updateMany.mock.calls[0][0].data
     expect(updateData.status).toBe('pending_approval')
@@ -557,7 +557,7 @@ describe('PUT /api/invoices/:id', () => {
     mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, lockVersion: 0 })
     mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
     const lines = [{ description: 'Service', qty: 1, unitPrice: 5000 }]
-    await PUT(idReq(INVOICE_ID, { lines }), { params: { id: INVOICE_ID } })
+    await PUT(idReq(INVOICE_ID, { lines }), { params: Promise.resolve({ id: INVOICE_ID }) })
     // Items are replaced via the item table, not a nested invoice update.
     expect(mockPrismaInvoiceItem.deleteMany).toHaveBeenCalledWith({ where: { invoiceId: INVOICE_ID } })
     expect(mockPrismaInvoiceItem.createMany).toHaveBeenCalled()
@@ -569,14 +569,14 @@ describe('PUT /api/invoices/:id', () => {
       items: [{ id: 'li1', description: 'Kept', qty: 1, unitPrice: 5000 }],
     })
     mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
-    await PUT(idReq(INVOICE_ID, { lines: [], status: 'posted' }), { params: { id: INVOICE_ID } })
+    await PUT(idReq(INVOICE_ID, { lines: [], status: 'posted' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(mockPrismaInvoiceItem.deleteMany).not.toHaveBeenCalled()
     expect(mockPrismaInvoiceItem.createMany).not.toHaveBeenCalled()
   })
 
   it('returns 403 for unauthorized role', async () => {
     mockRequireRole.mockRejectedValue(err403())
-    const res = await PUT(idReq(INVOICE_ID, {}), { params: { id: INVOICE_ID } })
+    const res = await PUT(idReq(INVOICE_ID, {}), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(403)
   })
 
@@ -607,7 +607,7 @@ describe('PUT /api/invoices/:id', () => {
     mockCreateJournalEntry.mockRejectedValue(
       Object.assign(new Error('Unknown journal code: SAL'), { status: 409 }),
     )
-    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: { id: INVOICE_ID } })
+    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(200)
     expect((await res.json()).status).toBe('approved')
     expect(mockPrismaInvoice.updateMany).toHaveBeenCalled()
@@ -626,7 +626,7 @@ describe('PUT /api/invoices/:id', () => {
     })
     mockPrismaInvoice.findUniqueOrThrow.mockResolvedValue({ ...baseInvoice, status: 'approved', lockVersion: 1 })
     mockCreateJournalEntry.mockRejectedValue(new Error('Fiscal period 2026 is draft and cannot accept postings'))
-    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: { id: INVOICE_ID } })
+    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(200)
     expect((await res.json()).status).toBe('approved')
   })
@@ -645,7 +645,7 @@ describe('PUT /api/invoices/:id', () => {
       lines: [{ description: 'mutated', qty: 9, unitPrice: 1 }],
       totalAmount: 9,
       subtotal: 9,
-    }), { params: { id: INVOICE_ID } })
+    }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(200)
     expect((await res.json()).status).toBe('approved')
     expect(mockPrismaInvoice.updateMany).not.toHaveBeenCalled()
@@ -658,7 +658,7 @@ describe('PUT /api/invoices/:id', () => {
       lockVersion: 2,
       items: [{ id: 'li1', description: 'Laptop', qty: 1, unitPrice: 5000, taxRate: 16, taxCategory: 'standard_16', lineSubtotal: 5000, lineTax: 800, lineTotal: 5800 }],
     })
-    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13', lockVersion: 0 }), { params: { id: INVOICE_ID } })
+    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13', lockVersion: 0 }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(409)
     const body = await res.json()
     expect(body.error).toMatch(/modified by another user/)
@@ -673,7 +673,7 @@ describe('PUT /api/invoices/:id', () => {
       items: [{ id: 'li1', description: 'Laptop', qty: 1, unitPrice: 5000, taxRate: 16, taxCategory: 'standard_16', lineSubtotal: 5000, lineTax: 800, lineTotal: 5800 }],
     })
     mockPrismaInvoice.findUniqueOrThrow.mockResolvedValue({ ...baseInvoice, status: 'approved', lockVersion: 3 })
-    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: { id: INVOICE_ID } })
+    const res = await PUT(idReq(INVOICE_ID, { status: 'posted', date: '2026-09-13' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(200)
     expect(mockPrismaInvoice.updateMany).toHaveBeenCalled()
     expect(mockPrismaInvoice.updateMany.mock.calls[0][0].where).toEqual({ id: INVOICE_ID, lockVersion: 2 })
@@ -689,7 +689,7 @@ describe('PUT /api/invoices/:id', () => {
     const res = await PUT(idReq(INVOICE_ID, {
       lines: [{ description: 'mutated', qty: 9, unitPrice: 1 }],
       totalAmount: 9,
-    }), { params: { id: INVOICE_ID } })
+    }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/immutable/)
     expect(mockPrismaInvoice.updateMany).not.toHaveBeenCalled()
@@ -701,7 +701,7 @@ describe('DELETE /api/invoices/:id', () => {
   it('voids (not hard-deletes) an unpaid invoice and returns { ok: true }', async () => {
     mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, amountPaid: 0 })
     mockPrismaInvoice.update.mockResolvedValue({ ...baseInvoice, status: 'voided' })
-    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: { id: INVOICE_ID } })
+    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(200)
     expect((await res.json()).ok).toBe(true)
     // Never hard-deletes — transitions to voided instead.
@@ -711,26 +711,26 @@ describe('DELETE /api/invoices/:id', () => {
 
   it('refuses to void a paid invoice (409)', async () => {
     mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, amountPaid: 5800 })
-    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: { id: INVOICE_ID } })
+    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(409)
     expect(mockPrismaInvoice.update).not.toHaveBeenCalled()
   })
 
   it('returns 404 for a missing invoice', async () => {
     mockPrismaInvoice.findUnique.mockResolvedValue(null)
-    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: { id: INVOICE_ID } })
+    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(404)
   })
 
   it('returns 403 for unauthorized role', async () => {
     mockRequireRole.mockRejectedValue(err403())
-    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: { id: INVOICE_ID } })
+    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(403)
   })
 
   it('returns 401 when unauthenticated', async () => {
     mockRequireRole.mockRejectedValue(err401())
-    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: { id: INVOICE_ID } })
+    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: Promise.resolve({ id: INVOICE_ID }) })
     expect(res.status).toBe(401)
   })
 })

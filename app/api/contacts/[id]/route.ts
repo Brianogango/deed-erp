@@ -8,11 +8,12 @@ export const dynamic = 'force-dynamic'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
-async function updateContact(request: Request, { params }: { params: { id: string } }) {
+async function updateContact(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
     const body = await request.json() as ContactInput
-    const updated = await updateContactById(prisma, params.id, body)
+    const updated = await updateContactById(prisma, resolvedParams.id, body)
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (typeof updated === 'string') {
       return NextResponse.json({ error: updated }, { status: 422 })
@@ -24,10 +25,11 @@ async function updateContact(request: Request, { params }: { params: { id: strin
   })
 }
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const client = await prisma.client.findUnique({ where: { id: params.id } })
+    const client = await prisma.client.findUnique({ where: { id: resolvedParams.id } })
     if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(clientToContact(client))
   })
@@ -36,10 +38,11 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 export const PATCH = updateContact
 export const PUT = updateContact
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
-    const deleted = await deleteContactById(prisma, params.id)
+    const deleted = await deleteContactById(prisma, resolvedParams.id)
     if (!deleted) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }

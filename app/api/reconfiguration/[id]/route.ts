@@ -11,10 +11,11 @@ import { assertVersion, isMutableDraftStatus } from '@/lib/reconfiguration/state
 /**
  * GET /api/reconfiguration/[id]
  */
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requirePermission('viewReconfiguration')
-    const order = await getWorkOrder(params.id)
+    const order = await getWorkOrder(resolvedParams.id)
     return NextResponse.json(order)
   })
 }
@@ -23,7 +24,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
  * PATCH /api/reconfiguration/[id]
  * Edit draft fields; optionally re-apply target configuration.
  */
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const user = await requirePermission('editReconfigurationDraft')
     const body = await request.json()
@@ -36,7 +38,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
 
     const data = parsed.data
-    const wo = await getWorkOrder(params.id)
+    const wo = await getWorkOrder(resolvedParams.id)
     assertVersion(wo.version, data.version)
 
     if (!isMutableDraftStatus(wo.status as any) && wo.status !== 'components_reserved') {
@@ -48,7 +50,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
 
     if (data.target) {
-      await applyTargetToWorkOrder(params.id, data.target, user.id)
+      await applyTargetToWorkOrder(resolvedParams.id, data.target, user.id)
     }
 
     const patch: Record<string, unknown> = { updatedById: user.id }
@@ -67,11 +69,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         patch.version = { increment: 1 }
       }
       await prisma.reconfigurationWorkOrder.update({
-        where: { id: params.id },
+        where: { id: resolvedParams.id },
         data: patch,
       })
     }
 
-    return NextResponse.json(await getWorkOrder(params.id))
+    return NextResponse.json(await getWorkOrder(resolvedParams.id))
   })
 }

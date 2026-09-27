@@ -30,11 +30,12 @@ function mapOpportunityToDb(body: any) {
   return data
 }
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const opp = await prisma.opportunity.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { client: true, assignedTo: true, activities: true },
     })
     if (!opp) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -48,12 +49,13 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   })
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    const existing = await prisma.opportunity.findUnique({ where: { id: params.id } })
+    const existing = await prisma.opportunity.findUnique({ where: { id: resolvedParams.id } })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (!canAccessRecord(session.user.role, 'opportunity', {
       ownerId: existing.createdById,
@@ -66,7 +68,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const data = mapOpportunityToDb(body)
     if (session.user.role === 'sales_rep') delete data.assignedToId
     const opp = await prisma.opportunity.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data,
       include: { client: true, assignedTo: true },
     })
@@ -75,15 +77,17 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   })
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return PUT(request, { params })
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    const existing = await prisma.opportunity.findUnique({ where: { id: params.id } })
+    const existing = await prisma.opportunity.findUnique({ where: { id: resolvedParams.id } })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (!canAccessRecord(session.user.role, 'opportunity', {
       ownerId: existing.createdById,
@@ -91,7 +95,7 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     }, session.user.id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    await prisma.opportunity.delete({ where: { id: params.id } })
+    await prisma.opportunity.delete({ where: { id: resolvedParams.id } })
     void broadcastOpportunities()
     return NextResponse.json({ ok: true })
   })

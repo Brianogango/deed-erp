@@ -51,7 +51,7 @@ describe('DELETE /api/repairs/[id]', () => {
       user: { id: 'director-1', role: 'director', name: 'Director' },
     })
 
-    const response = await DELETE(request, { params: { id: 'repair-1' } })
+    const response = await DELETE(request, { params: Promise.resolve({ id: 'repair-1' }) })
 
     expect(response.status).toBe(200)
     expect(mockSaveStoreKeys).toHaveBeenCalledWith({ deed_repairs_v2: '[]' })
@@ -62,7 +62,7 @@ describe('DELETE /api/repairs/[id]', () => {
       user: { id: 'director-1', role: 'director', name: 'Director' },
     })
 
-    await DELETE(request, { params: { id: 'repair-1' } })
+    await DELETE(request, { params: Promise.resolve({ id: 'repair-1' }) })
 
     expect(mockRepairDeleteMany).toHaveBeenCalledTimes(1)
     const where = mockRepairDeleteMany.mock.calls[0][0].where
@@ -78,7 +78,7 @@ describe('DELETE /api/repairs/[id]', () => {
     })
     mockRepairDeleteMany.mockRejectedValue(new Error('connection lost'))
 
-    const response = await DELETE(request, { params: { id: 'repair-1' } })
+    const response = await DELETE(request, { params: Promise.resolve({ id: 'repair-1' }) })
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toMatchObject({ error: expect.stringMatching(/reappear/i) })
@@ -89,7 +89,7 @@ describe('DELETE /api/repairs/[id]', () => {
       user: { id: 'tech-1', role: 'technician', name: 'Technician' },
     })
 
-    const response = await DELETE(request, { params: { id: 'repair-1' } })
+    const response = await DELETE(request, { params: Promise.resolve({ id: 'repair-1' }) })
 
     expect(response.status).toBe(403)
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()

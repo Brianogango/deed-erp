@@ -11,11 +11,12 @@ import {
  */
 export async function GET(
   _request: Request,
-  { params }: { params: { serialId: string } },
+  { params }: { params: Promise<{ serialId: string }> },
 ) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requirePermission('viewReconfiguration')
-    const config = await getDeviceConfiguration(decodeURIComponent(params.serialId))
+    const config = await getDeviceConfiguration(decodeURIComponent(resolvedParams.serialId))
     return NextResponse.json(config)
   })
 }
@@ -26,12 +27,13 @@ export async function GET(
  */
 export async function POST(
   request: Request,
-  { params }: { params: { serialId: string } },
+  { params }: { params: Promise<{ serialId: string }> },
 ) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const user = await requirePermission('editReconfigurationDraft')
     const body = await request.json()
-    const serialId = decodeURIComponent(params.serialId)
+    const serialId = decodeURIComponent(resolvedParams.serialId)
     const parsed = seedInstallationSchema.safeParse({ ...body, serialId })
     if (!parsed.success) {
       return NextResponse.json(

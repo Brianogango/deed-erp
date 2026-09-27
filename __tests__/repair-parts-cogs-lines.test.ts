@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveConsumedLines } from '@/app/api/repairs/[id]/parts-cogs/route'
+import { resolveConsumedLines } from '@/lib/repair/parts-cogs-lines'
 
 const repair = {
   partsUsed: [

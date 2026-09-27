@@ -282,7 +282,7 @@ describe('PATCH /api/purchase-orders/:id', () => {
     await PATCH(patchReq({
       lockVersion: 2,
       lines: [{ id: ITEM_ID, productId: PRODUCT_ID, qty: 10, qtyReceived: 0, qtyBilled: 0, unitPrice: 100, taxRate: 16, subtotal: 1000 }],
-    }), { params: { id: PO_ID } })
+    }), { params: Promise.resolve({ id: PO_ID }) })
 
     const updateCall = mockPrismaPurchaseOrder.update.mock.calls[0][0]
     // The line is updated in place (see grn_items_po_item_id_fkey), not recreated.
@@ -301,7 +301,7 @@ describe('PATCH /api/purchase-orders/:id', () => {
       lockVersion: 2,
       notes: 'Delivery moved to Friday',
       lines: [{ id: ITEM_ID, productId: PRODUCT_ID, qty: 10, unitPrice: 100, taxRate: 16 }],
-    }), { params: { id: PO_ID } })
+    }), { params: Promise.resolve({ id: PO_ID }) })
 
     expect(res.status).toBe(200)
     const data = mockPrismaPurchaseOrder.update.mock.calls[0][0].data
@@ -312,7 +312,7 @@ describe('PATCH /api/purchase-orders/:id', () => {
 
   it('refuses to remove a line that has already been received', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue(existingWithItems)
-    const res = await PATCH(patchReq({ lockVersion: 2, lines: [] }), { params: { id: PO_ID } })
+    const res = await PATCH(patchReq({ lockVersion: 2, lines: [] }), { params: Promise.resolve({ id: PO_ID }) })
     expect(res.status).toBe(409)
     await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('already been received') })
     expect(mockPrismaPurchaseOrder.update).not.toHaveBeenCalled()
@@ -325,7 +325,7 @@ describe('PATCH /api/purchase-orders/:id', () => {
       items: [{ id: ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 10, qtyReceived: 0, qtyBilled: 0, description: 'Toner' }],
     })
     mockPrismaGrnItem.findMany.mockResolvedValue([{ poItemId: ITEM_ID }])
-    const res = await PATCH(patchReq({ lockVersion: 2, lines: [] }), { params: { id: PO_ID } })
+    const res = await PATCH(patchReq({ lockVersion: 2, lines: [] }), { params: Promise.resolve({ id: PO_ID }) })
     expect(res.status).toBe(409)
     await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('Toner') })
   })
@@ -344,7 +344,7 @@ describe('PATCH /api/purchase-orders/:id', () => {
     const res = await PATCH(patchReq({
       lockVersion: 2,
       lines: [{ productId: OTHER_PRODUCT, qty: 2, unitPrice: 50, taxRate: 0 }],
-    }), { params: { id: PO_ID } })
+    }), { params: Promise.resolve({ id: PO_ID }) })
 
     expect(res.status).toBe(200)
     const data = mockPrismaPurchaseOrder.update.mock.calls[0][0].data
@@ -355,7 +355,7 @@ describe('PATCH /api/purchase-orders/:id', () => {
 
   it('returns 409 on a lockVersion mismatch', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue(existingWithItems)
-    const res = await PATCH(patchReq({ lockVersion: 1, notes: 'x' }), { params: { id: PO_ID } })
+    const res = await PATCH(patchReq({ lockVersion: 1, notes: 'x' }), { params: Promise.resolve({ id: PO_ID }) })
     expect(res.status).toBe(409)
     expect(mockPrismaPurchaseOrder.update).not.toHaveBeenCalled()
   })
@@ -370,7 +370,7 @@ describe('PATCH /api/purchase-orders/:id', () => {
       taxTotal: 0,
       total: 1,
       lines: [{ id: ITEM_ID, productId: PRODUCT_ID, qty: 10, qtyReceived: 10, qtyBilled: 10, unitPrice: 100, taxRate: 16, subtotal: 1 }],
-    }), { params: { id: PO_ID } })
+    }), { params: Promise.resolve({ id: PO_ID }) })
 
     expect(res.status).toBe(200)
     const data = mockPrismaPurchaseOrder.update.mock.calls[0][0].data
@@ -383,7 +383,7 @@ describe('PATCH /api/purchase-orders/:id', () => {
 
   it('rejects a client attempt to jump a PO into received status', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue(existingWithItems)
-    const res = await PATCH(patchReq({ lockVersion: 2, status: 'received' }), { params: { id: PO_ID } })
+    const res = await PATCH(patchReq({ lockVersion: 2, status: 'received' }), { params: Promise.resolve({ id: PO_ID }) })
     expect(res.status).toBe(409)
     expect(mockPrismaPurchaseOrder.update).not.toHaveBeenCalled()
   })
@@ -391,14 +391,14 @@ describe('PATCH /api/purchase-orders/:id', () => {
 
   it('returns 403 for a role outside WRITE_ROLES', async () => {
     mockGetSession.mockResolvedValue(salesSession)
-    const res = await PATCH(patchReq({ notes: 'x' }), { params: { id: PO_ID } })
+    const res = await PATCH(patchReq({ notes: 'x' }), { params: Promise.resolve({ id: PO_ID }) })
     expect(res.status).toBe(403)
     expect(mockPrismaPurchaseOrder.findUnique).not.toHaveBeenCalled()
   })
 
   it('returns 404 for a missing PO', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue(null)
-    const res = await PATCH(patchReq({ notes: 'x' }), { params: { id: PO_ID } })
+    const res = await PATCH(patchReq({ notes: 'x' }), { params: Promise.resolve({ id: PO_ID }) })
     expect(res.status).toBe(404)
   })
 })
@@ -409,7 +409,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
     mockPrismaPurchaseOrder.update.mockResolvedValue({ ...dbPo, status: 'cancelled' })
 
     const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
-      params: { id: PO_ID },
+      params: Promise.resolve({ id: PO_ID }),
     })
 
     expect(res.status).toBe(200)
@@ -424,7 +424,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
   it('returns 409 for a received PO', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue({ ...dbPo, status: 'received', items: [] })
     const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
-      params: { id: PO_ID },
+      params: Promise.resolve({ id: PO_ID }),
     })
     expect(res.status).toBe(409)
     expect(mockPrismaPurchaseOrder.update).not.toHaveBeenCalled()
@@ -437,7 +437,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
       items: [{ id: ITEM_ID, qtyOrdered: 10, qtyReceived: 3, qtyBilled: 0 }],
     })
     const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
-      params: { id: PO_ID },
+      params: Promise.resolve({ id: PO_ID }),
     })
     expect(res.status).toBe(409)
   })
@@ -445,7 +445,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
   it('returns 404 for a missing PO', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue(null)
     const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
-      params: { id: PO_ID },
+      params: Promise.resolve({ id: PO_ID }),
     })
     expect(res.status).toBe(404)
   })
@@ -453,7 +453,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
   it('is idempotent for an already-cancelled PO (no further mutation)', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue({ ...dbPo, status: 'cancelled', items: [] })
     const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
-      params: { id: PO_ID },
+      params: Promise.resolve({ id: PO_ID }),
     })
     expect(res.status).toBe(200)
     expect(mockPrismaPurchaseOrder.update).not.toHaveBeenCalled()
@@ -463,7 +463,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
   it('returns 403 for a role outside WRITE_ROLES', async () => {
     mockGetSession.mockResolvedValue(salesSession)
     const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
-      params: { id: PO_ID },
+      params: Promise.resolve({ id: PO_ID }),
     })
     expect(res.status).toBe(403)
     expect(mockPrismaPurchaseOrder.findUnique).not.toHaveBeenCalled()
@@ -473,7 +473,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
 describe('GET /api/purchase-orders/:id', () => {
   it('returns a single PO mapped to client shape', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue(dbPo)
-    const res = await GET_ONE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`), { params: { id: PO_ID } })
+    const res = await GET_ONE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`), { params: Promise.resolve({ id: PO_ID }) })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.id).toBe(PO_ID)
@@ -482,7 +482,7 @@ describe('GET /api/purchase-orders/:id', () => {
 
   it('returns 404 for a missing PO', async () => {
     mockPrismaPurchaseOrder.findUnique.mockResolvedValue(null)
-    const res = await GET_ONE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`), { params: { id: PO_ID } })
+    const res = await GET_ONE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`), { params: Promise.resolve({ id: PO_ID }) })
     expect(res.status).toBe(404)
   })
 })

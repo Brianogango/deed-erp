@@ -29,7 +29,7 @@ const complete = (body: unknown) =>
       body: JSON.stringify(body),
       headers: { 'Content-Type': 'application/json' },
     }),
-    { params: { id: 'dep-1' } },
+    { params: Promise.resolve({ id: 'dep-1' }) },
   )
 
 beforeEach(() => {

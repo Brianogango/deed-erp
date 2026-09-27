@@ -17,10 +17,11 @@ import {
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params
   try {
-    const quoteId = params.id
+    const quoteId = resolvedParams.id
     const token   = request.nextUrl.searchParams.get('token') ?? ''
 
     if (!verifyQuoteToken(quoteId, token)) {

@@ -37,7 +37,7 @@ describe('makeDetailHandlers lockKey opt-in', () => {
       body: JSON.stringify({ name: 'b' }),
       headers: { 'Content-Type': 'application/json' },
     })
-    const res = await PATCH(req, { params: { id: '1' } })
+    const res = await PATCH(req, { params: Promise.resolve({ id: '1' }) })
     expect(res.status).toBe(200)
     expect(mockWithAppStateKeyLock).not.toHaveBeenCalled()
   })
@@ -54,7 +54,7 @@ describe('makeDetailHandlers lockKey opt-in', () => {
       body: JSON.stringify({ name: 'b' }),
       headers: { 'Content-Type': 'application/json' },
     })
-    const res = await PATCH(req, { params: { id: '1' } })
+    const res = await PATCH(req, { params: Promise.resolve({ id: '1' }) })
     expect(res.status).toBe(200)
     expect(mockWithAppStateKeyLock).toHaveBeenCalledWith('deed_widgets', expect.any(Function))
     expect((await res.json()).item.name).toBe('b')
@@ -93,7 +93,7 @@ describe('onWritten dual-write hook opt-in', () => {
       body: JSON.stringify({ name: 'b' }),
       headers: { 'Content-Type': 'application/json' },
     })
-    const res = await PATCH(req, { params: { id: '1' } })
+    const res = await PATCH(req, { params: Promise.resolve({ id: '1' }) })
     expect(res.status).toBe(200)
     expect(onWritten).toHaveBeenCalledWith({ id: '1', name: 'b' }, 'patch')
   })

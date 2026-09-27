@@ -92,16 +92,18 @@ function mapQuoteItems(lines: any[]) {
   })
 }
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const quote = await prisma.quote.findUnique({ where: { id: params.id }, include: { items: true, client: true, opportunity: true } })
+    const quote = await prisma.quote.findUnique({ where: { id: resolvedParams.id }, include: { items: true, client: true, opportunity: true } })
     if (!quote) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(normalizeQuoteForClient(quote))
   })
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const body = await request.json()
@@ -116,11 +118,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     // Return a proper 404 (instead of a Prisma 500) so callers can fall back
     // to re-creating a quote that never reached the server.
-    const exists = await prisma.quote.findUnique({ where: { id: params.id }, select: { id: true } })
+    const exists = await prisma.quote.findUnique({ where: { id: resolvedParams.id }, select: { id: true } })
     if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const quote = await prisma.quote.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: {
         ...mapQuoteUpdateToDb(body, clientId),
         ...(linesData !== undefined ? {
@@ -137,16 +139,18 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   })
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return PUT(request, { params })
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    const quote = await prisma.quote.findUnique({ where: { id: params.id } })
+    const quote = await prisma.quote.findUnique({ where: { id: resolvedParams.id } })
     if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
 
     const status = String(quote.status || '').toLowerCase()

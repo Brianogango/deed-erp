@@ -17,9 +17,10 @@ function clientIp(req: NextRequest) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { ref: string } }
+  { params }: { params: Promise<{ ref: string }> }
 ) {
-  const ref = decodeURIComponent(params.ref)
+  const resolvedParams = await params
+  const ref = decodeURIComponent(resolvedParams.ref)
   if (!await lookupRepair(ref)) {
     return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
   }
@@ -30,8 +31,9 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { ref: string } }
+  { params }: { params: Promise<{ ref: string }> }
 ) {
+  const resolvedParams = await params
   // The sibling portal write endpoints (approve, payment-confirmation) are all
   // rate limited; this one was not, leaving an unauthenticated POST open.
   const rl = await checkRateLimit(`portal-message:${clientIp(req)}`, 30, 3600)
@@ -42,7 +44,7 @@ export async function POST(
     )
   }
 
-  const ref = decodeURIComponent(params.ref)
+  const ref = decodeURIComponent(resolvedParams.ref)
   if (!await lookupRepair(ref)) {
     return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
   }

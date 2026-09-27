@@ -19,8 +19,9 @@ function lineKey(line: any, index: number) {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { ref: string } }
+  { params }: { params: Promise<{ ref: string }> }
 ) {
+  const resolvedParams = await params
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
   const rl = await checkRateLimit(`portal-approve:${ip}`, 10, 3600)
   if (!rl.success) {
@@ -30,7 +31,7 @@ export async function POST(
     )
   }
 
-  const ref = decodeURIComponent(params.ref)
+  const ref = decodeURIComponent(resolvedParams.ref)
   const repair = await lookupRepair(ref)
   if (!repair) return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
   if (repair.status !== 'awaiting_approval') {

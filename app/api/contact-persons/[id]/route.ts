@@ -18,12 +18,13 @@ export const dynamic = 'force-dynamic'
  * Ids were preserved by migration 010, so a lookup by the old contact-person
  * id still finds the right person.
  */
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    if (!isUUID(params.id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!isUUID(resolvedParams.id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const client = await prisma.client.findUnique({ where: { id: params.id } })
+    const client = await prisma.client.findUnique({ where: { id: resolvedParams.id } })
     const employerId = client ? (client as any).companyId as string | null : null
     if (!client || client.clientType !== 'individual' || !employerId) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })

@@ -12,11 +12,12 @@ import { generateTemporaryPassword } from '@/lib/auth/temporary-credentials'
  * configured HR email channel. No credential is returned by this API.
  * Delivery failure rolls the password change back.
  */
-export async function POST(_request: Request, { params }: { params: { id: string } }) {
+export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requirePermission('manageUsers')
 
-    const user = await findAuthUserById(params.id)
+    const user = await findAuthUserById(resolvedParams.id)
     if (!user) {
       throw Object.assign(new Error('User not found'), { status: 404 })
     }
@@ -25,7 +26,7 @@ export async function POST(_request: Request, { params }: { params: { id: string
     const passwordHash = await hashPassword(temporaryPassword)
 
     const updated = await updateAuthUser(
-      params.id,
+      resolvedParams.id,
       { password: temporaryPassword, mustChangePassword: true },
       passwordHash,
     )
@@ -53,7 +54,7 @@ export async function POST(_request: Request, { params }: { params: { id: string
       // Restore the previous credential rather than returning the new password
       // to an administrator or leaving the user locked out without delivery.
       await updateAuthUser(
-        params.id,
+        resolvedParams.id,
         { mustChangePassword: Boolean(user.mustChangePassword) },
         user.passwordHash,
       )

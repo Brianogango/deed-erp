@@ -39,7 +39,7 @@ const call = (body: Record<string, unknown> = {}) => POST(
   new NextRequest('http://localhost/api/deliveries/delivery-1/reverse', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   }),
-  { params: { id: ID } } as any,
+  { params: Promise.resolve({ id: ID }) } as any,
 )
 const savedDeliveries = () => JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_deliveries)
 

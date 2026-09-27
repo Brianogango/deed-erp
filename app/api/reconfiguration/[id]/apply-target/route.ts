@@ -13,7 +13,8 @@ const applyTargetSchema = z.object({
  * POST /api/reconfiguration/[id]/apply-target
  * Apply a target configuration to the work order (rebuilds diff lines).
  */
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const user = await requirePermission('editReconfigurationDraft')
     const body = await request.json()
@@ -26,7 +27,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     // Ensure WO exists (and version matches when provided)
-    const wo = await getWorkOrder(params.id)
+    const wo = await getWorkOrder(resolvedParams.id)
     if (parsed.data.version != null && wo.version !== parsed.data.version) {
       const err = new Error(
         'Work order was modified by another user. Reload and try again.',
@@ -35,7 +36,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       throw err
     }
 
-    await applyTargetToWorkOrder(params.id, parsed.data.target, user.id)
-    return NextResponse.json(await getWorkOrder(params.id))
+    await applyTargetToWorkOrder(resolvedParams.id, parsed.data.target, user.id)
+    return NextResponse.json(await getWorkOrder(resolvedParams.id))
   })
 }

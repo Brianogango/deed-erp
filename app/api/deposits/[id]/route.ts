@@ -13,11 +13,12 @@ const depositMetadataSchema = z.object({
   customerPhone: z.string().trim().max(50).optional().nullable(),
 }).strict()
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const row = await prisma.deposit.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { items: { orderBy: { sortOrder: 'asc' } }, payments: { orderBy: { paidAt: 'asc' } } },
     })
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -25,13 +26,14 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   })
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(DEPOSIT_WRITE_ROLES)
     const parsed = depositMetadataSchema.safeParse(await request.json())
     if (!parsed.success) return NextResponse.json({ error: 'Invalid deposit update' }, { status: 422 })
     const body = parsed.data
-    const before = await prisma.deposit.findUnique({ where: { id: params.id } })
+    const before = await prisma.deposit.findUnique({ where: { id: resolvedParams.id } })
     if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (['completed','cancelled'].includes(before.status)) {
       return NextResponse.json({ error: 'Completed/cancelled deposits are immutable' }, { status: 409 })
@@ -48,12 +50,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
     if (body.customerPhone !== undefined) patch.customerPhone = body.customerPhone || null
     const updated = await prisma.$transaction(async tx => {
-      const row = await tx.deposit.update({ where: { id: params.id }, data: patch })
+      const row = await tx.deposit.update({ where: { id: resolvedParams.id }, data: patch })
       await writeFinancialAuditInTx(tx, {
         userId: actor.id,
         action: 'update_deposit_metadata',
         entityType: 'deposit',
-        entityId: params.id,
+        entityId: resolvedParams.id,
         oldValues: { notes: before.notes, dueDate: before.dueDate, customerPhone: before.customerPhone },
         newValues: patch,
       })

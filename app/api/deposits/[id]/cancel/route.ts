@@ -13,7 +13,8 @@ const depositRefundSchema = z.object({
   reason: z.string().trim().min(3).max(2_000),
 }).strict()
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(['director', 'finance_officer'])
     const parsed = depositRefundSchema.safeParse(await request.json().catch(() => ({})))
@@ -22,7 +23,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
     const body = parsed.data
     const result = await refundDeposit({
-      depositId: params.id,
+      depositId: resolvedParams.id,
       amount: body.amount,
       method: body.method,
       bankAccountId: body.bankAccountId || null,

@@ -7,7 +7,8 @@ import { hasModuleAccess } from '@/lib/auth/access'
  * GET /api/jarvis/conversations/[id]
  * Loads one conversation's messages — only if it belongs to the caller.
  */
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!hasModuleAccess(session.user, 'jarvis')) {
@@ -15,7 +16,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     }
 
     const conversation = await prisma.aiConversation.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: resolvedParams.id, userId: session.user.id },
       include: { messages: { orderBy: { createdAt: 'asc' } } },
     })
 
@@ -31,7 +32,8 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
  * DELETE /api/jarvis/conversations/[id]
  * Archives (soft-deletes) a conversation owned by the caller.
  */
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!hasModuleAccess(session.user, 'jarvis')) {
@@ -39,14 +41,14 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
     }
 
     const conversation = await prisma.aiConversation.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: resolvedParams.id, userId: session.user.id },
     })
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
 
     await prisma.aiConversation.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: { archivedAt: new Date() },
     })
 

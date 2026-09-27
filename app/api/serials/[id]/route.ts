@@ -75,30 +75,33 @@ async function updateSerial(request: NextRequest, id: string) {
   return NextResponse.json({ item: next })
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  return updateSerial(request, params.id)
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
+  return updateSerial(request, resolvedParams.id)
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  return updateSerial(request, params.id)
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
+  return updateSerial(request, resolvedParams.id)
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   const auth = await requireSerialEditRole()
   if (auth.error) return auth.error
   const session = auth.session
 
   const state = await loadAppState(['deed_serials'])
   const serials = Array.isArray(state.deed_serials) ? state.deed_serials as SerialNumber[] : []
-  const existing = serials.find(item => item.id === params.id)
-  const filtered = serials.filter(item => item.id !== params.id)
+  const existing = serials.find(item => item.id === resolvedParams.id)
+  const filtered = serials.filter(item => item.id !== resolvedParams.id)
   if (filtered.length === serials.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   await saveStoreKeys({ deed_serials: JSON.stringify(filtered) })
   await appendInventoryAuditLog({
     action: 'serial_delete',
-    documentRef: existing?.serial || params.id,
-    details: `Deleted serial ${existing?.serial || params.id}`,
+    documentRef: existing?.serial || resolvedParams.id,
+    details: `Deleted serial ${existing?.serial || resolvedParams.id}`,
     userId: session.user.id,
     username: session.user.username || session.user.name,
   })

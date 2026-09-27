@@ -81,7 +81,7 @@ beforeEach(() => {
 
 describe('PUT /api/leave-requests/[id] — no self-approval', () => {
   it('lets a director approve someone else\'s request', async () => {
-    const res = await PUT(putReq({ status: 'approved', reviewNotes: 'OK' }), { params: { id: 'lr-1' } })
+    const res = await PUT(putReq({ status: 'approved', reviewNotes: 'OK' }), { params: Promise.resolve({ id: 'lr-1' }) })
     expect(res.status).toBe(200)
     expect(mockPrisma.leaveRequest.update).toHaveBeenCalled()
     expect(publishLeaveDecision).toHaveBeenCalledWith(
@@ -92,7 +92,7 @@ describe('PUT /api/leave-requests/[id] — no self-approval', () => {
   })
 
   it('emails the applicant on reject', async () => {
-    const res = await PUT(putReq({ status: 'rejected', reviewNotes: 'No cover' }), { params: { id: 'lr-1' } })
+    const res = await PUT(putReq({ status: 'rejected', reviewNotes: 'No cover' }), { params: Promise.resolve({ id: 'lr-1' }) })
     expect(res.status).toBe(200)
     expect(publishLeaveDecision).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'lr-1' }),
@@ -103,27 +103,27 @@ describe('PUT /api/leave-requests/[id] — no self-approval', () => {
 
   it('blocks approving a request the caller submitted themselves', async () => {
     mockPrisma.leaveRequest.findUnique.mockResolvedValue({ ...pendingRow, submittedByUserId: 'u-director' })
-    const res = await PUT(putReq({ status: 'approved' }), { params: { id: 'lr-1' } })
+    const res = await PUT(putReq({ status: 'approved' }), { params: Promise.resolve({ id: 'lr-1' }) })
     expect(res.status).toBe(403)
     expect(mockPrisma.leaveRequest.update).not.toHaveBeenCalled()
   })
 
   it('blocks approving a request for the caller\'s own employee record', async () => {
     mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-a' })
-    const res = await PUT(putReq({ status: 'approved' }), { params: { id: 'lr-1' } })
+    const res = await PUT(putReq({ status: 'approved' }), { params: Promise.resolve({ id: 'lr-1' }) })
     expect(res.status).toBe(403)
     expect(mockPrisma.leaveRequest.update).not.toHaveBeenCalled()
   })
 
   it('blocks rejecting one\'s own request too', async () => {
     mockPrisma.leaveRequest.findUnique.mockResolvedValue({ ...pendingRow, submittedByUserId: 'u-director' })
-    const res = await PUT(putReq({ status: 'rejected' }), { params: { id: 'lr-1' } })
+    const res = await PUT(putReq({ status: 'rejected' }), { params: Promise.resolve({ id: 'lr-1' }) })
     expect(res.status).toBe(403)
   })
 
   it('still allows cancelling one\'s own request', async () => {
     mockPrisma.leaveRequest.findUnique.mockResolvedValue({ ...pendingRow, submittedByUserId: 'u-director' })
-    const res = await PUT(putReq({ status: 'cancelled' }), { params: { id: 'lr-1' } })
+    const res = await PUT(putReq({ status: 'cancelled' }), { params: Promise.resolve({ id: 'lr-1' }) })
     expect(res.status).toBe(200)
     expect(mockPrisma.leaveRequest.update).toHaveBeenCalled()
   })

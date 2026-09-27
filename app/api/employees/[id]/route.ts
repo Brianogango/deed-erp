@@ -109,17 +109,18 @@ const employeeInclude = {
   user: { select: { id: true } },
 } as const
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(WRITE_ROLES)
     const body = await request.json()
     const { firstName, lastName } = splitName(body.fullName)
     const departmentId = await resolveDepartmentId(body.departmentId)
 
-    const before = await prisma.employee.findUnique({ where: { id: params.id }, select: { basicSalary: true, isActive: true } })
+    const before = await prisma.employee.findUnique({ where: { id: resolvedParams.id }, select: { basicSalary: true, isActive: true } })
 
     const employee = await prisma.employee.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: {
         employeeNumber: String(body.employeeNo ?? body.employeeNumber ?? '').trim(),
         firstName,

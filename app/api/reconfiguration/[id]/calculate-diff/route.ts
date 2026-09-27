@@ -15,7 +15,8 @@ const calculateDiffSchema = z.object({
  * POST /api/reconfiguration/[id]/calculate-diff
  * Proposed vs current configuration for this work order's device.
  */
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requirePermission('viewReconfiguration')
     const body = await request.json()
@@ -27,7 +28,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       )
     }
 
-    const wo = await getWorkOrder(params.id)
+    const wo = await getWorkOrder(resolvedParams.id)
     const result = await calculateDiffForDevice({
       serialId: wo.serialId,
       target: parsed.data.target,

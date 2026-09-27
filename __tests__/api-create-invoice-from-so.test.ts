@@ -166,7 +166,7 @@ beforeEach(() => {
 describe('POST /api/sale-orders/:id/create-invoice', () => {
   it('returns the full client invoice including lines and pretax subtotals', async () => {
     const res = await POST(new NextRequest('http://localhost/api/sale-orders/' + ORDER_ID + '/create-invoice', { method: 'POST' }), {
-      params: { id: ORDER_ID },
+      params: Promise.resolve({ id: ORDER_ID }),
     })
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -208,7 +208,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
 
     const res = await POST(
       new NextRequest('http://localhost/api/sale-orders/' + ORDER_ID + '/create-invoice', { method: 'POST' }),
-      { params: { id: ORDER_ID } },
+      { params: Promise.resolve({ id: ORDER_ID }) },
     )
 
     expect(res.status).toBe(200)
@@ -228,7 +228,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
 
     const res = await POST(
       new NextRequest('http://localhost', { method: 'POST' }),
-      { params: { id: ORDER_ID } },
+      { params: Promise.resolve({ id: ORDER_ID }) },
     )
 
     expect(res.status).toBe(200)
@@ -249,7 +249,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
 
     const res = await POST(
       new NextRequest('http://localhost', { method: 'POST' }),
-      { params: { id: ORDER_ID } },
+      { params: Promise.resolve({ id: ORDER_ID }) },
     )
 
     expect(res.status).toBe(409)
@@ -261,7 +261,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
   })
 
   it('mirrors pretax line subtotals into deed_invoices (not tax-inclusive lineTotal)', async () => {
-    await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     const mirrorCall = mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)
     expect(mirrorCall).toBeTruthy()
     const mirrored = JSON.parse(mirrorCall![0].deed_invoices)
@@ -280,7 +280,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       orderNumber: 'SQ/2026/0001',
       confirmedAt: null,
     })
-    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(409)
     expect(mockPrisma.saleOrder.update).not.toHaveBeenCalled()
   })
@@ -323,7 +323,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'regular', source: 'repair' }),
       }),
-      { params: { id: ORDER_ID } },
+      { params: Promise.resolve({ id: ORDER_ID }) },
     )
     expect(res.status).toBe(200)
     expect(mockPrisma.saleOrder.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -357,7 +357,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'regular', source: 'repair' }),
       }),
-      { params: { id: ORDER_ID } },
+      { params: Promise.resolve({ id: ORDER_ID }) },
     )
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/Only a confirmed Sales Order can be invoiced/i)
@@ -370,7 +370,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       deed_invoices: [],
       deed_deliveries: [{ saleOrderId: ORDER_ID, status: 'ready', lines: [{ productId: 'prod-1', qty: 1, qtyDone: 1 }] }],
     })
-    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
@@ -384,7 +384,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'down_payment_percent', percent: 30 }),
       }),
-      { params: { id: ORDER_ID } },
+      { params: Promise.resolve({ id: ORDER_ID }) },
     )
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/pro-forma or record a customer deposit/i)
@@ -401,7 +401,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       items: [{ ...saleOrder.items[0], qtyDelivered: 0, qtyInvoiced: 0 }],
     }
     mockPrisma.saleOrder.findUnique.mockResolvedValue(undelivered)
-    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
@@ -425,7 +425,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       }],
     }
     mockPrisma.saleOrder.findUnique.mockResolvedValue(serviceOrder)
-    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
@@ -440,7 +440,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
         lines: [{ productId: 'prod-1', qty: 1, qtyDone: 0, serialIds: [] }],
       }],
     })
-    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
@@ -455,7 +455,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
         lines: [{ productId: 'prod-1', qty: 1, qtyDone: 1, serialIds: [] }],
       }],
     })
-    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(200)
     expect(mockPrisma.$transaction).toHaveBeenCalled()
   })
@@ -466,7 +466,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       items: [{ ...saleOrder.items[0], qty: 3, qtyDelivered: 1 }],
     }
     mockPrisma.saleOrder.findUnique.mockResolvedValue(partial)
-    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/Complete and validate the Sales Order delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
@@ -497,7 +497,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       repair: { update: mockPrisma.repair.update },
     }))
 
-    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(200)
     expect(mockPrisma.$transaction).toHaveBeenCalled()
   })
@@ -520,7 +520,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lines: [{ itemId: ITEM_ID, qty: 999 }] }),
         }),
-        { params: { id: ORDER_ID } },
+        { params: Promise.resolve({ id: ORDER_ID }) },
       )
       expect(res.status).toBe(200)
       const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
@@ -548,7 +548,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lines: [{ itemId: ITEM_ID, qty: 1 }] }),
         }),
-        { params: { id: ORDER_ID } },
+        { params: Promise.resolve({ id: ORDER_ID }) },
       )
       expect(res.status).toBe(200)
       const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
@@ -566,7 +566,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lines: [{ itemId: ITEM_ID, qty: 0 }] }),
         }),
-        { params: { id: ORDER_ID } },
+        { params: Promise.resolve({ id: ORDER_ID }) },
       )
       expect(res.status).toBe(409)
       expect((await res.json()).error).toMatch(/select at least one line/i)
@@ -590,7 +590,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
         saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
         invoice: { create: mockPrisma.invoice.create },
       }))
-      await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+      await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
       const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
       const line = createData.items.create[0]
       expect(line.qty).toBe(3)
@@ -613,7 +613,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lines: [{ itemId: ITEM_ID, qty: 1 }] }),
         }),
-        { params: { id: ORDER_ID } },
+        { params: Promise.resolve({ id: ORDER_ID }) },
       )
       const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
       const line = createData.items.create[0]
@@ -653,7 +653,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       repair: { update: mockPrisma.repair.update },
     }))
 
-    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.invoice.repairId).toBe(REPAIR_ID)
@@ -686,7 +686,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
         saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
         invoice: { create: mockPrisma.invoice.create },
       }))
-      await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+      await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
       // Single line, fully invoiced this round → the full header discount applies.
       const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
       expect(createData.discountAmount).toBe(1000)
@@ -701,7 +701,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
         saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
         invoice: { create: mockPrisma.invoice.create },
       }))
-      const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+      const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
       const body = await res.json()
       expect(body.error).toMatch(/at least KES 1/i)
     })
@@ -717,7 +717,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
         }
         return fn(tx)
       })
-      const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+      const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
       expect(res.status).toBe(500)
       expect(mockPrisma.invoice.create).not.toHaveBeenCalled()
     })

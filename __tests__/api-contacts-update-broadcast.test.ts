@@ -40,21 +40,21 @@ beforeEach(() => {
 describe('PUT /api/contacts/:id', () => {
   it('refreshes quote/invoice/sale-order blobs after a successful update', async () => {
     mockUpdateContactById.mockResolvedValue({ id: CONTACT_ID, name: 'Renamed Ltd' })
-    const res = await PUT(new Request('http://localhost', { method: 'PUT', body: JSON.stringify({ name: 'Renamed Ltd' }) }), { params: { id: CONTACT_ID } })
+    const res = await PUT(new Request('http://localhost', { method: 'PUT', body: JSON.stringify({ name: 'Renamed Ltd' }) }), { params: Promise.resolve({ id: CONTACT_ID }) })
     expect(res.status).toBe(200)
     expect(mockRefresh).toHaveBeenCalledTimes(1)
   })
 
   it('does not refresh when the update is rejected with a validation error', async () => {
     mockUpdateContactById.mockResolvedValue('Duplicate email')
-    const res = await PUT(new Request('http://localhost', { method: 'PUT', body: JSON.stringify({}) }), { params: { id: CONTACT_ID } })
+    const res = await PUT(new Request('http://localhost', { method: 'PUT', body: JSON.stringify({}) }), { params: Promise.resolve({ id: CONTACT_ID }) })
     expect(res.status).toBe(422)
     expect(mockRefresh).not.toHaveBeenCalled()
   })
 
   it('does not refresh when the contact is not found', async () => {
     mockUpdateContactById.mockResolvedValue(null)
-    const res = await PUT(new Request('http://localhost', { method: 'PUT', body: JSON.stringify({}) }), { params: { id: CONTACT_ID } })
+    const res = await PUT(new Request('http://localhost', { method: 'PUT', body: JSON.stringify({}) }), { params: Promise.resolve({ id: CONTACT_ID }) })
     expect(res.status).toBe(404)
     expect(mockRefresh).not.toHaveBeenCalled()
   })

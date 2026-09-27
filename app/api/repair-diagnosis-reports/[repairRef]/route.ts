@@ -44,13 +44,14 @@ function publicUrl(ref: string, id: string) {
  * the file as base64 inside the repair record, which bloats every page load
  * and store sync.
  */
-export async function POST(req: NextRequest, { params }: { params: { repairRef: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ repairRef: string }> }) {
+  const resolvedParams = await params
   // Uploading a QC / diagnosis report is a workshop action, not something
   // any signed-in user may do to any repair reference.
   const gate = await requireRepairAttachmentWriter()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
-  const ref = decodeURIComponent(params.repairRef)
+  const ref = decodeURIComponent(resolvedParams.repairRef)
   let form: FormData
   try { form = await req.formData() } catch {
     return NextResponse.json({ error: 'Invalid upload form' }, { status: 400 })

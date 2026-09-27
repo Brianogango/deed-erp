@@ -12,10 +12,11 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(
   request: Request,
-  { params }: { params: { packId: string; slot: string } },
+  { params }: { params: Promise<{ packId: string; slot: string }> },
 ) {
-  const slot = parseProductImageSlot(params.slot)
-  const pack = CATALOG_PHOTO_PACKS.find(p => p.id === params.packId)
+  const resolvedParams = await params
+  const slot = parseProductImageSlot(resolvedParams.slot)
+  const pack = CATALOG_PHOTO_PACKS.find(p => p.id === resolvedParams.packId)
   if (!slot || !pack) {
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: partnerCorsHeaders(request) })
   }

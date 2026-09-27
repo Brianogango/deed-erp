@@ -65,11 +65,12 @@ const CLIENT_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   cancelled: ['cancelled'],
 }
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const po = await prisma.purchaseOrder.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { vendor: true, items: { include: { product: true } } },
     })
     if (!po) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -77,7 +78,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   })
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) {
@@ -86,7 +88,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const body = await request.json()
 
     const existing = await prisma.purchaseOrder.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { items: true },
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -190,7 +192,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const updated = await prisma.purchaseOrder.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data,
       include: { vendor: true, items: { include: { product: true } } },
     })
@@ -200,11 +202,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   })
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return PATCH(request, { params })
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) {
@@ -212,7 +216,7 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     }
 
     const existing = await prisma.purchaseOrder.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { vendor: true, items: { include: { product: true } } },
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -228,7 +232,7 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     }
 
     const cancelled = await prisma.purchaseOrder.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: { status: 'cancelled', lockVersion: nextLockVersion(existing.lockVersion) },
       include: { vendor: true, items: { include: { product: true } } },
     })

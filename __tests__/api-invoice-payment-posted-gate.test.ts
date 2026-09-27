@@ -108,7 +108,7 @@ describe('POST /api/invoices/[id]/payments — posted-status gate', () => {
   for (const status of ['approved', 'invoiced', 'posted', 'paid', 'partially_paid', 'overdue']) {
     it(`accepts a payment on posted-family status "${status}"`, async () => {
       mockFindUnique.mockResolvedValue(invoiceWithStatus(status))
-      const res = await POST(payReq({ amount: 500, paymentMethod: 'cash' }), { params: { id: 'inv-1' } })
+      const res = await POST(payReq({ amount: 500, paymentMethod: 'cash' }), { params: Promise.resolve({ id: 'inv-1' }) })
       expect(res.status).toBe(200)
       expect(mockRecordPayment).toHaveBeenCalledTimes(1)
     })
@@ -117,7 +117,7 @@ describe('POST /api/invoices/[id]/payments — posted-status gate', () => {
   for (const status of ['draft', 'pending_approval', 'rejected', 'cancelled', 'voided']) {
     it(`rejects a payment on non-posted status "${status}"`, async () => {
       mockFindUnique.mockResolvedValue(invoiceWithStatus(status))
-      const res = await POST(payReq({ amount: 500, paymentMethod: 'cash' }), { params: { id: 'inv-1' } })
+      const res = await POST(payReq({ amount: 500, paymentMethod: 'cash' }), { params: Promise.resolve({ id: 'inv-1' }) })
       expect(res.status).toBe(409)
       const body = await res.json()
       expect(String(body.error)).toMatch(/Only posted invoices can receive payments/i)
@@ -132,7 +132,7 @@ describe('POST /api/invoices/[id]/payments — posted-status gate', () => {
       status: 'posted',
       partnerName: 'Leah',
     })
-    const res = await POST(payReq({ amount: 4500, paymentMethod: 'mpesa' }), { params: { id: 'inv-1' } })
+    const res = await POST(payReq({ amount: 4500, paymentMethod: 'mpesa' }), { params: Promise.resolve({ id: 'inv-1' }) })
     expect(res.status).toBe(200)
     expect(mockUpdateInvoice).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } }),
@@ -143,7 +143,7 @@ describe('POST /api/invoices/[id]/payments — posted-status gate', () => {
   it('does not promote a Prisma draft when the blob is also still draft', async () => {
     mockFindUnique.mockResolvedValue(invoiceWithStatus('draft'))
     mockResolveMirror.mockResolvedValue({ type: 'customer_invoice', status: 'draft' })
-    const res = await POST(payReq({ amount: 4500, paymentMethod: 'mpesa' }), { params: { id: 'inv-1' } })
+    const res = await POST(payReq({ amount: 4500, paymentMethod: 'mpesa' }), { params: Promise.resolve({ id: 'inv-1' }) })
     expect(res.status).toBe(409)
     expect(mockUpdateInvoice).not.toHaveBeenCalled()
     expect(mockRecordPayment).not.toHaveBeenCalled()
@@ -168,14 +168,14 @@ describe('POST /api/invoices/[id]/payments — which account the receipt debits'
     // cash_mobile default and every applied credit debited 2211 — cash the
     // business never received — while 3313 was never relieved.
     // The invoice total is 1000, so the receipt is capped to it.
-    await POST(payReq({ amount: 750, paymentMethod: 'customer_credit' }), { params: { id: 'inv-1' } })
+    await POST(payReq({ amount: 750, paymentMethod: 'customer_credit' }), { params: Promise.resolve({ id: 'inv-1' }) })
     const journal = journalFor()
     expect(journal.lines[0].accountLabel).toBe('3313 - Customer Credits')
     expect(journal.lines[0].debit).toBe(750)
   })
 
   it('books a credit application to the general journal, not a cash book', async () => {
-    await POST(payReq({ amount: 4500, paymentMethod: 'customer_credit' }), { params: { id: 'inv-1' } })
+    await POST(payReq({ amount: 4500, paymentMethod: 'customer_credit' }), { params: Promise.resolve({ id: 'inv-1' }) })
     expect(journalFor().journalCode).toBe('MISC')
   })
 
@@ -183,13 +183,13 @@ describe('POST /api/invoices/[id]/payments — which account the receipt debits'
     // No cash moves, so a stray bankAccountId must not re-point the debit.
     await POST(
       payReq({ amount: 4500, paymentMethod: 'customer_credit', bankAccountId: 'ncba' }),
-      { params: { id: 'inv-1' } },
+      { params: Promise.resolve({ id: 'inv-1' }) },
     )
     expect(journalFor().lines[0].accountLabel).toBe('3313 - Customer Credits')
   })
 
   it('still debits cash for an ordinary mobile-money receipt', async () => {
-    await POST(payReq({ amount: 4500, paymentMethod: 'mpesa' }), { params: { id: 'inv-1' } })
+    await POST(payReq({ amount: 4500, paymentMethod: 'mpesa' }), { params: Promise.resolve({ id: 'inv-1' }) })
     const journal = journalFor()
     expect(journal.lines[0].accountLabel).toBe('2211 - Petty Cash / Mobile Money')
     expect(journal.journalCode).toBe('CSH')
@@ -198,7 +198,7 @@ describe('POST /api/invoices/[id]/payments — which account the receipt debits'
   it('still resolves a named cashbook account for a bank receipt', async () => {
     await POST(
       payReq({ amount: 4500, paymentMethod: 'bank_transfer', bankAccountId: 'ncba' }),
-      { params: { id: 'inv-1' } },
+      { params: Promise.resolve({ id: 'inv-1' }) },
     )
     expect(journalFor().lines[0].accountLabel).not.toBe('3313 - Customer Credits')
     expect(journalFor().journalCode).toBe('BNK')

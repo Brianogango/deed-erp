@@ -10,11 +10,12 @@ const ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_office
  * Append a history-only ORC audit log (e.g. partial_return) without changing
  * release status. Released certificates stay released.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const user = await requireRole(ROLES)
 
-    const id = String(params.id || '').trim()
+    const id = String(resolvedParams.id || '').trim()
     if (!id) return NextResponse.json({ error: 'Missing release id' }, { status: 400 })
 
     const body = await req.json().catch(() => ({})) as {

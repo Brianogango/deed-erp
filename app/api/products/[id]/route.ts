@@ -182,18 +182,21 @@ async function handleUpdate(request: NextRequest, id: string) {
   })
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  return handleUpdate(request, params.id)
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
+  return handleUpdate(request, resolvedParams.id)
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  return handleUpdate(request, params.id)
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
+  return handleUpdate(request, resolvedParams.id)
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
-    const id = params.id
+    const id = resolvedParams.id
     const [stockLevel, serialCount, movementCount, poLineCount, saleLineCount, invoiceLineCount] = await Promise.all([
       prisma.stockLevel.findUnique({ where: { productId: id }, select: { qtyOnHand: true, qtyReserved: true, qtyOnOrder: true } }),
       prisma.serialNumber.count({ where: { productId: id } }),

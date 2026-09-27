@@ -18,11 +18,12 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const actor = await requireRole(['director', 'finance_officer', 'admin_officer'])
-    const paymentId = params.id
+    const paymentId = resolvedParams.id
     const body = await request.json().catch(() => ({}))
 
     const allocations = Array.isArray(body.allocations)

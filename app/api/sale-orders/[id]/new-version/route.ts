@@ -21,7 +21,8 @@ function baseRef(ref: string): string {
   return ref.replace(/-V\d+$/i, '')
 }
 
-export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!NEW_VERSION_ROLES.includes(session.user.role)) {
@@ -29,7 +30,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     }
 
     const source = await prisma.saleOrder.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       include: { items: true },
     })
     if (!source) return NextResponse.json({ error: 'Sale order not found' }, { status: 404 })

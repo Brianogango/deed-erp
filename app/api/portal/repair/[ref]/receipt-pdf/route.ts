@@ -12,10 +12,11 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { ref: string } }
+  { params }: { params: Promise<{ ref: string }> }
 ) {
+  const resolvedParams = await params
   try {
-    const ref = decodeURIComponent(params.ref)
+    const ref = decodeURIComponent(resolvedParams.ref)
     const state = await loadAppState(['deed_repairs_v2', 'deed_invoices', 'deed_companySettings', 'deed_bankAccounts'])
     const repairs = (state.deed_repairs_v2 ?? []) as any[]
     const invoices = (state.deed_invoices ?? []) as any[]

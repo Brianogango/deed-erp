@@ -7,7 +7,8 @@ import { isRoleAllowed } from '@/lib/auth/authorization'
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
 const VERIFY_ROLES = ['director', 'admin_officer', 'technical_lead']
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   // Normalized: a Technical Lead stored as `lead_tech`, or a Director stored
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const body = await req.json().catch(() => ({})) as { notes?: string; accessories?: RepairOrder['accessories'] }
   const state = await loadAppState([REPAIR_STORE_KEY])
   const repairs = Array.isArray(state[REPAIR_STORE_KEY]) ? state[REPAIR_STORE_KEY] as RepairOrder[] : []
-  const idx = repairs.findIndex(r => r.id === params.id || r.ref === decodeURIComponent(params.id))
+  const idx = repairs.findIndex(r => r.id === resolvedParams.id || r.ref === decodeURIComponent(resolvedParams.id))
   if (idx === -1) return NextResponse.json({ error: 'Repair not found' }, { status: 404 })
 
   const repair = repairs[idx]

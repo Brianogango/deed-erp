@@ -10,7 +10,8 @@ const startSchema = z.object({
 /**
  * POST /api/reconfiguration/[id]/start
  */
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const user = await requirePermission('performReconfigInstallation')
     const body = await request.json()
@@ -23,7 +24,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     const order = await startWork({
-      id: params.id,
+      id: resolvedParams.id,
       version: parsed.data.version,
       userId: user.id,
     })

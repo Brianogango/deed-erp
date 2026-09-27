@@ -42,10 +42,11 @@ async function loadReports(ref: string): Promise<DiagnosisReportMeta[]> {
  * base64 field on the repair record for reports uploaded before reports
  * were externalized.
  */
-export async function GET(_req: NextRequest, { params }: { params: { ref: string; id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ ref: string; id: string }> }) {
+  const resolvedParams = await params
   try {
-    const reports = await loadReports(params.ref)
-    const report = params.id === 'latest' ? reports[reports.length - 1] : reports.find(r => r.id === params.id)
+    const reports = await loadReports(resolvedParams.ref)
+    const report = resolvedParams.id === 'latest' ? reports[reports.length - 1] : reports.find(r => r.id === resolvedParams.id)
 
     if (report?.storagePath) {
       const storageRoot = path.resolve(process.cwd(), '.uploads', 'diagnosis-reports')
@@ -66,7 +67,7 @@ export async function GET(_req: NextRequest, { params }: { params: { ref: string
 
     // Legacy fallback: base64 report embedded in the repair record
     const state = await loadAppState(['deed_repairs_v2', 'deed_repairs'])
-    const decoded = decodeURIComponent(params.ref)
+    const decoded = decodeURIComponent(resolvedParams.ref)
     const repairs = (Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] : state['deed_repairs']) as RepairOrder[] | undefined
     const repair = repairs?.find(r => r.ref?.toLowerCase() === decoded.toLowerCase())
     const parsed = repair?.diagnosisReportData ? parseDataUrl(repair.diagnosisReportData) : null

@@ -109,7 +109,7 @@ function putReq(body: unknown): any {
   })
 }
 
-const params = { params: { id: ORDER_ID } }
+const params = { params: Promise.resolve({ id: ORDER_ID }) }
 
 beforeEach(() => {
   vi.clearAllMocks()
