@@ -35,6 +35,29 @@ const PUBLIC_PATH_PREFIXES = [
 ]
 const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
 
+/**
+ * API routes that may authenticate with x-internal-secret instead of a session
+ * cookie. Every one of these re-validates the same header itself — this set
+ * only decides whether the request is allowed past the middleware to be asked.
+ *
+ * These are server-side maintenance calls made from the box, where the only
+ * alternative is pasting a live session cookie into a terminal, putting a
+ * credential into shell history and into any screenshot of it.
+ */
+export const INTERNAL_SECRET_API_PATHS = new Set([
+  '/api/admin/backfill-repairs',
+  '/api/admin/backfill-accounting',
+  '/api/admin/journal-mirror-failures',
+  '/api/admin/blob-cleanup',
+  '/api/admin/blob-transfer',
+  '/api/accounting/orphaned-invoice-journals',
+  // Not a maintenance call: the portal's repair-approval route posts here
+  // server-side to send the customer their confirmation SMS. That fetch is
+  // fire-and-forget with a swallowed catch, so the 401 this set was causing
+  // was invisible — approvals and declines simply produced no message.
+  '/api/notifications/send',
+])
+
 export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
   '/dashboard': '/',
   '/purchase': '/purchases',
@@ -196,12 +219,18 @@ export async function middleware(request: NextRequest) {
 
     // Server-side maintenance calls authenticate with the internal secret;
     // the target route re-validates the same header before doing anything.
+    //
+    // This list is the gate, not the route's own check. A route that accepts
+    // x-internal-secret and is not named here is unreachable by that path —
+    // the 401 happens up here and the handler never runs. Two routes were in
+    // exactly that state (journal-mirror-failures and the orphaned-invoice
+    // re-post), each with a secret branch that had never once executed, which
+    // is why this is a named set now rather than a pair of hardcoded
+    // comparisons: the next route to grow one is a line here, not a debugging
+    // session.
     const internalSecret = process.env.INTERNAL_API_SECRET
-    const isInternalBackfill =
-      pathname === '/api/admin/backfill-repairs' ||
-      pathname === '/api/admin/backfill-accounting'
     if (
-      isInternalBackfill &&
+      INTERNAL_SECRET_API_PATHS.has(pathname) &&
       internalSecret &&
       request.headers.get('x-internal-secret') === internalSecret
     ) {
