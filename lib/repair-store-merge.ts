@@ -209,15 +209,31 @@ export function pickRepairStoreRow(
   return preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming)
 }
 
-export function mergeRepairsStoreWrite(current: unknown, incoming: unknown): RepairStoreRow[] {
+/**
+ * @param deletedIds ids of repairs that have been deleted. The merge is
+ * union-by-id, so without this a stale client that still holds a deleted
+ * repair re-inserts it and the mirror recreates the Prisma row from it.
+ */
+export function mergeRepairsStoreWrite(
+  current: unknown,
+  incoming: unknown,
+  deletedIds: ReadonlySet<string> = new Set(),
+): RepairStoreRow[] {
   const currentArr: RepairStoreRow[] = Array.isArray(current) ? current : []
   const incomingArr: RepairStoreRow[] = Array.isArray(incoming) ? incoming : []
-  if (incomingArr.length === 0) return currentArr
+  // An empty incoming array is ignored so a client that has not hydrated
+  // cannot wipe the collection — but a deleted repair still leaves.
+  if (incomingArr.length === 0) {
+    return deletedIds.size === 0
+      ? currentArr
+      : currentArr.filter(row => { const id = asId(row); return !id || !deletedIds.has(id) })
+  }
 
   const byId = new Map<string, RepairStoreRow>()
   for (const row of currentArr) {
     const id = asId(row)
-    if (id) byId.set(id, row)
+    // A deleted repair still sitting in the server copy leaves with this write.
+    if (id && !deletedIds.has(id)) byId.set(id, row)
   }
 
   let inProgressRewinds = 0
@@ -230,7 +246,7 @@ export function mergeRepairsStoreWrite(current: unknown, incoming: unknown): Rep
 
   for (const row of incomingArr) {
     const id = asId(row)
-    if (!id) continue
+    if (!id || deletedIds.has(id)) continue
     const prev = byId.get(id)
     byId.set(id, pickRepairStoreRow(prev, row, { pinInProgressRewind }))
   }

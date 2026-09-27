@@ -84,6 +84,10 @@ export async function DELETE(request: NextRequest, ctx: { params: RouteParams<{ 
   if (response.status < 200 || response.status >= 300) return response
 
   const { id } = await resolveRouteParams(ctx.params)
+  // Remember the deletion before removing the row, so a stale tab syncing in
+  // the meantime cannot re-insert it through the union-by-id store merge.
+  const { recordRepairTombstone } = await import('@/lib/repair-tombstones')
+  await recordRepairTombstone(id)
   const { deleted, error } = await deleteRepairFromPrisma(id)
   if (error) {
     return NextResponse.json(

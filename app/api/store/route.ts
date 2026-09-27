@@ -337,7 +337,9 @@ export async function POST(request: Request) {
       if (key === 'deed_repairs_v2' && entries[key]) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
-        entries[key] = JSON.stringify(mergeRepairsStoreWrite(serverState[key], incoming))
+        const { loadRepairTombstones, tombstoneIds } = await import('@/lib/repair-tombstones')
+        const deletedIds = tombstoneIds(await loadRepairTombstones())
+        entries[key] = JSON.stringify(mergeRepairsStoreWrite(serverState[key], incoming, deletedIds))
         continue
       }
       if (
