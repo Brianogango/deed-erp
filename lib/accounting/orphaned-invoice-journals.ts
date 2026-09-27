@@ -130,7 +130,14 @@ export type RepostOutcome =
 export async function repostOrphanedInvoice(params: {
   invoiceId: string
   entryDate: Date
-  actorId: string
+  /**
+   * The director doing this. Null when the call is authorised by the internal
+   * secret rather than a session — a maintenance run from the server itself,
+   * which has no user behind it. The journal and the audit row are written
+   * either way; an unattributed correction is far better than none, and the
+   * audit action name records what happened.
+   */
+  actorId: string | null
 }): Promise<RepostOutcome> {
   const invoice = await prisma.invoice.findUnique({
     where: { id: params.invoiceId },
@@ -181,7 +188,7 @@ export async function repostOrphanedInvoice(params: {
       subtotal: Number(i.lineSubtotal),
       description: i.description,
     })),
-  }, { createdById: params.actorId })
+  }, { createdById: params.actorId ?? undefined })
 
   // Takes `.../2` when the original is reversed, so the reversed entry stays
   // in place and the correction is legible as a separate event.
@@ -195,7 +202,7 @@ export async function repostOrphanedInvoice(params: {
       postingStatus: 'posted',
       postedJournalEntryId: journal.id,
       postedAt: new Date(),
-      postedById: params.actorId,
+      postedById: params.actorId,  // null is accepted: see actorId above
     },
   })
 

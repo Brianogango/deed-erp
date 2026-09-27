@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling } from '@/lib/auth/api'
+import { getServerSession } from '@/lib/auth/server'
 import {
   findOrphanedPostedInvoices,
   repostOrphanedInvoice,
@@ -38,12 +39,34 @@ const RepostSchema = z.object({
   entryDate: z.enum(['invoice_date', 'today']),
 }).strict()
 
-const DIRECTOR_ROLES = ['director']
+/**
+ * A director session, or the internal secret.
+ *
+ * The secret path matters for the one job this route exists to do. Remediation
+ * is run from the server, and the alternative — pasting a live session cookie
+ * into a terminal — puts a credential into shell history and into any
+ * screenshot of that terminal, which the project rules forbid. The secret is
+ * already in the app's environment, so a runner script reads it from there and
+ * it never reaches the screen. Same pattern as backfill-accounting and
+ * journal-mirror-failures.
+ *
+ * Returns the acting user's id when there is a session, and null for the
+ * secret path, which has no user behind it.
+ */
+async function authorize(request: NextRequest): Promise<{ ok: boolean; actorId: string | null }> {
+  const internalSecret = process.env.INTERNAL_API_SECRET
+  const providedSecret = request.headers.get('x-internal-secret')
+  if (internalSecret && providedSecret === internalSecret) return { ok: true, actorId: null }
+  const session = await getServerSession()
+  if (session?.user && String(session.user.role) === 'director') {
+    return { ok: true, actorId: session.user.id }
+  }
+  return { ok: false, actorId: null }
+}
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const session = await getRequiredSession()
-    if (!DIRECTOR_ROLES.includes(String(session.user.role))) {
+    if (!(await authorize(request)).ok) {
       return NextResponse.json({ error: 'Only a director can review orphaned invoice journals' }, { status: 403 })
     }
     const invoices = await findOrphanedPostedInvoices()
@@ -57,8 +80,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const session = await getRequiredSession()
-    if (!DIRECTOR_ROLES.includes(String(session.user.role))) {
+    const auth = await authorize(request)
+    if (!auth.ok) {
       return NextResponse.json({ error: 'Only a director can re-post an invoice journal' }, { status: 403 })
     }
 
@@ -82,7 +105,7 @@ export async function POST(request: NextRequest) {
       }
       const entryDate = parsed.data.entryDate === 'today' ? new Date() : orphan.invoiceDate
       try {
-        results.push(await repostOrphanedInvoice({ invoiceId: id, entryDate, actorId: session.user.id }))
+        results.push(await repostOrphanedInvoice({ invoiceId: id, entryDate, actorId: auth.actorId }))
       } catch (err) {
         // One failure must not abandon the rest: each invoice is its own
         // journal and its own decision.
