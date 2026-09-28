@@ -78,7 +78,10 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
   deed_deliveries: policy([...INVENTORY, 'sales_rep'], ['delivery', 'sales']),
   deed_warranties: policy([...SALES, 'technician'], ['sales', 'repair', 'after_sales']),
   deed_approvalRequests: policy(SALES, ['sales']),
-  deed_documentPaymentDetails: policy(FINANCE, ['accounting', 'sales']),
+  // The payment details printed on a quotation or invoice (which bank, which
+  // M-PESA till) are chosen by whoever prepares the document, and sales reps
+  // prepare quotations. Finance-only meant a rep's choice was refused.
+  deed_documentPaymentDetails: policy([...FINANCE, 'sales', 'sales_rep'], ['accounting', 'sales']),
   deed_customerCredits: policy(FINANCE, ['accounting', 'sales']),
 
   deed_contacts: policy([...SALES, 'inventory_officer'], ['contacts', 'crm', 'sales', 'purchase', 'pos', 'repair', 'delivery', 'after_sales', 'outsource', 'accounting']),

@@ -56,4 +56,10 @@ describe('legacy store write policy', () => {
   it('does not open outsource jobs to an inventory officer without the module', () => {
     expect(canWriteStoreKey({ role: 'inventory_officer', modules: ['inventory'] }, 'deed_outsourceJobs')).toBe(false)
   })
+
+  it('lets a sales rep set the payment details printed on their documents', () => {
+    // 28-Sep-2026: a sales rep's payment-details save was refused.
+    expect(canWriteStoreKey({ role: 'sales_rep', modules: ['sales'] }, 'deed_documentPaymentDetails')).toBe(true)
+    expect(canWriteStoreKey({ role: 'technician', modules: ['sales'] }, 'deed_documentPaymentDetails')).toBe(false)
+  })
 })
