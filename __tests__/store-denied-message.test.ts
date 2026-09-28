@@ -20,4 +20,16 @@ describe('telling someone their save was refused', () => {
   it('says nothing when nothing was refused', () => {
     expect(deniedSaveMessage([])).toBeNull()
   })
+
+  it('stays quiet about lists the browser rewrites on its own', () => {
+    // Every tab recomputes product stock counts; refusing those loses nothing
+    // anyone typed, and a pop-up for them would drown out the real ones.
+    expect(deniedSaveMessage(['deed_products', 'deed_posSessionId'])).toBeNull()
+  })
+
+  it('still speaks up for real work refused alongside background noise', () => {
+    const message = deniedSaveMessage(['deed_products', 'deed_serials'])
+    expect(message).toContain('serials')
+    expect(message).not.toContain('products')
+  })
 })

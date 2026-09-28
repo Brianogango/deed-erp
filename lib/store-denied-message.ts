@@ -17,8 +17,28 @@ export function storeKeyLabel(key: string): string {
   return words || String(key ?? '')
 }
 
+/**
+ * Lists every browser rewrites on its own, not because the person typed
+ * anything. Product stock counts are recomputed in each tab whenever serials
+ * change anywhere, and the POS session pointer and opening-stock flag are
+ * bookkeeping. A role that may not save them is refused many times a day
+ * (55 for one admin officer on 28 Sep) and nothing they entered is lost, so a
+ * pop-up for these would be noise that teaches people to ignore the real one.
+ */
+const BACKGROUND_KEYS = new Set([
+  'deed_products',
+  'deed_posSessionId',
+  'deed_posSessionOpen',
+  'deed_openingStockPosted',
+])
+
+export function isBackgroundStoreKey(key: string): boolean {
+  return BACKGROUND_KEYS.has(key)
+}
+
+/** A message only for refusals the person would notice as lost work. */
 export function deniedSaveMessage(keys: string[]): string | null {
-  const labels = Array.from(new Set((keys ?? []).filter(Boolean).map(storeKeyLabel)))
+  const labels = Array.from(new Set((keys ?? []).filter(k => k && !isBackgroundStoreKey(k)).map(storeKeyLabel)))
   if (labels.length === 0) return null
   const list = labels.length === 1
     ? labels[0]
