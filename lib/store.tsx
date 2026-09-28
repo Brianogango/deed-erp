@@ -266,6 +266,7 @@ import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceCh
 import { repairPriceChangeImpact, describeRepairPriceChange } from '@/lib/repair/document-impact'
 import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
+import { deniedSaveMessage } from '@/lib/store-denied-message'
 import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
 import { executeRepairConsolidation, mergedSaleOrderFromPlan } from '@/lib/repair/consolidation-execute'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
@@ -4834,7 +4835,7 @@ export function useStoreHydrated(): boolean {
   return hydrated
 }
 
-function emitSyncStatus(stage: SyncStage, extras?: { skippedKeys?: string[]; message?: string }) {
+function emitSyncStatus(stage: SyncStage, extras?: { skippedKeys?: string[]; deniedKeys?: string[]; message?: string }) {
   if (typeof window === 'undefined') return
   const pendingKeys = Object.keys(_pendingSync).length
   const lastSyncedAt = window.localStorage.getItem(LAST_SYNC_AT_LS) || null
@@ -4844,6 +4845,7 @@ function emitSyncStatus(stage: SyncStage, extras?: { skippedKeys?: string[]; mes
       pendingKeys,
       lastSyncedAt,
       skippedKeys: extras?.skippedKeys ?? [],
+      deniedKeys: extras?.deniedKeys ?? [],
       message: extras?.message ?? '',
       timestamp: new Date().toISOString(),
     },
@@ -4937,6 +4939,7 @@ function dropUnsyncablePendingKeys(entries: Record<string, string>) {
  */
 async function flushKeysIndividually(entries: Record<string, string>) {
   const failedKeys: string[] = []
+  const refusedKeys: string[] = []
   await Promise.all(Object.keys(entries).map(async key => {
     try {
       const res = await fetch('/api/store', {
@@ -4952,6 +4955,7 @@ async function flushKeysIndividually(entries: Record<string, string>) {
       // session. Leave the retry queue so one unknown/immutable key cannot
       // keep splitting every later flush into a parallel POST storm.
       if (res.ok || res.status === 403 || res.status === 400) {
+        if (res.status === 403) refusedKeys.push(key)
         markKeysSynced({ [key]: entries[key] })
       } else {
         failedKeys.push(key)
@@ -4960,7 +4964,9 @@ async function flushKeysIndividually(entries: Record<string, string>) {
       failedKeys.push(key)
     }
   }))
-  if (failedKeys.length > 0) {
+  if (refusedKeys.length > 0) {
+    emitSyncStatus('error', { deniedKeys: refusedKeys, message: deniedSaveMessage(refusedKeys) ?? '' })
+  } else if (failedKeys.length > 0) {
     emitSyncStatus('error', {
       message: `Some changes could not be saved yet: ${failedKeys.join(', ')}. Retrying automatically.`,
     })
@@ -5012,7 +5018,7 @@ async function flushServerSync() {
       const denied = payload?.deniedKeys ?? Object.keys(entries)
       denied.forEach(k => { if (_pendingSync[k] === entries[k]) delete _pendingSync[k] })
       removeDirtyKeys(denied)
-      emitSyncStatus('error', { message: `Your role cannot save: ${denied.join(', ')}` })
+      emitSyncStatus('error', { deniedKeys: denied, message: deniedSaveMessage(denied) ?? '' })
       return
     }
     if (!res.ok) {
@@ -5031,6 +5037,14 @@ async function flushServerSync() {
     if (_syncRetryTimer) {
       clearTimeout(_syncRetryTimer)
       _syncRetryTimer = null
+    }
+    // The server saves what the role may write and drops the rest, so a mixed
+    // batch still answers 200. Reporting that as "synced" is how refused
+    // changes used to vanish without anyone knowing.
+    const deniedKeys = payload?.deniedKeys ?? []
+    if (deniedKeys.length > 0) {
+      emitSyncStatus('error', { deniedKeys, message: deniedSaveMessage(deniedKeys) ?? '' })
+      return
     }
     const skippedKeys = payload?.skippedKeys ?? []
     if (skippedKeys.length > 0) {

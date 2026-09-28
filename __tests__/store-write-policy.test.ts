@@ -39,4 +39,21 @@ describe('legacy store write policy', () => {
     expect(canWriteStoreKey(user('director', []), 'deed_systemSettings')).toBe(true)
     expect(canWriteStoreKey(user('director', []), 'deed_bankRecons')).toBe(true)
   })
+
+  it('lets an inventory officer with the Outsource module record a job and its vendor', () => {
+    // REGRESSION 25-Sep-2026: David (inventory_officer) outsourced machines
+    // four times; every save was DENIED and the jobs never reached the server.
+    const officer = { role: 'inventory_officer', modules: ['inventory', 'outsource'] }
+    expect(canWriteStoreKey(officer, 'deed_outsourceJobs')).toBe(true)
+    expect(canWriteStoreKey(officer, 'deed_outsourceVendors')).toBe(true)
+  })
+
+  it('still keeps vendor payments with Finance', () => {
+    const officer = { role: 'inventory_officer', modules: ['inventory', 'outsource'] }
+    expect(canWriteStoreKey(officer, 'deed_outsourcePayments')).toBe(false)
+  })
+
+  it('does not open outsource jobs to an inventory officer without the module', () => {
+    expect(canWriteStoreKey({ role: 'inventory_officer', modules: ['inventory'] }, 'deed_outsourceJobs')).toBe(false)
+  })
 })

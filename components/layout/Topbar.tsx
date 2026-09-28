@@ -1170,6 +1170,12 @@ export default function Topbar() {
       if (detail.stage === 'conflict') {
         setShowConflictPrompt(true)
       }
+      // A refused save is data the person believes they entered. Say so
+      // loudly — the badge alone turns green again on the next save.
+      const denied = (detail as { deniedKeys?: string[] }).deniedKeys
+      if (Array.isArray(denied) && denied.length > 0 && detail.message) {
+        showToast(detail.message, 'error')
+      }
     }
 
     window.addEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)

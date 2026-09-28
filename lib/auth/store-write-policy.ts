@@ -91,8 +91,14 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
 
   deed_repairs_v2: policy(REPAIR, ['repair']),
   deed_outboundReleases: policy(REPAIR, ['repair', 'after_sales']),
-  deed_outsourceJobs: policy(REPAIR, ['repair', 'outsource']),
-  deed_outsourceVendors: policy([...ADMIN, 'technical_lead'], ['outsource', 'repair']),
+  // Inventory officers send laptops out too (stock units as well as repairs),
+  // and the Outsource screen lets them. Leaving them off this list meant every
+  // job they created was refused here and silently discarded by the browser —
+  // machines went to a vendor with no record anywhere but that one tab.
+  deed_outsourceJobs: policy([...REPAIR, 'inventory', 'inventory_officer'], ['repair', 'outsource']),
+  // The job form can add a vendor in place, so whoever may create a job must be
+  // able to save the vendor it names.
+  deed_outsourceVendors: policy([...ADMIN, 'technical_lead', 'inventory', 'inventory_officer'], ['outsource', 'repair']),
   deed_outsourcePayments: policy(FINANCE, ['outsource', 'accounting']),
 
   deed_accounts: policy(FINANCE, ['accounting']),
