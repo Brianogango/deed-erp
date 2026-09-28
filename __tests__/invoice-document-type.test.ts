@@ -15,6 +15,16 @@ describe('customer invoice or vendor bill', () => {
     expect(invoiceDocumentType({ documentType: 'customer_invoice', invoiceNumber: 'BILL/2026/0031' })).toBe('vendor_bill')
   })
 
+  it('recognises a draft bill by its DRAFT/BILL number', () => {
+    // Production: Ru-Walt Telecomm DRAFT/BILL/2EBD3279 carries documentType
+    // customer_invoice; its number is the only thing that says what it is.
+    expect(invoiceDocumentType({ documentType: 'customer_invoice', invoiceNumber: 'DRAFT/BILL/2EBD3279' })).toBe('vendor_bill')
+  })
+
+  it('does not mistake a draft invoice for a bill', () => {
+    expect(invoiceDocumentType({ invoiceNumber: 'DRAFT/INV/9A1C' })).toBe('customer_invoice')
+  })
+
   it('treats a document raised against a purchase order as a bill', () => {
     expect(invoiceDocumentType({ invoiceNumber: 'X-1', purchaseOrderId: 'po-1' })).toBe('vendor_bill')
   })

@@ -11,7 +11,8 @@
  *
  * `documentType` is the record's own answer, but the column only arrived on
  * 22 Sep 2026 with a customer-invoice default, so a bill saved before then can
- * carry the default. Bills have always been numbered BILL…, and a document
+ * carry the default. Bills have always been numbered BILL… (DRAFT/BILL… as a
+ * draft) — and a document
  * raised against a purchase order is a bill, so either of those also counts.
  */
 export type InvoiceDocumentType = 'customer_invoice' | 'vendor_bill'
@@ -22,7 +23,8 @@ export function invoiceDocumentType(row: {
   purchaseOrderId?: string | null
 }): InvoiceDocumentType {
   if (String(row.documentType ?? '').toLowerCase() === 'vendor_bill') return 'vendor_bill'
-  if (String(row.invoiceNumber ?? '').trim().toUpperCase().startsWith('BILL')) return 'vendor_bill'
+  // BILL/2026/0031 once posted, DRAFT/BILL/2EBD3279 while still a draft.
+  if (/^(DRAFT\/)?BILL\b/.test(String(row.invoiceNumber ?? '').trim().toUpperCase())) return 'vendor_bill'
   if (String(row.purchaseOrderId ?? '').trim()) return 'vendor_bill'
   return 'customer_invoice'
 }
