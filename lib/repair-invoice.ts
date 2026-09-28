@@ -36,6 +36,17 @@ export type RepairInvoiceSource = {
   warrantyCoverage?: string | null
   repairPath?: string | null
   intakeDate?: string | null
+  status?: string | null
+}
+
+/**
+ * The device could not be saved. The approved quote describes work that was
+ * attempted but did not deliver a working machine, so it is not automatically
+ * billable — the starting position is the diagnosis fee alone, and Finance
+ * decides on its own whether anything else belongs on the invoice.
+ */
+export function isUnrepairableRepair(repair: RepairInvoiceSource): boolean {
+  return String(repair.status ?? '').toLowerCase() === 'unrepairable'
 }
 
 function money(n: unknown): number {
@@ -180,6 +191,14 @@ export function buildRepairInvoiceCharges(
   applyVat = true,
   vatRate = 0,
 ): RepairInvoiceChargeLine[] {
+  // An unrepairable job bills the diagnosis fee and nothing more by default.
+  // Billing the approved quote would charge the customer in full for a repair
+  // that did not work; billing nothing leaves the diagnosis unpaid, which is
+  // where these jobs used to end up — `unrepairable` is in neither the
+  // quotable nor the invoiceable status list, so the fee could never be
+  // charged at all. Finance adds any further lines to the draft.
+  if (isUnrepairableRepair(repair)) return diagnosisCharges(repair)
+
   const quoted = quoteCharges(repair, applyVat, vatRate)
   const body = quoteChargeTotal(repair, applyVat, vatRate) >= 1 || quoted.length > 0
     ? quoted

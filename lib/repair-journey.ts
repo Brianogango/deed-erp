@@ -29,6 +29,9 @@ export function repairInvoiceJourneyAction(opts: {
     return 'view'
   }
 
+  // An unrepairable job is terminal for the workshop but not for billing: the
+  // diagnosis fee is still owed and there is no other route to charge it.
+  if (status === 'unrepairable') return opts.canManageBilling ? 'create' : 'none'
   if (terminal) return 'none'
   if (!['ready', 'invoiced'].includes(status)) return 'none'
   return opts.billingSyncNeeded && opts.canManageBilling ? 'create' : 'none'

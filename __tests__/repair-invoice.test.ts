@@ -266,3 +266,58 @@ describe('VAT is read from the quote, not recomputed from a hardcoded rule (REP-
     expect(fee).toMatchObject({ subtotal: 1000, taxRate: 0 })
   })
 })
+
+describe('an unrepairable job bills the diagnosis fee only', () => {
+  // Diagnosis-first, quoted at 3,000 and approved, repair attempted, device
+  // could not be saved. Before this, `unrepairable` was in neither the
+  // quotable nor the invoiceable status list, so the diagnosis fee could never
+  // be charged once the job was marked — while the customer was told by SMS
+  // that no charges applied.
+  const base = {
+    intakeDate: '2026-09-24',
+    repairPath: 'diagnosis_first' as const,
+    diagnosisFee: 1000,
+    diagnosisFeeStatus: 'applicable' as const,
+    underWarranty: false,
+    laborCost: 2000,
+    partsUsed: [{ productName: 'Mainboard', qty: 1, price: 8000 }],
+    quote: {
+      subtotal: 3000, tax: 0, total: 3000,
+      lines: [{ type: 'labor', description: 'Power issue fix', qty: 1, unitPrice: 3000, subtotal: 3000, decision: 'approved' }],
+    },
+  }
+
+  it('bills the fee and nothing else', () => {
+    const charges = buildRepairInvoiceCharges({ ...base, status: 'unrepairable' } as never, true, 16)
+    expect(charges).toHaveLength(1)
+    expect(charges[0]).toMatchObject({ subtotal: 1000, taxRate: 0 })
+    expect(repairInvoiceChargeTotal(charges)).toBe(1000)
+  })
+
+  it('does not bill the approved quote for a repair that did not work', () => {
+    const charges = buildRepairInvoiceCharges({ ...base, status: 'unrepairable' } as never, true, 16)
+    expect(charges.some(c => c.description.includes('Power issue fix'))).toBe(false)
+  })
+
+  it('does not fall back to parts and labour either', () => {
+    const noQuote = { ...base, quote: null, status: 'unrepairable' }
+    const charges = buildRepairInvoiceCharges(noQuote as never, true, 16)
+    expect(charges).toHaveLength(1)
+    expect(repairInvoiceChargeTotal(charges)).toBe(1000)
+  })
+
+  it('bills nothing when the fee was already settled', () => {
+    const settled = { ...base, status: 'unrepairable', diagnosisFeeStatus: 'paid' as const }
+    expect(buildRepairInvoiceCharges(settled as never, true, 16)).toEqual([])
+  })
+
+  it('bills nothing on a direct-repair job, which carries no diagnosis fee', () => {
+    const direct = { ...base, status: 'unrepairable', repairPath: 'direct_repair' as const }
+    expect(buildRepairInvoiceCharges(direct as never, true, 16)).toEqual([])
+  })
+
+  it('still bills the full quote while the job is not unrepairable', () => {
+    const charges = buildRepairInvoiceCharges({ ...base, status: 'ready' } as never, true, 16)
+    expect(repairInvoiceChargeTotal(charges)).toBe(4000)
+  })
+})

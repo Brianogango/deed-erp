@@ -18115,7 +18115,18 @@ const storeCtx: AppState = {
         notes: r.notes + `\n\nUnrepairable: ${reason}`,
       } : r))
 
-      addAuditLog('mark_unrepairable', repairId, `Marked unrepairable: ${reason}`)
+      // The message used to promise "No charges apply" unconditionally, in the
+      // same action that leaves a diagnosis fee owing. Say what is actually
+      // true, so the customer is not told one thing and invoiced another.
+      const unrepairableFeeDue = shouldChargeDiagnosisFee(repair) && !isDiagnosisFeeSettled(repair)
+        ? Math.max(0, Number(repair.diagnosisFee) || 0)
+        : 0
+
+      addAuditLog(
+        'mark_unrepairable',
+        repairId,
+        `Marked unrepairable: ${reason}${unrepairableFeeDue > 0 ? ` — diagnosis fee KES ${unrepairableFeeDue} still billable` : ''}`,
+      )
       
       // Notify customer
       if (repair.customerPhone) {
@@ -18129,7 +18140,7 @@ const storeCtx: AppState = {
               customerPhone: repair.customerPhone,
               repairRef: repair.ref,
               deviceName: repair.productName,
-              message: `After thorough diagnosis, we regret to inform you that your device cannot be repaired due to: ${reason}\n\nYour device is ready for return. No charges apply.`,
+              message: `After thorough diagnosis, we regret to inform you that your device cannot be repaired due to: ${reason}\n\nYour device is ready for return.${unrepairableFeeDue > 0 ? ` A diagnosis fee of KES ${unrepairableFeeDue.toLocaleString('en-KE')} applies for the work carried out.` : ' No charges apply.'}`,
               options: { priority: 'high' }
             })
           })

@@ -272,7 +272,12 @@ export default function RepairDetailView() {
     invoice: linkedInvoice,
     charges: buildRepairInvoiceCharges(r, true, companySettings?.vatRate ?? 0),
   })
-  const canInvoice = ['ready', 'invoiced'].includes(r.status)
+  // `unrepairable` is included so the diagnosis fee can still be billed. The
+  // device could not be saved, but the diagnosis was done and is chargeable —
+  // and this status was in neither the quotable nor the invoiceable list, so
+  // the fee could never be charged once a job was marked. The draft opens with
+  // the fee alone and Finance decides what else belongs on it.
+  const canInvoice = ['ready', 'invoiced', 'unrepairable'].includes(r.status)
     && !noCharge
     && billingSync.needed
     && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
@@ -318,6 +323,8 @@ export default function RepairDetailView() {
     : canStart     ? (billingExempt ? 'No-charge job — start the repair (quote & billing skipped)' : 'Start the repair')
     : canComplete  ? 'Mark repair complete to submit for QA'
     : canPerformQA ? 'Perform QC check — repair is ready for testing'
+    : canInvoice && r.status === 'unrepairable'
+      ? 'Device could not be repaired — bill the diagnosis fee (Finance can add other charges before confirming)'
     : canInvoice   ? (billingSync.requiresCreditNote
       ? 'Invoice is posted and no longer matches the quote — Finance must issue a credit or debit note'
       : billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen

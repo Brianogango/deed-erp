@@ -77,3 +77,38 @@ describe('repair invoice journey', () => {
     })).toBe('none')
   })
 })
+
+describe('an unrepairable job can still be billed', () => {
+  it('offers to create the invoice for the diagnosis fee', () => {
+    // `unrepairable` is terminal for the workshop but not for billing: the
+    // diagnosis was done and is chargeable, and no other route exists to
+    // charge it once the job is marked.
+    expect(repairInvoiceJourneyAction({
+      repairStatus: 'unrepairable',
+      invoice: null,
+      canManageBilling: true,
+    })).toBe('create')
+  })
+
+  it('offers nothing to someone who cannot bill', () => {
+    expect(repairInvoiceJourneyAction({
+      repairStatus: 'unrepairable',
+      invoice: null,
+      canManageBilling: false,
+    })).toBe('none')
+  })
+
+  it('shows the existing invoice rather than creating a second one', () => {
+    expect(repairInvoiceJourneyAction({
+      repairStatus: 'unrepairable',
+      invoice: { status: 'posted', amountPaid: 0 },
+      canManageBilling: true,
+    })).toBe('view')
+  })
+
+  it('leaves the other terminal statuses alone', () => {
+    for (const repairStatus of ['closed', 'cancelled', 'returned', 'retained']) {
+      expect(repairInvoiceJourneyAction({ repairStatus, invoice: null, canManageBilling: true })).toBe('none')
+    }
+  })
+})
