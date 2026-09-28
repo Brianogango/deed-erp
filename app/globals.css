@@ -16910,7 +16910,7 @@ body:has(.settings-workspace) [role='dialog'] > div {
 .repair-metric-strip {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--repair-metric-count, 4), minmax(0, 1fr));
   margin: 12px 16px 0;
   overflow: hidden;
   border: 1px solid var(--repair-border);
@@ -16950,6 +16950,34 @@ body:has(.settings-workspace) [role='dialog'] > div {
 .repair-metric--parts .repair-metric__indicator {
   border-color: var(--repair-cyan);
   background: #effaff;
+}
+
+.repair-metric--vendor .repair-metric__indicator {
+  border-color: #d97706;
+  background: #d97706;
+}
+
+button.repair-metric {
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
+  cursor: pointer;
+}
+
+button.repair-metric:hover {
+  background: #fff7ed;
+}
+
+.repair-metric__note {
+  display: block;
+  margin-top: 1px;
+  color: #b45309 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
 }
 
 .repair-metric--ready .repair-metric__indicator {

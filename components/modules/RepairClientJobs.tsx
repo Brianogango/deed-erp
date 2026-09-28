@@ -1,5 +1,6 @@
 'use client'
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
+import { activeOutsourceJob, isOutsourceOverdue, outsourceBadgeLabel, outsourcedRepairCounts } from '@/lib/repair/outsource-visibility'
 import { DataTable, type ActiveFilterChip, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
@@ -65,6 +66,22 @@ function RepairStatusBadge({ status }: { status: string }) {
   )
 }
 
+/** Vendor and days out, under the status — visible at every width. */
+function OutsourceLine({ repairId, outsourceJobs }: { repairId: string; outsourceJobs: any[] }) {
+  const job = activeOutsourceJob(repairId, outsourceJobs)
+  if (!job) return null
+  const overdue = isOutsourceOverdue(job)
+  return (
+    <span
+      className="block whitespace-normal text-[10px] font-bold leading-tight"
+      style={{ color: overdue ? '#dc2626' : '#d97706' }}
+      title={`${job.ref ?? 'Outsource job'}${overdue ? ' — out longer than a week' : ''}`}
+    >
+      {outsourceBadgeLabel(job)}{overdue ? ' · overdue' : ''}
+    </span>
+  )
+}
+
 function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
   const rowColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'
   const outJob   = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
@@ -109,6 +126,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <RepairStatusBadge status={r.status} />
+          <OutsourceLine repairId={r.id} outsourceJobs={outsourceJobs} />
           <span className="text-[10px] text-[var(--text-4)] font-medium tabular-nums">{fmtDateTime(r.intakeDate)}</span>
         </div>
       </div>
@@ -177,6 +195,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
       tone: 'ready',
     },
   ], [visibleRepairs])
+  const outsourced = useMemo(() => outsourcedRepairCounts(visibleRepairs, outsourceJobs ?? []), [visibleRepairs, outsourceJobs])
 
   const patchUi = useUrlUiPatch()
   const [searchQuery, setSearchQueryValue] = useUrlUiState('q', '')
@@ -244,6 +263,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     }
     if (statusFilter === 'pending_group') list = list.filter(r => ['pending_verification','received','assigned'].includes(r.status))
     else if (statusFilter === 'done_group') list = list.filter(r => ['delivered','closed'].includes(r.status))
+    else if (statusFilter === 'outsourced') list = list.filter(r => !!activeOutsourceJob(r.id, outsourceJobs))
     else if (statusFilter !== 'all') list = list.filter(r => r.status === statusFilter)
     if (techFilter !== 'all') list = techFilter === 'unassigned' ? list.filter(r => !r.assignedTechnicianId) : list.filter(r => r.assignedTechnicianId === techFilter)
     if (pathFilter === 'direct_repair') list = list.filter(r => r.repairPath === 'direct_repair')
@@ -254,10 +274,11 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     }
     // Always newest-first before DataTable pagination — survives cleared column sort.
     return sortRepairsNewestFirst(list)
-  }, [visibleRepairs, searchQuery, statusFilter, techFilter, pathFilter, priorityFilter, dateFrom, dateTo])
+  }, [visibleRepairs, outsourceJobs, searchQuery, statusFilter, techFilter, pathFilter, priorityFilter, dateFrom, dateTo])
 
   const selectedStatusLabel =
-    statusFilter === 'pending_group' ? 'Pending Group'
+    statusFilter === 'outsourced' ? 'At vendors'
+    : statusFilter === 'pending_group' ? 'Pending Group'
     : statusFilter === 'done_group' ? 'Done Group'
     : STATUS_FILTER_GROUPS.flatMap(g => g.options).find(o => o.id === statusFilter)?.label ?? 'All Statuses'
 
@@ -267,13 +288,14 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     { value: 'all', label: `All statuses (${visibleRepairs.length})` },
     { value: 'pending_group', label: `Pending group (${visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length})` },
     { value: 'done_group', label: `Done group (${visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length})` },
+    { value: 'outsourced', label: `At vendors (${outsourced.out})` },
     ...STATUS_FILTER_GROUPS.flatMap(group =>
       group.options.map(opt => ({
         value: opt.id,
         label: `${opt.label} (${visibleRepairs.filter(r => r.status === opt.id).length})`,
       }))
     ),
-  ], [visibleRepairs])
+  ], [visibleRepairs, outsourced.out])
 
   const technicianOptions = useMemo(() => [
     { value: 'all', label: 'All technicians' },
@@ -408,7 +430,12 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '140px',
-      render: r => <RepairStatusBadge status={r.status} />,
+      render: r => (
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <RepairStatusBadge status={r.status} />
+          <OutsourceLine repairId={r.id} outsourceJobs={outsourceJobs} />
+        </div>
+      ),
       exportValue: r => r.status,
     },
     {
@@ -465,7 +492,11 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
   return (
     <div className="repair-client-jobs flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
 
-      <div className="repair-metric-strip" aria-label="Repair workload summary">
+      <div
+        className="repair-metric-strip"
+        aria-label="Repair workload summary"
+        style={{ '--repair-metric-count': repairStats.length + (outsourced.out > 0 ? 1 : 0) } as CSSProperties}
+      >
         {repairStats.map(stat => (
           <div className={`repair-metric repair-metric--${stat.tone}`} key={stat.label}>
             <span className="repair-metric__indicator" aria-hidden="true" />
@@ -475,6 +506,23 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
             </div>
           </div>
         ))}
+        {outsourced.out > 0 && (
+          <button
+            type="button"
+            className="repair-metric repair-metric--vendor"
+            onClick={() => handleStatusChange('outsourced')}
+            title="Show repairs whose machine is at a vendor"
+          >
+            <span className="repair-metric__indicator" aria-hidden="true" />
+            <div>
+              <span>At vendors</span>
+              <strong>{outsourced.out}</strong>
+              {outsourced.overdue > 0 && (
+                <span className="repair-metric__note">{outsourced.overdue} out over a week</span>
+              )}
+            </div>
+          </button>
+        )}
       </div>
 
       {/* ── Main Content — full width, align with ModuleHeader (no max-width / side gutters) ── */}

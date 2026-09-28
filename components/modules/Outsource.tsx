@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
+import { formatDaysOut, isOutsourceOverdue, outsourceDaysOut, OUTSOURCE_OVERDUE_DAYS } from '@/lib/repair/outsource-visibility'
 import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar, SearchPicker, Modal } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
@@ -238,6 +239,7 @@ function OutsourceContent() {
 
   // ── Counts for tab badge ──
   const outCount = outsourceJobs.filter(j => j.status === 'sent').length
+  const overdueCount = outsourceJobs.filter(j => isOutsourceOverdue(j)).length
   const returnedToday = outsourceJobs.filter(job =>
     job.returnedDate && new Date(job.returnedDate).toDateString() === new Date().toDateString()
   ).length
@@ -441,7 +443,22 @@ function OutsourceContent() {
     },
     {
       key: 'sent', label: 'Sent', priority: 2, width: '100px',
-      render: job => <span className="whitespace-nowrap">{fmtDate(job.sentDate)}</span>,
+      render: job => {
+        // How long a machine has been away is what tells you to chase it. Jobs
+        // sent to Fastech in June were still open in late September unnoticed.
+        const days = job.status === 'sent' ? outsourceDaysOut(job) : null
+        const overdue = isOutsourceOverdue(job)
+        return (
+          <span className="flex flex-col whitespace-nowrap">
+            <span>{fmtDate(job.sentDate)}</span>
+            {days !== null && (
+              <span className="text-[10px] font-bold" style={{ color: overdue ? '#dc2626' : '#d97706' }}>
+                {days === 0 ? 'sent today' : `${formatDaysOut(days)} out`}{overdue ? ' · overdue' : ''}
+              </span>
+            )}
+          </span>
+        )
+      },
       exportValue: job => job.sentDate,
     },
     {
@@ -512,6 +529,14 @@ function OutsourceContent() {
         </div>
         <div className="mt-2.5 flex flex-wrap gap-2 border-t border-border-lt pt-2.5">
           <span className="text-[10px] text-t3">Sent {fmtDate(job.sentDate)}</span>
+          {job.status === 'sent' && outsourceDaysOut(job) !== null && (
+            <span
+              className="text-[10px] font-bold"
+              style={{ color: isOutsourceOverdue(job) ? '#dc2626' : '#d97706' }}
+            >
+              · {outsourceDaysOut(job) === 0 ? 'sent today' : `${formatDaysOut(outsourceDaysOut(job))} out`}{isOutsourceOverdue(job) ? ' · overdue' : ''}
+            </span>
+          )}
           {job.returnedDate && <span className="text-[10px] text-t3">· Returned {fmtDate(job.returnedDate)}</span>}
           <span className="ml-auto flex gap-2" onClick={e => e.stopPropagation()}>{jobRowActions(job)}</span>
         </div>
@@ -580,7 +605,10 @@ function OutsourceContent() {
       <div className="mod-body outsource-body p-3 sm:p-4">
         <section className="outsource-summary" aria-label="Outsource repair summary">
           <button type="button" className="outsource-summary__item" onClick={() => { setTab('jobs'); setJobStatusFilter('sent') }}>
-            <span>Out with vendors</span><strong>{outCount}</strong><small>Currently away</small>
+            <span>Out with vendors</span><strong>{outCount}</strong>
+            <small style={overdueCount > 0 ? { color: '#dc2626', fontWeight: 700 } : undefined}>
+              {overdueCount > 0 ? `${overdueCount} out over ${OUTSOURCE_OVERDUE_DAYS} days — chase or mark returned` : 'Currently away'}
+            </small>
           </button>
           <button type="button" className="outsource-summary__item is-warning" onClick={() => { setTab('jobs'); setJobStatusFilter('returned_unresolved') }}>
             <span>Needs follow-up</span><strong>{unresolvedCount}</strong><small>Returned unresolved</small>
