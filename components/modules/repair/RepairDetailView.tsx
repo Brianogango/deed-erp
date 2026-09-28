@@ -1549,6 +1549,15 @@ export default function RepairDetailView() {
                   {primaryActionId === 'invoice' && (billingSync.requiresCreditNote
                     ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-800">{`${linkedInvoice?.ref ?? 'The invoice'} is posted and cannot be edited. Correct it with a credit or debit note in the Invoice module.`}</p>
                     : <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice'} color="bg-sky-500 hover:bg-sky-600" shadow="" />)}
+                  {primaryActionId === 'invoice' && canBillTogether && (
+                    <button
+                      type="button"
+                      onClick={() => setShowConsolidateModal(true)}
+                      className="mt-2 w-full rounded-lg px-3 py-2 text-[11px] font-bold text-sky-700 hover:bg-sky-50"
+                    >
+                      {`Bill with ${consolidationOptions.filter(c => c.blocker === null).length - 1} other repair${consolidationOptions.filter(c => c.blocker === null).length === 2 ? '' : 's'} for this client`}
+                    </button>
+                  )}
                   {primaryActionId === 'prepare_release' && <ActionBtn onClick={openPrepareRelease} icon={faBoxOpen} label="Prepare release" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
                   {primaryActionId === 'collect' && <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark collected" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
                   {primaryActionId === 'close' && <ActionBtn onClick={() => closeRepairJob(r.id)} icon={faCheckCircle} label="Close job" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
