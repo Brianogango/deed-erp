@@ -4,6 +4,7 @@ import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
+import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 
 function mapDbInvoiceStatusToClient(status: string): string {
@@ -16,7 +17,9 @@ function mapInvoiceToClient(invoice: any) {
   return {
     id: invoice.id,
     ref: invoice.invoiceNumber,
-    type: invoice.client?.isVendor ? 'vendor_bill' as const : 'customer_invoice' as const,
+    // The document says which way it runs, not the contact: a customer who is
+    // also a supplier must not have their invoices filed under Bills.
+    type: invoiceDocumentType(invoice),
     status: mapDbInvoiceStatusToClient(String(invoice.status)),
     partnerId: invoice.clientId,
     partnerName: invoice.client?.name ?? '',
