@@ -1,7 +1,6 @@
 import {
   buildConsolidatedRepairInvoice,
-  isConsolidatable,
-  repairSectionTitle,
+  consolidationBlocker,
   type ConsolidatableRepair,
 } from '@/lib/repair/consolidated-invoice'
 
@@ -32,7 +31,9 @@ export type ConsolidationSaleOrderLine = {
   taxRate: number
   subtotal: number
   serialIds: string[]
-  lineType?: 'section'
+  lineType?: 'section' | 'service'
+  unit?: 'service'
+  invoicePolicy?: 'order'
 }
 
 export type ConsolidationPlan =
@@ -58,6 +59,8 @@ const money = (n: unknown) => {
   return Number.isFinite(v) ? Math.round(v * 100) / 100 : 0
 }
 
+const refOf = (r: ConsolidatableRepair) => String(r.ref ?? r.id ?? '')
+
 export function planRepairConsolidation(opts: {
   repairs: ConsolidatableRepair[]
 }): ConsolidationPlan {
@@ -67,24 +70,34 @@ export function planRepairConsolidation(opts: {
     return { ok: false, reason: 'Pick at least two repairs to bill together.' }
   }
 
+  const ids = repairs.map(r => String(r.id ?? ''))
+  if (new Set(ids).size !== ids.length) {
+    return { ok: false, reason: 'The same repair is selected twice.' }
+  }
+
   // One invoice has one customer. Mixing clients would bill somebody for
   // another customer's device.
-  const clientIds = new Set(repairs.map(r => String(r.clientId ?? '')))
+  const clientOf = (r: ConsolidatableRepair) => String(r.clientId ?? r.customerId ?? '')
+  const clientIds = new Set(repairs.map(clientOf))
   if (clientIds.size !== 1 || clientIds.has('')) {
     return { ok: false, reason: 'All repairs must belong to the same client.' }
   }
-  const clientId = repairs[0]!.clientId as string
+  const clientId = clientOf(repairs[0]!)
 
   const alreadyBilled = repairs.filter(r => r.invoiceId)
   if (alreadyBilled.length > 0) {
-    const refs = alreadyBilled.map(r => r.ref ?? r.id).join(', ')
-    return { ok: false, reason: `Already invoiced: ${refs}. Remove them from the selection.` }
+    return { ok: false, reason: `Already invoiced: ${alreadyBilled.map(refOf).join(', ')}. Remove them from the selection.` }
   }
 
-  const notBillable = repairs.filter(r => !isConsolidatable(r))
-  if (notBillable.length > 0) {
-    const refs = notBillable.map(r => r.ref ?? r.id).join(', ')
-    return { ok: false, reason: `Nothing to bill on: ${refs}.` }
+  const blocked = repairs
+    .map(r => ({ ref: refOf(r), why: consolidationBlocker(r) }))
+    .filter(b => b.why !== null)
+  if (blocked.length > 0) {
+    const nothing = blocked.filter(b => b.why === 'nothing to bill')
+    if (nothing.length === blocked.length) {
+      return { ok: false, reason: `Nothing to bill on: ${nothing.map(b => b.ref).join(', ')}.` }
+    }
+    return { ok: false, reason: `Cannot bill together: ${blocked.map(b => `${b.ref} (${b.why})`).join('; ')}.` }
   }
 
   const draft = buildConsolidatedRepairInvoice(repairs)
@@ -96,53 +109,58 @@ export function planRepairConsolidation(opts: {
   let subtotal = 0
   let taxTotal = 0
 
-  for (const repair of repairs) {
-    const own = buildConsolidatedRepairInvoice([repair])
-    if (own.lines.length === 0) continue
-
-    lines.push({
-      productId: '',
-      productName: repairSectionTitle(repair),
-      description: repairSectionTitle(repair),
-      qty: 0,
-      unitPrice: 0,
-      discount: 0,
-      taxRate: 0,
-      subtotal: 0,
-      serialIds: [],
-      lineType: 'section',
-    })
-
-    for (const charge of own.lines.filter(l => l.lineType !== 'section')) {
-      const lineSubtotal = money(charge.subtotal)
-      const lineTax = Math.round(lineSubtotal * (Number(charge.taxRate) || 0) / 100)
-      subtotal += lineSubtotal
-      taxTotal += lineTax
+  for (const line of draft.lines) {
+    if (line.lineType === 'section') {
       lines.push({
-        productId: String(charge.productId ?? ''),
-        productName: charge.description,
-        description: charge.description,
-        qty: money(charge.qty),
-        unitPrice: money(charge.unitPrice),
+        productId: '',
+        productName: line.description,
+        description: line.description,
+        qty: 0,
+        unitPrice: 0,
         discount: 0,
-        // Each line keeps the rate its own repair was quoted at, so a batch may
-        // legitimately carry more than one.
-        taxRate: Number(charge.taxRate) || 0,
-        subtotal: lineSubtotal,
+        taxRate: 0,
+        subtotal: 0,
         serialIds: [],
+        lineType: 'section',
       })
+      continue
     }
+    const lineSubtotal = money(line.subtotal)
+    subtotal += lineSubtotal
+    taxTotal += Math.round(lineSubtotal * line.taxRate / 100)
+    const productId = String(line.productId ?? '').trim()
+    // Section headings live on the sale order but the invoice bills only lines
+    // with a quantity, so they do not survive onto it. Each charge names its
+    // own repair so the customer can still tell which machine it was for.
+    const description = `${line.repairRef} · ${line.description}`
+    lines.push({
+      productId,
+      productName: description,
+      description,
+      qty: money(line.qty),
+      unitPrice: money(line.unitPrice),
+      discount: 0,
+      // Each line keeps the rate its own repair was quoted at, so a batch may
+      // legitimately carry more than one.
+      taxRate: line.taxRate,
+      subtotal: lineSubtotal,
+      serialIds: [],
+      // Same rule as a single repair's order (saleLineFieldsForRepairQuoteLine):
+      // a charge with no catalogue product is a service and must not wait on
+      // a delivery note that can never exist.
+      ...(productId ? {} : { unit: 'service' as const, invoicePolicy: 'order' as const, lineType: 'service' as const }),
+    })
   }
 
-  const repairRefs = repairs.map(r => String(r.ref ?? r.id ?? ''))
+  const repairRefs = repairs.map(refOf)
   const supersededSaleOrderIds = Array.from(new Set(
-    repairs.map(r => String((r as { saleOrderId?: unknown }).saleOrderId ?? '')).filter(Boolean),
+    repairs.map(r => String(r.saleOrderId ?? '')).filter(Boolean),
   ))
 
   return {
     ok: true,
     clientId,
-    repairIds: repairs.map(r => String(r.id ?? '')),
+    repairIds: ids,
     repairRefs,
     supersededSaleOrderIds,
     lines,
@@ -152,4 +170,39 @@ export function planRepairConsolidation(opts: {
     mixedVat: draft.mixedVat,
     notes: `Consolidated repair billing — ${repairRefs.join(', ')}`,
   }
+}
+
+type SupersededOrder = { id: string; ref?: string | null; status?: string | null }
+type OrderInvoice = { saleOrderId?: string | null; status?: string | null; ref?: string | null }
+type OrderDelivery = { saleOrderId?: string | null; status?: string | null }
+
+/**
+ * Why the repairs' own sale orders cannot be retired, checked before anything
+ * is written.
+ *
+ * The merged order bills the work, so each repair's own order is cancelled.
+ * An order that already carries a live invoice or a completed delivery cannot
+ * simply be cancelled — and finding that out after the merged order had been
+ * invoiced would leave the customer billed twice for the same repair.
+ */
+export function supersededOrderBlockers(input: {
+  orders: SupersededOrder[]
+  invoices: OrderInvoice[]
+  deliveries: OrderDelivery[]
+}): string[] {
+  const blockers: string[] = []
+  for (const order of input.orders) {
+    const label = order.ref || order.id
+    if (String(order.status ?? '').toLowerCase() === 'cancelled') continue
+    const live = input.invoices.filter(inv =>
+      inv.saleOrderId === order.id && !['cancelled', 'voided'].includes(String(inv.status ?? '').toLowerCase()))
+    if (live.length > 0) {
+      blockers.push(`${label} already has ${live.map(inv => inv.ref || 'an invoice').join(', ')}`)
+      continue
+    }
+    const done = input.deliveries.filter(d =>
+      d.saleOrderId === order.id && String(d.status ?? '').toLowerCase() === 'done')
+    if (done.length > 0) blockers.push(`${label} has a completed delivery — return the stock first`)
+  }
+  return blockers
 }
