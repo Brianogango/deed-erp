@@ -73,6 +73,36 @@ export function findRepairForSaleOrder<T extends RepairSaleOrderLink>(
   return repairs.find(r => String(r.ref ?? '').toUpperCase() === repairRef)
 }
 
+/**
+ * Notes that mark a sale order as billing several repairs at once.
+ *
+ * A merged order is recognised by this marker and nothing else. Resolving it
+ * from the refs in ordinary notes would let a single repair's order that
+ * merely mentions another job ("see also REP/0301") pull that job onto its
+ * invoice.
+ */
+export const CONSOLIDATED_REPAIR_NOTES_PREFIX = 'Consolidated repair billing — '
+
+const REPAIR_REFS_IN_TEXT_RE = new RegExp(REPAIR_REF_IN_TEXT_RE.source, 'gi')
+
+/**
+ * Every repair a merged sale order bills, in the order its notes list them.
+ * Empty for any order that is not a merged one — callers then fall back to
+ * findRepairForSaleOrder, so single-repair billing is untouched.
+ */
+export function findRepairsForConsolidatedSaleOrder<T extends RepairSaleOrderLink>(
+  repairs: T[] | null | undefined,
+  order: { notes?: string | null } | null | undefined,
+): T[] {
+  const notes = String(order?.notes ?? '')
+  if (!notes.startsWith(CONSOLIDATED_REPAIR_NOTES_PREFIX) || !Array.isArray(repairs)) return []
+  const refs = Array.from(new Set((notes.match(REPAIR_REFS_IN_TEXT_RE) ?? []).map(r => r.toUpperCase())))
+  return refs.flatMap(ref => {
+    const found = repairs.find(r => String(r.ref ?? '').toUpperCase() === ref)
+    return found ? [found] : []
+  })
+}
+
 export type RepairSaleOrderCandidate = SaleOrderRepairHint & {
   status?: string | null
   createdAt?: string | null

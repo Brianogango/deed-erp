@@ -3,7 +3,9 @@ import {
   applyInvoiceLinkToRepair,
   dedupeRepairSaleOrders,
   extractRepairRefFromText,
+  CONSOLIDATED_REPAIR_NOTES_PREFIX,
   findRepairForSaleOrder,
+  findRepairsForConsolidatedSaleOrder,
   findSaleOrderForRepair,
   findSalesQuoteForRepair,
   isRepairFulfillmentReady,
@@ -180,5 +182,33 @@ describe('isRepairFulfillmentReady', () => {
     expect(isRepairFulfillmentReady('in_repair')).toBe(false)
     expect(isRepairFulfillmentReady('qc')).toBe(false)
     expect(isRepairFulfillmentReady(undefined)).toBe(false)
+  })
+})
+
+describe('findRepairsForConsolidatedSaleOrder', () => {
+  const jobs = [
+    { id: 'r1', ref: 'REP/0310', status: 'ready' },
+    { id: 'r2', ref: 'REP/0311', status: 'ready' },
+    { id: 'r3', ref: 'REP-7K3M9X2Q', status: 'collected' },
+  ]
+
+  it('returns every repair a merged order bills, in its listed order', () => {
+    const found = findRepairsForConsolidatedSaleOrder(jobs, {
+      notes: `${CONSOLIDATED_REPAIR_NOTES_PREFIX}REP-7K3M9X2Q, REP/0310`,
+    })
+    expect(found.map(r => r.id)).toEqual(['r3', 'r1'])
+  })
+
+  it('ignores an ordinary order that merely mentions other jobs', () => {
+    // Otherwise a single repair's invoice could claim a job it never billed.
+    expect(findRepairsForConsolidatedSaleOrder(jobs, {
+      notes: 'Repair order REP/0310 — see also REP/0311',
+    })).toEqual([])
+  })
+
+  it('does not list a repair twice', () => {
+    expect(findRepairsForConsolidatedSaleOrder(jobs, {
+      notes: `${CONSOLIDATED_REPAIR_NOTES_PREFIX}REP/0310, rep/0310`,
+    })).toHaveLength(1)
   })
 })

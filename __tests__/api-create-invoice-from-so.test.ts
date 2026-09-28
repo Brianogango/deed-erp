@@ -677,6 +677,58 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     })
   })
 
+  describe('a merged order billing several repairs', () => {
+    const SECOND_REPAIR_ID = '88888888-8888-4888-8888-888888888888'
+    const merged = {
+      ...saleOrder,
+      notes: 'Consolidated repair billing — REP/0310, REP/0311',
+      items: [{ ...saleOrder.items[0], qtyDelivered: 0 }],
+    }
+    const arrange = (secondStatus: string) => {
+      mockPrisma.saleOrder.findUnique.mockResolvedValue(merged)
+      mockLoadAppState.mockResolvedValue({
+        deed_invoices: [],
+        deed_deliveries: [],
+        deed_repairs_v2: [
+          { id: REPAIR_ID, ref: 'REP/0310', status: 'ready' },
+          { id: SECOND_REPAIR_ID, ref: 'REP/0311', status: secondStatus },
+          { id: 'unrelated', ref: 'REP/0312', status: 'ready' },
+        ],
+      })
+      mockPrisma.repair.findUnique.mockImplementation(async ({ where }: any) => ({ id: where.id }))
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+        saleOrder: { findUnique: vi.fn().mockResolvedValue(merged) },
+        saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+        invoice: { create: mockPrisma.invoice.create },
+        repair: { update: mockPrisma.repair.update },
+      }))
+    }
+    const post = () => POST(new NextRequest('http://localhost', { method: 'POST' }), { params: Promise.resolve({ id: ORDER_ID }) })
+
+    it('links the invoice to every repair it bills, and to no other', async () => {
+      arrange('ready')
+      const res = await post()
+      expect(res.status).toBe(200)
+
+      const linked = mockPrisma.repair.update.mock.calls.map(c => c[0].where.id)
+      expect(linked).toEqual([REPAIR_ID, SECOND_REPAIR_ID])
+
+      const repairsCall = mockSaveStoreKeys.mock.calls.find(c => c[0].deed_repairs_v2)
+      const mirrored = JSON.parse(repairsCall![0].deed_repairs_v2)
+      expect(mirrored.filter((r: any) => r.invoiceId === INVOICE_ID).map((r: any) => r.ref))
+        .toEqual(['REP/0310', 'REP/0311'])
+    })
+
+    it('refuses while any one of the repairs is still in the workshop', async () => {
+      // Without a delivery note, a repair order is billable only once the job
+      // is finished — for every job on it, not just the first one listed.
+      arrange('in_repair')
+      const res = await post()
+      expect(res.status).toBe(409)
+      expect(mockPrisma.invoice.create).not.toHaveBeenCalled()
+    })
+  })
+
   describe('header discount proration', () => {
     it('prorates the sale order header discount into the invoice total', async () => {
       const discounted = { ...saleOrder, discountAmount: 1000 }

@@ -32,6 +32,7 @@ import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import {
   findRepairForSaleOrder,
+  findRepairsForConsolidatedSaleOrder,
   isRepairFulfillmentReady,
   stampInvoiceOnMatchingRepair,
 } from '@/lib/repair/sale-order-link'
@@ -116,24 +117,36 @@ export async function POST(
       return NextResponse.json({ error: credit.error }, { status: credit.status })
     }
 
-    const linkedRepair = findRepairForSaleOrder(blobRepairs, {
+    // A merged order bills several repairs; every other order bills at most one.
+    const consolidatedRepairs = findRepairsForConsolidatedSaleOrder(blobRepairs, confirmed)
+    const linkedRepair = consolidatedRepairs[0] ?? findRepairForSaleOrder(blobRepairs, {
       id: confirmed.id,
       ref: confirmed.orderNumber,
       orderNumber: confirmed.orderNumber,
       quotationRef: confirmed.quotationRef,
       notes: confirmed.notes,
     })
-    let prismaRepairId: string | undefined
-    if (linkedRepair?.id) {
+    const billedRepairs = consolidatedRepairs.length > 0
+      ? consolidatedRepairs
+      : linkedRepair ? [linkedRepair] : []
+    const prismaRepairIds = new Set<string>()
+    for (const billed of billedRepairs) {
+      if (!billed?.id) continue
       try {
-        const row = await prisma.repair.findUnique({ where: { id: String(linkedRepair.id) }, select: { id: true } })
-        prismaRepairId = row?.id
+        const row = await prisma.repair.findUnique({ where: { id: String(billed.id) }, select: { id: true } })
+        if (row?.id) prismaRepairIds.add(row.id)
       } catch {
-        prismaRepairId = undefined
+        // Blob-only repair — linked through the store mirror below.
       }
     }
+    const prismaRepairId = linkedRepair?.id && prismaRepairIds.has(String(linkedRepair.id))
+      ? String(linkedRepair.id)
+      : undefined
     const blobRepairId = linkedRepair?.id ? String(linkedRepair.id) : undefined
-    const repairFulfillmentReady = isRepairFulfillmentReady(linkedRepair?.status)
+    // A merged order skips the delivery note only when every repair on it is
+    // finished — one job still on the bench must not be billed as done.
+    const repairFulfillmentReady = billedRepairs.length > 0
+      && billedRepairs.every(r => isRepairFulfillmentReady(r?.status))
     const priorDownPayments = sumUnappliedDownPayments(
       [
         ...blobInvoices,
@@ -451,9 +464,11 @@ export async function POST(
         include: { items: true, client: true },
       })
 
-      if (prismaRepairId && !linkedRepair?.invoiceId) {
+      for (const billed of billedRepairs) {
+        const id = String(billed?.id ?? '')
+        if (!prismaRepairIds.has(id) || billed.invoiceId) continue
         await tx.repair.update({
-          where: { id: prismaRepairId },
+          where: { id },
           data: { invoiceId: invoice.id },
         })
       }
@@ -514,10 +529,9 @@ export async function POST(
           }
         }
       }
-      const nextRepairs = stampInvoiceOnMatchingRepair(
+      const nextRepairs = billedRepairs.reduce(
+        (rows, billed) => stampInvoiceOnMatchingRepair(rows, billed, { id: result.id, ref: result.invoiceNumber, date }),
         blobRepairs,
-        linkedRepair,
-        { id: result.id, ref: result.invoiceNumber, date },
       )
       await saveStoreKeys({
         deed_invoices: JSON.stringify(invoices),

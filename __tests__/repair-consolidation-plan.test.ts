@@ -147,6 +147,12 @@ describe('what the workshop has to have finished first', () => {
 })
 
 describe('reading repairs as the store holds them', () => {
+  it('refuses a repair with no ticket number the server can find it by', () => {
+    const p = plan([repair(), second({ ref: 'REP-227532' })])
+    expect(p.ok).toBe(false)
+    if (!p.ok) expect(p.reason).toContain('REP-227532')
+  })
+
   it('takes the client from customerId when clientId is absent', () => {
     const p = plan([
       repair({ clientId: undefined, customerId: 'cust-7' }),

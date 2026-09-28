@@ -3,6 +3,8 @@ import {
   consolidationBlocker,
   type ConsolidatableRepair,
 } from '@/lib/repair/consolidated-invoice'
+import { CONSOLIDATED_REPAIR_NOTES_PREFIX } from '@/lib/repair/sale-order-link'
+import { isOfficialRepairRef } from '@/lib/repair-ref'
 
 /**
  * What has to happen to bill several of a client's repairs on one invoice.
@@ -83,6 +85,14 @@ export function planRepairConsolidation(opts: {
     return { ok: false, reason: 'All repairs must belong to the same client.' }
   }
   const clientId = clientOf(repairs[0]!)
+
+  // The server finds a merged order's repairs by the ticket numbers in its
+  // notes. A repair without one would be billed on the invoice yet never linked
+  // to it, and would go on showing as unbilled.
+  const unreferenced = repairs.filter(r => !isOfficialRepairRef(r.ref))
+  if (unreferenced.length > 0) {
+    return { ok: false, reason: `No ticket number on: ${unreferenced.map(refOf).join(', ')}. Bill these on their own.` }
+  }
 
   const alreadyBilled = repairs.filter(r => r.invoiceId)
   if (alreadyBilled.length > 0) {
@@ -168,7 +178,7 @@ export function planRepairConsolidation(opts: {
     taxTotal: money(taxTotal),
     total: money(subtotal + taxTotal),
     mixedVat: draft.mixedVat,
-    notes: `Consolidated repair billing — ${repairRefs.join(', ')}`,
+    notes: `${CONSOLIDATED_REPAIR_NOTES_PREFIX}${repairRefs.join(', ')}`,
   }
 }
 
