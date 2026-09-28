@@ -19,6 +19,8 @@ import {
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
 import MessageThread from './MessageThread'
+import ConsolidatedBillingModal from './ConsolidatedBillingModal'
+import { consolidationCandidates } from '@/lib/repair/consolidated-invoice'
 import Chatter from '@/components/erp/Chatter'
 import { Modal } from '@/components/ui'
 import { SecondaryActionMenu, StatusBadge } from '@/components/erp'
@@ -124,7 +126,8 @@ export default function RepairDetailView() {
     markPartsArrived, closeRepairJob, markUnrepairable,
   } = useRepair()
 
-  const { invoices, quotes, saleOrders, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid, markRepairNoCharge } = useRepairStore()
+  const { invoices, quotes, saleOrders, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid, markRepairNoCharge, repairs: allRepairs, consolidateRepairInvoices } = useRepairStore()
+  const [showConsolidateModal, setShowConsolidateModal] = useState(false)
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
   const [activeRepairTab, setActiveRepairTab] = useState<'overview' | 'diagnosis' | 'quote' | 'parts' | 'work' | 'handover' | 'activity'>('overview')
@@ -283,6 +286,15 @@ export default function RepairDetailView() {
     && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
     && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     && !pendingOutsourceJob
+  // Offered only when this repair can itself go on a combined invoice and the
+  // client has at least one other repair that can join it.
+  const consolidationOptions = !linkedInvoice && !r.invoiceId
+    && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+    && !pendingOutsourceJob
+    ? consolidationCandidates(allRepairs ?? [], r)
+    : []
+  const canBillTogether = consolidationOptions.some(c => c.repair.id === r.id && c.blocker === null)
+    && consolidationOptions.filter(c => c.blocker === null).length >= 2
   const canCloseJob = ['delivered', 'collected'].includes(r.status)
     && ['director', 'admin_officer', 'technical_lead', 'finance_officer'].includes(currentRole)
   const canMarkUnrepairable = ['assigned', 'diagnosed', 'in_repair'].includes(r.status)
@@ -1681,6 +1693,12 @@ export default function RepairDetailView() {
                         // only produces a server refusal.
                         hidden: !canInvoice || primaryActionId === 'invoice' || billingSync.requiresCreditNote,
                       },
+                      {
+                        id: 'bill_together',
+                        label: 'Bill with other repairs',
+                        onClick: () => setShowConsolidateModal(true),
+                        hidden: !canBillTogether,
+                      },
                       { id: 'mark_fee_paid', label: 'Mark diagnosis fee paid', onClick: () => markDiagnosisFeePaid(r.id), hidden: !canMarkDiagnosisFeePaid },
                       { id: 'waive_fee', label: 'Waive diagnosis fee', onClick: () => { setWaiveFeeReason(''); setShowWaiveFeeModal(true) }, hidden: !canWaiveDiagnosisFee },
                       { id: 'no_charge', label: 'Mark no-charge', onClick: openNoCharge, hidden: !canMarkNoCharge },
@@ -2326,6 +2344,15 @@ export default function RepairDetailView() {
           release={repairOrc}
           isRepair
           onClose={() => setShowOrcPanel(false)}
+        />
+      )}
+
+      {showConsolidateModal && (
+        <ConsolidatedBillingModal
+          anchor={r}
+          repairs={allRepairs ?? []}
+          onConfirm={consolidateRepairInvoices}
+          onClose={() => setShowConsolidateModal(false)}
         />
       )}
 

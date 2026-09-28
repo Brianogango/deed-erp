@@ -266,6 +266,8 @@ import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceCh
 import { repairPriceChangeImpact, describeRepairPriceChange } from '@/lib/repair/document-impact'
 import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
+import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
+import { executeRepairConsolidation, mergedSaleOrderFromPlan } from '@/lib/repair/consolidation-execute'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
 import {
@@ -3770,6 +3772,9 @@ export interface AppState {
   deliverRepair: (repairId: string, recipientName: string, recipientPhone: string, isRep?: boolean, repRelationship?: string, repIdNumber?: string, closeAfter?: boolean) => void
   closeRepairJob: (repairId: string) => void | Promise<void>
   createInvoiceFromRepair: (repairId: string, applyVat?: boolean) => Invoice | null
+  // Bill several of one client's finished repairs on a single invoice, by
+  // merging them into one sale order. See lib/repair/consolidation-plan.ts.
+  consolidateRepairInvoices: (repairIds: string[]) => Promise<Invoice | null>
   // Finance review of a customer-submitted portal payment confirmation.
   // Confirm registers the payment against the linked invoice; reject flags it.
   reviewPortalPayment: (repairId: string, approved: boolean, notes?: string) => void
@@ -4046,6 +4051,7 @@ export type RepairStoreState = Pick<AppState,
   | 'deliverRepair'
   | 'closeRepairJob'
   | 'createInvoiceFromRepair'
+  | 'consolidateRepairInvoices'
   | 'getVisibleRepairs'
   | 'updateRepairProgress'
   | 'moveRepairToPreviousProgress'
@@ -7045,6 +7051,7 @@ export function StoreProvider({
     deliverRepair: (...args: Parameters<AppState['deliverRepair']>) => storeCtxRef.current!.deliverRepair(...args),
     closeRepairJob: (...args: Parameters<AppState['closeRepairJob']>) => storeCtxRef.current!.closeRepairJob(...args),
     createInvoiceFromRepair: (...args: Parameters<AppState['createInvoiceFromRepair']>) => storeCtxRef.current!.createInvoiceFromRepair(...args),
+    consolidateRepairInvoices: (...args: Parameters<AppState['consolidateRepairInvoices']>) => storeCtxRef.current!.consolidateRepairInvoices(...args),
     reviewPortalPayment: (...args: Parameters<AppState['reviewPortalPayment']>) => storeCtxRef.current!.reviewPortalPayment(...args),
     getVisibleRepairs: (...args: Parameters<AppState['getVisibleRepairs']>) => storeCtxRef.current!.getVisibleRepairs(...args),
     updateRepairProgress: (...args: Parameters<AppState['updateRepairProgress']>) => storeCtxRef.current!.updateRepairProgress(...args),
@@ -17486,6 +17493,146 @@ const storeCtx: AppState = {
         : createdNew
           ? `Invoice ${invoice!.ref} generated`
           : `Invoice ${invoice!.ref} linked — quote converted`)
+      return invoice
+    },
+
+    consolidateRepairInvoices: async (repairIds) => {
+      const actor = currentUser()
+      // Retiring each repair's own confirmed order is a reversal of a
+      // commercial document — the same people who may cancel a Sales Order.
+      if (!canReverseConfirmedSale(actor?.role)) {
+        showToast('Only Finance, Admin Officer, or Director can bill repairs together', 'error')
+        return null
+      }
+      const selected = repairIds.map(id => repairsRef.current.find(r => r.id === id)).filter(Boolean)
+      if (selected.length !== repairIds.length) {
+        showToast('Some of the selected repairs could not be found — refresh and try again', 'error')
+        return null
+      }
+      for (const r of selected) {
+        if (blockIfOutsourced(r.id, 'invoice this repair')) return null
+      }
+
+      // A repair whose order already carries an invoice counts as billed even
+      // when the repair itself was never stamped with it.
+      const withInvoiceLinks = selected.map(r => {
+        const listed = invRef.current.find(inv => inv.status !== 'cancelled' && (inv.repairId === r.id || inv.id === r.invoiceId))
+        return listed ? { ...r, invoiceId: listed.id } : r
+      })
+      const plan = planRepairConsolidation({ repairs: withInvoiceLinks })
+      if (!plan.ok) {
+        showToast(plan.reason, 'error')
+        return null
+      }
+
+      const supersededOrders = plan.supersededSaleOrderIds
+        .map(id => soRef.current.find(s => s.id === id))
+        .filter(Boolean)
+      const blockers = supersededOrderBlockers({
+        orders: supersededOrders,
+        invoices: invRef.current,
+        deliveries: delRef.current,
+      })
+      if (blockers.length > 0) {
+        showToast(`Cannot bill together: ${blockers.join('; ')}`, 'error')
+        return null
+      }
+
+      const mergedId = uid()
+      const mergedRef = await storeCtxRef.current!.allocateDocRef('SO')
+      const order = mergedSaleOrderFromPlan(plan, {
+        id: mergedId,
+        ref: mergedRef,
+        customerName: selected[0].customerName,
+        createdByUserId: actor?.id,
+        now: new Date().toISOString(),
+        date: now(),
+      })
+      order.lines = plan.lines.map(line => ({ id: uid(), ...line }))
+
+      const outcome = await executeRepairConsolidation<Invoice>(plan, order, {
+        createSaleOrder: async body => {
+          const res = await fetch('/api/sale-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }).catch(() => null)
+          const data = await res?.json().catch(() => null)
+          if (!res?.ok) return { ok: false, error: data?.error }
+          return { ok: true, id: String(data?.id ?? data?.item?.id ?? body.id) }
+        },
+        invoiceSaleOrder: async (saleOrderId, localOrder) => {
+          const attempt = await requestSaleOrderInvoice({
+            saleOrderId,
+            invoiceBody: { mode: 'regular', source: 'repair' },
+            localOrder: { ...localOrder, id: saleOrderId },
+          })
+          const payload = await attempt.res.json().catch(() => null)
+          if (!attempt.res.ok || !payload?.invoice) return { ok: false, error: payload?.error }
+          return { ok: true, invoice: payload.invoice as Invoice, saleOrderId: attempt.saleOrderId }
+        },
+        cancelSaleOrder: async saleOrderId => {
+          const res = await fetch(`/api/sale-orders/${saleOrderId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'cancelled' }),
+          }).catch(() => null)
+          return res?.ok ? { ok: true } : { ok: false }
+        },
+      })
+
+      if (!outcome.ok) {
+        showToast(outcome.strandedSaleOrderId
+          ? `${outcome.error}. ${mergedRef} was saved but could not be withdrawn — cancel it in Sales.`
+          : outcome.error, 'error')
+        return null
+      }
+
+      const invoice = outcome.invoice
+      const soId = outcome.saleOrderId
+      const retired = new Set(plan.supersededSaleOrderIds.filter(id => !outcome.stillOpenSaleOrderIds.includes(id)))
+      invRef.current = [invoice, ...invRef.current.filter(inv => inv.id !== invoice.id)]
+      setInvoices(p => [invoice, ...p.filter(inv => inv.id !== invoice.id)])
+      setSaleOrders(p => [
+        { ...order, id: soId, invoiceId: invoice.id } as SaleOrder,
+        ...p
+          .filter(s => s.id !== soId)
+          .map(s => retired.has(s.id) ? { ...s, status: 'cancelled' as const } : s),
+      ])
+
+      const covered = new Set(plan.repairIds)
+      const quoteIds = new Set(selected.map(r => findSalesQuoteForRepair(quotes, r)?.id).filter(Boolean))
+      setQuotes(p => p.map(q => {
+        if (!quoteIds.has(q.id)) return q
+        const updated = { ...q, status: 'accepted' as const, saleOrderId: soId, invoiceId: invoice.id }
+        sync(`/api/quotes/${q.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
+      setRepairs(p => p.map(r => covered.has(r.id) ? {
+        ...r,
+        invoiceId: invoice.id,
+        invoiceDate: r.invoiceDate ?? now(),
+        saleOrderId: soId,
+        saleOrderRef: mergedRef,
+        diagnosisFeeStatus: (() => {
+          if (!shouldChargeDiagnosisFee(r) || !(r.diagnosisFee ?? 0)) return r.diagnosisFeeStatus
+          if (r.diagnosisFeeStatus === 'paid' || r.diagnosisFeePaidAt) return 'paid'
+          if (r.diagnosisFeeStatus !== 'waived' && r.diagnosisFeeStatus !== 'not_applicable') return 'invoiced'
+          return r.diagnosisFeeStatus
+        })(),
+      } : r))
+
+      for (const ref of plan.repairRefs) {
+        addAuditLog('invoice_repair', ref, `Billed on ${invoice.ref} with ${plan.repairRefs.filter(x => x !== ref).join(', ')}`)
+      }
+      if (outcome.stillOpenSaleOrderIds.length > 0) {
+        const refs = outcome.stillOpenSaleOrderIds
+          .map(id => soRef.current.find(s => s.id === id)?.ref ?? id)
+          .join(', ')
+        showToast(`${invoice.ref} created for ${plan.repairRefs.length} repairs. ${refs} could not be cancelled — cancel it in Sales so it does not show as unbilled.`, 'info')
+      } else {
+        showToast(`${invoice.ref} created for ${plan.repairRefs.join(', ')}`)
+      }
       return invoice
     },
 

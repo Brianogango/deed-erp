@@ -120,3 +120,38 @@ export function buildConsolidatedRepairInvoice(
     mixedVat: rates.size > 1,
   }
 }
+
+const CLOSED_OUT = new Set(['cancelled', 'declined', 'returned', 'retained', 'closed'])
+
+export type ConsolidationCandidate<T extends ConsolidatableRepair> = {
+  repair: T
+  /** Why it cannot join the batch, or null when it can. */
+  blocker: string | null
+}
+
+/**
+ * The client's other repairs that could share an invoice with `anchor`.
+ *
+ * Jobs that are already billed or closed out are left off entirely. Jobs that
+ * are unbilled but not yet billable (still on the bench, no charge) are listed
+ * with the reason, so the person billing can see why a machine they expected
+ * is not selectable instead of wondering where it went.
+ */
+export function consolidationCandidates<T extends ConsolidatableRepair>(
+  repairs: T[],
+  anchor: T,
+): ConsolidationCandidate<T>[] {
+  const client = String(anchor.clientId ?? anchor.customerId ?? '')
+  if (!client) return []
+  return (repairs ?? [])
+    .filter(r => r
+      && String(r.clientId ?? r.customerId ?? '') === client
+      && !r.invoiceId
+      && !CLOSED_OUT.has(String(r.status ?? '').toLowerCase()))
+    .map(repair => ({ repair, blocker: consolidationBlocker(repair) }))
+    .sort((a, b) => {
+      if (a.repair.id === anchor.id) return -1
+      if (b.repair.id === anchor.id) return 1
+      return Number(a.blocker !== null) - Number(b.blocker !== null)
+    })
+}
