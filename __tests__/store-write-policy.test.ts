@@ -62,4 +62,12 @@ describe('legacy store write policy', () => {
     expect(canWriteStoreKey({ role: 'sales_rep', modules: ['sales'] }, 'deed_documentPaymentDetails')).toBe(true)
     expect(canWriteStoreKey({ role: 'technician', modules: ['sales'] }, 'deed_documentPaymentDetails')).toBe(false)
   })
+
+  it('lets whoever outsources a repair save the repair it holds', () => {
+    // The repair is held "in repair" while at the vendor and moved to QC when
+    // it returns; an inventory officer sending it out must be able to save that.
+    expect(canWriteStoreKey({ role: 'inventory_officer', modules: ['outsource'] }, 'deed_repairs_v2')).toBe(true)
+    expect(canWriteStoreKey({ role: 'admin_officer', modules: ['outsource'] }, 'deed_repairs_v2')).toBe(true)
+    expect(canWriteStoreKey({ role: 'sales_rep', modules: ['outsource'] }, 'deed_repairs_v2')).toBe(false)
+  })
 })

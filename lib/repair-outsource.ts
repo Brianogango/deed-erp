@@ -32,3 +32,33 @@ export function repairOutsourceReadiness(
   }
   return { ok: true }
 }
+
+const NOT_OUTSOURCEABLE_STATUSES = new Set([
+  'delivered', 'cancelled', 'closed', 'declined', 'unrepairable', 'returned',
+  'retained', 'ready', 'verified_released', 'collected',
+])
+
+/** Repairs worth listing in the outsource picker at all: still open in the workshop. */
+export function isOpenForOutsourcePicker(repair: { status?: string | null }): boolean {
+  return !NOT_OUTSOURCEABLE_STATUSES.has(String(repair.status ?? '').toLowerCase())
+}
+
+/**
+ * Why this open repair cannot be sent out right now, or null when it can.
+ *
+ * The picker used to drop any repair that failed these checks, so the person
+ * searched for REP/0312, found nothing, and had no idea why. Listing it with
+ * the reason tells them the one thing to do next.
+ */
+export function outsourcePickBlocker(
+  repair: RepairOutsourceCandidate & { id?: string | null },
+  jobs: { repairOrderId?: string | null; status?: string | null; ref?: string | null; vendorName?: string | null }[] = [],
+): string | null {
+  const open = jobs.find(job => job?.repairOrderId === repair.id && job.status === 'sent')
+  if (open) {
+    const vendor = String(open.vendorName ?? '').replace(/\s*\(.*\)\s*$/, '').trim() || 'a vendor'
+    return `Already at ${vendor} via ${open.ref ?? 'an open job'} — mark it returned first`
+  }
+  const readiness = repairOutsourceReadiness(repair)
+  return readiness.ok ? null : readiness.reason
+}

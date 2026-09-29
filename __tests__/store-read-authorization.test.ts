@@ -23,6 +23,11 @@ describe('collaborative wholesale store read authorization', () => {
     expect(canReadStoreKey(user('finance_officer', ['repair']), 'deed_repairs_v2')).toBe(true)
     expect(canReadStoreKey(user('technical_lead', ['inventory']), 'deed_repairs_v2')).toBe(false)
     expect(canReadStoreKey(user('sales_rep', ['repair']), 'deed_repairs_v2')).toBe(false)
+    // Outsourcing a repair means picking it from the repair list.
+    expect(canReadStoreKey(user('inventory_officer', ['inventory', 'outsource']), 'deed_repairs_v2')).toBe(true)
+    expect(canReadStoreKey(user('admin_officer', ['outsource']), 'deed_repairs_v2')).toBe(true)
+    expect(canReadStoreKey(user('inventory_officer', ['inventory']), 'deed_repairs_v2')).toBe(false)
+    expect(hasFullStoreContentAccess(user('inventory_officer', ['outsource']), 'deed_repairs_v2')).toBe(true)
   })
 
   it('allows contacts and products only for modules with a legitimate workflow', () => {

@@ -215,8 +215,10 @@ export const COLLABORATIVE_STORE_READ_POLICIES: Record<string, CollaborativeRead
   },
   deed_repairs_v2: {
     // Admin officers book intake + run the desk; finance needs billing follow-up.
-    roles: ['director', 'admin_officer', 'finance_officer', 'technical_lead', 'technician'],
-    modules: ['repair'],
+    // Inventory officers send repairs out to vendors, and outsourcing a repair
+    // means picking it from this list — so the Outsource module grants it too.
+    roles: ['director', 'admin_officer', 'finance_officer', 'technical_lead', 'technician', 'inventory_officer'],
+    modules: ['repair', 'outsource'],
   },
   deed_contacts: {
     roles: ALL_OPERATIONAL_ROLES,
@@ -320,6 +322,9 @@ export const hasFullStoreContentAccess = (
       || role === 'admin_officer'
       || role === 'finance_officer'
       || role === 'technical_lead'
+      // Whoever sends repairs to vendors must see every open job, not only the
+      // ones they booked — otherwise the outsource picker is empty.
+      || role === 'inventory_officer'
   }
   if (key === 'deed_opportunities') return role !== 'sales_rep'
   return true

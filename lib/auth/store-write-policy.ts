@@ -92,7 +92,10 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
   deed_purchaseOrders: policy([...INVENTORY, 'finance_officer'], ['purchase']),
   deed_purchaseReturns: policy(INVENTORY, ['purchase']),
 
-  deed_repairs_v2: policy(REPAIR, ['repair']),
+  // Outsourcing a repair also saves the repair (it is held "in repair" while at
+  // the vendor, and moved to QC when it comes back), so the roles that send
+  // repairs out must be able to save it.
+  deed_repairs_v2: policy([...REPAIR, 'inventory', 'inventory_officer'], ['repair', 'outsource']),
   deed_outboundReleases: policy(REPAIR, ['repair', 'after_sales']),
   // Inventory officers send laptops out too (stock units as well as repairs),
   // and the Outsource screen lets them. Leaving them off this list meant every

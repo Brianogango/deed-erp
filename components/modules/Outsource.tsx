@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { repairOutsourceReadiness } from '@/lib/repair-outsource'
+import { isOpenForOutsourcePicker, outsourcePickBlocker, repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { formatDaysOut, isOutsourceOverdue, outsourceDaysOut, OUTSOURCE_OVERDUE_DAYS } from '@/lib/repair/outsource-visibility'
 import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar, SearchPicker, Modal } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
@@ -146,16 +146,19 @@ function OutsourceContent() {
   const [vendorSearch, setVendorSearch] = useState('')
   const [vendorModalFromJob, setVendorModalFromJob] = useState(false)
 
-  // Open / in-progress repairs that pass outsource readiness (assigned; diagnosis required unless Direct Repair)
-  const pickableRepairs = repairs.filter(r =>
-    !['delivered', 'cancelled', 'closed', 'declined', 'unrepairable', 'returned', 'retained', 'ready', 'verified_released', 'collected'].includes(r.status)
-    && repairOutsourceReadiness(r).ok
-  )
+  // Every open workshop job is listed, including ones that cannot go out yet.
+  // They used to be dropped from the list, so someone searching for a repair
+  // they could see on the bench found nothing and was given no reason. Now the
+  // reason sits on the row and ready ones sort first.
+  const pickableRepairs = repairs
+    .filter(r => isOpenForOutsourcePicker(r))
+    .map(r => ({ ...r, outsourceBlocker: outsourcePickBlocker(r, outsourceJobs) }))
+    .sort((a, b) => Number(a.outsourceBlocker !== null) - Number(b.outsourceBlocker !== null))
   function selectRepair(repairId: string) {
     const r = repairs.find(x => x.id === repairId)
     if (!r) return
-    const readiness = repairOutsourceReadiness(r)
-    if (!readiness.ok) { showToast(readiness.reason, 'error'); return }
+    const blocker = outsourcePickBlocker(r, outsourceJobs)
+    if (blocker) { showToast(`${r.ref}: ${blocker}`, 'error'); return }
     setJobForm(f => ({
       ...f,
       repairOrderId:     r.id,
@@ -990,13 +993,13 @@ function OutsourceContent() {
                 label="Link to Repair Job (Optional)"
                 labelClassName="mb-1.5 block text-[13px] font-semibold text-slate-700"
                 inputClassName="h-11 text-sm"
-                placeholder="Search assigned repairs (diagnosis required unless Direct)…"
+                placeholder="Search open repairs by REP, device, customer or serial…"
                 items={pickableRepairs}
                 selectedLabel={jobForm.repairOrderId ? repairSearch : undefined}
                 formatSelected={r => `${r.ref} · ${r.productName} (${r.customerName})`}
                 onSelect={r => selectRepair(r.id)}
                 renderItem={r => (
-                  <div className="flex min-w-0 items-center justify-between gap-3">
+                  <div className={`flex min-w-0 items-center justify-between gap-3 ${r.outsourceBlocker ? 'opacity-70' : ''}`}>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-900">
                         <span className="font-mono text-blue-700">{r.ref}</span>
@@ -1005,11 +1008,19 @@ function OutsourceContent() {
                       <p className="truncate text-xs text-slate-500">
                         {r.customerName} · {r.repairPath === 'direct_repair' ? 'Direct Repair' : 'Diagnosis First'} · {r.issueDescription}{r.serialNumber ? ` · SN ${r.serialNumber}` : ''}
                       </p>
+                      {r.outsourceBlocker && (
+                        <p className="truncate text-xs font-semibold" style={{ color: '#b45309' }}>{r.outsourceBlocker}</p>
+                      )}
                     </div>
                     <StatusBadge status={r.status} label={r.status.replace(/_/g, ' ')} size="xs" />
                   </div>
                 )}
               />
+              {repairs.length === 0 && (
+                <p className="mt-1.5 text-xs" style={{ color: '#b45309' }}>
+                  No repairs are visible to your account. Ask an admin to give you the Repair or Outsource module, or send the machine without linking a repair.
+                </p>
+              )}
               <p className="mt-1.5 text-[11px] text-slate-500">
                 Diagnosis First repairs need an assigned tech and logged diagnosis. Direct Repair needs assignment only.
               </p>
