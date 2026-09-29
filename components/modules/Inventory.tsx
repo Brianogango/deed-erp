@@ -29,6 +29,7 @@ import InventoryProductsPanel from '@/components/inventory/InventoryProductsPane
 import ProductPhotoFields, { uploadProductPhoto } from '@/components/inventory/ProductPhotoFields'
 import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPanel'
 import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPanel'
+import VendorStockPanel from '@/components/inventory/VendorStockPanel'
 import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
 import type { ProductImageSlot } from '@/lib/product-images'
@@ -1796,8 +1797,8 @@ function InventoryContent() {
         const refurbCount = filteredRepairSerials.length + filteredBulkRepair.reduce((s, p) => s + p.qty, 0)
         const computerAidCount = serials.filter(s => s.location === 'computer_aid' && s.status !== 'sold').length
           + bulkStock.filter(row => row.location === 'computer_aid').reduce((sum, row) => sum + Math.max(0, Number(row.qty) || 0), 0)
-        const activeWarehouseLocation = ['warehouse', 'issues', 'refurbishment', 'computer_aid'].includes(warehouseLocation)
-          ? warehouseLocation as 'warehouse' | 'issues' | 'refurbishment' | 'computer_aid'
+        const activeWarehouseLocation = ['warehouse', 'issues', 'refurbishment', 'computer_aid', 'vendor_stock'].includes(warehouseLocation)
+          ? warehouseLocation as 'warehouse' | 'issues' | 'refurbishment' | 'computer_aid' | 'vendor_stock'
           : 'warehouse'
 
         return (
@@ -1845,6 +1846,9 @@ function InventoryContent() {
                   { id: 'issues', label: 'With Issues', sublabel: 'Needs attention', count: issuesCount, icon: faTriangleExclamation },
                   { id: 'refurbishment', label: 'Refurbishment', sublabel: 'Internal stock', count: refurbCount, icon: faWrench },
                   { id: 'computer_aid', label: 'Computer Aid', sublabel: 'Held in custody', count: computerAidCount, icon: faBoxesStacked },
+                  // Vendors' machines on the floor, not bought. The panel loads
+                  // its own register, so no count is shown on the tab.
+                  { id: 'vendor_stock', label: 'Vendor stock', sublabel: 'Not yet bought', count: null as number | null, icon: faBoxesStacked },
                 ].map(item => {
                   const selected = activeWarehouseLocation === item.id
                   return (
@@ -1866,7 +1870,7 @@ function InventoryContent() {
                             <span className="block truncate text-[10px] text-text-3">{item.sublabel}</span>
                           </span>
                         </span>
-                        <span className="shrink-0 rounded-md bg-white/80 px-2 py-0.5 text-[10px] font-bold tabular-nums text-text-2">{item.count.toLocaleString()}</span>
+                        {item.count !== null && <span className="shrink-0 rounded-md bg-white/80 px-2 py-0.5 text-[10px] font-bold tabular-nums text-text-2">{item.count.toLocaleString()}</span>}
                       </span>
                     </button>
                   )
@@ -1995,6 +1999,9 @@ function InventoryContent() {
                 )}
                 {activeWarehouseLocation === 'computer_aid' && (
                   <ComputerAidCustodyPanel />
+                )}
+                {activeWarehouseLocation === 'vendor_stock' && (
+                  <VendorStockPanel />
                 )}
                 {activeWarehouseLocation === 'refurbishment' && (
                   <div className="w-full min-w-0">

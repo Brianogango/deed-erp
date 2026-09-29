@@ -4041,3 +4041,33 @@ model ErpStateRecord {
   @@index([updatedAt], map: "idx_erp_state_records_updated")
   @@map("erp_state_records")
 }
+
+/// Vendor devices held at the shop that Deed has not bought — a custody
+/// register, NOT stock. Created by prisma/migrations/014_consignment_devices.sql
+/// (apply that file by hand; it also adds foreign keys and a partial unique
+/// index on the open serial that Prisma cannot express). Nothing here reaches
+/// the ledger; a purchase goes through a purchase order like any other.
+model ConsignmentDevice {
+  id              String    @id @default(uuid()) @db.Uuid
+  vendorId        String    @map("vendor_id") @db.Uuid
+  vendorName      String?   @map("vendor_name") @db.VarChar(200)
+  assetId         String?   @map("asset_id") @db.VarChar(120)
+  serialNumber    String    @map("serial_number") @db.VarChar(100)
+  productId       String?   @map("product_id") @db.Uuid
+  productName     String?   @map("product_name") @db.VarChar(300)
+  conditionGrade  String?   @map("condition_grade") @db.VarChar(30)
+  receivedAt      DateTime  @map("received_at") @db.Date
+  status          String    @default("at_shop") @db.VarChar(20)
+  purchasedAt     DateTime? @map("purchased_at") @db.Date
+  purchaseOrderId String?   @map("purchase_order_id") @db.Uuid
+  purchasePrice   Decimal?  @map("purchase_price") @db.Decimal(14, 2)
+  returnedAt      DateTime? @map("returned_at") @db.Date
+  notes           String?
+  createdById     String?   @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([vendorId], map: "idx_consignment_vendor")
+  @@index([status], map: "idx_consignment_status")
+  @@map("consignment_devices")
+}

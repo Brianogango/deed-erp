@@ -1009,7 +1009,7 @@ function OutsourceContent() {
                         {r.customerName} · {r.repairPath === 'direct_repair' ? 'Direct Repair' : 'Diagnosis First'} · {r.issueDescription}{r.serialNumber ? ` · SN ${r.serialNumber}` : ''}
                       </p>
                       {r.outsourceBlocker && (
-                        <p className="truncate text-xs font-semibold" style={{ color: '#b45309' }}>{r.outsourceBlocker}</p>
+                        <p className="truncate text-xs font-semibold" style={{ color: '#D97706' }}>{r.outsourceBlocker}</p>
                       )}
                     </div>
                     <StatusBadge status={r.status} label={r.status.replace(/_/g, ' ')} size="xs" />
@@ -1017,7 +1017,7 @@ function OutsourceContent() {
                 )}
               />
               {repairs.length === 0 && (
-                <p className="mt-1.5 text-xs" style={{ color: '#b45309' }}>
+                <p className="mt-1.5 text-xs" style={{ color: '#D97706' }}>
                   No repairs are visible to your account. Ask an admin to give you the Repair or Outsource module, or send the machine without linking a repair.
                 </p>
               )}
