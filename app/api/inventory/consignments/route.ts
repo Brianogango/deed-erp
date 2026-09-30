@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       conditionGrade: body.conditionGrade as string,
       receivedAt: body.receivedAt as string,
       notes: body.notes as string,
+      accessories: body.accessories,
     }, open.map(row => consignmentFromRow(row)), randomUUID())
     if (!receipt.ok) return NextResponse.json({ error: receipt.reason }, { status: 422 })
 
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
           receivedAt: new Date(`${device.receivedAt}T00:00:00Z`),
           status: 'at_shop',
           notes: device.notes,
+          accessories: device.accessories ?? [],
           createdById: actor.id,
         },
       })

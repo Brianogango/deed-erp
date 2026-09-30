@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const date = String(body.date ?? '').trim()
 
     if (body.action === 'return') {
-      const result = returnConsignment(device, { at: date, notes: body.notes as string })
+      const result = returnConsignment(device, { at: date, notes: body.notes as string, accessoriesReturned: body.accessoriesReturned })
       if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 422 })
       const updated = await prisma.consignmentDevice.update({
         where: { id },

@@ -4063,6 +4063,8 @@ model ConsignmentDevice {
   purchasePrice   Decimal?  @map("purchase_price") @db.Decimal(14, 2)
   returnedAt      DateTime? @map("returned_at") @db.Date
   notes           String?
+  /// What came with it — charger, bag, … (015_consignment_accessories.sql)
+  accessories     Json      @default("[]")
   createdById     String?   @map("created_by") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)

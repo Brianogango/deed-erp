@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Field, Input, Modal, SearchPicker, Textarea } from '@/components/ui'
 import { fmtKes } from '@/lib/store'
-import { missingAssetId, summariseConsignments, type ConsignmentStatus } from '@/lib/inventory/consignment'
+import { CONSIGNMENT_ACCESSORIES, hasCharger, missingAssetId, normalizeAccessories, summariseConsignments, type ConsignmentStatus } from '@/lib/inventory/consignment'
 
 /**
  * Vendor devices on the floor that Deed has not bought.
@@ -32,6 +32,7 @@ type Device = {
   purchasePrice: number | null
   returnedAt: string | null
   notes: string | null
+  accessories?: string[]
 }
 type Party = { id: string; name: string; isVendor?: boolean }
 type Product = { id: string; name: string; sku: string }
@@ -66,7 +67,11 @@ export default function VendorStockPanel() {
   const [dialog, setDialog] = useState<null | { kind: 'receive' } | { kind: 'purchase'; device: Device } | { kind: 'return'; device: Device }>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
-  const [form, setForm] = useState({ vendorId: '', vendorLabel: '', serialNumber: '', assetId: '', productId: '', productLabel: '', productName: '', conditionGrade: '', date: today(), price: '', notes: '' })
+  const [form, setForm] = useState({ vendorId: '', vendorLabel: '', serialNumber: '', assetId: '', productId: '', productLabel: '', productName: '', conditionGrade: '', date: today(), price: '', notes: '', accessories: [] as string[], otherAccessory: '' })
+  const toggleAccessory = (name: string) => setForm(f => ({
+    ...f,
+    accessories: f.accessories.includes(name) ? f.accessories.filter(a => a !== name) : [...f.accessories, name],
+  }))
   const patch = (next: Partial<typeof form>) => setForm(f => ({ ...f, ...next }))
 
   const load = async () => {
@@ -98,7 +103,10 @@ export default function VendorStockPanel() {
   const open = (next: NonNullable<typeof dialog>) => {
     setFormError('')
     setForm({
-      vendorId: '', vendorLabel: '', serialNumber: '', assetId: '', productName: '', conditionGrade: '', date: today(), price: '', notes: '',
+      vendorId: '', vendorLabel: '', serialNumber: '', assetId: '', productName: '', conditionGrade: '', date: today(), price: '', notes: '', otherAccessory: '',
+      // Collecting starts with everything that came in ticked; untick what is
+      // not going back and it is written into the record.
+      accessories: next.kind === 'return' ? [...(next.device.accessories ?? [])] : [],
       productId: next.kind === 'purchase' ? next.device.productId ?? '' : '',
       // Only a device already linked to a catalogue product starts with one
       // chosen. Showing the free-text model name here looked like a selection
@@ -117,6 +125,7 @@ export default function VendorStockPanel() {
           vendorId: form.vendorId, serialNumber: form.serialNumber, assetId: form.assetId,
           productId: form.productId || undefined, productName: form.productName || undefined,
           conditionGrade: form.conditionGrade, receivedAt: form.date, notes: form.notes,
+          accessories: normalizeAccessories([...form.accessories, ...form.otherAccessory.split(',')]),
         })
         setNotice(`${form.serialNumber.toUpperCase()} booked in.`)
       } else if (dialog.kind === 'purchase') {
@@ -125,7 +134,7 @@ export default function VendorStockPanel() {
         })
         setNotice(`${dialog.device.serialNumber} purchased — ${result.purchaseOrder?.ref ?? 'a purchase order'} raised as a draft. Confirm it in Purchases, then receive this serial on the GRN to put it into stock.`)
       } else {
-        await call(`/api/inventory/consignments/${dialog.device.id}`, { action: 'return', date: form.date, notes: form.notes })
+        await call(`/api/inventory/consignments/${dialog.device.id}`, { action: 'return', date: form.date, notes: form.notes, accessoriesReturned: form.accessories })
         setNotice(`${dialog.device.serialNumber} checked out — collected by the vendor.`)
       }
       setDialog(null)
@@ -227,6 +236,9 @@ export default function VendorStockPanel() {
                   </p>
                   <p className="m-0 mt-0.5 text-[11px] text-[var(--text-3)]">
                     {d.vendorName ?? 'Vendor'} · {d.assetId ? <>asset <span className="font-mono">{d.assetId}</span></> : <span className="font-semibold" style={{ color: '#D97706' }}>no asset tag</span>}
+                    {' · '}{(d.accessories ?? []).length
+                      ? <>with {(d.accessories ?? []).join(', ').toLowerCase()}{hasCharger(d as never) ? '' : <span className="font-semibold" style={{ color: '#D97706' }}> (no charger)</span>}</>
+                      : <span className="font-semibold" style={{ color: '#D97706' }}>no charger or accessories</span>}
                     {' · '}in {d.receivedAt}{held !== null ? ` (${held === 0 ? 'today' : `${held} day${held === 1 ? '' : 's'}`})` : ''}
                     {d.status === 'purchased' ? ` · bought ${d.purchasedAt}${d.purchasePrice ? ` for ${fmtKes(d.purchasePrice)}` : ''}${d.purchaseOrderRef ? ` · ${d.purchaseOrderRef}` : ''}` : ''}
                     {d.status === 'returned' ? ` · collected ${d.returnedAt}` : ''}
@@ -282,6 +294,19 @@ export default function VendorStockPanel() {
                   <Field label="Condition"><Input value={form.conditionGrade} onChange={v => patch({ conditionGrade: v })} placeholder="e.g. A, B, scratches on lid" /></Field>
                   <Field label="Date received" required><Input type="date" value={form.date} onChange={v => patch({ date: v })} /></Field>
                 </div>
+                <Field label="Came with" hint="Tick everything the vendor left with it — especially the charger">
+                  <div className="flex flex-wrap gap-2">
+                    {CONSIGNMENT_ACCESSORIES.map(name => (
+                      <label key={name} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-semibold ${form.accessories.includes(name) ? 'border-[var(--primary)] bg-[var(--primary-light)]' : 'border-[var(--border)]'}`}>
+                        <input type="checkbox" checked={form.accessories.includes(name)} onChange={() => toggleAccessory(name)} />
+                        {name}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mt-2">
+                    <Input value={form.otherAccessory} onChange={v => patch({ otherAccessory: v })} placeholder="Anything else, e.g. docking station, stylus" />
+                  </div>
+                </Field>
                 <SearchPicker
                   label="Catalogue product (optional)"
                   placeholder="Search products — needed later only if you buy it"
@@ -322,6 +347,20 @@ export default function VendorStockPanel() {
                 <p className="m-0 text-[11px] leading-relaxed text-[var(--text-2)]">
                   Record that {dialog.device.vendorName ?? 'the vendor'} took {dialog.device.serialNumber} back unsold.
                 </p>
+                {(dialog.device.accessories ?? []).length > 0 ? (
+                  <Field label="Going back with it" hint="Untick anything the vendor did not take — it is noted on the record">
+                    <div className="flex flex-wrap gap-2">
+                      {(dialog.device.accessories ?? []).map(name => (
+                        <label key={name} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-semibold ${form.accessories.includes(name) ? 'border-[var(--primary)] bg-[var(--primary-light)]' : 'border-[var(--border)]'}`}>
+                          <input type="checkbox" checked={form.accessories.includes(name)} onChange={() => toggleAccessory(name)} />
+                          {name}
+                        </label>
+                      ))}
+                    </div>
+                  </Field>
+                ) : (
+                  <p className="m-0 text-[11px] text-[var(--text-3)]">It came in with no charger or accessories recorded.</p>
+                )}
                 <Field label="Date collected" required><Input type="date" value={form.date} onChange={v => patch({ date: v })} /></Field>
                 <Field label="Notes" hint="Who collected it, condition on handover"><Textarea value={form.notes} onChange={v => patch({ notes: v })} rows={2} /></Field>
               </>

@@ -71,6 +71,11 @@ describe('booking a vendor device in', () => {
     expect(mockPrisma.client.update).toHaveBeenCalledWith({ where: { id: VENDOR }, data: { isVendor: true } })
   })
 
+  it('saves what came with the machine', async () => {
+    await POST(req({ ...valid, accessories: ['charger', 'Bag'] }))
+    expect(mockPrisma.consignmentDevice.create.mock.calls[0][0].data.accessories).toEqual(['Charger', 'Bag'])
+  })
+
   it('refuses a device with no serial', async () => {
     const res = await POST(req({ ...valid, serialNumber: '' }))
     expect(res.status).toBe(422)
@@ -105,6 +110,7 @@ describe('buying a consigned device', () => {
     // Draft: the device becomes stock only when the order is received on a GRN.
     expect(po).toMatchObject({ clientId: VENDOR, status: 'draft', totalAmount: 42000 })
     expect(po.notes).toContain('5CG7281XYZ')
+    expect(po.notes).toContain('no accessories')
     expect(po.items.create).toHaveLength(1)
     const update = mockPrisma.consignmentDevice.update.mock.calls[0][0].data
     expect(update).toMatchObject({ status: 'purchased', purchasePrice: 42000, purchaseOrderId: 'po-1' })
@@ -133,6 +139,12 @@ describe('the vendor collecting a device', () => {
     const res = await ACT(req({ action: 'return', date: '2026-09-29', notes: 'Collected by Ann' }), ctx)
     expect(res.status).toBe(200)
     expect(mockPrisma.consignmentDevice.update.mock.calls[0][0].data).toMatchObject({ status: 'returned' })
+  })
+
+  it('records a charger that did not go back with the device', async () => {
+    mockPrisma.consignmentDevice.findUnique.mockResolvedValue(row({ accessories: ['Charger', 'Bag'] }))
+    await ACT(req({ action: 'return', date: '2026-09-29', accessoriesReturned: ['Bag'] }), ctx)
+    expect(mockPrisma.consignmentDevice.update.mock.calls[0][0].data.notes).toContain('Not returned with the device: Charger')
   })
 
   it('refuses to hand back a device Deed has bought', async () => {

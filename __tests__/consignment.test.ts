@@ -188,3 +188,38 @@ describe('what is on the floor', () => {
     expect(summariseConsignments(floor)[0]!.oldestReceivedAt).toBe('2026-09-10')
   })
 })
+
+describe('accessories that come with a vendor device', () => {
+  const base = { vendorId: 'v1', vendorName: 'Laptop Hub', serialNumber: 'SN-ACC-1', receivedAt: '2026-09-30' }
+
+  it('records what came with the machine, tidied', async () => {
+    const { recordConsignmentReceipt } = await import('@/lib/inventory/consignment')
+    const result = recordConsignmentReceipt({ ...base, accessories: [' charger ', 'Bag', 'CHARGER', '', 'Docking station'] }, [], 'id-acc')
+    expect(result.ok && result.value.accessories).toEqual(['Charger', 'Bag', 'Docking station'])
+  })
+
+  it('records a machine that came with nothing', async () => {
+    const { recordConsignmentReceipt, accessoriesLabel, hasCharger } = await import('@/lib/inventory/consignment')
+    const result = recordConsignmentReceipt(base, [], 'id-none')
+    if (!result.ok) throw new Error(result.reason)
+    expect(result.value.accessories).toEqual([])
+    expect(hasCharger(result.value)).toBe(false)
+    expect(accessoriesLabel(result.value)).toBe('no accessories')
+  })
+
+  it('notes a charger that did not go back when the vendor collected', async () => {
+    const { recordConsignmentReceipt, returnConsignment } = await import('@/lib/inventory/consignment')
+    const booked = recordConsignmentReceipt({ ...base, accessories: ['Charger', 'Bag'] }, [], 'id-ret')
+    if (!booked.ok) throw new Error(booked.reason)
+    const returned = returnConsignment(booked.value, { at: '2026-10-02', accessoriesReturned: ['Bag'] })
+    expect(returned.ok && returned.value.notes).toContain('Not returned with the device: Charger')
+  })
+
+  it('adds no note when everything went back', async () => {
+    const { recordConsignmentReceipt, returnConsignment } = await import('@/lib/inventory/consignment')
+    const booked = recordConsignmentReceipt({ ...base, accessories: ['Charger'] }, [], 'id-all')
+    if (!booked.ok) throw new Error(booked.reason)
+    const returned = returnConsignment(booked.value, { at: '2026-10-02', accessoriesReturned: ['charger'] })
+    expect(returned.ok && returned.value.notes).toBeNull()
+  })
+})

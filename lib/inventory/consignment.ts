@@ -43,6 +43,12 @@ export type ConsignmentDevice = {
   purchasePrice?: number | null
   returnedAt?: string | null
   notes?: string | null
+  /**
+   * What came with the machine — charger above all. Recorded at book-in so the
+   * same things go back when the vendor collects, and so a buyer knows whether
+   * a charger is included.
+   */
+  accessories?: string[]
 }
 
 export type ConsignmentReceiptInput = {
@@ -54,6 +60,7 @@ export type ConsignmentReceiptInput = {
   conditionGrade?: string | null
   receivedAt?: string | null
   notes?: string | null
+  accessories?: unknown
 }
 
 export type ConsignmentResult<T> =
@@ -61,6 +68,39 @@ export type ConsignmentResult<T> =
   | { ok: false; reason: string }
 
 const text = (v: unknown) => String(v ?? '').trim()
+
+/** The accessories the book-in form offers as checkboxes. Anything else is typed. */
+export const CONSIGNMENT_ACCESSORIES = ['Charger', 'Bag', 'Mouse', 'Box'] as const
+
+/**
+ * Accessories as a clean list: trimmed, blanks dropped, one entry per item
+ * whatever its case, and the standard names spelt the standard way.
+ */
+export function normalizeAccessories(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of items) {
+    const name = text(raw)
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    const standard = CONSIGNMENT_ACCESSORIES.find(a => a.toLowerCase() === key)
+    out.push(standard ?? name)
+  }
+  return out
+}
+
+export function hasCharger(device: Pick<ConsignmentDevice, 'accessories'>): boolean {
+  return (device.accessories ?? []).some(a => a.toLowerCase() === 'charger')
+}
+
+/** "with charger, bag" / "no accessories" — how a device is described on lists and orders. */
+export function accessoriesLabel(device: Pick<ConsignmentDevice, 'accessories'>): string {
+  const list = device.accessories ?? []
+  return list.length ? `with ${list.join(', ').toLowerCase()}` : 'no accessories'
+}
 
 /** Serials are compared case-insensitively — vendors are inconsistent about case. */
 export function normalizeSerial(serial: unknown): string {
@@ -130,6 +170,7 @@ export function recordConsignmentReceipt(
       receivedAt,
       status: 'at_shop',
       notes: text(input.notes) || null,
+      accessories: normalizeAccessories(input.accessories),
     },
   }
 }
@@ -171,10 +212,20 @@ export function purchaseConsignment(
   }
 }
 
+/**
+ * Accessories that came in with the device but are not going back with it.
+ * A missing charger on collection is a dispute with the vendor later, so it is
+ * written into the record at the moment it is noticed.
+ */
+export function missingOnReturn(device: Pick<ConsignmentDevice, 'accessories'>, returned: unknown): string[] {
+  const back = new Set(normalizeAccessories(returned).map(a => a.toLowerCase()))
+  return (device.accessories ?? []).filter(a => !back.has(a.toLowerCase()))
+}
+
 /** The vendor collects it unsold. The check-out half of the custody trail. */
 export function returnConsignment(
   device: ConsignmentDevice,
-  opts: { at: string; notes?: string | null },
+  opts: { at: string; notes?: string | null; accessoriesReturned?: unknown },
 ): ConsignmentResult<ConsignmentDevice> {
   if (!device) return { ok: false, reason: 'Device not found.' }
   if (device.status === 'purchased') {
@@ -186,13 +237,18 @@ export function returnConsignment(
   if (!at) return { ok: false, reason: 'Record the date the vendor collected it.' }
 
   const note = text(opts?.notes)
+  // Only checked when the caller says what went back; an older client that
+  // sends no list does not have every accessory recorded as missing.
+  const missing = opts?.accessoriesReturned === undefined ? [] : missingOnReturn(device, opts.accessoriesReturned)
+  const missingNote = missing.length ? `Not returned with the device: ${missing.join(', ')}` : ''
+  const added = [note, missingNote].filter(Boolean).join('\n')
   return {
     ok: true,
     value: {
       ...device,
       status: 'returned',
       returnedAt: at,
-      notes: note ? [device.notes, note].filter(Boolean).join('\n') : device.notes ?? null,
+      notes: added ? [device.notes, added].filter(Boolean).join('\n') : device.notes ?? null,
     },
   }
 }

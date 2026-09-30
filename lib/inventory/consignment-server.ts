@@ -1,4 +1,4 @@
-import type { ConsignmentDevice, ConsignmentStatus } from '@/lib/inventory/consignment'
+import { accessoriesLabel, normalizeAccessories, type ConsignmentDevice, type ConsignmentStatus } from '@/lib/inventory/consignment'
 
 /**
  * Shapes shared by the consignment API: rows as the register reads them, and
@@ -36,6 +36,7 @@ export type ConsignmentRow = {
   purchasePrice?: unknown
   returnedAt?: Date | string | null
   notes?: string | null
+  accessories?: unknown
 }
 
 export type ConsignmentView = ConsignmentDevice & {
@@ -60,6 +61,7 @@ export function consignmentFromRow(row: ConsignmentRow, purchaseOrderRef?: strin
     purchasePrice: num(row.purchasePrice),
     returnedAt: day(row.returnedAt),
     notes: row.notes ?? null,
+    accessories: normalizeAccessories(row.accessories),
     ...(purchaseOrderRef ? { purchaseOrderRef } : {}),
   }
 }
@@ -75,7 +77,7 @@ export function consignmentFromRow(row: ConsignmentRow, purchaseOrderRef?: strin
  * order carries it.
  */
 export function consignmentPurchaseOrderBody(input: {
-  device: Pick<ConsignmentDevice, 'serialNumber' | 'assetId' | 'vendorId' | 'vendorName' | 'receivedAt'>
+  device: Pick<ConsignmentDevice, 'serialNumber' | 'assetId' | 'vendorId' | 'vendorName' | 'receivedAt' | 'accessories'>
   productId: string
   productName: string
   price: number
@@ -87,7 +89,7 @@ export function consignmentPurchaseOrderBody(input: {
     vendorId: device.vendorId,
     vendorName: device.vendorName ?? undefined,
     date: input.date,
-    notes: `Consignment purchase — SN ${device.serialNumber}${tag}, held since ${device.receivedAt}. Receive this serial on the GRN.`,
+    notes: `Consignment purchase — SN ${device.serialNumber}${tag}, held since ${device.receivedAt}, ${accessoriesLabel(device)}. Receive this serial on the GRN.`,
     lines: [{
       productId: input.productId,
       productName: input.productName,
