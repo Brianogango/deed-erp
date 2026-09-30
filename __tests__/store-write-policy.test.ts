@@ -85,6 +85,12 @@ describe('trade-ins raised from the repair screen', () => {
     expect(canWriteStoreKey(admin as any, 'deed_serials')).toBe(true)
   })
 
+  it('saves for an inventory officer booking a trade-in in', () => {
+    const inv = { role: 'inventory_officer', modules: ['inventory'] }
+    expect(canWriteStoreKey(inv as any, 'deed_buyBacks')).toBe(true)
+    expect(canWriteStoreKey({ role: 'inventory', modules: ['inventory'] } as any, 'deed_buyBacks')).toBe(true)
+  })
+
   it('still refuses technicians', () => {
     const tech = { role: 'technician', modules: ['repair'] }
     expect(canWriteStoreKey(tech as any, 'deed_buyBacks')).toBe(false)

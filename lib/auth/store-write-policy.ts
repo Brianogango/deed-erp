@@ -130,9 +130,14 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
   deed_riderWeeklyPays: policy(FINANCE, ['delivery', 'hr']),
 
   deed_returnOrders: policy([...FINANCE, 'sales_rep', 'technical_lead'], ['after_sales']),
-  // Trade-ins are also raised from the repair screen (director, admin
-  // officer, technical lead), so repair access counts as well as After Sales.
-  deed_buyBacks: policy([...FINANCE, 'sales_rep', 'technical_lead', 'lead_tech'], ['after_sales', 'repair']),
+  // Trade-ins are booked by the desk and by inventory (the device comes into
+  // stock) as well as After Sales, and raised from the repair screen by
+  // technical leads. Approving and paying stay Finance's (enforced in the
+  // actions); this only lets the draft and its stocking save.
+  deed_buyBacks: policy(
+    [...FINANCE, 'sales_rep', 'technical_lead', 'lead_tech', 'inventory', 'inventory_officer'],
+    ['after_sales', 'repair', 'inventory'],
+  ),
   deed_donations: policy(ADMIN, ['after_sales']),
   deed_clientExchanges: policy([...FINANCE, 'sales_rep', 'technical_lead'], ['after_sales']),
 
