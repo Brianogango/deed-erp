@@ -579,6 +579,26 @@ export default function RepairPortalPage() {
                   Thank you — we will be in touch shortly.
                 </div>
               )}
+
+              {/* Download, like the invoice and receipt — same phone check. */}
+              <div style={{ marginTop: 14 }}>
+                {!canApprove && (
+                  <input
+                    value={verifyPhone}
+                    onChange={e => setVerifyPhone(e.target.value)}
+                    placeholder="Phone number on this repair (to download the quote)"
+                    inputMode="tel"
+                    style={{ width: '100%', marginBottom: 10, background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none' }}
+                  />
+                )}
+                <a
+                  href={`/api/portal/repair/${encodeURIComponent(ref)}/quote-pdf?phone=${encodeURIComponent(verifyPhone.trim())}`}
+                  download
+                  style={{ display: 'block', textAlign: 'center', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}
+                >
+                  Download Quote PDF
+                </a>
+              </div>
             </div>
           </Card>
         )}
