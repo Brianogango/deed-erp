@@ -268,6 +268,7 @@ import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeA
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
 import { deniedSaveMessage } from '@/lib/store-denied-message'
 import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
+import { isSellableSerial } from '@/lib/inventory/sellable-stock'
 import { reissueAfterClientDecision, reissueBlocker, reissueOnRevision, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
 import { countCorrectionBlocker, countCorrectionNote, partsOrderNote, purchaseOrderBlocker, requestAfterCountCheck, requestAfterPurchaseOrder, type PartsRequest } from '@/lib/repair/parts-request'
 import { executeRepairConsolidation, mergedSaleOrderFromPlan } from '@/lib/repair/consolidation-execute'
@@ -11530,7 +11531,7 @@ const storeCtx: AppState = {
     getProductSerials: (productId, location) =>
       serialRef.current.filter(s => s.productId === productId && (!location || s.location === location)),
       getAvailableSerials: (productId) =>
-      serialRef.current.filter(s => s.productId === productId && s.status === 'available' && (s.location === 'warehouse' || s.location === 'shop')),
+      serialRef.current.filter(s => s.productId === productId && isSellableSerial(s)),
     updateSerial: (id, patch, opts) => {
       // Server-authoritative flows (notably reconfiguration completion) need
       // to refresh the client cache without scheduling useLS's debounced
@@ -12485,8 +12486,9 @@ const storeCtx: AppState = {
               } else if (selectedSource) {
                 sourceLocation = selectedSource
               } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
-                const warehouseAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'warehouse').length
-                sourceLocation = warehouseAvailable >= l.qty ? 'warehouse' : 'shop'
+                // Only Ready for Sale ships; a shortfall is reported, never filled
+                // from With Issues (lib/inventory/sellable-stock.ts).
+                sourceLocation = 'warehouse'
               } else {
                 const qty = Math.max(0, Math.floor(Number(l.qty) || 0))
                 sourceLocation = resolveBulkDeliverySourceLocation({
@@ -12626,8 +12628,9 @@ const storeCtx: AppState = {
           if (isNonStockSaleLine(l, prod ?? null)) {
             sourceLocation = undefined
           } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
-            const warehouseAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'warehouse').length
-            sourceLocation = warehouseAvailable >= l.qty ? 'warehouse' : 'shop'
+            // Only Ready for Sale ships; a shortfall is reported, never filled
+            // from With Issues (lib/inventory/sellable-stock.ts).
+            sourceLocation = 'warehouse'
           } else {
             const qty = Math.max(0, Math.floor(Number(l.qty) || 0))
             sourceLocation = resolveBulkDeliverySourceLocation({
@@ -14393,7 +14396,11 @@ const storeCtx: AppState = {
           const hasIssue = issueDesc.length > 0
           const newSerial: SerialNumber = {
             id: uid(), serial: s, productId: line.productId, productName: line.productName,
-            location: hasIssue ? 'warehouse' : destination,
+            // A device flagged on arrival goes to Refurbishment with its job —
+            // the same place createRefurbishmentJob puts one. It used to stay in
+            // 'warehouse' with status 'refurbishment', which no Warehouse tab
+            // shows, so it vanished until a technician picked the job up.
+            location: hasIssue ? 'repair_unit' : destination,
             status: hasIssue ? 'refurbishment' : 'available',
             purchaseOrderId: po.id,
             receiptId: receiptId,
@@ -19888,8 +19895,9 @@ const storeCtx: AppState = {
           } else if (selectedSource) {
             sourceLocation = selectedSource
           } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
-            const warehouseAvailable = serialRef.current.filter(s => s.productId === line.productId && s.status === 'available' && s.location === 'warehouse').length
-            sourceLocation = warehouseAvailable >= qty ? 'warehouse' : 'shop'
+            // Only Ready for Sale ships; a shortfall is reported, never filled
+            // from With Issues (lib/inventory/sellable-stock.ts).
+            sourceLocation = 'warehouse'
           } else {
             sourceLocation = resolveBulkDeliverySourceLocation({
               product: prod,

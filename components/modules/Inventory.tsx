@@ -639,7 +639,7 @@ function InventoryContent() {
 
   const warehouseStock = useMemo(() => {
     const bulkProducts = stockableProducts.filter(p => !p.requiresSerial)
-    const bulkByLocation = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).reduce((acc, loc) => {
+    const bulkByLocation = (['warehouse', 'shop', 'repair_unit', 'pending_testing', 'quarantine'] as LocationId[]).reduce((acc, loc) => {
       acc[loc] = bulkProducts
         .map(p => ({ ...p, qty: getStockByLocation(p.id)[loc] }))
         .filter(p => p.qty > 0)
@@ -649,7 +649,11 @@ function InventoryContent() {
     return {
       warehouseSerials: serials.filter(s => s.location === 'warehouse' && s.status === 'available'),
       issuesSerials: serials.filter(s => s.location === 'shop'),
-      repairSerials: serials.filter(s => s.location === 'repair_unit'),
+      // Also devices received with an issue before those went to the repair
+      // unit: they sat in 'warehouse' as 'refurbishment' and showed nowhere.
+      repairSerials: serials.filter(s => s.location === 'repair_unit' || (s.location === 'warehouse' && s.status === 'refurbishment')),
+      testingSerials: serials.filter(s => s.location === 'pending_testing' && s.status !== 'sold'),
+      quarantineSerials: serials.filter(s => s.location === 'quarantine' && s.status !== 'sold'),
       bulkByLocation,
     }
   }, [getStockByLocation, serials, stockableProducts])
@@ -1668,7 +1672,7 @@ function InventoryContent() {
       </div>
 
       {tab === 'warehouse_view' && (() => {
-        const { warehouseSerials, issuesSerials, repairSerials, bulkByLocation } = warehouseStock
+        const { warehouseSerials, issuesSerials, repairSerials, testingSerials, quarantineSerials, bulkByLocation } = warehouseStock
         const bulkByLoc = (loc: LocationId) => bulkByLocation[loc] ?? []
         const q = warehouseSearch.trim().toLowerCase()
         const serialMatches = (s: (typeof serials)[number]) => {
@@ -1697,6 +1701,10 @@ function InventoryContent() {
         const filteredBulkWarehouse = bulkByLoc('warehouse').filter(productMatches)
         const filteredBulkShop = bulkByLoc('shop').filter(productMatches)
         const filteredBulkRepair = bulkByLoc('repair_unit').filter(productMatches)
+        const filteredTestingSerials = testingSerials.filter(serialMatches)
+        const filteredQuarantineSerials = quarantineSerials.filter(serialMatches)
+        const filteredBulkTesting = bulkByLoc('pending_testing').filter(productMatches)
+        const filteredBulkQuarantine = bulkByLoc('quarantine').filter(productMatches)
 
         function quickMove(productId: string, productName: string, from: LocationId, to: LocationId, serialId?: string, qty = 1) {
           submitTransfer(from, to, productId, productName, qty, serialId ? [serialId] : [], `${LOCATIONS[from].name} → ${LOCATIONS[to].name}`)
@@ -1800,8 +1808,10 @@ function InventoryContent() {
         const refurbCount = filteredRepairSerials.length + filteredBulkRepair.reduce((s, p) => s + p.qty, 0)
         const computerAidCount = serials.filter(s => s.location === 'computer_aid' && s.status !== 'sold').length
           + bulkStock.filter(row => row.location === 'computer_aid').reduce((sum, row) => sum + Math.max(0, Number(row.qty) || 0), 0)
-        const activeWarehouseLocation = ['warehouse', 'issues', 'refurbishment', 'computer_aid', 'vendor_stock'].includes(warehouseLocation)
-          ? warehouseLocation as 'warehouse' | 'issues' | 'refurbishment' | 'computer_aid' | 'vendor_stock'
+        const testingCount = filteredTestingSerials.length + filteredBulkTesting.reduce((s, p) => s + p.qty, 0)
+        const quarantineCount = filteredQuarantineSerials.length + filteredBulkQuarantine.reduce((s, p) => s + p.qty, 0)
+        const activeWarehouseLocation = ['testing', 'warehouse', 'issues', 'refurbishment', 'quarantine', 'computer_aid', 'vendor_stock'].includes(warehouseLocation)
+          ? warehouseLocation as 'testing' | 'warehouse' | 'issues' | 'refurbishment' | 'quarantine' | 'computer_aid' | 'vendor_stock'
           : 'warehouse'
 
         return (
@@ -1845,9 +1855,13 @@ function InventoryContent() {
             <div className="w-full min-w-0 rounded-token-md border border-[var(--border-lt)] bg-[var(--bg-card)] overflow-hidden">
               <div className="flex flex-wrap gap-2 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] p-2" role="tablist" aria-label="Inventory stock location">
                 {[
+                  // The stages a device owned by Deed moves through; only
+                  // Ready for Sale can be sold (lib/inventory/sellable-stock.ts).
+                  { id: 'testing', label: 'Pending Testing', sublabel: 'Not sellable yet', count: testingCount, icon: faMagnifyingGlass },
                   { id: 'warehouse', label: 'Warehouse', sublabel: 'Ready for Sale', count: readyCount, icon: faIndustry },
                   { id: 'issues', label: 'With Issues', sublabel: 'Needs attention', count: issuesCount, icon: faTriangleExclamation },
-                  { id: 'refurbishment', label: 'Refurbishment', sublabel: 'Internal stock', count: refurbCount, icon: faWrench },
+                  { id: 'refurbishment', label: 'Refurbishment', sublabel: 'Work in progress', count: refurbCount, icon: faWrench },
+                  { id: 'quarantine', label: 'Quarantine', sublabel: 'Parts / write-off', count: quarantineCount, icon: faBox },
                   { id: 'computer_aid', label: 'Computer Aid', sublabel: 'Held in custody', count: computerAidCount, icon: faBoxesStacked },
                   // Vendors' machines on the floor, not bought. The panel loads
                   // its own register, so no count is shown on the tab.
@@ -1861,7 +1875,7 @@ function InventoryContent() {
                       role="tab"
                       aria-selected={selected}
                       onClick={() => setWarehouseLocation(item.id)}
-                      className={`min-w-[150px] flex-1 rounded-xl border px-3 py-2.5 text-left transition ${selected
+                      className={`min-w-[180px] flex-1 rounded-xl border px-3 py-2.5 text-left transition ${selected
                         ? 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--navy)] shadow-sm'
                         : 'border-transparent bg-transparent text-text-2 hover:border-[var(--border)] hover:bg-[var(--bg-muted)]'}`}
                     >
@@ -1995,6 +2009,88 @@ function InventoryContent() {
                     </p>
                     )}
                     actions={<span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>}
+                    />
+                    ))}
+                    </Section>
+                  </div>
+                )}
+                {activeWarehouseLocation === 'testing' && (
+                  <div className="w-full min-w-0">
+                    <Section title="Pending Testing — not sellable until it passes" icon={<Fa icon={faMagnifyingGlass} />} tone="info"
+                    count={testingCount}
+                    emptyText={q ? 'No Pending Testing stock matches this search' : 'Nothing waiting to be tested'}>
+                    {filteredTestingSerials.map(s => (
+                    <WarehouseRow
+                    key={s.id}
+                    title={s.productName}
+                    meta={<p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>}
+                    actions={(
+                    <>
+                    <ActionBtn
+                    label="Passed — Ready for Sale"
+                    tone="success"
+                    ariaLabel={`${s.serial} passed testing: move to Ready for Sale`}
+                    onClick={() => quickMove(s.productId, s.productName, 'pending_testing', 'warehouse', s.id)}
+                    />
+                    <SecondaryActionMenu
+                    ariaLabel={`Test outcome for ${s.serial}`}
+                    label="Failed…"
+                    actions={[
+                    { id: 'send-refurb', label: 'Send for Refurbishment', onClick: () => requestSendForRefurbishment(s) },
+                    { id: 'with-issues', label: 'Move to With Issues', onClick: () => quickMove(s.productId, s.productName, 'pending_testing', 'shop', s.id) },
+                    { id: 'quarantine', label: 'Quarantine (parts / write-off)', onClick: () => quickMove(s.productId, s.productName, 'pending_testing', 'quarantine', s.id) },
+                    ]}
+                    />
+                    </>
+                    )}
+                    />
+                    ))}
+                    {filteredBulkTesting.map(p => (
+                    <WarehouseRow
+                    key={p.id}
+                    title={p.name}
+                    meta={<p className="text-[10px] text-text-3 mt-0.5"><span className="tabular-nums font-semibold">{p.qty}</span> units awaiting testing</p>}
+                    actions={(
+                    <ActionBtn
+                    label={`All ${p.qty} passed — Ready for Sale`}
+                    tone="success"
+                    ariaLabel={`Move ${p.qty} ${p.name} to Ready for Sale`}
+                    onClick={() => quickMove(p.id, p.name, 'pending_testing', 'warehouse', undefined, p.qty)}
+                    />
+                    )}
+                    />
+                    ))}
+                    </Section>
+                  </div>
+                )}
+                {activeWarehouseLocation === 'quarantine' && (
+                  <div className="w-full min-w-0">
+                    <Section title="Quarantine — kept for parts or write-off" icon={<Fa icon={faBox} />} tone="warning"
+                    count={quarantineCount}
+                    emptyText={q ? 'No Quarantine stock matches this search' : 'Nothing in quarantine'}>
+                    {filteredQuarantineSerials.map(s => (
+                    <WarehouseRow
+                    key={s.id}
+                    title={s.productName}
+                    meta={<p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>}
+                    actions={(
+                    <SecondaryActionMenu
+                    ariaLabel={`More actions for ${s.serial}`}
+                    label="More"
+                    actions={[
+                    { id: 'retest', label: 'Back to Pending Testing', onClick: () => quickMove(s.productId, s.productName, 'quarantine', 'pending_testing', s.id) },
+                    { id: 'send-refurb', label: 'Send for Refurbishment', onClick: () => requestSendForRefurbishment(s) },
+                    ]}
+                    />
+                    )}
+                    />
+                    ))}
+                    {filteredBulkQuarantine.map(p => (
+                    <WarehouseRow
+                    key={p.id}
+                    title={p.name}
+                    meta={<p className="text-[10px] text-text-3 mt-0.5"><span className="tabular-nums font-semibold">{p.qty}</span> units in quarantine</p>}
+                    actions={<span className="text-[10px] text-text-4 italic">Use Adjustments to write off</span>}
                     />
                     ))}
                     </Section>

@@ -1,4 +1,5 @@
 'use client'
+import { isSellableSerial } from '@/lib/inventory/sellable-stock'
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Fragment, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
@@ -4643,8 +4644,7 @@ function DeliveryNoteView({
     const match = serials.find((s: any) => {
       const sn = String(s.serial ?? s.serialNumber ?? '').toUpperCase()
       return sn === value &&
-        (s.location === 'warehouse' || s.location === 'shop') &&
-        s.status === 'available'
+        isSellableSerial(s)
     })
     if (!match) {
       showToast(`Invalid or unavailable serial ${value}`, 'error')
@@ -5071,8 +5071,7 @@ function DeliveryNoteView({
                   const assignableSerials = serialTracked
                     ? serials.filter((serial: any) =>
                         serial.productId === l.productId &&
-                        (serial.location === 'warehouse' || serial.location === 'shop') &&
-                        serial.status === 'available',
+                        isSellableSerial(serial),
                       )
                     : []
                   const effectiveDone = effectiveDeliveryLineQty({

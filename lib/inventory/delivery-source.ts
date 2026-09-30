@@ -5,8 +5,11 @@
 
 import { calcStockByLocation, type BulkStockLevel, type SerialNumber, type StockProduct } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
+import { SALE_PICK_LOCATIONS } from '@/lib/inventory/sellable-stock'
 
-export const DELIVERY_PICK_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit']
+// Delivery notes ship sold goods, so they pick from Ready for Sale only —
+// never With Issues or Refurbishment (lib/inventory/sellable-stock.ts).
+export const DELIVERY_PICK_LOCATIONS: LocationId[] = [...SALE_PICK_LOCATIONS]
 
 export type StockReservationLike = {
   productId: string
@@ -76,7 +79,7 @@ export function freeQtyAtLocation(args: {
 
 /**
  * Prefer the DN's preferred location when it has enough free stock; otherwise
- * use the first pick location (warehouse → shop → repair) that can cover qty.
+ * use the first pick location that can cover qty.
  */
 export function resolveBulkDeliverySourceLocation(args: {
   product: StockProduct | undefined

@@ -42,8 +42,8 @@ describe('codesEqual / identityMatchesScan', () => {
 
 describe('matchPosScan', () => {
   const serials = [
-    { id: 's1', productId: 'p1', barcode: 'INV-1', serial: 'MFG-1', sku: 'LAP-1', status: 'available', location: 'shop' },
-    { id: 's2', productId: 'p1', barcode: 'INV-2', serial: 'MFG-2', sku: 'LAP-1', status: 'sold', location: 'shop' },
+    { id: 's1', productId: 'p1', barcode: 'INV-1', serial: 'MFG-1', sku: 'LAP-1', status: 'available', location: 'warehouse' },
+    { id: 's2', productId: 'p1', barcode: 'INV-2', serial: 'MFG-2', sku: 'LAP-1', status: 'sold', location: 'warehouse' },
   ]
   const products = [
     { id: 'p1', name: 'Laptop', sku: 'LAP-1', barcode: 'PROD-LAP', requiresSerial: true },
@@ -53,6 +53,12 @@ describe('matchPosScan', () => {
     if (requiresSerial) return serials.filter(s => s.productId === productId && s.status === 'available').length
     return productId === 'p2' ? 5 : 0
   }
+
+  it('does not offer a unit that is With Issues', () => {
+    const withIssues = [{ ...serials[0], location: 'shop' }]
+    const result = matchPosScan({ code: 'inv-1', serials: withIssues, products, getSellableQty })
+    expect(result).not.toEqual({ kind: 'serial', serial: withIssues[0] })
+  })
 
   it('matches unit by inventory barcode', () => {
     const result = matchPosScan({ code: 'inv-1', serials, products, getSellableQty })

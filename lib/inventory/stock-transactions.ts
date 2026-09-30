@@ -1,4 +1,5 @@
 import 'server-only'
+import { isSalePickLocation, stockStageLabel } from '@/lib/inventory/sellable-stock'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
@@ -15,7 +16,9 @@ import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-const VALID_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit', 'computer_aid', 'computer_aid_collected', 'computer_aid_issues', 'vendor', 'customer', 'employee']
+// pending_testing and quarantine were missing, so a transfer or receipt into
+// them was silently turned into 'warehouse' — i.e. made sellable.
+const VALID_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit', 'computer_aid', 'computer_aid_collected', 'computer_aid_issues', 'vendor', 'customer', 'employee', 'pending_testing', 'quarantine']
 
 function asLocationId(value: string | undefined): LocationId {
   const loc = String(value || 'warehouse')
@@ -179,7 +182,10 @@ export async function applyDeliveryStockMutation(params: {
     const product = products.find(p => p.id === line.productId)
     if (!product || isNonStockProduct(product)) continue
 
-    const location = asLocationId(line.sourceLocation)
+    // Delivery notes ship sold goods: Ready for Sale only, whatever location
+    // the client sends (lib/inventory/sellable-stock.ts). With Issues and
+    // Refurbishment stock used to ship when the warehouse ran short.
+    const location: LocationId = 'warehouse'
     const serialTracked = isSerialTracking(inferTrackingMethod(product))
 
     if (serialTracked) {
@@ -197,6 +203,13 @@ export async function applyDeliveryStockMutation(params: {
             (serial.status === 'assigned' && serial.saleOrderId === params.saleOrderId))
         if (!validStatus) {
           return { ok: false, error: `${line.productName}: serial ${serial?.serial ?? serialId} is not available for delivery` }
+        }
+        // Older serial rows can lack a location; only a known other stage blocks.
+        if (serial.location && !isSalePickLocation(serial.location)) {
+          return {
+            ok: false,
+            error: `${line.productName}: serial ${serial.serial ?? serialId} is in ${stockStageLabel(serial.location)}, not Ready for Sale — move it to the warehouse once it has passed its checks`,
+          }
         }
       }
     } else {
@@ -242,7 +255,7 @@ export async function applyDeliveryStockMutation(params: {
     const product = products[productIdx]
     if (isNonStockProduct(product)) continue
 
-    const location = asLocationId(line.sourceLocation)
+    const location: LocationId = 'warehouse' // matches the check above: Ready for Sale only
     const serialLabels: string[] = []
     const serialTracked = isSerialTracking(inferTrackingMethod(product))
 

@@ -136,7 +136,7 @@ describe('delivery-source', () => {
     )).toBe(false)
   })
 
-  it('falls back from warehouse to shop when preferred location is empty', () => {
+  it('never falls back to With Issues when the warehouse is short', () => {
     const resolved = resolveBulkDeliverySourceLocation({
       product,
       productId: 'hdd',
@@ -146,11 +146,11 @@ describe('delivery-source', () => {
       bulkStock,
       reservations: [],
     })
-    expect(resolved.location).toBe('shop')
-    expect(resolved.available).toBe(2)
+    expect(resolved.location).toBe('warehouse')
+    expect(resolved.available).toBe(0)
   })
 
-  it('keeps preferred location when it has enough stock', () => {
+  it('ignores a With Issues location asked for by the order', () => {
     const resolved = resolveBulkDeliverySourceLocation({
       product,
       productId: 'hdd',
@@ -160,13 +160,13 @@ describe('delivery-source', () => {
       bulkStock,
       reservations: [],
     })
-    expect(resolved.location).toBe('shop')
+    expect(resolved.location).toBe('warehouse')
   })
 
   it('formats stock breakdown for error toasts', () => {
     expect(formatStockByLocation(
       { warehouse: 0, shop: 2, repair_unit: 0 },
       { warehouse: 'Warehouse', shop: 'Shop', repair_unit: 'Repair' },
-    )).toBe('Warehouse: 0, Shop: 2, Repair: 0')
+    )).toBe('Warehouse: 0')
   })
 })

@@ -144,7 +144,7 @@ export function matchPosScan(input: {
 
   const locations = input.sellableLocations instanceof Set
     ? input.sellableLocations
-    : new Set(input.sellableLocations ?? ['warehouse', 'shop'])
+    : new Set(input.sellableLocations ?? ['warehouse'])
 
   const matchedSerial = input.serials.find(s =>
     s.status === 'available'

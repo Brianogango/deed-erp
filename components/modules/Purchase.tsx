@@ -40,7 +40,13 @@ const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
 
-const LOC_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
+// Receiving into Pending Testing keeps goods unsellable until each passes
+// its checks on the Warehouse screen; Warehouse makes them sellable at once.
+const LOC_OPTS = [
+  { value: 'pending_testing', label: 'Pending Testing — test before sale' },
+  { value: 'warehouse', label: 'Warehouse — Ready for Sale now' },
+  { value: 'shop', label: LOCATIONS.shop.name },
+]
 
 const REASON_OPTS = [
   { value: 'damaged',      label: 'Damaged goods' },

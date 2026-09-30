@@ -174,6 +174,37 @@ describe('applyDeliveryStockMutation()', () => {
     userId: 'user-1',
   })
 
+  it('refuses a device that is With Issues, however the delivery note was prepared', async () => {
+    const state = serialState('available', [])
+    state.deed_serials[0].location = 'shop'
+    mockLoadAppState.mockResolvedValue(state)
+    const result = await applyDeliveryStockMutation({
+      deliveryId: 'del-191', deliveryRef: 'DN/2026/0191', saleOrderId: 'so-1',
+      lines: [{ productId: PRODUCT_ID, productName: 'Thinkpad E14', qty: 1, serialIds: [SERIAL_ID], sourceLocation: 'shop' }],
+      userId: 'user-1',
+    })
+    expect(result.ok).toBe(false)
+    expect((result as { error: string }).error).toContain('With Issues, not Ready for Sale')
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('ships bulk stock from the warehouse only, even when the note says With Issues', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Adapter', stockQty: 3, requiresSerial: false, unit: 'pcs' }],
+      deed_serials: [],
+      deed_bulkStock: [{ productId: PRODUCT_ID, location: 'shop', qty: 3 }],
+      deed_stockMoves: [],
+      deed_stockReservations: [],
+    })
+    const result = await applyDeliveryStockMutation({
+      deliveryId: 'del-192', deliveryRef: 'DN/2026/0192', saleOrderId: 'so-1',
+      lines: [{ productId: PRODUCT_ID, productName: 'Adapter', qty: 1, sourceLocation: 'shop' }],
+      userId: 'user-1',
+    })
+    expect(result.ok).toBe(false)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
   it('REGRESSION 23-Sep-2026: retrying a delivery whose stock already left succeeds', async () => {
     // Validating writes stock first and the delivery record afterwards. An
     // attempt that died in between left the serial sold with the delivery
