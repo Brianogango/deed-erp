@@ -10,6 +10,8 @@ import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { findExistingContact } from '@/lib/contact-prisma'
 import { isUUID } from '@/lib/utils'
 import { findRepairByPortalRef } from '@/lib/repair-ref'
+import { invoiceReachedLedger, reissueAfterClientDecision, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
+import { publishNotificationEvent } from '@/lib/notifications/service'
 
 type ItemDecision = { lineId: string; decision: 'approved' | 'declined' | 'deferred' }
 
@@ -118,6 +120,39 @@ export async function POST(
   // Set when the sale-order/invoice chain fails after the approval is taken.
   let billingError: string | null = null
 
+  // A posted invoice is never rewritten here. If this job's invoice has
+  // reached the ledger, the approved revision goes to Finance to credit and
+  // reissue (lib/repair/invoice-reissue.ts); a decline leaves it standing.
+  const priorInvoiceId = [targetRepair.linkedInvoiceId, targetRepair.invoiceId].find(id => isUUID(id))
+  const priorInvoice = priorInvoiceId
+    ? await prisma.invoice.findUnique({
+        where: { id: priorInvoiceId },
+        select: { id: true, invoiceNumber: true, totalAmount: true, postingStatus: true, postedJournalEntryId: true },
+      }).catch(() => null)
+    : null
+  const priorInvoiceLocked = invoiceReachedLedger(priorInvoice)
+  let reissueRaised: InvoiceReissue | null = null
+  if (targetRepair.invoiceReissue?.status === 'awaiting_client' && approved && !priorInvoiceLocked) {
+    // The invoice never reached the ledger, so the approval below updates it
+    // in place — there is nothing for Finance to reissue.
+    targetRepair.invoiceReissue = { ...targetRepair.invoiceReissue, status: 'dropped', droppedAt: date }
+  } else if (targetRepair.invoiceReissue?.status === 'awaiting_client') {
+    targetRepair.invoiceReissue = reissueAfterClientDecision(targetRepair.invoiceReissue, approved, date)
+    if (approved && targetRepair.invoiceReissue?.status === 'pending') reissueRaised = targetRepair.invoiceReissue
+  } else if (approved && priorInvoice && priorInvoiceLocked && Math.abs(Number(priorInvoice.totalAmount) - approvedTotal) >= 0.01) {
+    // Revised before this rule existed: raise it now.
+    reissueRaised = {
+      status: 'pending',
+      invoiceId: priorInvoice.id,
+      invoiceRef: priorInvoice.invoiceNumber,
+      previousTotal: Number(priorInvoice.totalAmount),
+      revisedTotal: approvedTotal,
+      raisedAt: date,
+      approvedAt: date,
+    }
+    targetRepair.invoiceReissue = reissueRaised
+  }
+
   if (approved) {
     targetRepair.total = approvedTotal
     // A retry that succeeds must clear the previous failure marker.
@@ -143,7 +178,7 @@ export async function POST(
       const systemUser = await prisma.user.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' } })
       // Do not create billing documents below 1 — zero/near-zero approvals
       // (e.g. warranty-covered items) must not generate quotes or invoices.
-      if (systemUser && approvedTotal >= 1) {
+      if (systemUser && approvedTotal >= 1 && !priorInvoiceLocked) {
         const soItems = approvedLines.map((line: any) => ({ description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0) }))
         // Reuse the SO from a previous approval (quote revisions re-run this
         // flow) instead of creating a duplicate each time.
@@ -274,6 +309,21 @@ export async function POST(
       targetRepair.status = 'awaiting_parts'
       targetRepair.procurementRequests = [...(targetRepair.procurementRequests ?? []), request]
     }
+  }
+
+  if (reissueRaised) {
+    await publishNotificationEvent({
+      eventType: 'repair.invoice_reissue',
+      entityType: 'repair',
+      entityId: targetRepair.id,
+      roles: ['finance_officer', 'director'],
+      channels: ['in_app', 'push'],
+      severity: 'warning',
+      title: `Reissue invoice ${reissueRaised.invoiceRef} — ${targetRepair.ref}`,
+      body: `The client approved a revised quote (KES ${reissueRaised.previousTotal.toLocaleString('en-KE')} → ${reissueRaised.revisedTotal.toLocaleString('en-KE')}). Credit ${reissueRaised.invoiceRef} and reissue from the repair before it is released.`,
+      actionUrl: `/repair?id=${targetRepair.id}`,
+      idempotencyKey: `repair:${targetRepair.id}:invoice_reissue:${reissueRaised.invoiceId}:${date}`,
+    }).catch(err => console.error('[APPROVE] reissue notification failed:', err))
   }
 
   // Persist under the ledger lock against a fresh read — the array loaded at

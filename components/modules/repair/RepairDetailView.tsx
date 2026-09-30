@@ -40,6 +40,7 @@ import {
 } from '@/lib/repair-billing-exempt'
 import { resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 import { pickRepairPrimaryAction } from '@/lib/repair-handover'
+import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
 import { buildRepairInvoiceCharges, repairBillingNeedsSync } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 
@@ -672,6 +673,12 @@ export default function RepairDetailView() {
             </div>
           </div>
         </div>
+
+        {r.invoiceReissue && (
+          <div className="max-w-[1600px] mx-auto">
+            <InvoiceReissuePanel repairId={r.id} repairRef={r.ref} reissue={r.invoiceReissue} role={currentRole} />
+          </div>
+        )}
 
         {/* Next-action hint for assigned tech or QA performer */}
         {(isMyRepair || canPerformQA) && nextActionHint && !isQuoteDeclinedReopenable(r.status) && (

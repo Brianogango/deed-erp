@@ -268,6 +268,7 @@ import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeA
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
 import { deniedSaveMessage } from '@/lib/store-denied-message'
 import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
+import { reissueAfterClientDecision, reissueBlocker, reissueOnRevision, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
 import { countCorrectionBlocker, countCorrectionNote, partsOrderNote, purchaseOrderBlocker, requestAfterCountCheck, requestAfterPurchaseOrder, type PartsRequest } from '@/lib/repair/parts-request'
 import { executeRepairConsolidation, mergedSaleOrderFromPlan } from '@/lib/repair/consolidation-execute'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
@@ -1906,6 +1907,11 @@ export interface RepairOrder {
   // Quotation
   quote?: RepairQuote
   quoteApprovalDeadline?: string
+
+  // Posted invoice waiting to be credited and reissued after a re-quote
+  // (lib/repair/invoice-reissue.ts)
+  invoiceReissue?: InvoiceReissue | null
+  previousInvoiceIds?: string[]
 
   // Parts procurement requests
   procurementRequests?: {
@@ -15918,7 +15924,28 @@ const storeCtx: AppState = {
           : 'Warranty (auto-approved)'
       }
 
-      if (linkedSaleOrderId) {
+      // A posted invoice on this job means the revision cannot flow into
+      // billing yet: it waits for the client, then Finance credits and
+      // reissues (lib/repair/invoice-reissue.ts). Until then the confirmed
+      // sale order and the invoice stay as they are.
+      const replacedInvoiceIds = new Set(repair.previousInvoiceIds ?? [])
+      const liveInvoices = invoices.filter(inv => !replacedInvoiceIds.has(inv.id))
+      const invoiceForReissue = (repair.invoiceId ? liveInvoices.find(inv => inv.id === repair.invoiceId) : undefined)
+        ?? ((repair as any).linkedInvoiceId ? liveInvoices.find(inv => inv.id === (repair as any).linkedInvoiceId) : undefined)
+        ?? liveInvoices.find(inv => inv.repairId === repair.id && inv.status !== 'cancelled')
+      const invoiceReissue = isUpdate && !isNoCharge
+        ? reissueOnRevision({
+            invoice: invoiceForReissue,
+            previousTotal: Number(prevQuote?.total ?? 0),
+            revisedTotal: quote.total,
+            now: now(),
+            existing: repair.invoiceReissue,
+          })
+        : null
+
+      if (invoiceReissue) {
+        // Sale order is carried forward by the Finance reissue.
+      } else if (linkedSaleOrderId) {
         const soPatch = {
           ...(isNoCharge
             ? { status: 'sale' as const, confirmedAt: linkedSaleOrder?.confirmedAt ?? new Date().toISOString(), reserveStock: false }
@@ -16054,10 +16081,10 @@ const storeCtx: AppState = {
         sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
       }
 
-      const existingInvoice = (repair.invoiceId ? invoices.find(inv => inv.id === repair.invoiceId) : undefined)
-        ?? ((repair as any).linkedInvoiceId ? invoices.find(inv => inv.id === (repair as any).linkedInvoiceId) : undefined)
-        ?? (existingSalesQuote?.invoiceId ? invoices.find(inv => inv.id === existingSalesQuote.invoiceId) : undefined)
-        ?? invoices.find(inv =>
+      const existingInvoice = (repair.invoiceId ? liveInvoices.find(inv => inv.id === repair.invoiceId) : undefined)
+        ?? ((repair as any).linkedInvoiceId ? liveInvoices.find(inv => inv.id === (repair as any).linkedInvoiceId) : undefined)
+        ?? (existingSalesQuote?.invoiceId ? liveInvoices.find(inv => inv.id === existingSalesQuote.invoiceId) : undefined)
+        ?? liveInvoices.find(inv =>
           inv.repairId === repair.id ||
           (!!linkedSaleOrderId && inv.saleOrderId === linkedSaleOrderId) ||
           inv.notes?.includes(repair.ref)
@@ -16065,7 +16092,9 @@ const storeCtx: AppState = {
       // An invoice id recorded on the repair means one exists server-side even
       // when it is missing from local state — always patch it on revision.
       const invoiceIdToUpdate = existingInvoice?.id ?? repair.invoiceId ?? (repair as any).linkedInvoiceId
-      if (isUpdate && invoiceIdToUpdate) {
+      // A posted invoice is never rewritten: the revision waits for the
+      // client, then Finance credits it and reissues. Only drafts follow.
+      if (isUpdate && invoiceIdToUpdate && !invoiceReissue) {
         const invoiceLines: InvoiceLine[] = quote.lines.map(l => ({
           id: uid(),
           productId: l.productId,
@@ -16140,6 +16169,7 @@ const storeCtx: AppState = {
         deviceTier: resolvedFee.tier ?? repair.deviceTier,
         status: quoteStatus,
         quoteApprovalDeadline: undefined,
+        ...(invoiceReissue ? { invoiceReissue } : {}),
         ...(linkedSaleOrderId ? { saleOrderId: linkedSaleOrderId, saleOrderRef: linkedSaleOrderRef } : {}),
         ...(salesQuoteId ? { salesQuoteId, salesQuoteRef } : {}),
         ...(invoiceIdToUpdate ? { invoiceId: invoiceIdToUpdate } : {}),
@@ -16237,7 +16267,9 @@ const storeCtx: AppState = {
             ? invRef.current.find(inv => inv.id === repair.invoiceId)
             : invRef.current.find(inv => inv.repairId === repair.id),
         })
-        if (impact.impacts.length > 0) {
+        if (invoiceReissue) {
+          showToast(`${invoiceReissue.invoiceRef || 'The invoice'} is already posted, so it is not changed. When the client approves the revised quote, Finance will credit it and reissue.`, 'info')
+        } else if (impact.impacts.length > 0) {
           showToast(describeRepairPriceChange(impact), impact.needsAttention ? 'error' : 'info')
         }
       }
@@ -16297,8 +16329,31 @@ const storeCtx: AppState = {
     },
     
     approveRepairQuote: async (repairId, approved, reason) => {
-      const repair = repairs.find(r => r.id === repairId)
-      if (!repair?.quote) return
+      const foundRepair = repairs.find(r => r.id === repairId)
+      if (!foundRepair?.quote) return
+      // A revision on an already-invoiced job: the client's answer decides
+      // whether Finance reissues (approved) or the old invoice stands.
+      const reissueDecided = foundRepair.invoiceReissue?.status === 'awaiting_client'
+        ? reissueAfterClientDecision(foundRepair.invoiceReissue, approved, now())
+        : foundRepair.invoiceReissue
+      const repair = reissueDecided === foundRepair.invoiceReissue ? foundRepair : { ...foundRepair, invoiceReissue: reissueDecided }
+      // Sale order and invoice are carried forward by the Finance reissue.
+      const soFrozenForReissue = reissueDecided?.status === 'pending'
+      if (reissueDecided !== foundRepair.invoiceReissue) {
+        setRepairs(p => p.map(r => r.id === repairId ? { ...r, invoiceReissue: reissueDecided } : r))
+        if (reissueDecided?.status === 'pending') {
+          notifyUsers({
+            recipientRoles: ['finance_officer', 'director'],
+            recipients: userIdsWithRoles(users, ['finance_officer', 'director'], currentUserId),
+            type: 'repair',
+            title: `Reissue invoice ${reissueDecided.invoiceRef} — ${repair.ref}`,
+            body: `The client approved a revised quote (KES ${reissueDecided.previousTotal.toLocaleString('en-KE')} → ${reissueDecided.revisedTotal.toLocaleString('en-KE')}). Credit ${reissueDecided.invoiceRef} and reissue from the repair before it is released.`,
+            module: 'repair', path: `?id=${repair.id}`, icon: '🧾',
+            entityKey: `repair:${repair.id}:invoice_reissue:${reissueDecided.invoiceId}`,
+            excludeUserId: currentUserId,
+          })
+        }
+      }
       
       if (!approved) {
         setRepairs(p => p.map(r => r.id === repairId ? {
@@ -16463,8 +16518,10 @@ const storeCtx: AppState = {
             notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
             source: 'repair', repairId: repair.id, repairRef: repair.ref,
           }
-          setSaleOrders(p => p.map(order => order.id === awaitingSoId ? { ...order, ...soPatch } : order))
-          sync(`/api/sale-orders/${awaitingSoId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
+          if (!soFrozenForReissue) {
+            setSaleOrders(p => p.map(order => order.id === awaitingSoId ? { ...order, ...soPatch } : order))
+            sync(`/api/sale-orders/${awaitingSoId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
+          }
         }
 
         const approvedRepair = {
@@ -16591,8 +16648,10 @@ const storeCtx: AppState = {
           repairId: repair.id,
           repairRef: repair.ref,
         }
-        setSaleOrders(p => p.map(order => order.id === soId ? { ...order, ...soPatch } : order))
-        sync(`/api/sale-orders/${soId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
+        if (!soFrozenForReissue) {
+          setSaleOrders(p => p.map(order => order.id === soId ? { ...order, ...soPatch } : order))
+          sync(`/api/sale-orders/${soId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
+        }
       } else {
         soId = uid()
         soRef = await storeCtxRef.current!.allocateDocRef('SO')
@@ -17134,6 +17193,8 @@ const storeCtx: AppState = {
     scheduleDelivery: async (repairId, method, scheduledDate, address, riderId, riderName) => {
       const repair = repairs.find(r => r.id === repairId)
       if (blockIfOutsourced(repairId, 'schedule delivery')) return false
+      const reissueHold = reissueBlocker(repair?.invoiceReissue)
+      if (reissueHold) { showToast(reissueHold, 'error'); return false }
       let deliveryJobId: string | undefined
 
       if (method === 'delivery' && repair) {
@@ -17196,6 +17257,8 @@ const storeCtx: AppState = {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
       if (blockIfOutsourced(repairId, 'deliver this repair')) return
+      const reissueHold = reissueBlocker(repair.invoiceReissue)
+      if (reissueHold) { showToast(reissueHold, 'error'); return }
       const handover = applyRepairHandover(repair, {
         recipientName,
         recipientPhone,
@@ -17260,6 +17323,8 @@ const storeCtx: AppState = {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return null
       if (blockIfOutsourced(repairId, 'invoice this repair')) return null
+      const reissueHold = reissueBlocker(repair.invoiceReissue)
+      if (reissueHold) { showToast(reissueHold, 'error'); return null }
       
       if (isRepairNoCharge(repair)) {
         showToast(
@@ -17292,7 +17357,9 @@ const storeCtx: AppState = {
       const taxTotal = chargeLines.reduce((sum, line) => sum + Math.round(line.subtotal * line.taxRate / 100), 0)
 
       const resolveExistingInvoice = (row: typeof repair) => {
-        const listed = invRef.current
+        // Invoices credited by a reissue are history, never "the" invoice.
+        const replaced = new Set(row.previousInvoiceIds ?? [])
+        const listed = invRef.current.filter(inv => !replaced.has(inv.id))
         return (row.invoiceId ? listed.find(inv => inv.id === row.invoiceId) : undefined)
           ?? ((row as any).linkedInvoiceId ? listed.find(inv => inv.id === (row as any).linkedInvoiceId) : undefined)
           ?? listed.find(inv =>
@@ -18144,6 +18211,8 @@ const storeCtx: AppState = {
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         status: 'declined',
+        // A declined revision leaves the posted invoice standing as it was.
+        ...(r.invoiceReissue?.status === 'awaiting_client' ? { invoiceReissue: reissueAfterClientDecision(r.invoiceReissue, false, now()) } : {}),
         notes: `${r.notes || ''}\n\nQuote declined: ${trimmedReason}${feeApplies ? ` (diagnosis fee KES ${resolved.amount} still due)` : ''}`.trim(),
         quote: r.quote
           ? { ...r.quote, rejectedDate: now(), rejectionReason: trimmedReason }
