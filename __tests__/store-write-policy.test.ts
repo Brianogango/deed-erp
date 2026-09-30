@@ -71,3 +71,23 @@ describe('legacy store write policy', () => {
     expect(canWriteStoreKey({ role: 'sales_rep', modules: ['outsource'] }, 'deed_repairs_v2')).toBe(false)
   })
 })
+
+describe('trade-ins raised from the repair screen', () => {
+  it('saves for a technical lead, who may create them there', () => {
+    const lead = { role: 'technical_lead', modules: ['repair'] }
+    expect(canWriteStoreKey(lead as any, 'deed_buyBacks')).toBe(true)
+    expect(canWriteStoreKey(lead as any, 'deed_serials')).toBe(true)
+  })
+
+  it('saves for an admin officer with repair access but not After Sales or Inventory', () => {
+    const admin = { role: 'admin_officer', modules: ['repair'] }
+    expect(canWriteStoreKey(admin as any, 'deed_buyBacks')).toBe(true)
+    expect(canWriteStoreKey(admin as any, 'deed_serials')).toBe(true)
+  })
+
+  it('still refuses technicians', () => {
+    const tech = { role: 'technician', modules: ['repair'] }
+    expect(canWriteStoreKey(tech as any, 'deed_buyBacks')).toBe(false)
+    expect(canWriteStoreKey(tech as any, 'deed_serials')).toBe(false)
+  })
+})

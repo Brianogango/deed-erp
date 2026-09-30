@@ -61,7 +61,9 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
 
   deed_products: policy(INVENTORY, ['inventory']),
   deed_productPriceHistory: policy(INVENTORY, ['inventory']),
-  deed_serials: policy(INVENTORY, ['inventory']),
+  // A repair trade-in registers the customer's device serial from the repair
+  // screen; same inventory roles, reached through repair access too.
+  deed_serials: policy(INVENTORY, ['inventory', 'repair']),
   deed_bulkStock: policy(INVENTORY, ['inventory']),
   deed_stockTransfers: policy(OPERATIONS, ['inventory']),
   deed_stockAdjustments: policy(OPERATIONS, ['inventory']),
@@ -128,7 +130,9 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
   deed_riderWeeklyPays: policy(FINANCE, ['delivery', 'hr']),
 
   deed_returnOrders: policy([...FINANCE, 'sales_rep', 'technical_lead'], ['after_sales']),
-  deed_buyBacks: policy([...FINANCE, 'sales_rep'], ['after_sales']),
+  // Trade-ins are also raised from the repair screen (director, admin
+  // officer, technical lead), so repair access counts as well as After Sales.
+  deed_buyBacks: policy([...FINANCE, 'sales_rep', 'technical_lead', 'lead_tech'], ['after_sales', 'repair']),
   deed_donations: policy(ADMIN, ['after_sales']),
   deed_clientExchanges: policy([...FINANCE, 'sales_rep', 'technical_lead'], ['after_sales']),
 
