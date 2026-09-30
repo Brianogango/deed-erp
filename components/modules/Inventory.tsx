@@ -1810,9 +1810,37 @@ function InventoryContent() {
           + bulkStock.filter(row => row.location === 'computer_aid').reduce((sum, row) => sum + Math.max(0, Number(row.qty) || 0), 0)
         const testingCount = filteredTestingSerials.length + filteredBulkTesting.reduce((s, p) => s + p.qty, 0)
         const quarantineCount = filteredQuarantineSerials.length + filteredBulkQuarantine.reduce((s, p) => s + p.qty, 0)
-        const activeWarehouseLocation = ['testing', 'warehouse', 'issues', 'refurbishment', 'quarantine', 'computer_aid', 'vendor_stock'].includes(warehouseLocation)
-          ? warehouseLocation as 'testing' | 'warehouse' | 'issues' | 'refurbishment' | 'quarantine' | 'computer_aid' | 'vendor_stock'
+        // Top level: what the stock is. Inbound and Held for others open onto
+        // their own steps; old links to a step (?location=testing, vendor_stock…)
+        // still land on it.
+        const GROUP_DEFAULT: Record<string, string> = { inbound: 'testing', held: 'computer_aid' }
+        const requestedLocation = GROUP_DEFAULT[warehouseLocation] ?? warehouseLocation
+        const activeWarehouseLocation = ['testing', 'warehouse', 'issues', 'refurbishment', 'quarantine', 'computer_aid', 'vendor_stock'].includes(requestedLocation)
+          ? requestedLocation as 'testing' | 'warehouse' | 'issues' | 'refurbishment' | 'quarantine' | 'computer_aid' | 'vendor_stock'
           : 'warehouse'
+        const WAREHOUSE_GROUPS = [
+          {
+            id: 'inbound', label: 'Inbound', sublabel: 'Not sellable yet — testing & repair', icon: faMagnifyingGlass,
+            count: testingCount + refurbCount + quarantineCount as number | null,
+            steps: [
+              { id: 'testing', label: 'Awaiting tests', count: testingCount as number | null },
+              { id: 'refurbishment', label: 'Work in progress', count: refurbCount as number | null },
+              { id: 'quarantine', label: 'Rejected', count: quarantineCount as number | null },
+            ],
+          },
+          { id: 'warehouse', label: 'Ready for Sale', sublabel: 'The only stock that sells', icon: faIndustry, count: readyCount as number | null, steps: [] },
+          { id: 'issues', label: 'With Issues', sublabel: 'Faulty — needs a decision', icon: faTriangleExclamation, count: issuesCount as number | null, steps: [] },
+          {
+            id: 'held', label: 'Held for others', sublabel: 'Not Deed\u2019s stock', icon: faBoxesStacked,
+            count: computerAidCount as number | null,
+            steps: [
+              { id: 'computer_aid', label: 'Computer Aid', count: computerAidCount as number | null },
+              // The vendor register loads its own data, so no count here.
+              { id: 'vendor_stock', label: 'Vendor stock', count: null as number | null },
+            ],
+          },
+        ]
+        const activeGroup = WAREHOUSE_GROUPS.find(g => g.id === activeWarehouseLocation || g.steps.some(st => st.id === activeWarehouseLocation)) ?? WAREHOUSE_GROUPS[1]
 
         return (
           <div className="operations-warehouse">
@@ -1854,28 +1882,16 @@ function InventoryContent() {
 
             <div className="w-full min-w-0 rounded-token-md border border-[var(--border-lt)] bg-[var(--bg-card)] overflow-hidden">
               <div className="flex flex-wrap gap-2 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] p-2" role="tablist" aria-label="Inventory stock location">
-                {[
-                  // The stages a device owned by Deed moves through; only
-                  // Ready for Sale can be sold (lib/inventory/sellable-stock.ts).
-                  { id: 'testing', label: 'Pending Testing', sublabel: 'Not sellable yet', count: testingCount, icon: faMagnifyingGlass },
-                  { id: 'warehouse', label: 'Warehouse', sublabel: 'Ready for Sale', count: readyCount, icon: faIndustry },
-                  { id: 'issues', label: 'With Issues', sublabel: 'Needs attention', count: issuesCount, icon: faTriangleExclamation },
-                  { id: 'refurbishment', label: 'Refurbishment', sublabel: 'Work in progress', count: refurbCount, icon: faWrench },
-                  { id: 'quarantine', label: 'Quarantine', sublabel: 'Parts / write-off', count: quarantineCount, icon: faBox },
-                  { id: 'computer_aid', label: 'Computer Aid', sublabel: 'Held in custody', count: computerAidCount, icon: faBoxesStacked },
-                  // Vendors' machines on the floor, not bought. The panel loads
-                  // its own register, so no count is shown on the tab.
-                  { id: 'vendor_stock', label: 'Vendor stock', sublabel: 'Not yet bought', count: null as number | null, icon: faBoxesStacked },
-                ].map(item => {
-                  const selected = activeWarehouseLocation === item.id
+                {WAREHOUSE_GROUPS.map(item => {
+                  const selected = activeGroup.id === item.id
                   return (
                     <button
                       key={item.id}
                       type="button"
                       role="tab"
                       aria-selected={selected}
-                      onClick={() => setWarehouseLocation(item.id)}
-                      className={`min-w-[180px] flex-1 rounded-xl border px-3 py-2.5 text-left transition ${selected
+                      onClick={() => setWarehouseLocation(item.steps.length ? item.steps[0].id : item.id)}
+                      className={`min-w-[200px] flex-1 rounded-xl border px-3 py-2.5 text-left transition ${selected
                         ? 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--navy)] shadow-sm'
                         : 'border-transparent bg-transparent text-text-2 hover:border-[var(--border)] hover:bg-[var(--bg-muted)]'}`}
                     >
@@ -1893,6 +1909,28 @@ function InventoryContent() {
                   )
                 })}
               </div>
+              {activeGroup.steps.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 border-b border-[var(--border-lt)] px-3 py-2" role="tablist" aria-label={`${activeGroup.label} steps`}>
+                  {activeGroup.steps.map(step => {
+                    const on = activeWarehouseLocation === step.id
+                    return (
+                      <button
+                        key={step.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={on}
+                        onClick={() => setWarehouseLocation(step.id)}
+                        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[11px] font-bold transition ${on
+                          ? 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--navy)]'
+                          : 'border-[var(--border)] bg-[var(--bg-card)] text-text-2 hover:bg-[var(--bg-muted)]'}`}
+                      >
+                        {step.label}
+                        {step.count !== null && <span className="rounded bg-[var(--bg-muted)] px-1.5 text-[10px] tabular-nums">{step.count.toLocaleString()}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
 
               <div className="p-3 sm:p-4">
                 {activeWarehouseLocation === 'warehouse' && (
@@ -2016,7 +2054,7 @@ function InventoryContent() {
                 )}
                 {activeWarehouseLocation === 'testing' && (
                   <div className="w-full min-w-0">
-                    <Section title="Pending Testing — not sellable until it passes" icon={<Fa icon={faMagnifyingGlass} />} tone="info"
+                    <Section title="Awaiting tests — not sellable until it passes" icon={<Fa icon={faMagnifyingGlass} />} tone="info"
                     count={testingCount}
                     emptyText={q ? 'No Pending Testing stock matches this search' : 'Nothing waiting to be tested'}>
                     {filteredTestingSerials.map(s => (
@@ -2038,7 +2076,7 @@ function InventoryContent() {
                     actions={[
                     { id: 'send-refurb', label: 'Send for Refurbishment', onClick: () => requestSendForRefurbishment(s) },
                     { id: 'with-issues', label: 'Move to With Issues', onClick: () => quickMove(s.productId, s.productName, 'pending_testing', 'shop', s.id) },
-                    { id: 'quarantine', label: 'Quarantine (parts / write-off)', onClick: () => quickMove(s.productId, s.productName, 'pending_testing', 'quarantine', s.id) },
+                    { id: 'quarantine', label: 'Reject (parts / write-off / return)', onClick: () => quickMove(s.productId, s.productName, 'pending_testing', 'quarantine', s.id) },
                     ]}
                     />
                     </>
@@ -2065,9 +2103,9 @@ function InventoryContent() {
                 )}
                 {activeWarehouseLocation === 'quarantine' && (
                   <div className="w-full min-w-0">
-                    <Section title="Quarantine — kept for parts or write-off" icon={<Fa icon={faBox} />} tone="warning"
+                    <Section title="Rejected — for parts, write-off or return to supplier" icon={<Fa icon={faBox} />} tone="warning"
                     count={quarantineCount}
-                    emptyText={q ? 'No Quarantine stock matches this search' : 'Nothing in quarantine'}>
+                    emptyText={q ? 'No rejected stock matches this search' : 'Nothing rejected'}>
                     {filteredQuarantineSerials.map(s => (
                     <WarehouseRow
                     key={s.id}
@@ -2078,7 +2116,7 @@ function InventoryContent() {
                     ariaLabel={`More actions for ${s.serial}`}
                     label="More"
                     actions={[
-                    { id: 'retest', label: 'Back to Pending Testing', onClick: () => quickMove(s.productId, s.productName, 'quarantine', 'pending_testing', s.id) },
+                    { id: 'retest', label: 'Back to Awaiting tests', onClick: () => quickMove(s.productId, s.productName, 'quarantine', 'pending_testing', s.id) },
                     { id: 'send-refurb', label: 'Send for Refurbishment', onClick: () => requestSendForRefurbishment(s) },
                     ]}
                     />
@@ -2104,7 +2142,7 @@ function InventoryContent() {
                 )}
                 {activeWarehouseLocation === 'refurbishment' && (
                   <div className="w-full min-w-0">
-                    <Section title="Refurbishment Unit — Internal Stock" icon={<Fa icon={faWrench} />} tone="info"
+                    <Section title="Work in progress — refurbishment (retested before sale)" icon={<Fa icon={faWrench} />} tone="info"
                     count={refurbCount}
                     emptyText={q ? 'No refurbishment stock matches this search' : 'No stock currently in refurbishment'}>
                     {filteredRepairSerials.map(s => {
@@ -2144,9 +2182,9 @@ function InventoryContent() {
                     actions={
                     refurbJob?.status === 'ready' && canTransfer ? (
                     <ActionBtn
-                    label="Transfer to Warehouse"
+                    label="Send for retest"
                     tone="success"
-                    ariaLabel={`Transfer ${s.serial} to warehouse`}
+                    ariaLabel={`Send ${s.serial} for retest before sale`}
                     onClick={() => transferToSell(refurbJob.id)}
                     />
                     ) : undefined

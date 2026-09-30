@@ -29,9 +29,9 @@ export function isSellableSerial(serial: { status?: unknown; location?: unknown 
 export const STOCK_STAGE_LABELS: Record<string, string> = {
   warehouse: 'Ready for Sale',
   shop: 'With Issues',
-  repair_unit: 'Refurbishment',
-  pending_testing: 'Pending Testing',
-  quarantine: 'Quarantine',
+  repair_unit: 'Inbound — Work in progress',
+  pending_testing: 'Inbound — Awaiting tests',
+  quarantine: 'Inbound — Rejected',
   computer_aid: 'Computer Aid',
   vendor: 'Vendor',
   customer: 'Customer',

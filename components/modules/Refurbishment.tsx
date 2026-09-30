@@ -223,7 +223,7 @@ function RefurbishmentContent() {
               )}
               {canTransfer(job) && (
                 <PrimaryActionButton icon={<Fa icon={faArrowRight} />} onClick={() => transferToSell(job.id)} hideLabelOnMobile={false}>
-                  Transfer to inventory
+                  Send for retest
                 </PrimaryActionButton>
               )}
               {canWriteOff(job) && (

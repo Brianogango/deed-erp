@@ -43,8 +43,8 @@ const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
 // Receiving into Pending Testing keeps goods unsellable until each passes
 // its checks on the Warehouse screen; Warehouse makes them sellable at once.
 const LOC_OPTS = [
-  { value: 'pending_testing', label: 'Pending Testing — test before sale' },
-  { value: 'warehouse', label: 'Warehouse — Ready for Sale now' },
+  { value: 'pending_testing', label: 'Inbound — test before sale (used / refurbished)' },
+  { value: 'warehouse', label: 'Ready for Sale now (new, sealed)' },
   { value: 'shop', label: LOCATIONS.shop.name },
 ]
 

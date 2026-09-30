@@ -334,8 +334,8 @@ export const LOCATIONS: Record<LocationId, { name: string; icon: string; color: 
   vendor:            { name: 'Vendor',            icon: '🚚', color: '#F79009' },
   customer:          { name: 'Customer',          icon: '👤', color: '#2E90FA' },
   employee:          { name: 'Employee Asset',    icon: '🧑', color: '#7F56D9' },
-  pending_testing:   { name: 'Pending Testing',   icon: '🧪', color: '#0EA5E9' },
-  quarantine:        { name: 'Quarantine',        icon: '🚫', color: '#DC2626' },
+  pending_testing:   { name: 'Inbound — Awaiting tests', icon: '🧪', color: '#0EA5E9' },
+  quarantine:        { name: 'Inbound — Rejected', icon: '🚫', color: '#DC2626' },
 }
 
 export type { ProductKind } from '@/lib/product-kind'
@@ -15163,10 +15163,12 @@ const storeCtx: AppState = {
         serial,
         products: prodRef.current,
       })
+      // A repaired device is retested before it can be sold: it goes back to
+      // Inbound › Awaiting tests, and only a pass there makes it Ready for Sale.
       setSerials(p => p.map(s => s.id !== job.serialId ? s : {
         ...s,
         status: 'available',
-        location: 'warehouse',
+        location: 'pending_testing',
         ...(upgrade ? { specs: upgrade.specs } : {}),
       }))
       setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
@@ -15177,10 +15179,10 @@ const storeCtx: AppState = {
         ...(upgrade ? { specs: upgrade.specs, productName: upgrade.sellingName } : {}),
       }))
       if (upgrade) {
-        showToast(`${job.serialNumber} transferred — selling name is now ${upgrade.sellingName}`)
+        showToast(`${job.serialNumber} sent for retest — selling name is now ${upgrade.sellingName}`)
         return
       }
-      showToast(`${job.serialNumber} transferred to ready-to-sell inventory`)
+      showToast(`${job.serialNumber} sent for retest — pass it in Inventory › Warehouse › Inbound to make it sellable`)
     },
     writeOffRefurbishmentJob: (jobId, reason) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
