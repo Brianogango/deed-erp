@@ -161,19 +161,25 @@ async function scanCrm() {
   await resolveInactive('crm.opportunity.stale', 'opportunity', staleIds)
   await resolveInactive('crm.opportunity.close_due', 'opportunity', closeIds)
 
+  // `pending_approval` on a quote is how a quotation SENT TO THE CLIENT is
+  // stored (the quotes API maps sent → pending_approval) — it waits for the
+  // client, not for staff. Announcing each one as "approval required" sent
+  // every repair quote to the inbox as an action nobody could take. Only a
+  // quote the client has left unanswered for three days is worth a nudge.
   const approvalQuotes = await prisma.quote.findMany({
-    where: { status: 'pending_approval' },
+    where: { status: 'pending_approval', updatedAt: { lte: plusDays(current, -3) } },
     select: { id: true, quoteNumber: true, assignedToId: true, createdById: true, updatedAt: true },
   })
   const approvalIds = approvalQuotes.map(q => q.id)
   for (const quote of approvalQuotes) {
+    const waited = Math.max(3, Math.floor((current.getTime() - quote.updatedAt.getTime()) / DAY))
     if (await publishCondition({
       eventType: 'sales.quote.approval_required',
       entityType: 'quote',
       entityId: quote.id,
       userIds: [quote.assignedToId, quote.createdById],
-      title: `Quotation approval required — ${quote.quoteNumber}`,
-      body: `Quotation ${quote.quoteNumber} is awaiting approval.`,
+      title: `Client has not answered quotation ${quote.quoteNumber}`,
+      body: `Sent ${waited} days ago with no decision from the client. Follow up with them.`,
       actionUrl: `/sales?quote=${quote.id}`,
       idempotencyKey: '',
       stateVersion: quote.updatedAt,
@@ -640,7 +646,9 @@ async function scanFinance() {
     if (inv.documentType === 'customer_invoice' && inv.dueDate && inv.dueDate < current && balance > 0.01) {
       overdueItems.push({ id: inv.id, balance, line: `${inv.invoiceNumber} — KES ${Math.round(balance).toLocaleString('en-KE')} (due ${dateOnly(inv.dueDate)})` })
     }
-    if (paid > total + 0.01 || paid < -0.01) {
+    // Credit notes are stored with negative totals; compare sizes, or every
+    // unpaid credit note reads as "paid more than its total".
+    if (Math.abs(paid) > Math.abs(total) + 0.01 || (total >= 0 && paid < -0.01)) {
       allocationIds.push(inv.id)
       if (await publishCondition({
         eventType: 'finance.payment_allocation_exception',
