@@ -17,9 +17,13 @@ describe('getPreviousRepairProgressStatus', () => {
     })).toBe('received')
   })
 
-  it('skips diagnosed/approval for direct_repair path', () => {
+  it('skips diagnosis but keeps client approval for direct_repair path', () => {
     expect(getPreviousRepairProgressStatus({
       status: 'in_repair',
+      repairPath: 'direct_repair',
+    })).toBe('approved')
+    expect(getPreviousRepairProgressStatus({
+      status: 'awaiting_approval',
       repairPath: 'direct_repair',
     })).toBe('assigned')
     expect(getPreviousRepairProgressStatus({
@@ -49,8 +53,8 @@ describe('getPreviousRepairProgressStatus', () => {
   it('builds a shortened order for direct_repair', () => {
     const order = repairProgressOrderFor({ status: 'assigned', repairPath: 'direct_repair' })
     expect(order).not.toContain('diagnosed')
-    expect(order).not.toContain('awaiting_approval')
-    expect(order).not.toContain('approved')
+    expect(order).toContain('awaiting_approval')
+    expect(order).toContain('approved')
     expect(order).toContain('assigned')
     expect(order).toContain('in_repair')
   })

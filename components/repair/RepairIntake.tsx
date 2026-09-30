@@ -1123,7 +1123,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               <div className="flex flex-col gap-3" id="intake-repairPath">
                 {([
                   { value: 'diagnosis_first', icon: faMagnifyingGlass, title: 'Diagnosis First', desc: 'Tech inspects before quoting. Flat diagnosis fee applies.' },
-                  { value: 'direct_repair',   icon: faScrewdriverWrench, title: 'Direct Repair',   desc: 'Decline diagnosis — no fee; work only what the client asked.' },
+                  { value: 'direct_repair',   icon: faScrewdriverWrench, title: 'Direct Repair',   desc: 'Decline diagnosis — no fee; quote what the client asked, client approves.' },
                 ] as const).map(opt => (
                   <button
                     key={opt.value}

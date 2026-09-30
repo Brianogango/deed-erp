@@ -40,16 +40,15 @@ export type RepairProgressCandidate = {
 }
 
 /**
- * Progress stages that apply to this repair. Skips diagnosis/approval on
+ * Progress stages that apply to this repair. Skips diagnosis on
  * direct_repair, and skips awaiting_parts when no procurement was requested.
  */
 export function repairProgressOrderFor(repair: RepairProgressCandidate): RepairStatus[] {
   const isDirect = repair.repairPath === 'direct_repair'
   const hasProcurement = (repair.procurementRequests?.length ?? 0) > 0
   return REPAIR_PROGRESS_ORDER.filter(status => {
-    // Direct Repair jumps assigned → in_repair (optional quote is auto-approved
-    // without visiting awaiting_approval / approved in the linear stepper).
-    if (isDirect && (status === 'diagnosed' || status === 'awaiting_approval' || status === 'approved')) {
+    // Direct Repair skips diagnosis; the client still approves the quote.
+    if (isDirect && status === 'diagnosed') {
       return false
     }
     if (!hasProcurement && status === 'awaiting_parts') return false

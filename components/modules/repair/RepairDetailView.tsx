@@ -574,7 +574,7 @@ export default function RepairDetailView() {
                     ? 'bg-violet-50 text-violet-700 border-violet-200'
                     : 'bg-sky-50 text-sky-700 border-sky-200'
                 }`}
-                title={isDirectRepairPath(r.repairPath) ? 'Bypasses diagnosis; quotes auto-approve' : 'Tech diagnoses before quoting'}
+                title={isDirectRepairPath(r.repairPath) ? 'Skips diagnosis; the client still approves the quote' : 'Tech diagnoses before quoting'}
               >
                 {repairPathLabel(r.repairPath)}
               </span>

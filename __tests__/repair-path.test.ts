@@ -43,10 +43,8 @@ describe('repair-path helpers', () => {
     )
   })
 
-  it('allows start from assigned on direct_repair', () => {
-    expect(startableStatusesForPath('direct_repair')).toEqual(
-      expect.arrayContaining(['assigned', 'diagnosed', 'approved', 'awaiting_parts']),
-    )
+  it('waits for client approval of the quote on both paths', () => {
+    expect(startableStatusesForPath('direct_repair')).toEqual(['approved', 'awaiting_parts'])
     expect(startableStatusesForPath('diagnosis_first')).toEqual(['approved', 'awaiting_parts'])
     expect(isDirectRepairPath('direct_repair')).toBe(true)
   })

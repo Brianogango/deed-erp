@@ -55,10 +55,10 @@ export function returnableStatusesForPath(_path?: unknown): string[] {
   ]
 }
 
-/** Statuses from which the assigned tech may start work. */
-export function startableStatusesForPath(path: unknown): string[] {
-  if (isDirectRepairPath(path)) {
-    return ['assigned', 'diagnosed', 'approved', 'awaiting_parts']
-  }
+/**
+ * Statuses from which the assigned tech may start work. Both paths wait for
+ * the client to approve the quote; Direct Repair only skips diagnosis.
+ */
+export function startableStatusesForPath(_path?: unknown): string[] {
   return ['approved', 'awaiting_parts']
 }

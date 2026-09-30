@@ -1094,7 +1094,6 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
     && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
 
   const canStartHere = (['approved', 'awaiting_parts'].includes(repair.status))
-    || (repair.repairPath === 'direct_repair' && ['assigned', 'diagnosed', 'approved', 'awaiting_parts'].includes(repair.status))
     || (billingExempt && ['assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'declined'].includes(repair.status))
 
   const handleAction = () => {

@@ -9,7 +9,8 @@ import type { RepairStatus } from '@/lib/repair-types'
 export const REPAIR_TRANSITIONS: Readonly<Record<string, readonly RepairStatus[]>> = {
   pending_verification: ['received', 'cancelled'],
   received: ['assigned', 'cancelled'],
-  assigned: ['diagnosed', 'in_repair', 'unrepairable', 'cancelled'],
+  // assigned → awaiting_approval: Direct Repair quotes without a diagnosis.
+  assigned: ['diagnosed', 'awaiting_approval', 'in_repair', 'unrepairable', 'cancelled'],
   diagnosed: ['awaiting_approval', 'in_repair', 'unrepairable', 'returned', 'retained', 'cancelled'],
   awaiting_approval: ['approved', 'declined', 'returned', 'retained', 'cancelled'],
   declined: ['diagnosed', 'awaiting_approval', 'returned', 'retained'],

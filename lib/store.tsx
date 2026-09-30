@@ -15902,26 +15902,25 @@ const storeCtx: AppState = {
         ...saleLineFieldsForRepairQuoteLine(l),
       }))
 
-      // Full warranty / billing-exempt = company pays; Direct Repair auto-approves
+      // Full warranty / billing-exempt = company pays, so no client sign-off.
+      // Direct Repair skips diagnosis only — its quote still goes to the
+      // client for approval like any other.
       const isFullWarranty = repair.underWarranty && repair.warrantyCoverage === 'full'
       const isBillingExempt = isRepairBillingExempt(repair)
       const isNoCharge = isFullWarranty || isBillingExempt
-      const isDirectRepair = isDirectRepairPath(repair.repairPath)
       const chargeTotal = isNoCharge ? 0 : quote.total
-      // Full warranty + billing-exempt + Direct Repair quotes are auto-approved — no client approval gate
-      const quoteStatus: RepairStatus = (isNoCharge || isDirectRepair) ? 'approved' : 'awaiting_approval'
-      if (isNoCharge || isDirectRepair) {
+      // Only full warranty + billing-exempt quotes are auto-approved.
+      const quoteStatus: RepairStatus = isNoCharge ? 'approved' : 'awaiting_approval'
+      if (isNoCharge) {
         quote.approvedDate = now()
         quote.approvedBy = isBillingExempt
           ? `No-charge (${normalizeBillingExemptReason(repair.billingExemptReason)}) — auto-approved`
-          : isFullWarranty
-            ? 'Warranty (auto-approved)'
-            : `Direct Repair path (auto-approved by ${user.name})`
+          : 'Warranty (auto-approved)'
       }
 
       if (linkedSaleOrderId) {
         const soPatch = {
-          ...(isNoCharge || isDirectRepair
+          ...(isNoCharge
             ? { status: 'sale' as const, confirmedAt: linkedSaleOrder?.confirmedAt ?? new Date().toISOString(), reserveStock: false }
             : {}),
           lines: soLines,
@@ -15941,7 +15940,7 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${linkedSaleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
       } else if (chargeTotal >= 1) {
         const soId = uid()
-        const autoConfirm = isNoCharge || isDirectRepair
+        const autoConfirm = isNoCharge
         const soRef = await storeCtxRef.current!.allocateDocRef(autoConfirm ? 'SO' : 'QUO')
         const saleOrderRecord = {
           id: soId, ref: soRef, status: autoConfirm ? 'sale' as const : 'quotation' as const,
@@ -16000,7 +15999,7 @@ const storeCtx: AppState = {
         opportunityName: `Repair — ${repair.ref}`,
         ownerId: user.id,
         ownerName: user.name,
-        status: isFullWarranty || isBillingExempt || isDirectRepair ? 'accepted' : 'sent',
+        status: isFullWarranty || isBillingExempt ? 'accepted' : 'sent',
         source: 'repair',
         repairId: repair.id,
         repairRef: repair.ref,
@@ -16160,19 +16159,6 @@ const storeCtx: AppState = {
         syncRepairToPortal({ ...repair, quote, status: 'approved', total: 0 }, 'Repair is fully covered under warranty — no charge')
         addAuditLog('generate_quote', repairId, `Warranty quote auto-approved (full coverage): KES 0`)
         showToast('Quote auto-approved — repair is fully covered under warranty')
-      } else if (isDirectRepair) {
-        // Direct Repair — quote is informational / billing; tech can start without portal approval
-        syncRepairToPortal(
-          { ...repair, quote, laborCost: derivedLaborCost, logisticsCost: derivedLogisticsCost, total: chargeTotal, status: 'approved' },
-          isUpdate
-            ? `Quote revised to KES ${chargeTotal.toLocaleString('en-KE')} (Direct Repair — no approval required)`
-            : `Quote ready: KES ${chargeTotal.toLocaleString('en-KE')} (Direct Repair — no approval required)`,
-        )
-        const auditDetail = isUpdate && changeSummary
-          ? `Direct Repair quote revised: KES ${prevQuote?.total ?? 0} → KES ${quote.total}\n${changeSummary}`
-          : `Direct Repair quote ${isUpdate ? 'updated' : 'generated'} and auto-approved: KES ${quote.total}`
-        addAuditLog(isUpdate ? 'update_quote' : 'generate_quote', repairId, auditDetail)
-        showToast(isUpdate ? 'Quote revised and auto-approved (Direct Repair)' : 'Quote auto-approved — Direct Repair can start without client approval')
       } else {
         const coverageLabel = repair.underWarranty ? (repair.warrantyCoverage === 'partial' ? ' (partial warranty — uncovered items)' : ' (warranty voided — client pays)') : ''
         const portalMsg = reopeningAfterDecline
