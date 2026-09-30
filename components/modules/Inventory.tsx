@@ -31,6 +31,7 @@ import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPane
 import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPanel'
 import VendorStockPanel from '@/components/inventory/VendorStockPanel'
 import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
+import PartsRequestsPanel from '@/components/inventory/PartsRequestsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
 import type { ProductImageSlot } from '@/lib/product-images'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
@@ -41,14 +42,15 @@ import { getCategoryMarkupPct, quoteSalePriceFromCost, autoSalePriceFromCost, su
 import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 
-type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'checkouts' | 'stock_take' | 'reports'
+type MainTab = 'warehouse_view' | 'parts_requests' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'checkouts' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock' | 'valuation'
-const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'movements', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'checkouts', 'stock_take', 'reports']
+const MAIN_TABS: MainTab[] = ['warehouse_view', 'parts_requests', 'product_master', 'movements', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'checkouts', 'stock_take', 'reports']
 const INVENTORY_TAB_ALIASES: Record<string, MainTab> = {
   warehouse: 'warehouse_view',
   products: 'product_master',
   movement: 'movements',
   'stock-take': 'stock_take',
+  parts: 'parts_requests',
 }
 const resolveInventoryTab = (raw: string | null): MainTab | null => {
   if (!raw) return null
@@ -1617,6 +1619,7 @@ function InventoryContent() {
           ['product_catalog', 'Catalog'],
           ['product_master', 'Products'],
           ['warehouse_view', 'Warehouse'],
+          ['parts_requests', 'Parts requests'],
           ['movements', 'Movements'],
           ['stock_take', 'Stock take'],
           ['transfers', 'Transfers'],
@@ -2758,6 +2761,8 @@ function InventoryContent() {
       )}
 
       {tab === 'checkouts' && <StockCheckoutPanel />}
+
+      {tab === 'parts_requests' && <PartsRequestsPanel />}
 
       {tab === 'adjustments' && (() => {
         const ADJ_REASONS: Record<AdjReason, string> = {
