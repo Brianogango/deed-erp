@@ -5841,10 +5841,15 @@ export function StoreProvider({
     // 3. Sync users list (stored in DB, not app_state) — much less frequent.
     // Technical leads cannot GET /api/users (viewUsers is director/admin only).
     // Fall back to /api/technicians so the assign picker is not just "yourself".
+    // A role that is refused once is refused every minute after: stop asking.
+    // These refusals were ~560 of the server's error responses.
+    let usersForbidden = false
+    let techniciansForbidden = false
     const syncUsers = async () => {
       try {
-        const res = await fetch('/api/users')
-        if (res.ok) {
+        const res = usersForbidden ? null : await fetch('/api/users')
+        if (res?.status === 403) usersForbidden = true
+        if (res?.ok) {
           const data = await res.json()
           const fetched = Array.isArray(data) ? data : (Array.isArray(data.users) ? data.users : null)
           if (fetched) {
@@ -5854,7 +5859,9 @@ export function StoreProvider({
             return
           }
         }
+        if (techniciansForbidden) return
         const techRes = await fetch('/api/technicians')
+        if (techRes.status === 403) techniciansForbidden = true
         if (!techRes.ok) return
         const techData = await techRes.json()
         const technicians = Array.isArray(techData?.technicians) ? techData.technicians : []

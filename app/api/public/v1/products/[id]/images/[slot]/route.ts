@@ -65,5 +65,11 @@ export async function GET(
     })
   }
 
-  return NextResponse.json({ error: 'Not found' }, { status: 404, headers: partnerCorsHeaders(request) })
+  // Products with no photo were re-asked on every page view (~770 misses in
+  // the log), each costing a photo load and a product query. Let browsers and
+  // the website cache the miss for ten minutes.
+  return NextResponse.json({ error: 'Not found' }, {
+    status: 404,
+    headers: { ...partnerCorsHeaders(request), 'Cache-Control': 'public, max-age=600' },
+  })
 }
