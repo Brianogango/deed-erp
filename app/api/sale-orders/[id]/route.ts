@@ -31,6 +31,7 @@ import { quotationPaymentTermsDays } from '@/lib/sales/quotation-defaults'
 import { canTrimFulfillmentQty, isFulfillmentQtyTrim } from '@/lib/sales/fulfillment-trim'
 import { notifySaleOrderConfirmed } from '@/lib/notifications/business-events'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
+import { reopenAsQuotationData, repairRevisionAccessError, repairRevisionStatusError } from '@/lib/sales/repair-quote-revision'
 
 /** Serialize blob rewrites so a slower soft/findMany cannot overwrite a newer Save. */
 let broadcastSaleOrdersChain: Promise<void> = Promise.resolve()
@@ -330,11 +331,86 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   })
 }
 
+/**
+ * A revised repair quote reaching the repair's sale order. The repair is the
+ * source, so the ordinary Sales locks (technicians may not edit orders;
+ * confirmed and sent orders are frozen) do not apply — the repair has just
+ * gone back to awaiting the client's approval, and so does its order. What
+ * still stops it: the actor must be on that repair, and nothing may have been
+ * delivered or invoiced against the order.
+ */
+async function applyRepairQuoteRevision(id: string, body: any, session: { user: { id: string; role: string } }) {
+  const existing = await prisma.saleOrder.findUnique({ where: { id }, include: { items: true } })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const state = await loadAppState(['deed_repairs_v2'])
+  const repairs = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as any[] : []
+  const repair = repairs.find(r => r?.id === body.repairId)
+  const accessError = repairRevisionAccessError({
+    role: String(session.user.role),
+    userId: session.user.id,
+    repair,
+    order: { id: existing.id, notes: existing.notes },
+  })
+  if (accessError) return NextResponse.json({ error: accessError }, { status: 403 })
+
+  if (existing.versionGroupId) {
+    const lineage = await prisma.saleOrder.findMany({
+      where: { OR: [{ id: existing.versionGroupId }, { versionGroupId: existing.versionGroupId }] },
+      select: { id: true, versionNumber: true, orderNumber: true },
+    })
+    const maxRevision = Math.max(1, ...lineage.map(row => row.versionNumber ?? 1))
+    const latest = lineage.find(row => (row.versionNumber ?? 1) === maxRevision)
+    if (latest && latest.id !== existing.id) {
+      return NextResponse.json(
+        { error: `The repair points at revision ${existing.versionNumber ?? 1} of its quotation; Sales has revision ${maxRevision} (${latest.orderNumber}). Update that one in Sales.` },
+        { status: 409 },
+      )
+    }
+  }
+
+  const from = normalizeSaleStatus(existing.status)
+  const blockers = from === 'sale' ? await saleOrderBlockersFor(existing.id) : []
+  const statusError = repairRevisionStatusError(from, blockers)
+  if (statusError) return NextResponse.json({ error: statusError }, { status: 409 })
+
+  const rawItems = Array.isArray(body.lines) ? body.lines : body.items
+  if (Array.isArray(rawItems)) {
+    const lineError = validateSaleOrderLines(rawItems)
+    if (lineError) return NextResponse.json({ error: lineError }, { status: 400 })
+  }
+
+  // Status and lock stamps are the server's call here, never the body's.
+  const { status: _status, locked: _locked, confirmedAt: _c, confirmedById: _cb, ...commercial } = body
+  const data = await buildSaleOrderUpdateData(commercial, existing)
+  Object.assign(data, reopenAsQuotationData(from))
+  data.lockVersion = nextLockVersion(existing.lockVersion)
+
+  const order = await prisma.saleOrder.update({ where: { id }, data, include: { client: true, items: true } })
+  if (from === 'sale') {
+    await prisma.stockReservation.updateMany({
+      where: { saleOrderId: id, status: 'reserved' },
+      data: { status: 'cancelled', releasedAt: new Date() },
+    }).catch(err => console.error('[sale-orders] reservation release failed:', err))
+  }
+  await writeFinancialAudit({
+    userId: session.user.id,
+    action: 'repair_quote_revision',
+    entityType: 'SaleOrder',
+    entityId: id,
+    oldValues: { status: from, totalAmount: Number(existing.totalAmount) },
+    newValues: { status: order.status, totalAmount: Number(order.totalAmount), repairRef: repair?.ref },
+  }).catch(() => {})
+  await broadcastSaleOrders()
+  return NextResponse.json(mapSaleOrderToClient(order))
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const body = await request.json()
+    if (body?.repairRevision === true) return applyRepairQuoteRevision(resolvedParams.id, body, session)
     const trimRole = canTrimFulfillmentQty(session.user.role) && (body.fulfillmentTrim === true || body.fulfillmentTrim === 'true')
     const allowed = isRepairLinked(body)
       ? REPAIR_WRITE_ROLES.includes(session.user.role)

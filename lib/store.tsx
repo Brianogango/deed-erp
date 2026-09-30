@@ -15934,10 +15934,21 @@ const storeCtx: AppState = {
           repairId: repair.id,
           repairRef: repair.ref,
         }
-        setSaleOrders(p => p.map(s => s.id === linkedSaleOrderId ? { ...s, ...soPatch } : s))
+        // A paid revision sends the job back to the client, so the order in
+        // Sales reopens as a quotation with it (the server checks nothing was
+        // delivered or invoiced). No-charge jobs stay confirmed.
+        const revisionPatch = isNoCharge ? soPatch : { ...soPatch, status: 'quotation' as const, repairRevision: true }
+        setSaleOrders(p => p.map(s => s.id === linkedSaleOrderId ? { ...s, ...revisionPatch } : s))
         // Always push the revision to the server — even when the SO isn't in
         // local state (e.g. it was created by the customer-portal approval).
-        sync(`/api/sale-orders/${linkedSaleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
+        // A refusal is shown: it used to be dropped, leaving Sales on the old
+        // quote while the repair showed the new one.
+        syncOrWarn(
+          `/api/sale-orders/${linkedSaleOrderId}`,
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revisionPatch) },
+          message => showToast(`Quote saved on the repair, but Sales was not updated: ${message}`, 'error'),
+          'Could not update the quotation in Sales',
+        )
       } else if (chargeTotal >= 1) {
         const soId = uid()
         const autoConfirm = isNoCharge
