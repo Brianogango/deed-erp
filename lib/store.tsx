@@ -8045,6 +8045,7 @@ const storeCtx: AppState = {
       setExpenses(prev => [expense, ...prev])
       // Notify finance / director approvers (not the submitter)
       notifyUsers({
+        recipientRoles: ['director', 'finance_officer'],
         recipients: userIdsWithRoles(users, ['director', 'finance_officer'], user.id),
         type: 'expense',
         title: `Expense claim from ${expense.submittedByName}`,
@@ -8386,6 +8387,7 @@ const storeCtx: AppState = {
 
       const notifBody = `${job.ref}: ${job.deviceDescription} → ${job.vendorName} for ${OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType}. Sent by ${user.name}.`
       notifyUsers({
+        recipientRoles: ['technical_lead'],
         recipients: userIdsWithRoles(users, ['technical_lead'], user.id),
         type: 'repair',
         title: 'Repair Outsourced',
@@ -8477,6 +8479,7 @@ const storeCtx: AppState = {
           addAuditLog('advance_repair', job.repairOrderId, `Outsource job ${job.ref} returned resolved; repair resumed at ${resumeStatus}`)
 
           notifyUsers({
+            recipientRoles: ['technical_lead'],
             recipients: [
               repair?.assignedTechnicianId,
               ...userIdsWithRoles(users, ['technical_lead']),
@@ -8523,6 +8526,7 @@ const storeCtx: AppState = {
             : p.repairNextStep === 'in_repair' ? 'moved back to in-repair'
             : 'status unchanged'
           notifyUsers({
+            recipientRoles: ['technical_lead'],
             recipients: [
               repair?.assignedTechnicianId,
               ...userIdsWithRoles(users, ['technical_lead']),
@@ -15022,6 +15026,7 @@ const storeCtx: AppState = {
           })
         }))
         notifyUsers({
+          recipientRoles: ['technical_lead', 'inventory_officer'],
           recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], currentUserId),
           type: 'repair',
           title: 'Part requested for refurb job',
@@ -15351,6 +15356,7 @@ const storeCtx: AppState = {
       syncRepairToPortal(merged, 'Repair booked in')
       addAuditLog('create_repair', merged.ref, `Repair job created for ${customerName} - ${productName}`)
       notifyUsers({
+        recipientRoles: ['technical_lead'],
         recipients: userIdsWithRoles(users, ['technical_lead'], currentUserId),
         type: 'repair',
         title: 'New repair job booked',
@@ -15495,6 +15501,7 @@ const storeCtx: AppState = {
       setRepairs(p => p.map(r => r.id === repairId ? verified : r))
       syncRepairToPortal(verified, 'Device verified by staff — repair received')
       notifyUsers({
+        recipientRoles: ['technical_lead'],
         recipients: userIdsWithRoles(users, ['technical_lead'], actor.id),
         type: 'repair',
         title: `Repair intake verified: ${repair.ref}`,
@@ -16122,6 +16129,7 @@ const storeCtx: AppState = {
 
       if (isFullWarranty) {
         notifyUsers({
+          recipientRoles: ['finance_officer'],
           recipients: [
             repair.assignedTechnicianId,
             ...userIdsWithRoles(users, ['finance_officer']),
@@ -16324,6 +16332,7 @@ const storeCtx: AppState = {
           if (available < line.qty) {
             allPartsAvailable = false
             notifyUsers({
+              recipientRoles: ['technical_lead', 'inventory_officer'],
               recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], currentUserId),
               type: 'repair',
               title: 'Part needed for repair',
@@ -16389,6 +16398,7 @@ const storeCtx: AppState = {
           // and Purchase Order creation from this approved request.
 
           notifyUsers({
+            recipientRoles: ['technical_lead', 'inventory_officer'],
             recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], currentUserId),
             type: 'repair',
             title: `Parts needed: ${repair.ref}`,
@@ -16866,6 +16876,7 @@ const storeCtx: AppState = {
         // Ready must never create, confirm, post, or rewrite an invoice.
 
         notifyUsers({
+          recipientRoles: ['finance_officer'],
           recipients: [
             repair.assignedTechnicianId,
             ...userIdsWithRoles(users, ['finance_officer']),
@@ -16921,8 +16932,9 @@ const storeCtx: AppState = {
     
     markPartsArrived: (repairId) => {
       const actor = currentUser()
-      if (!actor || !['technical_lead', 'director', 'inventory_officer'].includes(actor.role)) {
-        showToast('Only the Technical Lead or Inventory Officer can mark parts as arrived', 'error'); return
+      // Admin officers chase the purchase for the desk, so they may close it too.
+      if (!actor || !['technical_lead', 'director', 'inventory_officer', 'inventory', 'admin_officer'].includes(actor.role)) {
+        showToast('Only the Technical Lead, Inventory Officer or Admin Officer can mark parts as arrived', 'error'); return
       }
       const repair = repairs.find(r => r.id === repairId)
       if (!repair || repair.status !== 'awaiting_parts') return
@@ -17086,6 +17098,7 @@ const storeCtx: AppState = {
 
       if (repair?.assignedTechnicianId) {
         notifyUsers({
+          recipientRoles: ['finance_officer'],
           recipients: [
             repair.assignedTechnicianId,
             ...userIdsWithRoles(users, ['finance_officer']),
@@ -17948,15 +17961,20 @@ const storeCtx: AppState = {
         .map(([t, names]) => `${typeIcons[t] ?? '📦'} ${names.join(', ')}`)
         .join(' · ')
 
+      // Inventory decides whether the part comes from stock or has to be
+      // bought; the desk (admin officers) follows up the purchase and the
+      // customer. Each request gets its own key — a second request on the same
+      // repair used to share the first one's and was dropped as a duplicate.
       notifyUsers({
-        recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], user.id),
+        recipientRoles: ['technical_lead', 'inventory_officer', 'admin_officer'],
+        recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer', 'admin_officer'], user.id),
         type: 'repair',
-        title: `${user.name} requested items for ${repair.ref}`,
-        body: `${repair.productName} — ${summary}`,
+        title: `${urgency === 'urgent' || urgency === 'high' ? `${urgency.toUpperCase()} · ` : ''}Parts requested for ${repair.ref}`,
+        body: `${user.name} needs: ${summary} (${repair.productName}). Next: issue it from stock if we have it, otherwise raise a purchase order — then mark the parts arrived on the repair.`,
         module: 'repair',
         path: `?id=${repair.id}`,
         icon: '📋',
-        entityKey: `repair:${repair.id}:procurement`,
+        entityKey: `repair:${repair.id}:procurement:${newRequest.id}`,
         excludeUserId: user.id,
       })
 
@@ -18723,6 +18741,7 @@ const storeCtx: AppState = {
       addAuditLog('repair_tradein', repairId, noteLine)
 
       notifyUsers({
+        recipientRoles: ['director', 'finance_officer'],
         recipients: userIdsWithRoles(users, ['director', 'finance_officer'], user.id),
         type: 'system',
         title: `Trade-in approval needed: ${bb.ref}`,

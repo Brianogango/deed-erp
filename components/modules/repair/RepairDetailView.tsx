@@ -263,7 +263,7 @@ export default function RepairDetailView() {
     && !r.retainedBuyBackId && !r.retainedDonationId
     && ['director', 'admin_officer', 'technical_lead', 'inventory_officer'].includes(currentRole)
   const canMarkPartsArrived = r.status === 'awaiting_parts'
-    && ['technical_lead', 'director', 'inventory_officer'].includes(currentRole)
+    && ['technical_lead', 'director', 'inventory_officer', 'admin_officer'].includes(currentRole)
     && !pendingOutsourceJob
   const linkedInvoice      = invoices.find(i => i.id === (r.invoiceId ?? (r as any).linkedInvoiceId))
     ?? invoices.find(i => i.repairId === r.id)

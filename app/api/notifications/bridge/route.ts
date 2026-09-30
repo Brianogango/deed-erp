@@ -5,6 +5,7 @@ import { publishNotificationEvent } from '@/lib/notifications/service'
 import { runNotificationWorker } from '@/lib/notifications/worker'
 import type { NotificationChannel } from '@/lib/notifications/types'
 import { bridgeEventType } from '@/lib/notifications/bridge-event-type'
+import { resolveRoleRecipients } from '@/lib/notifications/recipient-roles'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,16 +19,25 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { recipients, type, title, body, module, path, entityKey, excludeUserId } =
+    const { recipients, recipientRoles, type, title, body, module, path, entityKey, excludeUserId } =
       await request.json()
 
     if (!title || !body) {
       return NextResponse.json({ error: 'title and body required' }, { status: 400 })
     }
 
-    const rawIds = (recipients as unknown[])
+    const explicitIds = (Array.isArray(recipients) ? recipients as unknown[] : [])
       .filter((id): id is string => typeof id === 'string' && id.length > 0)
-      .slice(0, MAX_RECIPIENTS)
+    // Roles are resolved here, not in the browser: most roles cannot load the
+    // user list, so a role-addressed notification from them came out empty.
+    const roleIds = Array.isArray(recipientRoles) && recipientRoles.length > 0
+      ? resolveRoleRecipients(
+          await prisma.user.findMany({ where: { isActive: true }, select: { id: true, role: true, isActive: true } }),
+          recipientRoles,
+          { excludeUserId: excludeUserId ?? session.user.id, limit: MAX_RECIPIENTS },
+        )
+      : []
+    const rawIds = Array.from(new Set([...explicitIds, ...roleIds])).slice(0, MAX_RECIPIENTS)
     if (!rawIds.length) return NextResponse.json({ ok: true })
 
     const validUsers = await prisma.user.findMany({

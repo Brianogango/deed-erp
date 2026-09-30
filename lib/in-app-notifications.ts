@@ -40,6 +40,12 @@ export interface NotifyUsersInput {
   entityKey?: string
   /** Actor who caused the event — never receives the notification. */
   excludeUserId?: string | null
+  /**
+   * Roles to notify, resolved to users on the server. Pass these whenever the
+   * audience is "everyone in role X": the browser may not be allowed to see
+   * who holds that role, in which case `recipients` alone comes out empty.
+   */
+  recipientRoles?: string[]
 }
 
 const DEFAULT_ICON: Record<NotifType, string> = {
