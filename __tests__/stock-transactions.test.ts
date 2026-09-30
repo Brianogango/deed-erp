@@ -81,7 +81,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { applyDeliveryStockMutation, applyReceiptStockMutation, applyPosStockMutation, reserveStockForSaleOrder, reverseReceiptStockMutation } from '@/lib/inventory/stock-transactions'
+import { applyDeliveryStockMutation, applyReceiptStockMutation, applyPosStockMutation, applyVendorReturnStockMutation, reserveStockForSaleOrder, reverseReceiptStockMutation } from '@/lib/inventory/stock-transactions'
 
 const PRODUCT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const PRISMA_PRODUCT_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -155,6 +155,51 @@ beforeEach(() => {
   mockSerialNumberUpdateMany.mockResolvedValue({ count: 0 })
   mockInventoryBatchUpdateMany.mockResolvedValue({ count: 0 })
   mockPurchaseOrderItemFindUnique.mockResolvedValue(null)
+})
+
+describe('applyVendorReturnStockMutation()', () => {
+  const bulkState = (bulk: Array<{ location: string; qty: number }>) => ({
+    deed_products: [{ id: PRODUCT_ID, name: 'Adapter', stockQty: bulk.reduce((s, b) => s + b.qty, 0), requiresSerial: false, unit: 'pcs' }],
+    deed_serials: [],
+    deed_bulkStock: bulk.map(b => ({ productId: PRODUCT_ID, ...b })),
+    deed_stockMoves: [],
+  })
+
+  it('returns damaged goods out of With Issues, leaving Ready for Sale alone', async () => {
+    mockLoadAppState.mockResolvedValue(bulkState([{ location: 'warehouse', qty: 5 }, { location: 'shop', qty: 2 }]))
+    const result = await applyVendorReturnStockMutation({
+      returnRef: 'RET/0001', reason: 'damaged',
+      lines: [{ productId: PRODUCT_ID, productName: 'Adapter', qty: 2 }],
+    })
+    expect(result.ok).toBe(true)
+    const saved = mockSaveStoreKeys.mock.calls[0][0]
+    const bulk = JSON.parse(saved.deed_bulkStock)
+    expect(bulk.find((b: { location: string }) => b.location === 'warehouse').qty).toBe(5)
+    // An emptied location's row is dropped, not kept at zero.
+    expect(bulk.find((b: { location: string }) => b.location === 'shop')).toBeUndefined()
+    expect(JSON.parse(saved.deed_stockMoves)[0]).toMatchObject({ fromLocation: 'shop', toLocation: 'vendor', qty: 2 })
+  })
+
+  it('returns excess stock out of Ready for Sale', async () => {
+    mockLoadAppState.mockResolvedValue(bulkState([{ location: 'warehouse', qty: 5 }, { location: 'shop', qty: 2 }]))
+    await applyVendorReturnStockMutation({
+      returnRef: 'RET/0002', reason: 'excess',
+      lines: [{ productId: PRODUCT_ID, productName: 'Adapter', qty: 3 }],
+    })
+    const bulk = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_bulkStock)
+    expect(bulk.find((b: { location: string }) => b.location === 'warehouse').qty).toBe(2)
+    expect(bulk.find((b: { location: string }) => b.location === 'shop').qty).toBe(2)
+  })
+
+  it('refuses more than is on hand across the returnable stages', async () => {
+    mockLoadAppState.mockResolvedValue(bulkState([{ location: 'shop', qty: 1 }]))
+    const result = await applyVendorReturnStockMutation({
+      returnRef: 'RET/0003', reason: 'damaged',
+      lines: [{ productId: PRODUCT_ID, productName: 'Adapter', qty: 2 }],
+    })
+    expect(result).toEqual({ ok: false, error: 'Only 1 Adapter on hand to return (asked for 2)' })
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
 })
 
 describe('applyDeliveryStockMutation()', () => {

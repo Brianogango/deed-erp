@@ -71,6 +71,17 @@ async function resolveInactive(eventType: string, entityType: string, activeIds:
 export type DigestItem = { id: string; line: string }
 
 /**
+ * Credit a supplier credit note still has to give. Vendor credit notes are
+ * stored as negative vendor documents; what has been applied to bills is
+ * recorded as a negative amount paid.
+ */
+export function unappliedVendorCredit(documentType: string | null | undefined, total: number, paid: number, invoiceNumber?: string | null): number {
+  const isVendorDoc = documentType === 'vendor_bill' || /^VCN\b/i.test(String(invoiceNumber ?? ''))
+  if (!isVendorDoc || !(total < 0)) return 0
+  return Math.max(0, Math.round((Math.abs(total) - Math.abs(paid)) * 100) / 100)
+}
+
+/**
  * One notification per day summarising every open item of a kind, instead of
  * one notification per product / invoice / bill. Per-item alerts put 700+
  * unread rows in a single inbox and buried the approvals that matter.
@@ -633,9 +644,11 @@ async function scanFinance() {
       id: true, invoiceNumber: true, documentType: true, dueDate: true,
       totalAmount: true, amountPaid: true, updatedAt: true,
       etimsTransmissionStatus: true, invoiceDate: true,
+      client: { select: { name: true } },
     },
   })
   const overdueItems: Array<DigestItem & { balance: number }> = []
+  const vendorCreditItems: Array<DigestItem & { balance: number }> = []
   const allocationIds: string[] = []
   const vatIds: string[] = []
 
@@ -645,6 +658,17 @@ async function scanFinance() {
     const balance = total - paid
     if (inv.documentType === 'customer_invoice' && inv.dueDate && inv.dueDate < current && balance > 0.01) {
       overdueItems.push({ id: inv.id, balance, line: `${inv.invoiceNumber} — KES ${Math.round(balance).toLocaleString('en-KE')} (due ${dateOnly(inv.dueDate)})` })
+    }
+    // A supplier credit note (negative vendor document) that still has credit
+    // left a week on: the supplier owes Deed that money — as a refund or
+    // against their next bill — and nothing else reminds anyone.
+    const unappliedCredit = unappliedVendorCredit(inv.documentType, total, paid, inv.invoiceNumber)
+    if (unappliedCredit >= 1 && inv.invoiceDate && inv.invoiceDate <= minusDays(current, 7)) {
+      vendorCreditItems.push({
+        id: inv.id,
+        balance: unappliedCredit,
+        line: `${inv.invoiceNumber}${inv.client?.name ? ` — ${inv.client.name}` : ''} — KES ${Math.round(unappliedCredit).toLocaleString('en-KE')} (since ${dateOnly(inv.invoiceDate)})`,
+      })
     }
     // Credit notes are stored with negative totals; compare sizes, or every
     // unpaid credit note reads as "paid more than its total".
@@ -682,6 +706,15 @@ async function scanFinance() {
     legacyEntityType: 'invoice',
     items: overdueItems,
     title: n => `${n} overdue invoice${n === 1 ? '' : 's'} — KES ${Math.round(overdueTotal).toLocaleString('en-KE')} outstanding`,
+    actionUrl: '/accounting?tab=invoices',
+  })
+  vendorCreditItems.sort((a, b) => b.balance - a.balance)
+  const vendorCreditTotal = vendorCreditItems.reduce((sum, i) => sum + i.balance, 0)
+  emitted += await publishDigest({
+    eventType: 'finance.vendor_credit_unapplied',
+    legacyEntityType: 'invoice',
+    items: vendorCreditItems,
+    title: n => `${n} supplier credit${n === 1 ? '' : 's'} not used or refunded — KES ${Math.round(vendorCreditTotal).toLocaleString('en-KE')} owed to Deed`,
     actionUrl: '/accounting?tab=invoices',
   })
   await resolveInactive('finance.payment_allocation_exception', 'invoice', allocationIds)

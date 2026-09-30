@@ -1,5 +1,6 @@
 import 'server-only'
 import { isSalePickLocation, stockStageLabel } from '@/lib/inventory/sellable-stock'
+import { pickVendorReturnSources } from '@/lib/inventory/vendor-return-source'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
@@ -1484,6 +1485,8 @@ export async function applyVendorReturnStockMutation(params: {
     serialIds?: string[]
     requiresSerial?: boolean
   }>
+  /** The return's reason decides which stage bulk stock comes out of first. */
+  reason?: string
   userId?: string
 }): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
   const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
@@ -1511,6 +1514,12 @@ export async function applyVendorReturnStockMutation(params: {
         if (!isOnHandSerialStatus(serial.status) && serial.status !== 'assigned') {
           return { ok: false, error: `Serial ${serial.serial || sid} is not on hand` }
         }
+      }
+      // Record where each unit really left from (a faulty unit is usually in
+      // With Issues or Quarantine, not the warehouse).
+      const fromBySerial = new Map(serialIds.map(sid => [sid, String(serials.find(s => s.id === sid)?.location || 'warehouse')]))
+      for (const sid of serialIds) {
+        const serial = serials.find(s => s.id === sid)!
         serial.status = 'returned'
         serial.location = 'vendor'
       }
@@ -1519,31 +1528,37 @@ export async function applyVendorReturnStockMutation(params: {
         products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - serialIds.length) }
       }
       stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - serialIds.length)
-      newMoves.push({
-        id: randomUUID(), type: 'return', productId, productName: line.productName,
-        qty: serialIds.length, reason: `Vendor return ${params.returnRef}`,
-        fromLocation: 'warehouse', toLocation: 'vendor',
-        serialNumbers: serialIds.map(id => serials.find(s => s.id === id)?.serial || id),
-        date: nowIso(), userId: params.userId ?? 'system', documentRef: params.returnRef,
-      })
+      for (const from of new Set(fromBySerial.values())) {
+        const ids = serialIds.filter(id => fromBySerial.get(id) === from)
+        newMoves.push({
+          id: randomUUID(), type: 'return', productId, productName: line.productName,
+          qty: ids.length, reason: `Vendor return ${params.returnRef}`,
+          fromLocation: from, toLocation: 'vendor',
+          serialNumbers: ids.map(id => serials.find(s => s.id === id)?.serial || id),
+          date: nowIso(), userId: params.userId ?? 'system', documentRef: params.returnRef,
+        })
+      }
     } else {
       const product = products.find(p => p.id === productId)
       const locs = calcStockByLocation(product ?? { requiresSerial: false }, serials as any, bulkStock, productId)
-      if (Number(locs.warehouse ?? 0) < qty) {
-        return { ok: false, error: `Insufficient warehouse stock for ${line.productName}` }
+      const sourced = pickVendorReturnSources(locs as Record<string, number>, qty, params.reason)
+      if (!sourced.ok) {
+        return { ok: false, error: `Only ${sourced.available} ${line.productName} on hand to return (asked for ${qty})` }
       }
-      bulkStock = upsertBulkStock(bulkStock, productId, 'warehouse', -qty)
+      for (const pick of sourced.picks) bulkStock = upsertBulkStock(bulkStock, productId, pick.location, -pick.qty)
       const idx = products.findIndex(p => p.id === productId)
       if (idx >= 0) {
         products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - qty) }
       }
       stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - qty)
-      newMoves.push({
-        id: randomUUID(), type: 'return', productId, productName: line.productName,
-        qty, reason: `Vendor return ${params.returnRef}`,
-        fromLocation: 'warehouse', toLocation: 'vendor',
-        serialNumbers: [], date: nowIso(), userId: params.userId ?? 'system', documentRef: params.returnRef,
-      })
+      for (const pick of sourced.picks) {
+        newMoves.push({
+          id: randomUUID(), type: 'return', productId, productName: line.productName,
+          qty: pick.qty, reason: `Vendor return ${params.returnRef}`,
+          fromLocation: pick.location, toLocation: 'vendor',
+          serialNumbers: [], date: nowIso(), userId: params.userId ?? 'system', documentRef: params.returnRef,
+        })
+      }
     }
   }
 

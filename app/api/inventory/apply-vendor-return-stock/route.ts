@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null) as {
     returnRef?: string
+    reason?: string
     lines?: Array<{
       productId: string
       productName: string
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest) {
   const result = await applyVendorReturnStockMutation({
     returnRef: body.returnRef,
     lines: body.lines,
+    reason: body.reason,
     userId: session.user.id,
   })
   if (!result.ok) {

@@ -14753,6 +14753,7 @@ const storeCtx: AppState = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             returnRef: ret.ref,
+            reason: ret.reason,
             lines: ret.lines.map(l => ({
               productId: l.productId,
               productName: l.productName,
