@@ -8,6 +8,7 @@ import {
   findRepairsForConsolidatedSaleOrder,
   findSaleOrderForRepair,
   findSalesQuoteForRepair,
+  isRepairFeeOnlyBillable,
   isRepairFulfillmentReady,
   stampInvoiceOnMatchingRepair,
 } from '@/lib/repair/sale-order-link'
@@ -210,5 +211,16 @@ describe('findRepairsForConsolidatedSaleOrder', () => {
     expect(findRepairsForConsolidatedSaleOrder(jobs, {
       notes: `${CONSOLIDATED_REPAIR_NOTES_PREFIX}REP/0310, rep/0310`,
     })).toHaveLength(1)
+  })
+})
+
+describe('isRepairFeeOnlyBillable', () => {
+  it('is true for declined, unrepairable and stopped-at-diagnosis jobs only', () => {
+    expect(isRepairFeeOnlyBillable({ status: 'declined' })).toBe(true)
+    expect(isRepairFeeOnlyBillable({ status: 'unrepairable' })).toBe(true)
+    expect(isRepairFeeOnlyBillable({ status: 'ready', diagnosisStopped: true })).toBe(true)
+    expect(isRepairFeeOnlyBillable({ status: 'in_repair' })).toBe(false)
+    expect(isRepairFeeOnlyBillable({ status: 'ready' })).toBe(false)
+    expect(isRepairFeeOnlyBillable(null)).toBe(false)
   })
 })

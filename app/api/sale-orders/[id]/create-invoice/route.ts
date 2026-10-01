@@ -28,11 +28,13 @@ import {
   ensureConfirmedSaleOrderForFulfillment,
 } from '@/lib/sale-order-confirm-heal.server'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
+import { isDiagnosisFeeLine } from '@/lib/diagnosis-fee'
 import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import {
   findRepairForSaleOrder,
   findRepairsForConsolidatedSaleOrder,
+  isRepairFeeOnlyBillable,
   isRepairFulfillmentReady,
   stampInvoiceOnMatchingRepair,
 } from '@/lib/repair/sale-order-link'
@@ -145,8 +147,17 @@ export async function POST(
     const blobRepairId = linkedRepair?.id ? String(linkedRepair.id) : undefined
     // A merged order skips the delivery note only when every repair on it is
     // finished — one job still on the bench must not be billed as done.
-    const repairFulfillmentReady = billedRepairs.length > 0
+    const workshopFinished = billedRepairs.length > 0
       && billedRepairs.every(r => isRepairFulfillmentReady(r?.status))
+    // A declined / stopped / unrepairable job bills the diagnosis fee only and
+    // has no delivery to validate. Allowed only while every line on the order
+    // is that fee, so a leftover quote order cannot be billed this way.
+    const feeOnlyRepairOrder = !workshopFinished
+      && billedRepairs.length > 0
+      && billedRepairs.every(r => isRepairFeeOnlyBillable(r))
+      && confirmed.items.length > 0
+      && confirmed.items.every(item => isDiagnosisFeeLine({ description: item.description ?? undefined }))
+    const repairFulfillmentReady = workshopFinished || feeOnlyRepairOrder
     const priorDownPayments = sumUnappliedDownPayments(
       [
         ...blobInvoices,
