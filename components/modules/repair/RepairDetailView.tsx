@@ -41,7 +41,7 @@ import {
 import { resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 import { pickRepairPrimaryAction } from '@/lib/repair-handover'
 import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
-import { buildRepairInvoiceCharges, repairBillingNeedsSync } from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 
 const PROC_COLORS = {
@@ -124,7 +124,7 @@ export default function RepairDetailView() {
     setShowDeliveryModal, setShowMarkDeliveredConfirm,
     setShowProgressModal,
     verifyRepairIntake, startRepair, markRepairComplete, moveRepairToPreviousProgress, outsourceJobs, fileWarrantyClaim,
-    markPartsArrived, closeRepairJob, markUnrepairable,
+    markPartsArrived, closeRepairJob, markUnrepairable, createInvoiceFromRepair,
   } = useRepair()
 
   const { invoices, quotes, saleOrders, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid, markRepairNoCharge, repairs: allRepairs, consolidateRepairInvoices } = useRepairStore()
@@ -281,14 +281,18 @@ export default function RepairDetailView() {
   // and this status was in neither the quotable nor the invoiceable list, so
   // the fee could never be charged once a job was marked. The draft opens with
   // the fee alone and Finance decides what else belongs on it.
-  const canInvoice = ['ready', 'invoiced', 'unrepairable'].includes(r.status)
+  // A declined quote leaves the diagnosis fee billable on its own (nothing else
+  // was done). Offered only while a fee is actually still due.
+  const declinedFeeDue = isDeclinedRepair(r)
+    && buildRepairInvoiceCharges(r, false, 0).length > 0
+  const canInvoice = (['ready', 'invoiced', 'unrepairable'].includes(r.status) || declinedFeeDue)
     && !noCharge
     && billingSync.needed
     && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
     // Whoever stops a job at diagnosis (lead tech, assigned technician) can
     // also raise its fee invoice.
     && (['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-      || (!!r.diagnosisStopped && (currentRole === 'technical_lead' || isMyRepair)))
+      || ((!!r.diagnosisStopped || declinedFeeDue) && (currentRole === 'technical_lead' || isMyRepair)))
     && !pendingOutsourceJob
   // Offered only when this repair can itself go on a combined invoice and the
   // client has at least one other repair that can join it.
@@ -796,6 +800,11 @@ export default function RepairDetailView() {
                 {canQuote && (
                   <button type="button" className="btn-primary flex min-h-10 w-full items-center justify-center gap-2 px-4 text-[11px]" onClick={() => setShowQuoteModal(true)}>
                     <Fa icon={faSync} className="text-[10px]" /> Revise &amp; re-send quote
+                  </button>
+                )}
+                {canInvoice && declinedFeeDue && (
+                  <button type="button" className="btn-secondary flex min-h-10 w-full items-center justify-center gap-2 px-4 text-[11px]" onClick={() => { void createInvoiceFromRepair(r.id, false) }}>
+                    <Fa icon={faFileInvoiceDollar} className="text-[10px]" /> Create diagnosis-fee invoice
                   </button>
                 )}
                 {canReturnDevice && (

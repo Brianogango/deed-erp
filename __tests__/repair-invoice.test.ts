@@ -321,3 +321,23 @@ describe('an unrepairable job bills the diagnosis fee only', () => {
     expect(repairInvoiceChargeTotal(charges)).toBe(4000)
   })
 })
+
+describe('declined quote', () => {
+  const declined = {
+    status: 'declined',
+    quote: { lines: [{ type: 'labor', description: 'Labour', qty: 1, unitPrice: 3000, subtotal: 3000 }] },
+    diagnosisFee: 1000,
+    diagnosisFeeStatus: 'applicable',
+  }
+
+  it('bills only the diagnosis fee, never the declined quote', () => {
+    const charges = buildRepairInvoiceCharges(declined as never, true, 16)
+    expect(charges.map(c => c.description)).toEqual(['Diagnosis Fee (repair not undertaken)'])
+    expect(repairInvoiceChargeTotal(charges)).toBe(1000)
+  })
+
+  it('bills nothing once the fee is paid or waived', () => {
+    expect(buildRepairInvoiceCharges({ ...declined, diagnosisFeeStatus: 'paid' } as never, true, 16)).toEqual([])
+    expect(buildRepairInvoiceCharges({ ...declined, diagnosisFeeStatus: 'waived' } as never, true, 16)).toEqual([])
+  })
+})
