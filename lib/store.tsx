@@ -268,6 +268,7 @@ import { repairPriceChangeImpact, describeRepairPriceChange } from '@/lib/repair
 import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
 import { resolveBillProductId } from '@/lib/purchase/bill-product-id'
+import { contactPaymentTermsDays } from '@/lib/due-date'
 import { deniedSaveMessage } from '@/lib/store-denied-message'
 import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
 import { isSellableSerial } from '@/lib/inventory/sellable-stock'
@@ -8455,7 +8456,7 @@ const storeCtx: AppState = {
           partnerId: job.vendorId,
           partnerName: job.vendorName,
           date: now(),
-          dueDate: addDays(now(), 30),
+          dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === job.vendorId), systemSettings.purDefaultPaymentTermsDays ?? 30)),
           lines: [billLine],
           subtotal: p.finalCost,
           taxTotal: 0,
@@ -10769,7 +10770,7 @@ const storeCtx: AppState = {
         partnerId: quote.companyId,
         partnerName: quote.companyName,
         date: now(),
-        dueDate: addDays(now(), 14),
+        dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === quote.companyId), 14)),
         lines: invLines,
         subtotal: quote.subtotal,
         taxTotal: quote.taxTotal,
@@ -14659,7 +14660,7 @@ const storeCtx: AppState = {
       // Vendor's own payment terms govern the bill due date — previously
       // hardcoded to 30 days for every vendor regardless of what was agreed.
       const vendor = contacts.find(c => c.id === po.vendorId)
-      const termsDays = vendor?.paymentTermsDays ?? systemSettings.purDefaultPaymentTermsDays ?? 30
+      const termsDays = contactPaymentTermsDays(vendor, systemSettings.purDefaultPaymentTermsDays ?? 30)
       const bill: Invoice = {
         id: uid(), ref: draftInvoiceRef('vendor_bill'), type: 'vendor_bill', status: 'draft',
         partnerId: po.vendorId, partnerName: po.vendorName,
@@ -20117,7 +20118,7 @@ const storeCtx: AppState = {
           const invoice: Invoice = {
             id: uid(), ref: await storeCtxRef.current!.allocateDocRef('INV'), type: 'customer_invoice', status: 'posted',
             partnerId: delivery.customerId, partnerName: delivery.customerName,
-            date: now(), dueDate: addDays(now(), systemSettings.purDefaultPaymentTermsDays ?? 30),
+            date: now(), dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === delivery.customerId), 0)),
             lines: delivery.lines.map(l => ({
               id: uid(), description: l.productName, qty: l.qty,
               unitPrice: soLineMap[l.productId]?.unitPrice ?? 0, taxRate: companySettings.vatRate ?? 16,

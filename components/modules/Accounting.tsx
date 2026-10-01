@@ -96,6 +96,7 @@ import {
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { contactPaymentTermsDays, dueDateFromTerms } from '@/lib/due-date'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES & CONSTANTS
@@ -586,6 +587,8 @@ function AccountingContent() {
   const [newPartnerName, setNewPartnerName] = useState('')
   const [newDocumentDate, setNewDocumentDate] = useState('')
   const [newDueDate, setNewDueDate] = useState('')
+  // Once the user types a due date themselves, stop deriving it from the contact.
+  const dueDateEditedRef = useRef(false)
   const [newLines, setNewLines] = useState<ManualInvoiceLine[]>([newManualInvoiceLine()])
   const moveNewLine = (index: number, direction: -1 | 1) => {
     setNewLines(prev => {
@@ -661,6 +664,17 @@ function AccountingContent() {
   const canManageFullFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
+
+  // New invoice / bill: derive the due date from the contact's credit period
+  // (Contacts → Payment terms) and the document date, until the user sets one.
+  useEffect(() => {
+    if (!showNewForm || editingInvId || dueDateEditedRef.current) return
+    if (!newPartnerId || !newDocumentDate) return
+    const partner = contacts.find(c => c.id === newPartnerId)
+    if (!partner) return
+    const derived = dueDateFromTerms(newDocumentDate, contactPaymentTermsDays(partner, 0))
+    if (derived) setNewDueDate(derived)
+  }, [showNewForm, editingInvId, newPartnerId, newDocumentDate, contacts])
   const invoiceVatRate = companySettings.vatRate ?? 16
 
   // Align manual invoice payment bank: VAT → NCBA; non-VAT → ABSA / I&M
@@ -1052,6 +1066,7 @@ function AccountingContent() {
     setNewPartnerName('')
     setNewDocumentDate('')
     setNewDueDate('')
+    dueDateEditedRef.current = false
     setNewLines([newManualInvoiceLine()])
     setNewNotes('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -1086,6 +1101,7 @@ function AccountingContent() {
     setNewPartnerName(inv.partnerName)
     setNewDocumentDate(inv.date || '')
     setNewDueDate(inv.dueDate || '')
+    dueDateEditedRef.current = true
     setNewLines((inv.lines || []).map(l => ({
       type: l.lineType === 'section' ? 'section' : 'item',
       desc: l.description,
@@ -2742,7 +2758,7 @@ function AccountingContent() {
                     type="date"
                     className="form-input text-xs"
                     value={newDueDate}
-                    onChange={e => setNewDueDate(e.target.value)}
+                    onChange={e => { dueDateEditedRef.current = true; setNewDueDate(e.target.value) }}
                   />
                 </Field>
                 <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
