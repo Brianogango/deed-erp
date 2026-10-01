@@ -267,6 +267,7 @@ import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairBillsFeeO
 import { repairPriceChangeImpact, describeRepairPriceChange } from '@/lib/repair/document-impact'
 import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
+import { resolveBillProductId } from '@/lib/purchase/bill-product-id'
 import { deniedSaveMessage } from '@/lib/store-denied-message'
 import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
 import { isSellableSerial } from '@/lib/inventory/sellable-stock'
@@ -14625,8 +14626,11 @@ const storeCtx: AppState = {
       const activeBilledQty = (line: POLine) =>
         liveBillsForPO.reduce((total, bill) => total + bill.lines.reduce((sum, billLine) => {
           const sameProduct = Boolean(line.productId && billLine.productId && line.productId === billLine.productId)
+          // The bill line may carry a corrected product id (see resolveBillProductId),
+          // so the PO-line link is the reliable key.
+          const sameLine = Boolean(billLine.purchaseOrderItemId && billLine.purchaseOrderItemId === line.id)
           const sameDescription = !billLine.productId && String(billLine.description ?? '').includes(line.productName)
-          return sum + (sameProduct || sameDescription ? Math.max(0, Math.floor(Number(billLine.qty) || 0)) : 0)
+          return sum + (sameProduct || sameLine || sameDescription ? Math.max(0, Math.floor(Number(billLine.qty) || 0)) : 0)
         }, 0), 0)
 
       let billableLines: Array<POLine & { billQty: number }>
@@ -14663,7 +14667,7 @@ const storeCtx: AppState = {
         lines: billableLines.map(l => ({
           id: uid(), description: `${l.productName} ×${l.billQty}`, qty: l.billQty,
           unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.billQty * l.unitPrice,
-          productId: l.productId,
+          productId: resolveBillProductId(l, prodRef.current),
           purchaseOrderItemId: l.id,
           taxCategory: Number(l.taxRate) > 0 ? 'standard_16' : 'out_of_scope',
         })),
