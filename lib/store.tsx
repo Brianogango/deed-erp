@@ -233,6 +233,7 @@ import { EXCHANGE_RETURN_LOCATION } from '@/lib/aftersales/exchange-stock'
 import {
   isDirectRepairPath,
   isQuoteDeclinedReopenable,
+  isQuoteAwaitingApproval,
   quotableStatusesForPath,
   returnableStatusesForPath,
   startableStatusesForPath,
@@ -15776,7 +15777,9 @@ const storeCtx: AppState = {
         showToast('Only the assigned technician or authorised staff can generate a quote', 'error'); return
       }
       const QUOTABLE_STATUSES = quotableStatusesForPath(repair.repairPath)
-      if (!QUOTABLE_STATUSES.includes(repair.status)) {
+      // A sent quote still waiting on the customer may be corrected in place.
+      const amendingSentQuote = isQuoteAwaitingApproval(repair.status) && !!repair.quote
+      if (!QUOTABLE_STATUSES.includes(repair.status) && !amendingSentQuote) {
         showToast('Cannot generate a new quote at this stage', 'error'); return
       }
       if (!isDirectRepairPath(repair.repairPath) && !repairHasLoggedDiagnosis(repair)) {
