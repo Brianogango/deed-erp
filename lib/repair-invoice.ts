@@ -57,6 +57,15 @@ export function isDeclinedRepair(repair: RepairInvoiceSource): boolean {
   return String(repair.status ?? '').toLowerCase() === 'declined'
 }
 
+/**
+ * Jobs where the customer did not go ahead with the repair — declined quote,
+ * stopped at diagnosis, or unrepairable. Their invoice carries the diagnosis
+ * fee alone, so the declined quote must never reach the Sales Order either.
+ */
+export function repairBillsFeeOnly(repair: RepairInvoiceSource): boolean {
+  return isUnrepairableRepair(repair) || isDeclinedRepair(repair) || !!repair.diagnosisStopped
+}
+
 function money(n: unknown): number {
   const v = Number(n)
   return Number.isFinite(v) ? v : 0
@@ -207,7 +216,7 @@ export function buildRepairInvoiceCharges(
   // charged at all. Finance adds any further lines to the draft.
   // Stopped at diagnosis, or quote declined: the customer did not go ahead
   // with the repair, so only the fee.
-  if (isUnrepairableRepair(repair) || isDeclinedRepair(repair) || repair.diagnosisStopped) return diagnosisCharges(repair)
+  if (repairBillsFeeOnly(repair)) return diagnosisCharges(repair)
 
   const quoted = quoteCharges(repair, applyVat, vatRate)
   const body = quoteChargeTotal(repair, applyVat, vatRate) >= 1 || quoted.length > 0

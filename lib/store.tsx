@@ -262,7 +262,7 @@ import {
   taxableQuoteSubtotal,
   diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
-import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { repairPriceChangeImpact, describeRepairPriceChange } from '@/lib/repair/document-impact'
 import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
@@ -17446,12 +17446,30 @@ const storeCtx: AppState = {
         return existingInvoice
       }
 
-      const soLines = (repair.quote?.lines ?? [])
-        .filter(line => line.decision !== 'declined')
-        .map(line => ({
-          id: uid(),
-          ...saleLineFieldsForRepairQuoteLine(line),
-        }))
+      // A job the customer did not go ahead with bills the diagnosis fee only.
+      // The Sales Order the server invoices from must then carry exactly that
+      // fee — not the declined quote — and its totals must match.
+      const feeOnly = repairBillsFeeOnly(repair)
+      const soLines = feeOnly
+        ? chargeLines.map(line => ({
+            id: uid(),
+            ...saleLineFieldsForRepairQuoteLine({
+              type: 'service',
+              description: line.description,
+              qty: line.qty,
+              unitPrice: line.unitPrice,
+              subtotal: line.subtotal,
+            }),
+          }))
+        : (repair.quote?.lines ?? [])
+          .filter(line => line.decision !== 'declined')
+          .map(line => ({
+            id: uid(),
+            ...saleLineFieldsForRepairQuoteLine(line),
+          }))
+      const soSubtotal = feeOnly ? subtotal : (repair.quote?.subtotal ?? subtotal)
+      const soTax = feeOnly ? taxTotal : (repair.quote?.tax ?? taxTotal)
+      const soTotal = feeOnly ? chargeTotal : (repair.quote?.total ?? chargeTotal)
       let soId = linkedSaleOrder?.id ?? repair.saleOrderId ?? (repair as any).linkedSaleOrderId
       let soRefValue = linkedSaleOrder?.ref ?? linkedSaleOrder?.orderNumber ?? repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
       if (!soId) {
@@ -17461,11 +17479,11 @@ const storeCtx: AppState = {
           id: soId, ref: soRefValue, status: 'sale' as const, confirmedAt: new Date().toISOString(),
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(),
-          lines: soLines, subtotal: repair.quote?.subtotal ?? subtotal,
-          taxAmount: repair.quote?.tax ?? taxTotal,
-          taxTotal: repair.quote?.tax ?? taxTotal,
-          totalAmount: repair.quote?.total ?? chargeTotal,
-          total: repair.quote?.total ?? chargeTotal,
+          lines: soLines, subtotal: soSubtotal,
+          taxAmount: soTax,
+          taxTotal: soTax,
+          totalAmount: soTotal,
+          total: soTotal,
           notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy,
         }
         setSaleOrders(p => [newSo as SaleOrder, ...p])
@@ -17479,11 +17497,11 @@ const storeCtx: AppState = {
           // Sales confirm path — create-invoice confirms the workshop quotation.
           reserveStock: false,
           lines: soLines.length ? soLines : linkedSaleOrder.lines,
-          subtotal: repair.quote?.subtotal ?? linkedSaleOrder.subtotal,
-          taxAmount: repair.quote?.tax ?? linkedSaleOrder.taxAmount,
-          taxTotal: repair.quote?.tax ?? linkedSaleOrder.taxTotal,
-          totalAmount: repair.quote?.total ?? linkedSaleOrder.totalAmount ?? linkedSaleOrder.total,
-          total: repair.quote?.total ?? linkedSaleOrder.total,
+          subtotal: feeOnly ? soSubtotal : (repair.quote?.subtotal ?? linkedSaleOrder.subtotal),
+          taxAmount: feeOnly ? soTax : (repair.quote?.tax ?? linkedSaleOrder.taxAmount),
+          taxTotal: feeOnly ? soTax : (repair.quote?.tax ?? linkedSaleOrder.taxTotal),
+          totalAmount: feeOnly ? soTotal : (repair.quote?.total ?? linkedSaleOrder.totalAmount ?? linkedSaleOrder.total),
+          total: feeOnly ? soTotal : (repair.quote?.total ?? linkedSaleOrder.total),
         }
         setSaleOrders(p => p.map(s => s.id === soId ? { ...s, ...soPatch } : s))
         await fetch(`/api/sale-orders/${soId}`, {
@@ -17550,10 +17568,29 @@ const storeCtx: AppState = {
           showToast('Repair Sales Order is missing — align the quote before invoicing', 'error')
           return null
         }
+        // The repair can point at a Sales Order that was never saved to the
+        // server and is not in this browser either (a dangling id). A fee-only
+        // job has nothing in that order worth keeping, so rebuild it from the
+        // fee and let the recovery path push it — otherwise every attempt
+        // answers "Sale order not found".
+        let localOrder: unknown = soRef.current.find(s => s.id === soId)
+        if (!localOrder && feeOnly) {
+          soRefValue = await storeCtxRef.current!.allocateDocRef('SO')
+          localOrder = {
+                id: soId, ref: soRefValue, status: 'sale' as const,
+                confirmedAt: new Date().toISOString(),
+                customerId: repair.customerId, customerName: repair.customerName,
+                date: now(),
+                lines: soLines, subtotal: soSubtotal,
+                taxAmount: soTax, taxTotal: soTax,
+                totalAmount: soTotal, total: soTotal,
+                notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy,
+          }
+        }
         const attempt = await requestSaleOrderInvoice({
           saleOrderId: soId,
           invoiceBody: { mode: 'regular', source: 'repair' },
-          localOrder: soRef.current.find(s => s.id === soId),
+          localOrder,
         })
         const res = attempt.res
         if (attempt.saleOrderId !== soId) {
