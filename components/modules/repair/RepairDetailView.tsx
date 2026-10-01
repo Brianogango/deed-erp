@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client'
 
+import Link from 'next/link'
 import { useState, useRef } from 'react'
 import { useRepair } from './RepairContext'
 import { useRepairStore, fmtKes } from '@/lib/store'
@@ -988,9 +989,9 @@ export default function RepairDetailView() {
 
               {/* Linked invoice strip */}
               {r.invoiceId && linkedInvoice && (
-                <div
+                <Link
+                  href={`/finance/invoices/${encodeURIComponent(linkedInvoice.id)}`}
                   className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(99,102,241,0.08)] border border-indigo-500/25 cursor-pointer hover:bg-[rgba(99,102,241,0.12)] transition-colors"
-                  onClick={() => setModule('accounting')}
                 >
                   <div className="w-6 h-6 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
                     <Fa icon={faFileInvoiceDollar} className="text-white text-[9px]" />
@@ -1002,7 +1003,7 @@ export default function RepairDetailView() {
                     </p>
                   </div>
                   <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">View →</span>
-                </div>
+                </Link>
               )}
 
               {/* Outsource job strip */}
