@@ -58,8 +58,8 @@ importers:
         specifier: ^2.4.6
         version: 2.4.6
       '@types/pg':
-        specifier: ^8.11.10
-        version: 8.20.0
+        specifier: ^8.23.1
+        version: 8.23.1
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
@@ -1226,9 +1226,6 @@ packages:
 
   '@types/pako@2.0.4':
     resolution: {integrity: sha512-VWDCbrLeVXJM9fihYodcLiIv0ku+AlOa/TQ1SvYOaBuyrSKgEcro95LJyIsJ4vSo6BXIxOKxiJAat04CmST9Fw==}
-
-  '@types/pg@8.20.0':
-    resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
 
   '@types/pg@8.23.1':
     resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
@@ -5032,12 +5029,6 @@ snapshots:
       '@types/node': 20.19.40
 
   '@types/pako@2.0.4': {}
-
-  '@types/pg@8.20.0':
-    dependencies:
-      '@types/node': 20.19.40
-      pg-protocol: 1.13.0
-      pg-types: 2.2.0
 
   '@types/pg@8.23.1':
     dependencies:
