@@ -4,6 +4,7 @@ import {
   executionChargeTotal,
   invoiceMatchesRepairCharges,
   repairBillingNeedsSync,
+  repairBillsFeeOnly,
   repairInvoiceChargeTotal,
 } from '@/lib/repair-invoice'
 
@@ -341,5 +342,15 @@ describe('declined quote', () => {
   it('bills nothing once the fee is paid or waived', () => {
     expect(buildRepairInvoiceCharges({ ...declined, diagnosisFeeStatus: 'paid' } as never, true, 16)).toEqual([])
     expect(buildRepairInvoiceCharges({ ...declined, diagnosisFeeStatus: 'waived' } as never, true, 16)).toEqual([])
+  })
+})
+
+describe('repairBillsFeeOnly', () => {
+  it('is true for declined, stopped-at-diagnosis and unrepairable jobs only', () => {
+    expect(repairBillsFeeOnly({ status: 'declined' })).toBe(true)
+    expect(repairBillsFeeOnly({ status: 'unrepairable' })).toBe(true)
+    expect(repairBillsFeeOnly({ status: 'ready', diagnosisStopped: true })).toBe(true)
+    expect(repairBillsFeeOnly({ status: 'ready' })).toBe(false)
+    expect(repairBillsFeeOnly({ status: 'approved' })).toBe(false)
   })
 })
