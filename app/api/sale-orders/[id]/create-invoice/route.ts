@@ -401,7 +401,9 @@ export async function POST(
     }
 
     const draftRef = await getNextDocNumber('invoice').catch(() => `DRAFT-INV-${Date.now().toString().slice(-6)}`)
-    const paymentTermsDays = Number(confirmed.paymentTermsDays)
+    // Repair orders are minted in the browser without terms; fall back to the
+    // customer's own credit period rather than treating "unset" as 0 days.
+    const paymentTermsDays = Number(confirmed.paymentTermsDays ?? confirmed.client?.paymentTermsDays)
     const dueDate = new Date(Date.now() + (Number.isFinite(paymentTermsDays) && paymentTermsDays >= 0 ? paymentTermsDays : 0) * 86400000)
     const invoiceNotes = downDeduction > 0
       ? `Created from ${confirmed.orderNumber} · Down payments deducted: KES ${downDeduction.toLocaleString()}`
