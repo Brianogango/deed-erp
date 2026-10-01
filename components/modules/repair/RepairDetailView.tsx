@@ -38,7 +38,7 @@ import {
   startableStatusesWhenBillingExempt,
   type BillingExemptReason,
 } from '@/lib/repair-billing-exempt'
-import { resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
+import { diagnosisFeeLineBadge, isDiagnosisFeeLine, resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 import { pickRepairPrimaryAction } from '@/lib/repair-handover'
 import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
 import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync } from '@/lib/repair-invoice'
@@ -776,13 +776,26 @@ export default function RepairDetailView() {
                         </div>
                         <div className="flex items-center gap-2">
                           <strong className="text-[11px] font-black text-[var(--text-1)]">{fmtKes(line.subtotal)}</strong>
-                          <span className={`min-w-[68px] rounded-full border px-2 py-1 text-center text-[8px] font-black uppercase tracking-wider ${
-                            line.decision === 'approved'
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : line.decision === 'deferred'
-                                ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                : 'border-red-200 bg-red-50 text-red-700'
-                          }`}>{line.decision || 'Declined'}</span>
+                          {isDiagnosisFeeLine(line) ? (() => {
+                            const badge = diagnosisFeeLineBadge(r)
+                            return (
+                              <span className={`min-w-[68px] rounded-full border px-2 py-1 text-center text-[8px] font-black uppercase tracking-wider ${
+                                badge.tone === 'settled'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : badge.tone === 'due'
+                                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                    : 'border-slate-200 bg-slate-50 text-slate-600'
+                              }`}>{badge.label}</span>
+                            )
+                          })() : (
+                            <span className={`min-w-[68px] rounded-full border px-2 py-1 text-center text-[8px] font-black uppercase tracking-wider ${
+                              line.decision === 'approved'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : line.decision === 'deferred'
+                                  ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                  : 'border-red-200 bg-red-50 text-red-700'
+                            }`}>{line.decision || 'Declined'}</span>
+                          )}
                         </div>
                       </div>
                     ))}
