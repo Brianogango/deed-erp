@@ -17,6 +17,7 @@
 
 import { repairDateBoundsError } from '@/lib/data-validation'
 import { REPAIR_PROGRESS_ORDER } from '@/lib/repair-progress'
+import { REPAIR_TRANSITIONS } from '@/lib/repair-transition-policy'
 
 export type RepairStoreRow = {
   id?: unknown
@@ -27,7 +28,6 @@ export type RepairStoreRow = {
 
 export const REPAIR_TERMINAL_STATUSES = new Set<string>([
   'cancelled',
-  'declined',
   'unrepairable',
   'returned',
   'retained',
@@ -119,6 +119,8 @@ function asStatus(row: RepairStoreRow | undefined): string {
 export function repairStatusRank(status: unknown): number {
   const s = String(status ?? '').trim()
   if (REPAIR_TERMINAL_STATUSES.has(s)) return 1_000
+  // A declined quote is an open job sitting where awaiting_approval does.
+  if (s === 'declined') return REPAIR_PROGRESS_ORDER.indexOf('awaiting_approval')
   const idx = REPAIR_PROGRESS_ORDER.indexOf(s as (typeof REPAIR_PROGRESS_ORDER)[number])
   return idx
 }
@@ -151,6 +153,16 @@ export function preserveRepairCompletionFields(
     next.statusHistory = secondaryHistory
   }
   return next
+}
+
+/**
+ * `unrepairable` is a soft terminal: staff may still return or retain the
+ * device. (`declined` is NOT terminal — it is an open job awaiting a re-quote,
+ * so it is handled by the ordinary in-progress rules.)
+ */
+function isReopenFromSoftTerminal(currentStatus: string, incomingStatus: string): boolean {
+  if (currentStatus !== 'unrepairable') return false
+  return (REPAIR_TRANSITIONS[currentStatus] ?? []).includes(incomingStatus as never)
 }
 
 function isOrcVoidRewind(currentStatus: string, incomingStatus: string): boolean {
@@ -191,7 +203,11 @@ export function pickRepairStoreRow(
     return preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming)
   }
 
-  if (REPAIR_TERMINAL_STATUSES.has(currentStatus) && incomingStatus !== currentStatus) {
+  if (
+    REPAIR_TERMINAL_STATUSES.has(currentStatus)
+    && incomingStatus !== currentStatus
+    && !isReopenFromSoftTerminal(currentStatus, incomingStatus)
+  ) {
     return preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming)
   }
 
