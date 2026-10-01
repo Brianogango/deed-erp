@@ -49,6 +49,14 @@ export function isUnrepairableRepair(repair: RepairInvoiceSource): boolean {
   return String(repair.status ?? '').toLowerCase() === 'unrepairable'
 }
 
+/**
+ * The customer declined the quotation. Nothing was repaired, so the quote is
+ * not billable — only the diagnosis fee, when one is due.
+ */
+export function isDeclinedRepair(repair: RepairInvoiceSource): boolean {
+  return String(repair.status ?? '').toLowerCase() === 'declined'
+}
+
 function money(n: unknown): number {
   const v = Number(n)
   return Number.isFinite(v) ? v : 0
@@ -160,7 +168,7 @@ function diagnosisCharges(repair: RepairInvoiceSource): RepairInvoiceChargeLine[
   const amount = money(repair.diagnosisFee)
   if (amount <= 0) return []
   return [{
-    description: repair.diagnosisStopped
+    description: repair.diagnosisStopped || isDeclinedRepair(repair)
       ? 'Diagnosis Fee (repair not undertaken)'
       : 'Diagnosis Fee',
     qty: 1,
@@ -197,8 +205,9 @@ export function buildRepairInvoiceCharges(
   // where these jobs used to end up — `unrepairable` is in neither the
   // quotable nor the invoiceable status list, so the fee could never be
   // charged at all. Finance adds any further lines to the draft.
-  // Stopped at diagnosis: the customer declined the repair, so only the fee.
-  if (isUnrepairableRepair(repair) || repair.diagnosisStopped) return diagnosisCharges(repair)
+  // Stopped at diagnosis, or quote declined: the customer did not go ahead
+  // with the repair, so only the fee.
+  if (isUnrepairableRepair(repair) || isDeclinedRepair(repair) || repair.diagnosisStopped) return diagnosisCharges(repair)
 
   const quoted = quoteCharges(repair, applyVat, vatRate)
   const body = quoteChargeTotal(repair, applyVat, vatRate) >= 1 || quoted.length > 0
