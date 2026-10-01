@@ -197,7 +197,8 @@ export function buildRepairInvoiceCharges(
   // where these jobs used to end up — `unrepairable` is in neither the
   // quotable nor the invoiceable status list, so the fee could never be
   // charged at all. Finance adds any further lines to the draft.
-  if (isUnrepairableRepair(repair)) return diagnosisCharges(repair)
+  // Stopped at diagnosis: the customer declined the repair, so only the fee.
+  if (isUnrepairableRepair(repair) || repair.diagnosisStopped) return diagnosisCharges(repair)
 
   const quoted = quoteCharges(repair, applyVat, vatRate)
   const body = quoteChargeTotal(repair, applyVat, vatRate) >= 1 || quoted.length > 0

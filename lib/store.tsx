@@ -15695,18 +15695,25 @@ const storeCtx: AppState = {
         : alreadyPaid
           ? 'paid'
           : 'applicable'
-      setRepairs(p => p.map(r => r.id === repairId ? {
-        ...r,
+      const stopped: RepairOrder = {
+        ...repair,
         diagnosisStopped: true,
         diagnosisFee: DIAGNOSIS_FEE,
         diagnosisFeeStatus: nextFeeStatus,
-        diagnosisFeeBilling: r.diagnosisFeeBilling ?? resolved.billing,
-        customerBillingType: r.customerBillingType ?? resolved.customerType,
+        diagnosisFeeBilling: repair.diagnosisFeeBilling ?? resolved.billing,
+        customerBillingType: repair.customerBillingType ?? resolved.customerType,
         laborCost: 0,
         logisticsCost: 0,
         total: DIAGNOSIS_FEE,
         status: 'ready',
-      } : r))
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? { ...r, ...stopped } : r))
+      repairsRef.current = repairsRef.current.map(r => r.id === repairId ? { ...r, ...stopped } : r)
+      // Raise the diagnosis-fee invoice now, unless the job is no-charge or the
+      // fee is already settled.
+      if (DIAGNOSIS_FEE > 0 && !alreadyPaid && !isRepairNoCharge(stopped) && !repair.invoiceId && !(repair as any).linkedInvoiceId) {
+        void storeCtxRef.current!.createInvoiceFromRepair(repairId, false)
+      }
       addAuditLog('stop_at_diagnosis', repairId, `Repair stopped at diagnosis — KES ${DIAGNOSIS_FEE} diagnosis fee ${alreadyPaid ? '(already paid)' : 'due (not credited against repairs)'}`)
       showToast(
         DIAGNOSIS_FEE <= 0
@@ -17337,7 +17344,7 @@ const storeCtx: AppState = {
     },
     
     createInvoiceFromRepair: async (repairId, applyVat = true) => {
-      const repair = repairs.find(r => r.id === repairId)
+      const repair = repairsRef.current.find(r => r.id === repairId) ?? repairs.find(r => r.id === repairId)
       if (!repair) return null
       if (blockIfOutsourced(repairId, 'invoice this repair')) return null
       const reissueHold = reissueBlocker(repair.invoiceReissue)

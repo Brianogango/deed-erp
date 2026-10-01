@@ -28,7 +28,6 @@ export type RepairStoreRow = {
 
 export const REPAIR_TERMINAL_STATUSES = new Set<string>([
   'cancelled',
-  'declined',
   'unrepairable',
   'returned',
   'retained',
@@ -120,6 +119,8 @@ function asStatus(row: RepairStoreRow | undefined): string {
 export function repairStatusRank(status: unknown): number {
   const s = String(status ?? '').trim()
   if (REPAIR_TERMINAL_STATUSES.has(s)) return 1_000
+  // A declined quote is an open job sitting where awaiting_approval does.
+  if (s === 'declined') return REPAIR_PROGRESS_ORDER.indexOf('awaiting_approval')
   const idx = REPAIR_PROGRESS_ORDER.indexOf(s as (typeof REPAIR_PROGRESS_ORDER)[number])
   return idx
 }
@@ -155,14 +156,12 @@ export function preserveRepairCompletionFields(
 }
 
 /**
- * `declined` and `unrepairable` are "soft" terminals: the job stays open so
- * staff can revise & re-send the quote or return the device. Those documented
- * exits must persist; every other change out of a terminal status is still a
- * stale-tab rewind. (`approved` covers a no-charge/warranty re-quote.)
+ * `unrepairable` is a soft terminal: staff may still return or retain the
+ * device. (`declined` is NOT terminal — it is an open job awaiting a re-quote,
+ * so it is handled by the ordinary in-progress rules.)
  */
 function isReopenFromSoftTerminal(currentStatus: string, incomingStatus: string): boolean {
-  if (currentStatus !== 'declined' && currentStatus !== 'unrepairable') return false
-  if (currentStatus === 'declined' && incomingStatus === 'approved') return true
+  if (currentStatus !== 'unrepairable') return false
   return (REPAIR_TRANSITIONS[currentStatus] ?? []).includes(incomingStatus as never)
 }
 

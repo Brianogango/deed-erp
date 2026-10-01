@@ -40,7 +40,8 @@ describe('pickRepairStoreRow', () => {
     expect(picked.status).toBe('awaiting_approval')
     expect(picked.quote).toEqual(quote)
     expect(pickRepairStoreRow({ id: 'a', status: 'declined' }, { id: 'a', status: 'returned' }).status).toBe('returned')
-    expect(pickRepairStoreRow({ id: 'a', status: 'declined' }, { id: 'a', status: 'in_repair' }).status).toBe('declined')
+    expect(pickRepairStoreRow({ id: 'a', status: 'declined' }, { id: 'a', status: 'approved' }).status).toBe('approved')
+    expect(pickRepairStoreRow({ id: 'a', status: 'awaiting_approval' }, { id: 'a', status: 'declined' }).status).toBe('declined')
   })
 
   it('allows in-progress Back and QC fail', () => {
