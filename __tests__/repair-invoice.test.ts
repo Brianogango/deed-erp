@@ -325,6 +325,8 @@ describe('an unrepairable job bills the diagnosis fee only', () => {
 describe('declined quote', () => {
   const declined = {
     status: 'declined',
+    intakeDate: '2026-09-24',
+    repairPath: 'diagnosis_first' as const,
     quote: { lines: [{ type: 'labor', description: 'Labour', qty: 1, unitPrice: 3000, subtotal: 3000 }] },
     diagnosisFee: 1000,
     diagnosisFeeStatus: 'applicable',
