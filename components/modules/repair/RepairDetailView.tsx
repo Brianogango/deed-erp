@@ -285,7 +285,9 @@ export default function RepairDetailView() {
     && !noCharge
     && billingSync.needed
     && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
-    && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+    // The lead tech who stops a job at diagnosis can also raise its fee invoice.
+    && (['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+      || (!!r.diagnosisStopped && currentRole === 'technical_lead'))
     && !pendingOutsourceJob
   // Offered only when this repair can itself go on a combined invoice and the
   // client has at least one other repair that can join it.
