@@ -17573,10 +17573,11 @@ const storeCtx: AppState = {
         // job has nothing in that order worth keeping, so rebuild it from the
         // fee and let the recovery path push it — otherwise every attempt
         // answers "Sale order not found".
-        const localOrder = soRef.current.find(s => s.id === soId)
-          ?? (feeOnly
-            ? {
-                id: soId, ref: await storeCtxRef.current!.allocateDocRef('SO'), status: 'sale' as const,
+        let localOrder: unknown = soRef.current.find(s => s.id === soId)
+        if (!localOrder && feeOnly) {
+          soRefValue = await storeCtxRef.current!.allocateDocRef('SO')
+          localOrder = {
+                id: soId, ref: soRefValue, status: 'sale' as const,
                 confirmedAt: new Date().toISOString(),
                 customerId: repair.customerId, customerName: repair.customerName,
                 date: now(),
@@ -17584,8 +17585,8 @@ const storeCtx: AppState = {
                 taxAmount: soTax, taxTotal: soTax,
                 totalAmount: soTotal, total: soTotal,
                 notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy,
-              }
-            : undefined)
+          }
+        }
         const attempt = await requestSaleOrderInvoice({
           saleOrderId: soId,
           invoiceBody: { mode: 'regular', source: 'repair' },
