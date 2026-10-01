@@ -4,6 +4,14 @@
 //
 //   node scripts/backfill-app-state-to-prisma.mjs --dry-run
 //   node scripts/backfill-app-state-to-prisma.mjs
+//
+// Once STORE_BACKEND=prisma the new tables are NEWER than app_state, so a full
+// backfill would overwrite live data with stale rows. The script refuses to do
+// that. To copy only keys that have no projection yet (e.g. per-repair
+// portal_* keys, which the default `deed_%` selection never covered):
+//
+//   node scripts/backfill-app-state-to-prisma.mjs --missing-only \
+//     --prefixes=portal_,repair_,stock_reservation_ --dry-run
 
 import 'dotenv/config'
 import { createHash } from 'crypto'
@@ -11,6 +19,22 @@ import pg from 'pg'
 
 const { Pool } = pg
 const dryRun = process.argv.includes('--dry-run')
+const missingOnly = process.argv.includes('--missing-only')
+const prefixArg = process.argv.find(arg => arg.startsWith('--prefixes='))
+const extraPrefixes = prefixArg
+  ? prefixArg.slice('--prefixes='.length).split(',').map(p => p.trim()).filter(Boolean)
+  : []
+const escapeLike = prefix => `${prefix.replace(/[\\%_]/g, '\\$&')}%`
+const likePatterns = ['deed_', ...extraPrefixes].map(escapeLike)
+
+if (String(process.env.STORE_BACKEND || '').trim().toLowerCase() === 'prisma' && !missingOnly) {
+  console.error(
+    'Refusing to run: STORE_BACKEND=prisma means erp_state_* is newer than app_state, '
+    + 'so a full backfill would overwrite live data with stale rows. '
+    + 'Use --missing-only to copy only keys that have no projection yet.',
+  )
+  process.exit(2)
+}
 const connectionString =
   process.env.deed_erp_POSTGRES_URL
   || process.env.POSTGRES_URL
@@ -58,7 +82,11 @@ const pool = new Pool({ connectionString })
 
 try {
   const { rows } = await pool.query(
-    "SELECT key, value FROM app_state WHERE key LIKE 'deed_%' ORDER BY key",
+    `SELECT key, value FROM app_state
+      WHERE key LIKE ANY($1::text[])
+        ${missingOnly ? 'AND NOT EXISTS (SELECT 1 FROM erp_state_keys k WHERE k.key = app_state.key)' : ''}
+      ORDER BY key`,
+    [likePatterns],
   )
   let collections = 0
   let values = 0
@@ -76,6 +104,8 @@ try {
 
   console.log(JSON.stringify({
     dryRun,
+    missingOnly,
+    prefixes: ['deed_', ...extraPrefixes],
     keys: rows.length,
     collections,
     values,
