@@ -29,7 +29,7 @@ import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { repairProgressOrderFor } from '@/lib/repair-progress'
-import { isDirectRepairPath, isQuoteDeclinedReopenable, quotableStatusesForPath, repairPathLabel, returnableStatusesForPath, startableStatusesForPath } from '@/lib/repair-path'
+import { isDirectRepairPath, isQuoteAwaitingApproval, isQuoteDeclinedReopenable, quotableStatusesForPath, repairPathLabel, returnableStatusesForPath, startableStatusesForPath } from '@/lib/repair-path'
 import {
   BILLING_EXEMPT_REASON_LABELS,
   billingExemptLabel,
@@ -191,6 +191,14 @@ export default function RepairDetailView() {
     // Lock quote editing once device is marked ready-for-collection or has been picked up.
     // `declined` is intentionally allowed — staff may revise and re-send another quote.
     && !['ready','invoiced','verified_released','delivered','closed','cancelled','unrepairable','returned','retained'].includes(r.status)
+  // A sent quote still waiting on the customer: staff can fix a forgotten line
+  // without declining it first. Secondary action only (see repair-path.ts).
+  const canEditSentQuote = isQuoteAwaitingApproval(r.status)
+    && !!r.quote
+    && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentRole))
+    && !r.diagnosisStopped
+    && !billingExempt
+    && !pendingOutsourceJob
   const startableNow = (
     billingExempt
       ? startableStatusesWhenBillingExempt()
@@ -1722,9 +1730,9 @@ export default function RepairDetailView() {
                     actions={[
                       {
                         id: 'quote',
-                        label: isQuoteDeclinedReopenable(r.status) ? 'Revise & re-send quote' : r.quote ? 'Edit quote' : 'Generate quote',
+                        label: isQuoteDeclinedReopenable(r.status) ? 'Revise & re-send quote' : canEditSentQuote ? 'Edit sent quote' : r.quote ? 'Edit quote' : 'Generate quote',
                         onClick: () => setShowQuoteModal(true),
-                        hidden: !canQuote || primaryActionId === 'quote',
+                        hidden: !(canQuote || canEditSentQuote) || primaryActionId === 'quote',
                       },
                       { id: 'decline', label: 'Decline quote', onClick: () => setShowDeclineModal(true), hidden: !canDeclineQuote, danger: true },
                       {

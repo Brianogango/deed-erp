@@ -30,6 +30,16 @@ export function isQuoteDeclinedReopenable(status: unknown): boolean {
   return status === 'declined'
 }
 
+/**
+ * A quote that has been sent and is waiting for the customer. Staff may correct
+ * it (a forgotten line, a wrong price) without waiting for a decline — but it is
+ * deliberately not a "quotable" status, so it never becomes the primary workflow
+ * action; it is only offered as a secondary "Edit sent quote".
+ */
+export function isQuoteAwaitingApproval(status: unknown): boolean {
+  return status === 'awaiting_approval'
+}
+
 /** Statuses where a quote may be generated/edited. */
 export function quotableStatusesForPath(path: unknown): string[] {
   // `awaiting_approval` is deliberately excluded. Once a quote has been sent,
