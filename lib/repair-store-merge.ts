@@ -17,6 +17,7 @@
 
 import { repairDateBoundsError } from '@/lib/data-validation'
 import { REPAIR_PROGRESS_ORDER } from '@/lib/repair-progress'
+import { REPAIR_TRANSITIONS } from '@/lib/repair-transition-policy'
 
 export type RepairStoreRow = {
   id?: unknown
@@ -153,6 +154,18 @@ export function preserveRepairCompletionFields(
   return next
 }
 
+/**
+ * `declined` and `unrepairable` are "soft" terminals: the job stays open so
+ * staff can revise & re-send the quote or return the device. Those documented
+ * exits must persist; every other change out of a terminal status is still a
+ * stale-tab rewind. (`approved` covers a no-charge/warranty re-quote.)
+ */
+function isReopenFromSoftTerminal(currentStatus: string, incomingStatus: string): boolean {
+  if (currentStatus !== 'declined' && currentStatus !== 'unrepairable') return false
+  if (currentStatus === 'declined' && incomingStatus === 'approved') return true
+  return (REPAIR_TRANSITIONS[currentStatus] ?? []).includes(incomingStatus as never)
+}
+
 function isOrcVoidRewind(currentStatus: string, incomingStatus: string): boolean {
   return currentStatus === 'verified_released' && incomingStatus === 'ready'
 }
@@ -191,7 +204,11 @@ export function pickRepairStoreRow(
     return preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming)
   }
 
-  if (REPAIR_TERMINAL_STATUSES.has(currentStatus) && incomingStatus !== currentStatus) {
+  if (
+    REPAIR_TERMINAL_STATUSES.has(currentStatus)
+    && incomingStatus !== currentStatus
+    && !isReopenFromSoftTerminal(currentStatus, incomingStatus)
+  ) {
     return preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming)
   }
 

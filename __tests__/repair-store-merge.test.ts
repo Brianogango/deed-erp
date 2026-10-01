@@ -31,6 +31,18 @@ describe('pickRepairStoreRow', () => {
     expect(pickRepairStoreRow({ id: 'a', status: 'retained' }, { id: 'a', status: 'ready' }).status).toBe('retained')
   })
 
+  it('lets a declined quote be revised & re-sent, or the device returned', () => {
+    const quote = { id: 'q2', total: 500 }
+    const picked = pickRepairStoreRow(
+      { id: 'a', status: 'declined', quote: { id: 'q1', total: 900 } },
+      { id: 'a', status: 'awaiting_approval', quote },
+    )
+    expect(picked.status).toBe('awaiting_approval')
+    expect(picked.quote).toEqual(quote)
+    expect(pickRepairStoreRow({ id: 'a', status: 'declined' }, { id: 'a', status: 'returned' }).status).toBe('returned')
+    expect(pickRepairStoreRow({ id: 'a', status: 'declined' }, { id: 'a', status: 'in_repair' }).status).toBe('declined')
+  })
+
   it('allows in-progress Back and QC fail', () => {
     expect(pickRepairStoreRow({ id: 'a', status: 'in_repair' }, { id: 'a', status: 'assigned' }).status).toBe('assigned')
     expect(pickRepairStoreRow({ id: 'a', status: 'qc' }, { id: 'a', status: 'in_repair' }).status).toBe('in_repair')
