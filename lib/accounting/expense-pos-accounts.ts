@@ -32,6 +32,13 @@ export function expenseAccountForCategory(category?: ExpenseCategoryKey): string
     software: '6503 - Computer Expenses',
     hardware: '6521 - Expensed Assets',
     maintenance: '6505 - Repairs and Maintenance',
+    rent: '6508 - Rent and Service Charge',
+    service_charge: '6508 - Rent and Service Charge',
+    electricity: '6506 - Water and Electricity',
+    internet: '6510 - Telephone and Internet',
+    insurance: '6704 - Insurance',
+    bank_charges: '6703 - Bank Charges',
+    interest: '6701 - Interest Expense',
     other: '6599 - Other Operating Expenses',
   }
   return map[category ?? 'other'] ?? '6599 - Other Operating Expenses'

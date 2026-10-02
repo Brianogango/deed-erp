@@ -9,7 +9,8 @@ export const runtime = 'nodejs'
 const VALID_CATEGORIES = [
   'courier', 'office_supplies', 'water', 'printing',
   'transport', 'meals', 'utilities', 'software',
-  'hardware', 'maintenance', 'other',
+  'hardware', 'maintenance', 'rent', 'service_charge', 'electricity',
+  'internet', 'insurance', 'bank_charges', 'interest', 'other',
 ] as const
 
 type ExpenseCategory = typeof VALID_CATEGORIES[number]
