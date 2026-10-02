@@ -134,6 +134,7 @@ function mapInvoiceItems(lines: any[]) {
       ...(optionalUuid(l.purchaseOrderItemId ?? l.poItemId) ? { purchaseOrderItemId: optionalUuid(l.purchaseOrderItemId ?? l.poItemId) } : {}),
       ...(optionalUuid(l.grnItemId ?? l.receiptLineId) ? { grnItemId: optionalUuid(l.grnItemId ?? l.receiptLineId) } : {}),
       ...(optionalUuid(l.serialNumberId ?? l.serialId) ? { serialNumberId: optionalUuid(l.serialNumberId ?? l.serialId) } : {}),
+      ...(String(l.accountCode ?? '').trim() ? { accountCode: String(l.accountCode).trim().slice(0, 20) } : {}),
     }
   })
 }

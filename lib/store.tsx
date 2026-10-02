@@ -3651,7 +3651,7 @@ export interface AppState {
   deleteSaleOrder: (id: string) => void
 
   // Invoices
-  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
+  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string; account?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   /** Reorder a draft invoice line (product or section) up/down. */
   moveInvoiceLine: (invoiceId: string, lineId: string, direction: -1 | 1) => void
@@ -13654,6 +13654,7 @@ const storeCtx: AppState = {
             unitPrice,
             taxRate,
             ...(discountPct > 0 ? { discountPct } : {}),
+            ...(String(l.account ?? '').trim() ? { accountCode: String(l.account).trim() } : {}),
             subtotal,
           }
         })

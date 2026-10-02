@@ -1758,6 +1758,8 @@ model InvoiceItem {
   taxClaimEligible Boolean @default(true) @map("tax_claim_eligible")
   taxClaimReason  String? @map("tax_claim_reason") @db.VarChar(255)
   sortOrder      Int      @default(0) @map("sort_order")
+  // Expense / revenue account chosen on the line (e.g. 6506 on a utility bill).
+  accountCode    String?  @map("account_code") @db.VarChar(20)
 
   invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product       Product?       @relation(fields: [productId], references: [id])

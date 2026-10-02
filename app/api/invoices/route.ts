@@ -154,6 +154,7 @@ function mapInvoiceItems(lines: any[], isCreditNote = false) {
       productId: optionalUuid(l.productId) ?? undefined,
       serialNumberId: optionalUuid(l.serialNumberId ?? l.serialId) ?? undefined,
       purchaseOrderItemId: optionalUuid(l.purchaseOrderItemId ?? l.poItemId) ?? undefined,
+      accountCode: String(l.accountCode ?? '').trim().slice(0, 20) || undefined,
     }
   })
 }
