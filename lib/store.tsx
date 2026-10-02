@@ -2711,6 +2711,13 @@ const expenseAccountForCategory = (category?: ExpenseCategory) => {
     software: '6503 - Computer Expenses',
     hardware: '6521 - Expensed Assets',
     maintenance: '6505 - Repairs and Maintenance',
+    rent: '6508 - Rent and Service Charge',
+    service_charge: '6508 - Rent and Service Charge',
+    electricity: '6506 - Water and Electricity',
+    internet: '6510 - Telephone and Internet',
+    insurance: '6704 - Insurance',
+    bank_charges: '6703 - Bank Charges',
+    interest: '6701 - Interest Expense',
     other: '6599 - Other Operating Expenses',
   }
   return map[category ?? 'other'] ?? '6599 - Other Operating Expenses'
@@ -3100,6 +3107,13 @@ export const EXPENSE_CATEGORIES = [
   { value: 'software',        label: 'Software / Subscriptions' },
   { value: 'hardware',        label: 'Equipment / Hardware' },
   { value: 'maintenance',     label: 'Maintenance & Repairs' },
+  { value: 'rent', label: 'Rent' },
+  { value: 'service_charge', label: 'Service Charge' },
+  { value: 'electricity', label: 'Electricity' },
+  { value: 'internet', label: 'Telephone & Internet' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'bank_charges', label: 'Bank Charges' },
+  { value: 'interest', label: 'Loan Interest' },
   { value: 'other',           label: 'Other' },
 ] as const
 
@@ -3146,6 +3160,8 @@ export interface Expense {
   paymentBankAccount?: string
   paymentReference?: string
   paidDate?: string
+  /** Who the company is paying (landlord, KPLC, supplier) — for expenses that are not an employee's. */
+  payeeName?: string
   notes?: string
   createdAt: string
 }
