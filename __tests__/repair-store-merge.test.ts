@@ -20,6 +20,25 @@ describe('pickRepairStoreRow', () => {
     expect(pickRepairStoreRow({ id: 'a', status: 'verified_released' }, { id: 'a', status: 'assigned' }).status).toBe('verified_released')
   })
 
+  it('allows a deliberate Back step from Ready, but not a stale rewind', () => {
+    const history = [{ status: 'ready', date: 'd1', note: 'QC passed' }]
+    const stepped = [...history, { status: 'qc', date: 'd2', note: 'Lead moved progress back from ready to qc', by: 'Lead' }]
+    expect(pickRepairStoreRow(
+      { id: 'a', status: 'ready', statusHistory: history },
+      { id: 'a', status: 'qc', statusHistory: stepped },
+    ).status).toBe('qc')
+    // stale snapshot: same history, no new entry
+    expect(pickRepairStoreRow(
+      { id: 'a', status: 'ready', statusHistory: history },
+      { id: 'a', status: 'qc', statusHistory: history },
+    ).status).toBe('ready')
+    // an invoiced job never steps back this way
+    expect(pickRepairStoreRow(
+      { id: 'a', status: 'ready', invoiceId: 'i1', statusHistory: history },
+      { id: 'a', status: 'qc', statusHistory: stepped },
+    ).status).toBe('ready')
+  })
+
   it('allows forward progress onto a finalised job', () => {
     expect(pickRepairStoreRow({ id: 'a', status: 'ready' }, { id: 'a', status: 'invoiced', invoiceId: 'i1' }).status).toBe('invoiced')
     expect(pickRepairStoreRow({ id: 'a', status: 'verified_released' }, { id: 'a', status: 'collected', collectedDate: 'x' }).status).toBe('collected')

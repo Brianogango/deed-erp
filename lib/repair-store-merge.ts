@@ -165,6 +165,26 @@ function isReopenFromSoftTerminal(currentStatus: string, incomingStatus: string)
   return (REPAIR_TRANSITIONS[currentStatus] ?? []).includes(incomingStatus as never)
 }
 
+/**
+ * A lead technician / director deliberately stepped a Ready job back (the
+ * "Back step" button) — e.g. to send it to a vendor again. The write carries a
+ * status-history entry the server copy does not have yet, naming the target
+ * status, so it is told apart from a stale browser snapshot (which has an
+ * older, shorter history). Only a Ready job that has not been invoiced.
+ */
+function isIntentionalReadyBackStep(current: RepairStoreRow, incoming: RepairStoreRow): boolean {
+  if (asStatus(current) !== 'ready') return false
+  const incomingStatus = asStatus(incoming)
+  if (repairStatusRank(incomingStatus) >= repairStatusRank('ready')) return false
+  if (current.invoiceId || (current as { linkedInvoiceId?: unknown }).linkedInvoiceId) return false
+  const currentHistory = Array.isArray(current.statusHistory) ? current.statusHistory : []
+  const incomingHistory = Array.isArray(incoming.statusHistory) ? incoming.statusHistory : []
+  if (incomingHistory.length <= currentHistory.length) return false
+  const last = incomingHistory[incomingHistory.length - 1] as { status?: unknown; note?: unknown } | undefined
+  return String(last?.status ?? '') === incomingStatus
+    && /moved progress back/i.test(String(last?.note ?? ''))
+}
+
 function isOrcVoidRewind(currentStatus: string, incomingStatus: string): boolean {
   return currentStatus === 'verified_released' && incomingStatus === 'ready'
 }
@@ -213,6 +233,10 @@ export function pickRepairStoreRow(
 
   const currentRank = repairStatusRank(currentStatus)
   const incomingRank = repairStatusRank(incomingStatus)
+
+  if (isIntentionalReadyBackStep(current, incoming)) {
+    return preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming)
+  }
 
   if (REPAIR_FINALIZED_STATUSES.has(currentStatus) && incomingRank < currentRank) {
     return preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming)
