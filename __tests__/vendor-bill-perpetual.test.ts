@@ -116,3 +116,38 @@ describe('vendor bill perpetual posting', () => {
     expect(lines.some(l => l.account.includes('6101'))).toBe(false)
   })
 })
+
+describe('vendor bill expense account per line', () => {
+  const base = { partnerName: 'KPLC', ref: 'BILL/9', taxTotal: 0, perpetual: false }
+
+  it('books a utility line to its own expense account and balances', () => {
+    const lines = buildVendorBillPerpetualLines({
+      ...base, subtotal: 5000, total: 5000,
+      lines: [{ qty: 1, unitPrice: 5000, subtotal: 5000, accountCode: '6506' }],
+    })
+    expect(lines.find(l => l.debit === 5000)?.account).toContain('6506')
+    expect(lines.some(l => l.account.includes('6101'))).toBe(false)
+    expect(lines.reduce((s, l) => s + l.debit, 0)).toBe(lines.reduce((s, l) => s + l.credit, 0))
+  })
+
+  it('splits a mixed bill: coded lines to their account, the rest to Purchases', () => {
+    const lines = buildVendorBillPerpetualLines({
+      ...base, subtotal: 8000, total: 8000,
+      lines: [
+        { qty: 1, unitPrice: 5000, subtotal: 5000, accountCode: '6508' },
+        { qty: 1, unitPrice: 3000, subtotal: 3000 },
+      ],
+    })
+    expect(lines.find(l => l.account.includes('6508'))?.debit).toBe(5000)
+    expect(lines.find(l => l.account.includes('6101'))?.debit).toBe(3000)
+    expect(lines.reduce((s, l) => s + l.debit, 0)).toBe(lines.reduce((s, l) => s + l.credit, 0))
+  })
+
+  it('ignores a non-expense code and keeps the default', () => {
+    const lines = buildVendorBillPerpetualLines({
+      ...base, subtotal: 1000, total: 1000,
+      lines: [{ qty: 1, unitPrice: 1000, subtotal: 1000, accountCode: '3401' }],
+    })
+    expect(lines.find(l => l.debit === 1000)?.account).toContain('6101')
+  })
+})

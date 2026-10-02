@@ -243,8 +243,8 @@ const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
   month: 'short',
   year: 'numeric',
 })
-type ManualInvoiceLine = { type: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount: string }
-const newManualInvoiceLine = (): ManualInvoiceLine => ({ type: 'item', desc: '', qty: '', price: '', tax: '', discount: '' })
+type ManualInvoiceLine = { type: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount: string; account?: string }
+const newManualInvoiceLine = (): ManualInvoiceLine => ({ type: 'item', desc: '', qty: '', price: '', tax: '', discount: '', account: '' })
 const newManualSectionLine = (): ManualInvoiceLine => ({ type: 'section', desc: '', qty: '0', price: '0', tax: '0', discount: '0' })
 // Odoo-style invoice badge: the document state (Draft/Posted/Cancelled) with
 // the computed payment status shown for posted documents; Overdue is a
@@ -664,6 +664,13 @@ function AccountingContent() {
   const canManageFullFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
+  // Operating-expense accounts (6xxx) a bill line can be booked to.
+  const billExpenseAccounts = useMemo(
+    () => (accounts ?? [])
+      .filter((a: { code: string; type?: string; isActive?: boolean }) => /^6\d{3}$/.test(String(a.code)) && a.type === 'expense' && a.isActive !== false)
+      .sort((a: { code: string }, b: { code: string }) => a.code.localeCompare(b.code)),
+    [accounts],
+  )
 
   // New invoice / bill: derive the due date from the contact's credit period
   // (Contacts → Payment terms) and the document date, until the user sets one.
@@ -737,6 +744,7 @@ function AccountingContent() {
         index,
         lineType: 'item' as const,
         description: line.desc.trim(),
+        accountCode: String(line.account ?? '').trim(),
         qty: normalizedQty,
         unitPrice: Math.max(0, normalizedPrice),
         taxRate,
@@ -1109,6 +1117,7 @@ function AccountingContent() {
       price: String(l.unitPrice),
       tax: String(l.taxRate ?? 0),
       discount: String(l.discountPct ?? 0),
+      account: l.accountCode ?? '',
     })))
     setNewNotes(inv.notes ?? '')
     setNewPaymentDetails(
@@ -1363,6 +1372,7 @@ function AccountingContent() {
         unitPrice: l.unitPrice,
         taxRate: l.taxRate,
         ...(l.discountPct ? { discountPct: l.discountPct } : {}),
+        ...((l as { accountCode?: string }).accountCode ? { accountCode: (l as { accountCode?: string }).accountCode } : {}),
         subtotal: l.subtotal,
       }))
       updateInvoice(editingInvId, {
@@ -2879,6 +2889,19 @@ function AccountingContent() {
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))}
                                 />
                                 {isInvalid && !l.desc.trim() && <p className="text-[9px] text-red-600 font-semibold mt-1">Description required</p>}
+                                {tab === 'bills' && (
+                                  <select
+                                    className="form-input text-[11px] w-full mt-1"
+                                    aria-label="Expense account"
+                                    value={l.account ?? ''}
+                                    onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, account: e.target.value } : x)))}
+                                  >
+                                    <option value="">Expense account: Purchases (default)</option>
+                                    {billExpenseAccounts.map(a => (
+                                      <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
+                                    ))}
+                                  </select>
+                                )}
                               </td>
                               <td className="px-3 py-2">
                                 <input
