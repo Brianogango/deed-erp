@@ -35,7 +35,7 @@ describe('loan register', () => {
 })
 
 describe('loan postings', () => {
-  const sum = (ls: { debit: number; credit: number }[], k: 'debit' | 'credit') => ls.reduce((s, l) => s + l[k], 0)
+  const sum = (ls: { debit?: number; credit?: number }[], k: 'debit' | 'credit') => ls.reduce((s, l) => s + (l[k] ?? 0), 0)
   it('drawdown: Dr bank, Cr 3401 Bank Loan', () => {
     const ls = buildLoanDrawdownLines({ amount: 100000, ref: 'LN/0001', lender: 'NCBA' })
     expect(ls[1]).toMatchObject({ accountLabel: '3401 - Bank Loan', credit: 100000 })
