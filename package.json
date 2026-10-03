@@ -21,6 +21,8 @@
     "restore:missing-bills": "node scripts/restore-missing-bills.mjs",
     "preview:missing-bills": "node scripts/preview-missing-bills.mjs",
     "audit:ledger-documents": "node scripts/audit-ledger-vs-documents.mjs",
+    "reconcile:customer-payments": "node scripts/reconcile-customer-payments.mjs",
+    "audit:renumbered-bills": "node scripts/audit-renumbered-bills.mjs",
     "reconcile:bill-payments": "node scripts/reconcile-bill-payments.mjs",
     "parity:invoices": "node scripts/invoice-parity.mjs",
     "migrate:invoice-item-account-code:safe": "node scripts/run-safe-invoice-item-account-code.mjs",
