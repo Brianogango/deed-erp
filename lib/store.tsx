@@ -5310,6 +5310,37 @@ const DATA_VERSION = 'v4'
 const sync = (url: string, opts: RequestInit) => fetch(url, opts).catch(() => {})
 
 /**
+ * Save a newly created invoice/bill to the invoices table and TELL the user if
+ * it does not land. This used to be fire-and-forget `sync`, so a failed save
+ * left a posted bill that existed only on screen (and was later dropped by the
+ * list rebuild). Retries only when no response arrived or the gateway failed
+ * (502/503/504); on a retry a "already exists" answer counts as success.
+ */
+const saveInvoiceToServer = async (
+  invoice: unknown,
+  onFailure: (message: string) => void,
+): Promise<boolean> => {
+  const ref = String((invoice as { ref?: unknown })?.ref ?? 'document')
+  const delays = [0, 1500, 4000]
+  let lastError = ''
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    if (delays[attempt]) await new Promise(resolve => setTimeout(resolve, delays[attempt]))
+    try {
+      const res = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      if (res.ok) return true
+      const payload = await res.json().catch(() => null) as { error?: string } | null
+      lastError = payload?.error || `server returned ${res.status}`
+      if (attempt > 0 && (res.status === 409 || /already exists|unique/i.test(lastError))) return true
+      if (![502, 503, 504].includes(res.status)) break
+    } catch {
+      lastError = 'no connection to the server'
+    }
+  }
+  onFailure(`${ref} was NOT saved to the server (${lastError}). Do not close this tab; tell Finance so it can be re-saved.`)
+  return false
+}
+
+/**
  * A write whose failure the user is told about.
  *
  * `sync` above discards everything — it does not even read res.ok — so a 403,
@@ -8482,7 +8513,7 @@ const storeCtx: AppState = {
         }
         billId = bill.id
         setInvoices(prev => [bill, ...prev])
-        sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
+        void saveInvoiceToServer(bill, msg => showToast(msg, 'error'))
         showToast(`Vendor bill ${billRef} created for ${job.vendorName}`, 'success')
       }
 
@@ -10797,7 +10828,7 @@ const storeCtx: AppState = {
       }
       setInvoices(p => [invoice, ...p])
       postInvoiceJournalOnce(invoice)
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      void saveInvoiceToServer(invoice, msg => showToast(msg, 'error'))
 
       setQuotes(p => {
         const next = p.map(q => q.id === quoteId ? {
@@ -13695,7 +13726,7 @@ const storeCtx: AppState = {
         notes,
       }
       setInvoices(prev => [invoice, ...prev])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      void saveInvoiceToServer(invoice, msg => showToast(msg, 'error'))
       showToast(`${type === 'vendor_bill' ? 'Bill' : 'Invoice'} ${invoice.ref} created`, 'success')
       return invoice
     },
@@ -19388,7 +19419,7 @@ const storeCtx: AppState = {
       }
       setPosOrders(p => p.map(o => o.id === order.id ? { ...o, invoiceRef: posInv.ref } : o))
       setInvoices(p => [posInv, ...p])
-      await sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
+      await saveInvoiceToServer(posInv, msg => showToast(msg, 'error'))
       const revenueBuckets = aggregateLinesByAccount({
         lines: posInv.lines,
         resolveProduct: (productId) => prodRef.current.find(p => p.id === productId),
@@ -19924,7 +19955,7 @@ const storeCtx: AppState = {
         notes: `Auto-generated from weekly pay ${pay.ref} · Confirmed by ${user?.name ?? 'staff'}`,
       }
       setInvoices(p => [bill, ...p])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
+      void saveInvoiceToServer(bill, msg => showToast(msg, 'error'))
       addAuditLog('create_bill', bill.ref, `Rider bill ${pay.ref} confirmed — vendor bill ${bill.ref} created`)
 
       setRiderWeeklyPays(prev => prev.map(p =>
