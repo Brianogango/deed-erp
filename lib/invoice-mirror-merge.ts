@@ -1,5 +1,5 @@
 /**
- * Merge the invoices table into the deed_invoices store list without ever
+ * Merge a table-backed collection (invoices, sale orders, quotes) into its store list without ever
  * dropping a document that only the store list knows about.
  *
  * `refreshInvoicesBlob` used to REPLACE the list with the table rows. A bill
