@@ -1,6 +1,7 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { saveStoreKeys } from '@/lib/server-store'
+import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { mergeInvoiceMirror } from '@/lib/invoice-mirror-merge'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
@@ -64,7 +65,12 @@ export async function refreshQuotesBlob(): Promise<void> {
 export async function refreshInvoicesBlob(): Promise<void> {
   try {
     const all = await prisma.invoice.findMany({ include: { client: true, items: true }, orderBy: { invoiceDate: 'desc' } })
-    await saveStoreKeys({ deed_invoices: JSON.stringify(all.map(mapInvoiceToClient)) })
+    // Never replace the list outright: a document that only the store list
+    // knows about (its table save failed) must survive the refresh.
+    const existing = (await loadAppState(['deed_invoices'])).deed_invoices
+    const { merged, kept } = mergeInvoiceMirror(all.map(mapInvoiceToClient), existing)
+    if (kept > 0) console.warn(`[documents-broadcast] kept ${kept} invoice(s) present in the store but missing from the invoices table`)
+    await saveStoreKeys({ deed_invoices: JSON.stringify(merged) })
   } catch (err) {
     console.error('[documents-broadcast] refreshInvoicesBlob failed:', err)
   }
