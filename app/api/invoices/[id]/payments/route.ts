@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
-import { loadAppState } from '@/lib/server-store'
+import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import {
   canPayOwnPostedInvoice,
   canPostOrPayCustomerInvoice,
@@ -237,6 +237,24 @@ export async function POST(
     const { payment, allocations } = result
 
     const updatedInvoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
+
+    // The Finance screens read the deed_invoices store mirror, which used to be
+    // updated only by the browser's follow-up sync. If that sync never arrived
+    // (tab closed, offline, conflict) the ledger and invoices table showed the
+    // payment while the bill still read unpaid. Raise the mirror here too; it
+    // only ever moves amountPaid upward and never fails the payment.
+    if (updatedInvoice) try {
+      const state = await loadAppState(['deed_invoices'])
+      const mirror = Array.isArray(state.deed_invoices) ? state.deed_invoices as Array<Record<string, unknown>> : []
+      const row = mirror.find(i => i.id === invoiceId)
+      const paid = Number(updatedInvoice.amountPaid)
+      if (row && (Number(row.amountPaid) || 0) < paid) {
+        row.amountPaid = paid
+        await saveStoreKeys({ deed_invoices: JSON.stringify(mirror) })
+      }
+    } catch (err) {
+      console.error('[invoice-payment] mirror amountPaid sync failed:', err)
+    }
 
     // Audit was committed inside the same serializable transaction as the payment and journal.
 
