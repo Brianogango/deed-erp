@@ -18,6 +18,7 @@
     "migrate:leads-inbound-message-id:safe": "node scripts/run-safe-leads-inbound-message-id.mjs",
     "migrate:bulk-stock-levels:safe": "node scripts/run-safe-bulk-stock-levels.mjs",
     "migrate:sale-order-item-discount-pct:safe": "node scripts/run-safe-sale-order-item-discount-pct.mjs",
+    "audit:ledger-documents": "node scripts/audit-ledger-vs-documents.mjs",
     "reconcile:bill-payments": "node scripts/reconcile-bill-payments.mjs",
     "parity:invoices": "node scripts/invoice-parity.mjs",
     "migrate:invoice-item-account-code:safe": "node scripts/run-safe-invoice-item-account-code.mjs",
