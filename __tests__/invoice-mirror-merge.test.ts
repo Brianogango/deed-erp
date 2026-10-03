@@ -11,8 +11,13 @@ describe('mergeInvoiceMirror', () => {
   })
 
   it('lets the table win for ids it contains', () => {
-    const { merged } = mergeInvoiceMirror([{ id: 'a', amountPaid: 500 }], [{ id: 'a', amountPaid: 0 }])
-    expect(merged).toEqual([{ id: 'a', amountPaid: 500 }])
+    const { merged } = mergeInvoiceMirror([{ id: 'a', amountPaid: 500, ref: 'new' }], [{ id: 'a', amountPaid: 0, ref: 'old' }])
+    expect(merged).toEqual([{ id: 'a', amountPaid: 500, ref: 'new' }])
+  })
+
+  it('never lowers a recorded amountPaid that the table has not caught up with', () => {
+    const { merged } = mergeInvoiceMirror([{ id: 'a', amountPaid: 0, ref: 'INV/1' }], [{ id: 'a', amountPaid: 4000 }])
+    expect(merged).toEqual([{ id: 'a', amountPaid: 4000, ref: 'INV/1' }])
   })
 
   it('handles a missing or malformed existing list', () => {
