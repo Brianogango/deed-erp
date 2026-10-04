@@ -47,6 +47,16 @@ function ppeCodeForLine(line: VendorBillLineInput): string | undefined {
   return isPpeCostAccount(code) ? code : undefined
 }
 
+/**
+ * An operating-expense account chosen on a bill line (6xxx, e.g. 6506 Water and
+ * Electricity). Lets a utility or rent bill land in its own account instead of
+ * the Purchases fallback.
+ */
+export function expenseCodeForLine(line: { accountCode?: string }): string | undefined {
+  const code = String(line.accountCode || '').trim().split(/\s+/)[0]
+  return /^6\d{3}$/.test(code) ? code : undefined
+}
+
 function ppeAccountLabel(code: string, chart: Array<{ code: string; name: string }>) {
   return accountLabel(code, chart) || PPE_COST_LABELS[code as keyof typeof PPE_COST_LABELS] || `${code} — PPE`
 }
@@ -77,6 +87,7 @@ export function buildVendorBillPerpetualLines(params: {
   const ref = params.ref
 
   const ppeByCode = new Map<string, number>()
+  const expenseByCode = new Map<string, number>()
   let grniClear = 0
   let billStocked = 0
   let expenseNonStocked = 0
@@ -97,17 +108,32 @@ export function buildVendorBillPerpetualLines(params: {
       grniClear = money(grniClear + qty * receiptCost)
       billStocked = money(billStocked + billSub)
     } else {
-      expenseNonStocked = money(expenseNonStocked + billSub)
+      const expenseCode = expenseCodeForLine(line)
+      if (expenseCode) {
+        expenseByCode.set(expenseCode, money((expenseByCode.get(expenseCode) ?? 0) + billSub))
+      } else {
+        expenseNonStocked = money(expenseNonStocked + billSub)
+      }
     }
   }
 
   const ppeTotal = [...ppeByCode.values()].reduce((s, n) => s + n, 0)
   const useLegacyExpense = !params.perpetual && ppeTotal <= 0
+  const codedExpenseTotal = money([...expenseByCode.values()].reduce((s, n) => s + n, 0))
+  /** Debit lines for lines with their own expense account, plus `rest` to Purchases. */
+  const expenseDebits = (rest: number, restDescription: string): VendorBillJournalLine[] => [
+    ...[...expenseByCode].filter(([, amount]) => amount > 0).map(([code, amount]) => ({
+      account: accountLabel(code, chart),
+      description: `Expense ${code}: ${ref}`,
+      debit: amount,
+      credit: 0,
+    })),
+    ...(rest > 0 ? [{ account: purchaseFallback, description: restDescription, debit: rest, credit: 0 }] : []),
+  ]
 
   if (useLegacyExpense) {
-    const expense = money(params.subtotal)
     return [
-      { account: purchaseFallback, description: `Purchase: ${partner}`, debit: expense, credit: 0 },
+      ...expenseDebits(money(params.subtotal - codedExpenseTotal), `Purchase: ${partner}`),
       ...(tax > 0 ? [{ account: labelForRole('input_vat'), description: `VAT input on ${ref}`, debit: tax, credit: 0 }] : []),
       { account: labelForRole('ap'), description: `AP: ${partner}`, debit: 0, credit: total },
     ]
@@ -115,9 +141,8 @@ export function buildVendorBillPerpetualLines(params: {
 
   // Perpetual with nothing stocked and no PPE → expense the bill (legacy).
   if (params.perpetual && grniClear <= 0 && billStocked <= 0 && ppeTotal <= 0) {
-    const expense = money(params.subtotal)
     return [
-      { account: purchaseFallback, description: `Purchase: ${partner}`, debit: expense, credit: 0 },
+      ...expenseDebits(money(params.subtotal - codedExpenseTotal), `Purchase: ${partner}`),
       ...(tax > 0 ? [{ account: labelForRole('input_vat'), description: `VAT input on ${ref}`, debit: tax, credit: 0 }] : []),
       { account: labelForRole('ap'), description: `AP: ${partner}`, debit: 0, credit: total },
     ]
@@ -158,14 +183,7 @@ export function buildVendorBillPerpetualLines(params: {
       credit: money(-variance),
     })
   }
-  if (expenseNonStocked > 0) {
-    lines.push({
-      account: purchaseFallback,
-      description: `Non-stocked purchase: ${partner}`,
-      debit: expenseNonStocked,
-      credit: 0,
-    })
-  }
+  lines.push(...expenseDebits(expenseNonStocked, `Non-stocked purchase: ${partner}`))
   if (tax > 0) {
     lines.push({ account: labelForRole('input_vat'), description: `VAT input on ${ref}`, debit: tax, credit: 0 })
   }

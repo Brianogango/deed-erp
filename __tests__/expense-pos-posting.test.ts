@@ -268,3 +268,17 @@ describe('expense / POS post helpers', () => {
     )
   })
 })
+
+describe('rent, utility and finance expense categories', () => {
+  it.each([
+    ['rent', '6508'],
+    ['service_charge', '6508'],
+    ['electricity', '6506'],
+    ['internet', '6510'],
+    ['interest', '6701'],
+    ['bank_charges', '6703'],
+    ['insurance', '6704'],
+  ])('%s posts to %s', (category, code) => {
+    expect(expenseAccountForCategory(category)).toMatch(new RegExp(`^${code} - `))
+  })
+})

@@ -28,11 +28,13 @@ import {
   ensureConfirmedSaleOrderForFulfillment,
 } from '@/lib/sale-order-confirm-heal.server'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
+import { isDiagnosisFeeLine } from '@/lib/diagnosis-fee'
 import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import {
   findRepairForSaleOrder,
   findRepairsForConsolidatedSaleOrder,
+  isRepairFeeOnlyBillable,
   isRepairFulfillmentReady,
   stampInvoiceOnMatchingRepair,
 } from '@/lib/repair/sale-order-link'
@@ -145,8 +147,17 @@ export async function POST(
     const blobRepairId = linkedRepair?.id ? String(linkedRepair.id) : undefined
     // A merged order skips the delivery note only when every repair on it is
     // finished — one job still on the bench must not be billed as done.
-    const repairFulfillmentReady = billedRepairs.length > 0
+    const workshopFinished = billedRepairs.length > 0
       && billedRepairs.every(r => isRepairFulfillmentReady(r?.status))
+    // A declined / stopped / unrepairable job bills the diagnosis fee only and
+    // has no delivery to validate. Allowed only while every line on the order
+    // is that fee, so a leftover quote order cannot be billed this way.
+    const feeOnlyRepairOrder = !workshopFinished
+      && billedRepairs.length > 0
+      && billedRepairs.every(r => isRepairFeeOnlyBillable(r))
+      && confirmed.items.length > 0
+      && confirmed.items.every(item => isDiagnosisFeeLine({ description: item.description ?? undefined }))
+    const repairFulfillmentReady = workshopFinished || feeOnlyRepairOrder
     const priorDownPayments = sumUnappliedDownPayments(
       [
         ...blobInvoices,
@@ -390,7 +401,9 @@ export async function POST(
     }
 
     const draftRef = await getNextDocNumber('invoice').catch(() => `DRAFT-INV-${Date.now().toString().slice(-6)}`)
-    const paymentTermsDays = Number(confirmed.paymentTermsDays)
+    // Repair orders are minted in the browser without terms; fall back to the
+    // customer's own credit period rather than treating "unset" as 0 days.
+    const paymentTermsDays = Number(confirmed.paymentTermsDays ?? confirmed.client?.paymentTermsDays)
     const dueDate = new Date(Date.now() + (Number.isFinite(paymentTermsDays) && paymentTermsDays >= 0 ? paymentTermsDays : 0) * 86400000)
     const invoiceNotes = downDeduction > 0
       ? `Created from ${confirmed.orderNumber} · Down payments deducted: KES ${downDeduction.toLocaleString()}`

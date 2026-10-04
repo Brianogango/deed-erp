@@ -33,6 +33,20 @@ export function isRepairFulfillmentReady(status?: string | null): boolean {
   )
 }
 
+/**
+ * The customer did not go ahead with the repair — quote declined, stopped at
+ * diagnosis, or unrepairable. Nothing was delivered, and only the diagnosis fee
+ * is billed, so there is no delivery note to wait for.
+ */
+export function isRepairFeeOnlyBillable(
+  repair?: { status?: string | null; diagnosisStopped?: boolean | null } | null,
+): boolean {
+  if (!repair) return false
+  if (repair.diagnosisStopped) return true
+  const status = String(repair.status ?? '').toLowerCase()
+  return status === 'declined' || status === 'unrepairable'
+}
+
 export type SaleOrderRepairHint = {
   id?: string | null
   ref?: string | null

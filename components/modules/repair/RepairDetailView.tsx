@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client'
 
+import Link from 'next/link'
 import { useState, useRef } from 'react'
 import { useRepair } from './RepairContext'
 import { useRepairStore, fmtKes } from '@/lib/store'
@@ -28,7 +29,7 @@ import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { repairProgressOrderFor } from '@/lib/repair-progress'
-import { isDirectRepairPath, isQuoteDeclinedReopenable, quotableStatusesForPath, repairPathLabel, returnableStatusesForPath, startableStatusesForPath } from '@/lib/repair-path'
+import { isDirectRepairPath, isQuoteAwaitingApproval, isQuoteDeclinedReopenable, quotableStatusesForPath, repairPathLabel, returnableStatusesForPath, startableStatusesForPath } from '@/lib/repair-path'
 import {
   BILLING_EXEMPT_REASON_LABELS,
   billingExemptLabel,
@@ -38,10 +39,10 @@ import {
   startableStatusesWhenBillingExempt,
   type BillingExemptReason,
 } from '@/lib/repair-billing-exempt'
-import { resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
+import { diagnosisFeeLineBadge, isDiagnosisFeeLine, resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 import { pickRepairPrimaryAction } from '@/lib/repair-handover'
 import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
-import { buildRepairInvoiceCharges, repairBillingNeedsSync } from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 
 const PROC_COLORS = {
@@ -124,7 +125,7 @@ export default function RepairDetailView() {
     setShowDeliveryModal, setShowMarkDeliveredConfirm,
     setShowProgressModal,
     verifyRepairIntake, startRepair, markRepairComplete, moveRepairToPreviousProgress, outsourceJobs, fileWarrantyClaim,
-    markPartsArrived, closeRepairJob, markUnrepairable,
+    markPartsArrived, closeRepairJob, markUnrepairable, createInvoiceFromRepair,
   } = useRepair()
 
   const { invoices, quotes, saleOrders, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid, markRepairNoCharge, repairs: allRepairs, consolidateRepairInvoices } = useRepairStore()
@@ -190,6 +191,14 @@ export default function RepairDetailView() {
     // Lock quote editing once device is marked ready-for-collection or has been picked up.
     // `declined` is intentionally allowed — staff may revise and re-send another quote.
     && !['ready','invoiced','verified_released','delivered','closed','cancelled','unrepairable','returned','retained'].includes(r.status)
+  // A sent quote still waiting on the customer: staff can fix a forgotten line
+  // without declining it first. Secondary action only (see repair-path.ts).
+  const canEditSentQuote = isQuoteAwaitingApproval(r.status)
+    && !!r.quote
+    && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentRole))
+    && !r.diagnosisStopped
+    && !billingExempt
+    && !pendingOutsourceJob
   const startableNow = (
     billingExempt
       ? startableStatusesWhenBillingExempt()
@@ -281,11 +290,18 @@ export default function RepairDetailView() {
   // and this status was in neither the quotable nor the invoiceable list, so
   // the fee could never be charged once a job was marked. The draft opens with
   // the fee alone and Finance decides what else belongs on it.
-  const canInvoice = ['ready', 'invoiced', 'unrepairable'].includes(r.status)
+  // A declined quote leaves the diagnosis fee billable on its own (nothing else
+  // was done). Offered only while a fee is actually still due.
+  const declinedFeeDue = isDeclinedRepair(r)
+    && buildRepairInvoiceCharges(r, false, 0).length > 0
+  const canInvoice = (['ready', 'invoiced', 'unrepairable'].includes(r.status) || declinedFeeDue)
     && !noCharge
     && billingSync.needed
     && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
-    && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+    // Whoever stops a job at diagnosis (lead tech, assigned technician) can
+    // also raise its fee invoice.
+    && (['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+      || ((!!r.diagnosisStopped || declinedFeeDue) && (currentRole === 'technical_lead' || isMyRepair)))
     && !pendingOutsourceJob
   // Offered only when this repair can itself go on a combined invoice and the
   // client has at least one other repair that can join it.
@@ -769,13 +785,26 @@ export default function RepairDetailView() {
                         </div>
                         <div className="flex items-center gap-2">
                           <strong className="text-[11px] font-black text-[var(--text-1)]">{fmtKes(line.subtotal)}</strong>
-                          <span className={`min-w-[68px] rounded-full border px-2 py-1 text-center text-[8px] font-black uppercase tracking-wider ${
-                            line.decision === 'approved'
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : line.decision === 'deferred'
-                                ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                : 'border-red-200 bg-red-50 text-red-700'
-                          }`}>{line.decision || 'Declined'}</span>
+                          {isDiagnosisFeeLine(line) ? (() => {
+                            const badge = diagnosisFeeLineBadge(r)
+                            return (
+                              <span className={`min-w-[68px] rounded-full border px-2 py-1 text-center text-[8px] font-black uppercase tracking-wider ${
+                                badge.tone === 'settled'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : badge.tone === 'due'
+                                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                    : 'border-slate-200 bg-slate-50 text-slate-600'
+                              }`}>{badge.label}</span>
+                            )
+                          })() : (
+                            <span className={`min-w-[68px] rounded-full border px-2 py-1 text-center text-[8px] font-black uppercase tracking-wider ${
+                              line.decision === 'approved'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : line.decision === 'deferred'
+                                  ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                  : 'border-red-200 bg-red-50 text-red-700'
+                            }`}>{line.decision || 'Declined'}</span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -793,6 +822,11 @@ export default function RepairDetailView() {
                 {canQuote && (
                   <button type="button" className="btn-primary flex min-h-10 w-full items-center justify-center gap-2 px-4 text-[11px]" onClick={() => setShowQuoteModal(true)}>
                     <Fa icon={faSync} className="text-[10px]" /> Revise &amp; re-send quote
+                  </button>
+                )}
+                {canInvoice && declinedFeeDue && (
+                  <button type="button" className="btn-secondary flex min-h-10 w-full items-center justify-center gap-2 px-4 text-[11px]" onClick={() => { void createInvoiceFromRepair(r.id, false) }}>
+                    <Fa icon={faFileInvoiceDollar} className="text-[10px]" /> Create diagnosis-fee invoice
                   </button>
                 )}
                 {canReturnDevice && (
@@ -963,9 +997,9 @@ export default function RepairDetailView() {
 
               {/* Linked invoice strip */}
               {r.invoiceId && linkedInvoice && (
-                <div
+                <Link
+                  href={`/finance/invoices/${encodeURIComponent(linkedInvoice.id)}`}
                   className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(99,102,241,0.08)] border border-indigo-500/25 cursor-pointer hover:bg-[rgba(99,102,241,0.12)] transition-colors"
-                  onClick={() => setModule('accounting')}
                 >
                   <div className="w-6 h-6 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
                     <Fa icon={faFileInvoiceDollar} className="text-white text-[9px]" />
@@ -977,7 +1011,7 @@ export default function RepairDetailView() {
                     </p>
                   </div>
                   <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">View →</span>
-                </div>
+                </Link>
               )}
 
               {/* Outsource job strip */}
@@ -1696,9 +1730,9 @@ export default function RepairDetailView() {
                     actions={[
                       {
                         id: 'quote',
-                        label: isQuoteDeclinedReopenable(r.status) ? 'Revise & re-send quote' : r.quote ? 'Edit quote' : 'Generate quote',
+                        label: isQuoteDeclinedReopenable(r.status) ? 'Revise & re-send quote' : canEditSentQuote ? 'Edit sent quote' : r.quote ? 'Edit quote' : 'Generate quote',
                         onClick: () => setShowQuoteModal(true),
-                        hidden: !canQuote || primaryActionId === 'quote',
+                        hidden: !(canQuote || canEditSentQuote) || primaryActionId === 'quote',
                       },
                       { id: 'decline', label: 'Decline quote', onClick: () => setShowDeclineModal(true), hidden: !canDeclineQuote, danger: true },
                       {

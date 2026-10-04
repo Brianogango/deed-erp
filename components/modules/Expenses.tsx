@@ -215,6 +215,7 @@ function ExpensesContent() {
     amount:        '',
     expenseDate:   '',
     paymentMethod: '' as ExpensePaymentMethod | '',
+    payeeName:     '',
     notes:         '',
   })
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -223,7 +224,7 @@ function ExpensesContent() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   function openSubmit() {
-    setForm({ category: '', description: '', amount: '', expenseDate: '', paymentMethod: '', notes: '' })
+    setForm({ category: '', description: '', amount: '', expenseDate: '', paymentMethod: '', payeeName: '', notes: '' })
     setReceiptFile(null)
     setIsScanning(false)
     setShowSubmit(true)
@@ -306,6 +307,7 @@ function ExpensesContent() {
         amount:          amt,
         expenseDate:     form.expenseDate,
         paymentMethod,
+        payeeName:       form.payeeName.trim() || undefined,
         notes:           form.notes.trim() || undefined,
         receiptDataUrl:  dataUrl,
         receiptFileName: meta?.name,
@@ -582,6 +584,15 @@ function ExpensesContent() {
                   placeholder="What was purchased / what was the expense for?"
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+
+              {/* Payee */}
+              <div>
+                <label className="text-[11px] font-semibold text-t2 block mb-1">Payee / supplier (optional)</label>
+                <input aria-label="Payee" className="form-input w-full text-[12px]"
+                  placeholder="e.g. KPLC, landlord, Nairobi Water — who the company is paying"
+                  value={form.payeeName}
+                  onChange={e => setForm(f => ({ ...f, payeeName: e.target.value }))} />
               </div>
 
               {/* Amount */}
@@ -1090,7 +1101,7 @@ function ExpenseTable({
       key={exp.id}
       eyebrow={exp.ref}
       title={exp.description}
-      subtitle={`${catLabel(exp.category)} · ${fmtDate(exp.expenseDate)}${showSubmitter ? ` · ${exp.submittedByName}` : ''}`}
+      subtitle={`${catLabel(exp.category)} · ${fmtDate(exp.expenseDate)}${exp.payeeName ? ` · Payee: ${exp.payeeName}` : ''}${showSubmitter ? ` · ${exp.submittedByName}` : ''}`}
       amount={fmtKes(exp.amount)}
       status={<ExpenseStatusBadge status={exp.status} />}
       meta={[

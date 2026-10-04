@@ -20,6 +20,25 @@ describe('pickRepairStoreRow', () => {
     expect(pickRepairStoreRow({ id: 'a', status: 'verified_released' }, { id: 'a', status: 'assigned' }).status).toBe('verified_released')
   })
 
+  it('allows a deliberate Back step from Ready, but not a stale rewind', () => {
+    const history = [{ status: 'ready', date: 'd1', note: 'QC passed' }]
+    const stepped = [...history, { status: 'qc', date: 'd2', note: 'Lead moved progress back from ready to qc', by: 'Lead' }]
+    expect(pickRepairStoreRow(
+      { id: 'a', status: 'ready', statusHistory: history },
+      { id: 'a', status: 'qc', statusHistory: stepped },
+    ).status).toBe('qc')
+    // stale snapshot: same history, no new entry
+    expect(pickRepairStoreRow(
+      { id: 'a', status: 'ready', statusHistory: history },
+      { id: 'a', status: 'qc', statusHistory: history },
+    ).status).toBe('ready')
+    // an invoiced job never steps back this way
+    expect(pickRepairStoreRow(
+      { id: 'a', status: 'ready', invoiceId: 'i1', statusHistory: history },
+      { id: 'a', status: 'qc', statusHistory: stepped },
+    ).status).toBe('ready')
+  })
+
   it('allows forward progress onto a finalised job', () => {
     expect(pickRepairStoreRow({ id: 'a', status: 'ready' }, { id: 'a', status: 'invoiced', invoiceId: 'i1' }).status).toBe('invoiced')
     expect(pickRepairStoreRow({ id: 'a', status: 'verified_released' }, { id: 'a', status: 'collected', collectedDate: 'x' }).status).toBe('collected')
@@ -29,6 +48,19 @@ describe('pickRepairStoreRow', () => {
     expect(pickRepairStoreRow({ id: 'a', status: 'cancelled' }, { id: 'a', status: 'received' }).status).toBe('cancelled')
     expect(pickRepairStoreRow({ id: 'a', status: 'unrepairable' }, { id: 'a', status: 'in_repair' }).status).toBe('unrepairable')
     expect(pickRepairStoreRow({ id: 'a', status: 'retained' }, { id: 'a', status: 'ready' }).status).toBe('retained')
+  })
+
+  it('lets a declined quote be revised & re-sent, or the device returned', () => {
+    const quote = { id: 'q2', total: 500 }
+    const picked = pickRepairStoreRow(
+      { id: 'a', status: 'declined', quote: { id: 'q1', total: 900 } },
+      { id: 'a', status: 'awaiting_approval', quote },
+    )
+    expect(picked.status).toBe('awaiting_approval')
+    expect(picked.quote).toEqual(quote)
+    expect(pickRepairStoreRow({ id: 'a', status: 'declined' }, { id: 'a', status: 'returned' }).status).toBe('returned')
+    expect(pickRepairStoreRow({ id: 'a', status: 'declined' }, { id: 'a', status: 'approved' }).status).toBe('approved')
+    expect(pickRepairStoreRow({ id: 'a', status: 'awaiting_approval' }, { id: 'a', status: 'declined' }).status).toBe('declined')
   })
 
   it('allows in-progress Back and QC fail', () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   isDirectRepairPath,
+  isQuoteAwaitingApproval,
   isQuoteDeclinedReopenable,
   normalizeRepairPath,
   quotableStatusesForPath,
@@ -47,5 +48,14 @@ describe('repair-path helpers', () => {
     expect(startableStatusesForPath('direct_repair')).toEqual(['approved', 'awaiting_parts'])
     expect(startableStatusesForPath('diagnosis_first')).toEqual(['approved', 'awaiting_parts'])
     expect(isDirectRepairPath('direct_repair')).toBe(true)
+  })
+})
+
+describe('sent quote awaiting approval', () => {
+  it('can be corrected, but is not a primary "quotable" status', () => {
+    expect(isQuoteAwaitingApproval('awaiting_approval')).toBe(true)
+    expect(isQuoteAwaitingApproval('approved')).toBe(false)
+    expect(isQuoteAwaitingApproval('declined')).toBe(false)
+    expect(quotableStatusesForPath('diagnosis_first')).not.toContain('awaiting_approval')
   })
 })

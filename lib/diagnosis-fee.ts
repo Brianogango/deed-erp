@@ -80,6 +80,24 @@ export function isDiagnosisFeeLine(line: {
     || desc.startsWith('diagnosis fee')
 }
 
+/**
+ * How the diagnosis-fee line of a declined quote is labelled. The fee is not
+ * part of the customer's quote decision, so it never reads "Declined" — it
+ * shows where the fee actually stands.
+ */
+export function diagnosisFeeLineBadge(repair: {
+  diagnosisFeeStatus?: string | null
+  diagnosisFeePaidAt?: string | null
+}): { label: string; tone: 'due' | 'settled' | 'none' } {
+  const status = String(repair.diagnosisFeeStatus ?? '').toLowerCase()
+  if (status === 'paid' || status === 'invoiced' || repair.diagnosisFeePaidAt) {
+    return { label: status === 'invoiced' && !repair.diagnosisFeePaidAt ? 'Invoiced' : 'Paid', tone: 'settled' }
+  }
+  if (status === 'waived') return { label: 'Waived', tone: 'none' }
+  if (status === 'not_applicable') return { label: 'No fee', tone: 'none' }
+  return { label: 'Fee due', tone: 'due' }
+}
+
 export function normalizeDeviceTier(value: unknown): DeviceTier | null {
   if (value === 'regular' || value === 'high_end') return value
   return null

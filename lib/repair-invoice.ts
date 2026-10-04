@@ -49,6 +49,23 @@ export function isUnrepairableRepair(repair: RepairInvoiceSource): boolean {
   return String(repair.status ?? '').toLowerCase() === 'unrepairable'
 }
 
+/**
+ * The customer declined the quotation. Nothing was repaired, so the quote is
+ * not billable — only the diagnosis fee, when one is due.
+ */
+export function isDeclinedRepair(repair: RepairInvoiceSource): boolean {
+  return String(repair.status ?? '').toLowerCase() === 'declined'
+}
+
+/**
+ * Jobs where the customer did not go ahead with the repair — declined quote,
+ * stopped at diagnosis, or unrepairable. Their invoice carries the diagnosis
+ * fee alone, so the declined quote must never reach the Sales Order either.
+ */
+export function repairBillsFeeOnly(repair: RepairInvoiceSource): boolean {
+  return isUnrepairableRepair(repair) || isDeclinedRepair(repair) || !!repair.diagnosisStopped
+}
+
 function money(n: unknown): number {
   const v = Number(n)
   return Number.isFinite(v) ? v : 0
@@ -160,7 +177,7 @@ function diagnosisCharges(repair: RepairInvoiceSource): RepairInvoiceChargeLine[
   const amount = money(repair.diagnosisFee)
   if (amount <= 0) return []
   return [{
-    description: repair.diagnosisStopped
+    description: repair.diagnosisStopped || isDeclinedRepair(repair)
       ? 'Diagnosis Fee (repair not undertaken)'
       : 'Diagnosis Fee',
     qty: 1,
@@ -197,7 +214,9 @@ export function buildRepairInvoiceCharges(
   // where these jobs used to end up — `unrepairable` is in neither the
   // quotable nor the invoiceable status list, so the fee could never be
   // charged at all. Finance adds any further lines to the draft.
-  if (isUnrepairableRepair(repair)) return diagnosisCharges(repair)
+  // Stopped at diagnosis, or quote declined: the customer did not go ahead
+  // with the repair, so only the fee.
+  if (repairBillsFeeOnly(repair)) return diagnosisCharges(repair)
 
   const quoted = quoteCharges(repair, applyVat, vatRate)
   const body = quoteChargeTotal(repair, applyVat, vatRate) >= 1 || quoted.length > 0

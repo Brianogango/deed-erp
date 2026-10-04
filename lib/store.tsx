@@ -233,6 +233,7 @@ import { EXCHANGE_RETURN_LOCATION } from '@/lib/aftersales/exchange-stock'
 import {
   isDirectRepairPath,
   isQuoteDeclinedReopenable,
+  isQuoteAwaitingApproval,
   quotableStatusesForPath,
   returnableStatusesForPath,
   startableStatusesForPath,
@@ -262,10 +263,12 @@ import {
   taxableQuoteSubtotal,
   diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
-import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { repairPriceChangeImpact, describeRepairPriceChange } from '@/lib/repair/document-impact'
 import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
+import { resolveBillProductId } from '@/lib/purchase/bill-product-id'
+import { contactPaymentTermsDays } from '@/lib/due-date'
 import { deniedSaveMessage } from '@/lib/store-denied-message'
 import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
 import { isSellableSerial } from '@/lib/inventory/sellable-stock'
@@ -2709,6 +2712,13 @@ const expenseAccountForCategory = (category?: ExpenseCategory) => {
     software: '6503 - Computer Expenses',
     hardware: '6521 - Expensed Assets',
     maintenance: '6505 - Repairs and Maintenance',
+    rent: '6508 - Rent and Service Charge',
+    service_charge: '6508 - Rent and Service Charge',
+    electricity: '6506 - Water and Electricity',
+    internet: '6510 - Telephone and Internet',
+    insurance: '6704 - Insurance',
+    bank_charges: '6703 - Bank Charges',
+    interest: '6701 - Interest Expense',
     other: '6599 - Other Operating Expenses',
   }
   return map[category ?? 'other'] ?? '6599 - Other Operating Expenses'
@@ -3098,6 +3108,13 @@ export const EXPENSE_CATEGORIES = [
   { value: 'software',        label: 'Software / Subscriptions' },
   { value: 'hardware',        label: 'Equipment / Hardware' },
   { value: 'maintenance',     label: 'Maintenance & Repairs' },
+  { value: 'rent', label: 'Rent' },
+  { value: 'service_charge', label: 'Service Charge' },
+  { value: 'electricity', label: 'Electricity' },
+  { value: 'internet', label: 'Telephone & Internet' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'bank_charges', label: 'Bank Charges' },
+  { value: 'interest', label: 'Loan Interest' },
   { value: 'other',           label: 'Other' },
 ] as const
 
@@ -3144,6 +3161,8 @@ export interface Expense {
   paymentBankAccount?: string
   paymentReference?: string
   paidDate?: string
+  /** Who the company is paying (landlord, KPLC, supplier) — for expenses that are not an employee's. */
+  payeeName?: string
   notes?: string
   createdAt: string
 }
@@ -3649,7 +3668,7 @@ export interface AppState {
   deleteSaleOrder: (id: string) => void
 
   // Invoices
-  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
+  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string; account?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   /** Reorder a draft invoice line (product or section) up/down. */
   moveInvoiceLine: (invoiceId: string, lineId: string, direction: -1 | 1) => void
@@ -5292,6 +5311,37 @@ const DATA_VERSION = 'v4'
 // Background writes: a refusal is reported to the person (lib/save-failure.ts)
 // instead of being discarded — it used to look exactly like success.
 const sync = (url: string, opts: RequestInit) => reportingFetch(url, opts)
+
+/**
+ * Save a newly created invoice/bill to the invoices table and TELL the user if
+ * it does not land. This used to be fire-and-forget `sync`, so a failed save
+ * left a posted bill that existed only on screen (and was later dropped by the
+ * list rebuild). Retries only when no response arrived or the gateway failed
+ * (502/503/504); on a retry a "already exists" answer counts as success.
+ */
+const saveInvoiceToServer = async (
+  invoice: unknown,
+  onFailure: (message: string) => void,
+): Promise<boolean> => {
+  const ref = String((invoice as { ref?: unknown })?.ref ?? 'document')
+  const delays = [0, 1500, 4000]
+  let lastError = ''
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    if (delays[attempt]) await new Promise(resolve => setTimeout(resolve, delays[attempt]))
+    try {
+      const res = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      if (res.ok) return true
+      const payload = await res.json().catch(() => null) as { error?: string } | null
+      lastError = payload?.error || `server returned ${res.status}`
+      if (attempt > 0 && (res.status === 409 || /already exists|unique/i.test(lastError))) return true
+      if (![502, 503, 504].includes(res.status)) break
+    } catch {
+      lastError = 'no connection to the server'
+    }
+  }
+  onFailure(`${ref} was NOT saved to the server (${lastError}). Do not close this tab; tell Finance so it can be re-saved.`)
+  return false
+}
 
 /**
  * A write whose failure the user is told about.
@@ -8456,7 +8506,7 @@ const storeCtx: AppState = {
           partnerId: job.vendorId,
           partnerName: job.vendorName,
           date: now(),
-          dueDate: addDays(now(), 30),
+          dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === job.vendorId), systemSettings.purDefaultPaymentTermsDays ?? 30)),
           lines: [billLine],
           subtotal: p.finalCost,
           taxTotal: 0,
@@ -8466,7 +8516,7 @@ const storeCtx: AppState = {
         }
         billId = bill.id
         setInvoices(prev => [bill, ...prev])
-        sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
+        void saveInvoiceToServer(bill, msg => showToast(msg, 'error'))
         showToast(`Vendor bill ${billRef} created for ${job.vendorName}`, 'success')
       }
 
@@ -10770,7 +10820,7 @@ const storeCtx: AppState = {
         partnerId: quote.companyId,
         partnerName: quote.companyName,
         date: now(),
-        dueDate: addDays(now(), 14),
+        dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === quote.companyId), 14)),
         lines: invLines,
         subtotal: quote.subtotal,
         taxTotal: quote.taxTotal,
@@ -10781,7 +10831,7 @@ const storeCtx: AppState = {
       }
       setInvoices(p => [invoice, ...p])
       postInvoiceJournalOnce(invoice)
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      void saveInvoiceToServer(invoice, msg => showToast(msg, 'error'))
 
       setQuotes(p => {
         const next = p.map(q => q.id === quoteId ? {
@@ -13654,6 +13704,7 @@ const storeCtx: AppState = {
             unitPrice,
             taxRate,
             ...(discountPct > 0 ? { discountPct } : {}),
+            ...(String(l.account ?? '').trim() ? { accountCode: String(l.account).trim() } : {}),
             subtotal,
           }
         })
@@ -13678,7 +13729,7 @@ const storeCtx: AppState = {
         notes,
       }
       setInvoices(prev => [invoice, ...prev])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      void saveInvoiceToServer(invoice, msg => showToast(msg, 'error'))
       showToast(`${type === 'vendor_bill' ? 'Bill' : 'Invoice'} ${invoice.ref} created`, 'success')
       return invoice
     },
@@ -14627,8 +14678,11 @@ const storeCtx: AppState = {
       const activeBilledQty = (line: POLine) =>
         liveBillsForPO.reduce((total, bill) => total + bill.lines.reduce((sum, billLine) => {
           const sameProduct = Boolean(line.productId && billLine.productId && line.productId === billLine.productId)
+          // The bill line may carry a corrected product id (see resolveBillProductId),
+          // so the PO-line link is the reliable key.
+          const sameLine = Boolean(billLine.purchaseOrderItemId && billLine.purchaseOrderItemId === line.id)
           const sameDescription = !billLine.productId && String(billLine.description ?? '').includes(line.productName)
-          return sum + (sameProduct || sameDescription ? Math.max(0, Math.floor(Number(billLine.qty) || 0)) : 0)
+          return sum + (sameProduct || sameLine || sameDescription ? Math.max(0, Math.floor(Number(billLine.qty) || 0)) : 0)
         }, 0), 0)
 
       let billableLines: Array<POLine & { billQty: number }>
@@ -14657,7 +14711,7 @@ const storeCtx: AppState = {
       // Vendor's own payment terms govern the bill due date — previously
       // hardcoded to 30 days for every vendor regardless of what was agreed.
       const vendor = contacts.find(c => c.id === po.vendorId)
-      const termsDays = vendor?.paymentTermsDays ?? systemSettings.purDefaultPaymentTermsDays ?? 30
+      const termsDays = contactPaymentTermsDays(vendor, systemSettings.purDefaultPaymentTermsDays ?? 30)
       const bill: Invoice = {
         id: uid(), ref: draftInvoiceRef('vendor_bill'), type: 'vendor_bill', status: 'draft',
         partnerId: po.vendorId, partnerName: po.vendorName,
@@ -14665,7 +14719,7 @@ const storeCtx: AppState = {
         lines: billableLines.map(l => ({
           id: uid(), description: `${l.productName} ×${l.billQty}`, qty: l.billQty,
           unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.billQty * l.unitPrice,
-          productId: l.productId,
+          productId: resolveBillProductId(l, prodRef.current),
           purchaseOrderItemId: l.id,
           taxCategory: Number(l.taxRate) > 0 ? 'standard_16' : 'out_of_scope',
         })),
@@ -15698,18 +15752,25 @@ const storeCtx: AppState = {
         : alreadyPaid
           ? 'paid'
           : 'applicable'
-      setRepairs(p => p.map(r => r.id === repairId ? {
-        ...r,
+      const stopped: RepairOrder = {
+        ...repair,
         diagnosisStopped: true,
         diagnosisFee: DIAGNOSIS_FEE,
         diagnosisFeeStatus: nextFeeStatus,
-        diagnosisFeeBilling: r.diagnosisFeeBilling ?? resolved.billing,
-        customerBillingType: r.customerBillingType ?? resolved.customerType,
+        diagnosisFeeBilling: repair.diagnosisFeeBilling ?? resolved.billing,
+        customerBillingType: repair.customerBillingType ?? resolved.customerType,
         laborCost: 0,
         logisticsCost: 0,
         total: DIAGNOSIS_FEE,
         status: 'ready',
-      } : r))
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? { ...r, ...stopped } : r))
+      repairsRef.current = repairsRef.current.map(r => r.id === repairId ? { ...r, ...stopped } : r)
+      // Raise the diagnosis-fee invoice now, unless the job is no-charge or the
+      // fee is already settled.
+      if (DIAGNOSIS_FEE > 0 && !alreadyPaid && !isRepairNoCharge(stopped) && !repair.invoiceId && !(repair as any).linkedInvoiceId) {
+        void storeCtxRef.current!.createInvoiceFromRepair(repairId, false)
+      }
       addAuditLog('stop_at_diagnosis', repairId, `Repair stopped at diagnosis — KES ${DIAGNOSIS_FEE} diagnosis fee ${alreadyPaid ? '(already paid)' : 'due (not credited against repairs)'}`)
       showToast(
         DIAGNOSIS_FEE <= 0
@@ -15772,7 +15833,9 @@ const storeCtx: AppState = {
         showToast('Only the assigned technician or authorised staff can generate a quote', 'error'); return
       }
       const QUOTABLE_STATUSES = quotableStatusesForPath(repair.repairPath)
-      if (!QUOTABLE_STATUSES.includes(repair.status)) {
+      // A sent quote still waiting on the customer may be corrected in place.
+      const amendingSentQuote = isQuoteAwaitingApproval(repair.status) && !!repair.quote
+      if (!QUOTABLE_STATUSES.includes(repair.status) && !amendingSentQuote) {
         showToast('Cannot generate a new quote at this stage', 'error'); return
       }
       if (!isDirectRepairPath(repair.repairPath) && !repairHasLoggedDiagnosis(repair)) {
@@ -17340,7 +17403,7 @@ const storeCtx: AppState = {
     },
     
     createInvoiceFromRepair: async (repairId, applyVat = true) => {
-      const repair = repairs.find(r => r.id === repairId)
+      const repair = repairsRef.current.find(r => r.id === repairId) ?? repairs.find(r => r.id === repairId)
       if (!repair) return null
       if (blockIfOutsourced(repairId, 'invoice this repair')) return null
       const reissueHold = reissueBlocker(repair.invoiceReissue)
@@ -17442,12 +17505,30 @@ const storeCtx: AppState = {
         return existingInvoice
       }
 
-      const soLines = (repair.quote?.lines ?? [])
-        .filter(line => line.decision !== 'declined')
-        .map(line => ({
-          id: uid(),
-          ...saleLineFieldsForRepairQuoteLine(line),
-        }))
+      // A job the customer did not go ahead with bills the diagnosis fee only.
+      // The Sales Order the server invoices from must then carry exactly that
+      // fee — not the declined quote — and its totals must match.
+      const feeOnly = repairBillsFeeOnly(repair)
+      const soLines = feeOnly
+        ? chargeLines.map(line => ({
+            id: uid(),
+            ...saleLineFieldsForRepairQuoteLine({
+              type: 'service',
+              description: line.description,
+              qty: line.qty,
+              unitPrice: line.unitPrice,
+              subtotal: line.subtotal,
+            }),
+          }))
+        : (repair.quote?.lines ?? [])
+          .filter(line => line.decision !== 'declined')
+          .map(line => ({
+            id: uid(),
+            ...saleLineFieldsForRepairQuoteLine(line),
+          }))
+      const soSubtotal = feeOnly ? subtotal : (repair.quote?.subtotal ?? subtotal)
+      const soTax = feeOnly ? taxTotal : (repair.quote?.tax ?? taxTotal)
+      const soTotal = feeOnly ? chargeTotal : (repair.quote?.total ?? chargeTotal)
       let soId = linkedSaleOrder?.id ?? repair.saleOrderId ?? (repair as any).linkedSaleOrderId
       let soRefValue = linkedSaleOrder?.ref ?? linkedSaleOrder?.orderNumber ?? repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
       if (!soId) {
@@ -17457,11 +17538,11 @@ const storeCtx: AppState = {
           id: soId, ref: soRefValue, status: 'sale' as const, confirmedAt: new Date().toISOString(),
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(),
-          lines: soLines, subtotal: repair.quote?.subtotal ?? subtotal,
-          taxAmount: repair.quote?.tax ?? taxTotal,
-          taxTotal: repair.quote?.tax ?? taxTotal,
-          totalAmount: repair.quote?.total ?? chargeTotal,
-          total: repair.quote?.total ?? chargeTotal,
+          lines: soLines, subtotal: soSubtotal,
+          taxAmount: soTax,
+          taxTotal: soTax,
+          totalAmount: soTotal,
+          total: soTotal,
           notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy,
         }
         setSaleOrders(p => [newSo as SaleOrder, ...p])
@@ -17475,11 +17556,11 @@ const storeCtx: AppState = {
           // Sales confirm path — create-invoice confirms the workshop quotation.
           reserveStock: false,
           lines: soLines.length ? soLines : linkedSaleOrder.lines,
-          subtotal: repair.quote?.subtotal ?? linkedSaleOrder.subtotal,
-          taxAmount: repair.quote?.tax ?? linkedSaleOrder.taxAmount,
-          taxTotal: repair.quote?.tax ?? linkedSaleOrder.taxTotal,
-          totalAmount: repair.quote?.total ?? linkedSaleOrder.totalAmount ?? linkedSaleOrder.total,
-          total: repair.quote?.total ?? linkedSaleOrder.total,
+          subtotal: feeOnly ? soSubtotal : (repair.quote?.subtotal ?? linkedSaleOrder.subtotal),
+          taxAmount: feeOnly ? soTax : (repair.quote?.tax ?? linkedSaleOrder.taxAmount),
+          taxTotal: feeOnly ? soTax : (repair.quote?.tax ?? linkedSaleOrder.taxTotal),
+          totalAmount: feeOnly ? soTotal : (repair.quote?.total ?? linkedSaleOrder.totalAmount ?? linkedSaleOrder.total),
+          total: feeOnly ? soTotal : (repair.quote?.total ?? linkedSaleOrder.total),
         }
         setSaleOrders(p => p.map(s => s.id === soId ? { ...s, ...soPatch } : s))
         await fetch(`/api/sale-orders/${soId}`, {
@@ -17546,10 +17627,29 @@ const storeCtx: AppState = {
           showToast('Repair Sales Order is missing — align the quote before invoicing', 'error')
           return null
         }
+        // The repair can point at a Sales Order that was never saved to the
+        // server and is not in this browser either (a dangling id). A fee-only
+        // job has nothing in that order worth keeping, so rebuild it from the
+        // fee and let the recovery path push it — otherwise every attempt
+        // answers "Sale order not found".
+        let localOrder: unknown = soRef.current.find(s => s.id === soId)
+        if (!localOrder && feeOnly) {
+          soRefValue = await storeCtxRef.current!.allocateDocRef('SO')
+          localOrder = {
+                id: soId, ref: soRefValue, status: 'sale' as const,
+                confirmedAt: new Date().toISOString(),
+                customerId: repair.customerId, customerName: repair.customerName,
+                date: now(),
+                lines: soLines, subtotal: soSubtotal,
+                taxAmount: soTax, taxTotal: soTax,
+                totalAmount: soTotal, total: soTotal,
+                notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy,
+          }
+        }
         const attempt = await requestSaleOrderInvoice({
           saleOrderId: soId,
           invoiceBody: { mode: 'regular', source: 'repair' },
-          localOrder: soRef.current.find(s => s.id === soId),
+          localOrder,
         })
         const res = attempt.res
         if (attempt.saleOrderId !== soId) {
@@ -19322,7 +19422,7 @@ const storeCtx: AppState = {
       }
       setPosOrders(p => p.map(o => o.id === order.id ? { ...o, invoiceRef: posInv.ref } : o))
       setInvoices(p => [posInv, ...p])
-      await sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
+      await saveInvoiceToServer(posInv, msg => showToast(msg, 'error'))
       const revenueBuckets = aggregateLinesByAccount({
         lines: posInv.lines,
         resolveProduct: (productId) => prodRef.current.find(p => p.id === productId),
@@ -19858,7 +19958,7 @@ const storeCtx: AppState = {
         notes: `Auto-generated from weekly pay ${pay.ref} · Confirmed by ${user?.name ?? 'staff'}`,
       }
       setInvoices(p => [bill, ...p])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
+      void saveInvoiceToServer(bill, msg => showToast(msg, 'error'))
       addAuditLog('create_bill', bill.ref, `Rider bill ${pay.ref} confirmed — vendor bill ${bill.ref} created`)
 
       setRiderWeeklyPays(prev => prev.map(p =>
@@ -20069,7 +20169,7 @@ const storeCtx: AppState = {
           const invoice: Invoice = {
             id: uid(), ref: await storeCtxRef.current!.allocateDocRef('INV'), type: 'customer_invoice', status: 'posted',
             partnerId: delivery.customerId, partnerName: delivery.customerName,
-            date: now(), dueDate: addDays(now(), systemSettings.purDefaultPaymentTermsDays ?? 30),
+            date: now(), dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === delivery.customerId), 0)),
             lines: delivery.lines.map(l => ({
               id: uid(), description: l.productName, qty: l.qty,
               unitPrice: soLineMap[l.productId]?.unitPrice ?? 0, taxRate: companySettings.vatRate ?? 16,

@@ -4,6 +4,7 @@ import {
   DEFAULT_DIAGNOSIS_FEE_KES,
   DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT,
   diagnosisFeeAmount,
+  diagnosisFeeLineBadge,
   diagnosisFeeAmountForTier,
   diagnosisFeeCustomerNotice,
   ensureDiagnosisFeeInQuoteLines,
@@ -214,5 +215,16 @@ describe('diagnosis-fee', () => {
       warrantyCoverage: 'void',
     })
     expect(portalDiagnosisFeeFields({}).repairPath).toBe('diagnosis_first')
+  })
+})
+
+describe('diagnosisFeeLineBadge', () => {
+  it('never reads Declined — it shows where the fee stands', () => {
+    expect(diagnosisFeeLineBadge({ diagnosisFeeStatus: 'applicable' })).toEqual({ label: 'Fee due', tone: 'due' })
+    expect(diagnosisFeeLineBadge({ diagnosisFeeStatus: 'paid' })).toEqual({ label: 'Paid', tone: 'settled' })
+    expect(diagnosisFeeLineBadge({ diagnosisFeeStatus: 'invoiced' })).toEqual({ label: 'Invoiced', tone: 'settled' })
+    expect(diagnosisFeeLineBadge({ diagnosisFeeStatus: 'applicable', diagnosisFeePaidAt: '2026-10-01' }).label).toBe('Paid')
+    expect(diagnosisFeeLineBadge({ diagnosisFeeStatus: 'waived' }).label).toBe('Waived')
+    expect(diagnosisFeeLineBadge({ diagnosisFeeStatus: 'not_applicable' }).label).toBe('No fee')
   })
 })

@@ -180,6 +180,7 @@ export interface ClientInvoiceLine {
   discountPct?: number
   subtotal: number
   productId?: string
+  accountCode?: string
   lineType?: 'item' | 'section'
 }
 
@@ -198,6 +199,7 @@ export function mapDbInvoiceItemsToClientLines(
     discountPct?: unknown
     lineSubtotal?: unknown
     productId?: string | null
+    accountCode?: string | null
     sortOrder?: unknown
   }> | null | undefined,
 ): ClientInvoiceLine[] {
@@ -230,6 +232,7 @@ export function mapDbInvoiceItemsToClientLines(
       ...(discountPct > 0 ? { discountPct } : {}),
       subtotal: explicit != null ? explicit : fallback.lineSubtotal,
       ...(item.productId ? { productId: item.productId } : {}),
+      ...(item.accountCode ? { accountCode: item.accountCode } : {}),
     }
   })
 }
