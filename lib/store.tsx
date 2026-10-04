@@ -307,6 +307,8 @@ import {
   buildDeliveryChargeInvoiceLine,
 } from '@/lib/invoice-delivery-charge'
 import { safeLocalStorageSet } from '@/lib/client-store-cache'
+import { computeCollectionDelta, type CollectionDelta } from '@/lib/store-delta'
+import { forgetServerBaseline, rememberServerBaseline, serverBaselineFor } from '@/lib/store-baseline'
 import { contactFromPersonInput, deriveContactPersons } from '@/lib/contact-person-derive'
 import {
   applyCustomerToInvoice,
@@ -4993,6 +4995,7 @@ async function flushKeysIndividually(entries: Record<string, string>) {
       // 2xx = saved; 400/403 = this key can never succeed for this payload or
       // session. Leave the retry queue so one unknown/immutable key cannot
       // keep splitting every later flush into a parallel POST storm.
+      if (res.ok) rememberServerBaseline(key, entries[key])
       if (res.ok || res.status === 403 || res.status === 400) {
         if (res.status === 403) refusedKeys.push(key)
         markKeysSynced({ [key]: entries[key] })
@@ -5012,6 +5015,21 @@ async function flushKeysIndividually(entries: Record<string, string>) {
   } else {
     emitSyncStatus('synced')
   }
+}
+
+// Changed-records-only saves (lib/store-delta.ts, lib/store-baseline.ts).
+function buildSyncBody(entries: Record<string, string>): { body: Record<string, unknown>; deltaKeys: string[] } {
+  const body: Record<string, unknown> = {}
+  const delta: Record<string, CollectionDelta> = {}
+  for (const [key, value] of Object.entries(entries)) {
+    const baseline = serverBaselineFor(key)
+    const d = baseline ? computeCollectionDelta(baseline, value) : null
+    if (d) delta[key] = d
+    else body[key] = value
+  }
+  const deltaKeys = Object.keys(delta)
+  if (deltaKeys.length) body._delta = delta
+  return { body, deltaKeys }
 }
 
 async function flushServerSync() {
@@ -5039,11 +5057,14 @@ async function flushServerSync() {
     _flushInFlight = false
   }
   try {
+    const { body: syncBody, deltaKeys } = buildSyncBody(entries)
     const res = await fetch('/api/store', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entries),
+      body: JSON.stringify(syncBody),
     })
+    // Any refusal of a changed-records save: send those keys whole from now on.
+    if (!res.ok && deltaKeys.length) forgetServerBaseline(deltaKeys)
     if (res.status === 401) {
       // Session expired — redirect to login so user can re-authenticate and data re-syncs on next mount
       if (typeof window !== 'undefined') window.location.href = '/login'
@@ -5072,6 +5093,7 @@ async function flushServerSync() {
     }
     const payload = await res.json().catch(() => null) as { skippedKeys?: string[]; deniedKeys?: string[] } | null
     markKeysSynced(entries)
+    Object.entries(entries).forEach(([k, v]) => rememberServerBaseline(k, v))
     _syncRetryDelayMs = 500
     if (_syncRetryTimer) {
       clearTimeout(_syncRetryTimer)
@@ -5266,6 +5288,7 @@ function useLS<T>(
         try { window.localStorage.removeItem(key) } catch { /* ignore */ }
         return
       }
+      rememberServerBaseline(key, newValue)
       skipNextSync.current = true
       setState(prev => {
         const merge = mergeRemoteRef.current

@@ -1,6 +1,7 @@
 'use client'
 
 import { persistClientStoreValue } from '@/lib/client-store-cache'
+import { rememberServerBaseline } from '@/lib/store-baseline'
 
 const ARRAY_STORE_KEYS = /^(deed_repairs_v2|deed_products|deed_invoices|deed_saleOrders|deed_contacts|deed_employees|deed_expenses|deed_purchaseOrders|deed_stockTransfers|deed_serials|deed_accounts|deed_posOrders|deed_deliveries|deed_journalEntries|deed_leaveRequests|deed_opportunities|deed_companies|deed_quotes|deed_holdovers|deed_companyAssets|deed_deposits|deed_buyBacks|deed_warranties|deed_outsourceJobs|deed_outsourceVendors|deed_outsourcePayments|deed_bankAccounts|deed_receipts|deed_customerCredits|deed_workflowApprovals|deed_contracts|deed_customerContracts|deed_employeeAssets|deed_kilimallOrders|deed_payrollRuns)$/
 
@@ -63,6 +64,7 @@ export function applyHydratedStoreState(
         continue
       }
     }
+    rememberServerBaseline(key, serialized)
     try {
       if (window.localStorage.getItem(key) === serialized) continue
       persistClientStoreValue(key, serialized)

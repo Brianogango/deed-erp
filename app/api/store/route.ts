@@ -19,6 +19,7 @@ import { assertSafeStoreValue, InputSecurityError, readSafeJson } from '@/lib/in
 import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
 import { recordHttpMetric } from '@/lib/http-metrics'
 import { guardCollectionWrite } from '@/lib/store-bulk-delete-guard'
+import { applyCollectionDelta, isCollectionDelta, type CollectionDelta } from '@/lib/store-delta'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -154,7 +155,7 @@ export async function POST(request: Request) {
   }
 
   const rawBody = body as Record<string, unknown>
-  const allowedMetaKeys = new Set(['_version', 'If-Match'])
+  const allowedMetaKeys = new Set(['_version', 'If-Match', '_delta'])
   const unexpectedTopLevel = Object.keys(rawBody).filter(
     key => !key.startsWith('deed_') && !allowedMetaKeys.has(key),
   )
@@ -163,6 +164,26 @@ export async function POST(request: Request) {
       { error: 'Unexpected request fields', fields: unexpectedTopLevel.slice(0, 20) },
       { status: 400 },
     )
+  }
+
+  // Changed-records-only writes (lib/store-delta.ts): rebuild each full
+  // collection from the stored copy, then run the unchanged pipeline below.
+  const rawDelta = rawBody._delta
+  delete rawBody._delta
+  if (rawDelta !== undefined) {
+    if (!rawDelta || typeof rawDelta !== 'object' || Array.isArray(rawDelta)) {
+      return NextResponse.json({ error: 'Invalid _delta' }, { status: 400 })
+    }
+    const deltas = rawDelta as Record<string, unknown>
+    const deltaKeys = Object.keys(deltas)
+    const badKey = deltaKeys.find(key => !key.startsWith('deed_') || key in rawBody || !isCollectionDelta(deltas[key]))
+    if (badKey) return NextResponse.json({ error: 'Invalid _delta', key: badKey }, { status: 400 })
+    const stored = deltaKeys.length ? await loadAppStateForWrite(deltaKeys) : {}
+    for (const key of deltaKeys) {
+      const rebuilt = applyCollectionDelta(stored[key], deltas[key] as CollectionDelta)
+      if (!rebuilt) return NextResponse.json({ error: 'Delta not applicable', key, code: 'delta_unavailable' }, { status: 409 })
+      rawBody[key] = rebuilt
+    }
   }
 
   const unknownStoreKeys = Object.keys(rawBody).filter(
