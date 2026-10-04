@@ -269,6 +269,7 @@ import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
 import { deniedSaveMessage } from '@/lib/store-denied-message'
 import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
 import { isSellableSerial } from '@/lib/inventory/sellable-stock'
+import { reportingFetch } from '@/lib/save-failure'
 import { reissueAfterClientDecision, reissueBlocker, reissueOnRevision, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
 import { countCorrectionBlocker, countCorrectionNote, partsOrderNote, purchaseOrderBlocker, requestAfterCountCheck, requestAfterPurchaseOrder, type PartsRequest } from '@/lib/repair/parts-request'
 import { executeRepairConsolidation, mergedSaleOrderFromPlan } from '@/lib/repair/consolidation-execute'
@@ -5288,7 +5289,9 @@ const ShellStoreCtx = createContext<ShellStoreState | null>(null)
 const DATA_VERSION = 'v4'
 
 // Fire-and-forget server sync — swallows network errors so local state is never blocked
-const sync = (url: string, opts: RequestInit) => fetch(url, opts).catch(() => {})
+// Background writes: a refusal is reported to the person (lib/save-failure.ts)
+// instead of being discarded — it used to look exactly like success.
+const sync = (url: string, opts: RequestInit) => reportingFetch(url, opts)
 
 /**
  * A write whose failure the user is told about.

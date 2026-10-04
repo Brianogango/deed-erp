@@ -1,5 +1,6 @@
 'use client'
 
+import { SAVE_FAILED_EVENT } from '@/lib/save-failure'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useShellStore, ModuleId, AppNotification, SYNC_STATUS_EVENT, LAST_SYNC_AT_LS, DIRTY_KEYS_LS } from '@/lib/store'
@@ -1179,7 +1180,16 @@ export default function Topbar() {
     }
 
     window.addEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)
-    return () => window.removeEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)
+    // Background saves the server refused (lib/save-failure.ts).
+    const onSaveFailed = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message
+      if (message) showToast(message, 'error')
+    }
+    window.addEventListener(SAVE_FAILED_EVENT, onSaveFailed as EventListener)
+    return () => {
+      window.removeEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)
+      window.removeEventListener(SAVE_FAILED_EVENT, onSaveFailed as EventListener)
+    }
   }, [])
 
   useEffect(() => {
