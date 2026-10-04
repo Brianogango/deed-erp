@@ -14,6 +14,7 @@ import { useShellStore, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { trackUxEvent } from '@/lib/ux-telemetry'
 import { warmRoute } from '@/lib/warm-route'
+import { readRecentRecords, RECENT_CHANGED_EVENT, type RecentRecord } from '@/lib/recent-records'
 
 // Brand colours
 const DEED_BLUE  = 'var(--primary)'
@@ -173,6 +174,15 @@ export default function Sidebar() {
   // the choice is remembered per user. The group holding the current page is
   // always kept open so users never lose the active module.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // The last records this person opened, newest first.
+  const [recent, setRecent] = useState<RecentRecord[]>([])
+  useEffect(() => {
+    const refresh = () => setRecent(readRecentRecords(currentUserId))
+    refresh()
+    window.addEventListener(RECENT_CHANGED_EVENT, refresh)
+    return () => window.removeEventListener(RECENT_CHANGED_EVENT, refresh)
+  }, [currentUserId])
+
   const groupStorageKey = currentUserId ? `deed_sidebar_collapsed_groups_${currentUserId}` : null
 
   useEffect(() => {
@@ -348,6 +358,28 @@ export default function Sidebar() {
             </div>
           )
         })}
+        {sidebarOpen && !navQuery.trim() && recent.length > 0 && (
+          <div className="mt-4">
+            <div className="sidebar-group-toggle">
+              <span className="sidebar-group-label text-[9px] font-black uppercase tracking-[0.20em] whitespace-nowrap">Recent</span>
+              <div className="sidebar-group-rule h-px flex-1 rounded-full" />
+            </div>
+            <ul className="m-0 list-none space-y-0.5 px-3 py-0">
+              {recent.map(r => (
+                <li key={r.href}>
+                  <Link
+                    href={r.href}
+                    title={r.label}
+                    onClick={() => { if (window.innerWidth < 1024 && sidebarOpen) toggleSidebar() }}
+                    className="block truncate rounded-lg px-3 py-1.5 text-[11px] font-semibold no-underline text-[var(--sidebar-text)] hover:text-[var(--sidebar-text-hover)]"
+                  >
+                    {r.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* ── User / Collapse Footer ── */}

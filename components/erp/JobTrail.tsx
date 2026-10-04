@@ -1,17 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useApp } from '@/lib/store'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import { buildJobTrail, type TrailStart } from '@/lib/job-trail'
+import { rememberRecentRecord } from '@/lib/recent-records'
 
 /**
  * One customer job across modules — Repair → Quote → Sale order → Invoice →
  * Payment → Delivery — with links, and the one thing to do next.
  */
 export default function JobTrail({ start }: { start: TrailStart }) {
-  const { repairs, saleOrders, quotes, invoices, deliveries } = useApp() as any
+  const { repairs, saleOrders, quotes, invoices, deliveries, currentUserId } = useApp() as any
   const trail = useMemo(() => buildJobTrail(start, {
     repairs: repairs ?? [],
     saleOrders: saleOrders ?? [],
@@ -20,6 +21,13 @@ export default function JobTrail({ start }: { start: TrailStart }) {
     deliveries: deliveries ?? [],
     invoiceHref: id => financeInvoicePath(id),
   }), [start.kind, start.id, repairs, saleOrders, quotes, invoices, deliveries])
+
+  // The record this trail sits on goes into the sidebar's Recent list.
+  const KIND_FOR: Record<TrailStart['kind'], string> = { repair: 'repair', sale_order: 'sale_order', invoice: 'invoice', delivery: 'delivery' }
+  const own = trail.steps.find(step => step.kind === KIND_FOR[start.kind])
+  useEffect(() => {
+    if (own?.ref) rememberRecentRecord(currentUserId, { href: own.href, label: `${own.label} ${own.ref}`, kind: own.kind })
+  }, [currentUserId, own?.href, own?.ref])
 
   if (trail.steps.length < 2 && !trail.next) return null
 

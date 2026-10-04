@@ -1,4 +1,5 @@
 'use client'
+import { rememberRecentRecord } from '@/lib/recent-records'
 import CustomerSnapshot from '@/components/contacts/CustomerSnapshot'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
@@ -186,6 +187,12 @@ function ContactsInner() {
   const [formDraft, setFormDraft] = useState<ContactFormValues>(blankCompanyContact())
   const [formKey, setFormKey] = useState(0)
   const [viewTabValue, setViewTabValue] = useUrlQueryState('contactTab', 'info')
+  // A customer opened goes into the sidebar's Recent list.
+  useEffect(() => {
+    if (viewContact?.id && viewContact.name) {
+      rememberRecentRecord(currentUserId, { href: `/contacts?id=${encodeURIComponent(viewContact.id)}`, label: viewContact.name, kind: 'contact' })
+    }
+  }, [currentUserId, viewContact?.id, viewContact?.name])
 
   // Detail-modal derivation: filter/reduce the full ledgers only when the
   // viewed contact or the underlying datasets change, not on every render
