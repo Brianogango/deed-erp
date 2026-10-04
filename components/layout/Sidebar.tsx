@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { Fa } from '@/components/icons'
 import {
-  faChartLine, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
+  faChartLine, faListCheck, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
   faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt,
   faChevronDown, faMoneyBillWave, faHandHolding, faBullseye, faFileLines,
   faMicrochip, faChair,
@@ -39,7 +39,7 @@ function isNavItemActive(pathname: string | null, item: NavItem) {
 interface NavItem {
   label: string
   href: string
-  id: ModuleId | 'settings'
+  id: ModuleId | 'settings' | 'my_work'
   icon: any
   badge?: number
 }
@@ -74,6 +74,7 @@ export default function Sidebar() {
     .filter(r => ['received', 'assigned'].includes(r.status)).length
 
   const allItems: NavItem[] = [
+    { label: 'My work',       href: '/my-work',       id: 'my_work',       icon: faListCheck },
     { label: 'Dashboard',     href: '/',              id: 'dashboard',     icon: faChartLine },
     { label: 'Sales',         href: '/sales',         id: 'sales',         icon: faShoppingCart },
     { label: 'CRM',           href: '/crm',           id: 'crm',           icon: faUsers },
@@ -103,7 +104,9 @@ export default function Sidebar() {
 
   const canSeeSettings = role === 'director'
   const visibleItems = allItems.filter(item =>
-    item.id === 'settings' ? canSeeSettings : hasModuleAccess(currentUser, item.id as ModuleId)
+    // My work only shows queues the person can act on, so everyone gets it.
+    item.id === 'my_work' ? true
+      : item.id === 'settings' ? canSeeSettings : hasModuleAccess(currentUser, item.id as ModuleId)
   )
 
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
@@ -146,7 +149,7 @@ export default function Sidebar() {
       const target = pinnedItems[n - 1]
       if (!target) return
       event.preventDefault()
-      if (target.id !== 'settings') {
+      if (target.id !== 'settings' && target.id !== 'my_work') {
         setModule(target.id)
       }
       // Soft nav — full page reload made pinned shortcuts feel much slower.
@@ -156,7 +159,7 @@ export default function Sidebar() {
     return () => window.removeEventListener('keydown', handler)
   }, [pinnedItems, setModule, router])
 
-  const togglePinned = (id: ModuleId | 'settings') => {
+  const togglePinned = (id: NavItem['id']) => {
     setPinnedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -208,7 +211,7 @@ export default function Sidebar() {
     }] : []),
     {
       title: 'Overview',
-      items: visibleItems.filter(i => ['dashboard', 'contacts'].includes(i.id) && !pinnedIds.has(i.id)),
+      items: visibleItems.filter(i => ['my_work', 'dashboard', 'contacts'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
       title: 'Sales & CRM',
@@ -335,7 +338,7 @@ export default function Sidebar() {
                       currentUserId={currentUserId}
                       onTogglePin={() => togglePinned(item.id)}
                       onNavigate={() => {
-                        if (item.id !== 'settings') setModule(item.id)
+                        if (item.id !== 'settings' && item.id !== 'my_work') setModule(item.id)
                         if (window.innerWidth < 1024 && sidebarOpen) toggleSidebar()
                       }}
                     />
