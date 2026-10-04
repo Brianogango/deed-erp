@@ -18,8 +18,9 @@ export const REPAIR_TRANSITIONS: Readonly<Record<string, readonly RepairStatus[]
   awaiting_parts: ['in_repair', 'cancelled'],
   in_repair: ['qc', 'awaiting_parts', 'unrepairable', 'cancelled'],
   qc: ['ready', 'in_repair'],
-  ready: ['verified_released', 'delivered', 'collected'],
-  verified_released: ['ready', 'delivered', 'collected'],
+  // → closed: handover with "close after" collects and closes in one step.
+  ready: ['verified_released', 'delivered', 'collected', 'closed'],
+  verified_released: ['ready', 'delivered', 'collected', 'closed'],
   delivered: ['closed'],
   collected: ['closed'],
   unrepairable: ['returned', 'retained'],
