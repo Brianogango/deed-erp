@@ -1,4 +1,5 @@
 'use client'
+import CustomerSnapshot from '@/components/contacts/CustomerSnapshot'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS, isQuotationStage } from '@/lib/odoo-sales-flow'
@@ -909,6 +910,8 @@ function ContactsInner() {
                     </div>
                   ))}
                 </div>
+
+                <CustomerSnapshot contactId={vc.id} />
 
                 {/* Sales Orders */}
                 {clientSOs.length > 0 && (

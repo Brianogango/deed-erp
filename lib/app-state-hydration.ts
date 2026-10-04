@@ -75,7 +75,9 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   '/repairs': ['deed_repairs_v2', 'deed_contacts', 'deed_products', 'deed_invoices', 'deed_serials', 'deed_refurbishmentJobs', 'deed_warranties', 'deed_outboundReleases', 'deed_outsourceJobs', 'deed_outsourceVendors', 'deed_saleOrders', 'deed_quotes', 'deed_deliveries'],
   // My work: every queue the person can act on (lib/my-work.ts).
   '/my-work': ['deed_repairs_v2', 'deed_saleOrders', 'deed_invoices', 'deed_deliveries', 'deed_buyBacks', 'deed_stockAdjustments', 'deed_serials', 'deed_purchaseOrders'],
-  '/contacts': ['deed_contacts', 'deed_customerCredits'],
+  // A customer's Sales & service tab: history, devices, what is waiting on
+  // them. Deferred so the contact list itself opens as fast as before.
+  '/contacts': ['deed_contacts', 'deed_customerCredits', 'deed_saleOrders', 'deed_invoices', 'deed_repairs_v2', 'deed_posOrders', 'deed_serials'],
   '/hr': HR_APP_STATE_KEYS,
   '/finance': ['deed_saleOrders', 'deed_quotes', 'deed_repairs_v2', 'deed_journalEntries', 'deed_accounts', 'deed_bankAccounts', 'deed_bankRecons', 'deed_bankStatementLines', 'deed_invoices', 'deed_expenses', 'deed_deposits', 'deed_refundPayments', 'deed_posOrders', 'deed_payrollRuns', 'deed_purchaseOrders', 'deed_contacts', 'deed_products', 'deed_deliveries', 'deed_documentPaymentDetails', 'deed_deliveryJobs', 'deed_riders', 'deed_customerCredits'],
   '/accounting': ['deed_journalEntries', 'deed_accounts', 'deed_bankAccounts', 'deed_bankRecons', 'deed_bankStatementLines', 'deed_invoices', 'deed_expenses', 'deed_deposits', 'deed_refundPayments', 'deed_posOrders', 'deed_payrollRuns', 'deed_purchaseOrders', 'deed_contacts', 'deed_products', 'deed_deliveries', 'deed_documentPaymentDetails', 'deed_customerCredits'],
@@ -196,6 +198,7 @@ const DEFERRED_ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   '/pos': ['deed_journalEntries', 'deed_stockMoves'],
   '/repairs': ['deed_saleOrders', 'deed_quotes', 'deed_deliveries'],
   '/my-work': ['deed_serials', 'deed_purchaseOrders', 'deed_buyBacks', 'deed_stockAdjustments'],
+  '/contacts': ['deed_saleOrders', 'deed_invoices', 'deed_repairs_v2', 'deed_posOrders', 'deed_serials'],
 }
 
 function matchRouteKeyList(pathname: string, table: Record<string, string[]>): string[] {
