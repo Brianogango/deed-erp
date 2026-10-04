@@ -23,6 +23,7 @@
     "audit:ledger-documents": "node scripts/audit-ledger-vs-documents.mjs",
     "reconcile:customer-payments": "node scripts/reconcile-customer-payments.mjs",
     "audit:renumbered-bills": "node scripts/audit-renumbered-bills.mjs",
+    "reverse:duplicate-receipts": "node scripts/reverse-duplicate-receipts.mjs",
     "fix:bill-document-type": "node scripts/fix-bill-document-type.mjs",
     "reconcile:bill-payments": "node scripts/reconcile-bill-payments.mjs",
     "parity:invoices": "node scripts/invoice-parity.mjs",

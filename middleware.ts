@@ -51,6 +51,7 @@ export const INTERNAL_SECRET_API_PATHS = new Set([
   '/api/admin/blob-cleanup',
   '/api/admin/blob-transfer',
   '/api/accounting/orphaned-invoice-journals',
+  '/api/accounting/reverse-duplicate-receipts',
   // Not a maintenance call: the portal's repair-approval route posts here
   // server-side to send the customer their confirmation SMS. That fetch is
   // fire-and-forget with a swallowed catch, so the 401 this set was causing
