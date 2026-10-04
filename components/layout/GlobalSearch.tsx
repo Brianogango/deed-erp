@@ -19,7 +19,7 @@ import { useOverlayDismiss } from '@/lib/overlay-dismiss'
 
 interface SearchResult {
   id: string
-  type: 'contact' | 'product' | 'invoice' | 'repair' | 'purchase' | 'quote' | 'employee' | 'expense' | 'command' | 'module'
+  type: 'contact' | 'product' | 'invoice' | 'repair' | 'serial' | 'sale_order' | 'delivery' | 'purchase' | 'quote' | 'employee' | 'expense' | 'command' | 'module'
   title: string
   subtitle: string
   badge?: string
@@ -33,6 +33,9 @@ const TYPE_CONFIG: Record<SearchResult['type'], { label: string; icon: React.Rea
   product:  { label: 'Product',   icon: <Fa icon={faBoxesStacked} />,       color: '#8B5CF6',        bg: 'rgba(139,92,246,0.1)' },
   invoice:  { label: 'Invoice',   icon: <Fa icon={faFileInvoiceDollar} />,  color: 'var(--success)', bg: 'rgba(16,185,129,0.1)' },
   repair:   { label: 'Repair',    icon: <Fa icon={faScrewdriverWrench} />,  color: 'var(--warning)', bg: 'rgba(245,158,11,0.1)' },
+  serial:   { label: 'Device',    icon: <Fa icon={faBoxesStacked} />,       color: '#8B5CF6',        bg: 'rgba(139,92,246,0.1)' },
+  sale_order: { label: 'Sale order', icon: <Fa icon={faClipboardList} />,  color: '#06B6D4',        bg: 'rgba(6,182,212,0.1)' },
+  delivery: { label: 'Delivery',  icon: <Fa icon={faArrowRight} />,         color: '#334155',        bg: 'rgba(51,65,85,0.1)' },
   purchase: { label: 'Purchase',  icon: <Fa icon={faCartShopping} />,       color: '#EC4899',        bg: 'rgba(236,72,153,0.1)' },
   quote:    { label: 'Quote',     icon: <Fa icon={faClipboardList} />,      color: '#06B6D4',        bg: 'rgba(6,182,212,0.1)' },
   employee: { label: 'Employee',  icon: <Fa icon={faUserTie} />,            color: 'var(--text-4)',  bg: 'rgba(100,116,139,0.1)' },
@@ -90,6 +93,7 @@ const MODULE_SHORTCUTS: Array<{ id: string; title: string; subtitle: string; hre
   { id: 'mod-pos', title: 'Point of Sale', subtitle: 'Retail till and transactions', href: '/pos', module: 'pos', aliases: ['pos', 'till', 'retail'] },
   { id: 'mod-ecommerce', title: 'E-commerce', subtitle: 'Online store management', href: '/ecommerce', module: 'ecommerce', aliases: ['ecommerce', 'online store'] },
   { id: 'mod-kilimall', title: 'Kilimall', subtitle: 'Marketplace orders and settlements', href: '/kilimall', module: 'kilimall', aliases: ['kilimall', 'marketplace'] },
+  { id: 'mod-my-work', title: 'My work', subtitle: 'Everything waiting for you, across modules', href: '/my-work', module: 'dashboard', aliases: ['my work', 'tasks', 'to do', 'todo', 'inbox', 'queue'] },
   { id: 'mod-contacts', title: 'Contacts', subtitle: 'Customers, vendors, and staff', href: '/contacts', module: 'contacts', aliases: ['contacts', 'customers', 'vendors'] },
   { id: 'mod-repairs', title: 'Repairs', subtitle: 'Workshop and service tickets', href: '/repairs', module: 'repair', aliases: ['repair', 'workshop'] },
   { id: 'mod-operations', title: 'Inventory', subtitle: 'Stock control and transfers', href: '/inventory', module: 'inventory', aliases: ['inventory', 'stock', 'operations'] },
@@ -168,6 +172,25 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
       previouslyFocused?.focus()
     }
   }, [open, onClose])
+
+  // Every record the person may read, whatever this page has loaded
+  // (lib/universal-search.ts via /api/search): serials, phones, any doc number.
+  const [serverHits, setServerHits] = useState<SearchResult[]>([])
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) { setServerHits([]); return }
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: controller.signal })
+        .then(res => (res.ok ? res.json() : { results: [] }))
+        .then((body: { results?: Array<Omit<SearchResult, 'module'>> }) => {
+          const MODULE_FOR: Record<string, string> = { repair: 'repair', serial: 'inventory', sale_order: 'sales', delivery: 'sales', invoice: 'accounting', contact: 'contacts', purchase: 'purchase' }
+          setServerHits((body.results ?? []).map(hit => ({ ...hit, module: MODULE_FOR[hit.type] ?? 'dashboard' })))
+        })
+        .catch(() => {})
+    }, 200)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [query])
 
   const results = useMemo((): SearchResult[] => {
     const q = query.trim().toLowerCase()
@@ -291,14 +314,19 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
     return out.slice(0, 30)
   }, [query, contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses, currentUser?.modules, currentUser?.role])
 
+  const mergedResults = useMemo(() => {
+    const seen = new Set(results.map(r => `${r.type}:${r.id}`))
+    return [...results, ...serverHits.filter(h => !seen.has(`${h.type}:${h.id}`))]
+  }, [results, serverHits])
+
   const grouped = useMemo(() => {
     const map: Partial<Record<SearchResult['type'], SearchResult[]>> = {}
-    results.forEach(r => {
+    mergedResults.forEach(r => {
       if (!map[r.type]) map[r.type] = []
       map[r.type]!.push(r)
     })
     return map
-  }, [results])
+  }, [mergedResults])
 
   const flatResults = useMemo(() => Object.values(grouped).flat(), [grouped])
 
@@ -343,12 +371,12 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[var(--border)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[var(--text-4)] shrink-0" aria-hidden="true"><circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-          <input ref={inputRef} aria-label="Search records, commands, and modules" role="combobox" aria-autocomplete="list" aria-controls="global-search-results" aria-expanded={results.length > 0} aria-activedescendant={flatResults[activeIdx] ? `global-search-result-${activeIdx}` : undefined} type="text" value={query} onChange={e => { setQuery(e.target.value); setActiveIdx(0) }} placeholder="Search records, run commands, or jump to modules…" className="flex-1 bg-transparent text-[var(--text-1)] placeholder:text-[var(--text-4)] text-sm font-medium outline-none" />
+          <input ref={inputRef} aria-label="Search records, commands, and modules" role="combobox" aria-autocomplete="list" aria-controls="global-search-results" aria-expanded={mergedResults.length > 0} aria-activedescendant={flatResults[activeIdx] ? `global-search-result-${activeIdx}` : undefined} type="text" value={query} onChange={e => { setQuery(e.target.value); setActiveIdx(0) }} placeholder="Search records, run commands, or jump to modules…" className="flex-1 bg-transparent text-[var(--text-1)] placeholder:text-[var(--text-4)] text-sm font-medium outline-none" />
           {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')} className="text-[var(--text-4)] hover:text-[var(--text-2)] text-lg leading-none transition-colors">×</button>}
           <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[10px] font-bold text-[var(--text-4)]">ESC</kbd>
         </div>
 
-        <div id="global-search-results" ref={resultsRef} role={results.length ? 'listbox' : undefined} aria-label={results.length ? 'Search results' : undefined} className="flex-1 overflow-y-auto custom-scrollbar">
+        <div id="global-search-results" ref={resultsRef} role={mergedResults.length ? 'listbox' : undefined} aria-label={mergedResults.length ? 'Search results' : undefined} className="flex-1 overflow-y-auto custom-scrollbar">
           {!query.trim() && (
             <div className="p-4">
               <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-3">Quick Navigate</p>
@@ -364,14 +392,14 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             </div>
           )}
 
-          {query.trim().length >= 2 && results.length === 0 && (
+          {query.trim().length >= 2 && mergedResults.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
               <div className="w-12 h-12 rounded-2xl bg-[var(--bg-surface)] flex items-center justify-center text-2xl" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faMagnifyingGlass} /></div>
               <div className="text-center"><p className="text-sm font-bold text-[var(--text-2)]">No results for “{query}”</p><p className="text-xs text-[var(--text-4)] mt-1">Try a different keyword</p></div>
             </div>
           )}
 
-          {results.length > 0 && (() => {
+          {mergedResults.length > 0 && (() => {
             let globalIdx = 0
             return Object.entries(grouped).map(([type, items]) => {
               const cfg = TYPE_CONFIG[type as SearchResult['type']]
@@ -398,7 +426,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
         <div className="px-4 py-2.5 border-t border-[var(--border)] bg-[var(--bg-surface)]/50 flex items-center justify-between">
           <div className="flex items-center gap-3 text-[10px] text-[var(--text-4)] font-medium"><span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-bold">↑↓</kbd> Navigate</span><span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-bold">↵</kbd> Open</span><span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-bold">Esc</kbd> Close</span></div>
-          {results.length > 0 && <span className="text-[10px] text-[var(--text-4)] font-medium">{results.length} result{results.length !== 1 ? 's' : ''}</span>}
+          {mergedResults.length > 0 && <span className="text-[10px] text-[var(--text-4)] font-medium">{mergedResults.length} result{mergedResults.length !== 1 ? 's' : ''}</span>}
         </div>
       </div>
     </div>
