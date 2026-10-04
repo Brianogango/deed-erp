@@ -19485,8 +19485,13 @@ const storeCtx: AppState = {
         totalDebit: tenderTotal + customerCreditAmount + pointsRedeemed,
         totalCredit: sub + tax,
       }
-      setJournalEntries(p => [posJournal, ...p])
-      addAuditLog('post_pos', order.ref, `POS sale posted to journal ${posJournal.ref}`)
+      // A KES 0 sale has nothing to post; a one-line zero journal can never
+      // balance and was retried by the journal mirror forever.
+      const posJournalHasValue = posJournal.lines.some(l => Number(l.debit) > 0 || Number(l.credit) > 0)
+      if (posJournalHasValue) {
+        setJournalEntries(p => [posJournal, ...p])
+        addAuditLog('post_pos', order.ref, `POS sale posted to journal ${posJournal.ref}`)
+      }
       let accountingPostError: string | null = null
       try {
         const journalRes = await fetch('/api/pos/post-sale-journal', {

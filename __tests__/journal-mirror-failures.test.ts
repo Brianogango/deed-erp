@@ -187,6 +187,27 @@ describe('mirrorJournalEntriesToPrisma — a refused journal is never silent', (
   })
 })
 
+describe('mirrorJournalEntriesToPrisma — KES 0 journals', () => {
+  const zeroPos = entry({
+    ref: 'JRN/POS/0083',
+    source: 'pos',
+    lines: [{ id: 'l1', account: '5000 - Sales Revenue', description: 'POS revenue POS/0083', debit: 0, credit: 0 }],
+  })
+
+  it('skips a journal whose every line is zero instead of refusing it on every pass', async () => {
+    const result = await mirrorJournalEntriesToPrisma([zeroPos])
+    expect(result).toMatchObject({ mirrored: 0, skipped: 1, failed: 0 })
+    expect(mockPersist).not.toHaveBeenCalled()
+  })
+
+  it('clears the failure it left behind', async () => {
+    const prior = recordJournalMirrorFailure({}, zeroPos as any, new Error('Journal JRN/POS/0083 must contain at least two lines'))
+    appState({ [JOURNAL_MIRROR_FAILURE_KEY]: prior })
+    await mirrorJournalEntriesToPrisma([zeroPos])
+    expect(savedFailures()).toEqual({})
+  })
+})
+
 describe('the fingerprint version', () => {
   it('ignores hashes written before the version was introduced, forcing one re-mirror', async () => {
     // A bare md5 of the old payload shape. The versioned fingerprint cannot

@@ -170,6 +170,12 @@ export async function mirrorJournalEntriesToPrisma(entriesInput: unknown, opts: 
       // journal is created by the payroll posting transaction with the same
       // business document. Mirroring the blob copy would double-post payroll.
       if (String(e?.source ?? '') === 'payroll') { result.skipped++; continue }
+      // A journal whose every line is zero (a KES 0 POS sale) posts nothing.
+      if (e.lines.every((l: any) => !(Number(l?.debit) > 0) && !(Number(l?.credit) > 0))) {
+        failures = clearJournalMirrorFailure(failures, ref)
+        result.skipped++
+        continue
+      }
       try {
         const fp = fingerprint({
           ref,
