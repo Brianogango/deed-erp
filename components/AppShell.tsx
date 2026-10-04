@@ -15,6 +15,7 @@ import { markRouteDataReady, useRouteDataReady } from '@/lib/route-data-ready'
 import { ModuleRenderBoundary } from '@/components/erp'
 import { ModuleSkeleton, ShellChromeSkeleton } from '@/components/ui/ModuleSkeleton'
 import { fetchAndApplyStoreKeys, keysAreCached } from '@/lib/client-store-hydrate'
+import { beginRouteHydration, endRouteHydration } from '@/lib/store-freshness'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -464,6 +465,14 @@ function AppContent({ children }: { children: React.ReactNode }) {
       settlePaint()
     }
 
+    // Change notices that arrive meanwhile leave these keys to this load.
+    beginRouteHydration(criticalKeys)
+    beginRouteHydration(deferredKeys)
+    let criticalPending = true
+    let deferredPending = true
+    const endCritical = () => { if (criticalPending) { criticalPending = false; endRouteHydration(criticalKeys) } }
+    const endDeferred = () => { if (deferredPending) { deferredPending = false; endRouteHydration(deferredKeys) } }
+
     ;(async () => {
       try {
         if (criticalKeys.length > 0) {
@@ -472,11 +481,13 @@ function AppContent({ children }: { children: React.ReactNode }) {
             etagStorageKey: etagCritical,
             signal: controller.signal,
           })
+          endCritical()
           if (result === 'error') markRouteDataReady(route)
           else settlePaint()
         } else {
           settlePaint()
         }
+        endCritical()
         if (deferredKeys.length > 0 && !controller.signal.aborted) {
           await fetchAndApplyStoreKeys({
             keys: deferredKeys,
@@ -490,6 +501,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
         if (err instanceof Error && err.name === 'AbortError') return
         markRouteDataReady(route)
       } finally {
+        endCritical()
+        endDeferred()
         window.clearTimeout(paintCap)
       }
     })()

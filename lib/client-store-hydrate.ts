@@ -2,6 +2,7 @@
 
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { rememberServerBaseline } from '@/lib/store-baseline'
+import { claimStoreDownload, holdsStoreCopy, keysNeedingDownload, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
 
 const ARRAY_STORE_KEYS = /^(deed_repairs_v2|deed_products|deed_invoices|deed_saleOrders|deed_contacts|deed_employees|deed_expenses|deed_purchaseOrders|deed_stockTransfers|deed_serials|deed_accounts|deed_posOrders|deed_deliveries|deed_journalEntries|deed_leaveRequests|deed_opportunities|deed_companies|deed_quotes|deed_holdovers|deed_companyAssets|deed_deposits|deed_buyBacks|deed_warranties|deed_outsourceJobs|deed_outsourceVendors|deed_outsourcePayments|deed_bankAccounts|deed_receipts|deed_customerCredits|deed_workflowApprovals|deed_contracts|deed_customerContracts|deed_employeeAssets|deed_kilimallOrders|deed_payrollRuns)$/
 
@@ -80,25 +81,55 @@ export async function fetchAndApplyStoreKeys(opts: {
   etagStorageKey: string
   signal?: AbortSignal
 }): Promise<'applied' | 'not-modified' | 'error'> {
-  const { keys, etagStorageKey, signal } = opts
-  if (keys.length === 0) return 'not-modified'
+  const { etagStorageKey, signal } = opts
+  if (opts.keys.length === 0) return 'not-modified'
+
+  // Another part of the page may already be downloading some of these: take
+  // the rest (claimed in this same tick), and wait for theirs alongside.
+  const { mine: keys, others } = claimStoreDownload(opts.keys)
+  // A download we waited on can be cancelled (its page was left mid-load):
+  // fetch whatever it did not deliver ourselves.
+  const delegated = opts.keys.filter(key => !keys.includes(key))
+  const settleOthers = async () => {
+    await others
+    if (signal?.aborted) return
+    const missed = keysNeedingDownload(delegated)
+    if (missed.length) await fetchAndApplyStoreKeys({ keys: missed, etagStorageKey, signal })
+  }
+  if (keys.length === 0) {
+    await settleOthers()
+    return 'not-modified'
+  }
+  const wholeSet = keys.length === opts.keys.length
 
   const storedEtag = (() => {
     try { return window.localStorage.getItem(etagStorageKey) } catch { return null }
   })()
-  const cached = keysAreCached(keys)
+  // Large collections are not kept in localStorage, but a copy downloaded
+  // earlier in this session is still in memory — enough to accept a 304.
+  const cached = keysAreCached(keys) || holdsStoreCopy(keys)
 
-  const res = await fetch(`/api/store?keys=${encodeURIComponent(keys.join(','))}`, {
-    signal,
-    headers: storedEtag && cached ? { 'If-None-Match': storedEtag } : undefined,
-  })
-  if (res.status === 304) return 'not-modified'
-  if (!res.ok) return 'error'
-  const etag = res.headers.get('etag')
-  try {
-    if (etag) window.localStorage.setItem(etagStorageKey, etag)
-  } catch { /* storage full — conditional fetch just won't apply next time */ }
-  const state = await res.json() as Record<string, unknown>
-  applyHydratedStoreState(state)
-  return 'applied'
+  const download = (async () => {
+    const res = await fetch(`/api/store?keys=${encodeURIComponent(keys.join(','))}`, {
+      signal,
+      // The stored ETag belongs to the full key set; a subset never matches it.
+      headers: wholeSet && storedEtag && cached ? { 'If-None-Match': storedEtag } : undefined,
+    })
+    if (res.status === 304) {
+      noteStoreRead(keys, res.headers.get('x-store-read-at'))
+      return 'not-modified' as const
+    }
+    if (!res.ok) return 'error' as const
+    const etag = res.headers.get('etag')
+    try {
+      if (etag && wholeSet) window.localStorage.setItem(etagStorageKey, etag)
+    } catch { /* storage full — conditional fetch just won't apply next time */ }
+    const state = await res.json() as Record<string, unknown>
+    applyHydratedStoreState(state)
+    noteStoreRead(keys, res.headers.get('x-store-read-at'))
+    return 'applied' as const
+  })()
+  const result = await trackStoreDownload(keys, download)
+  await settleOthers()
+  return result
 }

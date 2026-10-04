@@ -17,7 +17,7 @@ describe('Prisma fetch scope', () => {
   it('subscribes the live store stream to the current route keys only', () => {
     expect(store).toContain('/api/store/stream?keys=')
     expect(stream).toContain('loadChangedStoreKeysSince')
-    expect(stream).toContain("send('store', { state: {}, patch: true, invalidated })")
+    expect(stream).toContain("send('store', { state: {}, patch: true, invalidated, changedAt: invalidatedAt })")
     expect(stream).not.toContain('loadAppStateChangesSince')
   })
 

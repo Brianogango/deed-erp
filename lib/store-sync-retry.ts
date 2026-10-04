@@ -55,19 +55,27 @@ function asDeedKeyList(value: unknown): string[] {
 export function parseStoreSseData(raw: string): {
   state: Record<string, unknown> | null
   invalidated: string[]
+  /** key → ISO time of the change, when the server sent it. */
+  changedAt: Record<string, string>
 } {
   try {
     const parsed = JSON.parse(raw) as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { state: null, invalidated: [] }
+      return { state: null, invalidated: [], changedAt: {} }
     }
-    const record = parsed as { state?: unknown; invalidated?: unknown }
+    const record = parsed as { state?: unknown; invalidated?: unknown; changedAt?: unknown }
     const state = record.state && typeof record.state === 'object' && !Array.isArray(record.state)
       ? record.state as Record<string, unknown>
       : null
-    return { state, invalidated: asDeedKeyList(record.invalidated) }
+    const changedAt: Record<string, string> = {}
+    if (record.changedAt && typeof record.changedAt === 'object' && !Array.isArray(record.changedAt)) {
+      for (const [key, value] of Object.entries(record.changedAt as Record<string, unknown>)) {
+        if (key.startsWith('deed_') && typeof value === 'string') changedAt[key] = value
+      }
+    }
+    return { state, invalidated: asDeedKeyList(record.invalidated), changedAt }
   } catch {
-    return { state: null, invalidated: [] }
+    return { state: null, invalidated: [], changedAt: {} }
   }
 }
 

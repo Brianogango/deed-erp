@@ -158,6 +158,7 @@ export async function getPrismaStateChangedKeysSince(
 ): Promise<{
   keys: string[]
   latestUpdatedAt: string
+  changedAt: Record<string, string>
 }> {
   const parsed = new Date(sinceUpdatedAt)
   const since = Number.isNaN(parsed.getTime()) ? new Date(0) : parsed
@@ -170,8 +171,11 @@ export async function getPrismaStateChangedKeysSince(
     orderBy: { updatedAt: 'asc' },
     select: { key: true, updatedAt: true },
   })
+  const changedAt: Record<string, string> = {}
+  for (const row of rows) changedAt[row.key] = row.updatedAt.toISOString()
   return {
     keys: rows.map(row => row.key),
     latestUpdatedAt: rows.at(-1)?.updatedAt.toISOString() ?? sinceUpdatedAt,
+    changedAt,
   }
 }

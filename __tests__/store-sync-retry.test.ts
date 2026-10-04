@@ -47,15 +47,17 @@ describe('store SSE payloads', () => {
       state: { deed_invoices: [{ id: '1' }] },
       patch: true,
       invalidated: ['deed_repairs_v2', 'ignore_me', 12],
+      changedAt: { deed_repairs_v2: '2026-10-04T10:00:00.000Z', ignore_me: 'x', deed_invoices: 5 },
     }))).toEqual({
       state: { deed_invoices: [{ id: '1' }] },
       invalidated: ['deed_repairs_v2'],
+      changedAt: { deed_repairs_v2: '2026-10-04T10:00:00.000Z' },
     })
   })
 
   it('treats malformed store events as empty so a bad packet cannot freeze sync', () => {
-    expect(parseStoreSseData('{')).toEqual({ state: null, invalidated: [] })
-    expect(parseStoreSseData('[]')).toEqual({ state: null, invalidated: [] })
+    expect(parseStoreSseData('{')).toEqual({ state: null, invalidated: [], changedAt: {} })
+    expect(parseStoreSseData('[]')).toEqual({ state: null, invalidated: [], changedAt: {} })
   })
 
   it('only treats an explicit liveNotify true as instant-path healthy', () => {

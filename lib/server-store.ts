@@ -197,11 +197,13 @@ export async function loadChangedStoreKeysSince(
 ): Promise<{
   keys: string[]
   latestUpdatedAt: string
+  /** When each changed key last changed — lets clients skip copies they already hold. */
+  changedAt: Record<string, string>
 }> {
   try {
     const wanted = keys?.filter(Boolean)
     const projected = process.env.NODE_ENV === 'test' || !readsPrismaState()
-      ? { keys: [] as string[], latestUpdatedAt: sinceUpdatedAt }
+      ? { keys: [] as string[], latestUpdatedAt: sinceUpdatedAt, changedAt: {} as Record<string, string> }
       : await getPrismaStateChangedKeysSince(sinceUpdatedAt, wanted)
     await ensureTable()
     const { rows } = wanted?.length
@@ -220,15 +222,20 @@ export async function loadChangedStoreKeysSince(
         `
     const legacyRows = rows as { key: string; updated_at: string }[]
     const changed = [...new Set([...projected.keys, ...legacyRows.map(row => row.key)])]
-    if (!changed.length) return { keys: [], latestUpdatedAt: sinceUpdatedAt }
+    if (!changed.length) return { keys: [], latestUpdatedAt: sinceUpdatedAt, changedAt: {} }
+    const changedAt: Record<string, string> = { ...projected.changedAt }
+    for (const row of legacyRows) {
+      const prev = changedAt[row.key]
+      if (!prev || Date.parse(row.updated_at) > Date.parse(prev)) changedAt[row.key] = row.updated_at
+    }
 
     const legacyLatest = legacyRows.at(-1)?.updated_at ?? sinceUpdatedAt
     const latestUpdatedAt = Date.parse(projected.latestUpdatedAt) >= Date.parse(legacyLatest)
       ? projected.latestUpdatedAt
       : legacyLatest
-    return { keys: changed, latestUpdatedAt }
+    return { keys: changed, latestUpdatedAt, changedAt }
   } catch {
-    return { keys: [], latestUpdatedAt: sinceUpdatedAt }
+    return { keys: [], latestUpdatedAt: sinceUpdatedAt, changedAt: {} }
   }
 }
 

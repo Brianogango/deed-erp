@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
             lastUpdatedAt = latest ? minusOverlap(latest) : new Date(Date.now() - CONNECT_OVERLAP_MS).toISOString()
           }
 
-          const { keys, latestUpdatedAt } = await loadChangedStoreKeysSince(
+          const { keys, latestUpdatedAt, changedAt } = await loadChangedStoreKeysSince(
             lastUpdatedAt,
             watched ? [...watched] : undefined,
           )
@@ -76,7 +76,9 @@ export async function GET(request: NextRequest) {
             return
           }
           for (const key of invalidated) announced.add(`${key}:${latestUpdatedAt}`)
-          send('store', { state: {}, patch: true, invalidated })
+          const invalidatedAt: Record<string, string> = {}
+          for (const key of invalidated) if (changedAt?.[key]) invalidatedAt[key] = changedAt[key]
+          send('store', { state: {}, patch: true, invalidated, changedAt: invalidatedAt })
           lastUpdatedAt = latestUpdatedAt
         } catch { /* DB error — skip this tick, retry next */ }
       }

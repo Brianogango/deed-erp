@@ -309,6 +309,7 @@ import {
 import { safeLocalStorageSet } from '@/lib/client-store-cache'
 import { computeCollectionDelta, type CollectionDelta } from '@/lib/store-delta'
 import { forgetServerBaseline, rememberServerBaseline, serverBaselineFor } from '@/lib/store-baseline'
+import { awaitRouteHydration, awaitStoreDownloads, keysChangedSinceRead, noteStoreChanges, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
 import { contactFromPersonInput, deriveContactPersons } from '@/lib/contact-person-derive'
 import {
   applyCustomerToInvoice,
@@ -5637,7 +5638,12 @@ export function StoreProvider({
       // One batched GET instead of 5 sequential /api/store/<key> round-trips.
       try {
         const path = typeof window !== 'undefined' ? (window.location.pathname || '/') : '/'
-        const needed = CRITICAL_VISIBILITY_KEYS.filter(key => appStateKeysForRoute(path).includes(key))
+        // Route hydration already replaces every clean key with the server
+        // copy; only keys with unsaved local edits (which hydration skips)
+        // need this merge. Fetching all of them duplicated the page's largest
+        // downloads on every load.
+        const dirty = getDirtyKeys()
+        const needed = CRITICAL_VISIBILITY_KEYS.filter(key => appStateKeysForRoute(path).includes(key) && dirty.has(key))
         if (!needed.length) return
         const res = await fetch(`/api/store?keys=${encodeURIComponent(needed.join(','))}`)
         if (!res.ok) return
@@ -5781,9 +5787,18 @@ export function StoreProvider({
     // prevents focus/visibility events from starting duplicate downloads.
     const storeEtags = new Map<string, string>()
     const storeFetchesInFlight = new Map<string, Promise<void>>()
-    const fetchStoreKeys = (keys: string[]): Promise<void> => {
-      const deedKeys = [...new Set(keys.filter(key => key.startsWith('deed_')))].sort()
-      if (!deedKeys.length) return Promise.resolve()
+    const fetchStoreKeys = async (keys: string[], changedAt?: Record<string, string>): Promise<void> => {
+      let deedKeys = [...new Set(keys.filter(key => key.startsWith('deed_')))].sort()
+      if (!deedKeys.length) return
+      // A change notice for a copy we downloaded after that change is
+      // already satisfied (the stream replays the last minute on connect).
+      if (changedAt) {
+        noteStoreChanges(changedAt)
+        await awaitRouteHydration(deedKeys)
+        await awaitStoreDownloads(deedKeys)
+        deedKeys = keysChangedSinceRead(deedKeys, changedAt)
+        if (!deedKeys.length) return
+      }
       const keySet = deedKeys.join(',')
       const existing = storeFetchesInFlight.get(keySet)
       if (existing) return existing
@@ -5794,12 +5809,16 @@ export function StoreProvider({
           const res = await fetch(`/api/store?keys=${encodeURIComponent(keySet)}`, {
             headers: etag ? { 'If-None-Match': etag } : undefined,
           })
-          if (res.status === 304) return
+          if (res.status === 304) {
+            noteStoreRead(deedKeys, res.headers.get('x-store-read-at'))
+            return
+          }
           if (!res.ok) return
           const nextEtag = res.headers.get('etag')
           if (nextEtag) storeEtags.set(keySet, nextEtag)
           const payload = await res.json().catch(() => null) as Record<string, unknown> | null
           if (payload && typeof payload === 'object') applyRemoteState(payload)
+          noteStoreRead(deedKeys, res.headers.get('x-store-read-at'))
         } catch {
           // best effort — SSE reconnect / backup poll will retry
         }
@@ -5807,7 +5826,7 @@ export function StoreProvider({
         storeFetchesInFlight.delete(keySet)
       })
       storeFetchesInFlight.set(keySet, request)
-      return request
+      return trackStoreDownload(deedKeys, request)
     }
 
     // 2. SSE stream for real-time store updates — reconnect with backoff so a
@@ -5863,12 +5882,12 @@ export function StoreProvider({
         ensureBackupPoll(false)
       })
       source.addEventListener('store', (e: Event) => {
-        const { state, invalidated } = parseStoreSseData((e as MessageEvent).data)
+        const { state, invalidated, changedAt } = parseStoreSseData((e as MessageEvent).data)
         if (state) applyRemoteState(state)
         if (invalidated.length) {
           const path = typeof window !== 'undefined' ? (window.location.pathname || '/') : '/'
           const needed = new Set(appStateKeysForRoute(path))
-          void fetchStoreKeys(invalidated.filter(key => needed.has(key)))
+          void fetchStoreKeys(invalidated.filter(key => needed.has(key)), changedAt)
         }
       })
       source.onopen = () => {

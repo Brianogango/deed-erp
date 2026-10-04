@@ -99,6 +99,9 @@ export async function GET(request: NextRequest) {
   // their updated_at fingerprint, caller identity — role filtering). When the
   // client already holds this exact version in localStorage, answer 304 and
   // skip loading + serializing + transferring the payload entirely.
+  // Captured before anything is read: the browser compares change notices
+  // against this to skip re-downloading what it already holds (store-freshness).
+  const readAt = new Date().toISOString()
   let etag: string | undefined
   let version: string | undefined
   if (keys?.length) {
@@ -107,7 +110,7 @@ export async function GET(request: NextRequest) {
       etag = buildStoreEtag(session, keys, version)
       if (request.headers.get('if-none-match') === etag) {
         recordHttpMetric({ path: '/api/store', status: 304, ms: Date.now() - t0 })
-        return new NextResponse(null, { status: 304, headers: { ETag: etag } })
+        return new NextResponse(null, { status: 304, headers: { ETag: etag, 'x-store-read-at': readAt } })
       }
     }
   }
@@ -125,7 +128,7 @@ export async function GET(request: NextRequest) {
   // Clients already ignore non-deed_ keys when hydrating; expose version for If-Match writes.
   const payload = version ? { ...state, version } : state
   recordHttpMetric({ path: '/api/store', status: 200, ms: Date.now() - t0 })
-  return NextResponse.json(payload, etag ? { headers: { ETag: etag } } : undefined)
+  return NextResponse.json(payload, { headers: { ...(etag ? { ETag: etag } : {}), 'x-store-read-at': readAt } })
 }
 
 export async function POST(request: Request) {
