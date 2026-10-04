@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client'
 
+import JobTrail from '@/components/erp/JobTrail'
 import Link from 'next/link'
 import { useState, useRef } from 'react'
 import { useRepair } from './RepairContext'
@@ -695,6 +696,10 @@ export default function RepairDetailView() {
             <InvoiceReissuePanel repairId={r.id} repairRef={r.ref} reissue={r.invoiceReissue} role={currentRole} />
           </div>
         )}
+
+        <div className="max-w-[1600px] mx-auto mt-2.5">
+          <JobTrail start={{ kind: 'repair', id: r.id }} />
+        </div>
 
         {/* Next-action hint for assigned tech or QA performer */}
         {(isMyRepair || canPerformQA) && nextActionHint && !isQuoteDeclinedReopenable(r.status) && (

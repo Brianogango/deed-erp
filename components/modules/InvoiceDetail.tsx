@@ -1,5 +1,6 @@
 'use client'
 
+import JobTrail from '@/components/erp/JobTrail'
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -636,6 +637,9 @@ export default function InvoiceDetail() {
           ]}
         />
 
+        {invoice.type === 'customer_invoice' && (
+          <div className="mb-2"><JobTrail start={{ kind: 'invoice', id: invoice.id }} /></div>
+        )}
         <div className="invoice-detail__header">
           <div className="invoice-detail__header-main">
             <div className="invoice-detail__title-row">

@@ -1,4 +1,5 @@
 'use client'
+import JobTrail from '@/components/erp/JobTrail'
 import { isSellableSerial } from '@/lib/inventory/sellable-stock'
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Fragment, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -2163,6 +2164,7 @@ function SalesContent() {
                 >
                   {activeOrder && (
                     <>
+                  <div className="mb-2"><JobTrail start={{ kind: 'sale_order', id: activeOrder.id }} /></div>
                   <div className="sales-proto-page-header">
                     <div className="sales-proto-header-copy">
                       <button type="button" className="sp-btn sp-btn-ghost sales-back-button" aria-label="Back to quotations" onClick={backToList}>
