@@ -84,6 +84,7 @@ export default function RecurringBills() {
     setBusy(true)
     try {
       const bill = createManualInvoice('vendor_bill', t.vendorId, t.vendorName, input.dueDate, input.lines, input.vatRate, input.notes, input.billDate)
+      if (!bill) return
       await api(`/api/recurring-bills/${t.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ action: 'recordGenerated', billDate, invoiceId: bill.id, invoiceRef: bill.ref ?? '' }),

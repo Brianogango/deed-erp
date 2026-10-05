@@ -14,6 +14,7 @@ import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
 import { ensureOpeningBalanceEquityAccount } from '@/lib/accounting/opening-balance-account'
+import { serialInvoiceGateError } from '@/lib/sales/serial-invoice-gate.server'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -244,6 +245,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Due date cannot be before the document date' }, { status: 422 })
       }
     }
+
+    // Only new invoices: a re-sent copy of one that exists is not re-judged.
+    const alreadyExists = isUUID(body.id) && await prisma.invoice.findUnique({ where: { id: body.id }, select: { id: true } })
+    const serialBlock = alreadyExists ? null : await serialInvoiceGateError(body, lines)
+    if (serialBlock) return NextResponse.json({ error: serialBlock }, { status: 409 })
 
     const clientId = await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
 

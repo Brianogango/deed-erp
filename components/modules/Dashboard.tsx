@@ -41,6 +41,7 @@ import { computeInvoiceStats, type InvoiceStats } from '@/lib/accounting/invoice
 import { onHandQtyAtStockLocations } from '@/lib/business-logic'
 import { isStockTracked, inferTrackingMethod } from '@/lib/inventory-identifiers'
 import { computeLowStockItems } from '@/lib/kpi-stock'
+import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
 import { isOpenRepairJob } from '@/lib/repair-progress'
 import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
@@ -236,6 +237,7 @@ export function Dashboard() {
     companySettings,
     serials,
     bulkStock,
+    deliveries,
   } = useApp()
   const { employees, leaveRequests } = useHrStore()
 
@@ -851,8 +853,28 @@ export function Dashboard() {
 
   // P1 — "Needs attention now". Everything here is either overdue, waiting on
   // an approval, or blocking someone. Every entry links to where it is fixed.
+  const invoicedNotDelivered = useMemo(
+    () => (canSeeSales || canSeeInventory || canSeeFinance)
+      ? findInvoicedNotDelivered({ saleOrders, invoices, deliveries: deliveries ?? [], products })
+      : [],
+    [canSeeSales, canSeeInventory, canSeeFinance, saleOrders, invoices, deliveries, products],
+  )
+
   const focusItems = useMemo(() => {
     const items: { key: string; title: string; sub: string; tone: string; module?: ModuleId; path?: string }[] = []
+
+    if (invoicedNotDelivered.length > 0) {
+      const units = invoicedNotDelivered.reduce((s, r) => s + r.undelivered, 0)
+      const first = invoicedNotDelivered[0]
+      items.push({
+        key: 'invoiced-not-delivered',
+        title: `${units} machine${units === 1 ? '' : 's'} invoiced but not delivered`,
+        sub: `${invoicedNotDelivered.length} sale order${invoicedNotDelivered.length === 1 ? '' : 's'}, oldest ${first.ref} (${first.customerName}) — still counted in stock until the delivery is validated with serials`,
+        tone: 'danger',
+        module: 'sales',
+        path: `/sales?id=${encodeURIComponent(first.saleOrderId)}`,
+      })
+    }
 
     if (canSeeFinance && financeDeskStats) {
       // Shared finance exceptions: overdue collections/payables, reimbursements
@@ -922,7 +944,7 @@ export function Dashboard() {
       .filter(item => !item.module || has(item.module))
       .sort((a, b) => (rank[a.tone] ?? 3) - (rank[b.tone] ?? 3))
       .slice(0, 3)
-  }, [canSeeFinance, canApproveLeave, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits, has])
+  }, [invoicedNotDelivered, canSeeFinance, canApproveLeave, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits, has])
 
   const executiveSnapshot = useMemo(() => {
     const now = new Date()

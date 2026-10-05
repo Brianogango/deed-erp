@@ -1398,6 +1398,7 @@ function AccountingContent() {
       showToast(tab === 'bills' ? 'Bill updated' : 'Invoice updated', 'success')
     } else {
       const created = createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate, newNotes.trim(), newDocumentDate)
+      if (!created) return
       if (type === 'customer_invoice' && created?.id) {
         setDocumentPaymentDetails(created.id, normalizeDocumentPaymentDetails(newPaymentDetails))
       }

@@ -25,8 +25,9 @@ export default function MyWork() {
     stockAdjustments: app.stockAdjustments ?? [],
     serials: app.serials ?? [],
     purchaseOrders: app.purchaseOrders ?? [],
+    products: app.products ?? [],
     invoiceHref: id => financeInvoicePath(id),
-  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders])
+  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders, app.products])
 
   const total = queues.reduce((s, q) => s + q.count, 0)
   const firstName = String(user?.name ?? '').split(/\s+/)[0]

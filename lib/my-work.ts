@@ -9,6 +9,8 @@
  * Pure: the page hands in the store lists and "now".
  */
 
+import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
+
 export type WorkItem = { id: string; title: string; subtitle: string; href: string; ageDays: number }
 export type WorkQueue = {
   id: string
@@ -33,6 +35,7 @@ export type MyWorkInput = {
   stockAdjustments: Any[]
   serials: Any[]
   purchaseOrders: Any[]
+  products?: Any[]
   invoiceHref: (id: string) => string
 }
 
@@ -121,6 +124,12 @@ export function buildMyWork(input: MyWorkInput): WorkQueue[] {
       && (role !== 'sales_rep' || o.createdByUserId === input.userId || o.salespersonId === input.userId))
     out.push(queue('quotations-open', 'Quotations to follow up', 'Open for 3+ days', '/sales',
       quotations.map(o => ({ id: o.id, title: o.ref ?? o.orderNumber, subtitle: `${o.customerName ?? ''} · ${kes(o.total)}`, href: `/sales?id=${encodeURIComponent(o.id)}`, ageDays: ageDays(o.date ?? o.createdAt, now) }))))
+  }
+  if (is('sales_rep', 'admin_officer', 'inventory_officer', 'finance_officer')) {
+    const billed = findInvoicedNotDelivered({ saleOrders: input.saleOrders, invoices: input.invoices, deliveries: input.deliveries, products: input.products ?? [] })
+      .filter(r => role !== 'sales_rep' || input.saleOrders.some(o => o.id === r.saleOrderId && (o.createdByUserId === input.userId || o.salespersonId === input.userId)))
+    out.push(queue('invoiced-not-delivered', 'Invoiced, not delivered', 'Machines billed but still counted in stock — validate the delivery with serials', '/sales',
+      billed.map(r => ({ id: r.saleOrderId, title: r.ref, subtitle: `${r.customerName} · ${r.machines.map(m => `${m.undelivered} × ${m.name}`).join(', ')}`, href: `/sales?id=${encodeURIComponent(r.saleOrderId)}`, ageDays: ageDays(r.firstInvoiceDate, now) })), 'urgent'))
   }
   if (is('admin_officer', 'inventory_officer')) {
     const dns = input.deliveries.filter(d => ['waiting', 'ready'].includes(String(d.status)))

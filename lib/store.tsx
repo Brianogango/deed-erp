@@ -3679,7 +3679,7 @@ export interface AppState {
   deleteSaleOrder: (id: string) => void
 
   // Invoices
-  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string; account?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
+  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string; account?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice | null
   /** Migration opening balances: saved to the server one by one (which posts each journal once), then shown. */
   importOpeningBalances: (invoices: Invoice[]) => Promise<{ saved: Invoice[]; failed: string[] }>
   updateInvoice: (id: string, p: Partial<Invoice>) => void
@@ -13759,6 +13759,21 @@ const storeCtx: AppState = {
 
     // ── Invoices ──────────────────────────────────────────────────────────────
     createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate, notes = '', documentDate) => {
+      if (type === 'customer_invoice') {
+        // Laptops and other serial-tracked machines leave stock only through a
+        // validated delivery or the POS till (lib/sales/serial-invoice-gate.ts).
+        const typed = new Set(lines
+          .filter(l => (l.type ?? 'item') !== 'section')
+          .map(l => String(l.desc ?? '').trim().replace(/\s+/g, ' ').toLowerCase())
+          .filter(Boolean))
+        const machine = prodRef.current.find(p =>
+          (p.requiresSerial || String(p.trackingMethod ?? '').toUpperCase() === 'SERIAL')
+          && typed.has(String(p.name ?? '').trim().replace(/\s+/g, ' ').toLowerCase()))
+        if (machine) {
+          showToast(`${machine.name} is serial-tracked: sell it through a sale order and validate the delivery (or at the POS till), so the machine leaves stock with its serial number.`, 'error')
+          return null
+        }
+      }
       const builtLines: InvoiceLine[] = lines
         .filter(l => {
           if ((l.type ?? 'item') === 'section') return !!String(l.desc || '').trim()

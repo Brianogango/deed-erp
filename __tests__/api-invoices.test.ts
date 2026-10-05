@@ -69,6 +69,8 @@ vi.mock('@/lib/auth/api', () => ({
     }),
 }))
 
+const mockPrismaProduct = vi.hoisted(() => ({ findMany: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/lib/server-store', async (orig) => ({ ...(await orig() as object), loadAppState: vi.fn(async () => ({})) }))
 vi.mock('@/lib/prisma', () => ({
   default: {
     invoice: mockPrismaInvoice,
@@ -76,6 +78,7 @@ vi.mock('@/lib/prisma', () => ({
     purchaseOrder: mockPrismaPurchaseOrder,
     purchaseOrderItem: mockPrismaPurchaseOrderItem,
     client: { findUnique: vi.fn().mockResolvedValue(null) },
+    product: mockPrismaProduct,
     taxTransaction: { upsert: vi.fn() },
     $transaction: async (fn: (tx: any) => Promise<any>) =>
       fn({
@@ -832,3 +835,36 @@ describe('POST /api/invoices — server-side 3-way match', () => {
     expect(mockPrismaPurchaseOrderItem.update).not.toHaveBeenCalled()
   })
 })
+
+describe('POST /api/invoices — serial-tracked machines', () => {
+  it('refuses a manual customer invoice for a laptop (no sale order, no delivery)', async () => {
+    const productId = '99999999-9999-4999-8999-999999999999'
+    mockPrismaProduct.findMany.mockResolvedValueOnce([{ id: productId, name: 'HP EliteBook 845 G7' }])
+    const res = await POST(postReq({
+      type: 'customer_invoice',
+      date: '2026-10-05',
+      dueDate: '2026-10-05',
+      lines: [{ productId, description: 'HP EliteBook 845 G7', qty: 1, unitPrice: 45000 }],
+      total: 45000,
+    }))
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/serial-tracked/)
+    expect(mockPrismaInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it('also catches a laptop typed by name on a free-text line', async () => {
+    const { loadAppState } = await import('@/lib/server-store')
+    vi.mocked(loadAppState).mockResolvedValueOnce({
+      deed_products: [{ id: 'p-845', name: 'HP EliteBook 845 G7', requiresSerial: true }],
+    } as any)
+    const res = await POST(postReq({
+      type: 'customer_invoice',
+      date: '2026-10-05',
+      dueDate: '2026-10-05',
+      lines: [{ description: 'hp elitebook  845 G7', qty: 50, unitPrice: 45000 }],
+      total: 2250000,
+    }))
+    expect(res.status).toBe(409)
+  })
+})
+
