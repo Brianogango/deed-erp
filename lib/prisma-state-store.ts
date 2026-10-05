@@ -147,6 +147,18 @@ export async function getPrismaStateVersion(keys: string[]): Promise<string> {
   return `${aggregate._max.updatedAt?.toISOString() ?? ''}:${aggregate._count._all}:${aggregate._sum.version ?? 0}`
 }
 
+/** Per-key version (change counter + time) — lets a client skip unchanged collections. */
+export async function getPrismaStateKeyVersions(keys: string[]): Promise<Record<string, string>> {
+  if (!keys.length) return {}
+  const rows = await prisma.erpStateKey.findMany({
+    where: { key: { in: keys } },
+    select: { key: true, version: true, updatedAt: true },
+  })
+  const out: Record<string, string> = {}
+  for (const row of rows) out[row.key] = `${row.version}@${row.updatedAt.toISOString()}`
+  return out
+}
+
 export async function getLatestPrismaStateUpdatedAt(): Promise<string> {
   const latest = await prisma.erpStateKey.aggregate({ _max: { updatedAt: true } })
   return latest._max.updatedAt?.toISOString() ?? ''

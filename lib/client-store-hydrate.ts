@@ -2,7 +2,8 @@
 
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { rememberServerBaseline } from '@/lib/store-baseline'
-import { claimStoreDownload, holdsStoreCopy, keysNeedingDownload, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
+import { claimStoreDownload, holdsStoreCopy, keysNeedingDownload, noteStoreHeld, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
+import { cacheCollectionsNow, readCachedCollections } from '@/lib/browser-collection-cache'
 
 const ARRAY_STORE_KEYS = /^(deed_repairs_v2|deed_products|deed_invoices|deed_saleOrders|deed_contacts|deed_employees|deed_expenses|deed_purchaseOrders|deed_stockTransfers|deed_serials|deed_accounts|deed_posOrders|deed_deliveries|deed_journalEntries|deed_leaveRequests|deed_opportunities|deed_companies|deed_quotes|deed_holdovers|deed_companyAssets|deed_deposits|deed_buyBacks|deed_warranties|deed_outsourceJobs|deed_outsourceVendors|deed_outsourcePayments|deed_bankAccounts|deed_receipts|deed_customerCredits|deed_workflowApprovals|deed_contracts|deed_customerContracts|deed_employeeAssets|deed_kilimallOrders|deed_payrollRuns)$/
 
@@ -28,8 +29,10 @@ export function keysAreCached(keys: string[]): boolean {
 export function applyHydratedStoreState(
   state: Record<string, unknown> | null | undefined,
   dirtyKeys?: Set<string>,
-): void {
-  if (!state) return
+): Record<string, string> {
+  /** Server copies taken into the store, serialized — what may be cached as-is. */
+  const applied: Record<string, string> = {}
+  if (!state) return applied
   // Always re-read dirty keys at apply time. The loading gate can release
   // after the critical GET, so the user may edit a deferred collection while
   // that second fetch is still in flight.
@@ -66,6 +69,7 @@ export function applyHydratedStoreState(
       }
     }
     rememberServerBaseline(key, serialized)
+    applied[key] = serialized
     try {
       if (window.localStorage.getItem(key) === serialized) continue
       persistClientStoreValue(key, serialized)
@@ -74,10 +78,33 @@ export function applyHydratedStoreState(
     }
     window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: serialized } }))
   }
+  return applied
+}
+
+/**
+ * Show this browser's cached copies (IndexedDB) of keys localStorage does not
+ * hold, before the page asks the server. The request then carries the ETag,
+ * so unchanged collections answer 304 instead of downloading again. Cached
+ * copies may include unsaved edits, so they never become the save baseline.
+ */
+export async function preloadCachedCollections(keys: string[]): Promise<void> {
+  if (typeof window === 'undefined' || keys.length === 0) return
+  const missing = keys.filter(key => {
+    if (holdsStoreCopy([key])) return false
+    try { return window.localStorage.getItem(key) === null } catch { return true }
+  })
+  if (!missing.length) return
+  const cached = await readCachedCollections(missing)
+  const loaded = Object.keys(cached)
+  for (const key of loaded) {
+    window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: cached[key], fromCache: true } }))
+  }
+  noteStoreHeld(loaded)
 }
 
 export async function fetchAndApplyStoreKeys(opts: {
   keys: string[]
+  /** Legacy: whole-set ETag slot. Per-key versions (below) replaced it. */
   etagStorageKey: string
   signal?: AbortSignal
 }): Promise<'applied' | 'not-modified' | 'error'> {
@@ -100,36 +127,57 @@ export async function fetchAndApplyStoreKeys(opts: {
     await settleOthers()
     return 'not-modified'
   }
-  const wholeSet = keys.length === opts.keys.length
 
-  const storedEtag = (() => {
-    try { return window.localStorage.getItem(etagStorageKey) } catch { return null }
-  })()
-  // Large collections are not kept in localStorage, but a copy downloaded
-  // earlier in this session is still in memory — enough to accept a 304.
-  const cached = keysAreCached(keys) || holdsStoreCopy(keys)
+  // Tell the server which versions this browser holds; it sends only the
+  // collections that changed since. A version is only claimed for a copy we
+  // actually have (localStorage, IndexedDB-loaded, or downloaded this session).
+  const versions = readKeyVersions()
+  const have: Record<string, string> = {}
+  for (const key of keys) {
+    if (versions[key] && (keysAreCached([key]) || holdsStoreCopy([key]))) have[key] = versions[key]
+  }
 
   const download = (async () => {
     const res = await fetch(`/api/store?keys=${encodeURIComponent(keys.join(','))}`, {
       signal,
-      // The stored ETag belongs to the full key set; a subset never matches it.
-      headers: wholeSet && storedEtag && cached ? { 'If-None-Match': storedEtag } : undefined,
+      headers: { 'x-store-have': JSON.stringify(have) },
     })
-    if (res.status === 304) {
-      noteStoreRead(keys, res.headers.get('x-store-read-at'))
-      return 'not-modified' as const
-    }
     if (!res.ok) return 'error' as const
-    const etag = res.headers.get('etag')
-    try {
-      if (etag && wholeSet) window.localStorage.setItem(etagStorageKey, etag)
-    } catch { /* storage full — conditional fetch just won't apply next time */ }
     const state = await res.json() as Record<string, unknown>
-    applyHydratedStoreState(state)
+    const applied = applyHydratedStoreState(state)
     noteStoreRead(keys, res.headers.get('x-store-read-at'))
-    return 'applied' as const
+    const serverVersions = (state.versions && typeof state.versions === 'object' ? state.versions : {}) as Record<string, string>
+    const unchanged = Array.isArray(state.unchanged) ? (state.unchanged as string[]) : []
+    // A version claims "this browser holds that copy": record it only once
+    // the data is stored, so a reload can never pair it with an older copy.
+    const stored = await cacheCollectionsNow(applied)
+    const nextVersions: Record<string, string> = {}
+    for (const key of Object.keys(applied)) {
+      if (serverVersions[key] && (stored || keysAreCached([key]))) nextVersions[key] = serverVersions[key]
+    }
+    writeKeyVersions(nextVersions, keys.filter(key => !unchanged.includes(key) && !(key in nextVersions)))
+    return unchanged.length === keys.length ? 'not-modified' as const : 'applied' as const
   })()
   const result = await trackStoreDownload(keys, download)
   await settleOthers()
   return result
+}
+
+const KEY_VERSIONS_LS = 'deed_store_key_versions'
+
+function readKeyVersions(): Record<string, string> {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(KEY_VERSIONS_LS) || '{}')
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Set versions for copies just stored; drop versions for keys we no longer hold as the server has them. */
+function writeKeyVersions(set: Record<string, string>, drop: string[]) {
+  if (!Object.keys(set).length && !drop.length) return
+  const next = { ...readKeyVersions(), ...set }
+  for (const key of drop) delete next[key]
+  try { window.localStorage.setItem(KEY_VERSIONS_LS, JSON.stringify(next)) } catch { /* optional */ }
 }

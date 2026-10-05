@@ -4,6 +4,7 @@ import { isBlobKey, readBlob, writeBlob } from './blob-store'
 import {
   getLatestPrismaStateUpdatedAt,
   getPrismaStateChangedKeysSince,
+  getPrismaStateKeyVersions,
   getPrismaStateVersion,
   loadPrismaState,
   savePrismaStateEntries,
@@ -169,6 +170,31 @@ export async function getAppStateVersion(keys: string[]): Promise<string> {
   } catch {
     return ''
   }
+}
+
+/**
+ * Version of each key on its own (Prisma counter + legacy timestamp). Empty
+ * string when unknown — never treated as unchanged.
+ */
+export async function getAppStateKeyVersions(keys: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  if (!keys.length) return out
+  try {
+    const projected = process.env.NODE_ENV === 'test' || !readsPrismaState()
+      ? {} as Record<string, string>
+      : await getPrismaStateKeyVersions(keys)
+    await ensureTable()
+    const { rows } = await sql`SELECT key, updated_at FROM app_state WHERE key = ANY(${keys})`
+    const legacy = new Map((rows as { key: string; updated_at: string }[]).map(r => [r.key, r.updated_at]))
+    for (const key of keys) {
+      const p = projected[key] ?? ''
+      const l = legacy.get(key) ?? ''
+      out[key] = p || l ? `${p}|${l}` : ''
+    }
+  } catch {
+    for (const key of keys) out[key] = ''
+  }
+  return out
 }
 
 export async function getLatestAppStateUpdatedAt(): Promise<string> {

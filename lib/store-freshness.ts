@@ -22,6 +22,8 @@ type Seen = { readAt: number; receivedAt: number }
 const seen = new Map<string, Seen>()
 const changedAt = new Map<string, number>()
 const inflight = new Map<string, Promise<unknown>>()
+/** Keys shown from the browser cache: held, but never counted as fresh. */
+const held = new Set<string>()
 /** Keys the current page load is about to download itself (critical, then deferred). */
 const hydrating = new Map<string, number>()
 let hydrationWaiters: Array<() => void> = []
@@ -70,7 +72,12 @@ export function keysChangedSinceRead(keys: string[], changes: Record<string, str
 
 /** This page session holds a downloaded copy of every one of these keys (in memory). */
 export function holdsStoreCopy(keys: string[]): boolean {
-  return keys.every(key => seen.has(key))
+  return keys.every(key => seen.has(key) || held.has(key))
+}
+
+/** Copies loaded from the browser cache: enough to ask for a 304, not to skip asking. */
+export function noteStoreHeld(keys: string[]) {
+  for (const key of keys) held.add(key)
 }
 
 /** Keys with no current copy: never downloaded, older than the window, or changed since. */
@@ -139,6 +146,7 @@ export function resetStoreFreshness() {
   seen.clear()
   changedAt.clear()
   inflight.clear()
+  held.clear()
   hydrating.clear()
   hydrationWaiters = []
 }

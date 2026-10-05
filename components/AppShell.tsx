@@ -14,7 +14,8 @@ import { hasModuleAccess } from '@/lib/auth/access'
 import { markRouteDataReady, useRouteDataReady } from '@/lib/route-data-ready'
 import { ModuleRenderBoundary } from '@/components/erp'
 import { ModuleSkeleton, ShellChromeSkeleton } from '@/components/ui/ModuleSkeleton'
-import { fetchAndApplyStoreKeys, keysAreCached } from '@/lib/client-store-hydrate'
+import { fetchAndApplyStoreKeys, keysAreCached, preloadCachedCollections } from '@/lib/client-store-hydrate'
+import { setCollectionCacheUser } from '@/lib/browser-collection-cache'
 import { beginRouteHydration, endRouteHydration } from '@/lib/store-freshness'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -475,6 +476,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
     ;(async () => {
       try {
+        // Show what this browser already has, so the server can answer 304.
+        setCollectionCacheUser(currentUserId)
+        await preloadCachedCollections([...criticalKeys, ...deferredKeys])
         if (criticalKeys.length > 0) {
           const result = await fetchAndApplyStoreKeys({
             keys: criticalKeys,

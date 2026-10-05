@@ -5286,13 +5286,14 @@ function useLS<T>(
 
   // Listen for cross-device updates (from our polling) or cross-tab updates
   useEffect(() => {
-    const handleUpdate = (newValue: string) => {
+    const handleUpdate = (newValue: string, fromCache = false) => {
       const { value, corrupted } = parseStoredState(newValue, seedRef.current)
       if (corrupted) {
         try { window.localStorage.removeItem(key) } catch { /* ignore */ }
         return
       }
-      rememberServerBaseline(key, newValue)
+      // A browser-cache copy may hold unsaved edits: never a save baseline.
+      if (!fromCache) rememberServerBaseline(key, newValue)
       skipNextSync.current = true
       setState(prev => {
         const merge = mergeRemoteRef.current
@@ -5303,7 +5304,7 @@ function useLS<T>(
       if (e.key === key && e.newValue !== null) handleUpdate(e.newValue)
     }
     const handleCustom = (e: CustomEvent) => {
-      if (e.detail?.key === key && e.detail?.value) handleUpdate(e.detail.value)
+      if (e.detail?.key === key && e.detail?.value) handleUpdate(e.detail.value, e.detail.fromCache === true)
     }
 
     window.addEventListener('storage', handleStorage)
@@ -9509,6 +9510,8 @@ const storeCtx: AppState = {
       try {
         const { purgeClientBusinessStorage } = await import('@/hooks/useFormDraft')
         purgeClientBusinessStorage()
+        const { clearCollectionCache } = await import('@/lib/browser-collection-cache')
+        await clearCollectionCache()
       } catch {
         // ignore — still complete logout
       }

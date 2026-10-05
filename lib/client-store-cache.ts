@@ -1,3 +1,5 @@
+import { cacheCollection } from '@/lib/browser-collection-cache'
+
 /**
  * Per-key localStorage cap for ERP collections.
  *
@@ -13,6 +15,8 @@ export const CLIENT_STORE_PERSIST_MAX_BYTES = 1.5 * 1024 * 1024
 /** Write a serialized store value, or drop a stale oversized copy. */
 export function persistClientStoreValue(key: string, serialized: string): boolean {
   if (typeof window === 'undefined') return false
+  // Every collection also goes to IndexedDB, which has room for all of them.
+  cacheCollection(key, serialized)
   try {
     if (serialized.length <= CLIENT_STORE_PERSIST_MAX_BYTES) {
       return safeLocalStorageSet(key, serialized)

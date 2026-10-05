@@ -167,4 +167,6 @@ export function purgeClientBusinessStorage() {
       // ignore
     }
   }
+  // Cached collections (IndexedDB) go with them.
+  void import('@/lib/browser-collection-cache').then(m => m.clearCollectionCache()).catch(() => {})
 }

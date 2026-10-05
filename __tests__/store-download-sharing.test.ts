@@ -63,25 +63,35 @@ describe('fetchAndApplyStoreKeys — one download per collection', () => {
     expect(requestedKeys(fetchMock)).toEqual([['deed_repairs_v2'], ['deed_repairs_v2']])
   })
 
-  it('a return visit after the window asks the server and accepts "not changed"', async () => {
-    const seenHeaders: Array<string | null> = []
+  it('a return visit sends the versions it holds and keeps collections the server says are unchanged', async () => {
+    const sentHave: Array<Record<string, string>> = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      const ifNoneMatch = (init?.headers as Record<string, string> | undefined)?.['If-None-Match'] ?? null
-      seenHeaders.push(ifNoneMatch)
-      if (ifNoneMatch === 'W/"v1"') return new Response(null, { status: 304, headers: { 'x-store-read-at': new Date().toISOString() } })
-      const res = respond(decodeURIComponent(url.split('keys=')[1]).split(','))
-      res.headers.set('etag', 'W/"v1"')
-      return res
+      const keys = decodeURIComponent(url.split('keys=')[1]).split(',')
+      const have = JSON.parse((init?.headers as Record<string, string>)['x-store-have'] || '{}')
+      sentHave.push(have)
+      const invoicesVersion = sentHave.length === 1 ? 'v1#me' : 'v2#me'
+      const versions = Object.fromEntries(keys.map(k => [k, k === 'deed_invoices' ? invoicesVersion : 'v1#me']))
+      const unchanged = keys.filter(k => have[k] === versions[k])
+      const body: Record<string, unknown> = { versions, unchanged }
+      for (const k of keys) if (!unchanged.includes(k)) body[k] = [{ id: `${k}-1` }]
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'x-store-read-at': new Date().toISOString() } })
     })
     vi.stubGlobal('fetch', fetchMock)
     const { fetchAndApplyStoreKeys } = await import('@/lib/client-store-hydrate')
     const { FRESH_WINDOW_MS } = await import('@/lib/store-freshness')
-    // Big collections are not kept in localStorage: keep storage empty for the key.
-    await fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2'], etagStorageKey: 'route' })
-    storage.delete('deed_repairs_v2')
+    await fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2', 'deed_invoices'], etagStorageKey: 'route' })
     const realNow = Date.now
     vi.spyOn(Date, 'now').mockReturnValue(realNow() + FRESH_WINDOW_MS + 1000)
-    expect(await fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2'], etagStorageKey: 'route' })).toBe('not-modified')
-    expect(seenHeaders).toEqual([null, 'W/"v1"'])
+    // Server-side, invoices changed (v1 -> v2); repairs did not.
+    const result = await fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2', 'deed_invoices'], etagStorageKey: 'route' })
+    expect(sentHave[0]).toEqual({})
+    expect(sentHave[1]).toEqual({ deed_repairs_v2: 'v1#me', deed_invoices: 'v1#me' })
+    expect(result).toBe('applied')
+    const third = await (async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(realNow() + 2 * FRESH_WINDOW_MS + 2000)
+      return fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2', 'deed_invoices'], etagStorageKey: 'route' })
+    })()
+    expect(sentHave[2]).toEqual({ deed_repairs_v2: 'v1#me', deed_invoices: 'v2#me' })
+    expect(third).toBe('not-modified')
   })
 })

@@ -5,7 +5,7 @@ import {
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
-import { loadAppState, loadAppStateForWrite, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
+import { loadAppState, loadAppStateForWrite, saveStoreKeys, getAppStateVersion, getAppStateKeyVersions } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
@@ -76,6 +76,29 @@ function extractClientVersion(request: Request, body: Record<string, unknown>): 
   return null
 }
 
+/** `x-store-have`: JSON { key: version } of copies the browser holds. */
+function parseHaveHeader(raw: string | null): Record<string, string> | null {
+  if (!raw || raw.length > 16_000) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    const out: Record<string, string> = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (key.startsWith('deed_') && typeof value === 'string') out[key] = value
+    }
+    return out
+  } catch {
+    return null
+  }
+}
+
+function viewerFingerprint(session: { user: { id: string; role: string; modules?: string[] | null } }): string {
+  return crypto.createHash('md5')
+    .update(`${session.user.id}:${session.user.role}:${[...(session.user.modules ?? [])].sort().join(',')}`)
+    .digest('hex')
+    .slice(0, 12)
+}
+
 export async function GET(request: NextRequest) {
   const t0 = Date.now()
   const session = await getServerSession()
@@ -115,7 +138,21 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const state = await loadAppState(keys)
+  // Per-key versions: the browser says which copies it holds (x-store-have);
+  // collections that have not changed since are not sent again. The viewer
+  // is part of each version because the content is filtered per role.
+  let keyVersions: Record<string, string> | null = null
+  let unchanged: string[] = []
+  const have = parseHaveHeader(request.headers.get('x-store-have'))
+  if (have) {
+    const viewer = viewerFingerprint(session)
+    const raw = await getAppStateKeyVersions(keys)
+    keyVersions = Object.fromEntries(keys.map(key => [key, raw[key] ? `${raw[key]}#${viewer}` : '']))
+    unchanged = keys.filter(key => keyVersions![key] && have[key] === keyVersions![key])
+  }
+  const toLoad = unchanged.length ? keys.filter(key => !unchanged.includes(key)) : keys
+
+  const state = toLoad.length ? await loadAppState(toLoad) : {}
   // Strip permission-gated and collaborative keys the caller isn't allowed to read.
   for (const key of Object.keys(state)) {
     if (!canReadStoreKey(session.user, key)) delete state[key]
@@ -126,9 +163,23 @@ export async function GET(request: NextRequest) {
     if (CONTENT_FILTERED_STORE_KEYS.has(key)) state[key] = filterStoreValueForRole(session.user, key, state[key]) as typeof state[string]
   }
   // Clients already ignore non-deed_ keys when hydrating; expose version for If-Match writes.
-  const payload = version ? { ...state, version } : state
+  const payload = {
+    ...state,
+    ...(version ? { version } : {}),
+    ...(keyVersions ? { versions: keyVersions, unchanged } : {}),
+  }
   recordHttpMetric({ path: '/api/store', status: 200, ms: Date.now() - t0 })
-  return NextResponse.json(payload, { headers: { ...(etag ? { ETag: etag } : {}), 'x-store-read-at': readAt } })
+  return NextResponse.json(payload, {
+    headers: {
+      ...(etag ? { ETag: etag } : {}),
+      'x-store-read-at': readAt,
+      // The body depends on x-store-have (unchanged collections are left
+      // out), which the ETag does not cover: the browser's HTTP cache must
+      // never replay one answer for a different request.
+      'Cache-Control': 'private, no-store',
+      Vary: 'x-store-have',
+    },
+  })
 }
 
 export async function POST(request: Request) {
