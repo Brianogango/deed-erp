@@ -108,8 +108,24 @@ export function onHandQtyAtStockLocations(
  * One low-stock definition for Dashboard and Operations:
  * active, stock-tracked SKU with a reorder point, on-hand at or below min.
  */
-export function isLowStockSku(product: StockProduct | undefined, onHand: number): boolean {
-  if (!product || product.isActive === false) return false
+/**
+ * Products this business has actually stocked: a serial was ever recorded,
+ * a stock line exists, or stock ever moved. Catalog entries that were never
+ * stocked are "not stocked", not "low" — every product carries a default
+ * minimum, so counting them made almost the whole catalog low stock.
+ */
+export function everStockedProductIds(
+  serials: Array<{ productId?: string }>,
+  bulkStock: Array<{ productId?: string }>,
+  stockMoves: Array<{ productId?: string }> = [],
+): Set<string> {
+  const ids = new Set<string>()
+  for (const row of [...serials, ...bulkStock, ...stockMoves]) if (row?.productId) ids.add(row.productId)
+  return ids
+}
+
+export function isLowStockSku(product: StockProduct | undefined, onHand: number, everStocked = true): boolean {
+  if (!product || product.isActive === false || !everStocked) return false
   const tracking = inferTrackingMethod({
     trackingMethod: product.trackingMethod,
     category: product.category,

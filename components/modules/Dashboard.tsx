@@ -494,7 +494,11 @@ export function Dashboard() {
       requiresSerial: p.requiresSerial,
       unit: p.unit,
     })) && p.isActive)
-    const lowStockItems = computeLowStockItems(stockableProducts, serials, bulkStock)
+    // Products ever bought or sold count as stocked: a sold-out bulk item has
+    // no stock line left, and it is exactly the one that must show as low.
+    const traded = [...(purchaseOrders ?? []), ...(saleOrders ?? []), ...(posOrders ?? [])]
+      .flatMap((doc: any) => (Array.isArray(doc?.lines) ? doc.lines : Array.isArray(doc?.items) ? doc.items : []))
+    const lowStockItems = computeLowStockItems(stockableProducts, serials, bulkStock, traded)
     const activeSkus = products.filter(p => p.isActive && p.unit !== 'service')
     const totalUnits = activeSkus.reduce((sum, p) => sum + onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
     const pendingReceipts = purchaseOrders.filter(po => ['sent', 'confirmed', 'partial'].includes(po.status)).length
@@ -502,7 +506,7 @@ export function Dashboard() {
     const stockValue = stockableProducts.reduce((sum, p) => sum + p.costPrice * onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
 
     return { lowStockItems, activeSkus, totalUnits, pendingReceipts, draftTransfers, stockValue }
-  }, [products, serials, bulkStock, purchaseOrders, stockTransfers])
+  }, [products, serials, bulkStock, purchaseOrders, saleOrders, posOrders, stockTransfers])
 
   const repairStats = useMemo(() => {
     const active = visibleRepairs.filter(isOpenRepairJob)

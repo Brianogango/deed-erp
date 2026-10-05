@@ -21,7 +21,7 @@ import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-l
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
-import { availableSellableQty, isListedInProductCatalog, isLowStockSku, onHandQtyAtStockLocations } from '@/lib/business-logic'
+import { availableSellableQty, everStockedProductIds, isListedInProductCatalog, isLowStockSku, onHandQtyAtStockLocations } from '@/lib/business-logic'
 import { isStockOutMove } from '@/lib/kpi-stock'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategory } from '@/lib/reconfiguration/unit-config'
@@ -360,6 +360,8 @@ function InventoryContent() {
   const [warehouseSearch, setWarehouseSearch] = useUrlUiState('warehouseQ', '')
   const [warehouseLocation, setWarehouseLocation] = useUrlUiState('location', 'warehouse')
   const [warehouseSearchDraft, setWarehouseSearchDraft] = useState(warehouseSearch)
+  // Ready for Sale is one row per product; a serialised product opens onto its units.
+  const [expandedReadyProducts, setExpandedReadyProducts] = useState<Set<string>>(() => new Set())
   useEffect(() => { setWarehouseSearchDraft(warehouseSearch) }, [warehouseSearch])
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string
@@ -543,9 +545,13 @@ function InventoryContent() {
     const rProds: typeof stockableProducts = []
     const lStock: typeof stockableProducts = []
     const validProductIds = new Set<string>()
+    const stocked = everStockedProductIds(serials, bulkStock, [
+      ...stockMoves,
+      ...purchaseOrders.flatMap((po: any) => (Array.isArray(po?.lines) ? po.lines : [])),
+    ])
     for (const p of stockableProducts) {
       const derivedTotal = onHandQtyAtStockLocations(p, serials, bulkStock, p.id)
-      const isLow = isLowStockSku(p, derivedTotal)
+      const isLow = isLowStockSku(p, derivedTotal, stocked.has(p.id))
       if (isLow) low.push(p)
       const matchesCat = catFilter === 'All' || p.category === catFilter
       const matchesId = reportProductId === 'All' || p.id === reportProductId
@@ -576,7 +582,7 @@ function InventoryContent() {
       filteredTrackedSerials: rSerials,
       filteredLowStock: lStock,
     }
-  }, [stockableProducts, stockMoves, serials, bulkStock, catFilter, reportProductId, reportMonth])
+  }, [stockableProducts, stockMoves, purchaseOrders, serials, bulkStock, catFilter, reportProductId, reportMonth])
 
   const displayedTrackedSerials = useMemo(() => {
     const q = serialReportSearch.trim().toLowerCase()
@@ -624,9 +630,11 @@ function InventoryContent() {
       if (p.isActive) activeProducts++
       else archivedProducts++
     }
+    // "Ready for sale" means the warehouse stage only — an available unit in
+    // Inbound or With Issues cannot be sold (same rule as the Warehouse tab).
     let availSerials = 0
     for (const s of serials) {
-      if (s.status === 'available') availSerials++
+      if (s.status === 'available' && s.location === 'warehouse') availSerials++
     }
     return {
       productMasters: activeProducts,
@@ -862,12 +870,16 @@ function InventoryContent() {
     showToast(`Updated ${validRows.length} product price${validRows.length !== 1 ? 's' : ''}`, 'success')
   }
 
-  const openingStockLocationLabels: Record<'warehouse' | 'shop' | 'repair_unit', string> = {
+  // The warehouse stages, by what they mean (see the Warehouse tab). 'shop'
+  // is the With Issues location — it was listed as "Shop / Showroom".
+  const openingStockLocationLabels: Record<'warehouse' | 'shop' | 'repair_unit' | 'pending_testing' | 'quarantine', string> = {
+    pending_testing: 'Inbound — Awaiting tests',
     warehouse: 'Ready for Sale',
-    shop: 'Shop / Showroom',
-    repair_unit: 'Repair Unit',
+    shop: 'With Issues',
+    repair_unit: 'Inbound — Work in progress (repair)',
+    quarantine: 'Inbound — Rejected',
   }
-  const inventoryLocationIds = ['warehouse', 'shop', 'repair_unit'] as const
+  const inventoryLocationIds = ['pending_testing', 'warehouse', 'shop', 'repair_unit', 'quarantine'] as const
   const locationOpts = inventoryLocationIds.map(k => ({
     value: k,
     label: `${LOCATIONS[k].icon} ${openingStockLocationLabels[k]}`,
@@ -1710,6 +1722,34 @@ function InventoryContent() {
           submitTransfer(from, to, productId, productName, qty, serialId ? [serialId] : [], `${LOCATIONS[from].name} → ${LOCATIONS[to].name}`)
         }
 
+        function requestSendToInbound(s: (typeof serials)[number]) {
+          setPendingConfirm({
+            title: 'Send to Inbound for testing?',
+            message: `Move ${s.productName} (${s.serial}) from Ready for Sale to Inbound › Awaiting tests?`,
+            detail: 'It cannot be sold until it passes its tests and is moved back to Ready for Sale.',
+            confirmLabel: 'Send to Inbound',
+            confirmColor: 'bg-sky-600',
+            action: () => quickMove(s.productId, s.productName, 'warehouse', 'pending_testing', s.id),
+          })
+        }
+
+        function requestSendProductToInbound(group: { productId: string; name: string; units: number; serials: Array<(typeof serials)[number]> }) {
+          setPendingConfirm({
+            title: `Send all ${group.units} to Inbound for testing?`,
+            message: `Move every ${group.name} in Ready for Sale (${group.units} unit${group.units === 1 ? '' : 's'}) to Inbound › Awaiting tests?`,
+            detail: 'None of them can be sold until each passes its tests. To move only some, open the product and send units one by one, or use Transfer stock.',
+            confirmLabel: 'Send all to Inbound',
+            confirmColor: 'bg-sky-600',
+            action: () => {
+              if (group.serials.length) {
+                submitTransfer('warehouse', 'pending_testing', group.productId, group.name, group.serials.length, group.serials.map(u => u.id), 'Ready for Sale → Inbound (retest)')
+              } else {
+                quickMove(group.productId, group.name, 'warehouse', 'pending_testing', undefined, group.units)
+              }
+            },
+          })
+        }
+
         function requestMoveToIssues(s: (typeof serials)[number]) {
           setPendingConfirm({
             title: 'Move to With Issues?',
@@ -1727,8 +1767,8 @@ function InventoryContent() {
           setShowNewRefurb(true)
         }
 
-        const Section = ({ title, icon, tone = 'navy', count, children, emptyText }: {
-          title: string; icon: React.ReactNode; tone?: 'navy' | 'warning' | 'info'; count: number; children: React.ReactNode; emptyText: string
+        const Section = ({ title, icon, tone = 'navy', count, countLabel, children, emptyText }: {
+          title: string; icon: React.ReactNode; tone?: 'navy' | 'warning' | 'info'; count: number; countLabel?: string; children: React.ReactNode; emptyText: string
         }) => {
           const toneClass =
             tone === 'warning' ? 'text-[var(--warning)] bg-[var(--warning-bg)]' :
@@ -1743,7 +1783,7 @@ function InventoryContent() {
             <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-lt)] bg-[var(--bg-surface)]">
               <span className={`text-lg ${iconClass}`} aria-hidden="true">{icon}</span>
               <p className="font-bold text-sm text-text-1">{title}</p>
-              <span className={`ml-2 px-2 py-0.5 rounded-md text-[10px] font-bold tabular-nums ${toneClass}`}>{count}</span>
+              <span className={`ml-2 px-2 py-0.5 rounded-md text-[10px] font-bold tabular-nums ${toneClass}`}>{countLabel ?? count}</span>
             </div>
             {count === 0 ? <div className="py-8 text-center text-[12px] text-text-3">{emptyText}</div>
               : <div className="divide-y divide-[var(--border-lt)]">{children}</div>}
@@ -1933,77 +1973,124 @@ function InventoryContent() {
               )}
 
               <div className="p-3 sm:p-4">
-                {activeWarehouseLocation === 'warehouse' && (
+                {activeWarehouseLocation === 'warehouse' && (() => {
+                  // One row per product: devices grouped under their model,
+                  // quantity stock as its count. Most units first.
+                  const groups = new Map<string, { productId: string; name: string; sku: string; units: number; serials: Array<(typeof serials)[number]>; bulk: (typeof filteredBulkWarehouse)[number] | null }>()
+                  for (const s of filteredWarehouseSerials) {
+                    const g = groups.get(s.productId) ?? { productId: s.productId, name: s.productName, sku: s.sku ?? products.find(p => p.id === s.productId)?.sku ?? '', units: 0, serials: [], bulk: null }
+                    g.units += 1
+                    g.serials.push(s)
+                    groups.set(s.productId, g)
+                  }
+                  for (const p of filteredBulkWarehouse) {
+                    const g = groups.get(p.id) ?? { productId: p.id, name: p.name, sku: p.sku ?? '', units: 0, serials: [], bulk: null }
+                    g.units += p.qty
+                    g.bulk = p
+                    groups.set(p.id, g)
+                  }
+                  const rows = [...groups.values()].sort((a, b) => b.units - a.units || a.name.localeCompare(b.name))
+                  const searching = Boolean(q)
+                  return (
                   <div className="w-full min-w-0">
                     <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} tone="navy"
                     count={readyCount}
+                    countLabel={`${rows.length.toLocaleString()} product${rows.length === 1 ? '' : 's'} · ${readyCount.toLocaleString()} unit${readyCount === 1 ? '' : 's'}`}
                     emptyText={q ? 'No warehouse stock matches this search' : 'No stock in warehouse'}>
-                    {filteredWarehouseSerials.map(s => {
-                    const prod = products.find(p => p.id === s.productId)
-                    return (
-                    <WarehouseRow
-                    key={s.id}
-                    title={s.productName}
-                    meta={(
-                    <>
-                    <p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>
-                    <p className="font-mono text-[10px] text-text-3 mt-0.5">SKU: {s.sku ?? prod?.sku ?? '—'}</p>
-                    </>
-                    )}
-                    actions={(
-                    <>
-                    <ActionBtn
-                    label={<><Fa icon={faPrint} /> Label</>}
-                    tone="primary"
-                    ariaLabel={`Print label for ${s.serial}`}
-                    onClick={() => { void printLabelsForSerialUnits({ serials: [s], products }) }}
-                    />
-                    <SecondaryActionMenu
-                    ariaLabel={`More actions for ${s.serial}`}
-                    label="More"
-                    actions={[
-                    {
-                    id: 'move-issues',
-                    label: 'Move to With Issues',
-                    onClick: () => requestMoveToIssues(s),
-                    },
-                    {
-                    id: 'send-refurb',
-                    label: 'Send for Refurbishment',
-                    onClick: () => requestSendForRefurbishment(s),
-                    },
-                    ]}
-                    />
-                    </>
-                    )}
-                    />
-                    )
+                    {rows.map(g => {
+                      const isSerial = g.serials.length > 0
+                      const open = isSerial && (searching || expandedReadyProducts.has(g.productId))
+                      return (
+                        <div key={g.productId} className="w-full min-w-0">
+                          <WarehouseRow
+                            title={g.name}
+                            meta={(
+                              <>
+                                <p className="text-[11px] text-text-2 mt-0.5">
+                                  <span className="tabular-nums font-semibold text-text-1">{g.units}</span> unit{g.units === 1 ? '' : 's'}
+                                  {isSerial ? ' · serialised' : ''}
+                                </p>
+                                {g.sku ? <p className="font-mono text-[10px] text-text-3 mt-0.5">{g.sku}</p> : null}
+                              </>
+                            )}
+                            actions={(
+                              <>
+                                {isSerial ? (
+                                  <ActionBtn
+                                    label={open && !searching ? 'Hide units' : `Show ${g.serials.length} unit${g.serials.length === 1 ? '' : 's'}`}
+                                    tone="primary"
+                                    ariaLabel={`${open ? 'Hide' : 'Show'} serial numbers for ${g.name}`}
+                                    onClick={() => setExpandedReadyProducts(prev => {
+                                      const next = new Set(prev)
+                                      if (next.has(g.productId)) next.delete(g.productId)
+                                      else next.add(g.productId)
+                                      return next
+                                    })}
+                                  />
+                                ) : (
+                                  <ActionBtn
+                                    label={<><Fa icon={faPrint} /> Print {g.units} Label{g.units !== 1 ? 's' : ''}</>}
+                                    tone="primary"
+                                    ariaLabel={`Print ${g.units} labels for ${g.name}`}
+                                    onClick={() => g.bulk && printProductLabels(g.bulk, g.units)}
+                                  />
+                                )}
+                                <SecondaryActionMenu
+                                  ariaLabel={`More actions for ${g.name}`}
+                                  label="More"
+                                  actions={[
+                                    ...(isSerial ? [{
+                                      id: 'labels',
+                                      label: `Print ${g.serials.length} label${g.serials.length === 1 ? '' : 's'}`,
+                                      onClick: () => { void printLabelsForSerialUnits({ serials: g.serials, products }) },
+                                    }] : []),
+                                    {
+                                      id: 'inbound-all',
+                                      label: 'Send all to Inbound for testing',
+                                      onClick: () => requestSendProductToInbound(g),
+                                    },
+                                  ]}
+                                />
+                              </>
+                            )}
+                          />
+                          {open && (
+                            <div className="ml-4 border-l border-[var(--border-lt)] pl-3">
+                              {g.serials.map(s => (
+                                <WarehouseRow
+                                  key={s.id}
+                                  title={s.serial}
+                                  meta={s.specs ? <p className="text-[10px] text-text-3 mt-0.5 truncate">{String(s.specs)}</p> : null}
+                                  actions={(
+                                    <>
+                                      <ActionBtn
+                                        label={<><Fa icon={faPrint} /> Label</>}
+                                        tone="primary"
+                                        ariaLabel={`Print label for ${s.serial}`}
+                                        onClick={() => { void printLabelsForSerialUnits({ serials: [s], products }) }}
+                                      />
+                                      <SecondaryActionMenu
+                                        ariaLabel={`More actions for ${s.serial}`}
+                                        label="More"
+                                        actions={[
+                                          { id: 'inbound', label: 'Send to Inbound for testing', onClick: () => requestSendToInbound(s) },
+                                          { id: 'move-issues', label: 'Move to With Issues', onClick: () => requestMoveToIssues(s) },
+                                          { id: 'send-refurb', label: 'Send for Refurbishment', onClick: () => requestSendForRefurbishment(s) },
+                                        ]}
+                                      />
+                                    </>
+                                  )}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
                     })}
-                    {filteredBulkWarehouse.map(p => (
-                    <WarehouseRow
-                    key={p.id}
-                    title={p.name}
-                    meta={(
-                    <p className="text-[10px] text-text-3 mt-0.5">
-                    <span className="tabular-nums font-semibold">{p.qty}</span> units in warehouse
-                    </p>
-                    )}
-                    actions={(
-                    <>
-                    <ActionBtn
-                    label={<><Fa icon={faPrint} /> Print {p.qty} Label{p.qty !== 1 ? 's' : ''}</>}
-                    tone="primary"
-                    ariaLabel={`Print ${p.qty} labels for ${p.name}`}
-                    onClick={() => printProductLabels(p, p.qty)}
-                    />
-                    <span className="text-[10px] text-text-4 italic self-center">Use Transfers tab to move bulk items</span>
-                    </>
-                    )}
-                    />
-                    ))}
                     </Section>
                   </div>
-                )}
+                  )
+                })()}
                 {activeWarehouseLocation === 'issues' && (
                   <div className="w-full min-w-0">
                     <Section title="With Issues" icon={<Fa icon={faTriangleExclamation} />} tone="warning"

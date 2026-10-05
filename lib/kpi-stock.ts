@@ -4,6 +4,7 @@
  */
 
 import {
+  everStockedProductIds,
   isLowStockSku,
   onHandQtyAtStockLocations,
   type BulkStockLevel,
@@ -19,11 +20,13 @@ export function computeLowStockItems<P extends StockProduct & { id: string }>(
   products: P[],
   serials: SerialNumber[],
   bulkStock: BulkStockLevel[],
+  stockMoves: Array<{ productId?: string }> = [],
 ): LowStockItem<P>[] {
+  const stocked = everStockedProductIds(serials, bulkStock, stockMoves)
   const items: LowStockItem<P>[] = []
   for (const product of products) {
     const onHand = onHandQtyAtStockLocations(product, serials, bulkStock, product.id)
-    if (isLowStockSku(product, onHand)) items.push({ ...product, onHand })
+    if (isLowStockSku(product, onHand, stocked.has(product.id))) items.push({ ...product, onHand })
   }
   return items
 }

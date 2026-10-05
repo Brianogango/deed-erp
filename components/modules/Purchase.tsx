@@ -583,9 +583,16 @@ function PurchaseContent() {
     })
     setActiveReceiptId(draft.id)
     setGrnLines(preLines)
-    // Destination is a per-receipt user choice; the draft's stored value is the
-    // store's creation default, not a selection, so the receiver must pick it.
-    setDestLocation('')
+    // Destination is a per-receipt choice; the draft's stored value is the
+    // store's creation default, not a selection. Suggest one only when the
+    // goods say it: anything refurbished is tested first (Inbound); an all-new
+    // receipt can go straight to Ready for Sale. Otherwise the receiver picks.
+    const types = draft.lines.map(l => (products.find(p => p.id === l.productId) as { productType?: string } | undefined)?.productType)
+    setDestLocation(
+      types.some(t => t === 'refurbished') ? 'pending_testing'
+        : types.length > 0 && types.every(t => t === 'new') ? 'warehouse'
+          : '',
+    )
     setSerialInputs({})
     setBulkSerialInputs({})
     setSerialSpecs(preSpecs)
