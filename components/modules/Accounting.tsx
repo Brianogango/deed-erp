@@ -957,9 +957,18 @@ function AccountingContent() {
     const inputVat = postedVendorBills.reduce((s, i) => s + (i.taxTotal || 0), 0)
     const vatPayable = outputVat - inputVat
 
+    // Net movement per distinct account label first (a few dozen labels), then
+    // match accounts to labels — not every journal line for every account.
+    const netByLabel = new Map<string, number>()
+    for (const je of journalEntries) {
+      for (const line of je.lines) netByLabel.set(line.account, (netByLabel.get(line.account) ?? 0) + line.debit - line.credit)
+    }
     const trialBalance = accounts
       .map(acc => {
-        const movement = journalEntries.reduce((sum, je) => sum + je.lines.filter(line => line.account === acc.name || line.account.startsWith(`${acc.code} -`) || line.account.includes(acc.name)).reduce((lineSum, line) => lineSum + line.debit - line.credit, 0), 0)
+        let movement = 0
+        for (const [label, net] of netByLabel) {
+          if (label === acc.name || label.startsWith(`${acc.code} -`) || label.includes(acc.name)) movement += net
+        }
         const normalDebit = ['asset', 'expense'].includes(acc.type)
         const balance = (acc.balance || 0) + movement
         return { id: acc.id, code: acc.code, name: acc.name, type: acc.type, debit: normalDebit ? Math.max(balance, 0) : Math.max(-balance, 0), credit: normalDebit ? Math.max(-balance, 0) : Math.max(balance, 0) }

@@ -2,7 +2,7 @@
  * Server-side audit helper for inventory mutations.
  * Appends to deed_auditLogs in the wholesale store (client mirror source).
  */
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 
 export async function appendInventoryAuditLog(entry: {
   action: string
@@ -11,7 +11,10 @@ export async function appendInventoryAuditLog(entry: {
   userId?: string | null
   username?: string | null
 }) {
-  const state = await loadAppState(['deed_auditLogs'])
+  // Locked: two appends at once each rewrote the log from the same copy, and
+  // one entry was lost.
+  await withAppStateKeyLock('deed_auditLogs', async () => {
+  const state = await loadAppStateForWrite(['deed_auditLogs'])
   const logs = Array.isArray(state.deed_auditLogs) ? state.deed_auditLogs as Array<Record<string, unknown>> : []
   const next = [
     {
@@ -26,4 +29,5 @@ export async function appendInventoryAuditLog(entry: {
     ...logs,
   ].slice(0, 5000)
   await saveStoreKeys({ deed_auditLogs: JSON.stringify(next) })
+  })
 }

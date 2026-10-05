@@ -106,7 +106,7 @@ export function getProductQtySnapshot(
   const stockProduct: StockProduct = {
     requiresSerial: isSerialTracking(tracking) || Boolean(product.requiresSerial),
   }
-  const byLocation = calcStockByLocation(stockProduct, serials, bulkStock, product.id)
+  const byLocation = calcStockByLocation(stockProduct, serials, bulkStock, product.id, true)
 
   const sellableLocations: LocationId[] = ['warehouse', 'shop', 'repair_unit']
   const onHandAll = sellableLocations.reduce((sum, loc) => sum + (byLocation[loc] || 0), 0)

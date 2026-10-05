@@ -312,6 +312,8 @@ import { forgetServerBaseline, patchServerBaseline, rememberServerBaseline, serv
 import { isSlimRow, SLIM_MARK } from '@/lib/store-slim'
 import { loadFullRecord } from '@/lib/full-record'
 import { awaitRouteHydration, awaitStoreDownloads, keysChangedSinceRead, noteStoreChanges, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
+import { formatKeDate, formatKeDateTime, formatKeInteger, installIntlFormatCache } from '@/lib/intl-cache'
+import { keepUnchangedRows } from '@/lib/same-content'
 import { contactFromPersonInput, deriveContactPersons } from '@/lib/contact-person-derive'
 import {
   applyCustomerToInvoice,
@@ -323,6 +325,9 @@ import {
   shouldSyncQuoteCustomer,
   shouldSyncSaleOrderCustomer,
 } from '@/lib/sync-customer-documents'
+
+// Reuse Intl formatters for every toLocale*String call in the app (lib/intl-cache.ts).
+if (typeof window !== 'undefined') installIntlFormatCache()
 
 export type ModuleId = AuthModuleId
 
@@ -5289,6 +5294,16 @@ function useLS<T>(
     // Skip localStorage for large values — avoids quota errors and slow reads/writes.
     // The server (app_state) and SSE still keep this data in sync across devices.
     persistClientStoreValue(key, serialized)
+    // Exactly what the server already holds (e.g. a re-merge that changed
+    // nothing): no save. Uploading it anyway sent the whole product list on
+    // every page load and made every other open session download it again.
+    // (Not while a save of this key is in flight: that save may hold an edit
+    // this value undoes.) An edit undone before its save went out is dropped.
+    if (serialized === serverBaselineFor(key) && !_inFlightSyncKeys.has(key)) {
+      delete _pendingSync[key]
+      removeDirtyKeys([key])
+      return
+    }
     debouncedServerSync(key, serialized)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
@@ -6077,7 +6092,9 @@ export function StoreProvider({
           if (p.trackingMethod === 'SERIAL' && p.requiresSerial) return p
           return { ...p, trackingMethod: 'SERIAL' as TrackingMethod, requiresSerial: true }
         })
-        return JSON.stringify(healed) === JSON.stringify(prev) ? prev : healed
+        // Same data with keys in another order is not a change — saving it
+        // re-uploaded every product on every page load.
+        return keepUnchangedRows(prev as any[], healed) as typeof prev
       })
       return rows.length
     } catch {
@@ -6945,7 +6962,7 @@ export function StoreProvider({
     setProducts(prev => {
       let changed = false
       const next = prev.map(product => {
-        const locs = calcStockByLocation(product, serials, bulkStock, product.id)
+        const locs = calcStockByLocation(product, serials, bulkStock, product.id, true)
         const stockQty = locs.warehouse + locs.shop + locs.repair_unit
         if (product.stockQty === stockQty) return product
         changed = true
@@ -6990,10 +7007,11 @@ export function StoreProvider({
 
   const currentUser = () => currentUserId ? users.find(u => u.id === currentUserId) ?? null : null
 
-  const addAuditLog = (action: string, documentRef: string, details: string) => {
+  const addAuditLog = (action: string, documentRef: string, details: string, opts?: { sessionOnly?: boolean }) => {
     const actor = currentUser()?.username || 'system'
     const log: AuditLog = { id: uid(), date: now(), user: actor, action, documentRef, details }
     setAuditLogs(p => [log, ...p].slice(0, SESSION_AUDIT_LOG_LIMIT))
+    if (opts?.sessionOnly) return
     // P0-SEC-002: persist via server-authored endpoint (client store writes to
     // deed_auditLogs are ignored).
     void fetch('/api/audit/commercial', {
@@ -9512,7 +9530,10 @@ const storeCtx: AppState = {
       }
       setActiveModule(m)
       if (typeof window !== 'undefined') window.localStorage.setItem('activeModule', m)
-      addAuditLog('navigate', m, `Navigated to ${m}`)
+      // Page views stay in this session's activity list. Sent to the server
+      // they cost a full audit-log rewrite per click and, with the log capped
+      // at 5,000 entries, pushed real commercial records out within days.
+      addAuditLog('navigate', m, `Navigated to ${m}`, { sessionOnly: true })
     },
     toggleSidebar: () => setSidebarOpen(v => !v),
     showToast,
@@ -11097,13 +11118,19 @@ const storeCtx: AppState = {
     refreshProductCatalog,
 
     normalizeInventoryTags: async () => {
+      // A legacy heal: once per browser session is plenty (it ran on every
+      // Inventory visit).
+      try {
+        if (window.sessionStorage.getItem('deed_tags_normalized')) return 0
+      } catch { /* run it */ }
       try {
         const res = await fetch('/api/inventory/normalize-tags', { method: 'POST' })
         if (!res.ok) return 0
+        try { window.sessionStorage.setItem('deed_tags_normalized', '1') } catch { /* optional */ }
         const data = await res.json().catch(() => null)
         const next = Array.isArray(data?.serials) ? data.serials as SerialNumber[] : null
         const rewritten = Number(data?.rewritten ?? 0)
-        if (next) setSerials(next)
+        if (next && rewritten > 0) setSerials(next)
         return Number.isFinite(rewritten) ? rewritten : 0
       } catch {
         return 0
@@ -19718,7 +19745,7 @@ const storeCtx: AppState = {
     // ── Reports ───────────────────────────────────────────────────────────────
     getStockByLocation: (productId) => {
       const prod = prodRef.current.find(x => x.id === productId)
-      return calcStockByLocation(prod, serialRef.current, bulkStock, productId)
+      return calcStockByLocation(prod, serialRef.current, bulkStock, productId, true)
     },
     getMonthlyMovements: (productId) => {
       const moves = stockMoves.filter(m => m.productId === productId)
@@ -22057,23 +22084,17 @@ export function useShellStore() {
 // strings (Prisma Decimal) or undefined — never render "KSh NaN".
 export const fmtKes = (n: number | string | null | undefined) => {
   const v = typeof n === 'string' ? Number(n.replace(/,/g, '')) : Number(n ?? 0)
-  return `KSh ${Math.round(Number.isFinite(v) ? v : 0).toLocaleString('en-KE')}`
+  return `KSh ${formatKeInteger(Math.round(Number.isFinite(v) ? v : 0))}`
 }
-export const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' }) } catch { return d } }
+export const fmtDate = (d: string) => { try { return formatKeDate(d) } catch { return d } }
 export const fmtDateTime = (d: string) => {
   try {
     const raw = String(d || '')
     if (!raw) return ''
     const dt = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
     if (Number.isNaN(dt.getTime())) return raw
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      return dt.toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' })
-    }
-    return dt.toLocaleString('en-KE', {
-      timeZone: 'Africa/Nairobi',
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', hour12: false,
-    })
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return formatKeDate(dt)
+    return formatKeDateTime(dt)
   } catch {
     return d
   }

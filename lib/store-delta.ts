@@ -11,6 +11,8 @@
  * Pure — shared by the client store and /api/store.
  */
 
+import { sameContent } from '@/lib/same-content'
+
 export type CollectionDelta = { upsert: unknown[]; remove: string[] }
 
 type IdRow = { id?: unknown }
@@ -36,11 +38,11 @@ export function computeCollectionDelta(baselineRaw: string, currentRaw: string):
   }
   if (!Array.isArray(baseline) || !Array.isArray(current)) return null
 
-  const before = new Map<string, string>()
+  const before = new Map<string, unknown>()
   for (const row of baseline) {
     const id = idOf(row)
     if (id === null || before.has(id)) return null
-    before.set(id, JSON.stringify(row))
+    before.set(id, row)
   }
   const upsert: unknown[] = []
   const seen = new Set<string>()
@@ -48,7 +50,8 @@ export function computeCollectionDelta(baselineRaw: string, currentRaw: string):
     const id = idOf(row)
     if (id === null || seen.has(id)) return null
     seen.add(id)
-    if (before.get(id) !== JSON.stringify(row)) upsert.push(row)
+    // Same data with keys in another order is not a change.
+    if (!before.has(id) || !sameContent(before.get(id), row)) upsert.push(row)
   }
   const remove = [...before.keys()].filter(id => !seen.has(id))
   // Small collections, or most rows changed: the full value is just as cheap.

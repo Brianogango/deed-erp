@@ -502,10 +502,10 @@ export function Dashboard() {
       .flatMap((doc: any) => (Array.isArray(doc?.lines) ? doc.lines : Array.isArray(doc?.items) ? doc.items : []))
     const lowStockItems = computeLowStockItems(stockableProducts, serials, bulkStock, traded)
     const activeSkus = products.filter(p => p.isActive && p.unit !== 'service')
-    const totalUnits = activeSkus.reduce((sum, p) => sum + onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
+    const totalUnits = activeSkus.reduce((sum, p) => sum + onHandQtyAtStockLocations(p, serials, bulkStock, p.id, true), 0)
     const pendingReceipts = purchaseOrders.filter(po => ['sent', 'confirmed', 'partial'].includes(po.status)).length
     const draftTransfers = stockTransfers.filter(t => t.status === 'draft').length
-    const stockValue = stockableProducts.reduce((sum, p) => sum + p.costPrice * onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
+    const stockValue = stockableProducts.reduce((sum, p) => sum + p.costPrice * onHandQtyAtStockLocations(p, serials, bulkStock, p.id, true), 0)
 
     return { lowStockItems, activeSkus, totalUnits, pendingReceipts, draftTransfers, stockValue }
   }, [products, serials, bulkStock, purchaseOrders, saleOrders, posOrders, stockTransfers])
@@ -1521,8 +1521,8 @@ export function Dashboard() {
                 <div className="p-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                   {ALL_CATEGORIES.map(cat => {
                     const prods = products.filter(p => p.category === cat && p.isActive)
-                    const val = prods.reduce((a, p) => a + p.costPrice * onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
-                    const qty = prods.reduce((a, p) => a + onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
+                    const val = prods.reduce((a, p) => a + p.costPrice * onHandQtyAtStockLocations(p, serials, bulkStock, p.id, true), 0)
+                    const qty = prods.reduce((a, p) => a + onHandQtyAtStockLocations(p, serials, bulkStock, p.id, true), 0)
                     const color = CATEGORY_COLORS[cat] ?? '#6B7280'
                     return (
                       <div key={cat} className="dashboard-category-card">

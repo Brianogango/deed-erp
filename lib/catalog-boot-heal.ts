@@ -16,6 +16,8 @@ export function scheduleCatalogHealOnce(): void {
   if (typeof window === 'undefined') return
   try {
     if (window.localStorage.getItem(HEAL_FLAG_LS)) return
+    // Not allowed for this login (403 below): do not retry on every load.
+    if (window.sessionStorage.getItem(HEAL_FLAG_LS)) return
   } catch {
     return
   }
@@ -27,7 +29,12 @@ export function scheduleCatalogHealOnce(): void {
         const deviceRes = await fetch('/api/products/normalize-device-config', { method: 'POST' })
         // 403 = this session cannot heal (non-write role). Do not persist a
         // browser-wide flag or a later admin login on this machine is skipped.
-        if (!trackingRes.ok || !deviceRes.ok) return
+        if (!trackingRes.ok || !deviceRes.ok) {
+          if (trackingRes.status === 403 || deviceRes.status === 403) {
+            try { window.sessionStorage.setItem(HEAL_FLAG_LS, 'forbidden') } catch { /* optional */ }
+          }
+          return
+        }
 
         const healed = await deviceRes.json().catch(() => null) as {
           serials?: unknown[]

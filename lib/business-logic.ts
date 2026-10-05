@@ -63,6 +63,8 @@ export function calcStockByLocation(
   serials: SerialNumber[],
   bulkStock: BulkStockLevel[],
   productId: string,
+  /** Group rows per product once per list (screens only: lists there are replaced, never edited in place). */
+  cached = false,
 ): Record<LocationId, number> {
   const locs: Record<LocationId, number> = {
     warehouse: 0, shop: 0, repair_unit: 0, computer_aid: 0, computer_aid_collected: 0,
@@ -79,15 +81,38 @@ export function calcStockByLocation(
   }))
 
   if (serialTracked) {
-    serials
-      .filter(s => s.productId === productId && ['available', 'assigned', 'under_repair', 'refurbishment', 'reconfiguration', 'in_stock'].includes(s.status))
-      .forEach(s => { locs[s.location] = (locs[s.location] || 0) + 1 })
+    for (const s of rowsForProduct(serials, productId, cached)) {
+      if (ACTIVE_SERIAL_STATUSES.has(s.status)) locs[s.location] = (locs[s.location] || 0) + 1
+    }
   } else {
-    bulkStock
-      .filter(level => level.productId === productId)
-      .forEach(level => { locs[level.location] = level.qty })
+    for (const level of rowsForProduct(bulkStock, productId, cached)) locs[level.location] = level.qty
   }
   return locs
+}
+
+const ACTIVE_SERIAL_STATUSES = new Set<string>(['available', 'assigned', 'under_repair', 'refurbishment', 'reconfiguration', 'in_stock'])
+
+// Stock pages ask for every product's stock in one render; scanning all
+// serials per product was products × serials work. On screens, rows are
+// grouped by product once per list. Server code edits lists in place between
+// calls, so it always scans.
+const rowsByProductCache = new WeakMap<object, Map<string, unknown[]>>()
+
+function rowsForProduct<T extends { productId?: string }>(rows: T[], productId: string, cached: boolean): T[] {
+  if (!cached) return rows.filter(row => row?.productId === productId)
+  let index = rowsByProductCache.get(rows) as Map<string, T[]> | undefined
+  if (!index) {
+    index = new Map()
+    for (const row of rows) {
+      const id = row?.productId
+      if (!id) continue
+      const list = index.get(id)
+      if (list) list.push(row)
+      else index.set(id, [row])
+    }
+    rowsByProductCache.set(rows, index as Map<string, unknown[]>)
+  }
+  return index.get(productId) ?? []
 }
 
 /** Locations that count as on-hand for low-stock / warehouse KPIs. */
@@ -99,8 +124,9 @@ export function onHandQtyAtStockLocations(
   serials: SerialNumber[],
   bulkStock: BulkStockLevel[],
   productId: string,
+  cached = false,
 ): number {
-  const locs = calcStockByLocation(product, serials, bulkStock, productId)
+  const locs = calcStockByLocation(product, serials, bulkStock, productId, cached)
   return ON_HAND_LOCATIONS.reduce((sum, loc) => sum + (Number(locs[loc]) || 0), 0)
 }
 

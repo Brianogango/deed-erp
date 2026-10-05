@@ -15,7 +15,8 @@ export async function POST() {
       ok: true,
       rewritten: result.rewritten,
       total: result.total,
-      serials: result.serials,
+      // The whole list only when something changed — it is ~250 KB.
+      ...(result.rewritten > 0 ? { serials: result.serials } : {}),
     })
   })
 }

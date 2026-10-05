@@ -2,6 +2,7 @@
 
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { rememberServerBaseline } from '@/lib/store-baseline'
+import { sameContent } from '@/lib/same-content'
 import { claimStoreDownload, holdsStoreCopy, keysNeedingDownload, noteStoreHeld, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
 import { cacheCollectionsNow, readCachedCollections } from '@/lib/browser-collection-cache'
 
@@ -14,6 +15,27 @@ export function readDirtyStoreKeys(): Set<string> {
   } catch {
     return new Set<string>()
   }
+}
+
+/** This browser's stored copy of `key` holds the same data as `serialized`. */
+function localCopyMatches(key: string, serialized: string): boolean {
+  try {
+    const local = window.localStorage.getItem(key)
+    if (local === null) return false
+    if (local === serialized) return true
+    if (Math.abs(local.length - serialized.length) > 64) return false
+    return sameContent(JSON.parse(local), JSON.parse(serialized))
+  } catch {
+    return false
+  }
+}
+
+function clearDirtyStoreKey(key: string) {
+  try {
+    const dirty = readDirtyStoreKeys()
+    if (!dirty.delete(key)) return
+    window.localStorage.setItem('deed_dirty_keys', JSON.stringify([...dirty]))
+  } catch { /* the next save clears it */ }
 }
 
 export function keysAreCached(keys: string[]): boolean {
@@ -39,11 +61,25 @@ export function applyHydratedStoreState(
   const skip = new Set(dirtyKeys)
   for (const key of readDirtyStoreKeys()) skip.add(key)
   for (const [key, value] of Object.entries(state)) {
-    if (!key.startsWith('deed_') || skip.has(key)) continue
+    if (!key.startsWith('deed_')) continue
     let serialized: string
     try {
       serialized = typeof value === 'string' ? value : JSON.stringify(value)
     } catch {
+      continue
+    }
+    if (skip.has(key) && localCopyMatches(key, serialized)) {
+      // Marked as edited, but this browser's copy holds exactly the server's
+      // data: nothing is waiting to be saved. Left marked, the key would never
+      // take server updates (or be cached) again.
+      clearDirtyStoreKey(key)
+      skip.delete(key)
+    }
+    if (skip.has(key)) {
+      // Local edits win on screen, but this is still the server's copy: the
+      // pending save is diffed against it (only the changed rows go up), not
+      // sent whole.
+      rememberServerBaseline(key, serialized)
       continue
     }
     if (ARRAY_STORE_KEYS.test(key)) {

@@ -553,7 +553,7 @@ function InventoryContent() {
       ...purchaseOrders.flatMap((po: any) => (Array.isArray(po?.lines) ? po.lines : [])),
     ])
     for (const p of stockableProducts) {
-      const derivedTotal = onHandQtyAtStockLocations(p, serials, bulkStock, p.id)
+      const derivedTotal = onHandQtyAtStockLocations(p, serials, bulkStock, p.id, true)
       const isLow = isLowStockSku(p, derivedTotal, stocked.has(p.id))
       if (isLow) low.push(p)
       const matchesCat = catFilter === 'All' || p.category === catFilter
