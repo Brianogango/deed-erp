@@ -1,5 +1,7 @@
 'use client'
 import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
@@ -32,6 +34,8 @@ import { invoiceResidual, isOpenInvoice } from '@/lib/odoo-sales-flow'
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills'
 type SubView  = 'list' | 'form' | 'receive' | 'receipt'
 type RfqDraftLine = { id: string; productId: string; productName: string; description: string; qty: string; unitPrice: string; taxRate: string }
+
+const InboundImport = dynamic(() => import('@/components/inventory/InboundImport'), { ssr: false })
 
 const PURCHASE_TABS: MainView[] = ['orders', 'receipts', 'returns', 'bills']
 const PURCHASE_RECORD_QUERY = { tab: 'orders' }
@@ -219,6 +223,7 @@ function PurchaseContent() {
   const [receiptOrigin,        setReceiptOrigin]        = useState<'list' | 'po'>('list')
   const [grnLines,             setGrnLines]             = useState<Receipt['lines']>([])
   const [destLocation,         setDestLocation]         = useState<LocationId | ''>('')
+  const [showInboundImport, setShowInboundImport] = useState(false)
   const [serialInputs,         setSerialInputs]         = useState<Record<number, string>>({})
   const [bulkSerialInputs,     setBulkSerialInputs]     = useState<Record<number, string>>({})
   // accessories per serial string: { 'SN001': ['Charger','Bag'] }
@@ -631,6 +636,21 @@ function PurchaseContent() {
     setActiveId(po.id)
     hydrateReceive(rec)
   }
+
+  // /purchases?id=<receipt>&receive=inbound — from Inventory → Import delivery:
+  // open the goods received note filled in, with Inbound chosen.
+  const searchParams = useSearchParams()
+  const autoReceived = useRef<string | null>(null)
+  useEffect(() => {
+    if (searchParams?.get('receive') !== 'inbound' || !urlActiveId || autoReceived.current === urlActiveId) return
+    // The id is the receipt at first; opening it re-points the URL at its PO.
+    const rec = receipts.find(r => (r.id === urlActiveId || r.poId === urlActiveId) && r.status === 'draft')
+    if (!rec || !purchaseOrders.some(p => p.id === rec.poId)) return
+    autoReceived.current = urlActiveId
+    startReceive(rec.id)
+    setDestLocation('pending_testing')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, urlActiveId, receipts, purchaseOrders])
 
   const leaveReceive = () => {
     if (receiptOrigin === 'list' && activeReceiptId) {
@@ -1321,6 +1341,7 @@ function PurchaseContent() {
     {/* List / receipts / bills view */}
     {subView !== 'form' && subView !== 'receipt' && <div className={`mod-page purchase-workspace purchase-workspace--${mainView}`}>
 
+      {showInboundImport && <InboundImport onClose={() => setShowInboundImport(false)} />}
       <ModuleHeader
         title="Purchases"
         subtitle="Source, receive and pay with control"
@@ -1334,6 +1355,7 @@ function PurchaseContent() {
         overflowActions={
           <SecondaryActionMenu
             actions={[
+              { id: 'import-inbound', label: 'Import delivery into Inbound (Excel / PDF)', onClick: () => setShowInboundImport(true) },
               { id: 'import', label: 'Import order lines', onClick: () => setShowImport(true) },
             ]}
           />

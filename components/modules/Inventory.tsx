@@ -41,6 +41,8 @@ import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
 import { getCategoryMarkupPct, quoteSalePriceFromCost, autoSalePriceFromCost, suggestWholesalePriceFromCost } from '@/lib/sale-price-calculator'
 import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import dynamic from 'next/dynamic'
+const InboundImport = dynamic(() => import('@/components/inventory/InboundImport'), { ssr: false })
 
 type MainTab = 'warehouse_view' | 'parts_requests' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'checkouts' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock' | 'valuation'
@@ -396,6 +398,7 @@ function InventoryContent() {
   const [priceProduct, setPriceProduct] = useState<Product | null>(null)
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null)
   const [showPriceImport, setShowPriceImport] = useState(false)
+  const [showInboundImport, setShowInboundImport] = useState(false)
   const [priceRows, setPriceRows] = useState<PriceUpdateRow[]>([])
   const [priceForm, setPriceForm] = useState({ salePrice: '', costPrice: '', reason: '', effectiveDate: '' })
 
@@ -2141,6 +2144,15 @@ function InventoryContent() {
                 )}
                 {activeWarehouseLocation === 'testing' && (
                   <div className="w-full min-w-0">
+                    <div className="mb-3 flex flex-col gap-2 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[12px] font-extrabold text-text-1">Add stock to Inbound</p>
+                        <p className="text-[11px] text-text-3">Upload the supplier&apos;s delivery (Excel, CSV, PDF or photo). It becomes a purchase order and a goods received note into Inbound.</p>
+                      </div>
+                      <button type="button" className="btn-primary shrink-0 text-[11px]" onClick={() => setShowInboundImport(true)}>
+                        Import delivery
+                      </button>
+                    </div>
                     <Section title="Awaiting tests — not sellable until it passes" icon={<Fa icon={faMagnifyingGlass} />} tone="info"
                     count={testingCount}
                     emptyText={q ? 'No Pending Testing stock matches this search' : 'Nothing waiting to be tested'}>
@@ -4606,6 +4618,7 @@ function InventoryContent() {
         </Modal>
       )}
 
+      {showInboundImport && <InboundImport onClose={() => setShowInboundImport(false)} />}
       {/* ── Opening stock modal ── */}
       {showOpening && (
         <Modal title="Post Opening Stock" onClose={() => setShowOpening(false)} width={860}>
