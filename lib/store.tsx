@@ -2266,6 +2266,10 @@ export interface POSOrder {
   /** Person who closed the sale for commission (may differ from cashier). */
   salespersonId?: string
   salespersonName?: string
+  /** Deed Express agent who brought the customer; earns agentCommission (KES) once the sale is fully paid. */
+  agentId?: string
+  agentName?: string
+  agentCommission?: number
   pointsEarned?: number
   pointsRedeemed?: number
   /** Client/store credit applied to this POS sale; the remainder is the selected tender. */
@@ -3883,6 +3887,10 @@ export interface AppState {
       paymentReference?: string
       salespersonId?: string
       salespersonName?: string
+      /** Deed Express agent who brought the customer (no employee commission then). */
+      agentId?: string
+      agentName?: string
+      agentCommission?: number
       /** Optional client credit portion; remaining total is collected via `payment`. */
       customerCreditAmount?: number
     },
@@ -19417,6 +19425,11 @@ const storeCtx: AppState = {
         customerCreditRefs: creditRefs.length ? creditRefs : undefined,
         salespersonId: paymentMeta?.salespersonId || user?.id,
         salespersonName: paymentMeta?.salespersonName || user?.name,
+        ...(paymentMeta?.agentId ? {
+          agentId: paymentMeta.agentId,
+          agentName: paymentMeta.agentName,
+          agentCommission: Math.max(0, Number(paymentMeta.agentCommission) || 0),
+        } : {}),
         invoiceId,
       }
       // Authoritative stock deduction on the server before local UI mirror.
@@ -19512,8 +19525,9 @@ const storeCtx: AppState = {
           creditRefs.length ? `Client credit ${creditRefs.join(', ')} (${fmtKes(customerCreditAmount)})` : '',
         ].filter(Boolean).join(' · '),
         isPosInvoice: true,
-        salespersonId: order.salespersonId,
-        salespersonName: order.salespersonName,
+        // An agent's sale earns the agent's commission, not the closer's.
+        salespersonId: order.agentId ? undefined : order.salespersonId,
+        salespersonName: order.agentId ? undefined : order.salespersonName,
       }
       setPosOrders(p => p.map(o => o.id === order.id ? { ...o, invoiceRef: posInv.ref } : o))
       setInvoices(p => [posInv, ...p])

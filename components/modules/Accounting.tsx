@@ -3,6 +3,7 @@
 import { planMigrationImport } from '@/lib/finance/migration-import'
 import { isOpeningBalanceDocument } from '@/lib/finance/opening-balance'
 import OpeningBalanceCorrection from '@/components/finance/OpeningBalanceCorrection'
+import AgentCommissions from '@/components/finance/AgentCommissions'
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -113,6 +114,7 @@ type MainTab =
   | 'refunds'
   | 'credits'
   | 'commissions'
+  | 'agent_commissions'
   | 'coa'
   | 'analytics'
   | 'gl'
@@ -149,7 +151,10 @@ const FINANCE_SECTION_TABS: Record<FinanceSection, Array<{ id: MainTab; label: s
     { id: 'refunds', label: 'Refunds' },
     { id: 'commissions', label: 'Sales commissions' },
   ],
-  money_out: [{ id: 'bills', label: 'Vendor bills' }],
+  money_out: [
+    { id: 'bills', label: 'Vendor bills' },
+    { id: 'agent_commissions', label: 'Agent commissions' },
+  ],
   banking: [{ id: 'cashbook', label: 'Cashbook & reconciliation' }],
   accounting: [
     { id: 'journals', label: 'Accounting entries' },
@@ -901,6 +906,7 @@ function AccountingContent() {
     },
     credits: { title: 'Customer credits', subtitle: 'Credit balances and applications' },
     commissions: { title: 'Salespeople', subtitle: 'Commission statements and payment status' },
+    agent_commissions: { title: 'Agent commissions', subtitle: 'Deed Express agents: commissions earned and payouts' },
     refunds: { title: 'Refunds', subtitle: 'Approved customer refund payments' },
     journals: { title: 'Accounting entries', subtitle: 'Posted entries and audit-ready movements' },
     reports: { title: 'Financial reports', subtitle: 'Management, statutory and control reports' },
@@ -1524,7 +1530,7 @@ function AccountingContent() {
           {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && (
             <div className="px-3 pb-2">
               <TabBar
-                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview']}
+                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => t.id !== 'agent_commissions' || canManageFullFinance)}
                 active={tab}
                 onChange={id => setTab(id as MainTab)}
                 className="border-0 bg-transparent px-0 py-0"
@@ -1809,6 +1815,20 @@ function AccountingContent() {
             <div className="finance-subview finance-subview--refunds"><RefundsTab /></div>
           ) : tab === 'credits' ? (
             <div className="finance-subview finance-subview--credits"><CustomerCreditsTab /></div>
+          ) : tab === 'agent_commissions' ? (
+            <div className="finance-subview finance-subview--agent-commissions">
+              {canManageFullFinance ? (
+                <AgentCommissions
+                  showToast={showToast}
+                  contacts={contacts}
+                  moneyAccounts={accounts
+                    .filter(a => a.isActive && a.type === 'asset' && ['Cash at Bank', 'Cash in Hand'].includes(a.group))
+                    .map(a => ({ code: a.code, name: a.name }))}
+                />
+              ) : (
+                <p className="p-6 text-xs text-text-3">Agent commissions are handled by the Director and Finance Officer.</p>
+              )}
+            </div>
           ) : tab === 'commissions' ? (
             <div className="finance-subview finance-subview--commissions"><CommissionsTab /></div>
           ) : tab === 'journals' ? (

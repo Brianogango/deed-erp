@@ -22,6 +22,8 @@ const { mockPrisma } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
+const storeState = vi.hoisted(() => ({ saleOrders: [] as Array<Record<string, unknown>> }))
+vi.mock('@/lib/server-store', () => ({ loadAppState: vi.fn(async () => ({ deed_saleAgents: storeState.saleOrders })) }))
 
 import { postSalesCommissionForInvoice } from '@/lib/accounting/sales-commission'
 
@@ -42,6 +44,7 @@ const baseInvoice = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  storeState.saleOrders = []
   mockPrisma.invoice.updateMany.mockResolvedValue({ count: 1 })
   mockPrisma.invoice.findUnique.mockResolvedValue(baseInvoice)
   mockPrisma.saleOrder.findUnique.mockResolvedValue({ salespersonId: SALESPERSON_USER_ID })
@@ -52,6 +55,12 @@ beforeEach(() => {
 })
 
 describe('postSalesCommissionForInvoice', () => {
+  it('pays no employee commission on a sale brought by a Deed Express agent', async () => {
+    storeState.saleOrders = [{ saleOrderId: SALE_ORDER_ID, agentId: 'agent-1' }]
+    await postSalesCommissionForInvoice(INVOICE_ID)
+    expect(mockPrisma.salesCommission.createMany).not.toHaveBeenCalled()
+  })
+
   it('is a no-op when the atomic claim loses the race (already computed/computing)', async () => {
     mockPrisma.invoice.updateMany.mockResolvedValue({ count: 0 })
     await postSalesCommissionForInvoice(INVOICE_ID)

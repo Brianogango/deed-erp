@@ -1,6 +1,13 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
+import { loadAppState } from '@/lib/server-store'
+
+async function saleOrderHasAgent(saleOrderId: string): Promise<boolean> {
+  const state = await loadAppState(['deed_saleAgents'])
+  const rows = Array.isArray(state.deed_saleAgents) ? state.deed_saleAgents as Array<{ saleOrderId?: unknown; agentId?: unknown }> : []
+  return rows.some(r => r.saleOrderId === saleOrderId && Boolean(r.agentId))
+}
 
 const round2 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
 
@@ -47,6 +54,9 @@ export async function postSalesCommissionForInvoice(
     if (!salesCommissionAppliesToInvoice(invoice)) return
 
     let salespersonId = opts?.salespersonUserId || null
+    // A sale brought by a Deed Express agent pays the agent's commission
+    // (lib/agents) instead — never both on one sale.
+    if (invoice.saleOrderId && await saleOrderHasAgent(invoice.saleOrderId)) return
     if (invoice.saleOrderId) {
       const saleOrder = await prisma.saleOrder.findUnique({
         where: { id: invoice.saleOrderId },

@@ -103,6 +103,7 @@ import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
 import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
 import { dedupeRepairSaleOrders } from '@/lib/repair/sale-order-link'
 import { SalespersonCloserField } from '@/components/sales/SalespersonCloserField'
+import { SaleOrderAgentField } from '@/components/sales/AgentField'
 import { allocateDeliveredQtyToOrderLines, pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
@@ -2802,6 +2803,17 @@ function SalesContent() {
                             onChange={(id, name) => {
                               void updateSaleOrder(activeOrder.id, { salespersonId: id, salespersonName: name })
                             }}
+                          />
+                          )}
+                          {!activeIsRepairBilling && (
+                          <SaleOrderAgentField
+                            saleOrderId={activeOrder.id}
+                            contacts={contacts}
+                            onError={msg => showToast(msg, 'error')}
+                            disabled={
+                              activeOrder.status === 'cancelled'
+                              || activeInvoices.some(i => ['paid', 'partial', 'partially_paid'].includes(String(i.status)) || Number(i.amountPaid) > 0)
+                            }
                           />
                           )}
                           <SalesDocField label="Payment terms"><input readOnly value={activeOrder.paymentTerms || '—'} /></SalesDocField>

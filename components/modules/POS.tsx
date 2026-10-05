@@ -4,6 +4,7 @@ import { useCommerceStore, useInventoryStore, fmtKes, fmtDate, isPosBankPayment 
 import { Modal, Field, Input, Select, Badge, ModuleSkeleton } from '@/components/ui'
 import { PosTransactionHistory } from '@/components/pos/PosTransactionHistory'
 import { SalespersonCloserField } from '@/components/sales/SalespersonCloserField'
+import { AgentField, type AgentValue } from '@/components/sales/AgentField'
 import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
@@ -277,6 +278,7 @@ export default function PointOfSale() {
   const [showCamera, setShowCamera] = useState(false)
   const [salespersonId, setSalespersonId] = useState('')
   const [salespersonName, setSalespersonName] = useState('')
+  const [agent, setAgent] = useState<AgentValue>({})
   const [mobilePage, setMobilePage] = useState(1)
   const [useClientCredit, setUseClientCredit] = useState(false)
   const [clientCreditInput, setClientCreditInput] = useState('')
@@ -570,6 +572,7 @@ export default function PointOfSale() {
           salespersonId: salespersonId || cashier?.id,
           salespersonName: salespersonName || cashier?.name,
           customerCreditAmount: clientCreditToApply || undefined,
+          ...(agent.agentId ? { agentId: agent.agentId, agentName: agent.agentName, agentCommission: agent.agentCommission || 0 } : {}),
         },
       )
 
@@ -584,6 +587,7 @@ export default function PointOfSale() {
         setBankAccountId('')
         setUseClientCredit(false)
         setClientCreditInput('')
+        setAgent({})
         setStkStatus('')
         setReceiptOrder(order)
         setIsPrinting(true)
@@ -974,6 +978,7 @@ export default function PointOfSale() {
                     setSalespersonName(name)
                   }}
                 />
+                <AgentField variant="compact" contacts={contacts} value={agent} onChange={setAgent} />
                 {!customerId && (
                   <Field label="Buyer name">
                     <Input

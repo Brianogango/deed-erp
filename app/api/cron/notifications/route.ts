@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { runNotificationWorker } from '@/lib/notifications/worker'
 import { scanOperationalNotificationEvents } from '@/lib/notifications/operational-scanner'
+import { syncAgentCommissions } from '@/lib/agents/agent-commissions.server'
 
 function secretOk(request: NextRequest) {
   const expected = String(process.env.CRON_SECRET || '').trim()
@@ -19,7 +20,12 @@ export async function POST(request: NextRequest) {
     if (!secretOk(request)) await requireRole(['director', 'admin_officer', 'super_admin'])
     const scan = await scanOperationalNotificationEvents()
     const worker = await runNotificationWorker()
-    return NextResponse.json({ ok: true, scan, worker })
+    // Agent commissions earn when a sale is fully paid; keep them current
+    // even when nobody opens the Finance page.
+    const agentCommissions = await syncAgentCommissions()
+      .then(r => ({ posted: r.posted, failed: r.failed }))
+      .catch(err => ({ error: err instanceof Error ? err.message : 'failed' }))
+    return NextResponse.json({ ok: true, scan, worker, agentCommissions })
   })
 }
 

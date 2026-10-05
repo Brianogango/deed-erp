@@ -189,6 +189,9 @@ export const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionActi
   deed_customerCredits: 'manageCustomerCredit',
   deed_auditLogs: 'viewAuditLog',
   deed_companyAssets: 'viewCompanyProperty',
+  deed_agentCommissions: 'postFinancial',
+  deed_agentPayouts: 'postFinancial',
+  deed_agentSettings: 'postFinancial',
 }
 
 type StoreReadUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician'>
@@ -436,6 +439,11 @@ export const CLIENT_IMMUTABLE_STORE_KEYS = new Set<string>([
   // P0-SEC-002: legacy commercial audit blob is server-authored only.
   // Clients may still read it; writes via /api/store are dropped.
   'deed_auditLogs',
+  // Agent commissions are written only by /api/agents (journals post there).
+  'deed_agentCommissions',
+  'deed_agentPayouts',
+  'deed_agentSettings',
+  'deed_saleAgents',
 ])
 
 export const hasPermission = (user: Pick<PublicUser, 'role'> | null | undefined, action: PermissionAction) => {
