@@ -308,7 +308,9 @@ import {
 } from '@/lib/invoice-delivery-charge'
 import { safeLocalStorageSet } from '@/lib/client-store-cache'
 import { computeCollectionDelta, type CollectionDelta } from '@/lib/store-delta'
-import { forgetServerBaseline, rememberServerBaseline, serverBaselineFor } from '@/lib/store-baseline'
+import { forgetServerBaseline, patchServerBaseline, rememberServerBaseline, serverBaselineFor } from '@/lib/store-baseline'
+import { isSlimRow, SLIM_MARK } from '@/lib/store-slim'
+import { loadFullRecord } from '@/lib/full-record'
 import { awaitRouteHydration, awaitStoreDownloads, keysChangedSinceRead, noteStoreChanges, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
 import { contactFromPersonInput, deriveContactPersons } from '@/lib/contact-person-derive'
 import {
@@ -5307,11 +5309,26 @@ function useLS<T>(
       if (e.detail?.key === key && e.detail?.value) handleUpdate(e.detail.value, e.detail.fromCache === true)
     }
 
+    // A full record replacing its slimmed list row (lib/full-record.ts):
+    // the server already has it, so this is not an edit to save.
+    const handlePatchRows = (e: CustomEvent) => {
+      if (e.detail?.key !== key || !Array.isArray(e.detail?.rows)) return
+      const rows = e.detail.rows as Array<{ id?: unknown }>
+      const byId = new Map(rows.map(row => [String(row.id), row]))
+      patchServerBaseline(key, rows)
+      skipNextSync.current = true
+      setState(prev => (Array.isArray(prev)
+        ? (prev as unknown[]).map(row => byId.get(String((row as { id?: unknown })?.id)) ?? row) as unknown as T
+        : prev))
+    }
+
     window.addEventListener('storage', handleStorage)
     window.addEventListener('deed_remote_update', handleCustom as EventListener)
+    window.addEventListener('deed_patch_rows', handlePatchRows as EventListener)
     return () => {
       window.removeEventListener('storage', handleStorage)
       window.removeEventListener('deed_remote_update', handleCustom as EventListener)
+      window.removeEventListener('deed_patch_rows', handlePatchRows as EventListener)
     }
   }, [key])
 
@@ -6546,7 +6563,18 @@ export function StoreProvider({
     })
   }, [notifyUsers])
 
-  const syncRepairToPortal = useCallback((r: RepairOrder, historyNote?: string) => {
+  const syncRepairToPortal = useCallback((input: RepairOrder, historyNote?: string) => {
+    // A finished repair's list row is slimmed (lib/store-slim.ts): the portal
+    // copy must carry the real diagnosis log, so fetch the full row first and
+    // overlay this change on it.
+    if (isSlimRow(input)) {
+      void loadFullRecord('deed_repairs_v2', String(input.id)).then(full => {
+        const { [SLIM_MARK]: _mark, qcItems: _qc, statusHistory: _sh, diagnosisHistory: _dh, ...changes } = input as any
+        syncRepairToPortal({ ...(full ?? {}), ...changes, ...(full ? {} : { diagnosisHistory: undefined }) } as RepairOrder, historyNote)
+      })
+      return
+    }
+    const r = input
     const portalRepair = {
       ref: r.ref,
       status: r.status,

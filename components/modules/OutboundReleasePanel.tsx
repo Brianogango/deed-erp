@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client'
 
+import { useFullRecord } from '@/lib/full-record'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   faBoxOpen, faShieldHalved, faSignature, faCircleCheck,
@@ -190,6 +191,14 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
 
   // Update step if release status changes externally
   useEffect(() => { setStep(statusToStep[release.status] ?? 0) }, [release.status])
+
+  // A completed release's list row has no signatures (lib/store-slim.ts):
+  // load the full row, then show them once they arrive.
+  useFullRecord('deed_outboundReleases', release)
+  useEffect(() => {
+    if (release.receiverSigData) setReceiverSigData(prev => prev ?? release.receiverSigData)
+    if (release.customerAckSigData) setCustomerAckSigData(prev => prev ?? release.customerAckSigData)
+  }, [release.receiverSigData, release.customerAckSigData])
 
   const handlePick = () => {
     pickRelease(release.id)

@@ -15,6 +15,7 @@ import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { SLIM_RULES, restoreSlimRows } from '@/lib/store-slim'
 import { appendStoreAudit } from '@/lib/store-audit'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
@@ -96,6 +97,13 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   let value = typeof body.value === 'string' ? body.value : JSON.stringify(body.value)
+  // Slimmed list rows (lib/store-slim.ts) get their stored heavy fields back.
+  if (SLIM_RULES[key] && value.includes('"__slim"')) {
+    let incoming: unknown
+    try { incoming = JSON.parse(value) } catch { incoming = null }
+    const currentState = await loadAppState([key])
+    value = JSON.stringify(restoreSlimRows(key, currentState[key], incoming))
+  }
   // Partial-view roles merge into the ledger by id instead of replacing it
   // (their client only ever holds the slice they were served).
   if (CONTENT_FILTERED_STORE_KEYS.has(key) && !hasFullStoreContentAccess(session.user, key)) {

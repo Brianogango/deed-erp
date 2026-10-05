@@ -1,5 +1,6 @@
 // @ts-nocheck
 'use client'
+import { useFullRecord } from '@/lib/full-record'
 import { useState, useMemo, useRef, useCallback, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import { useRepairStore } from '@/lib/store'
@@ -366,6 +367,9 @@ function RepairInner() {
   const activeRepair = (
     !repairsBlobDirty && serverActiveRepair?.id === activeId
   ) ? serverActiveRepair : localActiveRepair
+  // A finished repair's list row is slimmed (lib/store-slim.ts): load the full
+  // row into the store, so the local copy shows its QC and history too.
+  useFullRecord('deed_repairs_v2', localActiveRepair)
   const view = repairModuleView(
     isIntake,
     workspaceIdKind === 'refurb' ? null : activeId,

@@ -20,6 +20,7 @@ import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
 import { recordHttpMetric } from '@/lib/http-metrics'
 import { guardCollectionWrite } from '@/lib/store-bulk-delete-guard'
 import { applyCollectionDelta, isCollectionDelta, type CollectionDelta } from '@/lib/store-delta'
+import { SLIM_RULES, restoreSlimRows, slimCollection } from '@/lib/store-slim'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -161,6 +162,11 @@ export async function GET(request: NextRequest) {
   // (repair-linked invoices for workshop roles, own expense claims, ...).
   for (const key of Object.keys(state)) {
     if (CONTENT_FILTERED_STORE_KEYS.has(key)) state[key] = filterStoreValueForRole(session.user, key, state[key]) as typeof state[string]
+  }
+  // Slim lists: finished records without their heavy, display-only fields
+  // (lib/store-slim.ts). The full row comes from /api/store/record on open.
+  for (const key of Object.keys(state)) {
+    if (SLIM_RULES[key]) state[key] = slimCollection(key, state[key]) as typeof state[string]
   }
   // Clients already ignore non-deed_ keys when hydrating; expose version for If-Match writes.
   const payload = {
@@ -305,6 +311,18 @@ export async function POST(request: Request) {
       { error: `Forbidden — insufficient role to write: ${deniedKeys.join(', ')}`, deniedKeys },
       { status: 403 },
     )
+  }
+
+  // Slimmed rows from the list view: put back the fields they left out
+  // before anything else reads or stores this batch.
+  const slimKeys = Object.keys(entries).filter(key => SLIM_RULES[key] && entries[key].includes('"__slim"'))
+  if (slimKeys.length) {
+    const storedForSlim = await loadAppStateForWrite(slimKeys)
+    for (const key of slimKeys) {
+      let incoming: unknown
+      try { incoming = JSON.parse(entries[key]) } catch { continue }
+      entries[key] = JSON.stringify(restoreSlimRows(key, storedForSlim[key], incoming))
+    }
   }
 
   // P1-SEC-005: optional optimistic concurrency. Absent If-Match / _version →
