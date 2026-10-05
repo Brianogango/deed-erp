@@ -3672,6 +3672,8 @@ export interface AppState {
 
   // Invoices
   createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string; account?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
+  /** Migration opening balances: saved to the server one by one (which posts each journal once), then shown. */
+  importOpeningBalances: (invoices: Invoice[]) => Promise<{ saved: Invoice[]; failed: string[] }>
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   /** Reorder a draft invoice line (product or section) up/down. */
   moveInvoiceLine: (invoiceId: string, lineId: string, direction: -1 | 1) => void
@@ -4234,6 +4236,7 @@ export type FinanceStoreState = Pick<AppState,
   | 'createBillFromPO'
   | 'createDeposit'
   | 'createManualInvoice'
+  | 'importOpeningBalances'
   | 'moveInvoiceLine'
   | 'addInvoiceSection'
   | 'createPO'
@@ -7267,6 +7270,7 @@ export function StoreProvider({
     createBillFromPO: (...args: Parameters<AppState['createBillFromPO']>) => storeCtxRef.current!.createBillFromPO(...args),
     createDeposit: (...args: Parameters<AppState['createDeposit']>) => storeCtxRef.current!.createDeposit(...args),
     createManualInvoice: (...args: Parameters<AppState['createManualInvoice']>) => storeCtxRef.current!.createManualInvoice(...args),
+    importOpeningBalances: (...args: Parameters<AppState['importOpeningBalances']>) => storeCtxRef.current!.importOpeningBalances(...args),
     createPO: (...args: Parameters<AppState['createPO']>) => storeCtxRef.current!.createPO(...args),
     createPurchaseReturn: (...args: Parameters<AppState['createPurchaseReturn']>) => storeCtxRef.current!.createPurchaseReturn(...args),
     createReceiptFromPO: (...args: Parameters<AppState['createReceiptFromPO']>) => storeCtxRef.current!.createReceiptFromPO(...args),
@@ -13774,6 +13778,22 @@ const storeCtx: AppState = {
       void saveInvoiceToServer(invoice, msg => showToast(msg, 'error'))
       showToast(`${type === 'vendor_bill' ? 'Bill' : 'Invoice'} ${invoice.ref} created`, 'success')
       return invoice
+    },
+
+    importOpeningBalances: async (invoices) => {
+      // Server first: the posted-at-create path validates dates and the
+      // fiscal lock and posts the journal exactly once. Only documents the
+      // server accepted are added here, so a refused row leaves nothing behind.
+      const saved: Invoice[] = []
+      const failed: string[] = []
+      for (const invoice of invoices) {
+        let reason = ''
+        const ok = await saveInvoiceToServer(invoice, msg => { reason = msg })
+        if (ok) saved.push(invoice)
+        else failed.push(`${invoice.ref} (${invoice.partnerName}): ${reason || 'not saved'}`)
+      }
+      if (saved.length) setInvoices(prev => [...saved.filter(inv => !prev.some(p => p.id === inv.id)), ...prev])
+      return { saved, failed }
     },
 
     moveInvoiceLine: (invoiceId, lineId, direction) => {

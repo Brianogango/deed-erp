@@ -102,14 +102,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No valid keys provided' }, { status: 422 })
   }
 
-  await saveStoreKeys(updates)
+  try {
+    await saveStoreKeys(updates)
+  } catch (err) {
+    // e.g. the bulk-delete guard refusing a save that would drop records.
+    console.error('[import] save failed:', err)
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Import could not be saved' }, { status: 409 })
+  }
 
   // Posted opening invoices/bills must create Prisma journals so TB stays truthful.
   let journalsPosted = 0
   if (updates.deed_invoices) {
     try {
       const { postInvoiceJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
-      const invoices = JSON.parse(updates.deed_invoices) as Array<Record<string, unknown>>
+      // Only the documents in this request. Re-posting every posted invoice
+      // in the ledger made each import hundreds of journal writes long (and
+      // retried old documents' journals).
+      const incomingIds = new Set((Array.isArray(body.deed_invoices) ? body.deed_invoices as AnyRecord[] : []).map(inv => String(inv.id ?? '')))
+      const invoices = (JSON.parse(updates.deed_invoices) as Array<Record<string, unknown>>)
+        .filter(inv => incomingIds.has(String(inv.id ?? '')))
       const posted = invoices.filter(inv => {
         const status = String(inv.status || '')
         return status === 'posted' || status === 'approved' || status === 'paid' || status === 'partially_paid'

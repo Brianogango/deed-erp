@@ -1,5 +1,6 @@
 'use client'
 
+import { planMigrationImport } from '@/lib/finance/migration-import'
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -316,6 +317,7 @@ function AccountingContent() {
     updateInvoice,
     postInvoice,
     createManualInvoice,
+    importOpeningBalances,
     showToast,
     accounts,
     addAccount,
@@ -1224,6 +1226,7 @@ function AccountingContent() {
     try {
       guardSpreadsheetFile(file)
       setPendingMigrationFile(file)
+      setMigrationSummary(null)
     } catch (err) {
       showToast(err instanceof SpreadsheetGuardError ? err.message : 'File too large', 'error')
       if (migrationFileRef.current) migrationFileRef.current.value = ''
@@ -1246,92 +1249,80 @@ function AccountingContent() {
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
         guardSpreadsheetRows(rows)
-        const existingByName = new Map(contacts.map(contact => [contact.name.trim().toLowerCase(), contact]))
-        const importedContacts: any[] = []
-        const importedInvoices: Invoice[] = []
-        const seenNames = new Set<string>()
-        const newContactIds = new Map<string, string>()
-
-        rows.forEach((row, index) => {
-          const kindRaw = cell(row, 'Kind', 'Type', 'Contact Type').toLowerCase()
-          const isVendor = ['vendor', 'supplier', 'bill', 'ap', 'payable'].includes(kindRaw)
-          const isCustomer = ['customer', 'client', 'invoice', 'ar', 'receivable'].includes(kindRaw) || !isVendor
-          const name = cell(row, 'Name', 'Contact', 'Customer', 'Vendor', 'Supplier')
-          if (!name) throw new Error(`Row ${index + 2}: Name is required`)
-          const key = name.trim().toLowerCase()
-          const balance = Number(cell(row, 'Opening Balance', 'Balance', 'Amount', 'Outstanding')) || 0
-          if (balance < 0) throw new Error(`Row ${index + 2}: Opening Balance cannot be negative`)
-          const existing = existingByName.get(key)
-          const contactId = existing?.id ?? newContactIds.get(key) ?? `mig_contact_${uid()}`
-          if (!existing && !newContactIds.has(key)) newContactIds.set(key, contactId)
-          if (!existing && !seenNames.has(key)) {
-            importedContacts.push({
-              id: contactId,
-              type: isVendor ? 'company' : 'individual',
-              name,
-              email: cell(row, 'Email'),
-              phone: cell(row, 'Phone', 'Mobile'),
-              address: cell(row, 'Address'),
-              city: cell(row, 'City') || 'Nairobi',
-              country: cell(row, 'Country') || 'Kenya',
-              vatNumber: cell(row, 'VAT Number', 'PIN', 'KRA PIN'),
-              isCustomer,
-              isVendor,
-              tags: ['migration'],
-              createdAt: new Date().toISOString(),
-            })
-            seenNames.add(key)
-          }
-          if (balance > 0) {
-            const type = isVendor ? 'vendor_bill' : 'customer_invoice'
-            const ref = cell(row, 'Reference', 'Ref', 'Document Ref') || `${isVendor ? 'BILL' : 'INV'}-MIG-${String(importedInvoices.length + 1).padStart(4, '0')}`
-            const date = cell(row, 'Date', 'Document Date') || today()
-            const dueDate = cell(row, 'Due Date', 'Due') || date
-            const line: InvoiceLine = {
-              id: uid(),
-              description: cell(row, 'Description') || 'Opening balance migrated from previous system',
-              qty: 1,
-              unitPrice: balance,
-              taxRate: 0,
-              subtotal: balance,
-            }
-            importedInvoices.push({
-              id: `mig_invoice_${uid()}`,
-              ref,
-              type,
-              status: 'posted',
-              partnerId: contactId,
-              partnerName: name,
-              date,
-              dueDate,
-              lines: [line],
-              subtotal: balance,
-              taxTotal: 0,
-              total: balance,
-              amountPaid: 0,
-              notes: cell(row, 'Notes') || 'Opening balance migrated from previous system',
-            })
-          }
+        const plan = planMigrationImport(rows, {
+          contacts: contacts.map(c => ({ id: c.id, name: c.name })),
+          invoices,
+          today: today(),
         })
-
-        if (importedContacts.length === 0 && importedInvoices.length === 0) {
-          showToast('No valid migration rows found', 'error')
+        if (plan.errors.length) {
+          // Nothing is imported from a file with bad rows: fix and re-upload.
+          setMigrationSummary(`Nothing imported. Fix these rows and upload again:\n${plan.errors.slice(0, 15).join('\n')}${plan.errors.length > 15 ? `\n…and ${plan.errors.length - 15} more` : ''}`)
+          showToast(`${plan.errors.length} row(s) need fixing — nothing was imported`, 'error')
           return
         }
-        const res = await fetch('/api/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...(importedContacts.length ? { deed_contacts: importedContacts } : {}),
-            ...(importedInvoices.length ? { deed_invoices: importedInvoices } : {}),
-          }),
-        })
-        const payload = await res.json().catch(() => null)
-        if (!res.ok) throw new Error(payload?.error || 'Migration import failed')
-        const summary = `Imported ${importedContacts.length} contact(s) and ${importedInvoices.length} opening balance document(s).`
-        setMigrationSummary(summary)
-        showToast(`${summary} Reloading data...`, 'success')
-        window.setTimeout(() => window.location.reload(), 1200)
+        if (plan.contactsToCreate.size === 0 && plan.documents.length === 0) {
+          setMigrationSummary(plan.skipped.length ? `Everything in this file is already imported (${plan.skipped.length} row(s)).` : 'No rows to import.')
+          showToast('Nothing new to import', 'info')
+          return
+        }
+
+        // Contacts through the contacts API — that table is the source of
+        // truth; opening balances need its real ids.
+        const contactIds = new Map(plan.existingContactIds)
+        const failed: string[] = []
+        let contactsCreated = 0
+        for (const [key, input] of plan.contactsToCreate) {
+          try {
+            const res = await fetch('/api/contacts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(input),
+            })
+            const payload = await res.json().catch(() => null) as { id?: string; error?: string } | null
+            if (!res.ok || !payload?.id) throw new Error(payload?.error || `server returned ${res.status}`)
+            contactIds.set(key, payload.id)
+            // 200 = the server matched an existing contact; 201 = created.
+            if (res.status === 201) contactsCreated += 1
+          } catch (err) {
+            failed.push(`${input.name}: ${err instanceof Error ? err.message : 'contact not saved'}`)
+          }
+        }
+
+        const documents: Invoice[] = []
+        for (const doc of plan.documents) {
+          const partnerId = contactIds.get(doc.contactKey)
+          if (!partnerId) {
+            failed.push(`${doc.ref || doc.partnerName}: skipped — its contact was not saved`)
+            continue
+          }
+          const id = uid()
+          documents.push({
+            id,
+            ref: doc.ref || `OB-${doc.type === 'vendor_bill' ? 'BILL' : 'INV'}-${doc.date.replace(/-/g, '')}-${id.slice(0, 6).toUpperCase()}`,
+            type: doc.type,
+            status: 'posted',
+            partnerId,
+            partnerName: doc.partnerName,
+            date: doc.date,
+            dueDate: doc.dueDate,
+            lines: [{ id: uid(), description: doc.description, qty: 1, unitPrice: doc.amount, taxRate: 0, subtotal: doc.amount }],
+            subtotal: doc.amount,
+            taxTotal: 0,
+            total: doc.amount,
+            amountPaid: 0,
+            notes: doc.notes,
+          })
+        }
+        const result = documents.length ? await importOpeningBalances(documents) : { saved: [], failed: [] }
+        failed.push(...result.failed)
+
+        const lines = [
+          `Imported ${contactsCreated} new contact(s) and ${result.saved.length} opening balance document(s).`,
+          ...(plan.skipped.length ? [`Skipped ${plan.skipped.length} row(s) already in the books.`] : []),
+          ...(failed.length ? [`Not imported (${failed.length}):`, ...failed.slice(0, 15)] : []),
+        ]
+        setMigrationSummary(lines.join('\n'))
+        showToast(lines[0], failed.length ? 'error' : 'success')
       } catch (err) {
         showToast(err instanceof Error ? err.message : 'Could not import migration file', 'error')
       } finally {
@@ -1907,7 +1898,14 @@ function AccountingContent() {
                   />
                 </div>
                 {migrationSummary && (
-                  <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-xs font-semibold text-green-800">{migrationSummary}</div>
+                  <div
+                    role="status"
+                    className={`mt-4 whitespace-pre-line rounded-xl border p-3 text-xs font-semibold ${/Nothing imported|Not imported/.test(migrationSummary)
+                      ? 'border-amber-200 bg-amber-50 text-amber-900'
+                      : 'border-green-200 bg-green-50 text-green-800'}`}
+                  >
+                    {migrationSummary}
+                  </div>
                 )}
               </div>
 
