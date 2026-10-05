@@ -1272,6 +1272,8 @@ export interface Invoice {
   lines: InvoiceLine[]; subtotal: number; taxTotal: number; total: number; amountPaid: number
   /** Header-level discount (e.g. prorated from the source SO's discountAmount), applied after tax. */
   discountAmount?: number
+  /** Migrated from an old system: a receivable/payable carried over, not a sale or purchase (lib/finance/opening-balance.ts). */
+  isOpeningBalance?: boolean
   saleOrderId?: string; purchaseOrderId?: string; receiptId?: string; repairId?: string; notes: string
   payments?: InvoicePayment[]
   /** Document currency snapshot (KES-first). */

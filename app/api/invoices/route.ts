@@ -12,6 +12,8 @@ import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { isPosInvoiceWrite, POS_INVOICE_WRITE_ROLES, salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
+import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
+import { ensureOpeningBalanceEquityAccount } from '@/lib/accounting/opening-balance-account'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -255,6 +257,7 @@ export async function POST(request: Request) {
       invoiceNumber = await getNextDocNumber('invoice')
     }
 
+    const isOpeningBalance = body.isOpeningBalance === true
     const invoiceData = {
       ...(isUUID(body.id) ? { id: body.id } : {}),
       ...mapInvoiceBodyToDb(body, clientId),
@@ -262,6 +265,11 @@ export async function POST(request: Request) {
       createdById: actor.id,
       items: { create: items },
     } as any
+    if (isOpeningBalance) {
+      // Remembered on the server copy: reports and the correction tool read it.
+      invoiceData.internalNotes = [OPENING_BALANCE_MARKER, invoiceData.internalNotes].filter(Boolean).join(' ')
+      await ensureOpeningBalanceEquityAccount()
+    }
 
     // Server-side 3-way match: a vendor bill tied to a PO can only bill up to
     // (received − already billed) per line — client-side assertBillableQty
@@ -384,6 +392,7 @@ export async function POST(request: Request) {
           taxAmount: Number(invoice.taxAmount),
           type: documentType,
           repairId: invoice.repairId ?? undefined,
+          isOpeningBalance,
           partnerName: body.partnerName ?? body.clientName,
           lines: (invoice.items ?? []).map(i => ({
             productId: i.productId ?? undefined,

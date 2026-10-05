@@ -1,6 +1,8 @@
 'use client'
 
 import { planMigrationImport } from '@/lib/finance/migration-import'
+import { isOpeningBalanceDocument } from '@/lib/finance/opening-balance'
+import OpeningBalanceCorrection from '@/components/finance/OpeningBalanceCorrection'
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -807,7 +809,7 @@ function AccountingContent() {
         if (isOpenInvoice(i)) outAP += invoiceResidual(i)
       } else if (i.type === 'customer_invoice') {
         cust.push(i)
-        revDyn += i.subtotal
+        if (!isOpeningBalanceDocument(i)) revDyn += i.subtotal
         if (isOpenInvoice(i)) outAR += invoiceResidual(i)
       }
     }
@@ -941,8 +943,10 @@ function AccountingContent() {
 
 
   const financeReports = useMemo(() => {
-    const postedCustomerInvoices = customerInvoices.filter(i => invoiceDocState(i.status) === 'posted')
-    const postedVendorBills = vendorBills.filter(i => invoiceDocState(i.status) === 'posted')
+    // Opening balances were sales/purchases of the old system's periods: they
+    // are not taxable supplies of this one (lib/finance/opening-balance.ts).
+    const postedCustomerInvoices = customerInvoices.filter(i => invoiceDocState(i.status) === 'posted' && !isOpeningBalanceDocument(i))
+    const postedVendorBills = vendorBills.filter(i => invoiceDocState(i.status) === 'posted' && !isOpeningBalanceDocument(i))
     const outputVat = postedCustomerInvoices.reduce((s, i) => s + (i.taxTotal || 0), 0)
     const inputVat = postedVendorBills.reduce((s, i) => s + (i.taxTotal || 0), 0)
     const vatPayable = outputVat - inputVat
@@ -991,7 +995,8 @@ function AccountingContent() {
     const postedCustomerInvoices = customerInvoices.filter(i =>
       invoiceDocState(i.status) === 'posted' &&
       monthKey(i.date) === monthlyReportMonth &&
-      !i.notes?.startsWith('POS ')
+      !i.notes?.startsWith('POS ') &&
+      !isOpeningBalanceDocument(i)
     )
     postedCustomerInvoices.forEach(invoice => {
       invoice.lines.forEach(line => {
@@ -1027,7 +1032,8 @@ function AccountingContent() {
 
     const monthBills = vendorBills.filter(bill =>
       invoiceDocState(bill.status) === 'posted' &&
-      monthKey(bill.date) === monthlyReportMonth
+      monthKey(bill.date) === monthlyReportMonth &&
+      !isOpeningBalanceDocument(bill)
     )
 
     const categorySummary = Array.from(categoryRows.values()).sort((a, b) => b.revenue - a.revenue)
@@ -1311,6 +1317,8 @@ function AccountingContent() {
             total: doc.amount,
             amountPaid: 0,
             notes: doc.notes,
+            // Posts against 4004 Opening Balance Equity, not revenue/expense.
+            isOpeningBalance: true,
           })
         }
         const result = documents.length ? await importOpeningBalances(documents) : { saved: [], failed: [] }
@@ -1871,6 +1879,7 @@ function AccountingContent() {
                     <li>Use positive opening balances only; payments are recorded after import.</li>
                     <li>Put the original document number in Reference for traceability.</li>
                     <li>Opening balances create <strong>posted</strong> documents, so test with a small sample first.</li>
+                    <li>They post against <strong>4004 Opening Balance Equity</strong> — never to sales or expenses — and stay out of revenue and VAT figures.</li>
                   </ul>
                 </div>
               </div>
@@ -1908,6 +1917,10 @@ function AccountingContent() {
                   </div>
                 )}
               </div>
+
+              {['director', 'finance_officer'].includes(currentUser?.role ?? '') && (
+                <OpeningBalanceCorrection showToast={showToast} />
+              )}
 
               {pendingMigrationFile && (
                 <Modal

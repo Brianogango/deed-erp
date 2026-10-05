@@ -15,6 +15,7 @@ import {
   CUSTOMER_DEPOSITS_ACCOUNT,
 } from '@/lib/accounting/liability-accounts'
 import { labelForRole } from '@/lib/accounting/coa-roles'
+import { openingBalanceJournalLines } from '@/lib/finance/opening-balance'
 
 export type InvoiceLike = {
   id: string
@@ -31,6 +32,8 @@ export type InvoiceLike = {
   purchaseOrderId?: string
   repairId?: string | null
   invoiceDate?: string | Date
+  /** Migrated from an old system: posts against 4004, never revenue/expense. */
+  isOpeningBalance?: boolean
   lines?: Array<{
     productId?: string
     qty?: number
@@ -153,6 +156,30 @@ export async function buildInvoiceJournalInput(
     const err = new Error(`Invoice ${ref} has no positive posting amount`)
     ;(err as Error & { status?: number }).status = 409
     throw err
+  }
+
+  // An opening balance carries the old system's receivable/payable over; it
+  // is not a sale or purchase of this period (lib/finance/opening-balance.ts).
+  if (invoice.isOpeningBalance && !isCredit) {
+    return {
+      ref: `JRN/${ref}`.slice(0, 80),
+      journalCode: 'GEN',
+      date: invoice.invoiceDate,
+      description: `Opening balance ${ref} — ${partner}`,
+      sourceType: isVendor ? 'bill' : 'invoice',
+      sourceId: invoice.id,
+      invoiceId: invoice.id,
+      createdById: opts?.createdById,
+      skipIfExists: false,
+      lines: openingBalanceJournalLines({
+        type: isVendor ? 'vendor_bill' : 'customer_invoice',
+        partner,
+        ref,
+        amount: total,
+        arLabel: labelForRole('ar'),
+        apLabel: labelForRole('ap'),
+      }),
+    }
   }
 
   if (isVendor) {
