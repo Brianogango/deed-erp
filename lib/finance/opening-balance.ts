@@ -149,3 +149,66 @@ export function planOpeningBalanceCorrection(params: {
 export function openingBalanceCorrectionRef(ref: string, action: 'post' | 'reclass'): string {
   return `${action === 'post' ? 'JRN/OB/' : 'JRN/OBFIX/'}${ref}`.slice(0, 80)
 }
+
+// ── Repairs for documents from the first importer ──────────────────────────
+
+type MigratedDoc = {
+  id?: unknown
+  type?: unknown
+  ref?: unknown
+  partnerName?: unknown
+  total?: unknown
+  amountPaid?: unknown
+  date?: unknown
+  dueDate?: unknown
+}
+
+/**
+ * The first importer saved each document before posting journals for the
+ * whole ledger, timed out, reported "Migration import failed" — and every
+ * retry saved the file again. Copies share kind, partner, reference and
+ * amount. The first copy (or one already in the ledger) is kept; the others
+ * may be removed only if nothing was paid against them and they never
+ * reached the ledger.
+ */
+export function findDuplicateOpeningBalances(
+  docs: MigratedDoc[],
+  inLedger: (id: string) => boolean,
+): { remove: Map<string, string>; blocked: Map<string, string> } {
+  const groups = new Map<string, MigratedDoc[]>()
+  for (const doc of docs) {
+    const key = [
+      String(doc.type ?? ''),
+      String(doc.partnerName ?? '').trim().toLowerCase(),
+      String(doc.ref ?? '').trim().toLowerCase(),
+      Math.round(Number(doc.total) || 0),
+    ].join('|')
+    groups.set(key, [...(groups.get(key) ?? []), doc])
+  }
+  const remove = new Map<string, string>()
+  const blocked = new Map<string, string>()
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const keeper = group.find(d => inLedger(String(d.id))) ?? group[0]
+    for (const doc of group) {
+      if (doc === keeper) continue
+      const id = String(doc.id)
+      if ((Number(doc.amountPaid) || 0) > 0) blocked.set(id, `Duplicate of ${String(keeper.ref ?? '')}, but has payments recorded`)
+      else if (inLedger(id)) blocked.set(id, `Duplicate of ${String(keeper.ref ?? '')}, but already in the ledger`)
+      else remove.set(id, String(keeper.id))
+    }
+  }
+  return { remove, blocked }
+}
+
+/**
+ * A date the first importer stored as Excel's day number ("46326" — shown as
+ * the year 46326). Returns the real date, or null when the value is fine.
+ */
+export function repairedMigratedDate(value: unknown): string | null {
+  const raw = String(value ?? '').trim()
+  if (!/^\d{5}(\.\d+)?$/.test(raw)) return null
+  const serial = Math.floor(Number(raw))
+  if (serial < 20000 || serial > 80000) return null
+  return new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000).toISOString().slice(0, 10)
+}

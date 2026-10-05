@@ -3,10 +3,11 @@
 import { useState } from 'react'
 import { fmtKes } from '@/lib/store'
 
-type Plan = { action: 'ok' | 'post' | 'reclass' | 'review'; reason: string; lines?: Array<{ accountLabel: string; debit: number; credit: number }> }
+type Plan = { action: 'ok' | 'post' | 'reclass' | 'review' | 'remove'; reason: string; lines?: Array<{ accountLabel: string; debit: number; credit: number }> }
 type ReportRow = {
   id: string; ref: string; type: 'customer_invoice' | 'vendor_bill'; partner: string; date: string
   amount: number; currentJournal: string | null; plan: Plan; correctionDate: string
+  dateFix: { date?: string; dueDate?: string } | null
 }
 type Result = { ref: string; status: 'posted' | 'skipped' | 'failed'; message: string; journalRef?: string }
 
@@ -15,12 +16,14 @@ const ACTION_LABEL: Record<Plan['action'], string> = {
   reclass: 'Move to Opening Balance Equity',
   ok: 'Correct',
   review: 'Accountant to review',
+  remove: 'Remove duplicate',
 }
 const ACTION_TONE: Record<Plan['action'], string> = {
   post: 'bg-[var(--primary-light)] text-[var(--navy)]',
   reclass: 'bg-amber-50 text-amber-900',
   ok: 'bg-emerald-50 text-emerald-800',
   review: 'bg-red-50 text-red-700',
+  remove: 'bg-[var(--bg-muted)] text-[var(--text-2)]',
 }
 
 /**
@@ -48,21 +51,31 @@ export default function OpeningBalanceCorrection({ showToast }: { showToast: (ms
     }
   }
 
-  const toFix = (rows ?? []).filter(r => r.plan.action === 'post' || r.plan.action === 'reclass')
+  const toFix = (rows ?? []).filter(r => r.plan.action === 'post' || r.plan.action === 'reclass' || r.plan.action === 'remove')
+  const removals = toFix.filter(r => r.plan.action === 'remove').length
 
   const post = async () => {
     if (!toFix.length) return
-    if (!window.confirm(`Post ${toFix.length} correcting journal(s)? Each is posted once and appears in the General journal.`)) return
+    const journals = toFix.length - removals
+    const message = [
+      removals ? `Remove ${removals} duplicate cop${removals === 1 ? 'y' : 'ies'} (never paid, never in the ledger).` : '',
+      journals ? `Post ${journals} correcting journal(s), each once, in the General journal.` : '',
+    ].filter(Boolean).join('\n')
+    if (!window.confirm(`${message}\n\nContinue?`)) return
     setBusy(true)
     try {
       const res = await fetch('/api/accounting/opening-balances', { method: 'POST' })
-      const payload = await res.json().catch(() => null) as { results?: Result[]; error?: string } | null
+      const payload = await res.json().catch(() => null) as { results?: Result[]; removed?: number; datesFixed?: number; error?: string } | null
       if (!res.ok) throw new Error(payload?.error || `server returned ${res.status}`)
       const out = payload?.results ?? []
       setResults(out)
       const posted = out.filter(r => r.status === 'posted').length
       const failed = out.filter(r => r.status === 'failed').length
-      showToast(`${posted} correction(s) posted${failed ? `, ${failed} failed` : ''}`, failed ? 'error' : 'success')
+      const extras = [
+        payload?.removed ? `${payload.removed} duplicate(s) removed` : '',
+        payload?.datesFixed ? `${payload.datesFixed} date(s) repaired` : '',
+      ].filter(Boolean).join(', ')
+      showToast(`${posted} correction(s) posted${extras ? `, ${extras}` : ''}${failed ? `, ${failed} failed` : ''}`, failed ? 'error' : 'success')
       await load()
     } catch (err) {
       showToast(`Could not post corrections: ${err instanceof Error ? err.message : 'error'}`, 'error')
@@ -86,7 +99,7 @@ export default function OpeningBalanceCorrection({ showToast }: { showToast: (ms
           </button>
           {toFix.length > 0 && (
             <button type="button" className="btn-primary text-[11px]" disabled={busy} onClick={post}>
-              {busy ? 'Posting…' : `Post ${toFix.length} correction${toFix.length === 1 ? '' : 's'}`}
+              {busy ? 'Posting…' : `Apply ${toFix.length} correction${toFix.length === 1 ? '' : 's'}`}
             </button>
           )}
         </div>
@@ -112,7 +125,12 @@ export default function OpeningBalanceCorrection({ showToast }: { showToast: (ms
             <tbody className="divide-y divide-[var(--border-lt)]">
               {rows.map(row => (
                 <tr key={row.id} className="align-top">
-                  <td className="py-1.5 pr-3 font-mono">{row.ref}<span className="ml-1 font-sans text-text-3">{row.type === 'vendor_bill' ? 'bill' : 'invoice'}</span></td>
+                  <td className="py-1.5 pr-3 font-mono">
+                    {row.ref}<span className="ml-1 font-sans text-text-3">{row.type === 'vendor_bill' ? 'bill' : 'invoice'}</span>
+                    {row.dateFix && row.plan.action !== 'remove' && (
+                      <span className="mt-0.5 block font-sans text-amber-800">Date repaired to {row.dateFix.date ?? row.date}</span>
+                    )}
+                  </td>
                   <td className="py-1.5 pr-3">{row.partner}</td>
                   <td className="py-1.5 pr-3 text-right">{fmtKes(row.amount)}</td>
                   <td className="py-1.5 pr-3 text-text-2">{row.currentJournal ?? 'not in the ledger'}</td>

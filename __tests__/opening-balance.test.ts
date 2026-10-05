@@ -115,3 +115,51 @@ describe('planOpeningBalanceCorrection', () => {
     expect(openingBalanceCorrectionRef('OLD-1', 'reclass')).toBe('JRN/OBFIX/OLD-1')
   })
 })
+
+import { findDuplicateOpeningBalances, repairedMigratedDate } from '@/lib/finance/opening-balance'
+
+describe('repairedMigratedDate — Excel day numbers from the first importer', () => {
+  it('reads the day number as a real date', () => {
+    expect(repairedMigratedDate('46326')).toBe('2026-10-31')
+    expect(repairedMigratedDate(46300)).toBe('2026-10-05')
+  })
+  it('leaves real dates alone', () => {
+    expect(repairedMigratedDate('2026-10-31')).toBeNull()
+    expect(repairedMigratedDate('')).toBeNull()
+    expect(repairedMigratedDate('12345678')).toBeNull()
+  })
+})
+
+describe('findDuplicateOpeningBalances — retries of the first importer', () => {
+  const bill = (id: string, over: Record<string, unknown> = {}) => ({
+    id, type: 'vendor_bill', ref: 'TOKYO-STMT-2026', partnerName: 'Tokyo IT Solutions Ltd.', total: 5032644, amountPaid: 0, ...over,
+  })
+
+  it('keeps the first copy and removes the others', () => {
+    const { remove, blocked } = findDuplicateOpeningBalances([bill('a'), bill('b'), bill('c')], () => false)
+    expect([...remove.keys()]).toEqual(['b', 'c'])
+    expect(remove.get('b')).toBe('a')
+    expect(blocked.size).toBe(0)
+  })
+
+  it('keeps the copy that reached the ledger', () => {
+    const { remove } = findDuplicateOpeningBalances([bill('a'), bill('b')], id => id === 'b')
+    expect([...remove.keys()]).toEqual(['a'])
+  })
+
+  it('never removes a copy with payments, or a second copy already in the ledger', () => {
+    const { remove, blocked } = findDuplicateOpeningBalances(
+      [bill('a'), bill('b', { amountPaid: 1000 }), bill('c')],
+      id => id === 'a' || id === 'c',
+    )
+    expect(remove.size).toBe(0)
+    expect([...blocked.keys()].sort()).toEqual(['b', 'c'])
+  })
+
+  it('different references, partners or amounts are different documents', () => {
+    const { remove } = findDuplicateOpeningBalances([
+      bill('a'), bill('b', { ref: 'TOKYO-STMT-2025' }), bill('c', { total: 1 }), bill('d', { partnerName: 'Other' }), bill('e', { type: 'customer_invoice' }),
+    ], () => false)
+    expect(remove.size).toBe(0)
+  })
+})
