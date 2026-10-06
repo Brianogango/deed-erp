@@ -24,7 +24,7 @@ vi.mock('@/lib/server-store', () => {
 
 import { GET, POST } from '@/app/api/inventory/stock-checkouts/route'
 
-const post = (body: unknown) => POST(new NextRequest('http://x/api/inventory/stock-checkouts', { method: 'POST', body: JSON.stringify(body) }))
+const post = async (body: unknown) => (await POST(new NextRequest('http://x/api/inventory/stock-checkouts', { method: 'POST', body: JSON.stringify(body) })))!
 
 beforeEach(() => {
   h.user = { id: 'u-tech', role: 'technical_lead', name: 'Tech' }
@@ -47,7 +47,7 @@ beforeEach(() => {
 
 describe('stock checkout source stock', () => {
   it('lists every in-house unit, including units held for orders and Inbound / Computer Aid stock', async () => {
-    const res = await GET()
+    const res = (await GET())!
     const body = await res.json()
     const bySerial = Object.fromEntries(body.serials.map((s: any) => [s.serial, s]))
     expect(Object.keys(bySerial).sort()).toEqual(['CA1', 'FREE1', 'HELD1', 'INB1'])
