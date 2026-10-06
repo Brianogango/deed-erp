@@ -1,4 +1,3 @@
-import { sql } from './auth/db'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -62,10 +61,12 @@ function truncate(value: string | null, max: number): string | null {
 
 async function loadLegacyContacts(): Promise<LegacyContact[]> {
   try {
-    const { rows } = await sql`SELECT value FROM app_state WHERE key = ${'deed_contacts'}`
-    if (!rows[0]?.value || typeof rows[0].value !== 'string') return []
-    const parsed = JSON.parse(rows[0].value)
-    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === 'object') : []
+    // The live store (Prisma-backed in production), not the retired app_state
+    // table, which only holds an old copy of the contacts.
+    const { loadAppState } = await import('@/lib/server-store')
+    const state = await loadAppState(['deed_contacts'])
+    const parsed = state.deed_contacts
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === 'object') as LegacyContact[] : []
   } catch (error) {
     console.error('[legacy-compat] Failed to load legacy contacts:', error)
     return []
@@ -83,12 +84,17 @@ async function findLegacyContact(rawId: string | null, context: ClientResolution
   const phone = firstText(context.phone, context.clientPhone, context.customerPhone, context.partnerPhone)
   const name = firstText(context.name, context.clientName, context.customerName, context.partnerName, context.companyName)
 
+  // An email or phone alone does not identify a person: the shop's own email
+  // or a family number is often typed for several customers. With a name to
+  // go by, only a contact of that name counts.
+  const sameName = (contact: LegacyContact) =>
+    !name || String(contact.name ?? '').trim().toLowerCase() === name.trim().toLowerCase()
   if (email) {
-    const byEmail = contacts.find((contact) => String(contact.email ?? '').trim().toLowerCase() === email.toLowerCase())
+    const byEmail = contacts.find((contact) => String(contact.email ?? '').trim().toLowerCase() === email.toLowerCase() && sameName(contact))
     if (byEmail) return byEmail
   }
   if (phone) {
-    const byPhone = contacts.find((contact) => String(contact.phone ?? '').trim() === phone)
+    const byPhone = contacts.find((contact) => String(contact.phone ?? '').trim() === phone && sameName(contact))
     if (byPhone) return byPhone
   }
   if (name) {
@@ -181,15 +187,38 @@ export async function resolveClientId(
   const phone = mapped.phone
   const name = mapped.name
 
-  const exactLegacyNote = rawId && !isUuid(rawId) ? `Legacy contact ID: ${rawId}` : null
-  const or: any[] = []
-  if (exactLegacyNote) or.push({ notes: { contains: exactLegacyNote, mode: 'insensitive' } })
-  if (email) or.push({ email: { equals: email, mode: 'insensitive' } })
-  if (phone) or.push({ phone })
-  if (name) or.push({ name: { equals: name, mode: 'insensitive' } })
+  // The document names a contact this browser knows by id (lib/store's
+  // contacts) that the server does not hold yet: that is the person. Create
+  // them under the same id. Matching by email/phone instead filed sales under
+  // whoever else carried the same email (e.g. the shop's own address).
+  if (rawId && isUuid(rawId) && legacy && String(legacy.id ?? '') === rawId) {
+    try {
+      const created = await createClientWithUniqueNumber(prisma, { ...mapped, id: rawId })
+      return created.id
+    } catch (error) {
+      const raced = await prisma.client.findUnique({ where: { id: rawId } })
+      if (raced) return raced.id
+      throw error
+    }
+  }
 
-  if (or.length > 0) {
-    const existing = await prisma.client.findFirst({ where: { OR: or }, orderBy: { createdAt: 'asc' } })
+  const exactLegacyNote = rawId && !isUuid(rawId) ? `Legacy contact ID: ${rawId}` : null
+  if (exactLegacyNote) {
+    const byNote = await prisma.client.findFirst({ where: { notes: { contains: exactLegacyNote, mode: 'insensitive' } }, orderBy: { createdAt: 'asc' } })
+    if (byNote) return byNote.id
+  }
+
+  // Reuse an existing contact only when the name matches; prefer the one that
+  // also has this email or phone. Two people can share an email or a number.
+  if (name) {
+    const sameName = { name: { equals: name, mode: 'insensitive' } }
+    const contactMatch: any[] = []
+    if (email) contactMatch.push({ email: { equals: email, mode: 'insensitive' } })
+    if (phone) contactMatch.push({ phone })
+    const existing = (contactMatch.length
+      ? await prisma.client.findFirst({ where: { ...sameName, OR: contactMatch }, orderBy: { createdAt: 'asc' } })
+      : null)
+      ?? await prisma.client.findFirst({ where: sameName, orderBy: { createdAt: 'asc' } })
     if (existing) return existing.id
   }
 

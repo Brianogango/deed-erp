@@ -223,9 +223,15 @@ export async function findExistingContact(
     if (byId) return byId
   }
 
+  // An email or phone is the same person only under the same name: the shop's
+  // own email or a family number gets typed for several customers, and
+  // matching on it alone handed one customer's sale to another.
+  const name = normalizeName(body.name)
+  const sameName = name ? { name: { equals: name, mode: 'insensitive' } } : {}
+
   const email = normalizeEmail(body.email)
   if (email) {
-    const byEmail = await prisma.client.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } })
+    const byEmail = await prisma.client.findFirst({ where: { ...sameName, email: { equals: email, mode: 'insensitive' } } })
     if (byEmail) return byEmail
   }
 
@@ -234,6 +240,7 @@ export async function findExistingContact(
     const last9 = phone.slice(-9)
     const byPhone = await prisma.client.findFirst({
       where: {
+        ...sameName,
         OR: [
           { phone: { contains: last9 } },
           { phoneAlt: { contains: last9 } },
@@ -244,7 +251,6 @@ export async function findExistingContact(
     if (byPhone) return byPhone
   }
 
-  const name = normalizeName(body.name)
   if (opts?.matchByName === false || !name) return null
   const type = body.type === 'individual' ? 'individual' : 'company'
   return prisma.client.findFirst({

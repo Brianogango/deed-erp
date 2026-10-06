@@ -4,6 +4,7 @@ import { planMigrationImport } from '@/lib/finance/migration-import'
 import { isOpeningBalanceDocument } from '@/lib/finance/opening-balance'
 import OpeningBalanceCorrection from '@/components/finance/OpeningBalanceCorrection'
 import AgentCommissions from '@/components/finance/AgentCommissions'
+import InvoiceCustomerCheck from '@/components/finance/InvoiceCustomerCheck'
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -1626,7 +1627,10 @@ function AccountingContent() {
         ) : (
         <div className={`card overflow-hidden rounded-xl finance-content-card finance-subcomponent-shell finance-content-card--${tab}`}>
           {tab === 'integrity' ? (
-            <IntegrityDashboard />
+            <>
+              {canManageFullFinance && <InvoiceCustomerCheck showToast={showToast} />}
+              <IntegrityDashboard />
+            </>
           ) : tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
               <DataTable
