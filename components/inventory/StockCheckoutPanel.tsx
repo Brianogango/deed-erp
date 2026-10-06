@@ -4,14 +4,14 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
 
 type Product = { id: string; name: string; sku: string; serialized: boolean }
-type Serial = { id: string; serial: string; productId: string; location: string; barcode?: string; sku?: string; assetTag?: string; status?: string }
+type Serial = { id: string; serial: string; productId: string; location: string; barcode?: string; sku?: string; assetTag?: string; status?: string; heldFor?: string }
 type Checkout = { id: string; ref: string; status: string; productId: string; productName: string; sku: string; qty: number; serialIds: string[]; serialNumbers: string[]; sourceLocation: string; receiverName: string; purpose: string; relatedJob: string; deviceRef: string; deviceSerial: string; expectedReturnDate: string; notes: string; requestedBy: string; requestedByName: string; requestedAt: string; consumedQty: number; returnedQty: number; exceptionQty: number; rejectionReason?: string }
 type Data = { products: Product[]; serials: Serial[]; bulk: Array<{ productId: string; location: string; qty: number }>; checkouts: Checkout[]; canApprove: boolean; currentUserId: string }
 type Mode = 'request' | 'reject' | 'close'
 
 const EMPTY: Data = { products: [], serials: [], bulk: [], checkouts: [], canApprove: false, currentUserId: '' }
 const blank = () => ({ productId: '', qty: '', serialIds: [] as string[], sourceLocation: '', receiverName: '', purpose: '', relatedJob: '', deviceRef: '', deviceSerial: '', expectedReturnDate: '', notes: '', outcome: '', reason: '' })
-const locations = [{ value: '', label: 'Select source…' }, { value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'With Issues' }, { value: 'repair_unit', label: 'Refurbishment' }]
+const locations = [{ value: '', label: 'Select source…' }, { value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'With Issues' }, { value: 'repair_unit', label: 'Refurbishment' }, { value: 'pending_testing', label: 'Inbound — awaiting tests' }, { value: 'quarantine', label: 'Inbound — rejected' }, { value: 'computer_aid', label: 'Computer Aid' }, { value: 'computer_aid_issues', label: 'Computer Aid — with issues' }]
 const purposes = [{ value: '', label: 'Select purpose…' }, ...['Refurbishment', 'Repair', 'Testing', 'Internal installation', 'Other'].map(value => ({ value, label: value }))]
 const statusLabel: Record<string, string> = { pending: 'Pending approval', approved: 'Approved', issued: 'Checked out', partially_closed: 'Partially closed', completed: 'Closed', rejected: 'Rejected' }
 
@@ -154,7 +154,7 @@ export default function StockCheckoutPanel() {
                 const product = data.products.find(p => p.id === s.productId)
                 const picked = Boolean(requestItems[s.productId]?.serialIds.includes(s.id))
                 return <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg border border-border-lt px-2.5 py-1.5 text-xs">
-                  <span className="min-w-0"><strong className="font-mono">{s.serial}</strong>{s.barcode && s.barcode !== s.serial ? <span className="text-text-3"> · {s.barcode}</span> : null}<small className="block truncate text-text-3">{product?.name ?? 'Unknown product'} · {locationLabel(s.location)}</small></span>
+                  <span className="min-w-0"><strong className="font-mono">{s.serial}</strong>{s.barcode && s.barcode !== s.serial ? <span className="text-text-3"> · {s.barcode}</span> : null}<small className="block truncate text-text-3">{product?.name ?? 'Unknown product'} · {locationLabel(s.location)}{s.heldFor ? <span className="text-amber-700"> · Held for {s.heldFor}</span> : null}</small></span>
                   <button type="button" className={picked ? 'btn-secondary shrink-0 px-2 py-1 text-[11px]' : 'btn-primary shrink-0 px-2 py-1 text-[11px]'} disabled={picked} onClick={() => addSerial(s)}>{picked ? 'Added' : 'Add'}</button>
                 </div>
               })}
@@ -177,7 +177,7 @@ export default function StockCheckoutPanel() {
         return <div key={productId} className="custody-transfer-row">
           <div><strong>{rowProduct.name}</strong><small>{rowProduct.sku || 'No SKU'}</small></div>
           {rowProduct.serialized ? <div className="custody-transfer-serials">
-            {rowSerials.map(serial => <label key={serial.id}><input type="checkbox" checked={item.serialIds.includes(serial.id)} onChange={() => patchRequestItem(productId, { serialIds: item.serialIds.includes(serial.id) ? item.serialIds.filter(id => id !== serial.id) : [...item.serialIds, serial.id] })} /><span>{serial.serial}</span></label>)}
+            {rowSerials.map(serial => <label key={serial.id}><input type="checkbox" checked={item.serialIds.includes(serial.id)} onChange={() => patchRequestItem(productId, { serialIds: item.serialIds.includes(serial.id) ? item.serialIds.filter(id => id !== serial.id) : [...item.serialIds, serial.id] })} /><span>{serial.serial}{serial.heldFor ? <small className="text-amber-700"> · held for {serial.heldFor}</small> : null}</span></label>)}
             {!rowSerials.length && <small>No serials available at this source.</small>}
           </div> : <Input type="number" value={item.qty} onChange={qty => patchRequestItem(productId, { qty })} />}
           <button type="button" aria-label={`Remove ${rowProduct.name}`} onClick={() => toggleRequestProduct(productId)}>×</button>

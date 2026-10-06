@@ -12,12 +12,15 @@ export const dynamic = 'force-dynamic'
 
 const REQUEST_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
 const APPROVE_ROLES = ['director', 'inventory_officer', 'technical_lead']
-const SOURCE_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit']
+// Every place stock sits in-house. Customer, vendor and employee units are
+// not in stock, and Computer Aid's collected units have left.
+const SOURCE_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit', 'pending_testing', 'quarantine', 'computer_aid', 'computer_aid_issues']
+const GONE = new Set(['sold', 'written_off', 'scrapped', 'returned_to_vendor'])
 
 type CheckoutStatus = 'pending' | 'approved' | 'issued' | 'partially_closed' | 'completed' | 'rejected' | 'cancelled'
 type Outcome = 'consumed' | 'returned' | 'exception'
 type ProductRow = { id: string; name?: string; sku?: string; stockQty?: number; requiresSerial?: boolean; trackingMethod?: string; isActive?: boolean }
-type SerialRow = { id: string; serial: string; productId: string; productName?: string; location?: string; status?: string }
+type SerialRow = { id: string; serial: string; productId: string; productName?: string; location?: string; status?: string; saleOrderId?: string }
 type BulkRow = BulkStockLevel
 type StockMove = { id: string; type: 'out' | 'transfer' | 'return'; productId: string; productName: string; qty: number; reason: string; fromLocation?: string; toLocation?: string; serialNumbers: string[]; date: string; userId: string; documentRef: string }
 type Checkout = {
@@ -49,14 +52,25 @@ async function auth(approve = false) {
 export async function GET() {
   const access = await auth()
   if ('error' in access) return access.error
-  const state = await loadAppStateForWrite(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockCheckouts'])
+  const state = await loadAppStateForWrite(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockCheckouts', 'deed_saleOrders'])
+  const orders = new Map(list<Record<string, unknown>>(state.deed_saleOrders).map(o => [String(o.id), o]))
+  // Units held for an order are listed too, named with the order they are held for.
+  const heldFor = (s: SerialRow) => {
+    if (!s.saleOrderId || GONE.has(String(s.status))) return undefined
+    const o = orders.get(String(s.saleOrderId))
+    const ref = String(o?.ref || o?.orderNumber || s.saleOrderId)
+    const customer = String(o?.clientName || o?.customerName || '')
+    return customer ? `${ref} · ${customer}` : ref
+  }
   const products = list<ProductRow>(state.deed_products).filter(p => p.id && p.name && p.isActive !== false)
   const serials = list<SerialRow>(state.deed_serials)
   const bulk = list<BulkRow>(state.deed_bulkStock)
   const checkouts = list<Checkout>(state.deed_stockCheckouts).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
   return NextResponse.json({
     products: products.map(p => ({ id: p.id, name: p.name, sku: p.sku || '', serialized: isSerialized(p) })),
-    serials: serials.filter(s => isSourceLocation(String(s.location)) && s.status !== 'sold'),
+    serials: serials
+      .filter(s => isSourceLocation(String(s.location)) && !GONE.has(String(s.status)))
+      .map(s => ({ ...s, heldFor: heldFor(s) })),
     bulk,
     checkouts,
     canApprove: APPROVE_ROLES.some(role => normalizePermissionRole(role) === normalizePermissionRole(access.session.user.role)),
@@ -93,7 +107,7 @@ export async function POST(request: NextRequest) {
       if (isSerialized(product)) {
         const reservedIds = new Set(reservedRows.flatMap(r => r.serialIds))
         const selected = serials.filter(s => serialIds.includes(s.id))
-        if (selected.length !== qty || selected.some(s => s.productId !== product.id || s.location !== sourceLocation || reservedIds.has(s.id))) return NextResponse.json({ error: 'One or more serials are unavailable or already reserved' }, { status: 409 })
+        if (selected.length !== qty || selected.some(s => s.productId !== product.id || s.location !== sourceLocation || GONE.has(String(s.status)) || reservedIds.has(s.id))) return NextResponse.json({ error: 'One or more serials are unavailable or already reserved' }, { status: 409 })
       } else {
         const physical = bulk.filter(x => x.productId === product.id && x.location === sourceLocation).reduce((n, x) => n + Math.max(0, Number(x.qty) || 0), 0)
         const reserved = reservedRows.reduce((n, r) => n + outstanding(r), 0)
@@ -136,7 +150,8 @@ export async function POST(request: NextRequest) {
         if (product && isSerialized(product)) {
           if (outcomeSerialIds.length !== qty || outcomeSerialIds.some(id => !row.serialIds.includes(id) || alreadyClosed.has(id))) return NextResponse.json({ error: 'Select the serials being closed' }, { status: 422 })
           const ids = new Set(outcomeSerialIds)
-          serials = serials.map(s => ids.has(s.id) ? { ...s, location: outcome === 'returned' ? row.sourceLocation : outcome === 'exception' ? 'quarantine' : 'employee', status: outcome === 'returned' ? 'available' : outcome === 'exception' ? 'under_repair' : 'written_off' } : s)
+          serials = serials.map(s => ids.has(s.id) ? { ...s, location: outcome === 'returned' ? row.sourceLocation : outcome === 'exception' ? 'quarantine' : 'employee', // A unit held for an order goes back to being held for it.
+            status: outcome === 'returned' ? (s.saleOrderId ? 'assigned' : 'available') : outcome === 'exception' ? 'under_repair' : 'written_off' } : s)
           ;(row as Checkout & { closedSerialIds?: string[] }).closedSerialIds = [...alreadyClosed, ...outcomeSerialIds]
         }
         if (outcome === 'returned') {
