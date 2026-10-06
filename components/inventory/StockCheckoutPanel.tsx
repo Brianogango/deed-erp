@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
 
 type Product = { id: string; name: string; sku: string; serialized: boolean }
-type Serial = { id: string; serial: string; productId: string; location: string }
+type Serial = { id: string; serial: string; productId: string; location: string; barcode?: string; sku?: string; assetTag?: string; status?: string }
 type Checkout = { id: string; ref: string; status: string; productId: string; productName: string; sku: string; qty: number; serialIds: string[]; serialNumbers: string[]; sourceLocation: string; receiverName: string; purpose: string; relatedJob: string; deviceRef: string; deviceSerial: string; expectedReturnDate: string; notes: string; requestedBy: string; requestedByName: string; requestedAt: string; consumedQty: number; returnedQty: number; exceptionQty: number; rejectionReason?: string }
 type Data = { products: Product[]; serials: Serial[]; bulk: Array<{ productId: string; location: string; qty: number }>; checkouts: Checkout[]; canApprove: boolean; currentUserId: string }
 type Mode = 'request' | 'reject' | 'close'
@@ -45,11 +45,42 @@ export default function StockCheckoutPanel() {
     setError('')
     setMode(next)
   }
+  // A serial number, barcode or asset ID typed (or scanned) finds the unit itself.
+  const serialMatches = useMemo(() => {
+    const query = productSearch.trim().toLowerCase()
+    if (query.length < 3) return []
+    return data.serials
+      .filter(s => [s.serial, s.barcode, s.sku, s.assetTag].some(v => String(v ?? '').toLowerCase().includes(query)))
+      .slice(0, 8)
+  }, [data.serials, productSearch])
   const filteredProducts = useMemo(() => {
     const query = productSearch.trim().toLowerCase()
     if (!query) return data.products
-    return data.products.filter(p => `${p.name} ${p.sku}`.toLowerCase().includes(query))
-  }, [data.products, productSearch])
+    const viaSerial = new Set(serialMatches.map(s => s.productId))
+    return data.products.filter(p => viaSerial.has(p.id) || `${p.name} ${p.sku}`.toLowerCase().includes(query))
+  }, [data.products, productSearch, serialMatches])
+  const locationLabel = (loc: string) => locations.find(l => l.value === loc)?.label ?? loc.replace(/_/g, ' ')
+  /** Select the unit's product, its location as the source, and tick the unit. */
+  const addSerial = (serial: Serial) => {
+    if (form.sourceLocation && form.sourceLocation !== serial.location) {
+      setError(`${serial.serial} is in ${locationLabel(serial.location)} — change Source to ${locationLabel(serial.location)} to check it out`)
+      return
+    }
+    if (!locations.some(l => l.value === serial.location && l.value)) {
+      setError(`${serial.serial} is in ${locationLabel(serial.location)}, which cannot be a checkout source`)
+      return
+    }
+    setError('')
+    if (!form.sourceLocation) patch('sourceLocation', serial.location)
+    setRequestItems(items => {
+      const item = items[serial.productId] ?? { qty: '', serialIds: [] }
+      if (item.serialIds.includes(serial.id)) return items
+      const serialIds = [...item.serialIds, serial.id]
+      // A product counted by quantity: the unit found adds one to the count.
+      const serialized = data.products.find(p => p.id === serial.productId)?.serialized !== false
+      return { ...items, [serial.productId]: { qty: serialized ? item.qty : String(serialIds.length), serialIds } }
+    })
+  }
   const toggleRequestProduct = (productId: string) => setRequestItems(items => {
     if (items[productId]) {
       const next = { ...items }
@@ -108,7 +139,7 @@ export default function StockCheckoutPanel() {
     {error && !mode && <div role="alert" className="p-3 rounded-lg border border-red-200 text-xs text-red-700">{error}</div>}
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[['Open requests', active], ['Units checked out', checkedOut], ['Overdue', overdueCount]].map(([label, value]) => <div key={String(label)} className="rounded-xl border border-border-lt bg-surface p-4"><p className="text-[10px] uppercase font-bold text-text-3 m-0">{label}</p><p className="text-xl font-extrabold text-text-1 mt-1 mb-0 tabular-nums">{loading ? '—' : Number(value).toLocaleString()}</p></div>)}</div>
     <div className="rounded-xl border border-border-lt bg-surface overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left text-text-3 border-b border-border-lt"><th className="px-3 py-2.5">Reference</th><th className="px-3 py-2.5">Product</th><th className="px-3 py-2.5">Holder / purpose</th><th className="px-3 py-2.5">Qty</th><th className="px-3 py-2.5">Status</th><th className="px-3 py-2.5">Actions</th></tr></thead><tbody>
-      {data.checkouts.map(r => <tr key={r.id} className="border-b border-border-lt align-top"><td className="px-3 py-3 font-mono font-semibold">{r.ref}<div className="font-sans font-normal text-text-3 mt-1">{r.requestedAt.slice(0, 10)}</div></td><td className="px-3 py-3 font-semibold">{r.productName}<div className="font-normal text-text-3">{r.sku || r.serialNumbers.join(', ') || '—'}</div></td><td className="px-3 py-3">{r.receiverName}<div className="text-text-3">{r.purpose}{r.relatedJob ? ` · ${r.relatedJob}` : ''}</div></td><td className="px-3 py-3 tabular-nums">{outstanding(r)} / {r.qty}<div className="text-text-3">out / total</div></td><td className="px-3 py-3"><span className="font-semibold">{statusLabel[r.status] || r.status}</span>{overdue(r) && <div className="text-red-600 mt-1">Overdue</div>}{r.rejectionReason && <div className="text-text-3 mt-1">{r.rejectionReason}</div>}</td><td className="px-3 py-3"><div className="flex flex-wrap gap-1.5">{r.status === 'pending' && data.canApprove && r.requestedBy !== data.currentUserId && <><button className="btn-primary px-2.5 py-1.5 text-[11px]" onClick={() => { setSelected(r); void send('approve', { id: r.id }) }}>Approve</button><button className="btn-secondary px-2.5 py-1.5 text-[11px]" onClick={() => open('reject', r)}>Reject</button></>}{r.status === 'approved' && <button className="btn-primary px-2.5 py-1.5 text-[11px]" onClick={() => { setSelected(r); void send('issue', { id: r.id }) }}>Confirm issue</button>}{['issued', 'partially_closed'].includes(r.status) && <button className="btn-secondary px-2.5 py-1.5 text-[11px]" onClick={() => open('close', r)}>Close stock</button>}</div></td></tr>)}
+      {data.checkouts.map(r => <tr key={r.id} className="border-b border-border-lt align-top"><td className="px-3 py-3 font-mono font-semibold">{r.ref}<div className="font-sans font-normal text-text-3 mt-1">{r.requestedAt.slice(0, 10)}</div></td><td className="px-3 py-3 font-semibold">{r.productName}<div className="font-normal text-text-3">{r.serialNumbers.join(', ') || r.sku || '—'}</div></td><td className="px-3 py-3">{r.receiverName}<div className="text-text-3">{r.purpose}{r.relatedJob ? ` · ${r.relatedJob}` : ''}</div></td><td className="px-3 py-3 tabular-nums">{outstanding(r)} / {r.qty}<div className="text-text-3">out / total</div></td><td className="px-3 py-3"><span className="font-semibold">{statusLabel[r.status] || r.status}</span>{overdue(r) && <div className="text-red-600 mt-1">Overdue</div>}{r.rejectionReason && <div className="text-text-3 mt-1">{r.rejectionReason}</div>}</td><td className="px-3 py-3"><div className="flex flex-wrap gap-1.5">{r.status === 'pending' && data.canApprove && r.requestedBy !== data.currentUserId && <><button className="btn-primary px-2.5 py-1.5 text-[11px]" onClick={() => { setSelected(r); void send('approve', { id: r.id }) }}>Approve</button><button className="btn-secondary px-2.5 py-1.5 text-[11px]" onClick={() => open('reject', r)}>Reject</button></>}{r.status === 'approved' && <button className="btn-primary px-2.5 py-1.5 text-[11px]" onClick={() => { setSelected(r); void send('issue', { id: r.id }) }}>Confirm issue</button>}{['issued', 'partially_closed'].includes(r.status) && <button className="btn-secondary px-2.5 py-1.5 text-[11px]" onClick={() => open('close', r)}>Close stock</button>}</div></td></tr>)}
       {!loading && !data.checkouts.length && <tr><td colSpan={6} className="px-3 py-10 text-center text-text-3">No stock checkouts recorded.</td></tr>}
     </tbody></table></div></div>
 
@@ -117,7 +148,17 @@ export default function StockCheckoutPanel() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Products" required hint={`${Object.keys(requestItems).length} selected`}>
           <div className="custody-product-picker">
-            <Input value={productSearch} onChange={setProductSearch} placeholder="Search by product name or SKU…" />
+            <Input value={productSearch} onChange={setProductSearch} placeholder="Search by product, SKU, serial or asset ID…" />
+            {serialMatches.length > 0 && <div className="mt-2 space-y-1" aria-label="Matching units">
+              {serialMatches.map(s => {
+                const product = data.products.find(p => p.id === s.productId)
+                const picked = Boolean(requestItems[s.productId]?.serialIds.includes(s.id))
+                return <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg border border-border-lt px-2.5 py-1.5 text-xs">
+                  <span className="min-w-0"><strong className="font-mono">{s.serial}</strong>{s.barcode && s.barcode !== s.serial ? <span className="text-text-3"> · {s.barcode}</span> : null}<small className="block truncate text-text-3">{product?.name ?? 'Unknown product'} · {locationLabel(s.location)}</small></span>
+                  <button type="button" className={picked ? 'btn-secondary shrink-0 px-2 py-1 text-[11px]' : 'btn-primary shrink-0 px-2 py-1 text-[11px]'} disabled={picked} onClick={() => addSerial(s)}>{picked ? 'Added' : 'Add'}</button>
+                </div>
+              })}
+            </div>}
             <div className="custody-product-picker__list">
               {filteredProducts.map(p => <label key={p.id}>
                 <input type="checkbox" checked={Boolean(requestItems[p.id])} onChange={() => toggleRequestProduct(p.id)} />
