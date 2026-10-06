@@ -67,13 +67,14 @@ export async function reverseInvoicePayment(params: {
     const invoiceIds = [...new Set([...fresh.allocations.map(a => a.invoiceId), ...(fresh.invoiceId ? [fresh.invoiceId] : [])])]
     const amountPaidByInvoice: Record<string, number> = {}
     for (const invoiceId of invoiceIds) {
-      const live = await tx.paymentAllocation.findMany({
-        where: { invoiceId, reversedAt: null, payment: { isVoided: false } },
-        select: { amount: true },
-      })
-      const paid = round2(live.reduce((s, a) => s + Number(a.amount), 0))
-      const inv = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { id: true } })
+      // Take off what this payment put on the invoice — not a recount of the
+      // payment records, which miss payments made before they existed
+      // (migrated / older invoices) and would undercount what was paid.
+      const removed = fresh.allocations.filter(a => a.invoiceId === invoiceId).reduce((s, a) => s + Number(a.amount), 0)
+        || (fresh.allocations.length === 0 && fresh.invoiceId === invoiceId ? Number(fresh.amount) : 0)
+      const inv = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { id: true, amountPaid: true } })
       if (!inv) continue
+      const paid = round2(Math.max(0, Number(inv.amountPaid) - removed))
       await tx.invoice.update({ where: { id: invoiceId }, data: { amountPaid: paid } })
       amountPaidByInvoice[invoiceId] = paid
     }

@@ -46,7 +46,8 @@ export function mergeInvoiceMirror<T extends { id?: unknown }>(
           ...(Array.isArray(lists.voidedPayments) ? { voidedPayments: lists.voidedPayments } : {}),
         }
       : row
-    return kept != null && kept > (Number(paid) || 0) ? { ...withLists, amountPaid: kept } : withLists
+    const next = kept != null && kept > (Number(paid) || 0) ? { ...withLists, amountPaid: kept } : withLists
+    return atLeastListedPayments(next)
   })
   const orphans = (Array.isArray(existing) ? existing : []).filter(
     (row: unknown) => !!row && typeof row === 'object'
@@ -54,4 +55,19 @@ export function mergeInvoiceMirror<T extends { id?: unknown }>(
       && !tableIds.has(String((row as { id: unknown }).id)),
   )
   return { merged: [...rows, ...orphans], kept: orphans.length }
+}
+
+/**
+ * A document's amountPaid is never below the payments listed on it (reversed
+ * payments are not in that list), capped at its total. Heals a figure lowered
+ * by a stale save while the payments themselves survived.
+ */
+export function atLeastListedPayments<T>(row: T): T {
+  const r = row as { total?: unknown; amountPaid?: unknown; payments?: unknown }
+  if (!Array.isArray(r.payments) || !r.payments.length) return row
+  const total = Number(r.total)
+  if (!(total > 0)) return row
+  const listed = r.payments.reduce((s: number, p: { amount?: unknown }) => s + (Number(p?.amount) || 0), 0)
+  const floor = Math.min(total, Math.round(listed * 100) / 100)
+  return floor > (Number(r.amountPaid) || 0) + 0.005 ? { ...row, amountPaid: floor } : row
 }

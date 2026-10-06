@@ -18673,7 +18673,11 @@ const storeCtx: AppState = {
       const existingInv = repair.invoiceId
         ? invRef.current.find(i => i.id === repair.invoiceId)
         : undefined
-      const clearInvoiceLink = !!existingInv && !['paid', 'partially_paid'].includes(String(existingInv.status))
+      // Paid is what has been received, not the status word: posted invoices
+      // refreshed from the invoices table carry 'posted' whether paid or not.
+      const clearInvoiceLink = !!existingInv
+        && !['paid', 'partially_paid'].includes(String(existingInv.status))
+        && !((Number(existingInv.amountPaid) || 0) > 0)
 
       // Cancel any unpaid customer invoice — this job must not bill the client
       if (clearInvoiceLink && repair.invoiceId) {
