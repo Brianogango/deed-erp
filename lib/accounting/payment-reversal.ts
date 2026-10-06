@@ -65,10 +65,14 @@ export function applyReversalToInvoices(
 }
 
 /** The screen copy of the receipt journal's reversal, when the original is in the screen copy. */
-export function reversalJournalForStore(journals: Row[], originalRef: string, revRef: string, reason: string, at: string): Row | null {
+export function reversalJournalForStore(journals: Row[], originalRef: string | string[], revRef: string, reason: string, at: string): Row | null {
   if (journals.some(j => j?.ref === revRef)) return null
-  const original = journals.find(j => j?.ref === originalRef)
+  // The screen copy may hold the entry under the browser's ref
+  // (JRN/PAY/<doc>/<payment>) while the ledger's was re-posted under another.
+  const refs = Array.isArray(originalRef) ? originalRef : [originalRef]
+  const original = refs.map(ref => journals.find(j => j?.ref === ref)).find(Boolean)
   if (!original) return null
+  if (journals.some(j => j?.ref === `REV/${original.ref}`)) return null
   const lines = (Array.isArray(original.lines) ? original.lines : []).map((l: Row) => ({
     ...l,
     description: `Reversal of ${original.ref}: ${l.description ?? ''}`,

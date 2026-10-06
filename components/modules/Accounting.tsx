@@ -5,6 +5,7 @@ import { isOpeningBalanceDocument } from '@/lib/finance/opening-balance'
 import OpeningBalanceCorrection from '@/components/finance/OpeningBalanceCorrection'
 import AgentCommissions from '@/components/finance/AgentCommissions'
 import InvoiceCustomerCheck from '@/components/finance/InvoiceCustomerCheck'
+import BillPaymentFix from '@/components/finance/BillPaymentFix'
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -1629,6 +1630,7 @@ function AccountingContent() {
           {tab === 'integrity' ? (
             <>
               {canManageFullFinance && <InvoiceCustomerCheck showToast={showToast} />}
+              {canManageFullFinance && <BillPaymentFix showToast={showToast} canApply={currentUser?.role === 'director'} />}
               <IntegrityDashboard />
             </>
           ) : tab === 'invoices' || tab === 'bills' ? (

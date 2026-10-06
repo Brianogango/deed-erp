@@ -204,3 +204,27 @@ describe('POST /api/invoices/[id]/payments — which account the receipt debits'
     expect(journalFor().journalCode).toBe('BNK')
   })
 })
+
+describe('POST /api/invoices/[id]/payments — supplier bills', () => {
+  const bill = { ...invoiceWithStatus('approved'), invoiceNumber: 'BILL/2026/0007', documentType: 'vendor_bill' }
+
+  it('pays a bill out: Dr Accounts Payable / Cr bank, as a vendor payment, with no customer receipt message', async () => {
+    mockFindUnique.mockResolvedValue(bill)
+    await POST(payReq({ amount: 600, paymentMethod: 'bank_transfer', bankAccountId: 'ncba' }), { params: Promise.resolve({ id: 'inv-1' }) })
+    const args = mockRecordPayment.mock.calls[0][0] as { paymentType: string; journal: (id: string) => { description: string; lines: Array<{ accountLabel: string; debit: number; credit: number }> } }
+    expect(args.paymentType).toBe('vendor_payment')
+    const journal = args.journal('pay-1')
+    expect(journal.lines[0]).toMatchObject({ accountLabel: '3000 - Accounts Payable', debit: 600, credit: 0 })
+    expect(journal.lines[1]).toMatchObject({ debit: 0, credit: 600 })
+    expect(journal.lines.some(l => l.accountLabel.startsWith('1800'))).toBe(false)
+    expect(journal.description).toMatch(/Supplier payment/)
+    expect(mockNotify).not.toHaveBeenCalled()
+  })
+
+  it('a bill paid with "customer_credit" is still paid from cash, not customer credits', async () => {
+    mockFindUnique.mockResolvedValue(bill)
+    await POST(payReq({ amount: 600, paymentMethod: 'customer_credit' }), { params: Promise.resolve({ id: 'inv-1' }) })
+    const journal = (mockRecordPayment.mock.calls[0][0] as any).journal('pay-1')
+    expect(journal.lines.some((l: any) => l.accountLabel.startsWith('3313'))).toBe(false)
+  })
+})

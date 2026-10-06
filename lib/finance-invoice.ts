@@ -468,7 +468,10 @@ export function preservePostedInvoicePaymentProgress(current: unknown, incoming:
     if (!row || typeof row !== 'object' || (row as { id?: unknown }).id == null) return row
     const next = row as Record<string, unknown>
     const prev = currentById.get(String(next.id))
-    if (!prev || prev.status !== 'posted') return row
+    // Any document that is not a draft: posted ones are also stored as
+    // 'invoiced', 'paid' or 'partially_paid' (refreshed from the table), and
+    // guarding 'posted' alone let a stale tab reset those to unpaid.
+    if (!prev || prev.status === 'draft') return row
 
     const prevPaid = Number(prev.amountPaid) || 0
     const nextPaid = Number(next.amountPaid) || 0

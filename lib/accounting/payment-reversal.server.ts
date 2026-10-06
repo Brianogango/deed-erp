@@ -141,7 +141,9 @@ export async function reverseInvoicePayment(params: {
         deed_invoices: JSON.stringify(applyReversalToInvoices(invoices, info, result.amountPaidByInvoice)),
       }
       if (result.journal) {
-        const rev = reversalJournalForStore(journals, result.journal.originalRef, result.journal.revRef, reason, info.reversedAt)
+        const docNumbers = invoices.filter(i => String(i.id) in result.amountPaidByInvoice).map(i => String(i.ref ?? ''))
+        const candidates = [result.journal.originalRef, ...docNumbers.map(ref => `JRN/PAY/${ref}/${payment.id}`)]
+        const rev = reversalJournalForStore(journals, candidates, result.journal.revRef, reason, info.reversedAt)
         if (rev) updates.deed_journalEntries = JSON.stringify([rev, ...journals])
       }
       await saveStoreKeys(updates)

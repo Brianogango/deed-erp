@@ -13,6 +13,7 @@ import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirro
 import { invoiceDocState } from '@/lib/odoo-sales-flow'
 import { labelForRole, cashAccountRoleForBankId } from '@/lib/accounting/coa-roles'
 import { isUuid } from '@/lib/legacy-compat'
+import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
@@ -123,6 +124,11 @@ export async function POST(
       // If store mirror unavailable, still enforce role + posted status above
     }
 
+    // A supplier bill is paid out: Dr Accounts Payable / Cr bank. This route
+    // used to post every payment as a customer receipt (Dr bank / Cr AR), so a
+    // bill payment raised the bank balance instead of lowering it.
+    const isBill = invoiceDocumentType(invoice) === 'vendor_bill'
+
     const balance = Number(invoice.totalAmount) - Number(invoice.amountPaid)
     if (balance <= 0) {
       return NextResponse.json({ error: 'Invoice already fully paid' }, { status: 400 })
@@ -144,7 +150,7 @@ export async function POST(
     // against the credit liability. Without this branch the method falls
     // through to petty cash below and the receipt debits 2211, overstating
     // cash and leaving 3313 untouched.
-    const isCreditApplication = method === 'customer_credit'
+    const isCreditApplication = method === 'customer_credit' && !isBill
     let cashAccountLabel = isCreditApplication
       ? labelForRole('customer_credits')
       : method === 'bank_transfer'
@@ -177,7 +183,7 @@ export async function POST(
       notes,
       createdById: actor.id,
       invoiceId,
-      paymentType: 'customer_receipt',
+      paymentType: isBill ? 'vendor_payment' : 'customer_receipt',
       partnerId: invoice.clientId,
       bankAccountId: bankAccountId || null,
       currencyCode: invoice.currencyCode,
@@ -193,29 +199,46 @@ export async function POST(
           ? 'MISC'
           : method === 'cash' || method === 'mpesa' ? 'CSH' : 'BNK',
         date: paymentDate,
-        description: `Customer receipt for ${invoice.invoiceNumber}`,
+        description: `${isBill ? 'Supplier payment' : 'Customer receipt'} for ${invoice.invoiceNumber}`,
         sourceType: 'payment',
         sourceId: paymentId,
         invoiceId,
         paymentId,
         createdById: actor.id,
         skipIfExists: true,
-        lines: [
-          {
-            accountLabel: cashAccountLabel,
-            label: `Receipt for ${invoice.invoiceNumber}`,
-            debit: capped,
-            credit: 0,
-            partnerId: invoice.clientId,
-          },
-          {
-            accountLabel: labelForRole('ar'),
-            label: `AR settlement ${invoice.invoiceNumber}`,
-            debit: 0,
-            credit: capped,
-            partnerId: invoice.clientId,
-          },
-        ],
+        lines: isBill
+          ? [
+              {
+                accountLabel: labelForRole('ap'),
+                label: `AP settlement ${invoice.invoiceNumber}`,
+                debit: capped,
+                credit: 0,
+                partnerId: invoice.clientId,
+              },
+              {
+                accountLabel: cashAccountLabel,
+                label: `Payment for ${invoice.invoiceNumber}`,
+                debit: 0,
+                credit: capped,
+                partnerId: invoice.clientId,
+              },
+            ]
+          : [
+              {
+                accountLabel: cashAccountLabel,
+                label: `Receipt for ${invoice.invoiceNumber}`,
+                debit: capped,
+                credit: 0,
+                partnerId: invoice.clientId,
+              },
+              {
+                accountLabel: labelForRole('ar'),
+                label: `AR settlement ${invoice.invoiceNumber}`,
+                debit: 0,
+                credit: capped,
+                partnerId: invoice.clientId,
+              },
+            ],
       }),
       audit: async (tx, paymentRow, allocationRows) => {
         await writeFinancialAuditInTx(tx, {
@@ -260,7 +283,8 @@ export async function POST(
 
     // Automation #2: customer payment confirmation (email + WhatsApp when phone exists).
     // Never fail the payment if messaging fails. Skip on idempotent retries above.
-    if (!result.idempotent) try {
+    // A supplier is not sent a "we received your payment" message.
+    if (!result.idempotent && !isBill) try {
       const { notifyCustomerPaymentReceived } = await import('@/lib/finance/payment-receipt-notify')
       await notifyCustomerPaymentReceived({
         invoiceId,
@@ -275,7 +299,7 @@ export async function POST(
     } catch (err) {
       console.error('[invoice-payment] receipt notify failed:', err)
     }
-    if (!result.idempotent) {
+    if (!result.idempotent && !isBill) {
       const { notifyInvoicePayment } = await import('@/lib/notifications/business-events')
       await notifyInvoicePayment({ invoiceId, paymentId: payment.id, amount: capped, actorUserId: actor.id })
     }

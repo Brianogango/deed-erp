@@ -9,7 +9,9 @@ import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 
 function mapDbInvoiceStatusToClient(status: string): string {
-  if (status === 'approved') return 'posted'
+  // Posted documents; whether they are paid comes from amountPaid. Leaving
+  // 'paid' / 'invoiced' as the status took them out of the store-write guards.
+  if (status === 'approved' || status === 'invoiced' || status === 'paid' || status === 'partially_paid') return 'posted'
   if (status === 'pending_approval') return 'draft'
   return status
 }
