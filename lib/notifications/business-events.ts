@@ -215,3 +215,52 @@ export async function notifyPayrollPaid(runId: string, actorUserId?: string | nu
     }
   })
 }
+
+// ── Stock checkouts ─────────────────────────────────────────────────────────
+
+type CheckoutRow = {
+  id: string
+  ref: string
+  productName: string
+  qty: number
+  receiverName: string
+  purpose: string
+  requestedBy: string
+  requestedByName?: string
+  rejectionReason?: string
+}
+
+/** A new checkout request → approvers; a decision → the person who asked. */
+export async function notifyStockCheckout(action: string, row: CheckoutRow, actorUserId?: string | null) {
+  await safely(`inventory.checkout.${action}`, async () => {
+    const what = `${row.qty} × ${row.productName} for ${row.receiverName}`
+    if (action === 'request') {
+      await publishNotificationEvent({
+        eventType: 'inventory.checkout.approval_required',
+        entityType: 'stock_checkout',
+        entityId: row.id,
+        actorUserId: actorUserId || null,
+        title: `Stock checkout to approve — ${row.ref}`,
+        body: `${row.requestedByName || 'A colleague'} asked for ${what}.\nPurpose: ${row.purpose}`,
+        actionUrl: '/inventory?tab=checkouts',
+        idempotencyKey: `stock-checkout-request:${row.id}`,
+      })
+      return
+    }
+    if (action !== 'approve' && action !== 'reject') return
+    await resolveEntityNotifications('stock_checkout', row.id, ['inventory.checkout.approval_required'], actorUserId)
+    await publishNotificationEvent({
+      eventType: action === 'approve' ? 'inventory.checkout.approved' : 'inventory.checkout.rejected',
+      entityType: 'stock_checkout',
+      entityId: row.id,
+      actorUserId: actorUserId || null,
+      userIds: isUuid(row.requestedBy) ? [row.requestedBy] : [],
+      title: `Stock checkout ${action === 'approve' ? 'approved' : 'rejected'} — ${row.ref}`,
+      body: action === 'approve'
+        ? `${what} is approved and can be issued.`
+        : `${what} was rejected.${row.rejectionReason ? `\nReason: ${row.rejectionReason}` : ''}`,
+      actionUrl: '/inventory?tab=checkouts',
+      idempotencyKey: `stock-checkout-${action}:${row.id}`,
+    })
+  })
+}

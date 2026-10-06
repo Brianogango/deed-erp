@@ -4,6 +4,9 @@ import prisma from '@/lib/prisma'
 import { publishNotificationEvent } from './service'
 import { defaultNotificationPolicy } from './registry'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
+import { loadAppState } from '@/lib/server-store'
+import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
+import { buildDirectorBrief, directorBriefBody, directorBriefTitle, type DirectorBriefInput } from './director-brief'
 
 const DAY = 86_400_000
 const HOUR = 3_600_000
@@ -904,6 +907,110 @@ async function scanAftersales() {
   return emitted
 }
 
+/**
+ * The director's morning brief (see director-brief.ts): once per working day
+ * from 08:00 Nairobi. Checked against today's key first, so the scan that runs
+ * every minute only gathers the figures once a day.
+ */
+async function scanDirectorBrief() {
+  const clock = nairobiClock()
+  if (!['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(clock.weekday) || clock.hour < 8) return 0
+  const entityId = `director.daily_brief:${clock.date}`
+  const idempotencyKey = `digest:${entityId}`
+  const already = await prisma.notificationEvent.findFirst({ where: { idempotencyKey }, select: { id: true } })
+  if (already) return 0
+
+  const current = now()
+  const today = clock.date
+  const weekAhead = plusDays(current, 7)
+  const money = (v: unknown) => Number(v) || 0
+
+  const [bills, receivables, leave, advances, payroll, pos, blob] = await Promise.all([
+    prisma.invoice.findMany({
+      where: { documentType: 'vendor_bill', postingStatus: 'posted', dueDate: { not: null, lte: weekAhead } },
+      select: { invoiceNumber: true, dueDate: true, totalAmount: true, amountPaid: true, client: { select: { name: true } } },
+    }),
+    prisma.invoice.findMany({
+      where: { documentType: 'customer_invoice', postingStatus: 'posted', dueDate: { lt: current } },
+      select: { invoiceNumber: true, dueDate: true, totalAmount: true, amountPaid: true, client: { select: { name: true } } },
+    }),
+    prisma.leaveRequest.findMany({
+      where: { status: { in: ['pending', 'pending_hr'] } },
+      select: { reference: true, id: true, employeeName: true, leaveType: true, startDate: true, endDate: true, daysRequested: true },
+      orderBy: { startDate: 'asc' },
+    }),
+    prisma.salaryAdvance.findMany({
+      where: { status: 'pending' },
+      select: { reference: true, id: true, employeeName: true, amount: true },
+    }),
+    prisma.payrollRun.findMany({ where: { status: 'pending_approval', approvedAt: null }, select: { runReference: true } }),
+    prisma.purchaseOrder.findMany({
+      where: { status: 'sent', approvedAt: null },
+      select: { poNumber: true, totalAmount: true, vendor: { select: { name: true } } },
+    }),
+    loadAppState(['deed_stockCheckouts', 'deed_saleOrders', 'deed_invoices', 'deed_deliveries', 'deed_products']).catch(() => ({} as Record<string, unknown>)),
+  ])
+
+  const list = (v: unknown): any[] => (Array.isArray(v) ? v : [])
+  const checkouts = list(blob.deed_stockCheckouts)
+  const outstanding = (c: any) => Math.max(0, money(c.qty) - money(c.consumedQty) - money(c.returnedQty) - money(c.exceptionQty))
+  let notDelivered: ReturnType<typeof findInvoicedNotDelivered> = []
+  try {
+    notDelivered = findInvoicedNotDelivered({
+      saleOrders: list(blob.deed_saleOrders),
+      invoices: list(blob.deed_invoices),
+      deliveries: list(blob.deed_deliveries),
+      products: list(blob.deed_products),
+    })
+  } catch (error) {
+    console.error('[notifications] director brief: invoiced-not-delivered failed', error)
+  }
+
+  const billRows = bills
+    .map(b => ({ ref: b.invoiceNumber, supplier: b.client?.name, balance: money(b.totalAmount) - money(b.amountPaid), dueDate: dateOnly(b.dueDate!) }))
+    .filter(b => b.balance > 0.01)
+  const input: DirectorBriefInput = {
+    billsOverdue: billRows.filter(b => b.dueDate < today),
+    billsDueSoon: billRows.filter(b => b.dueDate >= today),
+    invoicesOverdue: receivables
+      .map(i => ({ ref: i.invoiceNumber, customer: i.client?.name, balance: money(i.totalAmount) - money(i.amountPaid), dueDate: dateOnly(i.dueDate!) }))
+      .filter(i => i.balance > 0.01),
+    leavePending: leave.map(l => ({
+      ref: l.reference || l.id,
+      employee: l.employeeName || 'Employee',
+      type: String(l.leaveType),
+      from: dateOnly(l.startDate),
+      to: dateOnly(l.endDate),
+      days: money(l.daysRequested),
+    })),
+    advancesPending: advances.map(a => ({ ref: a.reference || a.id, employee: a.employeeName || 'Employee', amount: money(a.amount) })),
+    payrollPending: payroll.map(p => ({ ref: p.runReference })),
+    posAwaitingApproval: pos.map(p => ({ ref: p.poNumber, supplier: p.vendor?.name, total: money(p.totalAmount) })),
+    checkoutsPending: checkouts
+      .filter(c => c.status === 'pending')
+      .map(c => ({ ref: String(c.ref), product: String(c.productName || 'item'), qty: money(c.qty), receiver: String(c.receiverName || '—') })),
+    checkoutsOverdue: checkouts
+      .filter(c => ['issued', 'partially_closed'].includes(String(c.status)) && c.expectedReturnDate && String(c.expectedReturnDate).slice(0, 10) < today && outstanding(c) > 0)
+      .map(c => ({ ref: String(c.ref), product: String(c.productName || 'item'), qty: outstanding(c), receiver: String(c.receiverName || '—'), expected: String(c.expectedReturnDate).slice(0, 10) })),
+    invoicedNotDelivered: notDelivered.map(o => ({ ref: o.ref, customer: o.customerName, units: o.undelivered })),
+  }
+
+  const sections = buildDirectorBrief(input)
+  await resolveInactive('director.daily_brief', 'digest', [entityId])
+  if (!sections.length) return 0
+  await publishNotificationEvent({
+    eventType: 'director.daily_brief',
+    entityType: 'digest',
+    entityId,
+    title: directorBriefTitle(sections),
+    body: directorBriefBody(sections),
+    actionUrl: '/my-work',
+    metadata: { sections: sections.map(s => ({ key: s.key, count: s.count, amount: s.amount ?? null })) },
+    idempotencyKey,
+  })
+  return 1
+}
+
 async function safeDomain(name: string, fn: () => Promise<number>) {
   try {
     return { name, emitted: await fn(), ok: true }
@@ -924,6 +1031,7 @@ export async function scanOperationalNotificationEvents() {
     ['finance', scanFinance],
     ['hr', scanHr],
     ['aftersales', scanAftersales],
+    ['director_brief', scanDirectorBrief],
   ] as const) {
     results.push(await safeDomain(name, fn))
   }

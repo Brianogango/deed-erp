@@ -6,6 +6,7 @@ import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/
 import { upsertBulkStock, type BulkStockLevel } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
 import { writeFinancialAudit } from '@/lib/finance-audit'
+import { notifyStockCheckout } from '@/lib/notifications/business-events'
 
 export const dynamic = 'force-dynamic'
 
@@ -151,6 +152,7 @@ export async function POST(request: NextRequest) {
 
     await saveStoreKeys({ deed_products: JSON.stringify(products), deed_serials: JSON.stringify(serials), deed_bulkStock: JSON.stringify(bulk), deed_stockMoves: JSON.stringify(moves), deed_stockCheckouts: JSON.stringify(rows) })
     await writeFinancialAudit({ userId: access.session.user.id, action: `stock_checkout_${action}`, entityType: 'stock_checkout', entityId: row.id, newValues: row }).catch(() => {})
+    await notifyStockCheckout(action, row, access.session.user.id)
     return NextResponse.json({ ok: true, checkout: row })
   })
 }
