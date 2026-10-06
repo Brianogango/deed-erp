@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { preservePostedInvoicePaymentProgress } from '@/lib/finance-invoice'
 
 type AnyRecord = Record<string, unknown>
 
@@ -93,7 +94,11 @@ export async function POST(request: NextRequest) {
     const result = key === 'deed_products'
       ? mergeProductsWithoutDuplicates(existing, incoming as AnyRecord[])
       : { merged: mergeById(existing, incoming as AnyRecord[]), imported: (incoming as AnyRecord[]).length, skipped: 0 }
-    const merged = result.merged
+    // Re-importing an older invoices file must not take payments away:
+    // amountPaid and the payment list never go down through an import.
+    const merged = key === 'deed_invoices'
+      ? preservePostedInvoicePaymentProgress(existing, result.merged) as AnyRecord[]
+      : result.merged
     updates[key]   = JSON.stringify(merged)
     summary[key]   = { imported: result.imported, skipped: result.skipped, total: merged.length }
   }
@@ -125,8 +130,16 @@ export async function POST(request: NextRequest) {
         const status = String(inv.status || '')
         return status === 'posted' || status === 'approved' || status === 'paid' || status === 'partially_paid'
       })
+      const prisma = (await import('@/lib/prisma')).default
       for (const inv of posted) {
         try {
+          // Already on the ledger: re-importing it again used to post another
+          // copy (JRN/INV/<ref>/2, /3, …) each time, multiplying the revenue.
+          const live = await prisma.journalEntry.findFirst({
+            where: { invoiceId: String(inv.id), sourceType: 'invoice', isReversed: false, reversalOfId: null },
+            select: { id: true },
+          }).catch(() => null)
+          if (live) continue
           await postInvoiceJournalToPrisma({
             id: String(inv.id),
             ref: String(inv.ref || inv.invoiceNumber || inv.id),
