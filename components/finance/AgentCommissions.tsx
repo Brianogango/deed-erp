@@ -57,6 +57,11 @@ export default function AgentCommissions({
   const [showAdd, setShowAdd] = useState(false)
   const [newAgent, setNewAgent] = useState({ name: '', phone: '', kraPin: '' })
   const [rateInput, setRateInput] = useState('')
+  const [showBill, setShowBill] = useState(false)
+  const emptyBill = { agentId: '', amount: '', date: today(), saleRef: '', customerName: '', description: '' }
+  const [bill, setBill] = useState(emptyBill)
+  const [billFile, setBillFile] = useState<File | null>(null)
+  const [billFileKey, setBillFileKey] = useState(0)
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -155,6 +160,45 @@ export default function AgentCommissions({
     }
   }
 
+  const addBill = async () => {
+    if (!bill.agentId) { showToast('Choose the agent', 'error'); return }
+    if (!(Number(bill.amount) > 0)) { showToast('Enter the commission amount', 'error'); return }
+    const form = new FormData()
+    for (const [k, v] of Object.entries(bill)) form.append(k, v)
+    if (billFile) form.append('file', billFile)
+    setBusy(true)
+    try {
+      const out = await readJson<{ commission: AgentCommission }>(await fetch('/api/agents/commissions', { method: 'POST', body: form }))
+      showToast(`Commission bill ${out.commission.id} added — ${fmtKes(out.commission.amount)} due to ${out.commission.agentName}`, 'success')
+      setBill(emptyBill)
+      setBillFile(null)
+      setBillFileKey(k => k + 1)
+      setShowBill(false)
+      await load()
+      setAgentId(out.commission.agentId)
+      setSelected(s => new Set([...s, out.commission.id]))
+    } catch (err) {
+      showToast(`Could not add commission bill: ${err instanceof Error ? err.message : 'error'}`, 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const cancelBill = async (row: AgentCommission) => {
+    if (!window.confirm(`Cancel commission bill ${row.id} (${fmtKes(row.amount)}) for ${row.agentName}? Its journal is reversed.`)) return
+    setBusy(true)
+    try {
+      await readJson(await fetch(`/api/agents/commissions?id=${encodeURIComponent(row.id)}`, { method: 'DELETE' }))
+      showToast(`Commission bill ${row.id} cancelled`, 'success')
+      setSelected(s => { const next = new Set(s); next.delete(row.id); return next })
+      await load()
+    } catch (err) {
+      showToast(`Could not cancel: ${err instanceof Error ? err.message : 'error'}`, 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const pay = async () => {
     if (!chosen.length) { showToast('Tick the commission lines to pay', 'error'); return }
     if (method === 'mpesa' && !reference.trim()) { showToast('Enter the M-Pesa transaction code', 'error'); return }
@@ -200,6 +244,7 @@ export default function AgentCommissions({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-primary text-[11px]" disabled={busy} onClick={() => { setShowBill(v => !v); setBill(b => ({ ...b, agentId: b.agentId || agentId })) }}>Add commission bill</button>
           <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => setShowAdd(v => !v)}>Add agent</button>
           <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => void load()}>{busy ? 'Loading…' : 'Refresh'}</button>
         </div>
@@ -238,6 +283,35 @@ export default function AgentCommissions({
           <input className="form-input text-xs" placeholder="Phone (M-Pesa)" aria-label="Agent phone" value={newAgent.phone} onChange={e => setNewAgent(a => ({ ...a, phone: e.target.value }))} />
           <input className="form-input text-xs" placeholder="KRA PIN (optional)" aria-label="Agent KRA PIN" value={newAgent.kraPin} onChange={e => setNewAgent(a => ({ ...a, kraPin: e.target.value }))} />
           <button type="button" className="btn-primary text-[11px]" disabled={busy} onClick={() => void addAgent()}>Save agent</button>
+        </div>
+      )}
+
+      {showBill && (
+        <div className="space-y-2 rounded-2xl border border-border-lt bg-card p-3">
+          <p className="text-xs font-extrabold text-text-1">Commission bill</p>
+          <p className="text-[11px] text-text-3">For a commission agreed outside a sale order or the till. It is owed to the agent at once and paid with their next payout.</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <select className="form-input text-xs" aria-label="Agent" value={bill.agentId} onChange={e => setBill(b => ({ ...b, agentId: e.target.value }))}>
+              <option value="">Choose agent…</option>
+              {(data?.agents ?? []).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            <input className="form-input text-xs" type="number" min={1} placeholder="Commission (KES)" aria-label="Commission amount" value={bill.amount} onChange={e => setBill(b => ({ ...b, amount: e.target.value }))} />
+            <input className="form-input text-xs" type="date" aria-label="Bill date" value={bill.date} onChange={e => setBill(b => ({ ...b, date: e.target.value }))} />
+            <input className="form-input text-xs" placeholder="Sale / agent invoice no. (optional)" aria-label="Sale or invoice reference" value={bill.saleRef} onChange={e => setBill(b => ({ ...b, saleRef: e.target.value }))} />
+            <input className="form-input text-xs" placeholder="Customer (optional)" aria-label="Customer" value={bill.customerName} onChange={e => setBill(b => ({ ...b, customerName: e.target.value }))} />
+            <input className="form-input text-xs" placeholder="What it is for (optional)" aria-label="Description" value={bill.description} onChange={e => setBill(b => ({ ...b, description: e.target.value }))} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-[11px] text-text-2">
+              Attachment (optional) — agent&apos;s invoice, receipt…
+              <input key={billFileKey} className="mt-1 block text-[11px]" type="file" aria-label="Attachment" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,application/pdf,image/*" onChange={e => setBillFile(e.target.files?.[0] ?? null)} />
+            </label>
+            <div className="ml-auto flex gap-2">
+              <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => setShowBill(false)}>Cancel</button>
+              <button type="button" className="btn-primary text-[11px]" disabled={busy} onClick={() => void addBill()}>{busy ? 'Saving…' : 'Save bill'}</button>
+            </div>
+          </div>
+          {(data?.agents ?? []).length === 0 && <p className="text-[11px] text-amber-800">No agents yet — add the agent first.</p>}
         </div>
       )}
 
@@ -309,9 +383,18 @@ export default function AgentCommissions({
                           />
                         )}
                       </td>
-                      <td className="py-1.5 pr-3 font-mono">{r.sourceRef}{r.clawbackOf && <span className="ml-1 font-sans text-red-700">refund recovery</span>}</td>
+                      <td className="py-1.5 pr-3 font-mono">
+                        {r.sourceRef}{r.clawbackOf && <span className="ml-1 font-sans text-red-700">refund recovery</span>}
+                        {r.sourceKind === 'manual' && (
+                          <span className="block font-sans text-text-3">
+                            Bill {r.id}{r.description ? ` · ${r.description}` : ''}
+                            {r.attachment && <> · <a className="text-primary-600 underline" href={`/api/agents/commissions?file=${encodeURIComponent(r.id)}`} target="_blank" rel="noreferrer">{r.attachment.name}</a></>}
+                            {r.status === 'due' && <> · <button type="button" className="text-red-700 underline" disabled={busy} onClick={() => void cancelBill(r)}>Cancel bill</button></>}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-1.5 pr-3">{r.customerName || '—'}</td>
-                      <td className="py-1.5 pr-3 text-right">{fmtKes(r.saleTotal)}</td>
+                      <td className="py-1.5 pr-3 text-right">{r.saleTotal ? fmtKes(r.saleTotal) : '—'}</td>
                       <td className={`py-1.5 pr-3 text-right font-bold ${r.amount < 0 ? 'text-red-700' : ''}`}>{fmtKes(r.amount)}</td>
                       <td className="py-1.5 pr-3">
                         <span className={`rounded-md px-1.5 py-0.5 font-bold ${STATUS_TONE[r.status]}`}>{STATUS_LABEL[r.status]}</span>

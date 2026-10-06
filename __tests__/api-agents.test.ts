@@ -4,6 +4,7 @@ const h = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   journals: [] as Array<{ ref: string; journalCode: string; lines: Array<{ accountLabel: string; debit: number; credit: number }> }>,
   requireRole: vi.fn(),
+  objects: new Map<string, Buffer>(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -42,13 +43,20 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     client: {
       findMany: vi.fn(async () => [{ id: 'agent-1', name: 'Jane Agent', phone: '0700', email: null, kraPin: null }]),
-      findFirst: vi.fn(async ({ where }: any) => (where.id === 'agent-1' ? { name: 'Jane Agent' } : null)),
+      findFirst: vi.fn(async ({ where }: any) => (where.id === 'agent-1' ? { id: 'agent-1', name: 'Jane Agent' } : null)),
     },
     accountCode: { findUnique: vi.fn(async () => null) },
   },
 }))
 
+vi.mock('@/lib/infra/object-store', () => ({
+  putObject: vi.fn(async (input: any) => { h.objects.set(input.key, input.body); return { uri: input.key } }),
+  getObject: vi.fn(async (_b: string, key: string) => h.objects.get(key) ?? null),
+  deleteObject: vi.fn(async (_b: string, key: string) => { h.objects.delete(key) }),
+}))
+
 import { GET, PUT } from '@/app/api/agents/route'
+import { GET as GET_BILL, POST as ADD_BILL, DELETE as CANCEL_BILL } from '@/app/api/agents/commissions/route'
 import { POST as PAY } from '@/app/api/agents/payouts/route'
 import { GET as GET_ASSIGN, PUT as ASSIGN } from '@/app/api/agents/assign/route'
 
@@ -147,5 +155,69 @@ describe('agent commissions API', () => {
     const body = await (await GET()).json()
     expect(body.commissions[0]).toMatchObject({ amount: 2500, status: 'due', agentName: 'Jane Agent' })
     expect((await ASSIGN(json({ saleOrderId: 'so-1', agentId: '' }, 'PUT'))).status).toBe(409)
+  })
+})
+
+describe('manual agent commission bills', () => {
+  const pdf = () => new File([Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF')], 'agent invoice.pdf', { type: 'application/pdf' })
+  const form = (fields: Record<string, string>, file?: File) => {
+    const f = new FormData()
+    for (const [k, v] of Object.entries(fields)) f.append(k, v)
+    if (file) f.append('file', file)
+    return new Request('http://localhost/api/agents/commissions', { method: 'POST', body: f })
+  }
+
+  it('raises a bill with an attachment: due at once, Dr 6403 / Cr 3314, paid with the next payout', async () => {
+    const res = await ADD_BILL(form({ agentId: 'agent-1', amount: '3500', date: '2026-10-06', saleRef: 'INV-77', description: 'Referral — Kisumu school' }, pdf()))
+    expect(res.status).toBe(201)
+    const { commission } = await res.json()
+    expect(commission).toMatchObject({ id: 'AGB/0001', sourceKind: 'manual', status: 'due', amount: 3500, sourceRef: 'INV-77', agentName: 'Jane Agent' })
+    expect(commission.attachment.name).toBe('agent_invoice.pdf')
+    const journal = h.journals.find(j => j.ref === 'JRN/AGB/0001')!
+    expect(debitOf(journal, '6403')).toBe(3500)
+    expect(debitOf(journal, '3314')).toBe(-3500)
+
+    const file = await GET_BILL(new Request('http://localhost/api/agents/commissions?file=AGB%2F0001'))
+    expect(file.status).toBe(200)
+    expect(file.headers.get('Content-Type')).toBe('application/pdf')
+
+    // The sales sync leaves it alone, and it is paid like any other line.
+    const body = await (await GET()).json()
+    expect(body.commissions.find((r: any) => r.id === 'AGB/0001').status).toBe('due')
+    const paid = await PAY(json({ agentId: 'agent-1', commissionIds: ['AGB/0001'], method: 'cash', reference: '', paidAt: '2026-10-06' }))
+    expect((await paid.json()).payout.gross).toBe(3500)
+    expect((await CANCEL_BILL(new Request('http://localhost/api/agents/commissions?id=AGB%2F0001', { method: 'DELETE' }))).status).toBe(409)
+  })
+
+  it('the attachment is optional; a JSON bill works too', async () => {
+    const res = await ADD_BILL(json({ agentId: 'agent-1', amount: 1000, date: '2026-10-06' }))
+    expect(res.status).toBe(201)
+    const { commission } = await res.json()
+    expect(commission.attachment).toBeUndefined()
+    expect(commission.sourceRef).toBe('AGB/0001')
+  })
+
+  it('refuses a bill for a sale that already pays this agent, and non-agents', async () => {
+    ;(h.state.deed_invoices as any[])[0].amountPaid = 50000
+    await GET()
+    expect((await ADD_BILL(json({ agentId: 'agent-1', amount: 500, date: '2026-10-06', saleRef: 'so/0001' }))).status).toBe(409)
+    expect((await ADD_BILL(json({ agentId: 'someone', amount: 500, date: '2026-10-06' }))).status).toBe(422)
+    expect((await ADD_BILL(json({ agentId: 'agent-1', amount: 0, date: '2026-10-06' }))).status).toBe(409)
+  })
+
+  it('refuses a disguised file and leaves no bill behind', async () => {
+    const fake = new File([Buffer.from('MZ not a pdf')], 'x.pdf', { type: 'application/pdf' })
+    expect((await ADD_BILL(form({ agentId: 'agent-1', amount: '100', date: '2026-10-06' }, fake))).status).toBe(415)
+    expect(h.state.deed_agentCommissions).toBeUndefined()
+  })
+
+  it('cancels an unpaid bill by reversing its journal', async () => {
+    await ADD_BILL(json({ agentId: 'agent-1', amount: 1200, date: '2026-10-06' }))
+    const res = await CANCEL_BILL(new Request('http://localhost/api/agents/commissions?id=AGB%2F0001', { method: 'DELETE' }))
+    expect(res.status).toBe(200)
+    expect((await res.json()).commission.status).toBe('cancelled')
+    const rev = h.journals.find(j => j.ref === 'JRN/AGB/0001-REV')!
+    expect(debitOf(rev, '3314')).toBe(1200)
+    expect(debitOf(rev, '6403')).toBe(-1200)
   })
 })

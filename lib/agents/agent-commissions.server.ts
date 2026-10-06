@@ -8,6 +8,8 @@ import { labelForRole } from '@/lib/accounting/coa-roles'
 import {
   AGENT_TAG,
   DEFAULT_AGENT_SETTINGS,
+  checkManualCommission,
+  nextManualCommissionRef,
   commissionJournalLines,
   evaluateAgentSales,
   payoutJournalLines,
@@ -197,4 +199,109 @@ export async function loadAgentOverview() {
     payouts: asArray<AgentPayout>(state[AGENT_PAYOUTS_KEY]),
     settings: readAgentSettings(state[AGENT_SETTINGS_KEY]),
   }
+}
+
+function httpError(message: string, status: number) {
+  const err = new Error(message)
+  ;(err as Error & { status?: number }).status = status
+  return err
+}
+
+/**
+ * Raise a commission bill by hand: the agent is owed it at once
+ * (Dr 6403 / Cr 3314) and it is paid with their next payout.
+ */
+export async function addManualCommission(params: {
+  agentId: string
+  amount: number
+  date: string
+  saleRef?: string
+  customerName?: string
+  saleTotal?: number
+  description?: string
+  attachment?: AgentCommission['attachment']
+  createdBy: { id: string; name: string }
+}): Promise<AgentCommission> {
+  const agent = await prisma.client.findFirst({
+    where: { id: params.agentId, tags: { array_contains: [AGENT_TAG] } },
+    select: { id: true, name: true },
+  })
+  if (!agent) throw httpError('Choose a Deed Express agent (add them under Add agent first)', 422)
+  return withAppStateKeyLock(AGENT_COMMISSIONS_KEY, async () => {
+    const state = await loadAppStateForWrite([AGENT_COMMISSIONS_KEY])
+    const rows = asArray<AgentCommission>(state[AGENT_COMMISSIONS_KEY])
+    const problem = checkManualCommission(rows, { agentId: agent.id, amount: params.amount, saleRef: params.saleRef, date: params.date })
+    if (problem) throw httpError(problem, 409)
+    const id = nextManualCommissionRef(rows)
+    const amount = Math.round(params.amount * 100) / 100
+    const sourceRef = params.saleRef?.trim() || id
+    const journalRef = `JRN/${id}`
+    await ensureTemplateAccounts(['6403', '3314'])
+    await createJournalEntry({
+      ref: journalRef,
+      journalCode: 'GEN',
+      date: params.date,
+      description: `Agent commission bill ${id} — ${agent.name}${params.description ? ` — ${params.description}` : ''}`,
+      sourceType: 'agent_commission',
+      sourceId: id,
+      createdById: params.createdBy.id,
+      skipIfExists: false,
+      lines: commissionJournalLines({ kind: 'earn', ref: journalRef, date: params.date, commissionId: id, agentName: agent.name, sourceRef, amount }),
+    })
+    const now = new Date().toISOString()
+    const row: AgentCommission = {
+      id,
+      sourceKind: 'manual',
+      sourceId: id,
+      sourceRef,
+      agentId: agent.id,
+      agentName: agent.name,
+      customerName: params.customerName?.trim() || '',
+      saleTotal: Math.max(0, Number(params.saleTotal) || 0),
+      amount,
+      status: 'due',
+      earnedAt: params.date,
+      journalRef,
+      description: params.description?.trim() || undefined,
+      createdByName: params.createdBy.name,
+      attachment: params.attachment,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await saveStoreKeys({ [AGENT_COMMISSIONS_KEY]: JSON.stringify([...rows, row]) })
+    return row
+  })
+}
+
+/** Cancel a manual commission bill that has not been paid: its journal is reversed. */
+export async function cancelManualCommission(id: string, by: { id: string; name: string }): Promise<AgentCommission> {
+  return withAppStateKeyLock(AGENT_COMMISSIONS_KEY, async () => {
+    const state = await loadAppStateForWrite([AGENT_COMMISSIONS_KEY])
+    const rows = asArray<AgentCommission>(state[AGENT_COMMISSIONS_KEY])
+    const row = rows.find(r => r.id === id)
+    if (!row || row.sourceKind !== 'manual') throw httpError('Commission bill not found', 404)
+    if (row.status !== 'due') throw httpError(row.status === 'paid' ? 'Already paid — it cannot be cancelled' : 'Already cancelled', 409)
+    const today = new Date().toISOString().slice(0, 10)
+    const ref = `JRN/${id}-REV`
+    await createJournalEntry({
+      ref,
+      journalCode: 'GEN',
+      date: today,
+      description: `Agent commission bill ${id} cancelled — ${row.agentName}`,
+      sourceType: 'agent_commission',
+      sourceId: id,
+      createdById: by.id,
+      skipIfExists: true,
+      lines: commissionJournalLines({ kind: 'reverse', ref, date: today, commissionId: id, agentName: row.agentName, sourceRef: row.sourceRef, amount: row.amount }),
+    })
+    const next: AgentCommission = { ...row, status: 'cancelled', flag: `Cancelled by ${by.name}`, updatedAt: new Date().toISOString() }
+    await saveStoreKeys({ [AGENT_COMMISSIONS_KEY]: JSON.stringify(rows.map(r => (r.id === id ? next : r))) })
+    return next
+  })
+}
+
+/** The commission row a manual-bill attachment belongs to. */
+export async function findCommission(id: string): Promise<AgentCommission | undefined> {
+  const state = await loadAppState([AGENT_COMMISSIONS_KEY])
+  return asArray<AgentCommission>(state[AGENT_COMMISSIONS_KEY]).find(r => r.id === id)
 }

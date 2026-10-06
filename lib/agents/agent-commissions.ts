@@ -14,6 +14,11 @@
  * (Dr 3314 / Cr 6403) that the agent's next payout deducts. A partial refund
  * is flagged for Finance instead of guessed at.
  *
+ * Finance can also raise a commission bill by hand (sourceKind 'manual') for
+ * an agent whose sale is not in the system or was agreed separately: it is
+ * due at once (Dr 6403 / Cr 3314), paid through the same payout, and can be
+ * cancelled (journal reversed) until it is paid. The sync never touches it.
+ *
  * Pure — the server sync (agent-commissions.server.ts) loads the lists,
  * posts the journals this returns and saves the rows.
  */
@@ -27,7 +32,7 @@ export type CommissionStatus = 'pending' | 'due' | 'paid' | 'cancelled'
 
 export type AgentCommission = {
   id: string
-  sourceKind: 'sale_order' | 'pos_order'
+  sourceKind: 'sale_order' | 'pos_order' | 'manual'
   sourceId: string
   sourceRef: string
   agentId: string
@@ -43,6 +48,11 @@ export type AgentCommission = {
   paidAt?: string
   payoutId?: string
   journalRef?: string
+  /** Manual bills: what the commission is for. */
+  description?: string
+  createdByName?: string
+  /** Optional document behind a manual bill (the agent's invoice, a receipt…). */
+  attachment?: { name: string; size: number; contentType: string; objectKey: string; uploadedAt: string }
   /** Shown to Finance: partial refund, period locked, … */
   flag?: string
   createdAt: string
@@ -280,7 +290,7 @@ export function reconcileAgentCommissions(params: {
 
   // Sales that no longer name an agent.
   for (const row of params.existing) {
-    if (seen.has(row.id) || row.clawbackOf) continue
+    if (seen.has(row.id) || row.clawbackOf || row.sourceKind === 'manual') continue
     if (row.status === 'pending') rows = rows.filter(r => r.id !== row.id)
     else settle(row, 'void')
   }
@@ -335,4 +345,29 @@ export function payoutJournalLines(params: { gross: number; withholdingTax: numb
       ? [{ accountLabel: WITHHOLDING_TAX_PAYABLE, label: `WHT on agent commission ${params.ref}`, debit: 0, credit: params.withholdingTax }]
       : []),
   ]
+}
+
+/** Next manual commission bill number: AGB/0001, AGB/0002, … */
+export function nextManualCommissionRef(rows: AgentCommission[]): string {
+  const n = rows
+    .filter(r => r.sourceKind === 'manual')
+    .reduce((max, r) => Math.max(max, Number(String(r.id).split('/').pop()) || 0), 0)
+  return `AGB/${String(n + 1).padStart(4, '0')}`
+}
+
+/**
+ * Check a manual commission bill before it is raised. A sale that already
+ * carries this agent's commission (from the sale order or the till) would be
+ * paid twice.
+ */
+export function checkManualCommission(rows: AgentCommission[], input: { agentId: string; amount: number; saleRef?: string; date: string }): string | null {
+  if (!input.agentId) return 'Choose the agent'
+  if (!(money(input.amount) > 0)) return 'Enter the commission amount'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return 'Enter the bill date'
+  const ref = String(input.saleRef ?? '').trim().toLowerCase()
+  if (ref) {
+    const dupe = rows.find(r => r.agentId === input.agentId && r.status !== 'cancelled' && !r.clawbackOf && r.sourceRef.trim().toLowerCase() === ref)
+    if (dupe) return `${dupe.sourceRef} already has a commission for this agent (${dupe.status}) — it would be paid twice`
+  }
+  return null
 }
