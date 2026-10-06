@@ -10,6 +10,7 @@ import {
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
+import { keepReversedPaymentsOff } from '@/lib/accounting/payment-reversal'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability } from '@/lib/finance-invoice'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
@@ -121,7 +122,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     // Posted-invoice immutability (FIN-001) — same guard as POST /api/store;
     // a single-key PUT must not be a weaker path to the same tampering.
     const guarded = enforcePostedInvoiceImmutability(currentState[key], withPreservedLines)
-    value = JSON.stringify(preservePostedInvoicePaymentProgress(currentState[key], guarded.merged))
+    value = JSON.stringify(keepReversedPaymentsOff(currentState[key], preservePostedInvoicePaymentProgress(currentState[key], guarded.merged)))
     rejectedPostedInvoiceEdits = guarded.rejected
   }
   if (key === 'deed_saleOrders') {

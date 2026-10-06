@@ -7,6 +7,7 @@ import {
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, getAppStateVersion, getAppStateKeyVersions } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
+import { keepReversedPaymentsOff } from '@/lib/accounting/payment-reversal'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
@@ -507,7 +508,10 @@ export async function POST(request: Request) {
       const withPreservedLines = preserveInvoiceLinesOnStoreWrite(serverState.deed_invoices, incoming)
       const guarded = enforcePostedInvoiceImmutability(serverState.deed_invoices, withPreservedLines)
       entries.deed_invoices = JSON.stringify(
-        preservePostedInvoicePaymentProgress(serverState.deed_invoices, guarded.merged),
+        keepReversedPaymentsOff(
+          serverState.deed_invoices,
+          preservePostedInvoicePaymentProgress(serverState.deed_invoices, guarded.merged),
+        ),
       )
       rejectedPostedInvoiceEdits = guarded.rejected
     }

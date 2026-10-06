@@ -74,6 +74,7 @@ export default function InvoiceDetail() {
     initRelease,
     serials,
     registerPayment,
+    reverseInvoicePayment,
     setInvoicePaymentBlocked,
     resetInvoiceToDraft,
     cancelInvoice,
@@ -102,6 +103,13 @@ export default function InvoiceDetail() {
   const invoice = invoices.find(i => i.id === id)
 
   const [showPayModal, setShowPayModal] = useState(false)
+  const [reversingPaymentId, setReversingPaymentId] = useState<string | null>(null)
+  const [reversalReason, setReversalReason] = useState('')
+  const [reversalBusy, setReversalBusy] = useState(false)
+  // Payments the server holds for this invoice. One recorded by M-Pesa, the
+  // Payments screen or another route may be missing from invoice.payments;
+  // it is listed (and can be reversed) all the same.
+  const [serverPayments, setServerPayments] = useState<Array<{ id: string; amount: string | number; paymentMethod: string; reference: string | null; paidAt: string }>>([])
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState('')
   const [payBankAccountId, setPayBankAccountId] = useState('')
@@ -295,6 +303,32 @@ export default function InvoiceDetail() {
       { key: 'paid', label: invoice.type === 'customer_invoice' ? 'Received' : 'Paid', state: isPaid ? 'current' : 'todo' },
     ] as Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>
   })()
+  const invoicePaidKey = invoice ? `${invoice.id}:${invoice.amountPaid}:${(invoice.voidedPayments || []).length}` : ''
+  useEffect(() => {
+    if (!invoicePaidKey || !canManageFullFinance) return
+    const invoiceId = invoicePaidKey.split(':')[0]
+    let cancelled = false
+    fetch(`/api/invoices/${invoiceId}/payments`, { cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : []))
+      .then(rows => { if (!cancelled && Array.isArray(rows)) setServerPayments(rows) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [invoicePaidKey, canManageFullFinance])
+
+  const shownPayments = invoice ? [
+    ...(invoice.payments || []),
+    ...serverPayments
+      .filter(sp => !(invoice.payments || []).some(p => p.id === sp.id) && !(invoice.voidedPayments || []).some(p => p.id === sp.id))
+      .map(sp => ({
+        id: sp.id,
+        amount: Number(sp.amount) || 0,
+        method: String(sp.paymentMethod || 'payment'),
+        date: String(sp.paidAt),
+        reference: sp.reference || undefined,
+        recordedBy: 'Recorded on server',
+      })),
+  ] : []
+
   const focusDetailTab = (nextTab: 'payments' | 'notes' | 'activity' | 'instructions') => {
     setDetailTab(nextTab)
     window.requestAnimationFrame(() => {
@@ -1086,19 +1120,83 @@ export default function InvoiceDetail() {
             )}
 
             {detailTab === 'payments' && (
-              (invoice.payments || []).length > 0 ? (
+              shownPayments.length > 0 || (invoice.voidedPayments || []).length > 0 ? (
                 <div className="invoice-detail__pay-list">
-                  {(invoice.payments || []).map(pay => (
-                    <div key={pay.id} className="invoice-detail__pay-row">
-                      <div>
-                        <p className="invoice-detail__pay-method">{pay.method.replace('_', ' ')}</p>
-                        <p className="invoice-detail__pay-meta">
-                          {fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}
-                        </p>
+                  {shownPayments.map(pay => (
+                    <div key={pay.id}>
+                      <div className="invoice-detail__pay-row">
+                        <div>
+                          <p className="invoice-detail__pay-method">{pay.method.replace('_', ' ')}</p>
+                          <p className="invoice-detail__pay-meta">
+                            {fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="invoice-detail__pay-amount">{fmtKes(pay.amount)}</span>
+                          {canManageFullFinance && reversingPaymentId !== pay.id && (
+                            <button
+                              type="button"
+                              className="btn-secondary px-2.5 py-1 text-[11px]"
+                              onClick={() => { setReversingPaymentId(pay.id); setReversalReason('') }}
+                            >
+                              Reverse
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <span className="invoice-detail__pay-amount">{fmtKes(pay.amount)}</span>
+                      {reversingPaymentId === pay.id && (
+                        <div className="mb-3 space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-900">
+                          <p>
+                            Reverse this {fmtKes(pay.amount)} payment? The invoice will owe it again and the receipt is taken off
+                            the books. Then register the amount actually received.
+                          </p>
+                          <textarea
+                            className="form-input w-full text-xs"
+                            rows={2}
+                            aria-label="Reason for reversal"
+                            placeholder="Why? e.g. Registered 42,000 — customer paid 15,000"
+                            value={reversalReason}
+                            onChange={e => setReversalReason(e.target.value)}
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button type="button" className="btn-secondary px-3 py-1 text-[11px]" disabled={reversalBusy} onClick={() => setReversingPaymentId(null)}>
+                              Keep payment
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-primary px-3 py-1 text-[11px]"
+                              disabled={reversalBusy || reversalReason.trim().length < 3}
+                              onClick={async () => {
+                                setReversalBusy(true)
+                                const ok = await reverseInvoicePayment(invoice.id, pay.id, reversalReason.trim())
+                                setReversalBusy(false)
+                                if (ok) setReversingPaymentId(null)
+                              }}
+                            >
+                              {reversalBusy ? 'Reversing…' : 'Reverse payment'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
+                  {(invoice.voidedPayments || []).length > 0 && (
+                    <div className="mt-3">
+                      <p className="invoice-detail__info-muted">Reversed payments</p>
+                      {(invoice.voidedPayments || []).map(pay => (
+                        <div key={pay.id} className="invoice-detail__pay-row opacity-70">
+                          <div>
+                            <p className="invoice-detail__pay-method">{(pay.method || 'payment').replace('_', ' ')} · reversed</p>
+                            <p className="invoice-detail__pay-meta">
+                              {fmtDate(pay.date)} · reversed {pay.reversedAt ? fmtDate(pay.reversedAt) : ''}{pay.reversedBy ? ` by ${pay.reversedBy}` : ''}
+                              {pay.reversalReason ? ` — ${pay.reversalReason}` : ''}
+                            </p>
+                          </div>
+                          <span className="invoice-detail__pay-amount line-through">{fmtKes(pay.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="invoice-detail__info-muted">

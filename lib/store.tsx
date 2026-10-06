@@ -1,5 +1,6 @@
 // @ts-nocheck
 'use client'
+import { applyReversalToInvoices, reversalJournalForStore, type PaymentReversalInfo } from '@/lib/accounting/payment-reversal'
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react'
 import {
   hasActivePosSession,
@@ -1268,6 +1269,10 @@ export interface InvoicePayment {
   bankAccountId?: string
   journalEntryId?: string
   recordedBy: string
+  /** Set on entries in Invoice.voidedPayments (lib/accounting/payment-reversal.ts). */
+  reversedAt?: string
+  reversedBy?: string
+  reversalReason?: string
 }
 
 export interface Invoice {
@@ -1281,6 +1286,8 @@ export interface Invoice {
   isOpeningBalance?: boolean
   saleOrderId?: string; purchaseOrderId?: string; receiptId?: string; repairId?: string; notes: string
   payments?: InvoicePayment[]
+  /** Payments registered by mistake and reversed — kept for the record, not counted as received. */
+  voidedPayments?: InvoicePayment[]
   /** Document currency snapshot (KES-first). */
   currencyCode?: string
   baseCurrencyCode?: string
@@ -3696,6 +3703,8 @@ export interface AppState {
   /** Finance dispute flag — Odoo "Blocked" payment status. */
   setInvoicePaymentBlocked: (id: string, blocked: boolean) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void | Promise<void>
+  /** Reverse a payment registered by mistake; the invoice owes the money again. */
+  reverseInvoicePayment: (invoiceId: string, paymentId: string, reason: string) => Promise<boolean>
   resetInvoiceToDraft: (id: string) => void
   cancelInvoice: (id: string, forcedCreditRef?: string) => void
   deleteInvoice: (id: string) => void
@@ -4269,6 +4278,7 @@ export type FinanceStoreState = Pick<AppState,
   | 'postInvoice'
   | 'recordOutsourcePayment'
   | 'registerPayment'
+  | 'reverseInvoicePayment'
   | 'setInvoicePaymentBlocked'
   | 'payExpense'
   | 'payPayrollRun'
@@ -7341,6 +7351,7 @@ export function StoreProvider({
     postInvoice: (...args: Parameters<AppState['postInvoice']>) => storeCtxRef.current!.postInvoice(...args),
     recordOutsourcePayment: (...args: Parameters<AppState['recordOutsourcePayment']>) => storeCtxRef.current!.recordOutsourcePayment(...args),
     registerPayment: (...args: Parameters<AppState['registerPayment']>) => storeCtxRef.current!.registerPayment(...args),
+    reverseInvoicePayment: (...args: Parameters<AppState['reverseInvoicePayment']>) => storeCtxRef.current!.reverseInvoicePayment(...args),
     setInvoicePaymentBlocked: (...args: Parameters<AppState['setInvoicePaymentBlocked']>) => storeCtxRef.current!.setInvoicePaymentBlocked(...args),
     payExpense: (...args: Parameters<AppState['payExpense']>) => storeCtxRef.current!.payExpense(...args),
     payPayrollRun: (...args: Parameters<AppState['payPayrollRun']>) => storeCtxRef.current!.payPayrollRun(...args),
@@ -14169,6 +14180,42 @@ const storeCtx: AppState = {
       }
       addAuditLog('register_payment', invoiceId, `Registered payment of KES ${capped} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
+    },
+    reverseInvoicePayment: async (invoiceId, paymentId, reason) => {
+      const actor = currentUser()
+      if (!['director', 'finance_officer'].includes(String(actor?.role))) {
+        showToast('Only Finance or a Director can reverse a payment', 'error'); return false
+      }
+      const inv = invRef.current.find(i => i.id === invoiceId)
+      if (!inv) return false
+      try {
+        const res = await fetch(`/api/invoices/${invoiceId}/payments/${paymentId}/reverse`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        })
+        const body = await res.json().catch(() => ({})) as { error?: string; reversal?: PaymentReversalInfo & { amountPaidByInvoice: Record<string, number>; reversalJournalRef: string | null } }
+        if (!res.ok || !body.reversal) throw new Error(body.error || `Reversal failed (${res.status})`)
+        const reversal = body.reversal
+        setInvoices(prev => {
+          const next = applyReversalToInvoices(prev as unknown as Array<Record<string, any>>, reversal, reversal.amountPaidByInvoice) as unknown as Invoice[]
+          invRef.current = next
+          return next
+        })
+        const originalRef = paymentJournalRef(inv.ref, paymentId)
+        if (reversal.reversalJournalRef) {
+          setJournalEntries(prev => {
+            const rev = reversalJournalForStore(prev as unknown as Array<Record<string, any>>, originalRef, reversal.reversalJournalRef!, reason, reversal.reversedAt)
+            return rev ? [rev as unknown as JournalEntry, ...prev] : prev
+          })
+        }
+        addAuditLog('reverse_payment', invoiceId, `Reversed payment of ${fmtKes(reversal.amount)} on ${inv.ref}: ${reason}`)
+        showToast(`Payment of ${fmtKes(reversal.amount)} reversed — ${inv.ref} owes it again`, 'success')
+        return true
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Payment could not be reversed', 'error')
+        return false
+      }
     },
     resetInvoiceToDraft: (id) => {
       const actor = currentUser()

@@ -291,8 +291,9 @@ export async function GET(
   return withApiErrorHandling(async () => {
     await requireRole([...WRITE_ROLES])
     const { id } = await resolveRouteParams(params)
+    // Payments on this invoice, including ones spread over several invoices.
     const payments = await prisma.payment.findMany({
-      where: { invoiceId: id, isVoided: false },
+      where: { isVoided: false, OR: [{ invoiceId: id }, { allocations: { some: { invoiceId: id, reversedAt: null } } }] },
       orderBy: { paidAt: 'asc' },
     })
     return NextResponse.json(payments)

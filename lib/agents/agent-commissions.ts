@@ -48,6 +48,12 @@ export type AgentCommission = {
   paidAt?: string
   payoutId?: string
   journalRef?: string
+  /**
+   * How many times the commission has been booked. A payment reversed after
+   * the commission fell due takes it back to pending; earning it again needs
+   * a journal ref of its own.
+   */
+  accruals?: number
   /** Manual bills: what the commission is for. */
   description?: string
   createdByName?: string
@@ -206,10 +212,11 @@ export function reconcileAgentCommissions(params: {
   const settle = (row: AgentCommission, nextState: 'pending' | 'earned' | 'void', ev?: EvaluatedSale) => {
     if (row.status === 'pending') {
       if (nextState === 'earned' && ev) {
-        const ref = jref('JRN/AGC', row.sourceRef)
+        const n = row.accruals ?? 0
+        const ref = jref('JRN/AGC', row.sourceRef, n)
         journals.push({
           kind: 'earn', ref, date: ev.earnedAt ?? today, commissionId: row.id, agentName: row.agentName, sourceRef: row.sourceRef, amount: row.amount,
-          afterJournal: list => replace(list, row.id, { status: 'due', earnedAt: ev.earnedAt ?? today, journalRef: ref, flag: undefined }),
+          afterJournal: list => replace(list, row.id, { status: 'due', earnedAt: ev.earnedAt ?? today, journalRef: ref, accruals: n + 1, flag: undefined }),
         })
       } else if (nextState === 'void') {
         rows = replace(rows, row.id, { status: 'cancelled' })
@@ -217,10 +224,23 @@ export function reconcileAgentCommissions(params: {
       return
     }
     if (row.status === 'due' && nextState === 'void' && !row.clawbackOf) {
-      const ref = jref('JRN/AGC-REV', row.sourceRef)
+      const ref = jref('JRN/AGC-REV', row.sourceRef, (row.accruals ?? 1) - 1)
       journals.push({
         kind: 'reverse', ref, date: today, commissionId: row.id, agentName: row.agentName, sourceRef: row.sourceRef, amount: row.amount,
-        afterJournal: list => replace(list, row.id, { status: 'cancelled' }),
+        afterJournal: list => replace(list, row.id, { status: 'cancelled', accruals: row.accruals ?? 1 }),
+      })
+      return
+    }
+    // Due, then the customer's payment was reversed: not earned after all —
+    // back to waiting for payment, the accrual reversed.
+    if (row.status === 'due' && nextState === 'pending' && !row.clawbackOf) {
+      const ref = jref('JRN/AGC-REV', row.sourceRef, (row.accruals ?? 1) - 1)
+      journals.push({
+        kind: 'reverse', ref, date: today, commissionId: row.id, agentName: row.agentName, sourceRef: row.sourceRef, amount: row.amount,
+        afterJournal: list => replace(list, row.id, {
+          status: 'pending', earnedAt: undefined, journalRef: undefined, accruals: row.accruals ?? 1,
+          flag: 'Customer payment reversed — waiting for payment again',
+        }),
       })
       return
     }
@@ -274,16 +294,19 @@ export function reconcileAgentCommissions(params: {
     }
     if (row.status === 'cancelled' && ev.state !== 'void' && !row.clawbackOf) {
       // Re-sold or un-cancelled: start again from pending.
-      rows = replace(rows, row.id, { status: 'pending', journalRef: undefined, agentId: ev.agentId, agentName: ev.agentName, amount: ev.amount })
-      settle({ ...row, status: 'pending', agentId: ev.agentId, agentName: ev.agentName, amount: ev.amount }, ev.state, ev)
+      const accruals = row.accruals ?? (row.journalRef ? 1 : 0)
+      rows = replace(rows, row.id, { status: 'pending', journalRef: undefined, accruals, agentId: ev.agentId, agentName: ev.agentName, amount: ev.amount })
+      settle({ ...row, status: 'pending', accruals, agentId: ev.agentId, agentName: ev.agentName, amount: ev.amount }, ev.state, ev)
       continue
     }
     if ((row.status === 'due' || row.status === 'paid') && !row.clawbackOf) {
       const changed = ev.agentId !== row.agentId || money(ev.amount) !== money(row.amount)
       const flag = ev.partlyRefunded
         ? 'Partly refunded — review whether the commission still stands'
-        : changed ? 'Agent or amount changed after it was earned — not applied' : undefined
-      if (flag !== row.flag) rows = replace(rows, row.id, { flag })
+        : row.status === 'paid' && ev.state === 'pending'
+          ? 'Paid out, but the customer has not paid in full any more (payment reversed) — review'
+          : changed ? 'Agent or amount changed after it was earned — not applied' : undefined
+      if (flag !== row.flag && !(row.status === 'due' && ev.state === 'pending')) rows = replace(rows, row.id, { flag })
       settle(row, ev.state, ev)
     }
   }
