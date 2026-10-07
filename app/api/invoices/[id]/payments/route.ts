@@ -48,6 +48,9 @@ export async function POST(
       bankAccountId,
       idempotencyKey,
     } = body
+    // Booking a payment that was already received and recorded on screen
+    // (screen-ledger repair): no "payment received" message to the customer.
+    const silent = body.silent === true && actor.role === 'director'
 
     if (!amount || Number(amount) <= 0) {
       return NextResponse.json({ error: 'Amount must be positive' }, { status: 400 })
@@ -284,7 +287,7 @@ export async function POST(
     // Automation #2: customer payment confirmation (email + WhatsApp when phone exists).
     // Never fail the payment if messaging fails. Skip on idempotent retries above.
     // A supplier is not sent a "we received your payment" message.
-    if (!result.idempotent && !isBill) try {
+    if (!result.idempotent && !isBill && !silent) try {
       const { notifyCustomerPaymentReceived } = await import('@/lib/finance/payment-receipt-notify')
       await notifyCustomerPaymentReceived({
         invoiceId,
@@ -299,7 +302,7 @@ export async function POST(
     } catch (err) {
       console.error('[invoice-payment] receipt notify failed:', err)
     }
-    if (!result.idempotent && !isBill) {
+    if (!result.idempotent && !isBill && !silent) {
       const { notifyInvoicePayment } = await import('@/lib/notifications/business-events')
       await notifyInvoicePayment({ invoiceId, paymentId: payment.id, amount: capped, actorUserId: actor.id })
     }

@@ -7,6 +7,7 @@ import AgentCommissions from '@/components/finance/AgentCommissions'
 import InvoiceCustomerCheck from '@/components/finance/InvoiceCustomerCheck'
 import BillPaymentFix from '@/components/finance/BillPaymentFix'
 import DuplicateInvoiceJournals from '@/components/finance/DuplicateInvoiceJournals'
+import ScreenLedgerSync from '@/components/finance/ScreenLedgerSync'
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -1633,6 +1634,7 @@ function AccountingContent() {
               {canManageFullFinance && <InvoiceCustomerCheck showToast={showToast} />}
               {canManageFullFinance && <DuplicateInvoiceJournals showToast={showToast} canApply={currentUser?.role === 'director'} />}
               {canManageFullFinance && <BillPaymentFix showToast={showToast} canApply={currentUser?.role === 'director'} />}
+              {canManageFullFinance && <ScreenLedgerSync showToast={showToast} canApply={currentUser?.role === 'director'} />}
               <IntegrityDashboard />
             </>
           ) : tab === 'invoices' || tab === 'bills' ? (
