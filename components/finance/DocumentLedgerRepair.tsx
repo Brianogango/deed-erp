@@ -6,7 +6,9 @@ import type { ExtraPaymentPlan } from '@/lib/accounting/document-ledger-repair'
 
 type Unbooked = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; date: string; total: number; paid: number }
 type Review = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; total: number; paid: number; ledgerPaid: number; reason: string; action?: 'record_payment' | 'book_payment' }
-type Data = { extraPayments: ExtraPaymentPlan[]; unbooked: Unbooked[]; review: Review[] }
+type Reversal = { reversalRef: string; originalRef: string; amount: number }
+type BillAsSale = { invoiceId: string; ref: string; journalRef: string; amount: number }
+type Data = { extraPayments: ExtraPaymentPlan[]; unbooked: Unbooked[]; review: Review[]; unlinkedReversals: Reversal[]; billsAsSales: BillAsSale[] }
 type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
 
 /**
@@ -49,7 +51,7 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
   const copies = (data?.extraPayments ?? []).reduce((n, p) => n + p.reverse.length, 0)
   const copyTotal = (data?.extraPayments ?? []).reduce((s, p) => s + p.reverse.reduce((t, r) => t + r.amount, 0), 0)
   const unbookedTotal = (data?.unbooked ?? []).reduce((s, d) => s + d.total, 0)
-  const count = copies + (data?.unbooked.length ?? 0)
+  const count = copies + (data?.unbooked.length ?? 0) + (data?.unlinkedReversals.length ?? 0) + (data?.billsAsSales.length ?? 0)
 
   const load = async () => {
     setBusy(true)
@@ -57,7 +59,7 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
       const res = await fetch('/api/accounting/document-ledger-repair', { cache: 'no-store' })
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error(body?.error || `server returned ${res.status}`)
-      setData({ extraPayments: body?.extraPayments ?? [], unbooked: body?.unbooked ?? [], review: body?.review ?? [] })
+      setData({ extraPayments: body?.extraPayments ?? [], unbooked: body?.unbooked ?? [], review: body?.review ?? [], unlinkedReversals: body?.unlinkedReversals ?? [], billsAsSales: body?.billsAsSales ?? [] })
     } catch (err) {
       showToast(`Could not check: ${err instanceof Error ? err.message : 'error'}`, 'error')
     } finally {
@@ -67,7 +69,7 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
 
   const fix = async () => {
     if (!data || !count) return
-    if (!window.confirm(`Reverse ${copies} duplicate payment entr${copies === 1 ? 'y' : 'ies'} (${fmtKes(copyTotal)}) on ${data.extraPayments.length} document${data.extraPayments.length === 1 ? '' : 's'}, and book ${data.unbooked.length} confirmed document${data.unbooked.length === 1 ? '' : 's'} that have no ledger entry (${fmtKes(unbookedTotal)})?\n\nEach recorded payment keeps one entry. Documents are booked on their own date at their current amount. Everything is written to the audit log.`)) return
+    if (!window.confirm(`${data.unlinkedReversals.length ? `Mark ${data.unlinkedReversals.length} entr${data.unlinkedReversals.length === 1 ? 'y' : 'ies'} as reversed by the reversal already posted (no balance change). ` : ''}${data.billsAsSales.length ? `Re-book ${data.billsAsSales.length} bill${data.billsAsSales.length === 1 ? '' : 's'} booked as sales. ` : ''}Then: reverse ${copies} duplicate payment entr${copies === 1 ? 'y' : 'ies'} (${fmtKes(copyTotal)}) on ${data.extraPayments.length} document${data.extraPayments.length === 1 ? '' : 's'}, and book ${data.unbooked.length} confirmed document${data.unbooked.length === 1 ? '' : 's'} that have no ledger entry (${fmtKes(unbookedTotal)})?\n\nEach recorded payment keeps one entry. Documents are booked on their own date at their current amount. Everything is written to the audit log.`)) return
     setBusy(true)
     try {
       const res = await fetch('/api/accounting/document-ledger-repair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
@@ -107,6 +109,19 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
       </div>
       {data && count === 0 && <p className="mt-3 text-xs font-semibold text-emerald-700">Nothing to correct automatically.</p>}
       {data && count > 0 && !canApply && <p className="mt-3 text-xs text-amber-800">A director can apply the correction.</p>}
+      {data && data.unlinkedReversals.length > 0 && (
+        <p className="mt-3 text-xs text-text-2">
+          <span className="font-bold">{data.unlinkedReversals.length} entr{data.unlinkedReversals.length === 1 ? 'y' : 'ies'} reversed but still counted as live</span> (the reversal was posted
+          without being linked; linking changes no balance and lets the documents be booked at their current amount):{' '}
+          <span className="font-mono text-text-3">{data.unlinkedReversals.slice(0, 12).map(r => r.originalRef.replace(/^JRN\//, '')).join(', ')}{data.unlinkedReversals.length > 12 ? ` +${data.unlinkedReversals.length - 12} more` : ''}</span>
+        </p>
+      )}
+      {data && data.billsAsSales.length > 0 && (
+        <p className="mt-3 text-xs text-text-2">
+          <span className="font-bold">{data.billsAsSales.length} bill{data.billsAsSales.length === 1 ? '' : 's'} booked as sales</span> (receivables and revenue instead of payables · {fmtKes(data.billsAsSales.reduce((t, b) => t + b.amount, 0))}):{' '}
+          <span className="font-mono text-text-3">{data.billsAsSales.slice(0, 12).map(b => b.ref).join(', ')}{data.billsAsSales.length > 12 ? ` +${data.billsAsSales.length - 12} more` : ''}</span>
+        </p>
+      )}
       {data && data.extraPayments.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <p className="mb-1 text-xs font-bold text-text-2">{copies} duplicate payment entr{copies === 1 ? 'y' : 'ies'} · {fmtKes(copyTotal)}</p>

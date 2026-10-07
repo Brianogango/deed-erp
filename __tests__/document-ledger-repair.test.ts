@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planExtraPaymentEntries } from '@/lib/accounting/document-ledger-repair'
+import { planExtraPaymentEntries, planUnlinkedReversals } from '@/lib/accounting/document-ledger-repair'
 
 const pid = '11111111-2222-3333-4444-555555555555'
 const e = (id: string, ref: string, amount: number, createdAt: string, paymentId: string | null = null) => ({ id, ref, paymentId, amount, createdAt })
@@ -45,5 +45,21 @@ describe('planExtraPaymentEntries', () => {
       invoiceId: 'i', ref: 'INV/2026/0293', payments: [],
       entries: [e('a', 'JRN/PAY/INV/2026/0293/x', 14000, '2026-10-02')],
     })).toBeNull()
+  })
+})
+
+describe('planUnlinkedReversals', () => {
+  const x = (id: string, ref: string, total: number, extra: Partial<{ invoiceId: string | null; isReversed: boolean; reversalOfId: string | null }> = {}) =>
+    ({ id, ref, total, invoiceId: 'inv', isReversed: false, reversalOfId: null, ...extra })
+
+  it('links a browser-posted REV/ entry to the live entry it reversed', () => {
+    expect(planUnlinkedReversals([x('a', 'JRN/INV/2026/0008', 2000000), x('b', 'REV/JRN/INV/2026/0008', 2000000)]))
+      .toEqual([{ reversalId: 'b', reversalRef: 'REV/JRN/INV/2026/0008', originalId: 'a', originalRef: 'JRN/INV/2026/0008', amount: 2000000 }])
+  })
+
+  it('leaves pairs that are already linked, differ in amount or belong to another document', () => {
+    expect(planUnlinkedReversals([x('a', 'JRN/X', 100, { isReversed: true }), x('b', 'REV/JRN/X', 100, { reversalOfId: 'a' })])).toEqual([])
+    expect(planUnlinkedReversals([x('a', 'JRN/X', 100), x('b', 'REV/JRN/X', 90)])).toEqual([])
+    expect(planUnlinkedReversals([x('a', 'JRN/X', 100), x('b', 'REV/JRN/X', 100, { invoiceId: 'other' })])).toEqual([])
   })
 })

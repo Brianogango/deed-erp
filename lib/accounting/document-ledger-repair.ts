@@ -66,3 +66,28 @@ export function planExtraPaymentEntries(doc: {
   }
   return reverse.length ? { invoiceId: doc.invoiceId, ref: doc.ref, recorded, booked, reverse } : null
 }
+
+/**
+ * Reversals the browser posted as plain entries. "Reset to draft" in an old
+ * tab posted REV/<ref> as a manual entry without marking <ref> as reversed,
+ * so <ref> still looks live: INV/2026/0008 (2,000,000, reset on 5 Aug and
+ * re-approved at 1,240,000.05) read as booked, and its new amount was never
+ * booked. Linking the pair changes no balance — the reversal already posted —
+ * it only records which entry it reversed, so the document can be booked.
+ */
+export type LedgerEntryLite = { id: string; ref: string; total: number; invoiceId: string | null; isReversed: boolean; reversalOfId: string | null }
+export type UnlinkedReversal = { reversalId: string; reversalRef: string; originalId: string; originalRef: string; amount: number }
+
+export function planUnlinkedReversals(entries: LedgerEntryLite[]): UnlinkedReversal[] {
+  const byRef = new Map(entries.map(e => [e.ref, e]))
+  const out: UnlinkedReversal[] = []
+  for (const rev of entries) {
+    if (!rev.ref.startsWith('REV/') || rev.reversalOfId || rev.isReversed) continue
+    const original = byRef.get(rev.ref.slice(4))
+    if (!original || original.isReversed || original.reversalOfId) continue
+    if ((original.invoiceId ?? null) !== (rev.invoiceId ?? null)) continue
+    if (Math.abs(original.total - rev.total) > 0.005) continue
+    out.push({ reversalId: rev.id, reversalRef: rev.ref, originalId: original.id, originalRef: original.ref, amount: original.total })
+  }
+  return out
+}

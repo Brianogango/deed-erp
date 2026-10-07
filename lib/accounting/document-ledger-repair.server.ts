@@ -8,7 +8,7 @@ import { postInvoicePaymentJournalToPrisma } from '@/lib/accounting/invoice-jour
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
-import { planExtraPaymentEntries, type ExtraPaymentPlan, type PaymentEntry } from '@/lib/accounting/document-ledger-repair'
+import { planExtraPaymentEntries, planUnlinkedReversals, type ExtraPaymentPlan, type PaymentEntry, type UnlinkedReversal } from '@/lib/accounting/document-ledger-repair'
 
 export type UnbookedDoc = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; date: string; total: number; paid: number }
 /**
@@ -22,7 +22,47 @@ export type ReviewDoc = { invoiceId: string; ref: string; kind: 'invoice' | 'bil
 const money = (n: number) => Math.round(n * 100) / 100
 const POSTED = ['approved', 'invoiced', 'paid', 'partially_paid'] as const
 
-export async function findDocumentLedgerRepairs(): Promise<{ extraPayments: ExtraPaymentPlan[]; unbooked: UnbookedDoc[]; review: ReviewDoc[] }> {
+export type BillAsSale = { invoiceId: string; ref: string; journalRef: string; amount: number }
+
+export async function findUnlinkedReversals(): Promise<UnlinkedReversal[]> {
+  const revs = await prisma.journalEntry.findMany({
+    where: { ref: { startsWith: 'REV/' }, reversalOfId: null, isReversed: false },
+    select: { id: true, ref: true, totalDebit: true, invoiceId: true, isReversed: true, reversalOfId: true },
+  })
+  if (!revs.length) return []
+  const originals = await prisma.journalEntry.findMany({
+    where: { ref: { in: revs.map(r => r.ref.slice(4)) } },
+    select: { id: true, ref: true, totalDebit: true, invoiceId: true, isReversed: true, reversalOfId: true },
+  })
+  return planUnlinkedReversals([...revs, ...originals].map(e => ({
+    id: e.id, ref: e.ref, total: Number(e.totalDebit), invoiceId: e.invoiceId, isReversed: e.isReversed, reversalOfId: e.reversalOfId,
+  })))
+}
+
+/**
+ * Bills whose live posting entry is a SALES entry (Dr 1800 receivables,
+ * Cr 5000 revenue): BILL/2026/0008 was booked that way on 5 Aug, so a supplier
+ * bill showed as revenue and as money owed to us, and never as money we owe.
+ */
+export async function findBillsBookedAsSales(): Promise<BillAsSale[]> {
+  const entries = await prisma.journalEntry.findMany({
+    where: { isPosted: true, isReversed: false, reversalOfId: null, sourceType: 'invoice', invoiceId: { not: null },
+      lines: { some: { accountLabel: { startsWith: '1800' }, debit: { gt: 0 } } } },
+    select: { ref: true, totalDebit: true, invoiceId: true },
+  })
+  if (!entries.length) return []
+  const bills = await prisma.invoice.findMany({
+    where: { id: { in: entries.map(e => e.invoiceId!) }, documentType: 'vendor_bill' },
+    select: { id: true, invoiceNumber: true },
+  })
+  const byId = new Map(bills.map(b => [b.id, b]))
+  return entries
+    .filter(e => byId.has(e.invoiceId!) && isPostingRef(e.ref, byId.get(e.invoiceId!)!.invoiceNumber))
+    .map(e => ({ invoiceId: e.invoiceId!, ref: byId.get(e.invoiceId!)!.invoiceNumber, journalRef: e.ref, amount: Number(e.totalDebit) }))
+    .sort((a, b) => a.ref.localeCompare(b.ref))
+}
+
+export async function findDocumentLedgerRepairs(): Promise<{ extraPayments: ExtraPaymentPlan[]; unbooked: UnbookedDoc[]; review: ReviewDoc[]; unlinkedReversals: UnlinkedReversal[]; billsAsSales: BillAsSale[] }> {
   const docs = await prisma.invoice.findMany({
     where: { status: { in: [...POSTED] }, NOT: { totalAmount: 0 }, isPosInvoice: false },
     select: { id: true, invoiceNumber: true, documentType: true, invoiceDate: true, totalAmount: true, amountPaid: true, internalNotes: true },
@@ -89,14 +129,58 @@ export async function findDocumentLedgerRepairs(): Promise<{ extraPayments: Extr
     else if (recorded > ledgerPaid + 0.5) review.push({ ...base, ledgerPaid, reason: 'Payment recorded on the document but not in the ledger', action: 'book_payment' })
   }
   const byRef = (a: { ref: string }, b: { ref: string }) => a.ref.localeCompare(b.ref)
-  return { extraPayments: extraPayments.sort(byRef), unbooked: unbooked.sort(byRef), review: review.sort(byRef) }
+  return {
+    extraPayments: extraPayments.sort(byRef), unbooked: unbooked.sort(byRef), review: review.sort(byRef),
+    unlinkedReversals: await findUnlinkedReversals(), billsAsSales: await findBillsBookedAsSales(),
+  }
 }
 
 type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
 
 export async function applyDocumentLedgerRepairs(actorId: string): Promise<Result[]> {
-  const { extraPayments, unbooked } = await findDocumentLedgerRepairs()
   const results: Result[] = []
+  // 1. Record which entry each browser-posted reversal reversed (no balance changes).
+  for (const r of await findUnlinkedReversals()) {
+    try {
+      await prisma.$transaction(async tx => {
+        await tx.journalEntry.update({ where: { id: r.originalId }, data: { isReversed: true } })
+        await tx.journalEntry.update({ where: { id: r.reversalId }, data: { reversalOfId: r.originalId } })
+        await writeFinancialAuditInTx(tx, {
+          userId: actorId,
+          action: 'link_unlinked_reversal',
+          entityType: 'journal_entry',
+          entityId: r.originalId,
+          relatedJournalId: r.reversalId,
+          oldValues: { originalRef: r.originalRef, isReversed: false, reversalRef: r.reversalRef, reversalOfId: null },
+          newValues: { isReversed: true, reversalOfId: r.originalId },
+        })
+      })
+      results.push({ ref: r.originalRef, status: 'fixed', message: `Marked as reversed by ${r.reversalRef} (no balance change)` })
+    } catch (err) {
+      results.push({ ref: r.originalRef, status: 'failed', message: err instanceof Error ? err.message : 'could not link' })
+    }
+  }
+  // 2. Bills booked as sales: reverse the sales entry and book the bill properly.
+  for (const b of await findBillsBookedAsSales()) {
+    try {
+      const rev = await reverseJournalEntry(b.journalRef, actorId)
+      const out = await ensureInvoiceBooked(b.invoiceId, actorId)
+      await writeFinancialAudit({
+        userId: actorId,
+        action: 'rebook_bill_booked_as_sale',
+        entityType: 'invoice',
+        entityId: b.invoiceId,
+        relatedJournalId: rev.id,
+        oldValues: { journalRef: b.journalRef, booking: 'sale (Dr receivables / Cr revenue)' },
+        newValues: { reversedBy: rev.ref, journalRef: out.ref },
+      })
+      results.push({ ref: b.ref, status: 'fixed', message: `Sales entry reversed; booked as a bill (${out.ref})` })
+    } catch (err) {
+      results.push({ ref: b.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not rebook' })
+    }
+  }
+  // 3. With those settled, the rest reads the current state.
+  const { extraPayments, unbooked } = await findDocumentLedgerRepairs()
   for (const plan of extraPayments) {
     for (const r of plan.reverse) {
       try {
