@@ -37,7 +37,7 @@ describe('payment journal posting under a write conflict', () => {
     const out = await recordPaymentWithAllocations({
       amount: 500, paymentMethod: 'mpesa', createdById: 'u1', invoiceId: 'inv-1',
       allocations: [{ invoiceId: 'inv-1', amount: 500 }],
-      journal: id => ({ ref: `JRN/PAY/INV/1/${id}`, journalCode: 'CSH', date: new Date(), description: 'x', lines: [] as any[] }),
+      journal: id => ({ ref: `JRN/PAY/INV/1/${id}`, journalCode: 'CSH', date: new Date(), description: 'x', sourceType: 'payment', lines: [] as any[] }),
     })
     expect(h.attempts).toBe(2)
     expect(h.committed).toEqual(['posted'])
