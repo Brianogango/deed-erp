@@ -13,6 +13,7 @@ import {
 } from '@/lib/accounting/journal-mirror-failures'
 import { roundMoney } from '@/lib/accounting/money'
 import { countPosSalesWithoutJournal } from '@/lib/accounting/pos-journal-gaps'
+import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
 
 export type IntegrityGate = {
   id: string
@@ -73,24 +74,31 @@ function tbRowNet(tb: Awaited<ReturnType<typeof buildTrialBalance>>, code: strin
  * first and the invoices counted against it.
  */
 async function countInvoicesWithReversedJournal(asOfDate: Date): Promise<number> {
-  const reversed = await prisma.journalEntry.findMany({
+  const entries = await prisma.journalEntry.findMany({
     where: {
       invoiceId: { not: null },
-      isReversed: true,
+      sourceType: { in: ['invoice', 'bill'] },
       NOT: { ref: { startsWith: 'REV/' } },
     },
-    select: { invoiceId: true },
+    select: { invoiceId: true, ref: true, isReversed: true, reversalOfId: true },
   })
-  const ids = Array.from(new Set(reversed.map(r => r.invoiceId).filter((id): id is string => Boolean(id))))
-  if (ids.length === 0) return 0
-  return prisma.invoice.count({
+  if (entries.length === 0) return 0
+  const candidates = await prisma.invoice.findMany({
     where: {
-      id: { in: ids },
+      id: { in: Array.from(new Set(entries.map(e => e.invoiceId!))) },
       status: { in: ['approved', 'invoiced', 'dispatched', 'delivered'] },
       postingStatus: 'unposted',
       invoiceDate: { lte: asOfDate },
     },
+    select: { id: true, invoiceNumber: true },
   })
+  // Only the invoice's OWN posting entry counts (JRN/<number>, JRN/<number>/N):
+  // a reversed payment or delivery charge on it is not a lost sale. And an
+  // invoice that still has a live posting entry has lost nothing.
+  return candidates.filter(inv => {
+    const own = entries.filter(e => e.invoiceId === inv.id && isPostingRef(e.ref, inv.invoiceNumber))
+    return own.some(e => e.isReversed) && !own.some(e => !e.isReversed && !e.reversalOfId)
+  }).length
 }
 
 export async function runIntegritySuite(asOf: string): Promise<IntegritySuiteResult> {

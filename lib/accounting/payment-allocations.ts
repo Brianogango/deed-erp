@@ -364,6 +364,10 @@ export async function recordPaymentWithAllocations(opts: {
       },
     })
 
+    // Allocated together with the payment: it applies from the payment's own
+    // date, not the day it was typed in. A payment made on 19 Aug and entered
+    // on 27 Aug otherwise read as unallocated for those eight days.
+    const applicationDate = opts.paidAt ?? new Date()
     const allocations = []
     for (const alloc of opts.allocations) {
       allocations.push(await tx.paymentAllocation.create({
@@ -371,6 +375,7 @@ export async function recordPaymentWithAllocations(opts: {
           paymentId: payment.id,
           invoiceId: alloc.invoiceId,
           amount: round2(alloc.amount),
+          applicationDate,
         },
       }))
     }
