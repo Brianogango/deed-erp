@@ -18,11 +18,11 @@
 type Row = Record<string, any>
 
 /**
- * The ledger starts on 13 Sep 2026 (the finance cutover). Older documents and
- * payments are carried in the opening balances; booking them again would
- * count them twice.
+ * There is no cutover in the data: the ledger holds the full history from
+ * June 2026 and no opening-balance entries were ever posted (integrity
+ * drill-down, 7 Oct). Older documents and payments are booked like any
+ * other; nothing is "carried in opening balances".
  */
-export const LEDGER_START = '2026-09-13'
 
 const CLOSED = new Set(['draft', 'cancelled', 'canceled', 'voided', 'void'])
 const money = (v: unknown) => Math.round((Number(v) || 0) * 100) / 100
@@ -55,8 +55,6 @@ export type MissingDocPlan = {
 export function planMissingDocs(screen: Row[], ledgerIds: Set<string>): MissingDocPlan[] {
   return screen
     .filter(r => r?.id && !ledgerIds.has(String(r.id)) && !CLOSED.has(String(r.status ?? '')))
-    // Before the ledger start: the opening balances carry it — not a gap.
-    .filter(r => { const d = normalizeDocDate(r.date ?? r.invoiceDate).iso; return !d || d >= LEDGER_START })
     .map(r => {
       const date = normalizeDocDate(r.date ?? r.invoiceDate)
       const due = normalizeDocDate(r.dueDate)
@@ -92,12 +90,6 @@ export type UnbookedPaymentPlan = {
   book: Array<{ id: string; amount: number; date: string; method: string; reference?: string }>
   /** Paid on screen with no payment listed: register by hand. */
   manual: boolean
-  /**
-   * Dated before the ledger start: the money is in the opening balances, so
-   * no entry is posted — only the document's stored paid amount is aligned
-   * with the screen (it drives ageing and the overdue lists).
-   */
-  alignOnly?: boolean
 }
 
 export function planUnbookedPayments(
@@ -112,11 +104,9 @@ export function planUnbookedPayments(
     if (!(screenPaid > l.amountPaid + 0.5)) continue
     let gap = money(screenPaid - l.amountPaid)
     const book: UnbookedPaymentPlan['book'] = []
-    let beforeStart = 0
     for (const p of Array.isArray(r.payments) ? r.payments : []) {
       if (!p?.id || l.paymentIds.has(String(p.id)) || gap <= 0.5) continue
       const paidOn = normalizeDocDate(p.date).iso || normalizeDocDate(r.date).iso
-      if (paidOn && paidOn < LEDGER_START) { beforeStart++; continue }
       const amount = Math.min(money(p.amount), gap)
       if (!(amount > 0)) continue
       book.push({
@@ -128,9 +118,6 @@ export function planUnbookedPayments(
       })
       gap = money(gap - amount)
     }
-    const docDate = normalizeDocDate(r.date ?? r.invoiceDate).iso
-    // Paid before the ledger start: nothing to post; align the paid figure.
-    const alignOnly = !book.length && (beforeStart > 0 || Boolean(docDate && docDate < LEDGER_START))
     out.push({
       invoiceId: String(r.id),
       ref: String(r.ref ?? r.id),
@@ -138,8 +125,7 @@ export function planUnbookedPayments(
       screenPaid,
       ledgerPaid: l.amountPaid,
       book,
-      manual: book.length === 0 && !alignOnly,
-      ...(alignOnly ? { alignOnly: true } : {}),
+      manual: book.length === 0,
     })
   }
   return out.sort((a, b) => a.ref.localeCompare(b.ref))

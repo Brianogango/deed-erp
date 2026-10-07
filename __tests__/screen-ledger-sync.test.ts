@@ -32,17 +32,16 @@ describe('screen vs ledger', () => {
     expect(plans).toHaveLength(2)
     expect(plans.find(p => p.ref === 'INV/2026/0226')).toMatchObject({ manual: false, book: [{ id: 'p1', amount: 2500, method: 'mpesa', reference: 'SJK1' }] })
     expect(plans.find(p => p.ref === 'INV/2026/0207')).toMatchObject({ manual: true, book: [] })
-    // No date on that row; a dated pre-ledger one is aligned instead (see below).
   })
 })
 
-describe('the ledger start date', () => {
-  it('leaves documents and payments from before 13 Sep to the opening balances', () => {
-    expect(planMissingDocs([{ id: 'o1', ref: 'INV/2026/0001', type: 'customer_invoice', status: 'posted', total: 5000, date: '2026-01-01', partnerId: 'c1' }], new Set())).toEqual([])
+describe('older documents', () => {
+  it('books documents and payments from before 13 Sep like any other (the ledger has the full history)', () => {
+    expect(planMissingDocs([{ id: 'o1', ref: 'INV/2026/0001', type: 'customer_invoice', status: 'posted', total: 5000, date: '2026-01-01', partnerId: 'c1' }], new Set())).toHaveLength(1)
     const plans = planUnbookedPayments(
       [{ id: 'i1', ref: 'INV/2026/0100', status: 'posted', total: 2500, amountPaid: 2500, date: '2026-08-01', payments: [{ id: 'p1', amount: 2500, date: '2026-08-02', method: 'cash' }] }],
       new Map([['i1', { amountPaid: 0, paymentIds: new Set<string>() }]]),
     )
-    expect(plans).toMatchObject([{ ref: 'INV/2026/0100', alignOnly: true, manual: false, book: [] }])
+    expect(plans).toMatchObject([{ ref: 'INV/2026/0100', manual: false, book: [{ id: 'p1', amount: 2500, date: '2026-08-02' }] }])
   })
 })

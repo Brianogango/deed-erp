@@ -16,7 +16,7 @@ export default function ScreenLedgerSync({ showToast, canApply }: { showToast: (
   const [gaps, setGaps] = useState<Gaps | null>(null)
   const [results, setResults] = useState<Result[]>([])
   const [busy, setBusy] = useState(false)
-  const bookable = gaps ? gaps.missing.filter(m => !m.problem).length + gaps.payments.reduce((n, p) => n + p.book.length + (p.alignOnly ? 1 : 0), 0) : 0
+  const bookable = gaps ? gaps.missing.filter(m => !m.problem).length + gaps.payments.reduce((n, p) => n + p.book.length, 0) : 0
   const empty = gaps && gaps.missing.length === 0 && gaps.payments.length === 0
 
   const load = async () => {
@@ -121,9 +121,7 @@ export default function ScreenLedgerSync({ showToast, canApply }: { showToast: (
                   <td className="py-1.5 pr-3 text-right">{fmtKes(p.screenPaid)}</td>
                   <td className="py-1.5 pr-3 text-right">{fmtKes(p.ledgerPaid)}</td>
                   <td className="py-1.5">
-                    {p.alignOnly
-                      ? <span>Align paid amount (paid before 13 Sep — no ledger entry)</span>
-                      : p.manual
+                    {p.manual
                       ? <span className="text-amber-800">No payment details on screen — register it on the document</span>
                       : p.book.map(b => `Book ${fmtKes(b.amount)} ${b.method.replace('_', ' ')}${b.date ? ` of ${b.date}` : ''}`).join('; ')}
                   </td>
