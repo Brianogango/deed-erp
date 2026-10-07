@@ -1,6 +1,6 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { mergeInvoiceMirror } from '@/lib/invoice-mirror-merge'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
@@ -43,7 +43,38 @@ function mapInvoiceToClient(invoice: any) {
     exchangeRateToBase: Number(invoice.exchangeRateToBase ?? 1) || 1,
     paymentBlocked: Boolean(invoice.paymentBlocked),
     lockVersion: Number(invoice.lockVersion ?? 0),
+    ...(invoice.isPosInvoice ? { isPosInvoice: true } : {}),
   }
+}
+
+/**
+ * Put documents that exist in the invoices table onto the Finance list
+ * (deed_invoices) when the list does not have them yet. Rows already on the
+ * list are left exactly as they are.
+ *
+ * The list used to be written only by the browser that created the document.
+ * A till sale by a role that may sell but may not write the invoice list
+ * (kilimall_officer), a closed tab or a refused save left the sale in the
+ * database and the ledger but invisible in Finance (POS/0096).
+ *
+ * Returns the refs added.
+ */
+export async function addInvoicesToList(ids?: string[]): Promise<string[]> {
+  return withAppStateKeyLock('deed_invoices', async () => {
+    const existing = (await loadAppStateForWrite(['deed_invoices'])).deed_invoices
+    const rows = Array.isArray(existing) ? existing as Array<Record<string, unknown>> : []
+    const haveIds = new Set(rows.map(r => String(r?.id ?? '')))
+    const haveRefs = new Set(rows.map(r => String(r?.ref ?? '')))
+    const missing = await prisma.invoice.findMany({
+      where: { ...(ids ? { id: { in: ids } } : {}), NOT: { id: { in: [...haveIds].filter(id => /^[0-9a-f-]{36}$/i.test(id)) } } },
+      include: { client: true, items: true },
+      orderBy: { invoiceDate: 'desc' },
+    })
+    const add = missing.filter(i => !haveIds.has(i.id) && !haveRefs.has(i.invoiceNumber)).map(mapInvoiceToClient)
+    if (!add.length) return []
+    await saveStoreKeys({ deed_invoices: JSON.stringify([...add, ...rows]) })
+    return add.map(r => r.ref)
+  })
 }
 
 export async function refreshSaleOrdersBlob(): Promise<void> {

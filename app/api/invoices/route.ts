@@ -441,6 +441,14 @@ export async function POST(request: Request) {
       }
     }
 
+    // Onto the Finance list from the server, not only from the creating browser.
+    try {
+      const { addInvoicesToList } = await import('@/lib/documents-broadcast.server')
+      await addInvoicesToList([invoice.id])
+    } catch (err) {
+      console.error('[invoice] could not add to the invoice list:', err)
+    }
+
     return NextResponse.json(invoice, { status: 201 })
   })
 }

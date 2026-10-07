@@ -5,6 +5,7 @@ import { fmtKes } from '@/lib/store'
 import type { DepositDuplicate } from '@/lib/accounting/ledger-cleanup'
 
 type VatGap = { invoiceId: string; ref: string; type: string; vat: number }
+type ListGap = { ref: string; date: string; total: number }
 type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
 
 /**
@@ -12,10 +13,10 @@ type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
  * twice and booked documents with no VAT record (lib/accounting/ledger-cleanup.ts).
  */
 export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg: string, type?: 'error' | 'success' | 'info') => void; canApply: boolean }) {
-  const [data, setData] = useState<{ deposits: DepositDuplicate[]; vat: VatGap[] } | null>(null)
+  const [data, setData] = useState<{ deposits: DepositDuplicate[]; vat: VatGap[]; listMissing: ListGap[] } | null>(null)
   const [failed, setFailed] = useState<Result[]>([])
   const [busy, setBusy] = useState(false)
-  const count = data ? data.deposits.length + data.vat.length : 0
+  const count = data ? data.deposits.length + data.vat.length + data.listMissing.length : 0
   const vatTotal = (data?.vat ?? []).reduce((s, g) => s + g.vat, 0)
 
   const load = async () => {
@@ -24,7 +25,7 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
       const res = await fetch('/api/accounting/ledger-cleanup', { cache: 'no-store' })
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error(body?.error || `server returned ${res.status}`)
-      setData({ deposits: body?.deposits ?? [], vat: body?.vat ?? [] })
+      setData({ deposits: body?.deposits ?? [], vat: body?.vat ?? [], listMissing: body?.listMissing ?? [] })
     } catch (err) {
       showToast(`Could not check: ${err instanceof Error ? err.message : 'error'}`, 'error')
     } finally {
@@ -34,7 +35,7 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
 
   const fix = async () => {
     if (!data || !count) return
-    if (!window.confirm(`Reverse ${data.deposits.length} duplicate deposit entr${data.deposits.length === 1 ? 'y' : 'ies'} and write VAT records for ${data.vat.length} document${data.vat.length === 1 ? '' : 's'} (${fmtKes(vatTotal)})?\n\nThe server's own deposit entry is kept. Reversals are dated today and written to the audit log.`)) return
+    if (!window.confirm(`Reverse ${data.deposits.length} duplicate deposit entr${data.deposits.length === 1 ? 'y' : 'ies'} and write VAT records for ${data.vat.length} document${data.vat.length === 1 ? '' : 's'} (${fmtKes(vatTotal)}), and put ${data.listMissing.length} document${data.listMissing.length === 1 ? '' : 's'} missing from the Finance list back on it?\n\nThe server's own deposit entry is kept. Reversals are dated today and written to the audit log.`)) return
     setBusy(true)
     try {
       const res = await fetch('/api/accounting/ledger-cleanup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
@@ -56,10 +57,11 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
     <div className="mx-4 mt-4 rounded-2xl border border-border-lt bg-card p-4 sm:mx-6">
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-sm font-extrabold text-text-1">Deposits booked twice and missing VAT records</h3>
+          <h3 className="text-sm font-extrabold text-text-1">Deposits booked twice, missing VAT records, documents missing from Finance</h3>
           <p className="mt-1 max-w-3xl text-xs text-text-3">
             Deposit receipts and refunds the browser booked beside the server&apos;s own entry, and booked invoices and bills whose VAT
-            never reached the VAT records (so the VAT return missed it).
+            never reached the VAT records (so the VAT return missed it), and saved documents — often till
+            sales (POS) — that the Finance invoice list does not show.
           </p>
         </div>
         <div className="flex gap-2">
@@ -94,6 +96,12 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
         <p className="mt-3 text-xs text-text-2">
           {data.vat.length} document{data.vat.length === 1 ? '' : 's'} with {fmtKes(vatTotal)} VAT and no VAT record:{' '}
           <span className="font-mono text-text-3">{data.vat.slice(0, 12).map(g => g.ref).join(', ')}{data.vat.length > 12 ? ` +${data.vat.length - 12} more` : ''}</span>
+        </p>
+      )}
+      {data && data.listMissing.length > 0 && (
+        <p className="mt-3 text-xs text-text-2">
+          {data.listMissing.length} document{data.listMissing.length === 1 ? '' : 's'} saved but not on the Finance list:{' '}
+          <span className="font-mono text-text-3">{data.listMissing.slice(0, 15).map(g => g.ref).join(', ')}{data.listMissing.length > 15 ? ` +${data.listMissing.length - 15} more` : ''}</span>
         </p>
       )}
       {failed.length > 0 && (
