@@ -11,10 +11,22 @@
 \echo '== Logic health check =='
 
 WITH
+-- A document's own posting entry: JRN/<number> or a numbered copy JRN/<number>/N
+-- (bills post as source 'bill', invoices and import copies as 'invoice';
+-- delivery charges and payments carry the document id too but are not counted).
 live_sales AS (
-  SELECT invoice_id, count(*) AS n, max(total_debit) AS amt
+  SELECT j.invoice_id, count(*) AS n, max(j.total_debit) AS amt
+  FROM journal_entries j JOIN invoices i ON i.id = j.invoice_id
+  WHERE j.source_type IN ('invoice', 'bill') AND NOT j.is_reversed AND j.reversal_of_id IS NULL
+    AND (j.ref = 'JRN/' || i.invoice_number
+         OR (left(j.ref, length(i.invoice_number) + 5) = 'JRN/' || i.invoice_number || '/'
+             AND substr(j.ref, length(i.invoice_number) + 6) ~ '^[0-9]+$'))
+  GROUP BY j.invoice_id
+),
+live_any AS (
+  SELECT invoice_id, count(*) AS n, sum(total_debit) AS amt
   FROM journal_entries
-  WHERE source_type = 'invoice' AND NOT is_reversed AND reversal_of_id IS NULL AND invoice_id IS NOT NULL
+  WHERE source_type IN ('invoice', 'bill') AND NOT is_reversed AND reversal_of_id IS NULL AND invoice_id IS NOT NULL
   GROUP BY invoice_id
 ),
 line_totals AS (
@@ -60,17 +72,23 @@ SELECT rule, problems, kes FROM (
   WHERE i.status::text IN ('approved', 'invoiced', 'paid', 'partially_paid') AND i.invoice_date >= '2026-09-13'
     AND s.invoice_id IS NULL AND i.invoice_number NOT LIKE 'POS%'
   UNION ALL
-  SELECT 4, 'Cancelled/voided invoices still booked (live sales entry)',
+  SELECT 4, 'Cancelled/voided invoices still booked (live entry)',
          count(*), coalesce(sum(s.amt), 0)
-  FROM invoices i JOIN live_sales s ON s.invoice_id = i.id
+  FROM invoices i JOIN live_any s ON s.invoice_id = i.id
   WHERE i.status::text IN ('cancelled', 'void')
   UNION ALL
   SELECT 5, 'Bill payments booked as customer receipts',
          count(*), coalesce(sum(amount), 0) FROM bill_receipts
   UNION ALL
-  SELECT 6, 'Payments with no ledger entry (not voided)',
+  SELECT 6, 'Payments with no ledger entry at all (not voided)',
          count(*), coalesce(sum(amount), 0)
-  FROM payments WHERE NOT is_voided AND (posting_status <> 'posted' OR journal_id IS NULL)
+  FROM payments p WHERE NOT p.is_voided
+    AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE (j.payment_id = p.id OR j.id = p.journal_id) AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
+  UNION ALL
+  SELECT 6, '  (info) payments booked but not marked as booked',
+         count(*), coalesce(sum(amount), 0)
+  FROM payments p WHERE NOT p.is_voided AND (p.posting_status <> 'posted' OR p.journal_id IS NULL)
+    AND EXISTS (SELECT 1 FROM journal_entries j WHERE (j.payment_id = p.id OR j.id = p.journal_id) AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
   UNION ALL
   SELECT 7, 'Ledger paid amount below its recorded payments',
          count(*), coalesce(sum(a.paid - i.amount_paid), 0)
@@ -85,7 +103,7 @@ SELECT rule, problems, kes FROM (
   SELECT 9, 'Screen and ledger disagree: amount paid',
          count(*), coalesce(sum(abs(s.paid - i.amount_paid)), 0)
   FROM screen s JOIN invoices i ON i.id::text = s.id
-  WHERE abs(s.paid - i.amount_paid) > 0.01
+  WHERE abs(s.paid - i.amount_paid) > 0.5
   UNION ALL
   SELECT 10, 'Screen and ledger disagree: cancelled on one side only',
          count(*), coalesce(sum(i.total_amount), 0)

@@ -14,7 +14,7 @@ vi.mock('@/lib/server-store', () => ({
 }))
 vi.mock('@/lib/accounting/invoice-journals', () => ({ postInvoiceJournalToPrisma: vi.fn(async (inv: any) => { h.posted.push(inv.id) }) }))
 vi.mock('@/lib/prisma', () => ({
-  default: { journalEntry: { findFirst: vi.fn(async ({ where }: any) => (h.liveJournalFor.has(where.invoiceId) ? { id: 'j' } : null)) } },
+  default: { journalEntry: { findMany: vi.fn(async ({ where }: any) => (h.liveJournalFor.has(where.invoiceId) ? [{ ref: 'JRN/INV/2026/0131' }] : [])) } },
 }))
 
 import { POST } from '@/app/api/import/route'

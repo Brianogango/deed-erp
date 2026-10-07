@@ -1,5 +1,5 @@
 /**
- * Invoices with more than one live sales entry.
+ * Invoices and bills with more than one live posting entry.
  *
  * A Finance → Migration import posted a sales entry for every invoice it
  * carried, under a new numbered ref (JRN/INV/<ref>/N) each time; a timed-out
@@ -26,21 +26,38 @@ export type DuplicateInvoicePlan = {
   invoiceNumber: string
   customer: string
   invoiceTotal: number
-  keep: { id: string; ref: string; amount: number }
+  /** 'cancelled': the document is cancelled/voided, so nothing is kept. */
+  reason: 'duplicate' | 'cancelled'
+  keep: { id: string; ref: string; amount: number } | null
   reverse: Array<{ id: string; ref: string; amount: number }>
   /** The kept entry's amount differs from the invoice total — check it. */
   amountMismatch: boolean
 }
 
 const ms = (d: Date | string) => new Date(d).getTime()
+const escape = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * The document's own posting entry: JRN/<number> or a numbered copy of it
+ * (JRN/<number>/2, /3, …). Not a delivery charge (JRN/DEL/…), payment
+ * (JRN/PAY/…) or anything else that also carries the document's id.
+ */
+export function isPostingRef(ref: string, invoiceNumber: string): boolean {
+  if (!invoiceNumber) return false
+  return new RegExp(`^JRN/${escape(invoiceNumber)}(/\\d+)?$`).test(ref)
+}
 const close = (a: number, b: number) => Math.abs(a - b) < 0.01
 
 export function planDuplicateInvoiceJournals(
   invoices: Array<{ id: string; invoiceNumber: string; customer: string; total: number }>,
   entries: LiveSalesEntry[],
 ): DuplicateInvoicePlan[] {
+  const numberOf = new Map(invoices.map(i => [i.id, i.invoiceNumber]))
   const byInvoice = new Map<string, LiveSalesEntry[]>()
-  for (const e of entries) byInvoice.set(e.invoiceId, [...(byInvoice.get(e.invoiceId) ?? []), e])
+  for (const e of entries) {
+    if (!isPostingRef(e.ref, numberOf.get(e.invoiceId) ?? '')) continue
+    byInvoice.set(e.invoiceId, [...(byInvoice.get(e.invoiceId) ?? []), e])
+  }
   const plans: DuplicateInvoicePlan[] = []
   for (const inv of invoices) {
     const live = byInvoice.get(inv.id) ?? []
@@ -61,10 +78,36 @@ export function planDuplicateInvoiceJournals(
       invoiceNumber: inv.invoiceNumber,
       customer: inv.customer,
       invoiceTotal: inv.total,
+      reason: 'duplicate',
       keep: { id: keep.id, ref: keep.ref, amount: keep.totalDebit },
       reverse: rest.map(e => ({ id: e.id, ref: e.ref, amount: e.totalDebit })),
       amountMismatch: !close(keep.totalDebit, inv.total),
     })
   }
   return plans.sort((a, b) => a.invoiceNumber.localeCompare(b.invoiceNumber))
+}
+
+/**
+ * Cancelled / voided documents whose entries are still live: every entry
+ * carrying the document (posting, delivery charge) is reversed. Its number
+ * may have reverted to a DRAFT/… placeholder, so entries are matched by id.
+ */
+export function planCancelledStillBooked(
+  invoices: Array<{ id: string; invoiceNumber: string; customer: string; total: number }>,
+  entries: LiveSalesEntry[],
+): DuplicateInvoicePlan[] {
+  return invoices.flatMap(inv => {
+    const live = entries.filter(e => e.invoiceId === inv.id)
+    if (!live.length) return []
+    return [{
+      invoiceId: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      customer: inv.customer,
+      invoiceTotal: inv.total,
+      reason: 'cancelled' as const,
+      keep: null,
+      reverse: live.map(e => ({ id: e.id, ref: e.ref, amount: e.totalDebit })),
+      amountMismatch: false,
+    }]
+  })
 }

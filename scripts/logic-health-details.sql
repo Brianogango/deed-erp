@@ -5,30 +5,30 @@
 \echo ''
 \echo '== 3. Posted documents with no live sales entry — by kind =='
 SELECT i.document_type AS kind, i.status::text AS status, i.posting_status,
-       EXISTS (SELECT 1 FROM journal_entries j WHERE j.invoice_id = i.id AND j.source_type = 'invoice') AS had_an_entry,
+       EXISTS (SELECT 1 FROM journal_entries j WHERE j.invoice_id = i.id AND j.source_type IN ('invoice', 'bill')) AS had_an_entry,
        to_char(i.invoice_date, 'YYYY-MM') AS month, count(*) AS docs, sum(i.total_amount) AS kes
 FROM invoices i
 WHERE i.status::text IN ('approved', 'invoiced', 'paid', 'partially_paid') AND i.invoice_date >= '2026-09-13'
   AND i.invoice_number NOT LIKE 'POS%'
-  AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE j.invoice_id = i.id AND j.source_type = 'invoice' AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE j.invoice_id = i.id AND j.source_type IN ('invoice', 'bill') AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
 GROUP BY 1, 2, 3, 4, 5 ORDER BY 7 DESC;
 
 \echo ''
 \echo '== 3. Largest ten =='
 SELECT i.invoice_number, left(c.name, 24) AS partner, i.total_amount, i.invoice_date::date, i.posting_status,
        (SELECT string_agg(j.ref || CASE WHEN j.is_reversed THEN ' (reversed)' ELSE '' END, ', ')
-          FROM journal_entries j WHERE j.invoice_id = i.id AND j.source_type = 'invoice') AS entries
+          FROM journal_entries j WHERE j.invoice_id = i.id AND j.source_type IN ('invoice', 'bill')) AS entries
 FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
 WHERE i.status::text IN ('approved', 'invoiced', 'paid', 'partially_paid') AND i.invoice_date >= '2026-09-13'
   AND i.invoice_number NOT LIKE 'POS%'
-  AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE j.invoice_id = i.id AND j.source_type = 'invoice' AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE j.invoice_id = i.id AND j.source_type IN ('invoice', 'bill') AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
 ORDER BY i.total_amount DESC LIMIT 10;
 
 \echo ''
 \echo '== 4. Cancelled invoices still booked =='
 SELECT i.invoice_number, i.status::text, i.total_amount, j.ref, j.created_at::timestamp(0)
 FROM invoices i JOIN journal_entries j ON j.invoice_id = i.id
-WHERE i.status::text IN ('cancelled', 'void') AND j.source_type = 'invoice' AND NOT j.is_reversed AND j.reversal_of_id IS NULL;
+WHERE i.status::text IN ('cancelled', 'void') AND j.source_type IN ('invoice', 'bill') AND NOT j.is_reversed AND j.reversal_of_id IS NULL;
 
 \echo ''
 \echo '== 6. Payments with no ledger entry — by kind =='

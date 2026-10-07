@@ -56,10 +56,10 @@ export default function DuplicateInvoiceJournals({ showToast, canApply }: { show
     <div className="mx-4 mt-4 rounded-2xl border border-border-lt bg-card p-4 sm:mx-6">
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-sm font-extrabold text-text-1">Invoices booked more than once</h3>
+          <h3 className="text-sm font-extrabold text-text-1">Invoices and bills booked more than once</h3>
           <p className="mt-1 max-w-3xl text-xs text-text-3">
-            Invoices whose sales entry is on the ledger several times (e.g. a migration import that retried), each copy booking the
-            revenue, VAT and receivable again.
+            Invoices and bills whose posting entry is on the ledger several times (e.g. a migration import that retried), each copy booking
+            the amount again — and cancelled ones still booked.
           </p>
         </div>
         <div className="flex gap-2">
@@ -94,8 +94,8 @@ export default function DuplicateInvoiceJournals({ showToast, canApply }: { show
                   <td className="py-1.5 pr-3">{r.customer || '—'}</td>
                   <td className="py-1.5 pr-3 text-right">{fmtKes(r.invoiceTotal)}</td>
                   <td className="py-1.5 pr-3 font-mono">
-                    {r.keep.ref}
-                    {r.amountMismatch && <span className="block font-sans text-amber-800">{fmtKes(r.keep.amount)} — differs from the invoice, check it</span>}
+                    {r.keep ? r.keep.ref : <span className="font-sans text-text-3">Nothing — invoice is cancelled</span>}
+                    {r.keep && r.amountMismatch && <span className="block font-sans text-amber-800">{fmtKes(r.keep.amount)} — differs from the invoice, check it</span>}
                   </td>
                   <td className="py-1.5 font-mono text-red-700">{r.reverse.map(x => x.ref).join(', ')}</td>
                 </tr>

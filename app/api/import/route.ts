@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { preservePostedInvoicePaymentProgress } from '@/lib/finance-invoice'
+import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
 
 type AnyRecord = Record<string, unknown>
 
@@ -135,11 +136,13 @@ export async function POST(request: NextRequest) {
         try {
           // Already on the ledger: re-importing it again used to post another
           // copy (JRN/INV/<ref>/2, /3, …) each time, multiplying the revenue.
-          const live = await prisma.journalEntry.findFirst({
-            where: { invoiceId: String(inv.id), sourceType: 'invoice', isReversed: false, reversalOfId: null },
-            select: { id: true },
-          }).catch(() => null)
-          if (live) continue
+          // Bills post with source 'bill', invoices with 'invoice'.
+          const live = await prisma.journalEntry.findMany({
+            where: { invoiceId: String(inv.id), sourceType: { in: ['invoice', 'bill'] }, isReversed: false, reversalOfId: null },
+            select: { ref: true },
+          }).catch(() => [] as Array<{ ref: string }>)
+          const number = String(inv.ref || inv.invoiceNumber || '')
+          if (live.some(j => isPostingRef(j.ref, number))) continue
           await postInvoiceJournalToPrisma({
             id: String(inv.id),
             ref: String(inv.ref || inv.invoiceNumber || inv.id),

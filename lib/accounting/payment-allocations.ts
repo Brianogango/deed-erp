@@ -40,6 +40,10 @@ async function tryPostPaymentJournalInTx(
       data: { journalId: journal.id, postingStatus: 'posted' },
     })
   } catch (err) {
+    // A write conflict / deadlock is not a posting failure: rethrow so
+    // runSerializable retries the whole payment. Swallowing it saved 132
+    // payments (a batch registered at once on 27 Aug) with no ledger entry.
+    if (isRetryableTxn(err)) throw err
     console.error('[payment] GL journal failed — payment stays recorded:', err)
     await tx.payment.update({
       where: { id: paymentId },
