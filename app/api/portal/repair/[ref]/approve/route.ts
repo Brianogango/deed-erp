@@ -260,6 +260,18 @@ export async function POST(
             }
           })
         }
+        // The invoice is confirmed here, so it must be in the ledger too (it
+        // used to be written as 'approved' with no entry — INV/2026/0308).
+        // A failure does not undo the customer's approval; it is recorded on
+        // the repair for staff, and the ledger health check lists it.
+        try {
+          const { ensureInvoiceBooked } = await import('@/lib/accounting/ensure-invoice-booked.server')
+          await ensureInvoiceBooked(invoice.id, systemUser.id)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          console.error(`[APPROVE] ${invoice.invoiceNumber} confirmed but not booked in the ledger:`, err)
+          targetRepair.billingSyncError = { message: `Invoice ${invoice.invoiceNumber} confirmed but not booked in the ledger: ${message}`, at: new Date().toISOString() }
+        }
         targetRepair.invoiceId = invoice.id
         targetRepair.invoiceDate = date
         targetRepair.linkedSaleOrderId = saleOrder.id
