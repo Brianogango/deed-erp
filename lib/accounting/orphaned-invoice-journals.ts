@@ -1,5 +1,6 @@
 import 'server-only'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
+import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
 import prisma from '@/lib/prisma'
 import { PRISMA_POSTED_INVOICE_STATUSES } from '@/lib/finance-invoice'
 import {
@@ -102,17 +103,23 @@ export async function findOrphanedPostedInvoices(): Promise<OrphanedInvoice[]> {
   // The reversal is what identifies a victim, so this is a filter, not a
   // decoration. `REV/` entries are excluded: the reversal itself is not
   // reversed, and matching one would let any cancelled invoice in.
-  const journals = await prisma.journalEntry.findMany({
+  // Only the invoice's OWN posting entry (JRN/<number>, JRN/<number>/N)
+  // counts: a reversed payment (JRN/PAY/…) or delivery charge on the invoice
+  // does not mean its revenue left the ledger. And an invoice that still has a
+  // live posting entry has lost nothing.
+  const numberOf = new Map(candidates.map(c => [c.id, c.invoiceNumber]))
+  const journals = (await prisma.journalEntry.findMany({
     where: {
       invoiceId: { in: candidates.map(c => c.id) },
-      isReversed: true,
       NOT: { ref: { startsWith: 'REV/' } },
     },
-    select: { invoiceId: true, ref: true, createdAt: true },
+    select: { invoiceId: true, ref: true, createdAt: true, isReversed: true, reversalOfId: true },
     orderBy: { createdAt: 'desc' },
-  })
+  })).filter(j => j.invoiceId && isPostingRef(j.ref, numberOf.get(j.invoiceId) ?? ''))
+  const stillLive = new Set(journals.filter(j => !j.isReversed && !j.reversalOfId).map(j => j.invoiceId))
   const byInvoice = new Map<string, { ref: string; createdAt: Date }>()
   for (const j of journals) {
+    if (!j.isReversed || stillLive.has(j.invoiceId)) continue
     if (j.invoiceId && !byInvoice.has(j.invoiceId)) byInvoice.set(j.invoiceId, { ref: j.ref, createdAt: j.createdAt })
   }
 
@@ -210,14 +217,15 @@ export async function repostOrphanedInvoice(params: {
   // function must refuse a pre-cutover invoice on its own account, not merely
   // because the caller filtered it out. Posting one of those would invent
   // revenue the opening balances already carry.
-  const reversed = await prisma.journalEntry.findFirst({
-    where: {
-      invoiceId: invoice.id,
-      isReversed: true,
-      NOT: { ref: { startsWith: 'REV/' } },
-    },
-    select: { id: true },
-  })
+  const own = (await prisma.journalEntry.findMany({
+    where: { invoiceId: invoice.id, NOT: { ref: { startsWith: 'REV/' } } },
+    select: { ref: true, isReversed: true, reversalOfId: true },
+  })).filter(j => isPostingRef(j.ref, invoice.invoiceNumber))
+  const liveOwn = own.find(j => !j.isReversed && !j.reversalOfId)
+  if (liveOwn) {
+    return { kind: 'skipped', invoiceNumber: invoice.invoiceNumber, reason: `Already in the ledger (${liveOwn.ref})` }
+  }
+  const reversed = own.find(j => j.isReversed) ?? null
   // Any entry at all — sales, bill, opening balance (JRN/OB/…), live or
   // reversed — means the document is already accounted for somewhere.
   const anyEntry = params.namedNeverPosted
