@@ -32,6 +32,7 @@ describe('screen vs ledger', () => {
     expect(plans).toHaveLength(2)
     expect(plans.find(p => p.ref === 'INV/2026/0226')).toMatchObject({ manual: false, book: [{ id: 'p1', amount: 2500, method: 'mpesa', reference: 'SJK1' }] })
     expect(plans.find(p => p.ref === 'INV/2026/0207')).toMatchObject({ manual: true, book: [] })
+    // No date on that row; a dated pre-ledger one is aligned instead (see below).
   })
 })
 
@@ -42,6 +43,6 @@ describe('the ledger start date', () => {
       [{ id: 'i1', ref: 'INV/2026/0100', status: 'posted', total: 2500, amountPaid: 2500, date: '2026-08-01', payments: [{ id: 'p1', amount: 2500, date: '2026-08-02', method: 'cash' }] }],
       new Map([['i1', { amountPaid: 0, paymentIds: new Set<string>() }]]),
     )
-    expect(plans).toEqual([])
+    expect(plans).toMatchObject([{ ref: 'INV/2026/0100', alignOnly: true, manual: false, book: [] }])
   })
 })

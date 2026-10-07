@@ -3,6 +3,7 @@ import 'server-only'
 import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock, loadAppStateForWrite } from '@/lib/server-store'
 import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
+import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import {
   planMissingDocs,
   planUnbookedPayments,
@@ -47,7 +48,7 @@ const bodyError = async (res: Response) => {
  * Book the gaps through the normal routes (same checks, same posting rules).
  * Called from a director's request, so the routes see that director's session.
  */
-export async function applyScreenLedgerSync(): Promise<Result[]> {
+export async function applyScreenLedgerSync(actorId: string): Promise<Result[]> {
   const { POST: createInvoice } = await import('@/app/api/invoices/route')
   const { POST: registerPayment } = await import('@/app/api/invoices/[id]/payments/route')
   const { missing, payments } = await findScreenLedgerGaps()
@@ -110,6 +111,28 @@ export async function applyScreenLedgerSync(): Promise<Result[]> {
   }
 
   for (const plan of payments) {
+    if (plan.alignOnly) {
+      try {
+        const inv = await prisma.invoice.findUnique({ where: { id: plan.invoiceId }, select: { totalAmount: true, amountPaid: true } })
+        if (!inv) { results.push({ ref: plan.ref, status: 'failed', message: 'Not in the ledger' }); continue }
+        const target = Math.min(plan.screenPaid, Math.abs(Number(inv.totalAmount)))
+        await prisma.$transaction(async tx => {
+          await tx.invoice.update({ where: { id: plan.invoiceId }, data: { amountPaid: target } })
+          await writeFinancialAuditInTx(tx, {
+            userId: actorId,
+            action: 'align_pre_ledger_amount_paid',
+            entityType: 'invoice',
+            entityId: plan.invoiceId,
+            oldValues: { amountPaid: Number(inv.amountPaid) },
+            newValues: { amountPaid: target, reason: 'Paid before the 13 Sep ledger start (opening balances) — no entry posted' },
+          })
+        })
+        results.push({ ref: plan.ref, status: 'fixed', message: `Paid amount aligned to KES ${Math.round(target).toLocaleString('en-KE')} (before the ledger start, no entry)` })
+      } catch (err) {
+        results.push({ ref: plan.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not align' })
+      }
+      continue
+    }
     if (plan.manual) {
       results.push({ ref: plan.ref, status: 'skipped', message: 'Paid on screen with no payment listed — register it on the document' })
       continue

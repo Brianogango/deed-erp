@@ -19,7 +19,7 @@ export async function GET() {
 
 export async function POST() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director'])
-    return NextResponse.json({ results: await applyScreenLedgerSync() })
+    const actor = await requireRole(['director'])
+    return NextResponse.json({ results: await applyScreenLedgerSync(actor.id) })
   })
 }

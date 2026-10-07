@@ -14040,6 +14040,7 @@ const storeCtx: AppState = {
       }))
       const postedInvoice = { ...inv, ...postedMeta, lines: linesWithTax }
       setInvoices(p => p.map(i => i.id === id ? postedInvoice : i))
+      let ledgerWarning: string | null = null
       try {
         // Edit PUT already incremented Prisma lockVersion; the local row still
         // holds the pre-edit value. Omit + one retry, same as sale-order Confirm.
@@ -14061,6 +14062,9 @@ const storeCtx: AppState = {
           setInvoices(p => p.map(i => i.id === id ? remapped : i))
           setPurchaseOrders(p => p.map(po => po.billId === id ? { ...po, billId: postedId } : po))
         }
+        ledgerWarning = typeof (data as { ledgerWarning?: unknown } | null)?.ledgerWarning === 'string'
+          ? String((data as { ledgerWarning: string }).ledgerWarning)
+          : null
         const postedLock = readLockVersionFromResponse(data)
         if (postedLock !== undefined) {
           const withLock = { ...(postedId !== id ? { ...postedInvoice, id: postedId } : postedInvoice), lockVersion: postedLock }
@@ -14075,7 +14079,11 @@ const storeCtx: AppState = {
       // Auto-post GL journal using the shared posting engine.
       postInvoiceJournalOnce({ ...inv, ref: finalRef })
       addAuditLog('post_invoice', finalRef, `Posted by ${actor?.name || 'Finance'}`)
-      showToast(`${finalRef} posted to accounting`)
+      if (ledgerWarning) {
+        showToast(`${finalRef} is confirmed but NOT booked in the ledger: ${ledgerWarning}. Tell Finance — it shows in the health check.`, 'error')
+      } else {
+        showToast(`${finalRef} posted to accounting`)
+      }
     },
     setInvoicePaymentBlocked: (id, blocked) => {
       const actor = currentUser()

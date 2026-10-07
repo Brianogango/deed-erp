@@ -297,6 +297,8 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
     // document transaction. GL persistence is best-effort after commit so a
     // Chart of Accounts / journal / fiscal-period gap cannot roll back Confirm.
     let postingJournal: Awaited<ReturnType<typeof buildInvoiceJournalInput>> | null = null
+    /** Set when the document is confirmed but its ledger entry fails. */
+    let ledgerWarning: string | null = null
     let postingInvoiceType: 'customer_invoice' | 'vendor_bill' = 'customer_invoice'
     let postingPurchaseOrderId: string | null = null
     let postingBillLines: any[] = []
@@ -370,6 +372,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
         // Confirm must not fail because yesterday's Prisma GL path cannot post.
         console.error('[invoice] confirm journal could not be built:', err)
         postingJournal = null
+        ledgerWarning = err instanceof Error ? err.message : 'its ledger entry could not be built'
       }
       postingBillLines = normalizedItems.map((i: any) => ({
         purchaseOrderItemId: i.purchaseOrderItemId ?? undefined,
@@ -503,6 +506,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
         if (postedInvoice) invoice = postedInvoice
       } catch (err) {
         console.error('[invoice] GL journal for confirm failed — invoice stays posted:', err)
+        ledgerWarning = err instanceof Error ? err.message : 'its ledger entry could not be posted'
         await prisma.invoice.update({
           where: { id },
           data: { postingStatus: 'unposted', documentType: postingInvoiceType },
@@ -597,7 +601,10 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       }
     }
 
-    return NextResponse.json(invoice)
+    // Confirmed but not booked: say so. The screen used to report
+    // "posted to accounting" regardless, and the invoice sat outside the
+    // ledger with the reason only in the server log.
+    return NextResponse.json(ledgerWarning ? { ...invoice, ledgerWarning } : invoice)
   })
 }
 

@@ -92,6 +92,12 @@ export type UnbookedPaymentPlan = {
   book: Array<{ id: string; amount: number; date: string; method: string; reference?: string }>
   /** Paid on screen with no payment listed: register by hand. */
   manual: boolean
+  /**
+   * Dated before the ledger start: the money is in the opening balances, so
+   * no entry is posted — only the document's stored paid amount is aligned
+   * with the screen (it drives ageing and the overdue lists).
+   */
+  alignOnly?: boolean
 }
 
 export function planUnbookedPayments(
@@ -122,10 +128,9 @@ export function planUnbookedPayments(
       })
       gap = money(gap - amount)
     }
-    // Only payments from before the ledger start: the opening balances carry them.
-    if (!book.length && beforeStart) continue
     const docDate = normalizeDocDate(r.date ?? r.invoiceDate).iso
-    if (!book.length && docDate && docDate < LEDGER_START) continue
+    // Paid before the ledger start: nothing to post; align the paid figure.
+    const alignOnly = !book.length && (beforeStart > 0 || Boolean(docDate && docDate < LEDGER_START))
     out.push({
       invoiceId: String(r.id),
       ref: String(r.ref ?? r.id),
@@ -133,7 +138,8 @@ export function planUnbookedPayments(
       screenPaid,
       ledgerPaid: l.amountPaid,
       book,
-      manual: book.length === 0,
+      manual: book.length === 0 && !alignOnly,
+      ...(alignOnly ? { alignOnly: true } : {}),
     })
   }
   return out.sort((a, b) => a.ref.localeCompare(b.ref))
