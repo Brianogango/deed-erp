@@ -8,7 +8,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 
-export type VendorBillMatchLine = {
+type VendorBillMatchLine = {
   purchaseOrderItemId?: string | null
   grnItemId?: string | null
   productId?: string | null
@@ -18,7 +18,7 @@ export type VendorBillMatchLine = {
   description?: string
 }
 
-export type AssertVendorBillMatchInput = {
+type AssertVendorBillMatchInput = {
   purchaseOrderId: string
   vendorId?: string | null
   billLines: VendorBillMatchLine[]

@@ -5,13 +5,11 @@
 import type { Contact, CompanySettings, PurchaseOrder } from '@/lib/store'
 import { purchaseDocType } from '@/lib/purchases-filter'
 import {
-  buildCommercialPdf,
   downloadCommercialPdf,
-  openCommercialPdf,
   type CommercialPdfInput,
 } from '@/lib/commercial-pdf'
 
-export type PurchasePdfKind = 'rfq' | 'po'
+type PurchasePdfKind = 'rfq' | 'po'
 
 export function purchasePdfKind(po: Pick<PurchaseOrder, 'status'>): PurchasePdfKind {
   return purchaseDocType(po.status)
@@ -62,7 +60,7 @@ export function purchaseOrderPdfInput(
   }
 }
 
-export async function downloadPurchasePdf(
+async function downloadPurchasePdf(
   po: PurchaseOrder,
   contacts: Contact[],
   companySettings: CompanySettings,
@@ -87,31 +85,4 @@ export async function downloadPoPdf(
   companySettings: CompanySettings,
 ) {
   return downloadPurchasePdf(po, contacts, companySettings, 'po')
-}
-
-export async function openPurchasePdf(
-  po: PurchaseOrder,
-  contacts: Contact[],
-  companySettings: CompanySettings,
-  kind: PurchasePdfKind = purchasePdfKind(po),
-): Promise<boolean> {
-  const input = purchaseOrderPdfInput(po, contacts, kind)
-  return openCommercialPdf(input, companySettings, [])
-}
-
-/** Base64 payload for email attachments (e.g. RFQ send). */
-export async function purchasePdfBase64(
-  po: PurchaseOrder,
-  contacts: Contact[],
-  companySettings: CompanySettings,
-  kind: PurchasePdfKind = purchasePdfKind(po),
-): Promise<{ pdfBase64: string; pdfFilename: string }> {
-  const input = purchaseOrderPdfInput(po, contacts, kind)
-  const doc = await buildCommercialPdf(input, companySettings, [])
-  const dataUri = doc.output('datauristring')
-  const prefix = kind === 'rfq' ? 'RFQ' : 'PO'
-  return {
-    pdfBase64: dataUri.slice(dataUri.indexOf('base64,') + 'base64,'.length),
-    pdfFilename: `${prefix} - ${input.ref}.pdf`.replace(/[/\\]/g, '-'),
-  }
 }

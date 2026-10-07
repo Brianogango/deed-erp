@@ -56,7 +56,7 @@ export const EMPTY_PRODUCT_FILTERS: ProductFilterState = {
   status: 'active',
 }
 
-export interface FilterableProduct {
+interface FilterableProduct {
   id: string
   name: string
   sku: string
@@ -72,7 +72,7 @@ export interface FilterableProduct {
   parentId?: string | null
 }
 
-export interface ProductQtySnapshot {
+interface ProductQtySnapshot {
   onHand: number
   available: number
   /** Serials with status `assigned` (SO pick / repair part hold). */

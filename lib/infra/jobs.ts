@@ -2,10 +2,7 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import prisma from '@/lib/prisma'
 import { enqueueJob } from '@/lib/infra/queue'
-
-export type DurableJobStatus = 'queued' | 'running' | 'retrying' | 'completed' | 'failed'
-
-export type EnqueueDurableJobInput = {
+type EnqueueDurableJobInput = {
   type: string
   payload?: unknown
   queue?: string

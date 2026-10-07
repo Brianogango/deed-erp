@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { listObjects, deleteObject } from '@/lib/infra/object-store'
 import { loadAppState } from '@/lib/server-store'
 
-export type BlobCleanupResult = {
+type BlobCleanupResult = {
   total: number
   orphaned: string[]
   deleted: string[]

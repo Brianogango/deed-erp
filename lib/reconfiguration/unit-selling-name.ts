@@ -13,7 +13,7 @@ const RAM_CLAUSE = /(\d+)\s*GB\s*(DDR\d?\s*)?RAM\b/gi
 /** Title style leftover after storage is rewritten: "i7 16GB 512GB SSD". */
 const BARE_GB = /\b(\d+)\s*GB\b/i
 
-export function storageTypeLabel(storageType?: string | null): 'SSD' | 'HDD' | 'NVMe' {
+function storageTypeLabel(storageType?: string | null): 'SSD' | 'HDD' | 'NVMe' {
   const raw = String(storageType || 'SSD')
   if (/nvme/i.test(raw)) return 'NVMe'
   if (/hdd/i.test(raw)) return 'HDD'
@@ -79,7 +79,7 @@ export function rewriteUnitCapacitiesInText(
 }
 
 /** True when a title was concatenated (old 16GB clause plus the new 8GB clause). */
-export function looksLikeConcatenatedSpecs(text: string): boolean {
+function looksLikeConcatenatedSpecs(text: string): boolean {
   const ram = [...String(text || '').matchAll(new RegExp(RAM_CLAUSE.source, 'gi'))].length
   const storage = [...String(text || '').matchAll(new RegExp(STORAGE_CLAUSE.source, 'gi'))].length
   return ram > 1 || storage > 1

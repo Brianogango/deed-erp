@@ -1,10 +1,10 @@
-export type MpesaPublicStatus = {
+type MpesaPublicStatus = {
   configured: boolean
   env: 'sandbox' | 'production'
   shortcode: string | null
 }
 
-export type StkClientRecord = {
+type StkClientRecord = {
   checkoutRequestId: string
   merchantRequestId: string
   phone: string
@@ -47,7 +47,7 @@ export async function sendMpesaStk(input: {
   return readJson<StkClientRecord>(res)
 }
 
-export async function queryMpesaStk(checkoutRequestId: string): Promise<StkClientRecord> {
+async function queryMpesaStk(checkoutRequestId: string): Promise<StkClientRecord> {
   const res = await fetch('/api/mpesa/stk-query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

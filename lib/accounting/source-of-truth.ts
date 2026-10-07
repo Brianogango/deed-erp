@@ -7,7 +7,7 @@
  * or archive gates in journal-retire-readiness.
  */
 
-export type AccountingSourceOfTruth = 'prisma'
+type AccountingSourceOfTruth = 'prisma'
 
 export function accountingReportSourceOfTruth(): AccountingSourceOfTruth {
   return 'prisma'

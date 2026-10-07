@@ -1,5 +1,3 @@
-import type { NextRequest } from 'next/server'
-
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 
 type StoreUser = {
@@ -190,53 +188,4 @@ export function canWriteStoreKey(user: StoreUser, key: string): boolean {
 
   const modules = new Set(Array.isArray(user.modules) ? user.modules.filter((m): m is string => typeof m === 'string') : [])
   return entry.modules.some(module => modules.has(module))
-}
-
-export class StoreWriteAuthorizationError extends Error {
-  readonly status = 403
-  readonly deniedKeys: string[]
-
-  constructor(keys: string[]) {
-    super('Forbidden — app-state write is not permitted for this role/module')
-    this.name = 'StoreWriteAuthorizationError'
-    this.deniedKeys = keys
-  }
-}
-
-function keyFromStorePath(pathname: string): string | null {
-  if (!pathname.startsWith('/api/store/')) return null
-  const raw = pathname.slice('/api/store/'.length).split('/')[0]
-  if (!raw) return null
-  try {
-    return decodeURIComponent(raw)
-  } catch {
-    return null
-  }
-}
-
-export async function assertStoreWriteAuthorized(request: NextRequest, user: StoreUser): Promise<void> {
-  const method = request.method.toUpperCase()
-  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return
-
-  const pathname = request.nextUrl.pathname
-  if (pathname !== '/api/store' && !pathname.startsWith('/api/store/')) return
-
-  let keys: string[] = []
-  if (pathname === '/api/store') {
-    const contentType = request.headers.get('content-type') || ''
-    if (!contentType.toLowerCase().includes('application/json')) {
-      throw new StoreWriteAuthorizationError(['<invalid-content-type>'])
-    }
-    const body = await request.clone().json().catch(() => null)
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      throw new StoreWriteAuthorizationError(['<invalid-payload>'])
-    }
-    keys = Object.keys(body as Record<string, unknown>).filter(key => key.startsWith('deed_'))
-  } else {
-    const key = keyFromStorePath(pathname)
-    if (key) keys = [key]
-  }
-
-  const denied = keys.filter(key => !canWriteStoreKey(user, key))
-  if (denied.length) throw new StoreWriteAuthorizationError(denied)
 }

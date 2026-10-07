@@ -6,7 +6,7 @@
 import { inferTrackingMethod, isSerialOnlyCategory, isSerialTracking } from '@/lib/inventory-identifiers'
 import { looksLikeCompleteDevice } from '@/lib/reconfiguration/product-effect'
 
-export type PartCatalogProduct = {
+type PartCatalogProduct = {
   id: string
   name?: string | null
   sku?: string | null

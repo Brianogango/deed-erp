@@ -4,7 +4,6 @@ import { Children, useState, useEffect, useRef, ReactNode, useCallback, useId, c
 import { createPortal } from 'react-dom'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 import { useOverlayDismiss } from '@/lib/overlay-dismiss'
-import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
 import { searchPickerExactMatch, searchPickerMatches } from '@/lib/search-picker-match'
 
@@ -1737,7 +1736,7 @@ export function StatusStepper({
 }
 
 /** Lightweight route/module loading UI (no heavy deps). */
-export { ModuleSkeleton, ShellChromeSkeleton } from '@/components/ui/ModuleSkeleton'
+export { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
 
 type StateTone = 'empty' | 'loading' | 'success' | 'error'
 
@@ -1793,42 +1792,6 @@ export function StateSkeleton({ label = 'Loading content' }: { label?: string })
       <div className="h-4 w-36 rounded bg-muted" />
       <div className="h-3 w-56 rounded bg-muted" />
       <div className="h-3 w-44 rounded bg-muted" />
-    </div>
-  )
-}
-
-/**
- * Table Skeleton Loader
- */
-export function TableSkeleton({
-  rows = 8,
-  columns = 6,
-  minWidth = 720,
-}: {
-  rows?: number
-  columns?: number
-  minWidth?: number
-}) {
-  return (
-    <div className="overflow-x-auto w-full animate-pulse">
-      <div className="flex flex-col" style={{ minWidth }}>
-        <div className="table-head" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-          {Array.from({ length: columns }).map((_, i) => (
-            <span key={i} className="h-3 rounded bg-muted" />
-          ))}
-        </div>
-        {Array.from({ length: rows }).map((_, row) => (
-          <div key={row} className="table-row" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-            {Array.from({ length: columns }).map((_, col) => (
-              <span
-                key={col}
-                className="h-3 rounded bg-muted"
-                style={{ width: `${col === 0 ? 55 : 72 + ((row + col) % 3) * 10}%` }}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
@@ -2276,89 +2239,6 @@ export function ModuleHeader({
 }
 
 /**
- * Pagination — numbered with mobile-simplified mode, first/last jumps on desktop
- */
-export function Pagination({
-  page,
-  total,
-  perPage = 20,
-  onChange,
-}: {
-  page: number
-  total: number
-  perPage?: number
-  onChange: (p: number) => void
-}) {
-  const totalPages = Math.ceil(total / perPage)
-  if (totalPages <= 1) return null
-
-  const start = (page - 1) * perPage + 1
-  const end   = Math.min(page * perPage, total)
-
-  const getPages = (): (number | '…')[] => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    if (page <= 4)           return [1, 2, 3, 4, 5, '…', totalPages]
-    if (page >= totalPages - 3) return [1, '…', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
-    return [1, '…', page - 1, page, page + 1, '…', totalPages]
-  }
-
-  return (
-    <div className="pagination">
-      {/* Info — hidden on smallest mobile */}
-      <span className="text-[10px] font-semibold text-text-3 hidden xs:block whitespace-nowrap">
-        {start.toLocaleString()}–{end.toLocaleString()} of {total.toLocaleString()}
-      </span>
-
-      {/* Mobile: prev / page indicator / next */}
-      <div className="flex items-center gap-1.5 sm:hidden w-full justify-between">
-        <button
-          className="page-btn flex-shrink-0"
-          onClick={() => onChange(page - 1)}
-          disabled={page === 1}
-          aria-label="Previous page"
-        >‹ Prev</button>
-        <span className="text-[11px] font-bold text-text-2 whitespace-nowrap">
-          {page} / {totalPages}
-        </span>
-        <button
-          className="page-btn flex-shrink-0"
-          onClick={() => onChange(page + 1)}
-          disabled={page === totalPages}
-          aria-label="Next page"
-        >Next ›</button>
-      </div>
-
-      {/* Desktop: first / ‹ / numbered / › / last */}
-      <div className="hidden sm:flex items-center gap-1">
-        {totalPages > 5 && (
-          <button className="page-btn" onClick={() => onChange(1)} disabled={page === 1} aria-label="First page">«</button>
-        )}
-        <button className="page-btn" onClick={() => onChange(page - 1)} disabled={page === 1} aria-label="Previous page">‹</button>
-        {getPages().map((p, i) =>
-          p === '…' ? (
-            <span key={`e${i}`} className="text-text-4 text-xs w-7 text-center select-none">…</span>
-          ) : (
-            <button
-              key={p}
-              className={`page-btn ${page === p ? 'active' : ''}`}
-              onClick={() => onChange(p as number)}
-              aria-label={`Page ${p}`}
-              aria-current={page === p ? 'page' : undefined}
-            >
-              {p}
-            </button>
-          )
-        )}
-        <button className="page-btn" onClick={() => onChange(page + 1)} disabled={page === totalPages} aria-label="Next page">›</button>
-        {totalPages > 5 && (
-          <button className="page-btn" onClick={() => onChange(totalPages)} disabled={page === totalPages} aria-label="Last page">»</button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/**
  * Empty State placeholder
  */
 export function EmptyState({
@@ -2381,48 +2261,6 @@ export function EmptyState({
       </div>
       {action}
     </div>
-  )
-}
-
-/**
- * Filter Chip — colored pill filter button
- */
-export function FilterChip({
-  label,
-  active,
-  color,
-  count,
-  onClick,
-}: {
-  label: string
-  active: boolean
-  color?: string
-  count?: number
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`
-        flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold
-        uppercase tracking-wider whitespace-nowrap transition-[background-color,border-color,color,box-shadow] duration-150
-        border flex-shrink-0
-        ${active
-          ? 'text-white border-transparent shadow-md'
-          : 'bg-transparent text-text-3 border-border hover:bg-surface hover:text-text-1'
-        }
-      `}
-      style={active ? { background: color ?? 'var(--primary)', borderColor: color ?? 'var(--primary)' } : {}}
-    >
-      {label}
-      {count !== undefined && (
-        <span className={`
-          w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black
-          ${active ? 'bg-white/25' : 'bg-muted'}
-        `}>{count > 99 ? '99+' : count}</span>
-      )}
-    </button>
   )
 }
 
@@ -2478,15 +2316,4 @@ export function SearchInput({
       )}
     </div>
   )
-}
-
-export function useEscapeKey(onClose: () => void, enabled: boolean = true) {
-  useEffect(() => {
-    if (!enabled) return
-    const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose, enabled])
 }

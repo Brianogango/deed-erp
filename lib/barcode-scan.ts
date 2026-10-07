@@ -10,7 +10,7 @@
  * - Legacy INV-* tags (still matched if present in stock)
  */
 
-export type ParsedScan = {
+type ParsedScan = {
   raw: string
   normalized: string
   sku?: string
@@ -93,7 +93,7 @@ export function parseScanPayload(rawInput: string | null | undefined): ParsedSca
   return { raw, normalized, sku, serial, barcode, candidates }
 }
 
-export type ScanIdentity = {
+type ScanIdentity = {
   barcode?: string | null
   serial?: string | null
   sku?: string | null
@@ -106,14 +106,14 @@ export function identityMatchesScan(identity: ScanIdentity, scan: ParsedScan | s
   return parsed.candidates.some(candidate => fields.some(field => codesEqual(field, candidate)))
 }
 
-export type PosSerialCandidate = ScanIdentity & {
+type PosSerialCandidate = ScanIdentity & {
   id: string
   productId: string
   status: string
   location: string
 }
 
-export type PosProductCandidate = {
+type PosProductCandidate = {
   id: string
   name: string
   sku?: string | null
@@ -122,7 +122,7 @@ export type PosProductCandidate = {
   unit?: string | null
 }
 
-export type PosScanMatch =
+type PosScanMatch =
   | { kind: 'serial'; serial: PosSerialCandidate }
   | { kind: 'product'; product: PosProductCandidate; needsUnitScan: boolean }
   | { kind: 'out_of_stock'; product: PosProductCandidate }
@@ -207,18 +207,4 @@ export function buildSerialLabelScanPayload(item: {
   const serial = normalizeScanCode(item.serial)
   if (serial) return serial
   return normalizeScanCode(item.barcode)
-}
-
-/** Human-readable secondary line for labels (does not replace the scan payload). */
-export function buildSerialLabelLegacyHint(item: {
-  serial: string
-  barcode?: string | null
-  sku?: string | null
-}): string {
-  const parts = [
-    item.sku ? `SKU:${normalizeScanCode(item.sku)}` : '',
-    `SERIAL:${normalizeScanCode(item.serial)}`,
-    item.barcode ? `BARCODE:${normalizeScanCode(item.barcode)}` : '',
-  ].filter(Boolean)
-  return parts.join('|')
 }

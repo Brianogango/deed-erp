@@ -2,7 +2,7 @@
  * Pure stock planners for device reconfiguration component movements.
  */
 
-export type ReconfigLocationId =
+type ReconfigLocationId =
   | 'warehouse'
   | 'shop'
   | 'repair_unit'
@@ -12,7 +12,7 @@ export type ReconfigLocationId =
   | 'pending_testing'
   | 'quarantine'
 
-export type ReconfigStockMovePlan =
+type ReconfigStockMovePlan =
   | {
       kind: 'return_bulk_to_testing'
       productId: string
@@ -123,13 +123,4 @@ export function planComponentInstall(params: {
 /** Sellable free qty excludes pending_testing and quarantine. */
 export function isSellableLocation(location: string): boolean {
   return location === 'warehouse' || location === 'shop'
-}
-
-export function freeQtyAtSellableLocations(
-  byLocation: Record<string, number>,
-  reservationsHeldElsewhere: number,
-): number {
-  const sellable =
-    Math.max(0, Number(byLocation.warehouse) || 0) + Math.max(0, Number(byLocation.shop) || 0)
-  return Math.max(0, sellable - Math.max(0, reservationsHeldElsewhere))
 }

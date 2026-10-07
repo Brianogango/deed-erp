@@ -6,7 +6,7 @@
 export const SYNC_RETRY_MIN_MS = 500
 export const SYNC_RETRY_MAX_MS = 30_000
 export const SSE_RETRY_MIN_MS = 1_000
-export const SSE_RETRY_MAX_MS = 30_000
+const SSE_RETRY_MAX_MS = 30_000
 /**
  * Last-resort visible-tab GET while the SSE transport itself is unavailable.
  * A connected stream already performs cursor-based server fallback polling when
@@ -16,7 +16,7 @@ export const STORE_NOTIFY_BACKUP_POLL_MS = 30_000
 /** Wait this long for the stream `hello` before treating the transport as unhealthy. */
 export const STORE_HELLO_GRACE_MS = 3_000
 
-export function nextBackoffMs(previous: number, minMs: number, maxMs: number): number {
+function nextBackoffMs(previous: number, minMs: number, maxMs: number): number {
   if (!Number.isFinite(previous) || previous <= 0) return minMs
   return Math.min(maxMs, previous * 2)
 }

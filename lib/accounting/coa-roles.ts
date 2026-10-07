@@ -73,7 +73,7 @@ export const COA_ROLE_CODES: Record<CoaRole, string> = {
  * Labels used on journal lines today.
  * Prefer these over CoA template display names so dual-write refs stay consistent.
  */
-export const COA_ROLE_LABELS: Record<CoaRole, string> = {
+const COA_ROLE_LABELS: Record<CoaRole, string> = {
   ar: '1800 - Accounts Receivable',
   ap: '3000 - Accounts Payable',
   output_vat: '3301 - Output VAT Payable',
@@ -107,10 +107,6 @@ export const COA_ROLE_LABELS: Record<CoaRole, string> = {
 
 export function labelForRole(role: CoaRole): string {
   return COA_ROLE_LABELS[role]
-}
-
-export function codeForRole(role: CoaRole): string {
-  return COA_ROLE_CODES[role]
 }
 
 /** Resolve payment method → bank/cash role (customer receipts / vendor payouts). */

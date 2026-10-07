@@ -8,7 +8,7 @@ import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { rewriteInventoryTags } from '@/lib/inventory-identifiers'
 
-export type NormalizeInventoryTagsResult = {
+type NormalizeInventoryTagsResult = {
   rewritten: number
   total: number
   serials: Array<Record<string, unknown>>

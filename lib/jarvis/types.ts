@@ -23,10 +23,3 @@ export interface ToolDefinition<TInput = any, TOutput = any> {
   mutates: boolean
   run: (ctx: ToolContext, input: TInput) => Promise<TOutput>
 }
-
-export interface ToolRunResult {
-  allowed: boolean
-  output?: unknown
-  error?: string
-  durationMs: number
-}

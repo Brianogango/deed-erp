@@ -29,7 +29,7 @@ export interface ToolCallRecord {
   error?: string
 }
 
-export interface ChatTurnResult {
+interface ChatTurnResult {
   reply: string
   toolCalls: ToolCallRecord[]
   sources: AnswerSource[]

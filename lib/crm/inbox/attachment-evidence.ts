@@ -9,7 +9,7 @@ const MAX_CHARS = 4000
 const MAX_FILES = 5
 const MAX_BYTES = 2 * 1024 * 1024
 
-export interface AttachmentEvidence {
+interface AttachmentEvidence {
   text: string
   sources: Array<{ filename: string; kind: string; chars: number }>
 }
@@ -27,7 +27,7 @@ function bufferOf(att: InboundEmailAttachmentMeta): Buffer | null {
 }
 
 /** Crude PDF text: pull printable strings from literal / stream content. */
-export function crudePdfText(buf: Buffer): string {
+function crudePdfText(buf: Buffer): string {
   const latin = buf.toString('latin1')
   const chunks: string[] = []
   const paren = /\((?:\\.|[^\\)]){3,200}\)/g

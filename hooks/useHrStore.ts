@@ -54,7 +54,7 @@ const seedDepartments: Department[] = [
 ]
 
 // ─── Cross-cutting context, injected by StoreProvider (see lib/store.tsx) ───────────────
-export interface HrCtx {
+interface HrCtx {
   currentUser: () => User | null
   users: User[]
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void

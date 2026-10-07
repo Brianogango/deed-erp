@@ -98,5 +98,3 @@ export function remainingBootApiGroups(immediate: BootApiGroup[]): BootApiGroup[
   const have = new Set(immediate)
   return ALL_BOOT_API_GROUPS.filter(g => !have.has(g))
 }
-
-export { ALL_BOOT_API_GROUPS }

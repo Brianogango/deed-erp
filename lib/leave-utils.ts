@@ -58,9 +58,9 @@ export const NOTICE_EXEMPT_TYPES: StoreLeaveType[] = [
 ]
 
 // Notice period thresholds (policy section 4.1)
-export const NOTICE_THRESHOLD_DAYS = 3   // ≤3 days = short; >3 days = long
-export const NOTICE_SHORT_DAYS     = 3   // working days required for short leave (≤3 days)
-export const NOTICE_LONG_DAYS      = 14  // working days required for long leave (>3 days)
+const NOTICE_THRESHOLD_DAYS = 3   // ≤3 days = short; >3 days = long
+const NOTICE_SHORT_DAYS     = 3   // working days required for short leave (≤3 days)
+const NOTICE_LONG_DAYS      = 14  // working days required for long leave (>3 days)
 
 export const LEAVE_LABELS: Record<StoreLeaveType, string> = {
   annual:           'Annual Leave',
@@ -72,18 +72,6 @@ export const LEAVE_LABELS: Record<StoreLeaveType, string> = {
   unpaid:           'Unpaid Leave',
   december_closure: 'December Closure',
 }
-
-export const LEAVE_COLORS: Record<StoreLeaveType, string> = {
-  annual:           '#10B981',
-  sick:             '#EF4444',
-  maternity:        '#8B5CF6',
-  paternity:        '#3B82F6',
-  compassionate:    '#F97316',
-  study:            '#0EA5E9',
-  unpaid:           '#6B7280',
-  december_closure: '#F59E0B',
-}
-
 // ── Kenyan Public Holidays ────────────────────────────────────────────────────
 
 // Fixed holidays (MM-DD)
@@ -108,7 +96,7 @@ const KE_EASTER: Record<number, [string, string]> = {
   2030: ['04-19', '04-22'],
 }
 
-export function isKenyaPublicHoliday(date: Date): boolean {
+function isKenyaPublicHoliday(date: Date): boolean {
   const mm   = String(date.getMonth() + 1).padStart(2, '0')
   const dd   = String(date.getDate()).padStart(2, '0')
   const mmdd = `${mm}-${dd}`
@@ -131,7 +119,7 @@ export function formatLocalDate(date: Date): string {
 }
 
 /** Deed working week: Monday–Saturday. Only Sunday is a rest day. */
-export function isWorkingDay(date: Date): boolean {
+function isWorkingDay(date: Date): boolean {
   return date.getDay() !== 0 && !isKenyaPublicHoliday(date)
 }
 

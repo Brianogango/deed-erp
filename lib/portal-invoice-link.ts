@@ -6,13 +6,13 @@
  * `invoiceNumber`, so a bare `=== undefined` match binds every unlinked repair
  * to the first invoice in the list — historically INV/2026/0044 (KES 51,700).
  */
-export type RepairInvoiceLink = {
+type RepairInvoiceLink = {
   invoiceId?: string | null
   linkedInvoiceId?: string | null
   linkedInvoiceRef?: string | null
 }
 
-export type InvoiceLike = {
+type InvoiceLike = {
   id?: string | null
   ref?: string | null
   invoiceNumber?: string | null

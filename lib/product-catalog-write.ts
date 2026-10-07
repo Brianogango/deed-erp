@@ -5,12 +5,12 @@ import { isSerialOnlyCategory } from '@/lib/inventory-identifiers'
 import { createZeroStockLevel } from '@/lib/inventory/stock-level'
 import { deviceConfigFromProductSpecs, withCatalogDeviceConfig } from '@/lib/reconfiguration/unit-config'
 
-export type ValidatedProductInput = z.infer<typeof productSchema>
+type ValidatedProductInput = z.infer<typeof productSchema>
 
 const skuSeed = (value: string) =>
   value.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toUpperCase().slice(0, 24) || 'PRODUCT'
 
-export async function buildUniqueSku(name: string) {
+async function buildUniqueSku(name: string) {
   const base = skuSeed(name)
   let candidate = `${base}-${Date.now().toString(36).toUpperCase().slice(-6)}`
   let suffix = 1
@@ -20,7 +20,7 @@ export async function buildUniqueSku(name: string) {
   return candidate
 }
 
-export async function findProductDuplicate(
+async function findProductDuplicate(
   name: string,
   sku?: string | null,
   barcode?: string | null,
@@ -44,7 +44,7 @@ function productIdentityLockKey(name: string, sku?: string | null, barcode?: str
   return `product:${parts.join('|')}`
 }
 
-export function resolveTrackingMethod(
+function resolveTrackingMethod(
   trackingMethod: 'NONE' | 'QUANTITY' | 'BATCH' | 'SERIAL' | null | undefined,
   productKind: 'storable' | 'consumable' | 'service' | null | undefined,
   category?: string | null,
@@ -56,7 +56,7 @@ export function resolveTrackingMethod(
   return 'QUANTITY' as const
 }
 
-export function uniqueTargetLabel(meta: unknown): string {
+function uniqueTargetLabel(meta: unknown): string {
   const target = (meta as { target?: string | string[] } | undefined)?.target
   const fields = Array.isArray(target) ? target : target ? [target] : []
   if (fields.some(f => /sku/i.test(String(f)))) return 'SKU'
@@ -65,7 +65,7 @@ export function uniqueTargetLabel(meta: unknown): string {
 }
 
 /** Map driver/Prisma schema drift into an actionable publish error (not a generic 500). */
-export function schemaDriftMessage(err: unknown): string | null {
+function schemaDriftMessage(err: unknown): string | null {
   const anyErr = err as { code?: string; meta?: { column?: string }; message?: string } | null
   const message = String(anyErr?.message || '')
   const column = String(anyErr?.meta?.column || '')
@@ -80,7 +80,7 @@ export function schemaDriftMessage(err: unknown): string | null {
   return `Database product schema is out of date.${hint}`.trim()
 }
 
-export function duplicateFieldLabel(
+function duplicateFieldLabel(
   duplicate: { name: string; sku: string; barcode: string | null },
   requestedSku: string,
   name: string,
@@ -100,7 +100,7 @@ async function resolveCategoryId(category: string | null | undefined): Promise<s
   return row.id
 }
 
-export type PublishProductResult =
+type PublishProductResult =
   | { status: 'created'; product: any }
   | { status: 'exists'; product: { id: string; name: string; sku: string; barcode: string | null }; field: 'SKU' | 'name' | 'barcode' }
   | { status: 'error'; message: string }

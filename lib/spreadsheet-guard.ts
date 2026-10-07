@@ -1,6 +1,5 @@
-export const SPREADSHEET_MAX_BYTES = 5 * 1024 * 1024  // 5 MB
-export const SPREADSHEET_MAX_ROWS  = 2_000
-export const SPREADSHEET_MAX_COLS  = 100
+const SPREADSHEET_MAX_BYTES = 5 * 1024 * 1024  // 5 MB
+const SPREADSHEET_MAX_ROWS  = 2_000
 
 export class SpreadsheetGuardError extends Error {
   constructor(message: string) {
@@ -27,14 +26,5 @@ export function guardSpreadsheetRows(rows: unknown[]): void {
   if (rows.length > SPREADSHEET_MAX_ROWS)
     throw new SpreadsheetGuardError(
       `File has ${rows.length.toLocaleString()} rows — maximum is ${SPREADSHEET_MAX_ROWS.toLocaleString()}. Please split into smaller batches.`
-    )
-}
-
-/** Call after XLSX parsing to catch unreasonably wide sheets */
-export function guardSpreadsheetCols(row: Record<string, unknown>): void {
-  const cols = Object.keys(row).length
-  if (cols > SPREADSHEET_MAX_COLS)
-    throw new SpreadsheetGuardError(
-      `File has too many columns (${cols}). Maximum allowed is ${SPREADSHEET_MAX_COLS}.`
     )
 }

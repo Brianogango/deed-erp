@@ -26,7 +26,7 @@ export type AttributedSale = {
   closerName: string
 }
 
-export function saleDateKey(value?: string): string {
+function saleDateKey(value?: string): string {
   const raw = String(value || '').trim()
   if (!raw) return ''
   return raw.slice(0, 10)
@@ -40,7 +40,7 @@ export function closerIdOf(doc: Pick<SaleAttributionDoc, 'salespersonId' | 'crea
   return String(doc.salespersonId || doc.createdByUserId || '').trim()
 }
 
-export function closerNameOf(doc: Pick<SaleAttributionDoc, 'salespersonName' | 'createdByName'>): string {
+function closerNameOf(doc: Pick<SaleAttributionDoc, 'salespersonName' | 'createdByName'>): string {
   return String(doc.salespersonName || doc.createdByName || '').trim()
 }
 
@@ -49,7 +49,7 @@ export function dateInInclusiveRange(date: string | undefined, start: string, en
   return Boolean(key && key >= start && key <= end)
 }
 
-export function attributedSaleOrders(orders: readonly SaleAttributionDoc[]): AttributedSale[] {
+function attributedSaleOrders(orders: readonly SaleAttributionDoc[]): AttributedSale[] {
   return (orders ?? [])
     .filter(order => isClosedSaleOrder(order.status) && closerIdOf(order))
     .map(order => ({
@@ -64,7 +64,7 @@ export function attributedSaleOrders(orders: readonly SaleAttributionDoc[]): Att
     }))
 }
 
-export function attributedPosOrders(orders: readonly SaleAttributionDoc[]): AttributedSale[] {
+function attributedPosOrders(orders: readonly SaleAttributionDoc[]): AttributedSale[] {
   return (orders ?? [])
     .filter(order => closerIdOf(order))
     .map(order => ({

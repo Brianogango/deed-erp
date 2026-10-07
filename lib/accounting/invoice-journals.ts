@@ -17,7 +17,7 @@ import {
 import { labelForRole } from '@/lib/accounting/coa-roles'
 import { openingBalanceJournalLines } from '@/lib/finance/opening-balance'
 
-export type InvoiceLike = {
+type InvoiceLike = {
   id: string
   ref?: string
   invoiceNumber?: string
@@ -111,7 +111,7 @@ async function resolveVendorBillLineMeta(invoice: InvoiceLike) {
   })
 }
 
-export function invoiceJournalRef(invoice: Pick<InvoiceLike, 'ref' | 'invoiceNumber' | 'id'>) {
+function invoiceJournalRef(invoice: Pick<InvoiceLike, 'ref' | 'invoiceNumber' | 'id'>) {
   return `JRN/${String(invoice.ref || invoice.invoiceNumber || invoice.id)}`
 }
 
@@ -376,37 +376,6 @@ export async function postCustomerCreditJournalToPrisma(params: {
         ? [{ account: labelForRole('output_vat'), description: `Credit VAT ${params.creditRef}`, debit: vatReversal, credit: 0 }]
         : []),
       { account: CUSTOMER_CREDITS_ACCOUNT, description: `Customer credit: ${partner}`, debit: 0, credit: amount },
-    ],
-  }, { createdById: params.createdById, journalCode: 'SAL' })
-}
-
-/** Clear deposit liability into AR when goods are collected against an invoice. */
-export async function postDepositClearJournalToPrisma(params: {
-  depositRef: string
-  depositId: string
-  amount: number
-  partnerName: string
-  invoiceId?: string
-  invoiceRef?: string
-  createdById?: string
-}) {
-  const amount = money(params.amount)
-  if (amount <= 0) return null
-  const creditAccount = params.invoiceId
-    ? labelForRole('ar')
-    : formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, [])
-  const creditDesc = params.invoiceId
-    ? `AR settlement via deposit ${params.depositRef}${params.invoiceRef ? ` → ${params.invoiceRef}` : ''}`
-    : `Revenue recognition on deposit collect ${params.depositRef}`
-
-  return persistStoreJournalEntry({
-    ref: `JRN/DEPCLR/${params.depositRef}`.slice(0, 80),
-    source: 'manual',
-    description: `Deposit collected — clear liability ${params.depositRef}`,
-    invoiceId: params.invoiceId,
-    lines: [
-      { account: CUSTOMER_DEPOSITS_ACCOUNT, description: `Clear deposit: ${params.partnerName}`, debit: amount, credit: 0 },
-      { account: creditAccount, description: creditDesc, debit: 0, credit: amount },
     ],
   }, { createdById: params.createdById, journalCode: 'SAL' })
 }

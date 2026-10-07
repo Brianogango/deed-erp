@@ -20,7 +20,7 @@ type Row = Record<string, unknown>
 const IDENTITY_FIELDS = ['id', 'ref', 'code', 'key', 'number', 'name'] as const
 
 /** Same identity precedence as the Prisma projection's record_key. */
-export function recordIdentity(value: unknown): string | null {
+function recordIdentity(value: unknown): string | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const row = value as Row
   for (const field of IDENTITY_FIELDS) {
@@ -31,7 +31,7 @@ export function recordIdentity(value: unknown): string | null {
   return null
 }
 
-export type CollectionShrink = {
+type CollectionShrink = {
   existing: number
   incoming: number
   /** Identified records present now but absent from the incoming array. */
@@ -80,7 +80,7 @@ export function unionMissingRecords(current: unknown, incoming: unknown): unknow
   return [...incomingArr, ...kept]
 }
 
-export type GuardedCollectionWrite = {
+type GuardedCollectionWrite = {
   value: unknown
   /** True when the incoming array was merged instead of replacing the store. */
   blocked: boolean

@@ -9,7 +9,7 @@ import { DEFAULT_COMPANY_SETTINGS, DEFAULT_BANK_ACCOUNTS } from '@/lib/store'
 import { loadAppState } from '@/lib/server-store'
 import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
 
-export interface QuotePdfInput {
+interface QuotePdfInput {
   ref: string
   companyName: string
   contactPersonName?: string

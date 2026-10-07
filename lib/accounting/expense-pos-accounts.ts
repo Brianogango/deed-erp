@@ -5,7 +5,7 @@ import { cashAccountRoleForBankId, labelForRole } from '@/lib/accounting/coa-rol
  * Labels match historical store.tsx journal strings for dual-write parity.
  */
 
-export type ExpenseCategoryKey =
+type ExpenseCategoryKey =
   | 'courier'
   | 'office_supplies'
   | 'water'

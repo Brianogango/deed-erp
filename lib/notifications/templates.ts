@@ -15,7 +15,7 @@ type EventLike = {
   priority?: string | null
 }
 
-export type RenderedNotificationTemplate = {
+type RenderedNotificationTemplate = {
   subject: string
   text: string
   templateId?: string

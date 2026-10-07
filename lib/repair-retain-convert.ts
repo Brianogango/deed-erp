@@ -74,7 +74,7 @@ export function buyBackConditionFromRepair(
   return 'good'
 }
 
-export type RepairSerialMatch<T> = {
+type RepairSerialMatch<T> = {
   existing: T | null
   serialText: string
 }
@@ -103,7 +103,7 @@ export function canConvertRetainedRepair(repair: {
 }
 
 /** Statuses where staff can open a paid trade-in from the repair job. */
-export const TRADE_IN_FROM_REPAIR_STATUSES = [
+const TRADE_IN_FROM_REPAIR_STATUSES = [
   'received',
   'assigned',
   'diagnosed',

@@ -31,7 +31,7 @@ function genericHtml(title: string, body: string, actionUrl?: string | null) {
   </body></html>`
 }
 
-export type ProviderDeliveryInput = {
+type ProviderDeliveryInput = {
   channel: NotificationChannel
   eventType: string
   title: string

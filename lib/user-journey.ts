@@ -1,4 +1,4 @@
-export type LinkedDocumentCta = 'create' | 'view' | 'confirm' | 'none'
+type LinkedDocumentCta = 'create' | 'view' | 'confirm' | 'none'
 
 export function linkedDocumentCta(opts: {
   exists?: boolean

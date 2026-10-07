@@ -4,7 +4,7 @@
  * normally prevents but a crafted API call could otherwise write.
  */
 
-export type SaleOrderLineValidationInput = {
+type SaleOrderLineValidationInput = {
   lineType?: unknown
   qty?: unknown
   unitPrice?: unknown

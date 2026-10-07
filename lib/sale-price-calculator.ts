@@ -17,7 +17,7 @@ import {
   type PricingMarginPolicy,
 } from '@/lib/pricing/margin-policy'
 
-export type CategoryMarkupMap = Partial<Record<string, number>>
+type CategoryMarkupMap = Partial<Record<string, number>>
 
 export function getCategoryMarkupPct(
   map: CategoryMarkupMap | null | undefined,
@@ -195,22 +195,4 @@ export function autoSalePriceFromCost(
   if (cost === 0) return 0
   // Fallback: sell ≈ cost / 0.70 → ~30% classic GP when no band/markup applies.
   return Math.max(0, Math.round(cost / 0.7))
-}
-
-export function suggestSalePriceFromMarginPolicy(
-  policy: PricingMarginPolicy | Partial<PricingMarginPolicy> | null | undefined,
-  opts: {
-    costPrice: number | string | null | undefined
-    erpCategory?: string | null
-    pricingCategoryId?: string | null
-    productType?: 'new' | 'refurbished' | string | null
-    legacyMarkupMap?: CategoryMarkupMap | null
-  },
-): number | null {
-  return suggestSalePriceFromCost(opts.legacyMarkupMap ?? null, opts.erpCategory, opts.costPrice, {
-    policy,
-    pricingCategoryId: opts.pricingCategoryId,
-    productType: opts.productType,
-    legacyMarkupMap: opts.legacyMarkupMap,
-  })
 }

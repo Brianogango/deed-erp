@@ -17,11 +17,11 @@ function orderLines(body: any, existing?: any): any[] {
   return (existing?.items ?? []).filter((l: any) => l.lineType !== 'section')
 }
 
-export function maxLineDiscountPercent(lines: any[]): number {
+function maxLineDiscountPercent(lines: any[]): number {
   return lines.reduce((max, line) => Math.max(max, Number(line.discount ?? line.discountPercent ?? 0)), 0)
 }
 
-export async function creditOverrideDetails(
+async function creditOverrideDetails(
   clientId: string | undefined,
   orderTotal: number,
   body: any,
@@ -62,7 +62,7 @@ export async function creditOverrideDetails(
   }
 }
 
-export async function collectApprovalTriggers(
+async function collectApprovalTriggers(
   body: any,
   existing?: any,
 ): Promise<Array<{ type: ApprovalType; details: Record<string, unknown> }>> {
@@ -242,7 +242,7 @@ async function hasApprovedRequest(orderId: string, type: ApprovalType): Promise<
   }
 }
 
-export type ApprovalEnforcementResult =
+type ApprovalEnforcementResult =
   | { ok: true }
   | { ok: false; status: number; error: string; requiredRoles: string[] }
 

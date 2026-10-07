@@ -10,10 +10,10 @@
  * Refurbishment is left out on purpose: stock there is being worked on.
  */
 
-export type ReturnReason = 'damaged' | 'wrong_supply' | 'excess' | 'other' | string
+type ReturnReason = 'damaged' | 'wrong_supply' | 'excess' | 'other' | string
 
-export const VENDOR_RETURN_LOCATIONS = ['quarantine', 'shop', 'pending_testing', 'warehouse'] as const
-export type VendorReturnLocation = (typeof VENDOR_RETURN_LOCATIONS)[number]
+const VENDOR_RETURN_LOCATIONS = ['quarantine', 'shop', 'pending_testing', 'warehouse'] as const
+type VendorReturnLocation = (typeof VENDOR_RETURN_LOCATIONS)[number]
 
 export function vendorReturnPickOrder(reason: ReturnReason | undefined): VendorReturnLocation[] {
   if (reason === 'excess' || reason === 'wrong_supply') {

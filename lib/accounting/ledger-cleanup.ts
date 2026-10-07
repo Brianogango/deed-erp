@@ -13,7 +13,7 @@
  * Pure — ledger-cleanup.server.ts reads and applies.
  */
 
-export type JournalLite = { ref: string; sourceType: string | null; amount: number; date: string }
+type JournalLite = { ref: string; sourceType: string | null; amount: number; date: string }
 
 export type DepositDuplicate = {
   /** The browser copy to reverse. */

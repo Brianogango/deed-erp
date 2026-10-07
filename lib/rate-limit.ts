@@ -1,7 +1,7 @@
 // Rate limiting — uses Upstash Redis when configured, in-memory fallback otherwise.
 // Swap: set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in env.
 
-export interface RateLimitResult {
+interface RateLimitResult {
   success: boolean
   remaining: number
   resetAt: number
@@ -71,12 +71,4 @@ const e2eRelaxed = () => process.env.E2E_RELAX_RATE_LIMIT === '1'
 
 export const loginRatelimit = {
   limit: (ip: string) => checkRateLimit(`login:${ip}`, e2eRelaxed() ? 120 : 10, 60),
-}
-
-export const apiRatelimit = {
-  limit: (ip: string) => checkRateLimit(`api:${ip}`, 120, 60),
-}
-
-export const salesRatelimit = {
-  limit: (ip: string) => checkRateLimit(`sales:${ip}`, 50, 3600),
 }

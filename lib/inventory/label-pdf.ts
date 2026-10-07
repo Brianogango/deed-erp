@@ -8,7 +8,7 @@ import { productThermalSpecs } from '@/lib/product-label'
 import { catalogBaseName } from '@/lib/reconfiguration/unit-selling-name'
 import type { ThermalLabelSpec } from '@/lib/inventory/thermal-label-template'
 
-export type ProductLabelPdfItem = {
+type ProductLabelPdfItem = {
   name: string
   sku: string
   barcode?: string
@@ -18,7 +18,7 @@ export type ProductLabelPdfItem = {
   specs?: string
 }
 
-export type SerialLabelPdfItem = {
+type SerialLabelPdfItem = {
   serial: string
   barcode?: string
   productName: string

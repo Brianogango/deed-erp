@@ -5,7 +5,7 @@
 
 import type { DeviceConfigFields, RamCompositionEntry } from './types'
 
-export function formatRamComposition(entries: RamCompositionEntry[]): string {
+function formatRamComposition(entries: RamCompositionEntry[]): string {
   if (!entries.length) return ''
   const parts = entries.map(e => {
     const tag = e.removable ? '' : ' (onboard)'

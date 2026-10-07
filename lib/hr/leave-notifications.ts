@@ -11,7 +11,7 @@
 import prisma from '@/lib/prisma'
 import { sendEmail } from '@/lib/integrations/email'
 
-export type LeaveNotifyPayload = {
+type LeaveNotifyPayload = {
   id: string
   ref: string
   employeeId: string
@@ -30,7 +30,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** Default leave-apply CC list when env / DB lookup is empty. */
 export const DEFAULT_LEAVE_APPLY_CC = ['edwin@deed.co.ke', 'dennis@deed.co.ke'] as const
-export const DEFAULT_LEAVE_APPLY_TO = 'hr@deed.co.ke'
+const DEFAULT_LEAVE_APPLY_TO = 'hr@deed.co.ke'
 
 function escapeHtml(value: string): string {
   return String(value ?? '')
@@ -131,18 +131,6 @@ export async function resolveLeaveApplyCcEmails(): Promise<string[]> {
   }
 
   return [...DEFAULT_LEAVE_APPLY_CC]
-}
-
-/** @deprecated Use leaveApplyToEmail + resolveLeaveApplyCcEmails. Kept for tests. */
-export function configuredLeaveInboxEmails(): string[] {
-  return [leaveApplyToEmail()]
-}
-
-/** @deprecated Apply notifications no longer blast all HR managers. */
-export async function resolveHrApproverEmails(): Promise<string[]> {
-  const to = leaveApplyToEmail()
-  const cc = await resolveLeaveApplyCcEmails()
-  return Array.from(new Set([to, ...cc]))
 }
 
 /**
@@ -329,80 +317,9 @@ export async function notifyLeaveDecision(
   })
 }
 
-/** Email the employee when HR books leave for them (auto-approved). */
-export async function notifyLeaveBookedForEmployee(payload: LeaveNotifyPayload): Promise<void> {
-  const applicant = await resolveApplicantEmail(payload.employeeId)
-  if (!applicant.email) {
-    console.warn('[leave-notifications] skip booked email — employee HR record has no email', {
-      ref: payload.ref,
-      employeeId: payload.employeeId,
-    })
-    return
-  }
-  const greeting = applicant.name || payload.employeeName || 'there'
-  const subject = `Leave booked for you — ${payload.ref}`
-  const text = [
-    `Hi ${greeting},`,
-    ``,
-    `${payload.reviewerName || 'HR'} has booked leave for you (${payload.ref}).`,
-    `Type: ${leaveTypeLabel(payload.leaveType)}`,
-    `Dates: ${formatDate(payload.startDate)} – ${formatDate(payload.endDate)}`,
-    `Days: ${payload.days}`,
-    ``,
-    `View in ERP: ${leaveSelfUrl()}`,
-  ].join('\n')
-  const html = wrapHtml('Leave Booked', `
-    <p>Hi ${escapeHtml(greeting)},</p>
-    <p>${escapeHtml(payload.reviewerName || 'HR')} has booked leave for you.</p>
-    ${detailBlock(payload)}
-    <p><a href="${escapeHtml(leaveSelfUrl())}" style="display:inline-block;background:#1B2762;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">View My Leave</a></p>
-  `)
-  await sendHrMailbox({
-    to: applicant.email,
-    subject,
-    html,
-    text,
-    metadata: { action: 'leave_booked', leaveId: payload.id, ref: payload.ref },
-  })
-}
-
 /** Fire-and-forget wrapper so callers never await mail failures. */
 export function queueLeaveNotification(task: () => Promise<void>): void {
   void task().catch(err => {
     console.error('[leave-notifications] background task failed', err)
   })
-}
-
-export function toLeaveNotifyPayload(row: {
-  id: string
-  reference?: string | null
-  ref?: string | null
-  employeeId: string
-  employeeName?: string | null
-  leaveType: string
-  startDate: Date | string
-  endDate: Date | string
-  daysRequested?: number | null
-  days?: number | null
-  reason?: string | null
-  status: string
-  reviewedByName?: string | null
-  reviewNotes?: string | null
-}): LeaveNotifyPayload {
-  const start = row.startDate instanceof Date ? row.startDate.toISOString() : String(row.startDate)
-  const end = row.endDate instanceof Date ? row.endDate.toISOString() : String(row.endDate)
-  return {
-    id: row.id,
-    ref: String(row.reference || row.ref || row.id),
-    employeeId: row.employeeId,
-    employeeName: String(row.employeeName || 'Employee'),
-    leaveType: String(row.leaveType),
-    startDate: start.slice(0, 10),
-    endDate: end.slice(0, 10),
-    days: Number(row.daysRequested ?? row.days ?? 0) || 0,
-    reason: row.reason,
-    status: String(row.status),
-    reviewerName: row.reviewedByName,
-    reviewNotes: row.reviewNotes,
-  }
 }

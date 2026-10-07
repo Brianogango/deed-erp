@@ -39,7 +39,7 @@ export function isReconfigurableCatalogCategory(category?: string | null): boole
   return c === 'laptops' || c === 'desktops'
 }
 
-export function hasCapacity(
+function hasCapacity(
   config?: { totalRamGb?: number | null; primaryStorageGb?: number | null } | null,
 ): boolean {
   if (!config) return false
@@ -174,7 +174,7 @@ export function fillMissingCatalogDeviceConfig(
   }
 }
 
-export type SerialSpecsBackfillRow = {
+type SerialSpecsBackfillRow = {
   specs?: string | null
   productName?: string | null
   productId?: string | null

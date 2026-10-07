@@ -28,7 +28,7 @@ export type ConsolidationDeps<Invoice> = {
   cancelSaleOrder: (saleOrderId: string) => Promise<Ok<object> | Failed>
 }
 
-export type ConsolidationOutcome<Invoice> =
+type ConsolidationOutcome<Invoice> =
   | {
     ok: true
     invoice: Invoice

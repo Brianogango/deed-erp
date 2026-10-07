@@ -13,7 +13,7 @@
  */
 
 /** A write whose timestamp is this close before our read may not have been visible to it. */
-export const READ_MARGIN_MS = 5_000
+const READ_MARGIN_MS = 5_000
 /** How long a downloaded copy counts as current without any change notice. */
 export const FRESH_WINDOW_MS = 60_000
 

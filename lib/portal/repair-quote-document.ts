@@ -14,7 +14,7 @@ type QuoteLine = {
   decision?: 'approved' | 'declined' | 'deferred' | string
 }
 
-export type RepairWithQuote = {
+type RepairWithQuote = {
   ref: string
   productName?: string
   deviceBrand?: string

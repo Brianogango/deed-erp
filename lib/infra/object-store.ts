@@ -3,16 +3,16 @@ import { createHmac, createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
-export type ObjectStoreDriver = 'fs' | 's3'
+type ObjectStoreDriver = 'fs' | 's3'
 
-export type PutObjectInput = {
+type PutObjectInput = {
   bucket: string
   key: string
   body: Buffer | string
   contentType?: string
 }
 
-export type StoredObject = {
+type StoredObject = {
   driver: ObjectStoreDriver
   bucket: string
   key: string
@@ -21,7 +21,7 @@ export type StoredObject = {
   uri: string
 }
 
-export type ObjectStore = {
+type ObjectStore = {
   driver: ObjectStoreDriver
   put(input: PutObjectInput): Promise<StoredObject>
   get(bucket: string, key: string): Promise<Buffer | null>
@@ -41,7 +41,7 @@ export function sanitizeObjectKey(key: string): string {
     .join('/')
 }
 
-export function sanitizeBucket(bucket: string): string {
+function sanitizeBucket(bucket: string): string {
   const value = bucket.replace(KEY_SEGMENT, '_')
   return value || 'files'
 }
@@ -360,10 +360,6 @@ export async function getObject(bucket: string, key: string): Promise<Buffer | n
 
 export async function deleteObject(bucket: string, key: string): Promise<void> {
   return getObjectStore().delete(bucket, key)
-}
-
-export async function objectExists(bucket: string, key: string): Promise<boolean> {
-  return getObjectStore().exists(bucket, key)
 }
 
 export async function listObjects(bucket: string, prefix?: string): Promise<string[]> {

@@ -67,14 +67,3 @@ export function getStoredCompanyData() {
 
 // ── Active bank accounts ──────────────────────────────────────────────────────
 // Returns all active bank accounts from localStorage (for utility functions).
-export function getStoredBankAccounts(): { id: string; name: string; bankName: string; accountNo: string }[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem('deed_bankAccounts')
-    if (raw) {
-      const accounts = JSON.parse(raw) as { id: string; name: string; bankName: string; accountNo: string; active: boolean }[]
-      return accounts.filter(a => a.active)
-    }
-  } catch { /* corrupted */ }
-  return []
-}

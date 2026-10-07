@@ -11,7 +11,7 @@
 
 import { safeLocalStorageSet } from '@/lib/client-store-cache'
 
-export type PosOrderLike = {
+type PosOrderLike = {
   id?: unknown
   ref?: unknown
   [key: string]: unknown
@@ -40,7 +40,7 @@ function asLineObject(value: unknown): Record<string, unknown> | null {
  * Keep a serial that only one side has. A stale till tab often re-sends the
  * restored 14 Aug tickets without SN; the server copy must not lose it.
  */
-export function mergePosOrderLines(currentLines: unknown, incomingLines: unknown): unknown {
+function mergePosOrderLines(currentLines: unknown, incomingLines: unknown): unknown {
   if (!Array.isArray(incomingLines)) return currentLines
   if (!Array.isArray(currentLines) || currentLines.length === 0) return incomingLines
 
@@ -113,7 +113,7 @@ function parsePosSeq(ref: unknown, prefix: string): number {
   return Number.isFinite(n) ? n : 0
 }
 
-export function nextPrefixedRef(prefix: string, existingRefs: string[], storageKey: string): string {
+function nextPrefixedRef(prefix: string, existingRefs: string[], storageKey: string): string {
   let max = 0
   for (const ref of existingRefs) {
     const n = parsePosSeq(ref, prefix)

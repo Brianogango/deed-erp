@@ -44,12 +44,9 @@ export const EXTENDED_CUTOVER_BLOB_KEYS = [
  * those collections now dual-write into Prisma.
  */
 export const BLOB_SOT_KEYS = [] as const
-
-export type CutoverBlobKey = (typeof DUAL_WRITE_BLOB_KEYS)[number] | (typeof CATALOG_BLOB_KEYS)[number] | string
-
 export type CutoverDomainRole = 'dual_write' | 'catalog' | 'blob_sot'
 
-export type CutoverStatus = 'pending' | 'verified' | 'certified' | 'archived' | 'blocked' | 'tracked'
+type CutoverStatus = 'pending' | 'verified' | 'certified' | 'archived' | 'blocked' | 'tracked'
 
 export interface BlobParityCheck {
   blobKey: string
@@ -65,7 +62,7 @@ export interface BlobParityCheck {
   details?: Record<string, unknown>
 }
 
-export interface BlobCutoverCertificate {
+interface BlobCutoverCertificate {
   id: string
   blobKey: string
   status: CutoverStatus
@@ -91,14 +88,6 @@ export function domainRoleFor(blobKey: string): CutoverDomainRole {
 export function archiveKeyFor(blobKey: string, at = new Date()): string {
   const stamp = at.toISOString().replace(/[:.]/g, '-')
   return `archive:${blobKey}:${stamp}`
-}
-
-export function isDualWriteKey(key: string): boolean {
-  return (DUAL_WRITE_BLOB_KEYS as readonly string[]).includes(key)
-}
-
-export function isProtectedBlobKey(key: string): boolean {
-  return isDualWriteKey(key) || (CATALOG_BLOB_KEYS as readonly string[]).includes(key)
 }
 
 /** Count array length of a JSON blob value; null if missing/unparseable. */

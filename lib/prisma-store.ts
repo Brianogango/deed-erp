@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { isBlobKey } from '@/lib/blob-store'
 
-export type StoreMap = Record<string, unknown>
+type StoreMap = Record<string, unknown>
 
 function parseMaybeJson(value: unknown): Prisma.InputJsonValue {
   if (typeof value !== 'string') {

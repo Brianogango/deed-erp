@@ -1,4 +1,4 @@
-export type RepairModuleView = 'list' | 'intake' | 'detail'
+type RepairModuleView = 'list' | 'intake' | 'detail'
 
 /**
  * List vs job card vs intake. The open record id (URL) is the only source

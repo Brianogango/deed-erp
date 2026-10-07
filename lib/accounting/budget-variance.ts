@@ -1,4 +1,4 @@
-export type BudgetActualInput = {
+type BudgetActualInput = {
   plannedAmount: number
   debit: number
   credit: number

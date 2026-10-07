@@ -7,7 +7,7 @@ import { parseSpecsString } from '@/lib/reconfiguration/display-name'
 import { catalogBaseName, formatStorageGb } from '@/lib/reconfiguration/unit-selling-name'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 
-export type ClientCatalogRow = {
+type ClientCatalogRow = {
   key: string
   model: string
   specs: string
@@ -273,20 +273,6 @@ export async function exportClientCatalogPdfFromTable(
 
   if (!rows.length) drawFrame(1)
   doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`)
-}
-
-function style(fill: string, color: string, bold = false, horizontal: 'left' | 'center' | 'right' = 'left') {
-  return {
-    fill: { patternType: 'solid', fgColor: { rgb: fill } },
-    font: { name: 'Arial', sz: 10, bold, color: { rgb: color } },
-    alignment: { vertical: 'center', horizontal, wrapText: true },
-    border: {
-      top: { style: 'thin', color: { rgb: 'D6E3EF' } },
-      bottom: { style: 'thin', color: { rgb: 'D6E3EF' } },
-      left: { style: 'thin', color: { rgb: 'D6E3EF' } },
-      right: { style: 'thin', color: { rgb: 'D6E3EF' } },
-    },
-  }
 }
 
 export async function exportClientCatalogExcelFromTable(

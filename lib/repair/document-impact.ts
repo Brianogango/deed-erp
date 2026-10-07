@@ -14,7 +14,7 @@
  * Pure, so the rules are testable without a repair, a store, or a database.
  */
 
-export type RepairDocAction =
+type RepairDocAction =
   /** The document is still editable and will be brought into line. */
   | 'updates_automatically'
   /** Confirmed, so the change needs a new version rather than an edit. */
@@ -24,14 +24,14 @@ export type RepairDocAction =
   /** Posted and the price went UP — the difference is not yet billed. */
   | 'needs_debit_note'
 
-export type RepairDocImpact = {
+type RepairDocImpact = {
   doc: 'sale_order' | 'invoice'
   ref: string
   action: RepairDocAction
   detail: string
 }
 
-export type RepairPriceChangeImpact = {
+type RepairPriceChangeImpact = {
   changed: boolean
   previousTotal: number
   nextTotal: number

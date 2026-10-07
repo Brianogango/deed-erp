@@ -11,7 +11,7 @@ import { canApproveLeaveRole } from '@/lib/auth/access'
 import type { ModuleId, PublicUser, UserRole } from '@/lib/auth/types'
 import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
 
-export interface DashboardSections {
+interface DashboardSections {
   /** Revenue / receivables / payables KPIs and money-denominated analytics. */
   finance: boolean
   /** Sales KPIs and pipeline content. */
@@ -86,7 +86,7 @@ export function hasExplicitModuleGrant(
   return !!user?.modules?.includes(module)
 }
 
-export const DASHBOARD_KPI_MODULES: Readonly<Record<string, ModuleId>> = {
+const DASHBOARD_KPI_MODULES: Readonly<Record<string, ModuleId>> = {
   'active-users': 'dashboard',
   revenue: 'accounting',
   outstanding: 'accounting',
@@ -160,12 +160,6 @@ export function dashboardSectionsForUser(
   ) as unknown as DashboardSections
 }
 
-export function canShowDashboardLeaveApprovals(
-  user: DashboardUser | null | undefined,
-): boolean {
-  return dashboardSectionsForUser(user).leaveApprovals
-}
-
 export function visibleDashboardSalesOrders<T>(
   user: DashboardUser | null | undefined,
   orders: readonly T[],
@@ -202,7 +196,7 @@ export function visibleDashboardRepairs<T extends { assignedTechnicianId?: strin
 // exclusively at /crm (the Sales component redirects the legacy ?tab=crm deep
 // link itself). Anything unknown or legacy ('dashboard', 'reps', 'crm', …)
 // resolves to the operational order list.
-export type SalesTab = 'list'
+type SalesTab = 'list'
 
 export function resolveSalesTab(_param: string | null | undefined): SalesTab {
   return 'list'
@@ -211,11 +205,11 @@ export function resolveSalesTab(_param: string | null | undefined): SalesTab {
 // ── Settings deep links ──────────────────────────────────────────────────────
 // Settings selects sections with local state; these aliases let ?tab= deep
 // links (e.g. the dashboard's Active Users card) land on the right section.
-export const SETTINGS_SECTIONS = [
+const SETTINGS_SECTIONS = [
   'general', 'document_layout', 'banks', 'access', 'email', 'crm', 'sales', 'inventory', 'purchase',
   'repair', 'accounting', 'hr_config', 'pos', 'notifications', 'security', 'partner_api', 'data_cutover',
 ] as const
-export type SettingsSection = typeof SETTINGS_SECTIONS[number]
+type SettingsSection = typeof SETTINGS_SECTIONS[number]
 
 const SETTINGS_ALIASES: Record<string, SettingsSection> = {
   users: 'access',

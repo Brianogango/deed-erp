@@ -10,7 +10,7 @@
 
 export const SAVE_FAILED_EVENT = 'deed:save-failed'
 
-export type SaveFailure = { message: string; url: string; status: number | null }
+type SaveFailure = { message: string; url: string; status: number | null }
 
 const DOCUMENT_NAMES: Array<[RegExp, string]> = [
   [/^\/api\/sale-orders/, 'sale order'],
@@ -52,7 +52,7 @@ export function describeSaveFailure(url: string, method: string | undefined, sta
 // per distinct message is enough.
 const recent = new Map<string, number>()
 
-export function reportSaveFailure(url: string, method: string | undefined, status: number | null, serverError?: string | null): void {
+function reportSaveFailure(url: string, method: string | undefined, status: number | null, serverError?: string | null): void {
   if (typeof window === 'undefined') return
   const message = describeSaveFailure(url, method, status, serverError)
   const now = Date.now()

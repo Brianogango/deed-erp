@@ -3,7 +3,7 @@
  * Blob historically uses `available`; Prisma SerialNumber uses `in_stock`.
  */
 
-export type BlobSerialStatus =
+type BlobSerialStatus =
   | 'available'
   | 'assigned'
   | 'sold'
@@ -13,7 +13,7 @@ export type BlobSerialStatus =
   | 'scrap'
   | string
 
-export type PrismaSerialStatus =
+type PrismaSerialStatus =
   | 'in_stock'
   | 'reserved'
   | 'sold'

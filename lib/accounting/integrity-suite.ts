@@ -15,7 +15,7 @@ import { roundMoney } from '@/lib/accounting/money'
 import { countPosSalesWithoutJournal } from '@/lib/accounting/pos-journal-gaps'
 import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
 
-export type IntegrityGate = {
+type IntegrityGate = {
   id: string
   name: string
   passed: boolean
@@ -26,7 +26,7 @@ export type IntegrityGate = {
   detail?: string
 }
 
-export type IntegritySuiteResult = {
+type IntegritySuiteResult = {
   asOf: string
   passedCount: number
   failedCount: number

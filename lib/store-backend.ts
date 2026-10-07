@@ -14,7 +14,7 @@
  * (docs/PRISMA_STATE_CUTOVER.md) has been followed and parity certified.
  * Deploying new code must never silently move production to an empty store.
  */
-export type StoreBackend = 'prisma' | 'dual' | 'app_state'
+type StoreBackend = 'prisma' | 'dual' | 'app_state'
 
 export function storeBackend(): StoreBackend {
   const raw = String(process.env.STORE_BACKEND || 'app_state').trim().toLowerCase()

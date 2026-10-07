@@ -20,7 +20,7 @@ const num = (value: unknown): number | null => {
   return Number.isFinite(n) ? n : null
 }
 
-export type ConsignmentRow = {
+type ConsignmentRow = {
   id: string
   vendorId: string
   vendorName?: string | null
@@ -39,7 +39,7 @@ export type ConsignmentRow = {
   accessories?: unknown
 }
 
-export type ConsignmentView = ConsignmentDevice & {
+type ConsignmentView = ConsignmentDevice & {
   productId: string | null
   purchaseOrderRef?: string | null
 }

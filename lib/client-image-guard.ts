@@ -1,6 +1,6 @@
 const DEFAULT_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
-export type ImageGuardOptions = {
+type ImageGuardOptions = {
   maxBytes?: number
   maxPixels?: number
   maxWidth?: number
@@ -9,7 +9,7 @@ export type ImageGuardOptions = {
   label?: string
 }
 
-export type ImageGuardResult = {
+type ImageGuardResult = {
   width: number
   height: number
   pixels: number
@@ -23,7 +23,7 @@ export class ImageGuardError extends Error {
   }
 }
 
-export function formatImageGuardBytes(bytes: number) {
+function formatImageGuardBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`

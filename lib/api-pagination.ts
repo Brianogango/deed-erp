@@ -6,7 +6,7 @@
 export const PAGINATION_DEFAULT_LIMIT = 50
 export const PAGINATION_MAX_LIMIT = 200
 
-export type PaginationParams = {
+type PaginationParams = {
   page: number
   limit: number
   skip: number
@@ -14,7 +14,7 @@ export type PaginationParams = {
   order: 'asc' | 'desc'
 }
 
-export type PaginatedResponse<T> = {
+type PaginatedResponse<T> = {
   items: T[]
   total: number
   page: number
@@ -87,10 +87,8 @@ export function parseCollectionPayload<T>(data: unknown): PaginatedResponse<T> {
   )
 }
 
-const FETCH_ALL_PAGE_CAP = 50
-
 /** Legacy / shorthand list paths → canonical collection routes. */
-export const COLLECTION_PATH_ALIASES: Record<string, string> = {
+const COLLECTION_PATH_ALIASES: Record<string, string> = {
   '/api/sales': '/api/sale-orders',
   '/api/purchase': '/api/purchase-orders',
   '/api/purchases': '/api/purchase-orders',
@@ -123,27 +121,4 @@ export async function fetchCollection<T>(inputUrl: string): Promise<T[]> {
   } catch {
     return []
   }
-}
-
-/**
- * Walk every page of a paginated collection endpoint.
- * Used for client boot so KPI / list counts are not a 200-row window.
- */
-export async function fetchAllCollectionPages<T>(inputUrl: string): Promise<T[]> {
-  const { url } = collectionRequestUrl(inputUrl)
-  url.searchParams.set('limit', String(PAGINATION_MAX_LIMIT))
-  const all: T[] = []
-  let page = 1
-  let totalPages = 1
-  do {
-    url.searchParams.set('page', String(page))
-    const res = await fetch(`${url.pathname}${url.search}`)
-    if (res.status === 404 || !res.ok) break
-    const parsed = parseCollectionPayload<T>(await res.json().catch(() => null))
-    all.push(...parsed.items)
-    totalPages = Math.max(1, parsed.totalPages || 1)
-    if (parsed.items.length === 0) break
-    page += 1
-  } while (page <= totalPages && page <= FETCH_ALL_PAGE_CAP)
-  return all
 }

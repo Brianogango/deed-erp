@@ -34,7 +34,7 @@ export const REPAIR_TRANSITIONS: Readonly<Record<string, readonly RepairStatus[]
   invoiced: ['verified_released', 'delivered', 'collected'],
 }
 
-export type RepairTransitionDecision =
+type RepairTransitionDecision =
   | { allowed: true }
   | { allowed: false; reason: string }
 

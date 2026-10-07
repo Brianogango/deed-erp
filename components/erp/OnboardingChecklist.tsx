@@ -21,7 +21,7 @@ function isCompanyConfigured(settings: CompanySettings): boolean {
   )
 }
 
-export function useOnboardingState({
+function useOnboardingState({
   companySettings,
   accounts,
   products,

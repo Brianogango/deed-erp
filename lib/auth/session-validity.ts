@@ -11,7 +11,7 @@
  * - Inactive entries are retained longer so deactivation sticks across TTL
  */
 
-export type SessionStatus = {
+type SessionStatus = {
   isActive: boolean
   role: string
   actsAsTechnician?: boolean
@@ -20,7 +20,7 @@ export type SessionStatus = {
 
 export const SESSION_STATUS_TTL_MS = 60_000
 /** Keep forced-inactive markers around long enough that JWT sessions die first. */
-export const SESSION_INACTIVE_TTL_MS = 12 * 60 * 60 * 1000
+const SESSION_INACTIVE_TTL_MS = 12 * 60 * 60 * 1000
 
 type CacheEntry = { status: SessionStatus; expiresAt: number }
 
@@ -76,11 +76,6 @@ export function setCachedSessionStatus(
   memStore.set(userId, { status, expiresAt: Date.now() + ttlMs })
 }
 
-export function clearCachedSessionStatus(userId: string): void {
-  if (!userId) return
-  memStore.delete(userId)
-}
-
 /** Test helper — wipe the in-memory map. */
 export function __resetSessionStatusCacheForTests(): void {
   memStore.clear()
@@ -91,7 +86,7 @@ export function __resetSessionStatusCacheForTests(): void {
  * Look up status from memory, then Upstash. Returns null on miss / failure
  * (callers should fail-open).
  */
-export async function lookupSessionStatus(userId: string): Promise<SessionStatus | null> {
+async function lookupSessionStatus(userId: string): Promise<SessionStatus | null> {
   if (!userId) return null
   const local = getCachedSessionStatus(userId)
   if (local) return local

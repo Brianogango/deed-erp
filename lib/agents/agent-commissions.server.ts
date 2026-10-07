@@ -21,7 +21,7 @@ import {
 } from '@/lib/agents/agent-commissions'
 
 export const AGENT_COMMISSIONS_KEY = 'deed_agentCommissions'
-export const AGENT_PAYOUTS_KEY = 'deed_agentPayouts'
+const AGENT_PAYOUTS_KEY = 'deed_agentPayouts'
 export const AGENT_SETTINGS_KEY = 'deed_agentSettings'
 /** Agent per sale order (sale orders are rebuilt from Prisma, which has no agent columns). */
 export const SALE_AGENTS_KEY = 'deed_saleAgents'
@@ -37,7 +37,7 @@ export type SaleAgent = {
 }
 
 /** Sale orders with their agent from deed_saleAgents laid over them. */
-export function withSaleAgents(saleOrders: unknown, saleAgents: unknown): Array<Record<string, unknown>> {
+function withSaleAgents(saleOrders: unknown, saleAgents: unknown): Array<Record<string, unknown>> {
   const agents = new Map(asArray<SaleAgent>(saleAgents).map(a => [a.saleOrderId, a]))
   return asArray<Record<string, unknown>>(saleOrders).map(so => {
     const a = agents.get(String(so?.id))

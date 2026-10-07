@@ -16,7 +16,7 @@ const PASSTHROUGH_KEYS = [
   'repairId', 'repairRef', 'procurementRequestId',
 ] as const
 
-export function mapPOLineToClient(item: any) {
+function mapPOLineToClient(item: any) {
   const requiresSerial = item.product ? isSerialTracking(inferTrackingMethod(item.product)) : false
   return {
     id: item.id,

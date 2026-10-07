@@ -4,12 +4,12 @@
  * Certify ≠ archive ≠ retire. Store still blob-writes journals today.
  */
 
-export type JournalRetireBlocker = {
+type JournalRetireBlocker = {
   code: string
   message: string
 }
 
-export type JournalRetireReadinessInput = {
+type JournalRetireReadinessInput = {
   /** Deep parity from Phase 9 (ref coverage + amount sample). */
   deepParityOk: boolean
   deepParityReason?: string | null
@@ -27,7 +27,7 @@ export type JournalRetireReadinessInput = {
   writersMigratedOffBlob?: boolean
 }
 
-export type JournalRetireReadiness = {
+type JournalRetireReadiness = {
   blobKey: 'deed_journalEntries'
   retireReady: boolean
   blockers: JournalRetireBlocker[]

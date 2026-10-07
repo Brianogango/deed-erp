@@ -8,13 +8,13 @@
  * for a single-line PO, the only remaining item.
  */
 
-export type PoItemForBillMatch = {
+type PoItemForBillMatch = {
   id: string
   productId: string
   description?: string | null
 }
 
-export type BillLineForPoMatch = {
+type BillLineForPoMatch = {
   purchaseOrderItemId?: string | null
   productId?: string | null
   description?: string | null

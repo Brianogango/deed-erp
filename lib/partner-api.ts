@@ -7,9 +7,9 @@ import prisma from '@/lib/prisma'
 // the plaintext is returned exactly once, at creation time. The `prefix`
 // (first 12 characters) is kept so keys can be identified in the admin UI.
 
-export const PARTNER_KEY_PREFIX = 'deed_pk_'
+const PARTNER_KEY_PREFIX = 'deed_pk_'
 
-export function hashPartnerApiKey(key: string): string {
+function hashPartnerApiKey(key: string): string {
   return createHash('sha256').update(key).digest('hex')
 }
 
@@ -18,14 +18,14 @@ export function generatePartnerApiKey(): { key: string; prefix: string; keyHash:
   return { key, prefix: key.slice(0, 12), keyHash: hashPartnerApiKey(key) }
 }
 
-export function extractPartnerApiKey(request: Request): string | null {
+function extractPartnerApiKey(request: Request): string | null {
   const auth = request.headers.get('authorization')
   if (auth && auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim() || null
   const headerKey = request.headers.get('x-api-key')
   return headerKey?.trim() || null
 }
 
-export type PartnerAuthResult =
+type PartnerAuthResult =
   | { ok: true; keyId: string; keyName: string }
   | { ok: false; status: number; error: string }
 
@@ -84,6 +84,3 @@ export function partnerCorsHeaders(request?: Request | null): Record<string, str
   }
   return headers
 }
-
-/** @deprecated Prefer partnerCorsHeaders(request) — static * CORS removed (SEC-007). */
-export const PUBLIC_API_CORS_HEADERS: Record<string, string> = partnerCorsHeaders(null)

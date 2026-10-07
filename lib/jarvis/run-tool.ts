@@ -1,12 +1,10 @@
 import 'server-only'
-
-import type { PublicUser } from '@/lib/auth/types'
 import { checkToolPermission } from './permissions'
 import { writeAiAuditLog } from './audit'
 import { getTool } from './tools'
 import type { ToolContext } from './types'
 
-export interface RunToolOutcome {
+interface RunToolOutcome {
   allowed: boolean
   output?: unknown
   error?: string

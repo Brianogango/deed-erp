@@ -11,12 +11,11 @@
 import { sendEmail } from '@/lib/integrations/email'
 import {
   leaveApplyToEmail,
-  queueLeaveNotification,
   resolveApplicantEmail,
   resolveLeaveApplyCcEmails,
 } from '@/lib/hr/leave-notifications'
 
-export type SalaryAdvanceNotifyPayload = {
+type SalaryAdvanceNotifyPayload = {
   id: string
   ref: string
   employeeId: string
@@ -294,11 +293,6 @@ export async function notifySalaryAdvanceDisbursed(payload: SalaryAdvanceNotifyP
     text,
     metadata: { action: 'salary_advance_disbursed', advanceId: payload.id, ref: payload.ref },
   })
-}
-
-/** Fire-and-forget wrapper so API handlers never await mail failures. */
-export function queueSalaryAdvanceNotification(task: () => Promise<void>): void {
-  queueLeaveNotification(task)
 }
 
 export function toSalaryAdvanceNotifyPayload(row: {

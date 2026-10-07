@@ -27,7 +27,7 @@ export interface PriceListDef {
   sortOrder?: number
 }
 
-export interface PriceListItemDef {
+interface PriceListItemDef {
   id: string
   priceListId: string
   productId: string
@@ -82,7 +82,7 @@ export function normalizePricelistCode(value?: string | null): string {
   return String(value || 'RETAIL').trim().toUpperCase() || 'RETAIL'
 }
 
-export function findPriceList(
+function findPriceList(
   lists: PriceListDef[],
   codeOrName?: string | null,
 ): PriceListDef | undefined {

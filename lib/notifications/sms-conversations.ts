@@ -4,7 +4,7 @@ import crypto from 'crypto'
 import prisma from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 
-export function normalizeSmsPhone(raw?: string | null): string | null {
+function normalizeSmsPhone(raw?: string | null): string | null {
   let value = String(raw || '').trim()
   if (!value) return null
   value = value.replace(/[\s().-]/g, '')
@@ -309,13 +309,4 @@ export async function backfillRecentSmsConversations(limit = 250) {
   }
 
   return { checked: deliveries.length, backfilled }
-}
-
-export async function latestSmsThreadForPhone(phone: string) {
-  const normalized = normalizeSmsPhone(phone)
-  if (!normalized) return null
-  return prisma.communicationThread.findFirst({
-    where: { channel: 'sms', participantPhone: normalized },
-    orderBy: { lastMessageAt: 'desc' },
-  })
 }

@@ -6,14 +6,14 @@ import { darajaStkPassword, darajaTimestamp } from './password'
 type TokenCache = { token: string; expiresAt: number }
 let tokenCache: TokenCache | null = null
 
-export type StkPushInput = {
+type StkPushInput = {
   phone: string
   amount: number
   accountReference: string
   transactionDesc: string
 }
 
-export type StkPushAccepted = {
+type StkPushAccepted = {
   merchantRequestId: string
   checkoutRequestId: string
   responseCode: string
@@ -21,7 +21,7 @@ export type StkPushAccepted = {
   customerMessage: string
 }
 
-export type StkQueryResult = {
+type StkQueryResult = {
   responseCode: string
   resultCode: string
   resultDesc: string
@@ -47,7 +47,7 @@ async function darajaFetch(cfg: MpesaConfig, path: string, init: RequestInit): P
   return json
 }
 
-export async function getDarajaAccessToken(cfg: MpesaConfig): Promise<string> {
+async function getDarajaAccessToken(cfg: MpesaConfig): Promise<string> {
   if (tokenCache && tokenCache.expiresAt > Date.now() + 30_000) return tokenCache.token
   const basic = Buffer.from(`${cfg.consumerKey}:${cfg.consumerSecret}`, 'utf8').toString('base64')
   const json = await darajaFetch(cfg, '/oauth/v1/generate?grant_type=client_credentials', {

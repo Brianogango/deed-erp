@@ -63,7 +63,7 @@ export function depreciationJournalRef(period: string): string {
   return `JRN/AST-DEP/${period}`
 }
 
-export function disposalJournalRef(assetRef: string, suffix?: string): string {
+function disposalJournalRef(assetRef: string, suffix?: string): string {
   return suffix ? `JRN/AST-DISP/${assetRef}/${suffix}` : `JRN/AST-DISP/${assetRef}`
 }
 

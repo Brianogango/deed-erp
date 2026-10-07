@@ -5,7 +5,7 @@
 
 import { invoiceResidual, isInvoiceOverdue, isOpenInvoice } from '@/lib/odoo-sales-flow'
 
-export interface FinanceAlert {
+interface FinanceAlert {
   key: string
   tone: 'danger' | 'warn' | 'info'
   title: string

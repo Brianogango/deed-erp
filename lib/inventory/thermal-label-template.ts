@@ -3,7 +3,7 @@ export type ThermalLabelSpec = {
   value: string
 }
 
-export type ThermalLabelInput = {
+type ThermalLabelInput = {
   title: string
   barcodeValue: string
   caption?: string | null
@@ -41,7 +41,7 @@ function barcodeDataUrl(value: string): string {
   }
 }
 
-export function thermalLabelHtml(input: ThermalLabelInput): string {
+function thermalLabelHtml(input: ThermalLabelInput): string {
   const specs = (input.specs || []).filter(spec => String(spec.label || '').trim()).slice(0, 3)
   const barcodeSrc = barcodeDataUrl(input.barcodeValue)
   const caption = String(input.caption || input.barcodeValue || '').trim()
@@ -84,7 +84,7 @@ export function thermalLabelHtml(input: ThermalLabelInput): string {
   </div>`
 }
 
-export const THERMAL_LABEL_CSS = `
+const THERMAL_LABEL_CSS = `
   @page { size: 80mm 40mm; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
 

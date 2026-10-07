@@ -463,64 +463,6 @@ export async function reverseDeliveryStockMutation(params: {
   })
 }
 
-export async function reversePosStockMutation(params: {
-  orderRef: string
-  lines: Array<{
-    productId: string
-    productName: string
-    qty: number
-    serialId?: string
-    serialNumber?: string
-    sourceLocation?: string
-  }>
-}): Promise<void> {
-  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
-  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
-  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
-  let bulkStock: BulkStockLevel[] =
-    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
-  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
-  const stockLevelDeltas = new Map<string, number>()
-  const location: LocationId = 'warehouse'
-
-  for (const line of params.lines) {
-    const productId = String(line.productId || '')
-    const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
-    if (!productId || qty <= 0) continue
-    const product = products.find(p => p.id === productId)
-
-    if (line.serialId || (product && isSerialTracking(inferTrackingMethod(product)))) {
-      const serial = line.serialId
-        ? serials.find(s => s.id === line.serialId)
-        : serials.find(s =>
-            s.productId === productId
-            && String(s.serial || '').toLowerCase() === String(line.serialNumber || '').toLowerCase(),
-          )
-      if (serial) {
-        serial.status = 'available'
-        serial.location = location
-        serial.soldDate = undefined
-      }
-      const idx = products.findIndex(p => p.id === productId)
-      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + 1 }
-      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + 1)
-    } else {
-      bulkStock = upsertBulkStock(bulkStock, productId, location, qty)
-      const idx = products.findIndex(p => p.id === productId)
-      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + qty }
-      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + qty)
-    }
-  }
-
-  await bumpPrismaOnHand(stockLevelDeltas)
-  await saveStoreKeys({
-    deed_products: JSON.stringify(products),
-    deed_serials: JSON.stringify(serials),
-    deed_bulkStock: JSON.stringify(bulkStock),
-    deed_stockMoves: JSON.stringify(stockMoves.filter(m => m.documentRef !== params.orderRef)),
-  })
-}
-
 export async function reverseReceiptStockMutation(params: {
   receiptRef: string
   destination: string

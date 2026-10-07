@@ -31,7 +31,7 @@ export interface DeedPdfLine {
   specs?: string
 }
 
-export interface DeedPdfCompany {
+interface DeedPdfCompany {
   name: string
   address?: string
   city?: string
@@ -56,7 +56,7 @@ export interface DeedPdfCompany {
   logoFormat?: 'PNG' | 'JPEG'
 }
 
-export interface DeedPdfBank {
+interface DeedPdfBank {
   active?: boolean
   id?: string
   accountNo?: string

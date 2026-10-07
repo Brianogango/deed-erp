@@ -21,7 +21,7 @@ import prisma from '@/lib/prisma'
  * absence of that ref is the only reliable evidence. This looks for it.
  */
 
-export type PosJournalGap = {
+type PosJournalGap = {
   id: string
   invoiceNumber: string
   invoiceDate: Date
@@ -32,14 +32,14 @@ export type PosJournalGap = {
   hasPaymentRecord: boolean
 }
 
-export function posJournalRef(invoiceNumber: string): string {
+function posJournalRef(invoiceNumber: string): string {
   return `JRN/${invoiceNumber}`
 }
 
 /**
  * @param asOf optional upper bound on invoice date, for period-scoped checks.
  */
-export async function findPosSalesWithoutJournal(asOf?: Date): Promise<PosJournalGap[]> {
+async function findPosSalesWithoutJournal(asOf?: Date): Promise<PosJournalGap[]> {
   const sales = await prisma.invoice.findMany({
     where: {
       isPosInvoice: true,

@@ -1,9 +1,9 @@
 import 'server-only'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
-export type PortalDocumentSource = 'quote' | 'sale_order'
+type PortalDocumentSource = 'quote' | 'sale_order'
 
-export interface PortalDocumentLookup {
+interface PortalDocumentLookup {
   source: PortalDocumentSource
   storeKey: 'deed_quotes' | 'deed_saleOrders'
   items: Record<string, unknown>[]

@@ -13,8 +13,6 @@ export function round2(n: number) {
   return roundMoney(n)
 }
 
-export { invoiceResidual, paymentAllocatedSum, paymentUnallocated }
-
 function isRetryableTxn(err: unknown) {
   const code = typeof err === 'object' && err && 'code' in err ? String((err as { code?: unknown }).code) : ''
   const msg = err instanceof Error ? err.message : String(err ?? '')
@@ -99,9 +97,9 @@ export function paymentMethodEnum(value: unknown): string {
   return PAYMENT_METHOD_ALIASES[raw] ?? 'cash'
 }
 
-export type AllocationInput = { invoiceId: string; amount: number }
+type AllocationInput = { invoiceId: string; amount: number }
 
-export type ValidateAllocationOptions = {
+type ValidateAllocationOptions = {
   allowEmpty?: boolean
   allocationCeiling?: number
 }
@@ -144,22 +142,6 @@ export function validateAllocationTotals(
     }
   }
   return { ok: true }
-}
-
-export async function sumAllocationsForInvoice(invoiceId: string): Promise<number> {
-  const rows = await prisma.paymentAllocation.findMany({
-    where: { invoiceId, payment: { isVoided: false } },
-    select: { amount: true },
-  })
-  return round2(rows.reduce((s, r) => s + Number(r.amount || 0), 0))
-}
-
-export async function sumAllocationsForPayment(paymentId: string): Promise<number> {
-  const rows = await prisma.paymentAllocation.findMany({
-    where: { paymentId, payment: { isVoided: false } },
-    select: { amount: true },
-  })
-  return round2(rows.reduce((s, r) => s + Number(r.amount || 0), 0))
 }
 
 async function sumAllocationsForInvoiceInTx(

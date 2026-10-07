@@ -11,8 +11,8 @@
 
 import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
 
-export type WorkItem = { id: string; title: string; subtitle: string; href: string; ageDays: number }
-export type WorkQueue = {
+type WorkItem = { id: string; title: string; subtitle: string; href: string; ageDays: number }
+type WorkQueue = {
   id: string
   title: string
   hint: string
@@ -42,7 +42,7 @@ export type MyWorkInput = {
 }
 
 const ROLE_ALIASES: Record<string, string> = { inventory: 'inventory_officer', sales: 'sales_rep', finance: 'finance_officer', lead_tech: 'technical_lead', repair_tech: 'technician' }
-export const normalizeWorkRole = (role: string) => ROLE_ALIASES[role] ?? role
+const normalizeWorkRole = (role: string) => ROLE_ALIASES[role] ?? role
 
 const DAY = 86_400_000
 const ageDays = (date: unknown, now: Date) => {

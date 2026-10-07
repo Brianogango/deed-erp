@@ -134,7 +134,7 @@ function normalizeAiResult(raw: Record<string, unknown>): IntentClassification |
   return isValidClassification(result) ? result : null
 }
 
-export async function classifySalesIntentGemini(
+async function classifySalesIntentGemini(
   mail: ParsedInboundEmail,
   opts?: { attachmentEvidence?: string },
 ): Promise<IntentClassification> {

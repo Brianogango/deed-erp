@@ -4,13 +4,13 @@ import { sql } from '@/lib/auth/db'
 import { isBlobKey } from '@/lib/blob-store'
 import { writeStoreRecords, storeBackend } from '@/lib/prisma-store'
 
-export type TransferDomainResult = {
+type TransferDomainResult = {
   key: string
   storeRecords: number
   relational?: { upserted: number; skipped: number; error?: string }
 }
 
-export type TransferResult = {
+type TransferResult = {
   ok: boolean
   backend: ReturnType<typeof storeBackend>
   copied: number

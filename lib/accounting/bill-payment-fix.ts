@@ -36,13 +36,13 @@ const money = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100
 const code = (label: string) => String(label ?? '').trim().split(/\s+/)[0]
 
 /** Dr bank / Cr receivables, with no payables line: a bill payment booked as a receipt. */
-export function isReceiptShaped(j: FixJournal): boolean {
+function isReceiptShaped(j: FixJournal): boolean {
   const creditsAr = j.lines.some(l => code(l.accountLabel) === AR && money(l.credit) > 0)
   const touchesAp = j.lines.some(l => code(l.accountLabel) === AP)
   return creditsAr && !touchesAp
 }
 
-export function isPayableShaped(j: FixJournal): boolean {
+function isPayableShaped(j: FixJournal): boolean {
   return j.lines.some(l => code(l.accountLabel) === AP && money(l.debit) > 0)
 }
 

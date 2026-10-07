@@ -6,7 +6,7 @@ import { normalizeDeliveryStatus } from '@/lib/odoo-sales-flow'
 import '@/components/sales-prototype/sales-prototype.css'
 import '@/components/modules/odoo-record-designs.css'
 
-export type SalesDocPillTone =
+type SalesDocPillTone =
   | 'draft'
   | 'sent'
   | 'accepted'

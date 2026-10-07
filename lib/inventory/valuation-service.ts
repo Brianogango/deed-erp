@@ -84,7 +84,7 @@ async function persistStockJournal(params: {
   return journal
 }
 
-export type CostingMethod = 'average' | 'fifo' | 'standard'
+type CostingMethod = 'average' | 'fifo' | 'standard'
 
 async function productExists(productId: string): Promise<boolean> {
   const row = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } })

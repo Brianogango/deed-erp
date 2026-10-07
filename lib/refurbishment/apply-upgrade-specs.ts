@@ -25,7 +25,7 @@ import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 export type RefurbInstallAction = 'add' | 'swap'
 export type RefurbCapacitySlot = 'ram' | 'storage'
 
-export type RefurbNamePart = {
+type RefurbNamePart = {
   partName: string
   productId?: string
   status: string
@@ -44,7 +44,7 @@ export type RefurbNameProduct = {
 
 const SKIP_PART_STATUSES = new Set(['ordered', 'requested'])
 
-export type RefurbUpgradeNameResult = {
+type RefurbUpgradeNameResult = {
   sellingName: string
   specs: string
   specsAtIntake: string
@@ -120,7 +120,7 @@ export function refurbInstallActionLabel(action: RefurbInstallAction): string {
 }
 
 /** RAM/SSD parts that have actually reached the bench (not still on order). */
-export function refurbPartsThatChangeSpecs(parts: RefurbNamePart[] | null | undefined): RefurbNamePart[] {
+function refurbPartsThatChangeSpecs(parts: RefurbNamePart[] | null | undefined): RefurbNamePart[] {
   return (parts || []).filter(part => !SKIP_PART_STATUSES.has(String(part.status || 'needed')))
 }
 

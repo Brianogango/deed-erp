@@ -1,6 +1,4 @@
 import 'server-only'
-
-import { NextResponse } from 'next/server'
 import { getServerSession as nextAuthGetServerSession } from 'next-auth'
 
 import { authOptions } from './auth-options'
@@ -49,22 +47,4 @@ export const getServerSession = async (): Promise<ServerSession | null> => {
 }
 
 // clearSessionCookie is used by the logout route — clears the NextAuth cookie.
-export const clearSessionCookie = (response: NextResponse) => {
-  const cookieName = process.env.NODE_ENV === 'production'
-    ? '__Secure-next-auth.session-token'
-    : 'next-auth.session-token'
-
-  response.cookies.set(cookieName, '', {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure:   process.env.NODE_ENV === 'production',
-    path:     '/',
-    maxAge:   0,
-    expires:  new Date(0),
-  })
-
-  return response
-}
-
 // attachSessionCookie is no longer used — the login route issues the JWT directly.
-export const attachSessionCookie = (_response: NextResponse, _user: PublicUser) => _response

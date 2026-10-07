@@ -117,7 +117,7 @@ export function validateTemplate(input: Partial<RecurringBill>): string | null {
   return null
 }
 
-export type BillInput = {
+type BillInput = {
   billDate: string
   dueDate: string
   period: string

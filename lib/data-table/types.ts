@@ -40,7 +40,7 @@ export interface ColumnDef<T> {
   exportValue?: (row: T) => string | number
 }
 
-export type ColumnValuePurpose = 'search' | 'filter' | 'export'
+type ColumnValuePurpose = 'search' | 'filter' | 'export'
 
 /**
  * Keeps data operations independent from cell presentation while retaining
@@ -83,8 +83,6 @@ export function isColumnSortable<T>(column: ColumnDef<T>): boolean {
     || column.key,
   )
 }
-
-export type TableType = 'A' | 'B' | 'C'
 
 export interface SavedView {
   id: string

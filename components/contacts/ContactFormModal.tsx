@@ -16,7 +16,7 @@ function focusFieldControl(fieldId: string) {
   ;(target as HTMLElement | null)?.focus?.()
 }
 
-export const CONTACT_INDUSTRIES = [
+const CONTACT_INDUSTRIES = [
   'Financial Services', 'Telecommunications', 'Electronics', 'IT Services',
   'Healthcare', 'Education', 'Retail', 'Manufacturing', 'Construction',
   'Real Estate', 'Hospitality', 'Transport & Logistics', 'Agriculture',
@@ -24,7 +24,7 @@ export const CONTACT_INDUSTRIES = [
 ] as const
 
 /** Standard payment-terms presets (days); 0 = cash / due immediately. New contacts start with none selected. */
-export const PAYMENT_TERMS_DAY_OPTIONS = [
+const PAYMENT_TERMS_DAY_OPTIONS = [
   { value: '0', label: 'Cash / due immediately (0 days)' },
   { value: '7', label: '7 days' },
   { value: '14', label: '14 days' },

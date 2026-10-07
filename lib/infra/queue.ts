@@ -2,7 +2,7 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { getInfraRedis } from '@/lib/infra/redis'
 
-export type QueueJob<T = unknown> = {
+type QueueJob<T = unknown> = {
   id: string
   type: string
   payload: T
@@ -13,7 +13,7 @@ export type QueueJob<T = unknown> = {
 
 const QUEUE_PREFIX = 'deed:queue:'
 
-export function queueRedisKey(name: string): string {
+function queueRedisKey(name: string): string {
   return `${QUEUE_PREFIX}${name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
 }
 
@@ -67,14 +67,4 @@ export async function dequeueJobs<T = unknown>(queue: string, limit: number): Pr
 export async function queueLength(queue: string): Promise<number> {
   const redis = await getInfraRedis()
   return redis.llen(queueRedisKey(queue))
-}
-
-export async function requeueJob<T>(queue: string, job: QueueJob<T>, error?: string): Promise<QueueJob<T>> {
-  return enqueueJob(queue, {
-    id: job.id,
-    type: job.type,
-    payload: { ...(job.payload as object), lastError: error } as T,
-    attempts: job.attempts + 1,
-    runAt: job.runAt,
-  })
 }

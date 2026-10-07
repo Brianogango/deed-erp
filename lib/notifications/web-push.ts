@@ -3,7 +3,7 @@ import 'server-only'
 import crypto from 'crypto'
 import type { ProviderSendResult } from './types'
 
-export type WebPushSubscriptionRecord = {
+type WebPushSubscriptionRecord = {
   endpoint: string
   p256dh: string
   authSecret: string

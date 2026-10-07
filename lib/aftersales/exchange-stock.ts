@@ -4,5 +4,3 @@
  * problem and must not re-enter Ready for Sale / warehouse automatically.
  */
 export const EXCHANGE_RETURN_LOCATION = 'shop' as const
-
-export type ExchangeReturnLocation = typeof EXCHANGE_RETURN_LOCATION

@@ -3,7 +3,7 @@
  * Tax written-down value lives in lib/tax/kra-capital-allowances.ts — do not mix.
  */
 
-export const DEPRECIATION_METHODS = ['straight_line', 'reducing_balance'] as const
+const DEPRECIATION_METHODS = ['straight_line', 'reducing_balance'] as const
 export type DepreciationMethod = (typeof DEPRECIATION_METHODS)[number]
 
 type AssetCategory = 'furniture' | 'fittings' | 'office_equipment' | 'it_non_trading' | 'other'
@@ -30,10 +30,10 @@ export type BookAsset = {
   qty: number
 }
 
-export const PPE_COST_ACCOUNTS = ['1701', '1702', '1703', '1704'] as const
-export type PpeCostAccount = (typeof PPE_COST_ACCOUNTS)[number]
+const PPE_COST_ACCOUNTS = ['1701', '1702', '1703', '1704'] as const
+type PpeCostAccount = (typeof PPE_COST_ACCOUNTS)[number]
 
-export const ACCUM_DEPR_BY_PPE: Record<PpeCostAccount, string> = {
+const ACCUM_DEPR_BY_PPE: Record<PpeCostAccount, string> = {
   '1701': '1751',
   '1702': '1752',
   '1703': '1753',
@@ -53,16 +53,10 @@ export const ACCUM_DEPR_LABELS: Record<string, string> = {
   '1753': '1753 — Accum. Depr. Office Equipment',
   '1754': '1754 — Accum. Depr. Software',
 }
-
-export const DEPR_EXPENSE_CODE = '6517'
 export const DEPR_EXPENSE_LABEL = '6517 — Depreciation and Amortization'
-export const DISPOSAL_GAIN_CODE = '5203'
 export const DISPOSAL_GAIN_LABEL = '5203 — Profit / Surplus on Disposal of Assets'
-export const DISPOSAL_LOSS_CODE = '6515'
 export const DISPOSAL_LOSS_LABEL = '6515 — Loss on Disposal of Assets'
-export const INVENTORY_CODE = '1200'
 export const INVENTORY_LABEL = '1200 — Inventory'
-export const AP_CODE = '3000'
 export const AP_LABEL = '3000 — Accounts Payable'
 
 export function isPpeCostAccount(code?: string | null): code is PpeCostAccount {
@@ -86,7 +80,7 @@ export function defaultBookMethod(category: AssetCategory): DepreciationMethod {
 }
 
 /** Annual rate used only for book reducing-balance (not KRA class rates). */
-export function bookReducingAnnualRate(usefulLifeMonths: number): number {
+function bookReducingAnnualRate(usefulLifeMonths: number): number {
   const years = Math.max(1, usefulLifeMonths / 12)
   return Math.min(1, 1 / years)
 }
@@ -99,7 +93,7 @@ export function bookNbv(asset: Pick<BookAsset, 'costKes' | 'accumDeprKes'>): num
   return Math.max(0, moneyKes(asset.costKes) - moneyKes(asset.accumDeprKes))
 }
 
-export function depreciableBase(asset: Pick<BookAsset, 'costKes' | 'residualKes'>): number {
+function depreciableBase(asset: Pick<BookAsset, 'costKes' | 'residualKes'>): number {
   return Math.max(0, moneyKes(asset.costKes) - moneyKes(asset.residualKes))
 }
 

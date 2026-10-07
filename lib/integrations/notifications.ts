@@ -15,7 +15,7 @@ import { sendWhatsAppMessage, WhatsAppResult } from './whatsapp'
 import { sendTelerivetSms } from './telerivet'
 import { resolveSmsProvider } from '@/lib/notifications/sms-provider'
 
-export interface NotificationOptions {
+interface NotificationOptions {
   to: string              // Phone number with country code
   message: string         // Message text
   priority?: 'low' | 'normal' | 'high' | 'urgent'
@@ -101,24 +101,6 @@ function withSmsRateLimit<T>(run: () => Promise<T>): Promise<T> {
     smsLimiter.queue.push({ run, resolve, reject })
     pumpSmsQueue()
   })
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  worker: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const output = new Array<R>(items.length)
-  let cursor = 0
-  const runners = Array.from({ length: Math.min(Math.max(1, limit), Math.max(1, items.length)) }, async () => {
-    while (true) {
-      const index = cursor++
-      if (index >= items.length) return
-      output[index] = await worker(items[index], index)
-    }
-  })
-  await Promise.all(runners)
-  return output
 }
 
 /**
@@ -310,130 +292,6 @@ export const formatPhoneNumber = (phone: string): string => {
 
   return cleaned
 }
-
-/**
- * Batch send notifications (for multiple recipients)
- */
-export const sendBatchNotifications = async (
-  recipients: Array<{ phone: string; message: string }>,
-  options?: { priority?: NotificationOptions['priority']; channel?: NotificationOptions['channel'] }
-): Promise<Array<NotificationResult & { phone: string }>> => {
-  const concurrency = notifEnvNumber('NOTIFICATION_BATCH_CONCURRENCY', 4, 1, 20)
-  return mapWithConcurrency(recipients, concurrency, async ({ phone, message }) => {
-    const result = await sendNotification({
-      to: formatPhoneNumber(phone),
-      message,
-      ...options,
-    })
-    return { ...result, phone }
-  })
-}
-
-/**
- * Send repair notification (helper for repair module)
- */
-export const sendRepairNotification = async (
-  customerName: string,
-  customerPhone: string,
-  repairRef: string,
-  deviceName: string,
-  message: string,
-  options?: Omit<NotificationOptions, 'to' | 'message'>
-): Promise<NotificationResult> => {
-  const formattedPhone = formatPhoneNumber(customerPhone)
-  
-  const fullMessage = `Hi ${customerName},
-
-${message}
-
-Repair: ${repairRef}
-Device: ${deviceName}
-
-- Deed Technologies
-www.deed.co.ke`
-
-  return sendNotification({
-    to: formattedPhone,
-    message: fullMessage,
-    ...options,
-  })
-}
-
-/**
- * Send procurement notification to team
- */
-export const sendProcurementNotification = async (
-  repairRef: string,
-  technicianName: string,
-  items: Array<{ productName: string; qty: number; estimatedCost: number }>,
-  urgency: string,
-  notes?: string
-): Promise<NotificationResult> => {
-  const procurementTeamPhone = process.env.PROCUREMENT_TEAM_PHONE || '+254700000000'
-  
-  const itemsList = items.map(item => 
-    `- ${item.productName} x${item.qty} (Est. KES ${item.estimatedCost.toLocaleString()})`
-  ).join('\n')
-
-  const total = items.reduce((sum, item) => sum + (item.qty * item.estimatedCost), 0)
-
-  const message = `🔧 PARTS REQUEST - ${urgency.toUpperCase()}
-
-Repair: ${repairRef}
-Requested by: ${technicianName}
-
-PARTS NEEDED:
-${itemsList}
-
-TOTAL ESTIMATE: KES ${total.toLocaleString()}
-
-${notes ? `Notes: ${notes}` : ''}
-
-Please process this request ASAP.
-
-- Deed ERP`
-
-  return sendNotification({
-    to: procurementTeamPhone,
-    message,
-    priority: urgency as NotificationOptions['priority'],
-  })
-}
-
-/**
- * Send quote notification
- */
-export const sendQuoteNotification = async (
-  customerName: string,
-  customerPhone: string,
-  repairRef: string,
-  deviceName: string,
-  quoteTotal: number,
-  quoteUrl?: string
-): Promise<NotificationResult> => {
-  const formattedPhone = formatPhoneNumber(customerPhone)
-  
-  const message = `Hi ${customerName},
-
-Your repair quotation is ready!
-
-Repair: ${repairRef}
-Device: ${deviceName}
-Total: KES ${quoteTotal.toLocaleString()} (incl. VAT)
-
-${quoteUrl ? `View & Accept Online:\n${quoteUrl}` : 'Please check your email for details.'}
-
-Reply with "YES" to approve or "NO" to decline.
-
-- Deed Technologies`
-
-  return sendNotification({
-    to: formattedPhone,
-    message,
-    priority: 'high',
-  })
-}
-
 /**
  * Development Mode: Log notification
  */
@@ -447,17 +305,4 @@ const logNotificationForDev = (to: string, message: string, priority: string) =>
   console.log('-------------------------------------------')
   console.log(message)
   console.log('═══════════════════════════════════════════\n')
-}
-
-/**
- * Get notification statistics
- */
-export const getNotificationStats = () => {
-  // TODO: Implement notification tracking
-  return {
-    sent: 0,
-    delivered: 0,
-    failed: 0,
-    pending: 0,
-  }
 }

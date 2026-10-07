@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 
-export type WorkflowStage = {
+type WorkflowStage = {
   id: string
   label: string
   description?: string

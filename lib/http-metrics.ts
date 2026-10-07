@@ -6,7 +6,7 @@
  * endpoint reads the Node isolate (API routes).
  */
 
-export type HttpMetricRow = {
+type HttpMetricRow = {
   path: string
   hits: number
   status404: number

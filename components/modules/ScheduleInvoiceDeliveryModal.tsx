@@ -10,7 +10,7 @@ import {
   suggestRiderFeePrefill,
 } from '@/lib/delivery-job-fee'
 
-export interface ScheduleInvoiceDeliveryForm {
+interface ScheduleInvoiceDeliveryForm {
   deliveryAddress: string
   scheduledDate: string
   riderId: string

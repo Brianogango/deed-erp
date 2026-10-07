@@ -96,34 +96,3 @@ export async function buildVatReturnFromTaxLedger(opts?: {
       : null,
   }
 }
-
-export async function buildVatControlReport(opts?: {
-  dateFrom?: string
-  dateTo?: string
-}) {
-  const lines = await fetchPostedLines({
-    dateFrom: opts?.dateFrom,
-    dateTo: opts?.dateTo,
-  })
-  return buildVatControlFromAggregates(aggregateJournalLines(lines), {
-    dateFrom: opts?.dateFrom ?? null,
-    dateTo: opts?.dateTo ?? null,
-  })
-}
-
-export async function buildVatReturnDraftReport(opts?: {
-  dateFrom?: string
-  dateTo?: string
-  periodLabel?: string
-  companyPin?: string | null
-  vatNumber?: string | null
-  taxPeriod?: string
-}) {
-  return buildVatReturnFromTaxLedger({
-    dateFrom: opts?.dateFrom,
-    dateTo: opts?.dateTo,
-    taxPeriod: opts?.taxPeriod,
-    companyPin: opts?.companyPin,
-    vatNumber: opts?.vatNumber,
-  })
-}

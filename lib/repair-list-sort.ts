@@ -4,7 +4,7 @@
 
 import { compareSortValues } from '@/lib/data-table/sort'
 
-export type RepairSortable = {
+type RepairSortable = {
   ref?: string
   intakeDate?: string
   createdDate?: string
@@ -20,7 +20,7 @@ function repairTieKey(r: RepairSortable): string {
 }
 
 /** Newest repairs first (intake date, then created time / ref). */
-export function compareRepairsNewestFirst(a: RepairSortable, b: RepairSortable): number {
+function compareRepairsNewestFirst(a: RepairSortable, b: RepairSortable): number {
   const byIntake = compareSortValues(repairRecencyKey(b), repairRecencyKey(a))
   if (byIntake !== 0) return byIntake
   const byCreated = compareSortValues(repairTieKey(b), repairTieKey(a))

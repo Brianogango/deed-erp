@@ -4,28 +4,14 @@ import type { ApprovalRequest, ApprovalLevel, ApprovalType } from './sales-flow-
 import {
   APPROVAL_RULES,
   approvalRolesAreAnyOf,
-  extractApprovalValue,
   getApprovalRolesSync,
-  isCreditOverrideApprovalRequired,
-  isSalesConfirmGatingApproval,
-  isSpecialPricingApprovalRequired,
-  rolesFromThresholds,
-  salesConfirmGatingApprovalTypes,
-  type ApprovalThreshold,
+  isSalesConfirmGatingApproval
 } from '@/lib/sales-approval-rules'
 
 export {
   APPROVAL_RULES,
-  approvalRolesAreAnyOf,
-  extractApprovalValue,
-  getApprovalRolesSync,
-  isCreditOverrideApprovalRequired,
-  isSalesConfirmGatingApproval,
-  isSpecialPricingApprovalRequired,
-  rolesFromThresholds,
-  salesConfirmGatingApprovalTypes,
+  isSalesConfirmGatingApproval
 }
-export type { ApprovalThreshold }
 
 /**
  * Check if approval is required (sync — uses hardcoded rules for client UI).
@@ -50,7 +36,7 @@ function levelRoles(level: ApprovalLevel): string[] {
  * Price types collapse into a single any-of level (Director OR Finance).
  * Other types keep a sequential role chain.
  */
-export function getApprovalLevels(
+function getApprovalLevels(
   type: ApprovalType,
   details: any,
   availableApprovers: { id: string; name: string; role: string }[]
@@ -235,7 +221,7 @@ export function approvalDocumentPath(request: ApprovalRequest): string {
   return `/sales?id=${request.documentId}`
 }
 
-export type SalesOrderStockCheckOptions = {
+type SalesOrderStockCheckOptions = {
   /**
    * Ignore reservations already held by this document.
    * Without this, a quote-converted SO that reserved its own stock always
@@ -264,7 +250,7 @@ export function reservedQtyElsewhere(
     .reduce((sum, r) => sum + (Number(r.qty) || 0), 0)
 }
 
-export type ConfirmBackorderLine = {
+type ConfirmBackorderLine = {
   productId: string
   productName: string
   qtyOrdered: number

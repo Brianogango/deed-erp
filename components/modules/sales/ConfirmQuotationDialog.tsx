@@ -16,7 +16,7 @@ import {
 } from '@/lib/sales/confirm-quotation'
 import { SameDocumentIdentity } from '@/components/modules/sales/SameDocumentIdentity'
 
-export type ConfirmApprovalBlocker = {
+type ConfirmApprovalBlocker = {
   type: string
   reason: string
   status?: 'pending' | 'needed'

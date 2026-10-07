@@ -13,7 +13,7 @@ import {
   type VerifiedChassis,
 } from '@/lib/inventory/laptop-verified-chassis'
 
-export type LaptopDisplayFacts = {
+type LaptopDisplayFacts = {
   screenSize: string | null
   resolution: string | null
   touch: boolean | null
@@ -73,7 +73,7 @@ function parseDisplayFromText(text: string): Partial<LaptopDisplayFacts> {
   }
 }
 
-export function inferLaptopDisplay(name: string): LaptopDisplayFacts {
+function inferLaptopDisplay(name: string): LaptopDisplayFacts {
   const chassis = verifiedChassisFor(name)
   const parsed = parseDisplayFromText(name)
   const skuGpu = parsed.graphics

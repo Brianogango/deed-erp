@@ -20,7 +20,7 @@ function retryAt(attempt: number) {
 const terminalSuccess = new Set(['delivered', 'read'])
 const terminalFailure = new Set(['failed', 'undelivered', 'bounce', 'bounced', 'dropped', 'complaint', 'spamreport', 'blocked'])
 
-export type ProviderDeliveryStatusInput = {
+type ProviderDeliveryStatusInput = {
   provider: string
   messageId: string
   status: string

@@ -54,13 +54,6 @@ export type NotificationRouting = {
   externalRecipients: ExternalNotificationRecipient[]
   channels?: NotificationChannel[]
 }
-
-export type NotificationChannelContent = {
-  subject?: string
-  text: string
-  html?: string
-}
-
 export type ProviderSendResult = {
   success: boolean
   provider: string

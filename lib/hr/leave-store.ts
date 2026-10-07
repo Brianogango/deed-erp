@@ -7,7 +7,7 @@ import { employeeLeaveTypesFor, entitlementFor, type EmployeeGender, type StoreL
 // dedicated /api/leave-requests routes can switch persistence without changing
 // the client. All leave enum values line up 1:1 with the Prisma LeaveType enum.
 
-export interface ClientLeaveRequest {
+interface ClientLeaveRequest {
   id: string
   ref: string
   employeeId: string
@@ -26,7 +26,7 @@ export interface ClientLeaveRequest {
   isSystemGenerated?: boolean
 }
 
-export interface ClientLeaveBalance {
+interface ClientLeaveBalance {
   id: string
   employeeId: string
   leaveType: StoreLeaveType
@@ -101,7 +101,7 @@ export function defaultBalances(employeeId: string, year: number, gender?: Emplo
 }
 
 /** Look up an employee's recorded gender (null when unknown). */
-export async function getEmployeeGender(employeeId: string): Promise<EmployeeGender> {
+async function getEmployeeGender(employeeId: string): Promise<EmployeeGender> {
   const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { gender: true } }).catch(() => null)
   return (emp?.gender ?? null) as EmployeeGender
 }

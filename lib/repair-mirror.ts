@@ -27,7 +27,7 @@ let repairsPayloadCache: { at: number; data: any[] } | null = null
 // user's write while still coalescing the boot fan-out on one worker.
 const REPAIRS_PAYLOAD_CACHE_MS = 3_000
 
-export function invalidateRepairsPayloadCache() {
+function invalidateRepairsPayloadCache() {
   repairsPayloadCache = null
 }
 

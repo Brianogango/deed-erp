@@ -17,7 +17,7 @@ import { isDeliveryNoteLine } from './sales/non-stock-line'
 
 // ─── Sale order states ───────────────────────────────────────────────────────
 
-export type OdooSaleStatus = 'quotation' | 'quotation_sent' | 'sale' | 'cancelled'
+type OdooSaleStatus = 'quotation' | 'quotation_sent' | 'sale' | 'cancelled'
 
 export const SALE_STATUS_LABELS: Record<OdooSaleStatus, string> = {
   quotation: 'Quotation',
@@ -29,7 +29,7 @@ export const SALE_STATUS_LABELS: Record<OdooSaleStatus, string> = {
 /** The user-facing status bar. Cancelled is an exception state, never a stage. */
 export const SALE_STATUS_BAR: OdooSaleStatus[] = ['quotation', 'quotation_sent', 'sale']
 
-export const SALE_STATUSES = new Set<string>(['quotation', 'quotation_sent', 'sale', 'cancelled'])
+const SALE_STATUSES = new Set<string>(['quotation', 'quotation_sent', 'sale', 'cancelled'])
 
 /**
  * Map any historical status value onto the Odoo vocabulary. The legacy flow
@@ -101,17 +101,17 @@ export function saleOrderLooksConfirmed(order: {
 // ─── Server-side transition rules ────────────────────────────────────────────
 
 /** Roles allowed to confirm a quotation into a Sales Order. */
-export const SALE_CONFIRM_ROLES = ['director', 'sales_rep', 'admin_officer']
+const SALE_CONFIRM_ROLES = ['director', 'sales_rep', 'admin_officer']
 
 /** Workshop billing: tech/finance confirm the repair-linked quotation without the Sales desk. */
-export const REPAIR_SALE_CONFIRM_ROLES = [
+const REPAIR_SALE_CONFIRM_ROLES = [
   ...SALE_CONFIRM_ROLES,
   'finance_officer',
   'technical_lead',
 ] as const
 
 /** Roles allowed to cancel or reset a confirmed Sales Order. */
-export const SALE_REVERSE_CONFIRMED_ROLES = ['director', 'finance_officer', 'admin_officer'] as const
+const SALE_REVERSE_CONFIRMED_ROLES = ['director', 'finance_officer', 'admin_officer'] as const
 
 export function canReverseConfirmedSale(role: string | null | undefined): boolean {
   return (SALE_REVERSE_CONFIRMED_ROLES as readonly string[]).includes(String(role ?? ''))
@@ -181,7 +181,7 @@ export const INVOICE_POLICY_LABELS: Record<InvoicePolicy, string> = {
   delivery: 'Delivered Quantities',
 }
 
-export interface InvoiceableLine {
+interface InvoiceableLine {
   qty: number
   qtyDelivered?: number
   qtyInvoiced?: number
@@ -220,7 +220,7 @@ export function reconcileInvoicedQty<T extends InvoiceableLine>(
   return lines.map(line => (Number(line.qtyInvoiced) || 0) > 0 ? { ...line, qtyInvoiced: 0 } : line)
 }
 
-export type SoInvoiceStatus = 'no' | 'to_invoice' | 'invoiced' | 'upselling'
+type SoInvoiceStatus = 'no' | 'to_invoice' | 'invoiced' | 'upselling'
 
 export const SO_INVOICE_STATUS_LABELS: Record<SoInvoiceStatus, string> = {
   no: 'Nothing to Invoice',
@@ -236,7 +236,7 @@ export const SO_INVOICE_STATUS_LABELS: Record<SoInvoiceStatus, string> = {
  * has been invoiced, and "Upselling Opportunity" when more was delivered than
  * ordered on a fully invoiced order.
  */
-export interface SaleOrderLinkedInvoiceInput {
+interface SaleOrderLinkedInvoiceInput {
   id: string
   status?: unknown
   /** Draft refs start DRAFT/INV; an official INV ref is durable posting evidence. */
@@ -248,7 +248,7 @@ export interface SaleOrderLinkedInvoiceInput {
   paymentBlocked?: boolean
 }
 
-export type SaleOrderInvoicePrimaryAction =
+type SaleOrderInvoicePrimaryAction =
   | { kind: 'create' }
   | { kind: 'view'; invoiceId: string; invoiceState: InvoiceDocState }
 
@@ -263,7 +263,7 @@ export type SaleOrderInvoicePrimaryAction =
  *
  * See docs/domain/SALES_ORDER_WORKFLOW.md.
  */
-export function saleOrderLinkedInvoiceDocState(
+function saleOrderLinkedInvoiceDocState(
   invoice: Pick<SaleOrderLinkedInvoiceInput, 'status' | 'ref'>,
 ): InvoiceDocState {
   const state = invoiceDocState(invoice.status)
@@ -329,7 +329,7 @@ export function saleOrderInvoiceStatus(
   return overDelivered ? 'upselling' : 'invoiced'
 }
 
-export type SoFulfilmentStatus = 'nothing' | 'to_deliver' | 'partial' | 'delivered'
+type SoFulfilmentStatus = 'nothing' | 'to_deliver' | 'partial' | 'delivered'
 
 export const SO_FULFILMENT_STATUS_LABELS: Record<SoFulfilmentStatus, string> = {
   nothing: 'Nothing to Deliver',
@@ -383,7 +383,7 @@ export function saleOrderIsAccepted(order: {
 
 // ─── Delivery states ─────────────────────────────────────────────────────────
 
-export type DeliveryState = 'draft' | 'waiting' | 'ready' | 'done' | 'cancelled'
+type DeliveryState = 'draft' | 'waiting' | 'ready' | 'done' | 'cancelled'
 
 export const DELIVERY_STATE_LABELS: Record<DeliveryState, string> = {
   draft: 'Draft',
@@ -596,7 +596,7 @@ export function deliveryFulfillmentWriteError(next: {
   return null
 }
 
-export interface DeliverySplitLine {
+interface DeliverySplitLine {
   productId: string
   productName: string
   qty: number
@@ -729,7 +729,7 @@ export function deliveredByProductFromDoneDeliveries(
 
 // ─── Invoice document state & payment status ─────────────────────────────────
 
-export type InvoiceDocState = 'draft' | 'posted' | 'cancelled'
+type InvoiceDocState = 'draft' | 'posted' | 'cancelled'
 
 export const INVOICE_DOC_STATE_LABELS: Record<InvoiceDocState, string> = {
   draft: 'Draft',
@@ -766,7 +766,7 @@ export function displayDocRef(ref: string | undefined | null): string {
   return `Draft ${match[1] === 'BILL' ? 'Bill' : 'Invoice'} · ${match[2]}`
 }
 
-export type PaymentStatus = 'not_paid' | 'in_payment' | 'partially_paid' | 'paid' | 'reversed' | 'blocked'
+type PaymentStatus = 'not_paid' | 'in_payment' | 'partially_paid' | 'paid' | 'reversed' | 'blocked'
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   not_paid: 'Not Paid',
@@ -777,7 +777,7 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   blocked: 'Blocked',
 }
 
-export interface PaymentStatusInput {
+interface PaymentStatusInput {
   status: unknown
   total: number
   amountPaid: number
@@ -844,7 +844,7 @@ export function isInvoiceOverdue(
 }
 
 /** Calendar days from today to the due date. Negative means past due. */
-export function invoiceDueDaysRemaining(
+function invoiceDueDaysRemaining(
   dueDate: string | undefined | null,
   today: string = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }),
 ): number | null {
@@ -885,7 +885,7 @@ export function invoiceDueDateNeedsAlert(
 
 // ─── Cancellation guards ─────────────────────────────────────────────────────
 
-export interface CancelGuardInput {
+interface CancelGuardInput {
   status: OdooSaleStatus
   deliveries: readonly { status: string }[]
   invoices: readonly { status: unknown; amountPaid: number }[]
@@ -927,18 +927,7 @@ export type SalesListFilter =
   | 'to_invoice'
   | 'fully_invoiced'
 
-export const SALES_LIST_FILTER_LABELS: Record<SalesListFilter, string> = {
-  all: 'All',
-  my_quotations: 'My Quotations',
-  quotations: 'Quotations',
-  quotation_sent: 'Quotation Sent',
-  sales_orders: 'Sales Orders',
-  cancelled: 'Cancelled',
-  to_invoice: 'To Invoice',
-  fully_invoiced: 'Fully Invoiced',
-}
-
-export interface FilterableSaleOrder {
+interface FilterableSaleOrder {
   status: OdooSaleStatus
   createdByUserId?: string
   createdById?: string

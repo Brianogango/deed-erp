@@ -11,7 +11,7 @@ const SERVICE_UNITS = new Set(['service', 'services', 'hour', 'hours', 'licence'
 const SERVICE_LINE_TYPES = new Set(['service', 'labor', 'labour', 'logistics', 'software'])
 const REPAIR_NON_STOCK_QUOTE_TYPES = new Set(['labor', 'labour', 'service', 'logistics', 'software'])
 
-export type NonStockLineInput = {
+type NonStockLineInput = {
   lineType?: unknown
   productId?: unknown
   unit?: unknown
@@ -20,7 +20,7 @@ export type NonStockLineInput = {
   description?: unknown
 }
 
-export type NonStockProductInput = {
+type NonStockProductInput = {
   unit?: unknown
   productKind?: unknown
   category?: unknown
@@ -36,7 +36,7 @@ function specsRecord(specs: unknown): Record<string, unknown> {
     : {}
 }
 
-export function isServiceUnit(unit: unknown): boolean {
+function isServiceUnit(unit: unknown): boolean {
   return SERVICE_UNITS.has(String(unit ?? '').trim().toLowerCase())
 }
 
@@ -95,7 +95,7 @@ export function isDeliveryNoteLine(line: NonStockLineInput | null | undefined): 
   return Boolean(String(line.productId ?? '').trim())
 }
 
-export type RepairQuoteLineForSale = {
+type RepairQuoteLineForSale = {
   type?: string
   productId?: string
   productName?: string

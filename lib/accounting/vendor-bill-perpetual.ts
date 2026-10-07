@@ -11,9 +11,9 @@ import { labelForRole } from '@/lib/accounting/coa-roles'
 import { isPpeCostAccount, PPE_COST_LABELS } from '@/lib/company-property-ppe'
 
 export const GRNI_ACCOUNT_LABEL = labelForRole('grni')
-export const PRICE_DIFF_ACCOUNT_CODE = COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode
+const PRICE_DIFF_ACCOUNT_CODE = COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode
 
-export type VendorBillLineInput = {
+type VendorBillLineInput = {
   productId?: string
   qty: number
   unitPrice: number
@@ -27,7 +27,7 @@ export type VendorBillLineInput = {
   receiptUnitCost?: number
 }
 
-export type VendorBillJournalLine = {
+type VendorBillJournalLine = {
   account: string
   description: string
   debit: number
@@ -52,7 +52,7 @@ function ppeCodeForLine(line: VendorBillLineInput): string | undefined {
  * Electricity). Lets a utility or rent bill land in its own account instead of
  * the Purchases fallback.
  */
-export function expenseCodeForLine(line: { accountCode?: string }): string | undefined {
+function expenseCodeForLine(line: { accountCode?: string }): string | undefined {
   const code = String(line.accountCode || '').trim().split(/\s+/)[0]
   return /^6\d{3}$/.test(code) ? code : undefined
 }

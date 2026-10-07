@@ -6,9 +6,9 @@
 import { round2, type AggregatedAccount } from '@/lib/accounting/gl-reports'
 import { COA_ROLE_CODES } from '@/lib/accounting/coa-roles'
 
-export type CashFlowRow = { code: string; name: string; amount: number }
+type CashFlowRow = { code: string; name: string; amount: number }
 
-export type CashFlowResult = {
+type CashFlowResult = {
   currency: string
   dateFrom: string
   dateTo: string

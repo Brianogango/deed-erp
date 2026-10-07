@@ -4,10 +4,10 @@
  * caches, then reloads. Guarded by sessionStorage so it cannot loop.
  */
 
-export const CLIENT_RECOVERY_FLAG = 'deed_client_recovered'
+const CLIENT_RECOVERY_FLAG = 'deed_client_recovered'
 
 /** Stale-deploy / corrupt-cache signatures that should auto Repair & reload. */
-export const STALE_BUILD_PATTERNS: RegExp[] = [
+const STALE_BUILD_PATTERNS: RegExp[] = [
   /ChunkLoadError/i,
   /Loading chunk [\w-]+ failed/i,
   /failed to fetch dynamically imported module/i,
@@ -27,7 +27,7 @@ export function isRecoverableClientError(error: Error | { name?: string; message
   return STALE_BUILD_PATTERNS.some(re => re.test(text))
 }
 
-export function clearDeedClientCaches(): { clearedKeys: number } {
+function clearDeedClientCaches(): { clearedKeys: number } {
   let clearedKeys = 0
   try {
     const keys: string[] = []
@@ -59,7 +59,7 @@ export function clearDeedClientCaches(): { clearedKeys: number } {
   return { clearedKeys }
 }
 
-export async function clearServiceWorkerCaches(): Promise<void> {
+async function clearServiceWorkerCaches(): Promise<void> {
   try {
     if ('caches' in window) {
       const names = await caches.keys()

@@ -7,7 +7,7 @@
 
 import { looksLikeEnquiryTitle } from '@/lib/crm/lead-convert'
 
-export type DuplicatePolicyMember = {
+type DuplicatePolicyMember = {
   id: string
   name: string
   companyName?: string | null
@@ -30,7 +30,7 @@ function companyOrName(member: DuplicatePolicyMember): string {
   return normalizeContactName(member.name)
 }
 
-export function isOrganizationContactName(name: string | null | undefined): boolean {
+function isOrganizationContactName(name: string | null | undefined): boolean {
   return /\b(ltd|limited|plc|llc|inc|corp|hospital|school|university|college|company|group|enterprises|services|kenya|bank|church|parish|clinic|ministr(?:y|ies)|county|government)\b/i
     .test(String(name || ''))
 }

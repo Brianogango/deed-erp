@@ -3,7 +3,7 @@
  * when a contact or linked document customer is edited.
  */
 
-export type CustomerIdentity = {
+type CustomerIdentity = {
   name: string
   email?: string
   phone?: string
@@ -79,15 +79,4 @@ export function applyCustomerToInvoice<T extends {
     ...(identity.customerId ? { partnerId: identity.customerId } : {}),
     ...(identity.address !== undefined ? { invoiceAddress: identity.address || undefined } : {}),
   }
-}
-
-export function customerIdentityChanged(
-  before: { name?: string; email?: string; phone?: string; address?: string },
-  after: CustomerIdentity,
-): boolean {
-  if ((before.name || '') !== (after.name || '')) return true
-  if (after.email !== undefined && (before.email || '') !== (after.email || '')) return true
-  if (after.phone !== undefined && (before.phone || '') !== (after.phone || '')) return true
-  if (after.address !== undefined && (before.address || '') !== (after.address || '')) return true
-  return false
 }

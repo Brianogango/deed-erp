@@ -4,7 +4,7 @@
 
 import type { CompatibilityIssue, InstalledComponentView, TargetConfigInput } from './types'
 
-export interface ComponentProductSpec {
+interface ComponentProductSpec {
   id: string
   name: string
   category?: string
@@ -19,7 +19,7 @@ export interface ComponentProductSpec {
   slotType?: string
 }
 
-export interface DeviceCapability {
+interface DeviceCapability {
   maxRamGb?: number
   ramSlots?: number
   ramType?: string

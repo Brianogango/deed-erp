@@ -10,8 +10,8 @@
  * collections into Prisma. Binary files stay in the object store.
  */
 
-export type DomainTruth = 'prisma'
-export type DomainPersistence = 'normalized' | 'row_projection'
+type DomainTruth = 'prisma'
+type DomainPersistence = 'normalized' | 'row_projection'
 
 export const DOMAIN_SOURCE_OF_TRUTH = {
   products: 'prisma',
@@ -84,5 +84,3 @@ const PRISMA_REST_SOT_KEY_SET = new Set<string>(PRISMA_REST_SOT_STORE_KEYS)
 export function isPrismaRestSotStoreKey(key: string): boolean {
   return PRISMA_REST_SOT_KEY_SET.has(key)
 }
-
-export const VISIBLE_POLL_INTERVAL_MS = 10_000

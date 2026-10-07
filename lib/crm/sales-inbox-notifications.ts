@@ -4,9 +4,7 @@
  * reps see inbound RFQs even when the ERP tab is closed.
  */
 import 'server-only'
-import { sendEmail } from '@/lib/integrations/email'
-
-export type InboundLeadNotifyInput = {
+type InboundLeadNotifyInput = {
   leadId: string
   leadName: string
   leadEmail?: string | null
@@ -81,47 +79,4 @@ export function buildInboundLeadNotifyContent(input: InboundLeadNotifyInput): {
   ].filter(Boolean).join('\n')
 
   return { subject, html, text: lines.join('\n') }
-}
-
-/**
- * Best-effort email to assigned rep (To) and sales team mailbox (Cc when different).
- * Never throws — inbox import must not fail because mail delivery failed.
- */
-export async function notifyInboundLeadCreated(input: InboundLeadNotifyInput): Promise<{
-  sent: boolean
-  to?: string
-  error?: string
-}> {
-  const recipients = resolveInboundLeadNotifyRecipients({
-    ownerEmail: input.ownerEmail,
-    salesTeamEmail: process.env.SALES_TEAM_EMAIL || process.env.SALES_EMAIL || 'sales@deed.co.ke',
-  })
-  if (!recipients) {
-    return { sent: false, error: 'no_recipients' }
-  }
-
-  const content = buildInboundLeadNotifyContent(input)
-  try {
-    const result = await sendEmail({
-      to: recipients.to,
-      cc: recipients.cc,
-      mailbox: 'sales',
-      replyTo: process.env.SALES_EMAIL || undefined,
-      subject: content.subject,
-      html: content.html,
-      text: content.text,
-    })
-    if (!result.success) {
-      console.error('[sales-inbox-notifications] send failed', {
-        leadId: input.leadId,
-        error: result.error,
-      })
-      return { sent: false, to: recipients.to, error: result.error || 'send_failed' }
-    }
-    return { sent: true, to: recipients.to }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'send_failed'
-    console.error('[sales-inbox-notifications] send threw', { leadId: input.leadId, error: message })
-    return { sent: false, to: recipients.to, error: message }
-  }
 }

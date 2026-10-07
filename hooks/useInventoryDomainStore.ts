@@ -44,18 +44,3 @@ export const useInventoryDomainStore = create<InventoryDomainState>((set) => ({
     }
   },
 }))
-
-export const INVENTORY_BLOB_KEYS = [
-  'deed_products',
-  'deed_productPriceHistory',
-  'deed_serials',
-  'deed_bulkStock',
-  'deed_stockTransfers',
-  'deed_stockAdjustments',
-  'deed_stockReservations',
-  'deed_openingStockPosted',
-  'deed_purchaseOrders',
-  'deed_receipts',
-  'deed_refurbishmentJobs',
-  'deed_warranties',
-] as const

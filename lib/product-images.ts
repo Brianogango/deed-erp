@@ -4,7 +4,7 @@ export const PRODUCT_IMAGE_SLOTS = [1, 2] as const
 export type ProductImageSlot = (typeof PRODUCT_IMAGE_SLOTS)[number]
 export type ProductImageRole = 'hero' | 'detail'
 
-export const PRODUCT_IMAGE_ROLES: Record<ProductImageSlot, ProductImageRole> = {
+const PRODUCT_IMAGE_ROLES: Record<ProductImageSlot, ProductImageRole> = {
   1: 'hero',
   2: 'detail',
 }
@@ -12,10 +12,6 @@ export const PRODUCT_IMAGE_ROLES: Record<ProductImageSlot, ProductImageRole> = {
 export type PartnerProductImage = {
   url: string
   role: ProductImageRole
-}
-
-export function isProductImageSlot(value: unknown): value is ProductImageSlot {
-  return value === 1 || value === 2 || value === '1' || value === '2'
 }
 
 export function parseProductImageSlot(value: unknown): ProductImageSlot | null {
@@ -70,7 +66,7 @@ export type ProductThumbInput = {
   image?: unknown
 }
 
-export type ProductThumbSource = {
+type ProductThumbSource = {
   src: string
   /** True when the URL may 404 (upload not confirmed on the client). */
   speculative: boolean

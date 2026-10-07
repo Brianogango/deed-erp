@@ -19,12 +19,12 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
  * blob key without bound.
  */
 
-export const REPAIR_TOMBSTONE_KEY = 'deed_repairs_deleted_v1'
+const REPAIR_TOMBSTONE_KEY = 'deed_repairs_deleted_v1'
 
 /** Long enough to outlive a laptop left asleep over a weekend. */
 export const TOMBSTONE_TTL_DAYS = 30
 
-export type RepairTombstones = Record<string, string>
+type RepairTombstones = Record<string, string>
 
 const ttlMs = TOMBSTONE_TTL_DAYS * 24 * 60 * 60 * 1000
 

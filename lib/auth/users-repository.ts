@@ -145,12 +145,6 @@ const ensureSchemaReady = async () => {
 
   await schemaPromise
 }
-
-const getUserCount = async () => {
-  const { rows } = await sql`SELECT COUNT(*) as count FROM users`
-  return Number(rows[0].count)
-}
-
 const migrateRoles = async () => {
   // Normalise legacy role names to the current operational role catalog.
   await sql`UPDATE users SET role = 'director'        WHERE role IN ('admin', 'super_admin')`
@@ -217,7 +211,7 @@ const migrateSessionVersion = async () => {
   }
 }
 
-export const ensureUserStore = async () => {
+const ensureUserStore = async () => {
   await ensureSchemaReady()
   await migratePasswordHistory()
   await migrateLockoutFields()

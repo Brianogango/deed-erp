@@ -1,6 +1,6 @@
 import { invoiceDocState } from '@/lib/odoo-sales-flow'
 
-export type RepairInvoiceJourneyAction = 'create' | 'align' | 'confirm' | 'view' | 'none'
+type RepairInvoiceJourneyAction = 'create' | 'align' | 'confirm' | 'view' | 'none'
 
 export function repairInvoiceJourneyAction(opts: {
   repairStatus?: string | null

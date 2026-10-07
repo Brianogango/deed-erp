@@ -6,7 +6,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Modal, Field, Input, Select } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 
-export type LeadAttachment = {
+type LeadAttachment = {
   id: string
   name: string
   size: number
@@ -14,7 +14,7 @@ export type LeadAttachment = {
   storedAt?: string
 }
 
-export type LeadRow = {
+type LeadRow = {
   id: string
   name: string
   companyName?: string | null

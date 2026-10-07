@@ -21,7 +21,7 @@ import {
   type PricingMarginPolicy,
 } from '@/lib/pricing/margin-policy'
 
-export interface MarginApprovalLine {
+interface MarginApprovalLine {
   productId?: string
   productName?: string
   qty?: number
@@ -32,7 +32,7 @@ export interface MarginApprovalLine {
   subtotal?: number
 }
 
-export interface MarginApprovalProduct extends PricelistProductPrices {
+interface MarginApprovalProduct extends PricelistProductPrices {
   id: string
   name?: string
   costPrice?: number | null
@@ -43,7 +43,7 @@ export interface MarginApprovalProduct extends PricelistProductPrices {
   productType?: 'new' | 'refurbished' | string | null
 }
 
-export interface SaleOrderApprovalTrigger {
+interface SaleOrderApprovalTrigger {
   type: ApprovalType
   details: Record<string, unknown>
   reason: string

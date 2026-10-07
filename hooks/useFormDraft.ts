@@ -5,12 +5,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
 const SENSITIVE_KEY = /password|passwd|secret|token|api[_-]?key|authorization|credential/i
 
-export type FormDraftMeta = {
+type FormDraftMeta = {
   savedAt: string
   formKey: string
 }
 
-export type UseFormDraftResult<T extends Record<string, unknown>> = {
+type UseFormDraftResult<T extends Record<string, unknown>> = {
   draft: T | null
   meta: FormDraftMeta | null
   restore: () => T | null
@@ -37,7 +37,7 @@ export function sanitizeDraftPayload<T extends Record<string, unknown>>(
   return out
 }
 
-export function readFormDraft<T>(userId: string | null | undefined, formKey: string): { values: T; savedAt: string } | null {
+function readFormDraft<T>(userId: string | null | undefined, formKey: string): { values: T; savedAt: string } | null {
   if (!userId || typeof window === 'undefined') return null
   try {
     const raw = localStorage.getItem(draftStorageKey(userId, formKey))
@@ -54,7 +54,7 @@ export function readFormDraft<T>(userId: string | null | undefined, formKey: str
   }
 }
 
-export function clearFormDraft(userId: string | null | undefined, formKey: string) {
+function clearFormDraft(userId: string | null | undefined, formKey: string) {
   if (!userId || typeof window === 'undefined') return
   try {
     localStorage.removeItem(draftStorageKey(userId, formKey))

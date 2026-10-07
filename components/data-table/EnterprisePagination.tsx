@@ -10,7 +10,7 @@ function normaliseOptions(options: readonly number[], current: number) {
     .sort((a, b) => a - b)
 }
 
-export interface EnterprisePaginationProps {
+interface EnterprisePaginationProps {
   page: number
   total: number
   perPage: number

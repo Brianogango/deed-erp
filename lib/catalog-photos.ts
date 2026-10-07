@@ -7,7 +7,7 @@
  * (or the same chassis for RAM/SSD variants) are listed.
  */
 
-export type CatalogPhotoPack = {
+type CatalogPhotoPack = {
   id: string
   label: string
   /** Lowercase phrases; longest matching phrase wins. */

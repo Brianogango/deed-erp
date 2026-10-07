@@ -1,4 +1,4 @@
-export type FinancePaymentPreview = {
+type FinancePaymentPreview = {
   entered: number
   applied: number
   balanceBefore: number

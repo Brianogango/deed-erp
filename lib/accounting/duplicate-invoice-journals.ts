@@ -12,7 +12,7 @@
  * first; the others are reversed. Pure.
  */
 
-export type LiveSalesEntry = {
+type LiveSalesEntry = {
   id: string
   ref: string
   invoiceId: string

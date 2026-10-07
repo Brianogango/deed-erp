@@ -2,20 +2,20 @@ import 'server-only'
 import { cacheGet, cacheSet, cacheIncr } from '@/lib/infra/cache'
 import { enqueueDurableJob } from '@/lib/infra/jobs'
 import { getInfraRedis } from '@/lib/infra/redis'
-import { getOperationalPrisma, getReportingPrisma } from '@/lib/infra/reporting-db'
+import { getOperationalPrisma } from '@/lib/infra/reporting-db'
 
-export type ReportKind = 'profit_loss' | 'profit_loss_management' | 'trial_balance' | 'balance_sheet'
+type ReportKind = 'profit_loss' | 'profit_loss_management' | 'trial_balance' | 'balance_sheet'
 
-export type ReportSource = 'cache' | 'snapshot' | 'snapshot_stale' | 'live'
+type ReportSource = 'cache' | 'snapshot' | 'snapshot_stale' | 'live'
 
-export type ReportParams = {
+type ReportParams = {
   dateFrom?: string | null
   dateTo?: string | null
   asOf?: string | null
   view?: string | null
 }
 
-export type ReportEnvelope<T> = T & {
+type ReportEnvelope<T> = T & {
   _reporting: {
     kind: ReportKind
     source: ReportSource
@@ -33,11 +33,11 @@ function envSeconds(name: string, fallback: number) {
   return Number.isFinite(raw) && raw > 0 ? raw : fallback
 }
 
-export function reportCacheTtlSeconds() {
+function reportCacheTtlSeconds() {
   return envSeconds('REPORT_CACHE_TTL_SECONDS', 60)
 }
 
-export function reportSnapshotTtlSeconds() {
+function reportSnapshotTtlSeconds() {
   return envSeconds('REPORT_SNAPSHOT_TTL_SECONDS', 300)
 }
 
@@ -189,7 +189,7 @@ export async function readOptimisedReport<T extends object>(
   }
 }
 
-export async function refreshReportSnapshot(kind: ReportKind, params: ReportParams, live: LiveLoader<object>) {
+async function refreshReportSnapshot(kind: ReportKind, params: ReportParams, live: LiveLoader<object>) {
   const data = await live()
   await saveSnapshot(kind, params, data).catch(() => null)
   const envelope = wrap(kind, data, 'live', new Date().toISOString())
@@ -225,8 +225,4 @@ export async function refreshCoreReportSnapshots() {
     asOf: today,
     reportingDatabase: Boolean(process.env.REPORTING_DATABASE_URL),
   }
-}
-
-export function reportingReadClient() {
-  return getReportingPrisma()
 }

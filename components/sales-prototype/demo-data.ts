@@ -1,15 +1,3 @@
-/**
- * Sales Module prototype — demo data only.
- * Never import production store / Prisma / saveStoreKeys from these pages.
- */
-
-export type ProtoStatusTone = 'purple' | 'green' | 'amber' | 'red' | 'grey' | 'blue'
-
-export interface ProtoStatus {
-  label: string
-  tone: ProtoStatusTone
-}
-
 export const DEMO_CUSTOMER = {
   id: 'cust-demo-01',
   name: 'Nairobi Tech Hub Ltd',

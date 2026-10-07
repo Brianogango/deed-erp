@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Fa, faChevronDown } from '@/components/icons'
 
-export type SearchablePickOption = {
+type SearchablePickOption = {
   id: string
   label: string
 }

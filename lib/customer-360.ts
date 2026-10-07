@@ -7,8 +7,8 @@
 
 type Row = Record<string, any>
 
-export type CustomerDevice = { serial: string; product: string; how: string; href: string }
-export type CustomerWaiting = { label: string; detail: string; href: string; tone: 'money' | 'action' }
+type CustomerDevice = { serial: string; product: string; how: string; href: string }
+type CustomerWaiting = { label: string; detail: string; href: string; tone: 'money' | 'action' }
 
 export function customerDevices(input: { contactId: string; saleOrders: Row[]; serials: Row[]; repairs: Row[] }): CustomerDevice[] {
   const orderIds = new Set(input.saleOrders.filter(o => o.customerId === input.contactId).map(o => o.id))

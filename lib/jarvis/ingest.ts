@@ -119,7 +119,7 @@ function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } 
   }
 }
 
-export interface IngestResult {
+interface IngestResult {
   documentId: string
   title: string
   status: 'ready' | 'unsupported' | 'failed' | 'unchanged'
@@ -128,7 +128,7 @@ export interface IngestResult {
   sourceUrl?: string | null
 }
 
-export async function upsertDocument(params: {
+async function upsertDocument(params: {
   sourceType: string
   sourceId: string
   title: string

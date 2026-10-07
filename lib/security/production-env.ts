@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-export const ENV_KEY_RE = /^[A-Z][A-Z0-9_]*$/
+const ENV_KEY_RE = /^[A-Z][A-Z0-9_]*$/
 const PLACEHOLDER_RE = /REPLACE_WITH|changeme|password|secret/i
 const PRIVILEGED_SECRET_KEYS = [
   'AUTH_SECRET',
@@ -16,8 +16,8 @@ const PRIVILEGED_SECRET_KEYS = [
   'NOTIFICATION_WEBHOOK_SECRET',
 ] as const
 
-export type EnvFieldKind = 'secret' | 'value' | 'flag'
-export type EnvCategory =
+type EnvFieldKind = 'secret' | 'value' | 'flag'
+type EnvCategory =
   | 'Authentication'
   | 'Privileged MFA'
   | 'Database'
@@ -30,7 +30,7 @@ export type EnvCategory =
   | 'Security gate'
   | 'Custom'
 
-export type EnvFieldSpec = {
+type EnvFieldSpec = {
   key: string
   category: EnvCategory
   kind: EnvFieldKind
@@ -40,7 +40,7 @@ export type EnvFieldSpec = {
   description: string
 }
 
-export const PRODUCTION_ENV_CATALOG: readonly EnvFieldSpec[] = [
+const PRODUCTION_ENV_CATALOG: readonly EnvFieldSpec[] = [
   { key: 'AUTH_SECRET', category: 'Authentication', kind: 'secret', required: true, generate: true, description: 'Session signing secret. Keep identical to NEXTAUTH_SECRET.' },
   { key: 'NEXTAUTH_SECRET', category: 'Authentication', kind: 'secret', required: true, generate: true, description: 'NextAuth/JWT signing secret. Rotating signs everyone out.' },
   { key: 'CUSTOMER_PORTAL_SECRET', category: 'Authentication', kind: 'secret', required: true, generate: true, description: 'Customer portal token secret.' },
@@ -221,7 +221,7 @@ export function upsertEnvValues(source: string, updates: Record<string, string>)
   return next.endsWith('\n') ? next : `${next}\n`
 }
 
-export type EnvFieldSummary = {
+type EnvFieldSummary = {
   key: string
   category: EnvCategory
   kind: EnvFieldKind
@@ -285,7 +285,7 @@ export function summarizeEnv(values: Record<string, string>): EnvFieldSummary[] 
   return rows
 }
 
-export function resolveEnvFilePath(): string {
+function resolveEnvFilePath(): string {
   return process.env.DEED_ENV_FILE || path.join(process.cwd(), '.env')
 }
 
@@ -310,7 +310,7 @@ function backupDirFor(_envPath: string): string {
   }
 }
 
-export function writeEnvFile(envPath: string, nextSource: string): { backupPath: string } {
+function writeEnvFile(envPath: string, nextSource: string): { backupPath: string } {
   const stat = fs.existsSync(envPath) ? fs.statSync(envPath) : null
   if (stat && (stat.mode & 0o077) !== 0) {
     throw Object.assign(new Error('Refusing to edit an environment file that is group/world readable. chmod 600 first.'), { status: 409 })

@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-export type SecondaryAction = {
+type SecondaryAction = {
   id: string
   label: string
   onClick: () => void

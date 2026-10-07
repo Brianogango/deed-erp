@@ -1,21 +1,21 @@
 'use client'
-import { createContext, useContext, useState, useMemo, useRef, useCallback } from 'react'
+import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import {
   useFinanceStore, fmtKes, fmtDate,
-  type Receipt, type LocationId, type POLine, type Account,
+  type Receipt, type LocationId
 } from '@/lib/store'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills'
 type SubView  = 'list' | 'form' | 'receive' | 'receipt'
-export type ReceiptOrigin = 'list' | 'po'
+type ReceiptOrigin = 'list' | 'po'
 type ImportRow = {
   raw: Record<string, string>; productId: string; productName: string; accountCode?: string
   qty: number; unitPrice: number; taxRate: number; requiresSerial: boolean
   importedSerials: string[]; specs: string; status: 'ok' | 'warn' | 'error'; message: string; serialWarning?: string
 }
 
-export interface PurchaseCtxValue {
+interface PurchaseCtxValue {
   // Store
   purchaseOrders: ReturnType<typeof useFinanceStore>['purchaseOrders']
   contacts: ReturnType<typeof useFinanceStore>['contacts']

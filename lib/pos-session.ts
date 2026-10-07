@@ -154,7 +154,7 @@ export function isPosBankPayment(payment?: string): boolean {
   return payment === 'bank' || payment === 'card'
 }
 
-export type PosOrderSessionRef = {
+type PosOrderSessionRef = {
   sessionId?: string | null
   createdAt?: string
   date?: string

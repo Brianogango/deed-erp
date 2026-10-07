@@ -25,7 +25,7 @@ function getClient(): GoogleGenerativeAI {
 }
 
 /** Map JSON Schema → Gemini function declaration parameters (recursive). */
-export function jsonSchemaToGeminiSchema(raw: Record<string, unknown> | undefined | null): Schema {
+function jsonSchemaToGeminiSchema(raw: Record<string, unknown> | undefined | null): Schema {
   if (!raw || typeof raw !== 'object') {
     return { type: SchemaType.STRING } as Schema
   }

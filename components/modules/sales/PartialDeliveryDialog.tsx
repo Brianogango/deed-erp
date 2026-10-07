@@ -3,7 +3,7 @@
 import { Modal } from '@/components/ui'
 import { AsyncActionButton, DestructiveAction, EmptyState } from '@/components/erp'
 
-export type PartialDeliveryRemainder = {
+type PartialDeliveryRemainder = {
   productName: string
   ordered: number
   done: number

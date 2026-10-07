@@ -1,4 +1,4 @@
-export type StkCallbackResult = {
+type StkCallbackResult = {
   merchantRequestId: string
   checkoutRequestId: string
   resultCode: number

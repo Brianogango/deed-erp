@@ -10,70 +10,55 @@ import type { CSSProperties } from 'react'
 
 // ── Solid icons ───────────────────────────────────────────────────────────────
 export {
-  faUsers, faUserCircle, faUserTie, faUserGroup,
-  faUser, faUserPlus, faUserCheck, faUserClock, faUserSlash,
+  faUsers, faUserTie,
+  faUser, faUserSlash,
+} from '@fortawesome/free-solid-svg-icons'
+export {
+  faMoneyBillWave, faMoneyBill,
+  faCreditCard,
+  faArrowTrendUp
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
-  faCalendarMinus, faCalendarCheck, faCalendarXmark, faCalendarDays,
-  faCalendarPlus,
+  faFolderOpen, faFileLines,
+  faFilePdf, faFileSignature, faFileInvoice, faFileInvoiceDollar
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
-  faMoneyBillWave, faMoneyBill, faMoneyBillTrendUp,
-  faCreditCard, faDollarSign,
-  faArrowTrendUp, faArrowTrendDown,
-} from '@fortawesome/free-solid-svg-icons'
-
-export {
-  faFolderOpen, faFolder, faFile, faFileAlt, faFileLines,
-  faFilePdf, faFileSignature, faFileInvoice, faFileInvoiceDollar, faFileCircleCheck,
-} from '@fortawesome/free-solid-svg-icons'
-
-export {
-  faLaptop, faDesktop, faPrint, faServer,
-  faScrewdriverWrench, faWrench, faToolbox,
+  faDesktop, faPrint,
+  faScrewdriverWrench, faWrench,
   faMicrochip, faMemory, faHardDrive,
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
-  faChartBar, faChartLine, faChartPie, faChartSimple,
-  faArrowUp, faArrowDown,
+  faChartBar, faChartLine, faArrowDown,
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
   faBuilding, faBuildingColumns, faWarehouse,
-  faBoxesStacked, faBoxOpen, faBox, faCubes,
+  faBoxesStacked, faBoxOpen, faBox
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
-  faShoppingCart, faCartShopping, faBagShopping,
-  faCashRegister, faBarcode, faTag,
+  faCartShopping,
+  faCashRegister, faBarcode
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
   faCamera, faReceipt, faMobileScreenButton, faStore,
   faClipboardList, faInbox, faUpload, faArrowsRotate,
-  faFileImport, faFileExport, faFileArrowDown, faFileArrowUp,
-  faLink, faIndustry, faPaperclip, faImage,
+  faFileImport, faFileExport, faFileArrowDown, faIndustry, faPaperclip, faImage,
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
-  faTruck, faGlobe, faBriefcase, faBullseye,
-  faAddressBook, faHandshake, faTableCells,
-  faScaleBalanced, faClipboardCheck, faTriangleExclamation,
-  faTrophy, faPercent, faBook, faLandmark,
-  faStar, faCircleCheck, faCircleXmark, faCircleExclamation,
-  faCheckCircle, faTimesCircle,
-  faBell, faGear, faKey, faLock, faShield,
-  faMagnifyingGlass, faPlus, faPen, faTrash, faEye, faEyeSlash,
-  faChevronDown, faChevronRight, faChevronLeft,
-  faArrowLeft, faArrowRight, faRotateLeft,
+  faTruck, faBullseye, faHandshake, faTableCells, faClipboardCheck, faTriangleExclamation,
+  faStar, faCircleCheck, faCircleXmark, faCircleExclamation, faShield,
+  faMagnifyingGlass, faPlus, faPen, faTrash,
+  faChevronDown, faArrowRight, faRotateLeft,
   faEnvelope, faPhone, faLocationDot,
-  faPaperPlane, faDownload, faPrint as faPrintIcon,
+  faPaperPlane,
   faCheck, faXmark, faMinus,
-  faEllipsisVertical, faBars, faGrip,
-  faFire, faSun, faSnowflake, faNoteSticky, faListCheck,
+  faEllipsisVertical, faNoteSticky,
   faCar, faUtensils, faLightbulb, faComputer, faDroplet,
   faFlagCheckered, faThumbtack,
 } from '@fortawesome/free-solid-svg-icons'

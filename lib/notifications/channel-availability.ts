@@ -1,7 +1,7 @@
 import { resolveSmsProvider } from './sms-provider'
 
 /** True when the WhatsApp Cloud API credentials are present. */
-export function whatsappConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+function whatsappConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(String(env.WHATSAPP_PHONE_NUMBER_ID || '').trim() && String(env.WHATSAPP_ACCESS_TOKEN || '').trim())
 }
 

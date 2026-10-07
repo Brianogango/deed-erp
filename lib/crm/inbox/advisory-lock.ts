@@ -6,10 +6,7 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { SALES_INBOX_LOCK_KEY } from '@/lib/crm/inbox/lock-keys'
-
-export { SALES_INBOX_LOCK_KEY, salesInboxMessageLockKey } from '@/lib/crm/inbox/lock-keys'
-
-export type LockOutcome<T> =
+type LockOutcome<T> =
   | { acquired: true; result: T }
   | { acquired: false }
 

@@ -26,7 +26,7 @@ export const requirePermission = async (action: Parameters<typeof assertPermissi
   return session.user
 }
 
-export const jsonError = (message: string, status = 400) => NextResponse.json({ error: message }, { status })
+const jsonError = (message: string, status = 400) => NextResponse.json({ error: message }, { status })
 
 export const withApiErrorHandling = async <T>(handler: () => Promise<T>) => {
   const t0 = Date.now()

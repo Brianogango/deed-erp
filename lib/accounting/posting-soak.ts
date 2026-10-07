@@ -13,7 +13,7 @@ import {
   resolvePostingAccountLabel,
 } from '@/lib/accounting/posting-service'
 
-export type PostingEngineSurface = {
+type PostingEngineSurface = {
   id: string
   label: string
   path: string
@@ -32,7 +32,7 @@ export const POSTING_ENGINE_SURFACES: PostingEngineSurface[] = [
   { id: 'pos', label: 'POS sale journal', path: 'pos/post-sale-journal', phase: '7' },
 ]
 
-export type PostingEngineSoakReport = {
+type PostingEngineSoakReport = {
   enabled: boolean
   defaultOff: true
   envVar: 'ACCOUNTING_POSTING_ENGINE'

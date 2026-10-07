@@ -18,10 +18,10 @@ import { isPortalPhoneVerificationRequired, portalDocumentAccessAllowed } from '
  * document gate covers; they were simply never wired to it.
  */
 
-export const REPAIR_ATTACHMENT_WRITE_ROLES = ['director', 'admin_officer', 'technical_lead', 'technician']
+const REPAIR_ATTACHMENT_WRITE_ROLES = ['director', 'admin_officer', 'technical_lead', 'technician']
 
-export type AttachmentWriteDenial = { ok: false; status: number; error: string }
-export type AttachmentWriteGrant = { ok: true; user: { id: string; role: string } }
+type AttachmentWriteDenial = { ok: false; status: number; error: string }
+type AttachmentWriteGrant = { ok: true; user: { id: string; role: string } }
 
 /** Staff-only write gate. Roles are normalized so `lead_tech` is not locked out. */
 export async function requireRepairAttachmentWriter(): Promise<AttachmentWriteGrant | AttachmentWriteDenial> {

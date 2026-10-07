@@ -150,26 +150,6 @@ export async function publishNotificationEvent(
   return tx ? run(tx) : prisma.$transaction(run)
 }
 
-export async function resolveNotificationEvent(
-  idempotencyKey: string,
-  resolvedById?: string | null,
-) {
-  const event = await prisma.notificationEvent.findUnique({ where: { idempotencyKey } })
-  if (!event || event.resolvedAt) return event
-  const now = new Date()
-  return prisma.$transaction(async tx => {
-    const updated = await tx.notificationEvent.update({
-      where: { id: event.id },
-      data: { resolvedAt: now, resolvedById: resolvedById || null },
-    })
-    await tx.notificationRecipient.updateMany({
-      where: { eventId: event.id, resolvedAt: null },
-      data: { resolvedAt: now },
-    })
-    return updated
-  })
-}
-
 export async function resolveEntityNotifications(
   entityType: string,
   entityId: string,
@@ -197,12 +177,4 @@ export async function resolveEntityNotifications(
     }),
   ])
   return ids.length
-}
-
-export async function findActiveUsersByRoles(roles: string[]) {
-  if (!roles.length) return []
-  return prisma.user.findMany({
-    where: { isActive: true, role: { in: roles as any } },
-    select: { id: true, username: true, email: true, phone: true, role: true },
-  })
 }

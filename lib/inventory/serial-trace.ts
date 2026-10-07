@@ -1,6 +1,6 @@
 import type { LocationId } from '@/lib/store'
 
-export type TraceableSerial = {
+type TraceableSerial = {
   id: string
   serial: string
   productId: string
@@ -23,7 +23,7 @@ export type TraceableSerial = {
   specs?: string
 }
 
-export type TraceableSaleOrder = {
+type TraceableSaleOrder = {
   id: string
   ref?: string
   status: string
@@ -31,7 +31,7 @@ export type TraceableSaleOrder = {
   lines: Array<{ serialIds?: string[]; productName?: string }>
 }
 
-export type TraceableStockMove = {
+type TraceableStockMove = {
   id: string
   productId: string
   date: string
@@ -42,7 +42,7 @@ export type TraceableStockMove = {
   toLocation?: string
 }
 
-export type SerialTraceResult = {
+type SerialTraceResult = {
   serial: TraceableSerial
   summary: string
   details: string[]

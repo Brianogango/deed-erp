@@ -4,11 +4,11 @@
  * Pure — no DB / no server-only. Analytic tags / budgets are out of scope.
  */
 
-export function round2(n: number) {
+function round2(n: number) {
   return Math.round(Number(n || 0) * 100) / 100
 }
 
-export function netBalanceForType(type: string, debit: number, credit: number): number {
+function netBalanceForType(type: string, debit: number, credit: number): number {
   const net = round2(debit - credit)
   if (type === 'asset' || type === 'expense') return net
   return round2(credit - debit)
@@ -24,7 +24,7 @@ export type AggregateLike = {
   credit: number
 }
 
-export type ProfitAndLossRow = {
+type ProfitAndLossRow = {
   code: string
   name: string
   type: string
@@ -32,7 +32,7 @@ export type ProfitAndLossRow = {
   amount: number
 }
 
-export type ExpenseBucket = 'cogs' | 'operating' | 'finance'
+type ExpenseBucket = 'cogs' | 'operating' | 'finance'
 
 /** CoA groups treated as cost of sales / direct cost (matches Accounting.tsx P&L lists). */
 const COGS_GROUPS = new Set([
@@ -75,13 +75,13 @@ export function isOtherIncomeGroup(group?: string): boolean {
   return OTHER_INCOME_GROUPS.has(String(group || '').trim())
 }
 
-export type ManagementGroupRollup = {
+type ManagementGroupRollup = {
   group: string
   section: 'revenue' | 'other_income' | 'cogs' | 'operating' | 'finance'
   amount: number
 }
 
-export type ManagementProfitAndLossResult = {
+type ManagementProfitAndLossResult = {
   currency: string
   dateFrom: string | null
   dateTo: string | null

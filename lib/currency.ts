@@ -13,7 +13,7 @@ export const FUNCTIONAL_CURRENCY = 'KES' as const
 export const SUPPORTED_CURRENCIES = ['KES', 'USD', 'EUR', 'GBP'] as const
 export type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number]
 
-export interface DocumentMoneySnapshot {
+interface DocumentMoneySnapshot {
   /** Currency the document amounts are denominated in. */
   currencyCode: CurrencyCode
   /** Always KES — books / functional currency. */
@@ -34,17 +34,13 @@ export interface ExchangeRateRow {
   updatedAt?: string
 }
 
-export function isSupportedCurrency(code: string | null | undefined): code is CurrencyCode {
+function isSupportedCurrency(code: string | null | undefined): code is CurrencyCode {
   return !!code && (SUPPORTED_CURRENCIES as readonly string[]).includes(code.toUpperCase())
 }
 
 export function normalizeCurrencyCode(code?: string | null): CurrencyCode {
   const upper = String(code || FUNCTIONAL_CURRENCY).trim().toUpperCase()
   return isSupportedCurrency(upper) ? upper : FUNCTIONAL_CURRENCY
-}
-
-export function isFunctionalCurrency(code?: string | null): boolean {
-  return normalizeCurrencyCode(code) === FUNCTIONAL_CURRENCY
 }
 
 /** Build a money snapshot for a new Quote / SO / Invoice. */
@@ -104,17 +100,4 @@ export function findExchangeRate(
   if (!hit) return null
   const rate = Number(hit.rate)
   return Number.isFinite(rate) && rate > 0 ? rate : null
-}
-
-export function resolveDocumentCurrency(
-  doc: { currencyCode?: string | null; exchangeRateToBase?: number | null } | null | undefined,
-  companyCurrency?: string | null,
-): DocumentMoneySnapshot {
-  if (doc?.currencyCode) {
-    return documentMoneySnapshot({
-      currencyCode: doc.currencyCode,
-      exchangeRateToBase: doc.exchangeRateToBase,
-    })
-  }
-  return documentMoneySnapshot({ currencyCode: companyCurrency || FUNCTIONAL_CURRENCY, exchangeRateToBase: 1 })
 }

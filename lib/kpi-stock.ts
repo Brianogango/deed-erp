@@ -12,7 +12,7 @@ import {
   type StockProduct,
 } from '@/lib/business-logic'
 
-export type LowStockItem<P extends StockProduct & { id: string; stockQty?: number }> = P & {
+type LowStockItem<P extends StockProduct & { id: string; stockQty?: number }> = P & {
   onHand: number
 }
 

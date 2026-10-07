@@ -28,7 +28,7 @@ export interface ParsedInboundEmail {
   attachments?: InboundEmailAttachmentMeta[]
 }
 
-export interface DraftLeadFromEmail {
+interface DraftLeadFromEmail {
   name: string
   companyName?: string | null
   email: string
@@ -161,7 +161,7 @@ export function parseFromIdentity(fromName: string, fromEmail: string): {
   }
 }
 
-export function buildLeadNotesFromEmail(mail: ParsedInboundEmail): string {
+function buildLeadNotesFromEmail(mail: ParsedInboundEmail): string {
   const body = (mail.textBody || '').replace(/\r\n/g, '\n').trim()
   const clipped = body.length > 2500 ? `${body.slice(0, 2500)}\n…` : body
   const attachmentLines = (mail.attachments ?? [])

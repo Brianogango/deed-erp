@@ -12,7 +12,7 @@ import 'server-only'
  * Session validity and rate limits keep their own Edge-safe Upstash clients.
  */
 
-export type RedisLike = {
+type RedisLike = {
   get(key: string): Promise<string | null>
   set(key: string, value: string, ttlSeconds?: number): Promise<void>
   setNx(key: string, value: string, ttlSeconds: number): Promise<boolean>
@@ -24,7 +24,7 @@ export type RedisLike = {
   ping(): Promise<boolean>
 }
 
-export type RedisBackendName = 'memory' | 'upstash' | 'redis'
+type RedisBackendName = 'memory' | 'upstash' | 'redis'
 
 type MemEntry = { value: string; expiresAt: number | null }
 
@@ -55,7 +55,7 @@ function memGetRaw(key: string): string | null {
   return entry.value
 }
 
-export function createMemoryRedis(): RedisLike {
+function createMemoryRedis(): RedisLike {
   return {
     async get(key) {
       return memGetRaw(key)
@@ -298,11 +298,6 @@ export function __resetInfraRedisForTests() {
   memLists.clear()
   lastPrune = Date.now()
   cached = { backend: 'memory', client: createMemoryRedis() }
-  connecting = null
-}
-
-export function __setInfraRedisForTests(client: RedisLike, backend: RedisBackendName = 'memory') {
-  cached = { backend, client }
   connecting = null
 }
 

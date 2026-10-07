@@ -67,7 +67,7 @@ import {
   type PpeJournalDraft,
 } from '@/lib/accounting/ppe-journals'
 import { applyKraAnnualAllowance, initialTaxWdv } from '@/lib/tax/kra-capital-allowances'
-export type { CompanyAsset, CompanyAssetInput, CompanyAssetStatus, CompanyAssetCategory, CompanyAssetClass, CompanyAssetCondition } from '@/lib/company-property'
+export type { CompanyAsset, CompanyAssetInput } from '@/lib/company-property'
 import { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId } from '@/lib/product-categories'
 export { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId }
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
@@ -352,16 +352,10 @@ export const LOCATIONS: Record<LocationId, { name: string; icon: string; color: 
   pending_testing:   { name: 'Inbound — Awaiting tests', icon: '🧪', color: '#0EA5E9' },
   quarantine:        { name: 'Inbound — Rejected', icon: '🚫', color: '#DC2626' },
 }
-
-export type { ProductKind } from '@/lib/product-kind'
 export { PRODUCT_KIND_OPTIONS, UOM_OPTIONS, inferProductKind, defaultTrackingForKind, defaultUnitForKind, kindRequiresInventoryAccounts } from '@/lib/product-kind'
 export {
-  CATEGORY_ACCOUNT_DEFAULTS,
-  COMPANY_ACCOUNT_FALLBACKS,
   resolveProductAccounts,
-  applyCategoryAccountDefaults,
-  formatAccountLabel,
-  aggregateLinesByAccount,
+  applyCategoryAccountDefaults
 } from '@/lib/product-accounts'
 
 // ─── Core Types ───────────────────────────────────────────────────────────────
@@ -369,7 +363,7 @@ export {
 // CRM & Sales Types
 export type OpportunityStage = 'prospecting' | 'qualification' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost' | 'on_hold'
 export type LeadSource = 'website' | 'referral' | 'cold_call' | 'email_campaign' | 'social_media' | 'trade_show' | 'partner' | 'existing_customer' | 'walk_in'
-export type QuoteStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired' | 'revised'
+type QuoteStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired' | 'revised'
 
 export interface Client {
   id: string
@@ -404,9 +398,9 @@ export interface Client {
   saleOrders?: SaleOrder[]
 }
 
-export type Company = Client
+type Company = Client
 
-export interface ContactPerson {
+interface ContactPerson {
   id: string
   clientId: string
   companyId?: string
@@ -429,7 +423,7 @@ export interface ContactPerson {
   client?: Client
 }
 
-export interface Opportunity {
+interface Opportunity {
   id: string
   ref: string
   name: string
@@ -468,7 +462,7 @@ export interface Opportunity {
   activities?: OpportunityActivity[]
 }
 
-export interface QuoteLineItem {
+interface QuoteLineItem {
   id: string
   productId: string
   productName: string
@@ -565,7 +559,7 @@ export interface Quote {
   saleOrders?: SaleOrder[]
 }
 
-export interface OpportunityActivity {
+interface OpportunityActivity {
   id: string
   opportunityId: string
   type: string
@@ -634,15 +628,13 @@ export interface Contact {
   mergedIntoId?: string
 }
 
-export interface AuditLog {
+interface AuditLog {
   id: string; date: string; user: string; action: string; documentRef: string; details: string
 }
 
 // ── In-app Notifications ──────────────────────────────────────────────────────
 export type {
-  NotifType,
-  AppNotification,
-  NotifyUsersInput,
+  AppNotification
 } from '@/lib/in-app-notifications'
 
 // ── Cashbook / Bank Accounts ──────────────────────────────────────────────────
@@ -661,7 +653,7 @@ export interface BankAccount {
   mpesaAccount?: string
 }
 
-export interface BankRecon {
+interface BankRecon {
   id: string
   bankAccountId: string
   month: string          // 'YYYY-MM'
@@ -782,7 +774,7 @@ export interface CompanySettings {
   partnerHiddenCategories?: string[]
 }
 
-export interface SystemSettings {
+interface SystemSettings {
   // General
   multiUserRoles: boolean
   enforceDeptAccess: boolean
@@ -913,7 +905,7 @@ export interface SystemSettings {
   accAdminOfficerInvoiceLimitKes: number
 }
 
-export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   multiUserRoles: true, enforceDeptAccess: true, auditLogs: true, fiscalYearStart: 'January',
   crmLeads: true, crmLeadScoring: false, crmTags: true, crmSourceTracking: true,
   crmPipelineStages: ['Inquiry Received', 'Assigned', 'Contacted', 'Qualified', 'Needs Confirmed', 'Quote Sent', 'Follow-up', 'Won', 'Lost'],
@@ -1045,7 +1037,7 @@ export interface Product {
   priceUpdatedBy?: string
 }
 
-export interface ProductPriceHistory {
+interface ProductPriceHistory {
   id: string
   productId: string
   productName: string
@@ -1335,7 +1327,7 @@ export interface Payment {
   notes?: string
 }
 
-export interface CustomerCredit {
+interface CustomerCredit {
   id: string
   ref: string
   customerId: string
@@ -1477,7 +1469,7 @@ export interface Deposit {
   cancelReason?: string
 }
 
-export type CreateDepositInput = Omit<Deposit, 'id' | 'ref' | 'totalPaid' | 'balance' | 'status' | 'payments' | 'createdAt' | 'createdBy'> & {
+type CreateDepositInput = Omit<Deposit, 'id' | 'ref' | 'totalPaid' | 'balance' | 'status' | 'payments' | 'createdAt' | 'createdBy'> & {
   initialPayment?: number
   payMethod?: DepositPayment['method']
   payRef?: string
@@ -1688,7 +1680,7 @@ export interface Receipt {
 }
 
 // Stock Transfer between internal locations
-export interface StockTransfer {
+interface StockTransfer {
   id: string; ref: string
   fromLocation: LocationId; toLocation: LocationId
   status: 'draft' | 'done'
@@ -1773,7 +1765,7 @@ function productCreateLockKey(product: Partial<Product>) {
 
 export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup'
 
-export type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
+type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
 
 export interface RepairDiagnosis {
   id?: string
@@ -1788,10 +1780,10 @@ export interface RepairDiagnosis {
   diagnosedDate: string
 }
 
-export type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
+type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
 export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'confirmed' | 'rejected'
 
-export interface RepairQuoteLine {
+interface RepairQuoteLine {
   id: string
   type: 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service'
   description: string
@@ -2292,7 +2284,7 @@ export interface POSOrder {
   invoiceRef?: string
 }
 
-export interface POSSession {
+interface POSSession {
   id: string
   ref: string
   status: 'open' | 'closed'
@@ -2323,7 +2315,7 @@ export interface StockMove {
   documentRef: string  // PO ref, SO ref, etc.
 }
 
-export interface BulkStockLevel {
+interface BulkStockLevel {
   productId: string
   location: LocationId
   qty: number
@@ -2378,7 +2370,7 @@ export interface EmployeeTraining {
   id: string; employeeId: string; trainingId: string; status: TrainingStatus; enrolledDate: string; completedDate?: string; score?: number;
 }
 
-export interface Contract {
+interface Contract {
   id: string
   employeeId: string
   type: 'permanent' | 'fixed_term' | 'consultant'
@@ -2624,9 +2616,9 @@ export interface RefundPayment {
 }
 
 export type AdjReason = 'damage' | 'theft' | 'count_correction' | 'expiry' | 'other'
-export type AdjStatus = 'pending' | 'approved' | 'rejected'
+type AdjStatus = 'pending' | 'approved' | 'rejected'
 
-export interface StockAdjustment {
+interface StockAdjustment {
   id: string; ref: string
   productId: string; productName: string
   type: 'add' | 'subtract'
@@ -3103,7 +3095,7 @@ export interface OutsourceJob {
   createdAt: string
 }
 
-export interface OutsourcePayment {
+interface OutsourcePayment {
   id: string
   ref: string
   vendorId: string
@@ -3191,14 +3183,14 @@ export interface Expense {
 }
 
 // ── SOP Documents ───────────────────────────────────────────────────────────
-export interface SOPDocStep {
+interface SOPDocStep {
   id: string
   order: number
   instruction: string
   note?: string
 }
 
-export interface SOPDocument {
+interface SOPDocument {
   id: string
   title: string
   category: string
@@ -3263,7 +3255,7 @@ export interface SOP {
 }
 
 // Manually entered actual values for custom (non-auto) metrics
-export interface SOPActual {
+interface SOPActual {
   id: string
   sopId: string
   metricId: string
@@ -3309,13 +3301,8 @@ export interface RefSOP {
 }
 
 // Monthly inventory snapshot
-export interface InventorySnapshot {
-  id: string; month: string; year: number
-  lines: { productId: string; productName: string; opening: number; purchases: number; sales: number; usage: number; closing: number }[]
-  createdAt: string
-}
 
-export interface AppState {
+interface AppState {
   activeModule: ModuleId; sidebarOpen: boolean
   toast: { msg: string; type: 'success' | 'error' | 'info' } | null
   
@@ -3979,7 +3966,7 @@ export interface AppState {
   cancelExchange: (id: string) => void
 }
 
-export type InventoryStoreState = Pick<AppState,
+type InventoryStoreState = Pick<AppState,
   | 'products'
   | 'productPriceHistory'
   | 'serials'
@@ -4023,7 +4010,7 @@ export type InventoryStoreState = Pick<AppState,
   | 'approveAdjustment'
 >
 
-export type SalesStoreState = Pick<AppState,
+type SalesStoreState = Pick<AppState,
   | 'saleOrders'
   | 'repairs'
   | 'contacts'
@@ -4080,7 +4067,7 @@ export type SalesStoreState = Pick<AppState,
   | 'approveRequest'
 >
 
-export type RepairStoreState = Pick<AppState,
+type RepairStoreState = Pick<AppState,
   | 'repairs'
   | 'contacts'
   | 'products'
@@ -4142,7 +4129,7 @@ export type RepairStoreState = Pick<AppState,
   | 'addOutsourceJob'
 >
 
-export type ShellStoreState = Pick<AppState,
+type ShellStoreState = Pick<AppState,
   | 'activeModule'
   | 'sidebarOpen'
   | 'toast'
@@ -4165,7 +4152,7 @@ export type ShellStoreState = Pick<AppState,
   | 'updateUser'
 >
 
-export type CrmStoreState = Pick<AppState,
+type CrmStoreState = Pick<AppState,
   | 'contacts'
   | 'companies'
   | 'contactPersons'
@@ -4205,7 +4192,7 @@ export type CrmStoreState = Pick<AppState,
   | 'showToast'
 >
 
-export type FinanceStoreState = Pick<AppState,
+type FinanceStoreState = Pick<AppState,
   | 'accounts'
   | 'bankAccounts'
   | 'documentPaymentDetails'
@@ -4314,7 +4301,7 @@ export type FinanceStoreState = Pick<AppState,
   | 'linkSerialToCompanyAsset'
 >
 
-export type HrStoreState = Pick<AppState,
+type HrStoreState = Pick<AppState,
   | 'currentUser'
   | 'currentUserId'
   | 'users'
@@ -4328,7 +4315,7 @@ export type HrStoreState = Pick<AppState,
   | 'updateUser'
 >
 
-export type DeliveryStoreState = Pick<AppState,
+type DeliveryStoreState = Pick<AppState,
   | 'companySettings'
   | 'currentUserId'
   | 'deliveryJobs'
@@ -4351,7 +4338,7 @@ export type DeliveryStoreState = Pick<AppState,
   | 'updateRider'
 >
 
-export type CommerceStoreState = Pick<AppState,
+type CommerceStoreState = Pick<AppState,
   | 'companySettings'
   | 'systemSettings'
   | 'contacts'
@@ -4387,7 +4374,7 @@ export type CommerceStoreState = Pick<AppState,
   | 'updateProduct'
 >
 
-export type AfterSalesStoreState = Pick<AppState,
+type AfterSalesStoreState = Pick<AppState,
   | 'buyBacks'
   | 'clientExchanges'
   | 'contacts'
@@ -4425,7 +4412,7 @@ export type AfterSalesStoreState = Pick<AppState,
   | 'stockBuyBack'
 >
 
-export type OperationsStoreState = Pick<AppState,
+type OperationsStoreState = Pick<AppState,
   | 'contactPersons'
   | 'contacts'
   | 'currentUserId'
@@ -4509,7 +4496,7 @@ async function fetchNextDeliveryRef(): Promise<string | null> {
 // browser continues the same sequence — with a localStorage high-water mark
 // guarding rapid consecutive creates in the same session.
 let docRefSource: (() => Array<string | undefined>) | null = null
-export const registerDocRefSource = (fn: () => Array<string | undefined>) => { docRefSource = fn }
+const registerDocRefSource = (fn: () => Array<string | undefined>) => { docRefSource = fn }
 
 export const docSeq = (prefix: string) => {
   const year = new Date().getFullYear()
@@ -4535,9 +4522,9 @@ export const docSeq = (prefix: string) => {
 // Draft invoices carry a placeholder reference; the official INV/BILL number
 // is assigned from the per-year sequence only when the invoice is posted
 // (Odoo: posting assigns the official number).
-export const draftInvoiceRef = (type: InvoiceType) =>
+const draftInvoiceRef = (type: InvoiceType) =>
   `DRAFT/${type === 'vendor_bill' ? 'BILL' : 'INV'}/${uid().slice(0, 8).toUpperCase()}`
-export const isDraftInvoiceRef = (ref: string | undefined) => Boolean(ref?.startsWith('DRAFT/'))
+const isDraftInvoiceRef = (ref: string | undefined) => Boolean(ref?.startsWith('DRAFT/'))
 
 const calcSO = (lines: SaleOrderLine[]) => {
   const sub = lines.reduce((a, l) => a + l.subtotal, 0)
@@ -5578,7 +5565,7 @@ function applySaleOrderPersistResult(
 /** Prevents concurrent confirmSO races from creating duplicate waiting DNs. */
 const confirmingSaleOrderIds = new Set<string>()
 
-export function StoreProvider({
+function StoreProvider({
   children,
   initialUser = null,
   initialUsers = [],
@@ -22094,7 +22081,6 @@ function useFeatureStore(ctx: React.Context<AppState | null>, name: string) {
   return value
 }
 
-export function useDashboardStore() { return useFeatureStore(DashboardStoreCtx, 'useDashboardStore') }
 export function useCrmStore() {
   const ctx = useContext(CrmStoreCtx)
   if (!ctx) throw new Error('useCrmStore must be inside AppProvider')

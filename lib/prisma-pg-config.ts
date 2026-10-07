@@ -19,7 +19,7 @@ import type { PoolConfig } from 'pg'
  * Prisma-written rows must be corrected ONCE when this ships:
  * scripts/fix-prisma-timestamptz-offset.mjs (see docs/PRISMA_UTC_SESSION_FIX.md).
  */
-export const PRISMA_SESSION_TIMEZONE = 'UTC'
+const PRISMA_SESSION_TIMEZONE = 'UTC'
 
 export function prismaPgConfig(connectionString: string): PoolConfig {
   return {

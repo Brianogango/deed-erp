@@ -4,13 +4,13 @@
  * and resolves which posted invoice a credit note should hit when possible.
  */
 
-export interface ReturnStampLine {
+interface ReturnStampLine {
   productId: string
   qty: number
   serialIds?: string[]
 }
 
-export interface DeliveryStampLine {
+interface DeliveryStampLine {
   productId: string
   productName?: string
   qty: number
@@ -20,14 +20,14 @@ export interface DeliveryStampLine {
   sourceLocation?: string
 }
 
-export interface DeliveryStampInput {
+interface DeliveryStampInput {
   id: string
   saleOrderId: string
   status: string
   lines: DeliveryStampLine[]
 }
 
-export interface StampedDelivery {
+interface StampedDelivery {
   deliveryId: string
   lines: DeliveryStampLine[]
 }
@@ -97,13 +97,13 @@ export function stampDeliveryReturnQtys(args: {
   return [...touched.entries()].map(([deliveryId, lines]) => ({ deliveryId, lines }))
 }
 
-export interface PostedInvoiceCandidate {
+interface PostedInvoiceCandidate {
   id: string
   ref: string
   lines?: Array<{ productId?: string; qty?: number }> | null
 }
 
-export type PickPostedInvoiceResult =
+type PickPostedInvoiceResult =
   | { ok: true; invoice: PostedInvoiceCandidate; coverage: number }
   | { ok: false; reason: 'none' | 'ambiguous'; count: number; coverage?: number }
 
@@ -164,7 +164,7 @@ function scoreInvoiceCoverage(invoice: PostedInvoiceCandidate, returnLines: Retu
   return covered
 }
 
-export interface OrcStampCandidate {
+interface OrcStampCandidate {
   id: string
   ref?: string
   status: string
@@ -172,7 +172,7 @@ export interface OrcStampCandidate {
   deliveryNoteId?: string | null
 }
 
-export interface OrcPartialReturnTarget {
+interface OrcPartialReturnTarget {
   releaseId: string
   releaseRef?: string
 }

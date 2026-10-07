@@ -6,13 +6,13 @@
 import { roundMoney } from '@/lib/accounting/money'
 import { COA_ROLE_CODES } from '@/lib/accounting/coa-roles'
 
-export type VatAccountAggregate = {
+type VatAccountAggregate = {
   code: string
   debit: number
   credit: number
 }
 
-export type VatControlResult = {
+type VatControlResult = {
   currency: string
   dateFrom: string | null
   dateTo: string | null
@@ -30,7 +30,7 @@ export type VatControlResult = {
   taxablePurchases?: number
 }
 
-export type VatReturnDraft = {
+type VatReturnDraft = {
   periodLabel: string
   companyPin?: string | null
   vatNumber?: string | null

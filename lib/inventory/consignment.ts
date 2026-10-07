@@ -51,7 +51,7 @@ export type ConsignmentDevice = {
   accessories?: string[]
 }
 
-export type ConsignmentReceiptInput = {
+type ConsignmentReceiptInput = {
   vendorId?: string | null
   vendorName?: string | null
   assetId?: string | null
@@ -63,7 +63,7 @@ export type ConsignmentReceiptInput = {
   accessories?: unknown
 }
 
-export type ConsignmentResult<T> =
+type ConsignmentResult<T> =
   | { ok: true; value: T }
   | { ok: false; reason: string }
 
@@ -103,11 +103,11 @@ export function accessoriesLabel(device: Pick<ConsignmentDevice, 'accessories'>)
 }
 
 /** Serials are compared case-insensitively — vendors are inconsistent about case. */
-export function normalizeSerial(serial: unknown): string {
+function normalizeSerial(serial: unknown): string {
   return text(serial).toUpperCase()
 }
 
-export function isAtShop(device: Pick<ConsignmentDevice, 'status'>): boolean {
+function isAtShop(device: Pick<ConsignmentDevice, 'status'>): boolean {
   return device.status === 'at_shop'
 }
 
@@ -217,7 +217,7 @@ export function purchaseConsignment(
  * A missing charger on collection is a dispute with the vendor later, so it is
  * written into the record at the moment it is noticed.
  */
-export function missingOnReturn(device: Pick<ConsignmentDevice, 'accessories'>, returned: unknown): string[] {
+function missingOnReturn(device: Pick<ConsignmentDevice, 'accessories'>, returned: unknown): string[] {
   const back = new Set(normalizeAccessories(returned).map(a => a.toLowerCase()))
   return (device.accessories ?? []).filter(a => !back.has(a.toLowerCase()))
 }
@@ -253,7 +253,7 @@ export function returnConsignment(
   }
 }
 
-export type ConsignmentSummary = {
+type ConsignmentSummary = {
   vendorId: string
   vendorName: string | null
   atShop: number

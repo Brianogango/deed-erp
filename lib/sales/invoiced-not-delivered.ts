@@ -9,7 +9,7 @@ import { deliveredByProductFromDoneDeliveries } from '@/lib/odoo-sales-flow'
 
 type Row = Record<string, any>
 
-export type InvoicedNotDelivered = {
+type InvoicedNotDelivered = {
   saleOrderId: string
   ref: string
   customerName: string
@@ -21,7 +21,7 @@ export type InvoicedNotDelivered = {
 
 const CLOSED = new Set(['draft', 'cancelled', 'canceled', 'voided', 'void'])
 
-export function isSerialTracked(product: Row | undefined): boolean {
+function isSerialTracked(product: Row | undefined): boolean {
   return Boolean(product && (product.requiresSerial === true || String(product.trackingMethod ?? '').toUpperCase() === 'SERIAL'))
 }
 

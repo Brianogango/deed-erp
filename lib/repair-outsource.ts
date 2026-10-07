@@ -1,5 +1,5 @@
 /** Minimal repair shape needed to decide if outsourcing is allowed. */
-export type RepairOutsourceCandidate = {
+type RepairOutsourceCandidate = {
   assignedTechnicianId?: string | null
   repairPath?: 'diagnosis_first' | 'direct_repair' | string | null
   diagnosis?: {

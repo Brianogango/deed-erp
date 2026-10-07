@@ -37,7 +37,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
  * trail instead of being overwritten.
  */
 
-export type OrphanedInvoice = {
+type OrphanedInvoice = {
   id: string
   invoiceNumber: string
   invoiceDate: Date

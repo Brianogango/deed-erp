@@ -6,7 +6,7 @@
 
 import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
 
-export const FULFILLMENT_TRIM_ROLES = new Set([
+const FULFILLMENT_TRIM_ROLES = new Set([
   'director',
   'admin_officer',
   'inventory_officer',

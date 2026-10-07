@@ -15,21 +15,21 @@
  */
 
 /** Staff who may revise any repair's quote; technicians only their own job. */
-export const REPAIR_REVISION_STAFF_ROLES = ['director', 'technical_lead', 'admin_officer', 'finance_officer', 'sales_rep']
+const REPAIR_REVISION_STAFF_ROLES = ['director', 'technical_lead', 'admin_officer', 'finance_officer', 'sales_rep']
 
-export type RevisionRepair = {
+type RevisionRepair = {
   id: string
   ref?: string | null
   saleOrderId?: string | null
   assignedTechnicianId?: string | null
 }
 
-export type RevisionOrder = {
+type RevisionOrder = {
   id: string
   notes?: string | null
 }
 
-export function isRepairsSaleOrder(repair: RevisionRepair, order: RevisionOrder): boolean {
+function isRepairsSaleOrder(repair: RevisionRepair, order: RevisionOrder): boolean {
   if (repair.saleOrderId && repair.saleOrderId === order.id) return true
   const ref = String(repair.ref ?? '').trim()
   return Boolean(ref) && String(order.notes ?? '').includes(ref)

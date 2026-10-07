@@ -6,7 +6,7 @@ import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 
 const money = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100
 
-export type CreditNoteLineInput = {
+type CreditNoteLineInput = {
   invoiceItemId: string
   qty: number
   reason?: string

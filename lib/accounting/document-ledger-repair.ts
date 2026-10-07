@@ -16,7 +16,7 @@
  */
 
 export type PaymentEntry = { id: string; ref: string; paymentId: string | null; amount: number; createdAt: string }
-export type RecordedPayment = { id: string; amount: number }
+type RecordedPayment = { id: string; amount: number }
 
 export type ExtraPaymentPlan = {
   invoiceId: string
@@ -75,7 +75,7 @@ export function planExtraPaymentEntries(doc: {
  * booked. Linking the pair changes no balance — the reversal already posted —
  * it only records which entry it reversed, so the document can be booked.
  */
-export type LedgerEntryLite = { id: string; ref: string; total: number; invoiceId: string | null; isReversed: boolean; reversalOfId: string | null }
+type LedgerEntryLite = { id: string; ref: string; total: number; invoiceId: string | null; isReversed: boolean; reversalOfId: string | null }
 export type UnlinkedReversal = { reversalId: string; reversalRef: string; originalId: string; originalRef: string; amount: number }
 
 export function planUnlinkedReversals(entries: LedgerEntryLite[]): UnlinkedReversal[] {

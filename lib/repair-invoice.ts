@@ -191,7 +191,7 @@ export function executionChargeTotal(repair: RepairInvoiceSource): number {
   return executionCharges(repair, false, 0).reduce((sum, line) => sum + line.subtotal, 0)
 }
 
-export function quoteChargeTotal(
+function quoteChargeTotal(
   repair: RepairInvoiceSource,
   applyVat = true,
   vatRate = 0,
@@ -267,7 +267,7 @@ const OPEN_QUOTATION_STATUSES = new Set(['quotation', 'quotation_sent'])
  */
 const REWRITABLE_INVOICE_STATUSES = new Set(['draft'])
 
-export type RepairBillingSyncState = {
+type RepairBillingSyncState = {
   needed: boolean
   canRewriteInvoice: boolean
   /**

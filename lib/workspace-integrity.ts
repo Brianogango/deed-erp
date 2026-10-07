@@ -1,5 +1,5 @@
-export type TargetDirection = 'min' | 'max'
-export type TargetPeriod = 'monthly' | 'weekly' | 'quarterly'
+type TargetDirection = 'min' | 'max'
+type TargetPeriod = 'monthly' | 'weekly' | 'quarterly'
 
 const DAY_MS = 86_400_000
 const NAIROBI_TIME_ZONE = 'Africa/Nairobi'

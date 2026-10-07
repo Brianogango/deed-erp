@@ -60,9 +60,6 @@ export const COMPONENT_DISPOSITIONS = [
   'write_off',
   'supplier_return',
 ] as const
-
-export type ComponentDisposition = (typeof COMPONENT_DISPOSITIONS)[number]
-
 export const DATA_STATUSES = [
   'unknown',
   'none',
@@ -75,10 +72,7 @@ export const DATA_STATUSES = [
   'sanitisation_failed',
   'physical_destruction_required',
 ] as const
-
-export type DataStatus = (typeof DATA_STATUSES)[number]
-
-export const INSTALLATION_STATUSES = ['installed', 'removed', 'quarantined'] as const
+const INSTALLATION_STATUSES = ['installed', 'removed', 'quarantined'] as const
 export type InstallationStatus = (typeof INSTALLATION_STATUSES)[number]
 
 export const PRICE_METHODS = [

@@ -1,6 +1,6 @@
 // Kenya Payroll Tax Calculations (2024/2025)
 
-export interface PayrollBreakdown {
+interface PayrollBreakdown {
   grossSalary: number
   nssf: number           // Employee NSSF contribution
   taxablePay: number     // Gross - NSSF
@@ -11,7 +11,7 @@ export interface PayrollBreakdown {
 }
 
 // NSSF: Tier I (6% up to 7,000) + Tier II (6% of 7,001–36,000)
-export function calcNSSF(gross: number): number {
+function calcNSSF(gross: number): number {
   if (gross <= 0) return 0
   const tierI = Math.min(gross, 7000) * 0.06
   const tierII = gross > 7000 ? (Math.min(gross, 36000) - 7000) * 0.06 : 0
@@ -19,7 +19,7 @@ export function calcNSSF(gross: number): number {
 }
 
 // SHIF (Social Health Insurance Fund): 2.75% of gross, minimum 300
-export function calcSHIF(gross: number): number {
+function calcSHIF(gross: number): number {
   if (gross <= 0) return 0
   return Math.max(300, Math.round(gross * 0.0275))
 }
@@ -27,7 +27,7 @@ export function calcSHIF(gross: number): number {
 // PAYE — KRA monthly tax bands (2024/2025)
 // Bands: 0–24,000 @ 10%, 24,001–32,333 @ 25%, 32,334+ @ 30%, 500,001+ @ 35%
 // Personal Relief: KES 2,400/month
-export function calcPAYE(taxablePay: number): number {
+function calcPAYE(taxablePay: number): number {
   if (taxablePay <= 0) return 0
 
   let tax = 0

@@ -1,4 +1,4 @@
-export interface SerialMenuTriggerRect {
+interface SerialMenuTriggerRect {
   bottom: number
 }
 

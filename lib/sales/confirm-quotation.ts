@@ -59,7 +59,7 @@ function withLineMoney<T extends ConfirmableLine>(line: T, qty: number): T {
   }
 }
 
-export type ApplyConfirmLineSelectionResult<T extends ConfirmableLine> = {
+type ApplyConfirmLineSelectionResult<T extends ConfirmableLine> = {
   lines: T[]
   droppedIds: string[]
   releasedSerialIds: string[]

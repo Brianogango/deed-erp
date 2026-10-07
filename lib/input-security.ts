@@ -17,7 +17,7 @@ export class InputSecurityError extends Error {
   }
 }
 
-export type JsonSafetyLimits = {
+type JsonSafetyLimits = {
   maxDepth: number
   maxNodes: number
   maxArrayLength: number
@@ -26,7 +26,7 @@ export type JsonSafetyLimits = {
   maxStringLength: number
 }
 
-export const DEFAULT_JSON_SAFETY_LIMITS: JsonSafetyLimits = {
+const DEFAULT_JSON_SAFETY_LIMITS: JsonSafetyLimits = {
   maxDepth: 20,
   maxNodes: 100_000,
   maxArrayLength: 20_000,
@@ -117,7 +117,7 @@ function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength
 }
 
-export type SafeJsonReadOptions = {
+type SafeJsonReadOptions = {
   maxBytes?: number
   limits?: Partial<JsonSafetyLimits>
   requireJsonContentType?: boolean
@@ -158,7 +158,7 @@ export async function readSafeJson<T = unknown>(
   return parsed as T
 }
 
-export function assertSafeRequestUrl(request: Request): void {
+function assertSafeRequestUrl(request: Request): void {
   if (request.url.length > 16_384) fail('Request URL is too long', 414, 'url_too_long')
 
   const url = new URL(request.url)
@@ -286,20 +286,6 @@ export function assertSameOriginBrowserWrite(request: Request): void {
   }
 }
 
-export function inputSecurityResponse(error: unknown): Response | null {
-  if (!(error instanceof InputSecurityError)) return null
-  return new Response(
-    JSON.stringify({ error: error.message, code: error.code }),
-    {
-      status: error.status,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-      },
-    },
-  )
-}
-
 /**
  * Validate a legacy serialized app-state value. String values may themselves
  * contain JSON; when they do, inspect the decoded value too so nested payloads
@@ -333,10 +319,4 @@ export function assertSafeStoreValue(value: unknown, label = 'store value'): voi
     // Some legacy scalar string values are not JSON. They remain safe after
     // the outer string checks above, so keep backward compatibility.
   }
-}
-
-export function normalizePlainText(value: unknown, maxLength = 10_000): string {
-  const text = String(value ?? '').normalize('NFKC').trim()
-  assertSafeString(text, 'text value', maxLength)
-  return text
 }

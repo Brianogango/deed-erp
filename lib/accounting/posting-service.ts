@@ -23,11 +23,7 @@ import {
   expenseAccountForCategory,
 } from '@/lib/accounting/expense-pos-accounts'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
-import { invoiceResidual, roundMoney } from '@/lib/accounting/money'
-import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
-
-export { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
-export { labelForRole, codeForRole, COA_ROLE_CODES, COA_ROLE_LABELS } from '@/lib/accounting/coa-roles'
+import { roundMoney } from '@/lib/accounting/money'
 export type { CoaRole } from '@/lib/accounting/coa-roles'
 export { invoiceResidual, roundMoney } from '@/lib/accounting/money'
 
@@ -42,7 +38,7 @@ export type PostingLineInput = {
   analyticAccountId?: string | null
 }
 
-export type CommitPostingInput = {
+type CommitPostingInput = {
   ref: string
   source: string
   description: string
@@ -564,35 +560,6 @@ export async function commitPosting(input: CommitPostingInput) {
   return persistStoreJournalEntry(persisted, opts)
 }
 
-export async function postCustomerInvoice(params: {
-  invoiceId: string
-  ref: string
-  partnerName: string
-  total: number
-  subtotal: number
-  tax: number
-  createdById?: string
-  revenueAccountLabel?: string
-}) {
-  const lines = buildCustomerInvoiceLines({
-    partnerName: params.partnerName,
-    ref: params.ref,
-    total: params.total,
-    subtotal: params.subtotal,
-    tax: params.tax,
-    revenueAccountLabel: params.revenueAccountLabel,
-  })
-  return commitPosting({
-    ref: `JRN/${params.ref}`,
-    source: 'invoice',
-    description: `Invoice ${params.ref} — ${params.partnerName}`,
-    invoiceId: params.invoiceId,
-    lines,
-    createdById: params.createdById,
-    journalCode: 'SAL',
-  })
-}
-
 /** Vendor bill / credit — lines already built by vendor-bill-perpetual. */
 export async function postVendorBill(params: {
   invoiceId: string
@@ -678,106 +645,6 @@ export async function postBankStatementAdjustment(params: {
     lines,
     createdById: params.createdById,
     journalCode: 'BNK',
-  })
-}
-
-export async function postInvoicePayment(params: {
-  invoiceId: string
-  paymentId: string
-  ref: string
-  partnerName: string
-  amount: number
-  method?: string
-  isVendor?: boolean
-  createdById?: string
-}) {
-  const method = String(params.method || '').toLowerCase()
-  const lines = buildInvoicePaymentLines({
-    partnerName: params.partnerName,
-    ref: params.ref,
-    amount: params.amount,
-    method: params.method,
-    isVendor: params.isVendor,
-  })
-  const journalCode = params.isVendor
-    ? 'PUR'
-    : (method === 'cash' ? 'CSH' : 'BNK')
-  return commitPosting({
-    ref: `JRN/PAY/${params.ref}/${params.paymentId}`.slice(0, 80),
-    source: params.isVendor ? 'purchase_payment' : 'payment',
-    description: !params.isVendor && isCustomerCreditMethod(method)
-      ? `Customer credit applied to ${params.ref} — ${params.partnerName}`
-      : !params.isVendor && isDepositApplyMethod(method)
-        ? `Deposit applied to ${params.ref} — ${params.partnerName}`
-        : `Payment for ${params.ref} — ${params.partnerName}`,
-    invoiceId: params.invoiceId,
-    paymentId: params.paymentId,
-    lines,
-    createdById: params.createdById,
-    journalCode,
-  })
-}
-
-/** Single journal for a receipt/payment that may leave an outstanding remainder. */
-export async function postPaymentWithOutstanding(params: {
-  paymentId: string
-  paymentRef: string
-  partnerName: string
-  method?: string
-  isVendor?: boolean
-  allocations: Array<{ invoiceId?: string; invoiceRef: string; amount: number }>
-  unallocatedAmount: number
-  createdById?: string
-}) {
-  const method = String(params.method || '').toLowerCase()
-  const lines = buildPaymentWithOutstandingLines({
-    partnerName: params.partnerName,
-    paymentRef: params.paymentRef,
-    method: params.method,
-    isVendor: params.isVendor,
-    allocations: params.allocations,
-    unallocatedAmount: params.unallocatedAmount,
-  })
-  if (lines.length === 0) return null
-  const primaryInvoiceId = params.allocations[0]?.invoiceId ?? null
-  return commitPosting({
-    ref: `JRN/PAY/${params.paymentRef}/${params.paymentId}`.slice(0, 80),
-    source: params.isVendor ? 'purchase_payment' : 'payment',
-    description: `Payment ${params.paymentRef} — ${params.partnerName}`,
-    invoiceId: primaryInvoiceId || undefined,
-    paymentId: params.paymentId,
-    lines,
-    createdById: params.createdById,
-    journalCode: params.isVendor ? 'PUR' : (method === 'cash' ? 'CSH' : 'BNK'),
-  })
-}
-
-/** Clear outstanding receipts/payments onto invoices after a later allocation. */
-export async function postAllocateOutstanding(params: {
-  paymentId: string
-  paymentRef: string
-  partnerName: string
-  isVendor?: boolean
-  allocations: Array<{ invoiceId: string; invoiceRef: string; amount: number }>
-  createdById?: string
-}) {
-  const lines = buildAllocateOutstandingLines({
-    partnerName: params.partnerName,
-    paymentRef: params.paymentRef,
-    isVendor: params.isVendor,
-    allocations: params.allocations,
-  })
-  if (lines.length === 0) return null
-  const stamp = Date.now().toString(36)
-  return commitPosting({
-    ref: `JRN/PAYALC/${params.paymentRef}/${stamp}`.slice(0, 80),
-    source: params.isVendor ? 'purchase_payment' : 'payment',
-    description: `Allocate outstanding ${params.paymentRef} — ${params.partnerName}`,
-    invoiceId: params.allocations[0]?.invoiceId,
-    paymentId: params.paymentId,
-    lines,
-    createdById: params.createdById,
-    journalCode: params.isVendor ? 'PUR' : 'BNK',
   })
 }
 

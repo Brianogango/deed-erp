@@ -1,7 +1,7 @@
 import { optionalUuid } from '@/lib/legacy-compat'
 import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
 
-export type SaleOrderItemRow = {
+type SaleOrderItemRow = {
   id?: string
   productId?: string | null
   description: string

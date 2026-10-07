@@ -3,7 +3,6 @@ import { displayDocRef, invoiceDocState } from '@/lib/odoo-sales-flow'
 import {
   buildCommercialPdf,
   downloadCommercialPdf,
-  openCommercialPdf,
   type CommercialPdfInput,
 } from '@/lib/commercial-pdf'
 import {
@@ -13,7 +12,7 @@ import {
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
 
 /** Map an invoice onto the shared Odoo-style PDF input. */
-export function invoicePdfInput(
+function invoicePdfInput(
   inv: Invoice,
   saleOrders: SaleOrder[],
   contacts: Contact[] = [],
@@ -113,20 +112,3 @@ export async function invoicePdfBase64(
     pdfFilename: `${input.title} - ${input.ref}.pdf`.replace(/[/\\]/g, '-'),
   }
 }
-
-export async function openInvoicePdf(
-  inv: Invoice,
-  saleOrders: SaleOrder[],
-  contacts: Contact[],
-  companySettings: CompanySettings,
-  bankAccounts: BankAccount[],
-  paymentDetails?: Partial<DocumentPaymentDetails> | null,
-): Promise<boolean> {
-  return openCommercialPdf(
-    invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts),
-    companySettings,
-    bankAccounts,
-  )
-}
-
-export { buildCommercialPdf }

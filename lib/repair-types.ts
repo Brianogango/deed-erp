@@ -26,7 +26,7 @@ export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email
 
 export type DeliveryMethod = 'pickup' | 'delivery' | 'courier'
 
-export type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
+type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
 export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'confirmed' | 'rejected'
 
 export interface RepairAccessory {
@@ -35,7 +35,7 @@ export interface RepairAccessory {
   notes?: string
 }
 
-export type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
+type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
 
 export interface RepairDiagnosis {
   id?: string
@@ -50,7 +50,7 @@ export interface RepairDiagnosis {
   diagnosedDate: string
 }
 
-export interface RepairQuoteLine {
+interface RepairQuoteLine {
   id: string
   type: 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service'
   description: string
@@ -266,40 +266,4 @@ export interface RepairOrder {
   diagnosisReportData?: string
   diagnosisReportName?: string
   diagnosisReportUrl?: string
-}
-
-export interface RepairPermissions {
-  canCreate: boolean
-  canViewAll: boolean
-  canViewAssigned: boolean
-  canAssign: boolean
-  canDiagnose: boolean
-  canApproveQuote: boolean
-  canExecuteRepair: boolean
-  canPerformQC: boolean
-  canInvoice: boolean
-  canClose: boolean
-}
-
-export interface ProcurementRequest {
-  id: string
-  repairId: string
-  repairRef: string
-  requestedBy: string
-  requestedDate: string
-  items: {
-    productName: string
-    description: string
-    qty: number
-    estimatedCost: number
-    supplier?: string
-    partNumber?: string
-  }[]
-  urgency: 'low' | 'normal' | 'high' | 'urgent'
-  status: 'pending' | 'ordered' | 'received' | 'cancelled'
-  notes: string
-  orderedDate?: string
-  expectedDelivery?: string
-  receivedDate?: string
-  orderReference?: string
 }

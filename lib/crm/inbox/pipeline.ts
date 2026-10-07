@@ -28,7 +28,7 @@ import {
   resolveThreadId,
 } from '@/lib/crm/inbox/normalize'
 
-export type PipelineDecision =
+type PipelineDecision =
   | 'ALREADY_PROCESSED'
   | 'HARD_FILTERED'
   | 'LINK_EXISTING_LEAD'
@@ -47,7 +47,7 @@ export interface ExistingLeadRef {
   clientId?: string | null
 }
 
-export interface PipelineInput {
+interface PipelineInput {
   mail: ParsedInboundEmail
   /** True when provider message id already stored. */
   alreadyProcessed?: boolean
@@ -61,7 +61,7 @@ export interface PipelineInput {
   config?: SalesInboxPipelineConfig
 }
 
-export interface PipelineResult {
+interface PipelineResult {
   decision: PipelineDecision
   processingStatus:
     | 'FILTERED'
@@ -381,7 +381,7 @@ export function isValidClassification(c: IntentClassification): boolean {
   return true
 }
 
-export function buildLeadTitle(opts: {
+function buildLeadTitle(opts: {
   companyName?: string | null
   name?: string | null
   classification: IntentClassification

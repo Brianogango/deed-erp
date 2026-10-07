@@ -53,10 +53,6 @@ function bumpGeneration(orderId: string): number {
   return next
 }
 
-export function getSaleOrderPersistGeneration(orderId: string): number {
-  return generation.get(orderId) ?? 0
-}
-
 export function isSaleOrderHardSaving(orderId: string) {
   return hardSaving.has(orderId)
 }
@@ -135,10 +131,6 @@ export function scheduleDraftSaleOrderLinePersist(orderId: string) {
     timers.delete(orderId)
     enqueueSoftPersist(orderId, () => flushDraftSaleOrderLinePersist(orderId, startedGen))
   }, 450))
-}
-
-export function isDraftSaleOrderPersistInFlight(orderId: string) {
-  return inflight.has(orderId) || timers.has(orderId)
 }
 
 /** Test helper */

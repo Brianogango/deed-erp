@@ -9,7 +9,7 @@ function round2(n: number) {
   return Math.round(Number(n || 0) * 100) / 100
 }
 
-export type PostFxGainLossInput = {
+type PostFxGainLossInput = {
   amountBase: number
   amountForeign: number
   rate: number

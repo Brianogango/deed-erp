@@ -1,6 +1,6 @@
 import sharp, { type Metadata } from 'sharp'
 
-export type ServerImageGuardOptions = {
+type ServerImageGuardOptions = {
   allowedTypes?: string[]
   maxBytes?: number
   maxPixels?: number
@@ -9,7 +9,7 @@ export type ServerImageGuardOptions = {
   label?: string
 }
 
-export type GuardedImageBuffer = {
+type GuardedImageBuffer = {
   buffer: Buffer
   mimeType: string
   width?: number
@@ -17,7 +17,7 @@ export type GuardedImageBuffer = {
   bytes: number
 }
 
-export class ServerImageGuardError extends Error {
+class ServerImageGuardError extends Error {
   status: number
 
   constructor(message: string, status = 400) {

@@ -12,7 +12,7 @@ type Options = {
   clearKeys?: string[]
 }
 
-export type SetUrlRecordIdOptions = {
+type SetUrlRecordIdOptions = {
   /**
    * Merge into the URL in the same navigation as the id change.
    * `null` deletes the key. Use this so a clear cannot clobber a concurrent
@@ -130,7 +130,7 @@ export function useUrlRecordId(options: Options = {}) {
 /**
  * Sync a free-form query string value (e.g. tab) both ways with the URL.
  */
-export type SetUrlQueryStateOptions = {
+type SetUrlQueryStateOptions = {
   history?: 'push' | 'replace'
   queryPatch?: Record<string, string | null>
 }

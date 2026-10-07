@@ -6,7 +6,7 @@ import type { Invoice, Account, JournalEntry } from '@/lib/store'
 
 type MainTab = 'invoices' | 'bills' | 'journals' | 'refunds' | 'coa' | 'gl' | 'partner_ledger' | 'pl' | 'bs' | 'cashbook'
 
-export interface AccountingCtxValue {
+interface AccountingCtxValue {
   // Store
   invoices: ReturnType<typeof useFinanceStore>['invoices']
   contacts: ReturnType<typeof useFinanceStore>['contacts']

@@ -3,14 +3,10 @@ import { parseSpecsString } from '@/lib/reconfiguration/display-name'
 import { catalogBaseName } from '@/lib/reconfiguration/unit-selling-name'
 import { printThermalLabelBatch, type ThermalLabelSpec } from '@/lib/inventory/thermal-label-template'
 import {
-  categoryConditionLine,
   resolveProductSpecs,
   truncateLabelText,
   type SerialLabelItem,
 } from '@/lib/product-label-meta'
-
-export type { SerialLabelItem, ProductLabelCondition } from '@/lib/product-label-meta'
-export { formatConditionLabel, categoryConditionLine } from '@/lib/product-label-meta'
 
 function clean(value: unknown): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim()
@@ -136,7 +132,7 @@ export function printProductLabels(product: Product, qty: number): void {
   printThermalLabelBatch(Array.from({ length: count }, () => label), `Product Label — ${product.name}`)
 }
 
-export type AssetTagItem = {
+type AssetTagItem = {
   ref: string
   name: string
   assetTag?: string

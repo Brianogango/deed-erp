@@ -1,4 +1,4 @@
-export interface RepairWarrantyRecord {
+interface RepairWarrantyRecord {
   id: string
   ref: string
   serialNumber: string
@@ -7,7 +7,7 @@ export interface RepairWarrantyRecord {
   status?: 'active' | 'expiring' | 'expired' | string
 }
 
-export interface RepairWarrantyDecision {
+interface RepairWarrantyDecision {
   normalizedSerial: string
   warranty?: RepairWarrantyRecord
   covered: boolean
@@ -15,7 +15,7 @@ export interface RepairWarrantyDecision {
   reason: 'serial_missing' | 'serial_too_short' | 'not_found' | 'not_started' | 'expired' | 'inactive' | 'covered' | 'manual_review' | 'client_damage'
 }
 
-export const CLOSED_REPAIR_STATUSES = new Set([
+const CLOSED_REPAIR_STATUSES = new Set([
   'delivered', 'closed', 'cancelled', 'returned', 'collected',
   'unrepairable', 'retained',
 ])

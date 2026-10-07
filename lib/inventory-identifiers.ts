@@ -111,7 +111,7 @@ function normalizeTagSeed(value: string | null | undefined, fallback: string) {
  * True when the stored tag should be rewritten to the manufacturer serial
  * (missing, INV-* legacy, or any value other than the serial).
  */
-export function needsInventoryTagRewrite(row: {
+function needsInventoryTagRewrite(row: {
   serial?: string | null
   barcode?: string | null
 }): boolean {

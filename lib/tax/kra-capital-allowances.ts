@@ -9,9 +9,9 @@
 
 import { moneyKes } from '@/lib/company-property-ppe'
 
-export type KraWearTearClass = 'II' | 'IV'
+type KraWearTearClass = 'II' | 'IV'
 
-export const KRA_CLASS_RATES: Record<KraWearTearClass, number> = {
+const KRA_CLASS_RATES: Record<KraWearTearClass, number> = {
   II: 0.30,
   IV: 0.125,
 }
@@ -22,7 +22,7 @@ export function kraClassForPpe(ppeAccountCode?: string | null): KraWearTearClass
   return 'IV'
 }
 
-export function kraAnnualRate(ppeAccountCode?: string | null): number {
+function kraAnnualRate(ppeAccountCode?: string | null): number {
   return KRA_CLASS_RATES[kraClassForPpe(ppeAccountCode)]
 }
 

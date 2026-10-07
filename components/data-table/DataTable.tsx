@@ -56,7 +56,7 @@ function operationalPageSize(requested: number) {
   return safe
 }
 
-export interface DataTableProps<T> {
+interface DataTableProps<T> {
   tableId: string
   columns: ColumnDef<T>[]
   rows: T[]

@@ -26,7 +26,7 @@ const BANK_SEEDS: Array<{ name: string; accountNumber: string; glCode: string }>
  * accounting recommendations that are missing on a live database. Never
  * overwrites existing account balances or names.
  */
-export async function ensureMissingControlAccounts() {
+async function ensureMissingControlAccounts() {
   const template = buildZeroBalanceCoaTemplate()
   const existing = await prisma.accountCode.findMany({ select: { code: true } })
   const have = new Set(existing.map(r => r.code))

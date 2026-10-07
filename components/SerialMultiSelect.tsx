@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 import { getSerialMenuPlacement } from '@/lib/inventory/serial-menu-placement'
 
-export interface SerialOption {
+interface SerialOption {
   id: string
   /** Serial / IMEI number. */
   label: string

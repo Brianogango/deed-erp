@@ -6,14 +6,11 @@
 
 import {
   buildSerialDeviceLabelView,
-  type SerialDeviceLabelInput,
-  type SerialDeviceLabelView,
+  type SerialDeviceLabelInput
 } from '@/lib/inventory/serial-device-label-data'
 import { printThermalLabelBatch } from '@/lib/inventory/thermal-label-template'
 
-export type { SerialDeviceLabelInput, SerialDeviceLabelView } from '@/lib/inventory/serial-device-label-data'
-export { buildSerialDeviceLabelView, buildSerialDeviceQrUrl } from '@/lib/inventory/serial-device-label-data'
-
+export type { SerialDeviceLabelInput } from '@/lib/inventory/serial-device-label-data'
 export type PrintSerialDeviceLabelSource = Omit<SerialDeviceLabelInput, 'qrUrl' | 'website' | 'phone'> & {
   /** Retained for API compatibility; QR is intentionally not printed on the 80×40 label. */
   qrUrl?: string

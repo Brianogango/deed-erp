@@ -6,7 +6,7 @@
  * Treat either signal as "already posted".
  */
 
-export type OpeningStockMoveLike = {
+type OpeningStockMoveLike = {
   type?: string | null
   documentRef?: string | null
   reason?: string | null

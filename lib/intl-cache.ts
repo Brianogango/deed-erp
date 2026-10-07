@@ -11,7 +11,7 @@
 const dateFormats = new Map<string, Intl.DateTimeFormat>()
 const numberFormats = new Map<string, Intl.NumberFormat>()
 
-export function dateFormatter(locale: string | undefined, options: Intl.DateTimeFormatOptions = {}): Intl.DateTimeFormat {
+function dateFormatter(locale: string | undefined, options: Intl.DateTimeFormatOptions = {}): Intl.DateTimeFormat {
   const key = `${locale ?? ''}|${JSON.stringify(options)}`
   let f = dateFormats.get(key)
   if (!f) {
@@ -21,7 +21,7 @@ export function dateFormatter(locale: string | undefined, options: Intl.DateTime
   return f
 }
 
-export function numberFormatter(locale: string | undefined, options: Intl.NumberFormatOptions = {}): Intl.NumberFormat {
+function numberFormatter(locale: string | undefined, options: Intl.NumberFormatOptions = {}): Intl.NumberFormat {
   const key = `${locale ?? ''}|${JSON.stringify(options)}`
   let f = numberFormats.get(key)
   if (!f) {
@@ -31,8 +31,8 @@ export function numberFormatter(locale: string | undefined, options: Intl.Number
   return f
 }
 
-export const KE_DATE = { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' } as const
-export const KE_DATE_TIME = { ...KE_DATE, hour: '2-digit', minute: '2-digit', hour12: false } as const
+const KE_DATE = { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' } as const
+const KE_DATE_TIME = { ...KE_DATE, hour: '2-digit', minute: '2-digit', hour12: false } as const
 
 /** "05 Oct 2026" in Nairobi time; the input back unchanged when it is not a date. */
 export function formatKeDate(value: string | number | Date): string {

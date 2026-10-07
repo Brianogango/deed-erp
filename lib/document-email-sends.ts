@@ -1,16 +1,5 @@
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
-
-/**
- * Compatibility facade for document-send history.
- *
- * The old implementation stored a bounded array in app_state under
- * deed_documentEmailSends. History is now durable and relational:
- * notification_events = document-send audit record
- * notification_deliveries = per-channel provider attempt/result
- */
-export const DOCUMENT_EMAIL_SENDS_KEY = 'deed_documentEmailSends'
-
 export type DocumentEmailDocumentType = 'quote' | 'invoice' | 'bill' | 'rfq' | 'payment_receipt'
 
 export type DocumentEmailSendStatus = 'success' | 'failed'

@@ -76,11 +76,11 @@ function startOfLocalDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-export function invoiceOpenBalance(inv: AgeingInvoiceLike): number {
+function invoiceOpenBalance(inv: AgeingInvoiceLike): number {
   return Math.max(0, Number(inv.total || 0) - Number(inv.amountPaid || 0))
 }
 
-export function isOpenForAgeing(inv: AgeingInvoiceLike): boolean {
+function isOpenForAgeing(inv: AgeingInvoiceLike): boolean {
   if (String(inv.status || '').toLowerCase() === 'cancelled') return false
   if (String(inv.status || '').toLowerCase() === 'draft') return false
   return invoiceOpenBalance(inv) > 0.0001

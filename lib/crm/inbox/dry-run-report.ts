@@ -7,7 +7,7 @@ import { processSalesInboxLeads, type SalesInboxProcessResult } from '@/lib/crm/
 import { resolveSalesInboxPipelineConfig } from '@/lib/crm/inbox/config'
 import { salesInboxAiClassifierEnabled } from '@/lib/crm/inbox/classify-ai'
 
-export interface SalesInboxDryRunReport {
+interface SalesInboxDryRunReport {
   generatedAt: string
   mode: string
   aiClassifier: boolean

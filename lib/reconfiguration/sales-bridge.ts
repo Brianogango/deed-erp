@@ -31,7 +31,7 @@ import { isMutableDraftStatus } from '@/lib/reconfiguration/state-machine'
 
 const TERMINAL = new Set(['completed', 'cancelled', 'reversed'])
 
-export type SaleOrderReconfigLink = {
+type SaleOrderReconfigLink = {
   saleOrderId: string
   hostSerialId: string
   hostProductId: string | null
@@ -495,24 +495,4 @@ async function syncBlobCommercialDocumentsAfterReconfig(params: {
   if (dnChanged) patch.deed_deliveries = JSON.stringify(deliveries)
 
   if (Object.keys(patch).length) await saveStoreKeys(patch)
-}
-
-/** Repair sale/invoice/delivery descriptions for every completed work order. */
-export async function repairAllCompletedReconfigDocuments() {
-  const rows = await prisma.reconfigurationWorkOrder.findMany({
-    where: { status: 'completed' },
-    select: { id: true, ref: true },
-    orderBy: { dateCompleted: 'asc' },
-  })
-  const results = []
-  for (const row of rows) {
-    const refreshed = await refreshSaleOrderHostLineAfterReconfig(row.id)
-    results.push({ ref: row.ref, description: refreshed?.description || null })
-  }
-  return results
-}
-
-/** Sales no longer blocks delivery on reconfiguration. */
-export function throwIfDeliveryBlocked(_result: Awaited<ReturnType<typeof assertSaleOrderReconfigAllowsDelivery>>) {
-  return
 }

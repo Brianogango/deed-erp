@@ -16,7 +16,7 @@ import {
   type DeviceConfigDefault,
 } from '@/lib/reconfiguration/unit-config'
 
-export type BackfillDeviceConfigResult = {
+type BackfillDeviceConfigResult = {
   productsUpdated: number
   serialsUpdated: number
   productsSkippedBare: number

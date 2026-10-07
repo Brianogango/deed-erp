@@ -7,7 +7,7 @@ import { initiateStkPush, queryStkPush } from './daraja'
 import { normalizeMpesaPhone } from './phone'
 import { isUuid } from '@/lib/legacy-compat'
 
-export type StkRecord = {
+type StkRecord = {
   checkoutRequestId: string
   merchantRequestId: string
   phone: string

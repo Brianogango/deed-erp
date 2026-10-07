@@ -35,7 +35,7 @@ export function receiptLogoSrc(logoUrl?: string | null): string {
   return url
 }
 
-export type InvoiceCustomerHint = {
+type InvoiceCustomerHint = {
   id?: string
   ref?: string
   partnerName?: string

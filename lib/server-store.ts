@@ -32,7 +32,7 @@ const ensureTable = async () => {
   if (process.env.NODE_ENV !== 'test') _tableReady = true
 }
 
-export type AppStateMap = Record<string, unknown>
+type AppStateMap = Record<string, unknown>
 
 function rowsToAppState(rows: { key: string; value: string }[]): AppStateMap {
   const result: AppStateMap = {}
@@ -134,19 +134,6 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   const state = await loadStateWithLegacyFallback(wantedKeys)
   await overlayExternalBlobs(state, wantedKeys)
   await overlayAuthoritativeRepairs(state, wantedKeys)
-  return state
-}
-
-export async function loadInitialAppState(): Promise<AppStateMap> {
-  const state = await loadAppState()
-  for (const key of Object.keys(state)) {
-    if (
-      key.startsWith('expense_receipt_')
-      || key.startsWith('repair_photos_')
-      || key.startsWith('repair_payment_proof_')
-      || key.startsWith('product_photos_')
-    ) delete state[key]
-  }
   return state
 }
 
@@ -265,15 +252,6 @@ export async function loadChangedStoreKeysSince(
   }
 }
 
-export async function loadAppStateChangesSince(sinceUpdatedAt: string): Promise<{
-  changes: AppStateMap
-  latestUpdatedAt: string
-}> {
-  const { keys, latestUpdatedAt } = await loadChangedStoreKeysSince(sinceUpdatedAt)
-  if (!keys.length) return { changes: {}, latestUpdatedAt: sinceUpdatedAt }
-  return { changes: await loadAppState(keys), latestUpdatedAt }
-}
-
 /**
  * Serializes concurrent read-modify-write cycles against a single app_state
  * collection key (e.g. 'deed_deliveries'). Every write path for that key does
@@ -303,7 +281,7 @@ export async function withAppStateKeyLock<T>(key: string, fn: () => Promise<T>):
   }
 }
 
-export type SaveStoreKeysOptions = {
+type SaveStoreKeysOptions = {
   /**
    * Keys (or `true` for every key) whose save may intentionally remove more
    * than BULK_DELETE_MAX_REMOVALS records. Without it such a save is refused.

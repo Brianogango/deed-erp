@@ -115,16 +115,6 @@ export async function trustCurrentBrowser(
   })
 }
 
-export function clearTrustedBrowserCookie(response: NextResponse, request: NextRequest) {
-  response.cookies.set(TRUSTED_BROWSER_COOKIE, '', {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: shouldUseSecureCookie(request),
-    path: '/',
-    maxAge: 0,
-  })
-}
-
 export async function revokeAllTrustedBrowsers(userId: string): Promise<void> {
   const now = new Date().toISOString()
   try {

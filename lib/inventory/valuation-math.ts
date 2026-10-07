@@ -1,6 +1,6 @@
 /** Pure weighted-average helpers — unit-testable, no DB. */
 
-export function round4(n: number) {
+function round4(n: number) {
   return Math.round(Number(n || 0) * 10000) / 10000
 }
 
@@ -77,14 +77,14 @@ export function stockValuationJournalRef(kind: StockValuationKind, reference: st
   return `JRN/STK/${KIND_TOKEN[kind]}/${ref}/${pid}`.slice(0, 80)
 }
 
-export type FifoBatchLayer = {
+type FifoBatchLayer = {
   id: string
   quantityAvailable: number
   unitCost: number
   receivedAt?: string | Date | null
 }
 
-export type FifoConsumptionLine = {
+type FifoConsumptionLine = {
   batchId: string
   qty: number
   unitCost: number
@@ -143,7 +143,7 @@ export function consumeBatchesFIFO(
   return { consumed, remainingBatches, totalCost, shortfall: remaining }
 }
 
-export type FifoRestoreLayer = FifoBatchLayer & { quantityReceived: number }
+type FifoRestoreLayer = FifoBatchLayer & { quantityReceived: number }
 
 /** Put consumed FIFO qty back onto the newest layers that still have room. */
 export function restoreBatchesFIFO(

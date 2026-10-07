@@ -9,7 +9,7 @@ export type PortalRepairStatus =
   | 'ready' | 'verified_released' | 'invoiced' | 'delivered' | 'collected' | 'closed'
   | 'declined' | 'unrepairable' | 'returned' | 'retained' | 'cancelled'
 
-export type PortalQuoteLineDecision = 'approved' | 'declined' | 'deferred'
+type PortalQuoteLineDecision = 'approved' | 'declined' | 'deferred'
 export type PortalPaymentStatus = 'unpaid' | 'pending_review' | 'auto_paid' | 'paid' | 'rejected'
 
 export interface PortalQuoteLine {
@@ -22,7 +22,7 @@ export interface PortalQuoteLine {
   lineDecision?: PortalQuoteLineDecision
 }
 
-export type PortalDiagnosisRevisionType = 'initial' | 'update' | 'correction'
+type PortalDiagnosisRevisionType = 'initial' | 'update' | 'correction'
 
 export interface PortalDiagnosis {
   id?: string
@@ -154,7 +154,7 @@ export function registerPortalRepair(repair: PortalRepair) {
   }
 }
 
-export const PORTAL_REPAIRS: PortalRepair[] = [
+const PORTAL_REPAIRS: PortalRepair[] = [
   // ── REP/0038 — Canon printer, currently in_repair ────────────────────────
   {
     ref: 'REP/0038',

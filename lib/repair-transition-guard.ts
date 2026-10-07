@@ -21,7 +21,7 @@ import { REPAIR_TRANSITIONS, evaluateRepairTransition } from '@/lib/repair-trans
  * traffic is visible before the guard is tightened. Widen GUARDED_TARGETS once
  * the logs are quiet.
  */
-export const GUARDED_TARGETS: ReadonlySet<string> = new Set([
+const GUARDED_TARGETS: ReadonlySet<string> = new Set([
   'ready',
   'verified_released',
   'delivered',

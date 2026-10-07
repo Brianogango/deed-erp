@@ -9,7 +9,7 @@
 // between what the UI shows while drafting a quotation and what the server
 // actually persists).
 
-export interface RawSaleOrderLine {
+interface RawSaleOrderLine {
   lineType?: string
   qty?: number | string
   unitPrice?: number | string
@@ -25,7 +25,7 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? n : 0
 }
 
-export interface ComputedSaleOrderLineMoney {
+interface ComputedSaleOrderLineMoney {
   qty: number
   unitPrice: number
   taxRate: number
@@ -49,7 +49,7 @@ export function calcSaleOrderLineMoney(line: RawSaleOrderLine): ComputedSaleOrde
   return { qty, unitPrice, taxRate, discountPct, lineTotal, lineTax }
 }
 
-export interface ComputedSaleOrderTotals {
+interface ComputedSaleOrderTotals {
   subtotal: number
   taxAmount: number
   discountAmount: number
@@ -76,7 +76,7 @@ export function calcSaleOrderTotals(
 }
 
 /** Prisma SaleOrderItem shape (lineTotal is already net of any line discount). */
-export interface PersistedSaleOrderLine {
+interface PersistedSaleOrderLine {
   lineTotal?: number | string
   taxRate?: number | string
 }

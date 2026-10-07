@@ -62,7 +62,7 @@ export function mergeInvoiceMirror<T extends { id?: unknown }>(
  * payments are not in that list), capped at its total. Heals a figure lowered
  * by a stale save while the payments themselves survived.
  */
-export function atLeastListedPayments<T>(row: T): T {
+function atLeastListedPayments<T>(row: T): T {
   const r = row as { total?: unknown; amountPaid?: unknown; payments?: unknown }
   if (!Array.isArray(r.payments) || !r.payments.length) return row
   const total = Number(r.total)

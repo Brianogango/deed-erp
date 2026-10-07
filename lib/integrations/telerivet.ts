@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 
-export type TelerivetSendResult = {
+type TelerivetSendResult = {
   success: boolean
   messageId?: string
   error?: string
@@ -9,7 +9,7 @@ export type TelerivetSendResult = {
   status?: string
 }
 
-export type TelerivetWebhookPayload = {
+type TelerivetWebhookPayload = {
   secret?: string
   event?: string
   id?: string

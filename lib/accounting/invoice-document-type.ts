@@ -15,7 +15,7 @@
  * draft) — and a document
  * raised against a purchase order is a bill, so either of those also counts.
  */
-export type InvoiceDocumentType = 'customer_invoice' | 'vendor_bill'
+type InvoiceDocumentType = 'customer_invoice' | 'vendor_bill'
 
 export function invoiceDocumentType(row: {
   documentType?: string | null

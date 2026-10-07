@@ -18,7 +18,7 @@ function normaliseRef(ref: string) {
   return decodeURIComponent(ref).toUpperCase()
 }
 
-export function messagesStateKey(ref: string) {
+function messagesStateKey(ref: string) {
   return `portal_messages_${normaliseRef(ref).replace(/\//g, '_')}`
 }
 

@@ -14,7 +14,7 @@
 
 export const SALE_PICK_LOCATIONS = ['warehouse'] as const
 
-export type SalePickLocation = (typeof SALE_PICK_LOCATIONS)[number]
+type SalePickLocation = (typeof SALE_PICK_LOCATIONS)[number]
 
 export function isSalePickLocation(location: unknown): location is SalePickLocation {
   return (SALE_PICK_LOCATIONS as readonly string[]).includes(String(location ?? ''))
@@ -26,7 +26,7 @@ export function isSellableSerial(serial: { status?: unknown; location?: unknown 
 }
 
 /** The stage names people see, for messages about where a device is. */
-export const STOCK_STAGE_LABELS: Record<string, string> = {
+const STOCK_STAGE_LABELS: Record<string, string> = {
   warehouse: 'Ready for Sale',
   shop: 'With Issues',
   repair_unit: 'Inbound — Work in progress',

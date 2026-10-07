@@ -74,7 +74,7 @@ export function openingBalanceJournalLines(params: {
   ]
 }
 
-export type ExistingJournalLine = {
+type ExistingJournalLine = {
   accountLabel: string
   /** revenue | expense | asset | liability | equity, from the chart. */
   accountType: string | null

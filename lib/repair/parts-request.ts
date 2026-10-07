@@ -153,7 +153,7 @@ export function requestAfterCountCheck(request: PartsRequest, productId: string,
   }
 }
 
-export type OrderLine = { productId: string; productName: string; qty: number; unitPrice: number }
+type OrderLine = { productId: string; productName: string; qty: number; unitPrice: number }
 
 /**
  * Step 2. `systemQtyFor` is what the system shows in the warehouse for a

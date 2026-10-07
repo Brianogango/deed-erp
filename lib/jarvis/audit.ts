@@ -2,7 +2,7 @@ import 'server-only'
 
 import prisma from '@/lib/prisma'
 
-export interface AiAuditEntry {
+interface AiAuditEntry {
   userId: string | null
   conversationId: string | null
   toolName: string

@@ -15,7 +15,7 @@ export interface ProductAccountCodes {
   priceDifferenceAccountCode?: string
 }
 
-export interface CategoryAccountDefaults extends ProductAccountCodes {
+interface CategoryAccountDefaults extends ProductAccountCodes {
   productKind?: ProductKind
 }
 
@@ -261,7 +261,7 @@ export function formatAccountLabel(
   return match ? `${match.code} - ${match.name}` : trimmed
 }
 
-export interface InvoiceLineForPosting {
+interface InvoiceLineForPosting {
   productId?: string
   description?: string
   subtotal: number

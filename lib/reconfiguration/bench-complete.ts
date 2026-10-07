@@ -57,7 +57,7 @@ function isUuid(value: string | null | undefined): value is string {
   return Boolean(value && UUID_RE.test(value))
 }
 
-export type BenchSlotInput = {
+type BenchSlotInput = {
   action: BenchActionKind
   moduleCount?: number
   pullCapacityGb?: number
@@ -67,7 +67,7 @@ export type BenchSlotInput = {
   storageType?: string | null
 }
 
-export type ApplyBenchParams = {
+type ApplyBenchParams = {
   serialId: string
   userId?: string
   ram: BenchSlotInput

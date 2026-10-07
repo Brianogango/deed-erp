@@ -6,23 +6,21 @@
 
 import { CUSTOMER_CREDITS_ACCOUNT } from '@/lib/accounting/liability-accounts'
 
-export const BUYBACK_CASH_METHODS = ['cash', 'mpesa', 'bank_transfer'] as const
-export type BuyBackCashMethod = (typeof BUYBACK_CASH_METHODS)[number]
+const BUYBACK_CASH_METHODS = ['cash', 'mpesa', 'bank_transfer'] as const
+type BuyBackCashMethod = (typeof BUYBACK_CASH_METHODS)[number]
 export const BUYBACK_STORE_CREDIT_METHOD = 'store_credit' as const
-export type BuyBackPayoutMethod = BuyBackCashMethod | typeof BUYBACK_STORE_CREDIT_METHOD
-
 /** Expense counterpart when the payout is store credit instead of cash. */
 export const TRADE_IN_PURCHASES_CODE = '6114'
 export const TRADE_IN_PURCHASES_ACCOUNT = '6114 - Trade-in Purchases'
 
-export type BuyBackSettleLike = {
+type BuyBackSettleLike = {
   status?: string
   total?: number
   paymentMethod?: string | null
   creditId?: string | null
 }
 
-export function isBuyBackCashMethod(method?: string | null): method is BuyBackCashMethod {
+function isBuyBackCashMethod(method?: string | null): method is BuyBackCashMethod {
   return BUYBACK_CASH_METHODS.includes(method as BuyBackCashMethod)
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-export type BreadcrumbItem = {
+type BreadcrumbItem = {
   label: string
   onClick?: () => void
 }

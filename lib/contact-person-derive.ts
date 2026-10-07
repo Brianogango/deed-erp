@@ -14,7 +14,7 @@
  * opportunity.contactPersonId resolving after the migration.
  */
 
-export type DerivedContactPerson = {
+type DerivedContactPerson = {
   id: string
   clientId: string
   companyId: string

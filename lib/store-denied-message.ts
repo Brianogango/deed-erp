@@ -32,7 +32,7 @@ const BACKGROUND_KEYS = new Set([
   'deed_openingStockPosted',
 ])
 
-export function isBackgroundStoreKey(key: string): boolean {
+function isBackgroundStoreKey(key: string): boolean {
   return BACKGROUND_KEYS.has(key)
 }
 

@@ -9,7 +9,7 @@
  * stuck behind it. A 404 is therefore not the end: push the local copy, then
  * bill it.
  */
-export type CreateInvoiceAttempt = {
+type CreateInvoiceAttempt = {
   res: Response
   /** The id that was billed — the server may mint its own for a legacy id. */
   saleOrderId: string

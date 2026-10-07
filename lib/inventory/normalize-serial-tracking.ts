@@ -8,7 +8,7 @@ import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { SERIAL_ONLY_CATEGORIES, isSerialOnlyCategory } from '@/lib/inventory-identifiers'
 
-export type NormalizeSerialTrackingResult = {
+type NormalizeSerialTrackingResult = {
   prismaUpdated: number
   blobUpdated: number
   categories: string[]

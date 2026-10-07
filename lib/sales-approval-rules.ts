@@ -20,7 +20,7 @@ export type ApprovalThreshold = { maxValue: number; requiredRoles: string[] }
  * this ladder.
  */
 
-export type SalesConfirmApprovalSettings = {
+type SalesConfirmApprovalSettings = {
   salesRequireSpecialPricingApproval?: boolean
   salesRequireCreditOverrideApproval?: boolean
 } | null
@@ -51,7 +51,7 @@ export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = 
 }
 
 /** Types that can block quotation confirm. */
-export const SALES_CONFIRM_APPROVAL_TYPES: ApprovalType[] = [
+const SALES_CONFIRM_APPROVAL_TYPES: ApprovalType[] = [
   'discount',
   'credit_override',
   'backorder',

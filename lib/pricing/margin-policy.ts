@@ -7,7 +7,7 @@
 
 import type { CategoryId } from '@/lib/store-types'
 
-export type PricingCondition = 'new' | 'refurbished' | 'any'
+type PricingCondition = 'new' | 'refurbished' | 'any'
 
 export interface PricingMarginCategory {
   id: string

@@ -215,7 +215,7 @@ async function claimOutbox(limit: number, workerId: string): Promise<Array<{ id:
   )
 }
 
-export async function routePendingNotificationEvents(limit = 50) {
+async function routePendingNotificationEvents(limit = 50) {
   const workerId = `router:${process.pid}:${crypto.randomUUID().slice(0, 8)}`
   const rows = await claimOutbox(limit, workerId)
   let processed = 0
@@ -314,7 +314,7 @@ async function deadLetter(delivery: any, reason: string) {
   await maybeCreateSmsFallback(delivery)
 }
 
-export async function dispatchPendingNotificationDeliveries(limit = 100) {
+async function dispatchPendingNotificationDeliveries(limit = 100) {
   const claimed = await claimDeliveries(limit)
   let sent = 0
   let retried = 0
@@ -573,7 +573,7 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
   return { claimed: claimed.length, sent, retried, deadLettered: dead }
 }
 
-export async function processNotificationEscalations(limit = 50) {
+async function processNotificationEscalations(limit = 50) {
   const events = await prisma.notificationEvent.findMany({
     where: {
       resolvedAt: null,

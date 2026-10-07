@@ -2,7 +2,7 @@
  * Purchase 3-way match: PO qty ordered → GRN qty received → vendor bill qty billed.
  */
 
-export interface ThreeWayPoLine {
+interface ThreeWayPoLine {
   productId?: string
   qtyOrdered?: number
   qty?: number
@@ -10,7 +10,7 @@ export interface ThreeWayPoLine {
   qtyBilled?: number
 }
 
-export interface VendorBillLineForMatch {
+interface VendorBillLineForMatch {
   productId?: string
   qty?: number
   description?: string
@@ -78,7 +78,7 @@ export function assertVendorBillThreeWayMatch(params: {
   }
 }
 
-export type BillMatchStatus = 'matched' | 'over_billed' | 'under_billed' | 'pending_receipt'
+type BillMatchStatus = 'matched' | 'over_billed' | 'under_billed' | 'pending_receipt'
 
 export function billMatchStatus(line: ThreeWayPoLine): BillMatchStatus {
   const ordered = Math.max(0, Math.floor(Number(line.qtyOrdered ?? line.qty) || 0))

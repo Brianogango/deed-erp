@@ -31,13 +31,13 @@ export type ConsolidatableRepair = RepairInvoiceSource & {
   saleOrderId?: string | null
 }
 
-export type ConsolidatedInvoiceLine = RepairInvoiceChargeLine & {
+type ConsolidatedInvoiceLine = RepairInvoiceChargeLine & {
   repairId: string
   repairRef: string
   lineType?: 'section'
 }
 
-export type ConsolidatedInvoiceDraft = {
+type ConsolidatedInvoiceDraft = {
   lines: ConsolidatedInvoiceLine[]
   subtotal: number
   taxTotal: number
@@ -46,7 +46,7 @@ export type ConsolidatedInvoiceDraft = {
   mixedVat: boolean
 }
 
-export function repairSectionTitle(repair: ConsolidatableRepair): string {
+function repairSectionTitle(repair: ConsolidatableRepair): string {
   const ref = String(repair.ref ?? repair.id ?? '').trim()
   const device = String(repair.productName ?? '').trim()
   return device ? `Repair ${ref} — ${device}` : `Repair ${ref}`
@@ -72,10 +72,6 @@ export function consolidationBlocker(repair: ConsolidatableRepair): string | nul
   const owed = charges.reduce((sum, line) => sum + line.subtotal, 0)
   if (charges.length === 0 || owed < 1) return 'nothing to bill'
   return null
-}
-
-export function isConsolidatable(repair: ConsolidatableRepair): boolean {
-  return consolidationBlocker(repair) === null
 }
 
 export function buildConsolidatedRepairInvoice(
@@ -123,7 +119,7 @@ export function buildConsolidatedRepairInvoice(
 
 const CLOSED_OUT = new Set(['cancelled', 'declined', 'returned', 'retained', 'closed'])
 
-export type ConsolidationCandidate<T extends ConsolidatableRepair> = {
+type ConsolidationCandidate<T extends ConsolidatableRepair> = {
   repair: T
   /** Why it cannot join the batch, or null when it can. */
   blocker: string | null

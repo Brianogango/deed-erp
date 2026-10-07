@@ -28,7 +28,7 @@ export type InboundProduct = {
   isActive?: boolean
 }
 
-export type InboundLine = {
+type InboundLine = {
   key: string
   productId: string | null
   productName: string
@@ -86,7 +86,7 @@ export function rowsFromSheet(rows: Array<Record<string, unknown>>): InboundSour
   return out
 }
 
-export function matchProduct(row: { product: string; sku?: string }, products: InboundProduct[]): InboundProduct | null {
+function matchProduct(row: { product: string; sku?: string }, products: InboundProduct[]): InboundProduct | null {
   const live = products.filter(p => p.isActive !== false)
   const sku = norm(row.sku)
   if (sku) {
@@ -161,7 +161,7 @@ export function buildInboundLines(
 }
 
 /** The key a row is matched by, for "choose the product" picks. */
-export const sourceKey = (row: { product: string; sku?: string }) => norm(row.product) || norm(row.sku)
+const sourceKey = (row: { product: string; sku?: string }) => norm(row.product) || norm(row.sku)
 
 /** Rows with the person's product picks applied (unmatched rows → chosen product). */
 export function applyProductPicks(rows: InboundSourceRow[], picks: Record<string, string>, products: InboundProduct[]): InboundSourceRow[] {

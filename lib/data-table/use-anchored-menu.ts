@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-export interface AnchoredMenuPosition {
+interface AnchoredMenuPosition {
   top: number
   right: number
 }

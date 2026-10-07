@@ -18,7 +18,7 @@ export type RepairSaleOrderLink = {
 }
 
 /** Workshop jobs that may be invoiced without a warehouse delivery note. */
-export const REPAIR_FULFILLMENT_READY_STATUSES = [
+const REPAIR_FULFILLMENT_READY_STATUSES = [
   'ready',
   'invoiced',
   'verified_released',
@@ -47,7 +47,7 @@ export function isRepairFeeOnlyBillable(
   return status === 'declined' || status === 'unrepairable'
 }
 
-export type SaleOrderRepairHint = {
+type SaleOrderRepairHint = {
   id?: string | null
   ref?: string | null
   orderNumber?: string | null
@@ -117,7 +117,7 @@ export function findRepairsForConsolidatedSaleOrder<T extends RepairSaleOrderLin
   })
 }
 
-export type RepairSaleOrderCandidate = SaleOrderRepairHint & {
+type RepairSaleOrderCandidate = SaleOrderRepairHint & {
   status?: string | null
   createdAt?: string | null
   updatedAt?: string | null
@@ -258,14 +258,14 @@ export function stampInvoiceOnMatchingRepair<T extends RepairSaleOrderLink & Rec
   return repairs.map(r => (r.id === repair.id ? applyInvoiceLinkToRepair(r, invoice) : r))
 }
 
-export type RepairSalesQuoteLink = {
+type RepairSalesQuoteLink = {
   id?: string | null
   ref?: string | null
   salesQuoteId?: string | null
   salesQuoteRef?: string | null
 }
 
-export type SalesQuoteCandidate = {
+type SalesQuoteCandidate = {
   id?: string | null
   ref?: string | null
   quoteNumber?: string | null

@@ -4,7 +4,7 @@
  * cannot spoof type via Content-Type alone.
  */
 
-export type FileValidationResult =
+type FileValidationResult =
   | { ok: true; detected: string }
   | { ok: false; error: string }
 

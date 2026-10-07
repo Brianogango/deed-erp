@@ -45,7 +45,7 @@ export function lookupTierReduction(
   return { reductionPct: best ? Number(best.reductionPct) || 0 : 0, tier: best }
 }
 
-export interface MarginQuoteBand {
+interface MarginQuoteBand {
   targetMarginPct: number
   effectiveMarginPct: number
   pricingDivisor: number
@@ -189,12 +189,4 @@ export function suggestedListPriceFromQuote(quote: MarginQuote): number | null {
 export function suggestedWholesalePriceFromQuote(quote: MarginQuote): number | null {
   if (!quote.ok) return null
   return quote.min.sellExVatRounded
-}
-
-export function classicGrossMarginPct(sellExVat: number, costKes: number): number | null {
-  const sell = Number(sellExVat)
-  const cost = Number(costKes)
-  if (!Number.isFinite(sell) || sell <= 0) return null
-  if (!Number.isFinite(cost)) return null
-  return ((sell - cost) / sell) * 100
 }

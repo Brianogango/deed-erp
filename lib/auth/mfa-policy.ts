@@ -1,4 +1,4 @@
-export const PRIVILEGED_MFA_ROLES = new Set([
+const PRIVILEGED_MFA_ROLES = new Set([
   'director',
   'admin_officer',
   'finance_officer',

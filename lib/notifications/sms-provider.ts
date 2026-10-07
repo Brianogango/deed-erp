@@ -1,6 +1,6 @@
 /** Resolve which SMS transport the ERP should use. */
 
-export type SmsProviderName = 'telerivet' | 'twilio'
+type SmsProviderName = 'telerivet' | 'twilio'
 
 export function resolveSmsProvider(): SmsProviderName | null {
   const forced = String(process.env.SMS_PROVIDER || '').trim().toLowerCase()

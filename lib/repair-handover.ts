@@ -1,13 +1,13 @@
 import { isRepairNoCharge, type BillingExemptRepair } from '@/lib/repair-billing-exempt'
 import type { DeliveryMethod } from '@/lib/repair-types'
 
-export type RepairHandoverInput = BillingExemptRepair & {
+type RepairHandoverInput = BillingExemptRepair & {
   invoiceId?: string | null
   linkedInvoiceId?: string | null
   deliveryMethod?: DeliveryMethod | string | null
 }
 
-export type RepairHandoverFields = {
+type RepairHandoverFields = {
   status: 'delivered' | 'closed'
   deliveryActualDate: string
   deliveryMethod: DeliveryMethod
@@ -19,7 +19,7 @@ export type RepairHandoverFields = {
   closedDate?: string
 }
 
-export type RepairPrimaryActionId =
+type RepairPrimaryActionId =
   | 'verify'
   | 'parts_arrived'
   | 'start'
@@ -42,7 +42,7 @@ export function canCollectWithoutReleaseCheckpoint(opts: {
   return !String(opts.serialNumber ?? '').trim()
 }
 
-export function collectActionAvailable(opts: {
+function collectActionAvailable(opts: {
   canMarkCollected: boolean
   repairOrcStatus?: string | null
 }): boolean {

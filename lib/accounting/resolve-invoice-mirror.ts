@@ -1,9 +1,9 @@
 import 'server-only'
 import { loadAppState } from '@/lib/server-store'
 
-export type BlobInvoiceType = 'customer_invoice' | 'vendor_bill'
+type BlobInvoiceType = 'customer_invoice' | 'vendor_bill'
 
-export type BlobInvoiceMirror = {
+type BlobInvoiceMirror = {
   type: BlobInvoiceType
   status?: string
   purchaseOrderId?: string

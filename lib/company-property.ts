@@ -59,7 +59,7 @@ export const COMPANY_PROPERTY_LOCATIONS = [
 ] as const
 
 /** Default PPE cost accounts — Kenya IFRS chart used in this ERP. */
-export const PPE_ACCOUNT_DEFAULTS: Record<CompanyAssetCategory, string | null> = {
+const PPE_ACCOUNT_DEFAULTS: Record<CompanyAssetCategory, string | null> = {
   furniture: '1702',
   fittings: '1702',
   office_equipment: '1703',
@@ -347,9 +347,9 @@ export function historyEntry(partial: Omit<CompanyAssetHistoryEntry, 'id'> & { i
   }
 }
 
-export type CoaLine = { code: string; balance: number }
+type CoaLine = { code: string; balance: number }
 
-export type RegisterVsCoaRow = {
+type RegisterVsCoaRow = {
   code: string
   label: string
   register: number

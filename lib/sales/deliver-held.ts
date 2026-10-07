@@ -13,7 +13,7 @@ import { isSalePickLocation } from '@/lib/inventory/sellable-stock'
 
 type Row = Record<string, any>
 
-export type HeldDeliveryLine = {
+type HeldDeliveryLine = {
   productId: string
   productName: string
   ordered: number

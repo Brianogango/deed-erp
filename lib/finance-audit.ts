@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { isUUID } from '@/lib/utils'
 
-export type FinancialAuditInput = {
+type FinancialAuditInput = {
   userId?: string | null
   action: string
   entityType: string

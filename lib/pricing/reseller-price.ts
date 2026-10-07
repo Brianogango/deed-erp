@@ -16,9 +16,9 @@ import {
   type PricingMarginPolicy,
 } from '@/lib/pricing/margin-policy'
 
-export type ResellerPriceSource = 'manual' | 'min_band'
+type ResellerPriceSource = 'manual' | 'min_band'
 
-export interface ResolveResellerPriceArgs {
+interface ResolveResellerPriceArgs {
   cost: number | string | null | undefined
   salePrice?: number | string | null
   wholesalePrice?: number | string | null
@@ -30,7 +30,7 @@ export interface ResolveResellerPriceArgs {
   policy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
 }
 
-export interface ResolveResellerPriceResult {
+interface ResolveResellerPriceResult {
   price: number
   source: ResellerPriceSource
 }

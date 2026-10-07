@@ -22,30 +22,30 @@ export interface ReturnPoLine {
   accountCode?: string
 }
 
-export interface ReturnDraftBill {
+interface ReturnDraftBill {
   id: string
   lines: Array<{ id: string; productId?: string; qty: number }>
 }
 
-export interface ReturnLineInput {
+interface ReturnLineInput {
   productId: string
   productName: string
   qty: number
 }
 
-export interface PoLineAdjustment {
+interface PoLineAdjustment {
   poLineId: string
   qtyReceived: number
   qtyBilled: number
 }
 
-export interface DraftBillDeduction {
+interface DraftBillDeduction {
   billId: string
   lineId: string
   deductQty: number
 }
 
-export interface CreditNoteLine {
+interface CreditNoteLine {
   productId: string
   productName: string
   qty: number
@@ -58,7 +58,7 @@ export interface CreditNoteLine {
   accountCode?: string
 }
 
-export interface ReturnAllocation {
+interface ReturnAllocation {
   poLineAdjustments: PoLineAdjustment[]
   draftBillDeductions: DraftBillDeduction[]
   creditLines: CreditNoteLine[]

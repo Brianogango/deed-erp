@@ -17,7 +17,7 @@ export type MatchableStatementLine = {
   category?: string
 }
 
-export type MatchableCashbookEntry = {
+type MatchableCashbookEntry = {
   id: string
   date: string
   debit: number
@@ -26,7 +26,7 @@ export type MatchableCashbookEntry = {
   description?: string
 }
 
-export type OutstandingPaymentCandidate = {
+type OutstandingPaymentCandidate = {
   id: string
   amount: number
   allocatedSum: number
@@ -37,7 +37,7 @@ export type OutstandingPaymentCandidate = {
   direction?: 'inbound' | 'outbound'
 }
 
-export type StatementMatchOptions = {
+type StatementMatchOptions = {
   /** Max absolute amount difference (KES). Default 1. */
   amountTolerance?: number
   /** Max calendar-day gap. Default 5. */

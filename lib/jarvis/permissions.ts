@@ -57,7 +57,7 @@ export function allowedToolNamesForRole(role: UserRole): string[] {
   return ROLE_TOOL_ALLOWLIST[role] ?? []
 }
 
-export interface PermissionCheckResult {
+interface PermissionCheckResult {
   allowed: boolean
   reason?: string
 }

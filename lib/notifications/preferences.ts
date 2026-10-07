@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma'
 import { SEVERITY_RANK, shouldBypassUserPreference } from './registry'
 import type { NotificationChannel, NotificationSeverity } from './types'
 
-export type EffectiveNotificationPreference = {
+type EffectiveNotificationPreference = {
   inAppEnabled: boolean
   pushEnabled: boolean
   emailEnabled: boolean

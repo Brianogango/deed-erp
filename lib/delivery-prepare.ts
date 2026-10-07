@@ -4,7 +4,7 @@
  * must consume them line-by-line instead of always using `.find(productId)`.
  */
 
-export type PrepareSourceLine = {
+type PrepareSourceLine = {
   productId?: string
   lineType?: string
   qty?: number
@@ -12,7 +12,7 @@ export type PrepareSourceLine = {
   serialNumberId?: string | null
 }
 
-export type PrepareDeliveryLine = {
+type PrepareDeliveryLine = {
   productId: string
   productName: string
   qty: number
@@ -20,7 +20,7 @@ export type PrepareDeliveryLine = {
   serialNumberId?: string | null
 }
 
-export type PrepareLinePlan = {
+type PrepareLinePlan = {
   productId: string
   productName: string
   qty: number
@@ -40,14 +40,14 @@ export function sumQtyByProductId(
   return out
 }
 
-export type AssignedSerialRef = {
+type AssignedSerialRef = {
   id: string
   productId?: string
   saleOrderId?: string
   status?: string
 }
 
-export type DeliveryPrepareSerial = {
+type DeliveryPrepareSerial = {
   id: string
   productId?: string
   saleOrderId?: string | null

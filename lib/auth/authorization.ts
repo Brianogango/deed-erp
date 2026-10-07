@@ -154,52 +154,13 @@ export type PermissionAction = keyof typeof roleMatrix
 // listed here keep the existing behaviour: any authenticated user may write them,
 // since most domains (quotes, repairs, inventory, CRM, ...) are legitimately
 // multi-role collaborative data.
-export const SENSITIVE_STORE_KEY_PERMISSIONS: Record<string, PermissionAction> = {
-  deed_journalEntries: 'postFinancial',
-  deed_accounts: 'postFinancial',
-  deed_bankAccounts: 'manageBankRecon',
-  deed_bankRecons: 'manageBankRecon',
-  deed_bankStatementLines: 'manageBankRecon',
-  deed_customerCredits: 'manageCustomerCredit',
-  deed_salaryAdvances: 'manageHR',
-  deed_riderWeeklyPays: 'manageHR',
-  deed_systemSettings: 'manageMasterData',
-  deed_companySettings: 'manageMasterData',
-  deed_approvalRequests: 'requestSalesApproval',
-  deed_workflowApprovals: 'approveDiscount',
-  deed_auditLogs: 'appendAuditLog',
-  // Commercial ledgers
-  deed_invoices: 'recordRepairBilling',
-  deed_payments: 'recordPayment',
-  deed_posOrders: 'recordSales',
-  deed_refundPayments: 'recordSales',
-  deed_saleOrders: 'manageSaleOrders',
-  deed_deliveries: 'manageDeliveries',
-  deed_expenses: 'manageExpenses',
-  // Purchase orders and Return-to-Vendor — previously missing here, which let
-  // the generic wholesale store endpoint bypass the dedicated routes'
-  // (and, for returns, the store action's) role gates entirely.
-  deed_purchaseOrders: 'managePurchaseOrders',
-  deed_purchaseReturns: 'manageProcurement',
-  // Layby deposits and payroll — restricted to their respective back-office roles.
-  deed_deposits: 'manageDeposits',
-  deed_companyAssets: 'manageCompanyProperty',
-  deed_payrollRuns: 'managePayroll',
-  deed_payslips: 'managePayroll',
-  // HR leave ledger — self-service leave is created through the dedicated
-  // /api/leave-requests endpoint (which forces ownership + pending status), so
-  // wholesale writes here are restricted to HR approvers.
-  deed_leaveRequests: 'approveLeave',
-  deed_leaveBalances: 'manageHR',
-}
-
 // Read gating for the wholesale store endpoints (GET /api/store, GET
 // /api/store/[key], and the SSE stream). Keys listed here are only included in
 // the response for users holding the permission; everyone else simply does not
 // receive them. Sensitive HR/payroll/financial data must never be broadcast to
 // every authenticated session. Self-service data (a user's own leave, payslip)
 // is served instead by dedicated, ownership-scoped endpoints.
-export const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionAction> = {
+const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionAction> = {
   deed_payrollRuns: 'managePayroll',
   deed_payslips: 'managePayroll',
   deed_salaryAdvances: 'manageHR',
@@ -238,7 +199,7 @@ const ALL_OPERATIONAL_ROLES: readonly UserRole[] = [
 // and an explicit module grant; row filters below still narrow repairs for
 // technicians and CRM opportunities for sales reps. Sale orders are shared
 // across the sales team (sales reps read the full quotes/SO book).
-export const COLLABORATIVE_STORE_READ_POLICIES: Record<string, CollaborativeReadPolicy> = {
+const COLLABORATIVE_STORE_READ_POLICIES: Record<string, CollaborativeReadPolicy> = {
   deed_saleOrders: {
     roles: ['director', 'admin_officer', 'finance_officer', 'sales_rep'],
     modules: ['sales'],
@@ -415,7 +376,7 @@ export function mergeFilteredStoreWrite(current: unknown, incoming: unknown): St
   return [...byId.values()]
 }
 
-export type RecordAccessModel = 'sale_order' | 'opportunity' | 'repair' | 'expense'
+type RecordAccessModel = 'sale_order' | 'opportunity' | 'repair' | 'expense'
 
 const opportunityOwnedByUser = (record: StoreRow, userId: string) =>
   record.ownerId === userId || record.assignedToId === userId

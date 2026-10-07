@@ -32,7 +32,7 @@ import type {
 } from '@/lib/data-table/toolbar-types'
 import { useTableBreakpoint, type TableBreakpoint } from '@/lib/data-table/use-breakpoint'
 
-export interface DataTableToolbarProps<T> {
+interface DataTableToolbarProps<T> {
   columns: ColumnDef<T>[]
   eligibleKeys: Set<string>
   visibleKeys: Set<string>
@@ -575,5 +575,3 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
     </div>
   )
 }
-
-export { DataTableToolbar as TableToolbar }

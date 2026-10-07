@@ -2,9 +2,9 @@
 
 import type { ReactNode } from 'react'
 
-export type SmartButtonTone = 'success' | 'primary' | 'violet' | 'teal' | 'warning' | 'neutral'
+type SmartButtonTone = 'success' | 'primary' | 'violet' | 'teal' | 'warning' | 'neutral'
 
-export type SmartButton = {
+type SmartButton = {
   id: string
   label: string
   count?: number

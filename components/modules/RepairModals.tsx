@@ -35,7 +35,6 @@ import {
   faBan,
   faTrash,
   faSearch,
-  faBoxOpen,
   faExclamationCircle,
   faCheckSquare,
   faShieldAlt,
@@ -916,62 +915,6 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
           >
             <Fa icon={allPassed ? faCheckCircle : faExclamationTriangle} />
             {allPassed ? 'Pass Quality Check' : 'Submit as Failed'}
-          </ActionBtn>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-/**
- * LeaveDeviceModal — customer leaves device with Deed (terminal retained)
- */
-export function LeaveDeviceModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { leaveDeviceWithDeed, showToast } = useRepairStore()
-  const [notes, setNotes] = useState('')
-  const [convertMode, setConvertMode] = useState<'none' | 'donation' | 'buyback' | ''>('')
-
-  const handleConfirm = () => {
-    if (!convertMode) { showToast('Select what to do with the device (Donation, Buy-back or Retain only)', 'error'); return }
-    leaveDeviceWithDeed(repair.id, {
-      convertToDonation: convertMode === 'donation',
-      convertToStock: convertMode === 'buyback',
-      notes: notes.trim() || undefined,
-    })
-    onClose()
-  }
-
-  return (
-    <Modal variant="enterprise" title="Customer Leaves Device" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faBoxOpen} />} accent="#57534E">
-      <div className="flex flex-col gap-5">
-        <div className="flex items-start gap-3 p-4 rounded-xl"
-          style={{ background: 'rgba(87,83,78,0.08)', border: '1px solid rgba(87,83,78,0.22)' }}>
-          <Fa icon={faBoxOpen} style={{ color: '#57534E', marginTop: 2, flexShrink: 0 } as any} />
-          <p className="text-[11px] font-medium leading-relaxed" style={{ color: 'var(--text-2)' }}>
-            Closes this job as <strong>Left with Deed</strong>. Reserved parts are released and any linked sale order / invoice is cancelled.
-            Convert into a donation-in or free buy-back stocked at warehouse, linked to this repair.
-          </p>
-        </div>
-        <Field label="Notes (optional)">
-          <Textarea value={notes} onChange={setNotes} placeholder="e.g. Customer donated the laptop after declining repair" rows={3} />
-        </Field>
-        <div className="flex flex-col gap-2">
-          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Convert device <span className="text-red-500">*</span></p>
-          {([
-            { v: 'donation' as const, label: 'Donation in → warehouse' },
-            { v: 'buyback' as const, label: 'Buy-back stock (KES 0)' },
-            { v: 'none' as const, label: 'Retain only (convert later)' },
-          ]).map(opt => (
-            <label key={opt.v} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] cursor-pointer">
-              <input type="radio" name="leave-convert-modal" checked={convertMode === opt.v} onChange={() => setConvertMode(opt.v)} />
-              <span className="text-[11px] font-medium text-[var(--text-2)]">{opt.label}</span>
-            </label>
-          ))}
-        </div>
-        <div className="flex gap-2 justify-end pt-2">
-          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn onClick={handleConfirm} color="linear-gradient(135deg,#44403C,#78716C)" shadow="0 8px 24px rgba(87,83,78,0.35)">
-            <Fa icon={faBoxOpen} /> Confirm Retain
           </ActionBtn>
         </div>
       </div>

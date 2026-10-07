@@ -39,7 +39,7 @@ function normName(s: string | null | undefined): string {
   return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
-export function scoreContactMatch(
+function scoreContactMatch(
   incoming: {
     email?: string | null
     phone?: string | null

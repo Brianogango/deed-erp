@@ -3,7 +3,7 @@
 import { useId, type ReactNode } from 'react'
 import { ModuleHeader, TabBar } from '@/components/ui'
 
-export type ModuleTab = {
+type ModuleTab = {
   id: string
   label: string
   icon?: ReactNode

@@ -7,13 +7,7 @@
 
 export const DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES = 1_000_000
 
-export type FinanceRole =
-  | 'director'
-  | 'admin_officer'
-  | 'finance_officer'
-  | string
-
-export function normalizeFinanceRole(role: string | null | undefined): string {
+function normalizeFinanceRole(role: string | null | undefined): string {
   if (!role) return ''
   const aliases: Record<string, string> = {
     super_admin: 'director',
@@ -24,18 +18,12 @@ export function normalizeFinanceRole(role: string | null | undefined): string {
 }
 
 /** Full finance seal — bank recon and expense reimbursement. */
-export function isFullFinanceRole(role: string | null | undefined): boolean {
+function isFullFinanceRole(role: string | null | undefined): boolean {
   const r = normalizeFinanceRole(role)
   return r === 'director' || r === 'finance_officer'
 }
 
-/** Roles that may create draft customer invoices from SO. */
-export function canCreateCustomerInvoiceRole(role: string | null | undefined): boolean {
-  const r = normalizeFinanceRole(role)
-  return r === 'director' || r === 'finance_officer' || r === 'admin_officer'
-}
-
-export function resolveAdminOfficerInvoiceLimit(limitKes?: number | null): number {
+function resolveAdminOfficerInvoiceLimit(limitKes?: number | null): number {
   const n = Number(limitKes)
   if (Number.isFinite(n) && n > 0) return Math.round(n)
   return DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES

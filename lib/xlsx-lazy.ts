@@ -1,5 +1,5 @@
 /** Lazy-load SheetJS only when an import/export handler actually needs it. */
-export type XlsxModule = typeof import('xlsx')
+type XlsxModule = typeof import('xlsx')
 
 let cached: Promise<XlsxModule> | null = null
 

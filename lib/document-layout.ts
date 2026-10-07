@@ -1,6 +1,3 @@
-export const DEED_DOCUMENT_PRIMARY = '#1B2762'
-export const DEED_DOCUMENT_SECONDARY = '#00AEEF'
-
 export const DOCUMENT_LAYOUT_IDS = [
   'standard',
   'boxed',
@@ -27,7 +24,7 @@ export type DocumentFontId = typeof DOCUMENT_FONT_IDS[number]
 export type DocumentBackgroundId = 'blank' | 'demo_logo'
 export type DocumentPaperFormat = 'a4' | 'letter'
 
-export interface DocumentLayoutOption {
+interface DocumentLayoutOption {
   id: DocumentLayoutId
   label: string
   description: string

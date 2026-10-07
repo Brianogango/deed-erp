@@ -1,6 +1,6 @@
 export type CreditSalesDocument = 'quote' | 'order' | 'invoice'
 
-export type CustomerCreditGateInput = {
+type CustomerCreditGateInput = {
   overdueBalance: number
   overdueCount: number
   creditLimit: number
@@ -10,7 +10,7 @@ export type CustomerCreditGateInput = {
   formatMoney?: (amount: number) => string
 }
 
-export type CustomerCreditGateResult = {
+type CustomerCreditGateResult = {
   ok: boolean
   isLocked: boolean
   creditLimitExceeded: boolean

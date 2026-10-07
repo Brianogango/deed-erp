@@ -14,7 +14,7 @@
 
 type Row = Record<string, unknown>
 
-export type MigrationContactInput = {
+type MigrationContactInput = {
   name: string
   type: 'company' | 'individual'
   email: string
@@ -28,7 +28,7 @@ export type MigrationContactInput = {
   tags: string[]
 }
 
-export type MigrationDocument = {
+type MigrationDocument = {
   /** Lower-cased contact name; resolves to an id once the contact exists. */
   contactKey: string
   partnerName: string
@@ -41,7 +41,7 @@ export type MigrationDocument = {
   notes: string
 }
 
-export type MigrationPlan = {
+type MigrationPlan = {
   /** Contacts that do not exist yet, by lower-cased name. */
   contactsToCreate: Map<string, MigrationContactInput>
   /** Existing contact ids, by lower-cased name. */
@@ -57,7 +57,7 @@ type ExistingInvoice = { type?: string; ref?: string; partnerId?: string; partne
 const VENDOR_KINDS = ['vendor', 'supplier', 'bill', 'ap', 'payable']
 const CUSTOMER_KINDS = ['customer', 'client', 'invoice', 'ar', 'receivable']
 
-export function cell(row: Row, ...keys: string[]): string {
+function cell(row: Row, ...keys: string[]): string {
   for (const key of keys) {
     const direct = row[key]
     if (direct !== undefined && direct !== null && String(direct).trim()) return String(direct).trim()

@@ -81,7 +81,7 @@ export function computeDownPaymentAmount(opts: {
   return { ok: false, error: 'Not a down-payment mode' }
 }
 
-export interface DownPaymentInvoiceLike {
+interface DownPaymentInvoiceLike {
   id?: string
   saleOrderId?: string | null
   status?: string | null

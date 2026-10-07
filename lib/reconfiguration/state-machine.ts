@@ -5,9 +5,7 @@
  */
 
 import type { ReconfigStatus } from './types'
-import { ACTIVE_RECONFIG_STATUSES } from './types'
-
-export type ReconfigTransition =
+type ReconfigTransition =
   | 'submit_stock_check'
   | 'reserve'
   | 'release_to_draft'
@@ -71,10 +69,6 @@ export function nextStatus(from: ReconfigStatus, action: ReconfigTransition): Re
     throw new Error(`Invalid reconfiguration transition: ${from} → ${action}`)
   }
   return next
-}
-
-export function isActiveReconfigStatus(status: ReconfigStatus): boolean {
-  return ACTIVE_RECONFIG_STATUSES.includes(status)
 }
 
 export function isMutableDraftStatus(status: ReconfigStatus): boolean {

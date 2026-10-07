@@ -6,7 +6,7 @@
  * but never delivered. Sections with nothing in them are left out. Pure.
  */
 
-export type BriefSection = {
+type BriefSection = {
   key: string
   heading: string
   count: number
@@ -27,7 +27,7 @@ export type DirectorBriefInput = {
   invoicedNotDelivered: Array<{ ref: string; customer: string; units: number }>
 }
 
-export const kes = (n: number) => `KES ${Math.round(n).toLocaleString('en-KE')}`
+const kes = (n: number) => `KES ${Math.round(n).toLocaleString('en-KE')}`
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const sum = (rows: Array<{ balance?: number; amount?: number; total?: number }>) =>
   rows.reduce((s, r) => s + (r.balance ?? r.amount ?? r.total ?? 0), 0)

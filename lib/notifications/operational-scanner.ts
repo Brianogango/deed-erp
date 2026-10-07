@@ -71,7 +71,7 @@ async function resolveInactive(eventType: string, entityType: string, activeIds:
   return ids.length
 }
 
-export type DigestItem = { id: string; line: string }
+type DigestItem = { id: string; line: string }
 
 /**
  * Credit a supplier credit note still has to give. Vendor credit notes are

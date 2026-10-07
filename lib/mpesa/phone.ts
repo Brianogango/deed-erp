@@ -8,7 +8,3 @@ export function normalizeMpesaPhone(input: string | number | null | undefined): 
   if (n.length !== 9 || !n.startsWith('7')) return null
   return `254${n}`
 }
-
-export function isMpesaPhone(input: string | number | null | undefined): boolean {
-  return Boolean(normalizeMpesaPhone(input))
-}

@@ -4,9 +4,9 @@
  * KES-only — no multi-currency accounts.
  */
 
-export type CoaAccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense'
+type CoaAccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense'
 
-export type CoaTemplateAccount = {
+type CoaTemplateAccount = {
   code: string
   name: string
   type: CoaAccountType

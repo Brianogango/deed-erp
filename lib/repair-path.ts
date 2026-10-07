@@ -5,7 +5,7 @@
  * Missing / unknown values are treated as diagnosis-first.
  */
 
-export type RepairWorkflowPath = 'diagnosis_first' | 'direct_repair'
+type RepairWorkflowPath = 'diagnosis_first' | 'direct_repair'
 
 export const DIRECT_REPAIR_WAIVER_TEXT =
   'I authorise Deed to proceed with direct repair work and acknowledge that customer-caused damage, liquid damage, previous tampering, or unavailable parts may affect warranty coverage and repair outcome.'

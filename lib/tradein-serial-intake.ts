@@ -4,7 +4,7 @@
  * that are not yet in the system.
  */
 
-export type SerialLike = {
+type SerialLike = {
   id: string
   serial: string
   productId: string
@@ -13,12 +13,12 @@ export type SerialLike = {
   saleOrderId?: string
 }
 
-export type SaleOrderLike = {
+type SaleOrderLike = {
   id: string
   customerId?: string
 }
 
-export function normSerial(value: unknown): string {
+function normSerial(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
 }
 

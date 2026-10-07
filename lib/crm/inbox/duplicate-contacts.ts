@@ -16,7 +16,7 @@ import { findExistingClientForLead } from '@/lib/crm/lead-client-resolve'
 import { normalizeEmail, normalizePhoneE164, phoneMatchKey } from '@/lib/crm/inbox/normalize'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
-export interface DuplicateContactMember {
+interface DuplicateContactMember {
   id: string
   name: string
   email: string | null
@@ -28,7 +28,7 @@ export interface DuplicateContactMember {
   leadCount: number
 }
 
-export interface DuplicateContactGroup {
+interface DuplicateContactGroup {
   key: string
   kind: 'email' | 'phone' | 'name'
   members: DuplicateContactMember[]

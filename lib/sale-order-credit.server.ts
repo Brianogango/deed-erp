@@ -1,11 +1,7 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
 import { loadAppState } from '@/lib/server-store'
 import { evaluateCustomerCreditGate, type CreditSalesDocument } from '@/lib/customer-credit-gate'
-
-export { assertQuoteNotExpired }
-
 /** Prisma `DocumentStatus` values that can still carry an unpaid residual. */
 const OPEN_INVOICE_STATUSES = [
   'approved',
@@ -19,7 +15,7 @@ const OPEN_INVOICE_STATUSES = [
 
 const CREDIT_OVERRIDE_ROLES = new Set(['director', 'finance_officer'])
 
-export type SaleOrderCreditCheck =
+type SaleOrderCreditCheck =
   | { ok: true }
   | { ok: false; status: 403 | 409; error: string }
 

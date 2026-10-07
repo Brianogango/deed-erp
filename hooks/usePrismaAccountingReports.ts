@@ -22,7 +22,7 @@ type TrialBalanceResponse = {
 
 type PlRow = { code: string; name: string; type: string; group: string; amount: number }
 
-export type ProfitLossResponse = {
+type ProfitLossResponse = {
   currency: string
   dateFrom: string | null
   dateTo: string | null
@@ -60,7 +60,7 @@ type BalanceSheetResponse = {
   balanced: boolean
 }
 
-export type VatControlResponse = {
+type VatControlResponse = {
   currency: string
   dateFrom: string | null
   dateTo: string | null
@@ -79,7 +79,7 @@ export type VatControlResponse = {
   }
 }
 
-export type PrismaReportFlags = {
+type PrismaReportFlags = {
   trialBalance?: boolean
   profitLoss?: boolean
   balanceSheet?: boolean

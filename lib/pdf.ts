@@ -27,7 +27,7 @@ const buildContentStream = (lines: PdfLine[]) => lines.map(line => {
   return `BT /${font} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${escapePdfText(line.text)}) Tj ET`
 }).join('\n')
 
-export const createPdfBlob = (lines: PdfLine[]) => {
+const createPdfBlob = (lines: PdfLine[]) => {
   const content = buildContentStream(lines)
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',

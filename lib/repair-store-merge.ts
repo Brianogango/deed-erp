@@ -19,14 +19,14 @@ import { repairDateBoundsError } from '@/lib/data-validation'
 import { REPAIR_PROGRESS_ORDER } from '@/lib/repair-progress'
 import { REPAIR_TRANSITIONS } from '@/lib/repair-transition-policy'
 
-export type RepairStoreRow = {
+type RepairStoreRow = {
   id?: unknown
   ref?: unknown
   status?: unknown
   [key: string]: unknown
 }
 
-export const REPAIR_TERMINAL_STATUSES = new Set<string>([
+const REPAIR_TERMINAL_STATUSES = new Set<string>([
   'cancelled',
   'unrepairable',
   'returned',
@@ -34,7 +34,7 @@ export const REPAIR_TERMINAL_STATUSES = new Set<string>([
 ])
 
 /** Jobs that have left the workshop floor — a stale tab must not rewind these. */
-export const REPAIR_FINALIZED_STATUSES = new Set<string>([
+const REPAIR_FINALIZED_STATUSES = new Set<string>([
   'ready',
   'invoiced',
   'verified_released',
@@ -80,7 +80,7 @@ function calendarMonthDay(value: unknown): string | null {
  * The one allowed rewrite is a same month-day year correction
  * (2091-04-28 → 2026-04-28) when the current year is out of bounds.
  */
-export function preserveRepairBookingFields(
+function preserveRepairBookingFields(
   picked: RepairStoreRow,
   current: RepairStoreRow | undefined,
   incoming: RepairStoreRow,
@@ -116,7 +116,7 @@ function asStatus(row: RepairStoreRow | undefined): string {
   return String(row?.status ?? '').trim()
 }
 
-export function repairStatusRank(status: unknown): number {
+function repairStatusRank(status: unknown): number {
   const s = String(status ?? '').trim()
   if (REPAIR_TERMINAL_STATUSES.has(s)) return 1_000
   // A declined quote is an open job sitting where awaiting_approval does.
@@ -136,7 +136,7 @@ function isPresent(value: unknown): boolean {
  * Keep the chosen row's status, but copy completion fields the winner is
  * missing so a forward write cannot drop an invoice / ORC / collection stamp.
  */
-export function preserveRepairCompletionFields(
+function preserveRepairCompletionFields(
   primary: RepairStoreRow,
   secondary: RepairStoreRow | undefined,
 ): RepairStoreRow {
@@ -189,12 +189,12 @@ function isOrcVoidRewind(currentStatus: string, incomingStatus: string): boolean
   return currentStatus === 'verified_released' && incomingStatus === 'ready'
 }
 
-export type PickRepairStoreRowOptions = {
+type PickRepairStoreRowOptions = {
   /** Pin in-progress status when a stale snapshot rewinds many jobs at once. */
   pinInProgressRewind?: boolean
 }
 
-export function isInProgressStatusRewind(
+function isInProgressStatusRewind(
   current: RepairStoreRow | undefined,
   incoming: RepairStoreRow,
 ): boolean {

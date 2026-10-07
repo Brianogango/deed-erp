@@ -10,7 +10,7 @@ import { cleanEmailBody, emailDomainOf, emailLocalPart, normalizeEmail } from '@
 import { shouldSkipInboundEmail } from '@/lib/crm/sales-inbox-leads'
 import { resolveInboxBlocklists } from '@/lib/crm/sales-inbox-relevance'
 
-export type HardExcludeCategory =
+type HardExcludeCategory =
   | 'INTERNAL'
   | 'BANK_NOTIFICATION'
   | 'PAYMENT_NOTIFICATION'
@@ -22,7 +22,7 @@ export type HardExcludeCategory =
   | 'OTHER_AUTOMATED'
   | 'BLOCKED_SENDER'
 
-export type HardExcludeResult =
+type HardExcludeResult =
   | { exclude: true; category: HardExcludeCategory; reason: string }
   | { exclude: false }
 

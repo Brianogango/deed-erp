@@ -14,7 +14,7 @@
  * Docs: https://developers.facebook.com/docs/whatsapp/cloud-api
  */
 
-export interface WhatsAppMessage {
+interface WhatsAppMessage {
   to: string  // Phone number with country code, e.g., +254722000111
   type: 'text' | 'template' | 'document' | 'image'
   text?: string
@@ -228,44 +228,6 @@ export const sendQuoteViaWhatsApp = async (quote: {
     text: message,
   })
 }
-
-/**
- * Send Repair Ready Notification via WhatsApp
- */
-export const sendRepairReadyWhatsApp = async (repair: {
-  ref: string
-  customerName: string
-  customerPhone: string
-  productName: string
-  total: number
-}) => {
-  const message = `
-Hi ${repair.customerName},
-
-Good news! Your device repair is complete ✅
-
-*Repair ${repair.ref}*
-Device: ${repair.productName}
-Amount Due: KES ${repair.total.toLocaleString()}
-
-Your device is ready for pickup at our Westlands branch.
-
-Please bring your repair receipt.
-
-Opening Hours: Mon-Fri 8AM-6PM, Sat 9AM-3PM
-
-Deed Technologies
-Westlands, Nairobi
-+254 20 123 4567
-  `.trim()
-
-  return sendWhatsAppMessage({
-    to: repair.customerPhone,
-    type: 'text',
-    text: message,
-  })
-}
-
 /**
  * Development Mode: Log WhatsApp message
  */

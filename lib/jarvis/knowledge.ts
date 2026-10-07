@@ -3,7 +3,7 @@ import 'server-only'
 import prisma from '@/lib/prisma'
 
 /** Minimal tool-call shape for source attribution (avoids circular imports). */
-export interface ToolCallForSources {
+interface ToolCallForSources {
   toolName: string
   allowed: boolean
   output?: unknown

@@ -3,22 +3,22 @@
  * Store applies the plans against live serials + bulkStock.
  */
 
-export type LocationId = 'warehouse' | 'shop' | 'repair_unit' | 'vendor' | 'customer' | 'employee'
+type LocationId = 'warehouse' | 'shop' | 'repair_unit' | 'vendor' | 'customer' | 'employee'
 
-export type RepairPartLine = {
+type RepairPartLine = {
   productId: string
   productName: string
   qty: number
   requiresSerial: boolean
 }
 
-export type StockSnapshot = {
+type StockSnapshot = {
   warehouse: number
   shop: number
   repair_unit: number
 }
 
-export type ReservePlanStep =
+type ReservePlanStep =
   | {
       kind: 'transfer_bulk'
       productId: string
@@ -38,7 +38,7 @@ export type ReservePlanStep =
       reason: string
     }
 
-export type ConsumePlanStep =
+type ConsumePlanStep =
   | {
       kind: 'consume_bulk'
       productId: string
@@ -56,18 +56,6 @@ export type ConsumePlanStep =
       from: LocationId
       reason: string
     }
-
-/** Prefer shop, then warehouse, for pulling parts into repair_unit. */
-export function pickSourceLocation(stock: StockSnapshot, qty: number): LocationId | null {
-  if (stock.shop >= qty) return 'shop'
-  if (stock.warehouse >= qty) return 'warehouse'
-  if (stock.shop + stock.warehouse >= qty) {
-    // Caller should split — return shop first for partial; planner splits below.
-    return stock.shop > 0 ? 'shop' : 'warehouse'
-  }
-  if (stock.repair_unit >= qty) return 'repair_unit'
-  return null
-}
 
 /**
  * Plan transfers into repair_unit for bulk parts, and serial assignments.

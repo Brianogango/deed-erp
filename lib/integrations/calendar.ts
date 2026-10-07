@@ -17,7 +17,7 @@
  * Docs: https://developers.google.com/calendar/api/v3/reference
  */
 
-export interface CalendarEvent {
+interface CalendarEvent {
   summary: string
   description?: string
   start: {
@@ -50,7 +50,7 @@ export interface CalendarEvent {
   }
 }
 
-export interface CalendarResult {
+interface CalendarResult {
   success: boolean
   eventId?: string
   eventLink?: string
@@ -60,7 +60,7 @@ export interface CalendarResult {
 /**
  * Create calendar event
  */
-export const createCalendarEvent = async (
+const createCalendarEvent = async (
   event: CalendarEvent,
   accessToken: string
 ): Promise<CalendarResult> => {
@@ -167,57 +167,6 @@ export const createActivityCalendarEvent = async (
 
   return createCalendarEvent(event, userAccessToken)
 }
-
-/**
- * Get OAuth authorization URL
- */
-export const getGoogleAuthUrl = () => {
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback'
-  
-  const scopes = [
-    'https://www.googleapis.com/auth/calendar.events',
-    'https://www.googleapis.com/auth/calendar.readonly',
-  ].join(' ')
-
-  return `https://accounts.google.com/o/oauth2/v2/auth?` +
-    `client_id=${clientId}&` +
-    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-    `response_type=code&` +
-    `scope=${encodeURIComponent(scopes)}&` +
-    `access_type=offline&` +
-    `prompt=consent`
-}
-
-/**
- * Exchange authorization code for access token
- */
-export const exchangeGoogleAuthCode = async (code: string) => {
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      code,
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: process.env.GOOGLE_REDIRECT_URI,
-      grant_type: 'authorization_code',
-    }),
-  })
-
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error_description || 'Failed to exchange auth code')
-  }
-
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresIn: data.expires_in,
-  }
-}
-
 /**
  * Development Mode: Log calendar event
  */

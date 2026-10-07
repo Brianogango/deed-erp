@@ -46,14 +46,3 @@ export function getTool(name: string): ToolDefinition | undefined {
 export function allTools(): ToolDefinition[] {
   return REGISTRY
 }
-
-/** @deprecated Prefer provider-agnostic tool defs via chat-engine / provider layer. */
-export function anthropicToolsFor(allowedNames: string[]) {
-  return REGISTRY
-    .filter(t => allowedNames.includes(t.name))
-    .map(t => ({
-      name: t.name,
-      description: t.description,
-      input_schema: t.inputSchema as any,
-    }))
-}

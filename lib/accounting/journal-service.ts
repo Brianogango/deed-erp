@@ -127,10 +127,6 @@ async function resolveJournalId(db: AccountingDb, journalCode: string): Promise<
   }
 }
 
-export async function assertFiscalPeriodOpen(date: Date | string): Promise<void> {
-  return assertFiscalPeriodOpenWith(prisma, date)
-}
-
 function postingError(message: string, status = 409): Error {
   const err = new Error(message)
   ;(err as Error & { status?: number }).status = status

@@ -8,7 +8,7 @@
 
 import { canCancelOrResetInvoice } from '@/lib/finance-controls'
 
-export interface RawInvoiceLine {
+interface RawInvoiceLine {
   qty?: number | string
   unitPrice?: number | string
   taxRate?: number | string
@@ -25,7 +25,7 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? n : 0
 }
 
-export interface ComputedInvoiceLineMoney {
+interface ComputedInvoiceLineMoney {
   qty: number
   unitPrice: number
   taxRate: number
@@ -57,7 +57,7 @@ export function computeInvoiceLineMoney(line: RawInvoiceLine): ComputedInvoiceLi
   return { qty, unitPrice, taxRate, discountPct, gross, discountAmount, lineSubtotal, lineTax, lineTotal }
 }
 
-export interface ComputedInvoiceTotals {
+interface ComputedInvoiceTotals {
   subtotal: number
   taxAmount: number
   discountAmount: number
@@ -171,7 +171,7 @@ export function shouldApplyInvoiceEditQuery(
 }
 
 /** Client-store invoice line shape (deed_invoices). */
-export interface ClientInvoiceLine {
+interface ClientInvoiceLine {
   id: string
   description: string
   qty: number
@@ -281,12 +281,12 @@ export const POSTED_INVOICE_ECONOMIC_PUT_KEYS = [
   'invoiceNumber', 'ref',
 ] as const
 
-export function mapClientInvoiceStatus(raw: string | undefined): string | undefined {
+function mapClientInvoiceStatus(raw: string | undefined): string | undefined {
   if (!raw) return undefined
   return CLIENT_TO_PRISMA_INVOICE_STATUS[raw] ?? raw
 }
 
-export type PostedInvoicePutDecision =
+type PostedInvoicePutDecision =
   | { kind: 'passthrough' }
   | { kind: 'stay_posted' }
   | { kind: 'already_posted' }

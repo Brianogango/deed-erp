@@ -67,7 +67,7 @@ export const DIA_MODES: Array<{
   },
 ]
 
-export type DiaStarter = { label: string; prompt: string }
+type DiaStarter = { label: string; prompt: string }
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)

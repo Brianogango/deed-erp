@@ -11,9 +11,9 @@
 
 import { stockStageLabel } from '@/lib/inventory/sellable-stock'
 
-export type SearchHitType = 'repair' | 'sale_order' | 'invoice' | 'serial' | 'contact' | 'delivery' | 'purchase'
+type SearchHitType = 'repair' | 'sale_order' | 'invoice' | 'serial' | 'contact' | 'delivery' | 'purchase'
 
-export type SearchHit = {
+type SearchHit = {
   type: SearchHitType
   id: string
   title: string
@@ -23,7 +23,7 @@ export type SearchHit = {
 }
 
 type Row = Record<string, any>
-export type SearchSources = {
+type SearchSources = {
   repairs?: Row[]
   saleOrders?: Row[]
   invoices?: Row[]

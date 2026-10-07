@@ -7,7 +7,7 @@ import { shouldUseSecureCookie } from '@/lib/auth/session-issuer'
 import { requiresPrivilegedMfa } from '@/lib/auth/mfa-policy'
 import { revokeAllTrustedBrowsers } from '@/lib/auth/trusted-browser'
 
-export type MfaChallengeMode = 'enroll' | 'verify'
+type MfaChallengeMode = 'enroll' | 'verify'
 
 type ChallengePayload = {
   uid: string
@@ -53,7 +53,7 @@ function safeEqualString(a: string, b: string): boolean {
   return aa.length === bb.length && crypto.timingSafeEqual(aa, bb)
 }
 
-export function parseMfaChallenge(token: string | undefined | null): ChallengePayload | null {
+function parseMfaChallenge(token: string | undefined | null): ChallengePayload | null {
   if (!token) return null
   const [encoded, signature, extra] = token.split('.')
   if (!encoded || !signature || extra) return null

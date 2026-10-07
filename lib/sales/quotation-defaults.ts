@@ -1,7 +1,7 @@
 /** Cash / due immediately unless a contact is given explicit credit terms. */
 export const DEFAULT_CONTACT_PAYMENT_TERMS_DAYS = 0
 
-export type QuotationPaymentTermsContact = {
+type QuotationPaymentTermsContact = {
   paymentTermsDays?: number | string | null
   paymentTerms?: string | null
 }

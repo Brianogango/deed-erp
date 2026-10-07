@@ -4,7 +4,7 @@ import { createHash } from 'crypto'
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 
-export type PrismaStateMap = Record<string, unknown>
+type PrismaStateMap = Record<string, unknown>
 
 function parseStoredValue(raw: string): unknown {
   try {
@@ -40,7 +40,7 @@ function compactRecordKey(base: string): string {
  * The occurrence suffix prevents malformed duplicate ids from violating the
  * database constraint while preserving every submitted record.
  */
-export function buildProjectionRows(key: string, values: unknown[]) {
+function buildProjectionRows(key: string, values: unknown[]) {
   const seen = new Map<string, number>()
   return values.map((payload, position) => {
     const fallback = `hash:${createHash('sha256').update(JSON.stringify(payload)).digest('hex')}`

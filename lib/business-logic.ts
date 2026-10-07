@@ -42,7 +42,7 @@ export interface PayrollEmployee {
   transportAllowance: number
 }
 
-export interface PayrollLine {
+interface PayrollLine {
   employeeId: string
   employeeName: string
   basicSalary: number
@@ -284,7 +284,7 @@ export function aggregatePayroll(lines: PayrollLine[]) {
 
 // ── Deposit payment helpers ───────────────────────────────────────────────────
 
-export type DepositStatus = 'active' | 'partially_paid' | 'fully_paid' | 'completed' | 'cancelled'
+type DepositStatus = 'active' | 'partially_paid' | 'fully_paid' | 'completed' | 'cancelled'
 
 /**
  * Determines the new deposit status after a payment.

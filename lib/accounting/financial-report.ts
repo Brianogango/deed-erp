@@ -7,12 +7,12 @@ import {
 } from '@/lib/accounting/gl-reports'
 import { buildCashFlowStatement } from '@/lib/accounting/cash-flow.server'
 
-export type FinancialReportPeriod = {
+type FinancialReportPeriod = {
   dateFrom: string
   dateTo: string
 }
 
-export type FinancialReportDailyRow = {
+type FinancialReportDailyRow = {
   date: string
   revenue: number
   expenses: number

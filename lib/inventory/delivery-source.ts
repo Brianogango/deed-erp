@@ -9,9 +9,9 @@ import { SALE_PICK_LOCATIONS } from '@/lib/inventory/sellable-stock'
 
 // Delivery notes ship sold goods, so they pick from Ready for Sale only —
 // never With Issues or Refurbishment (lib/inventory/sellable-stock.ts).
-export const DELIVERY_PICK_LOCATIONS: LocationId[] = [...SALE_PICK_LOCATIONS]
+const DELIVERY_PICK_LOCATIONS: LocationId[] = [...SALE_PICK_LOCATIONS]
 
-export type StockReservationLike = {
+type StockReservationLike = {
   productId: string
   location: string
   status: string

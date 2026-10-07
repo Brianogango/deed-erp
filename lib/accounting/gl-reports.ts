@@ -58,7 +58,7 @@ export function netBalanceForType(type: string, debit: number, credit: number): 
   return round2(credit - debit)
 }
 
-export type ProfitAndLossRow = {
+type ProfitAndLossRow = {
   code: string
   name: string
   type: string
@@ -66,7 +66,7 @@ export type ProfitAndLossRow = {
   amount: number
 }
 
-export type ProfitAndLossResult = {
+type ProfitAndLossResult = {
   currency: string
   dateFrom: string | null
   dateTo: string | null
@@ -115,7 +115,7 @@ export function buildProfitAndLossFromAggregates(
   }
 }
 
-export type BalanceSheetRow = {
+type BalanceSheetRow = {
   code: string
   name: string
   type: string
@@ -123,7 +123,7 @@ export type BalanceSheetRow = {
   amount: number
 }
 
-export type BalanceSheetResult = {
+type BalanceSheetResult = {
   currency: string
   asOf: string
   assets: BalanceSheetRow[]
@@ -294,7 +294,7 @@ export async function buildBalanceSheet(opts: { asOf: string }) {
   return buildBalanceSheetFromAggregates(aggregateJournalLines(lines), opts.asOf)
 }
 
-export type GeneralLedgerLine = {
+type GeneralLedgerLine = {
   id: string
   entryRef: string
   entryDate: string

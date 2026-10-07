@@ -8,7 +8,7 @@
 import { useEffect } from 'react'
 import { isSlimRow } from '@/lib/store-slim'
 
-export const PATCH_ROWS_EVENT = 'deed_patch_rows'
+const PATCH_ROWS_EVENT = 'deed_patch_rows'
 
 const inflight = new Map<string, Promise<Record<string, unknown> | null>>()
 

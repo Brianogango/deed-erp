@@ -1,16 +1,16 @@
 import { sendEmail, type EmailMessage, type EmailResult, type MailboxProfile } from './email'
 import { sendNotification, formatPhoneNumber, type NotificationResult } from './notifications'
 
-export type MessageChannel = 'email' | 'whatsapp' | 'sms'
-export type MessagePurpose = 'invoice' | 'repair_link' | 'repair_quote' | 'credentials' | 'general' | 'payment_receipt'
+type MessageChannel = 'email' | 'whatsapp' | 'sms'
+type MessagePurpose = 'invoice' | 'repair_link' | 'repair_quote' | 'credentials' | 'general' | 'payment_receipt'
 
-export interface MessagingRecipient {
+interface MessagingRecipient {
   name?: string
   email?: string | null
   phone?: string | null
 }
 
-export interface MessagingContent {
+interface MessagingContent {
   subject: string
   html: string
   text: string
@@ -18,7 +18,7 @@ export interface MessagingContent {
   whatsappText?: string
 }
 
-export interface SendMessageInput {
+interface SendMessageInput {
   purpose: MessagePurpose
   recipient: MessagingRecipient
   channels: MessageChannel[]
@@ -32,14 +32,14 @@ export interface SendMessageInput {
   metadata?: Record<string, unknown>
 }
 
-export interface ChannelSendResult {
+interface ChannelSendResult {
   success: boolean
   channel: MessageChannel
   messageId?: string
   error?: string
 }
 
-export interface MultiChannelSendResult {
+interface MultiChannelSendResult {
   success: boolean
   results: Record<MessageChannel, ChannelSendResult>
 }

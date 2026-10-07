@@ -9,10 +9,10 @@ import { planDepositDuplicates, type DepositDuplicate } from '@/lib/accounting/l
 import { loadAppState } from '@/lib/server-store'
 import { addInvoicesToList } from '@/lib/documents-broadcast.server'
 
-export type VatGap = { invoiceId: string; ref: string; type: string; vat: number; journalId: string }
+type VatGap = { invoiceId: string; ref: string; type: string; vat: number; journalId: string }
 
-export type ListGap = { ref: string; date: string; total: number }
-export type TillGap = { ref: string; date: string; total: number; customer: string; cashier: string; inLedger: boolean }
+type ListGap = { ref: string; date: string; total: number }
+type TillGap = { ref: string; date: string; total: number; customer: string; cashier: string; inLedger: boolean }
 
 type Row = Record<string, any>
 const uuid = (v: unknown) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v ?? ''))

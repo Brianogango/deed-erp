@@ -7,8 +7,7 @@ import {
   processStockDelivery,
   processStockPosSale,
   processStockReceipt,
-  processStockVendorReturn,
-  reversePosSaleValuation,
+  processStockVendorReturn
 } from '@/lib/inventory/valuation-service'
 
 type ReceiptLine = {
@@ -24,7 +23,7 @@ type PoLine = {
   qty?: number
 }
 
-export async function isAutomatedValuationEnabled(): Promise<boolean> {
+async function isAutomatedValuationEnabled(): Promise<boolean> {
   try {
     const state = await loadAppState(['deed_systemSettings'])
     const ss = state.deed_systemSettings as { invAutomatedValuation?: boolean } | null
@@ -42,7 +41,7 @@ function collectWarnings(results: any[]) {
 }
 
 /** Chart / journal / analytic setup gaps must not reverse POS or delivery stock. */
-export function isFinanceSetupGap(message: string | null | undefined): boolean {
+function isFinanceSetupGap(message: string | null | undefined): boolean {
   const value = String(message || '')
   return /Unknown journal code/i.test(value)
     || /Unknown account/i.test(value)
@@ -222,29 +221,6 @@ export async function postPosValuationFromPayload(params: {
     }
   }
   return finalizeValuation(results, { allowMissingProduct: true, allowFinanceSetupGap: true })
-}
-export async function reversePosValuationFromPayload(params: {
-  orderRef: string
-  lines: Array<{ productId?: string; qty?: number }>
-  userId?: string
-}) {
-  const results = []
-  for (const line of params.lines || []) {
-    const productId = String(line.productId || '').trim()
-    if (!productId) continue
-    try {
-      const result = await reversePosSaleValuation({
-        productId,
-        qty: Math.max(0, Math.floor(Number(line.qty) || 0)),
-        reference: params.orderRef,
-        userId: params.userId,
-      })
-      results.push({ productId, result })
-    } catch (err) {
-      results.push({ productId, error: err instanceof Error ? err.message : 'failed' })
-    }
-  }
-  return { ok: true as const, results }
 }
 
 export async function postCustomerReturnValuation(params: {

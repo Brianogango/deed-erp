@@ -14,7 +14,7 @@ import {
   type CommercialPdfLine,
 } from '@/lib/commercial-pdf'
 
-export interface DnPrintOptions {
+interface DnPrintOptions {
   recipientName?: string
   recipientPhone?: string
   recipientIdNumber?: string
@@ -22,7 +22,7 @@ export interface DnPrintOptions {
   notes?: string
 }
 
-export interface DnProductRef {
+interface DnProductRef {
   id: string
   description?: string
   name?: string
@@ -162,20 +162,4 @@ export async function downloadDeliveryNotePdf(
     }
     return false
   }
-}
-
-/** @deprecated Prefer downloadDeliveryNotePdf — kept for call-site compatibility during migration. */
-export async function printDeliveryNote(
-  delivery: Delivery,
-  serials: SerialNumber[],
-  options: DnPrintOptions = {},
-  company?: CompanySettings,
-  bankAccounts: BankAccount[] = [],
-  products: DnProductRef[] = [],
-): Promise<boolean> {
-  if (!company) {
-    console.error('printDeliveryNote requires company settings for the commercial PDF template')
-    return false
-  }
-  return downloadDeliveryNotePdf(delivery, serials, company, bankAccounts, options, products)
 }

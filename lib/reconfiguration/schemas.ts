@@ -115,7 +115,7 @@ export const completeSchema = z.object({
 })
 
 /** One slot on the bench form — RAM and SSD share this shape. */
-export const benchSlotSchema = z.object({
+const benchSlotSchema = z.object({
   action: z.enum(['none', 'pull_one', 'swap', 'add_one']),
   moduleCount: z.number().int().min(1).max(4).optional(),
   pullCapacityGb: z.number().int().min(1).optional(),
@@ -148,12 +148,6 @@ export const cancelSchema = z.object({
   version: z.number().int().min(1),
   reason: z.string().min(1).max(2000),
 })
-
-export const reverseSchema = z.object({
-  version: z.number().int().min(1),
-  reason: z.string().min(1).max(2000),
-})
-
 export const seedInstallationSchema = z.object({
   serialId: z.string().min(1),
   components: z.array(

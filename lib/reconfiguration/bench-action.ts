@@ -59,7 +59,7 @@ export interface BenchSlotRequest {
   storageType?: string | null
 }
 
-export interface BenchStockMove {
+interface BenchStockMove {
   kind: 'remove' | 'install'
   slot: BenchSlot
   productId: string
@@ -69,7 +69,7 @@ export interface BenchStockMove {
   slotNumber: number
 }
 
-export interface BenchSlotResult {
+interface BenchSlotResult {
   slot: BenchSlot
   action: BenchActionKind
   beforeGb: number
@@ -81,7 +81,7 @@ export interface BenchSlotResult {
   error?: string
 }
 
-export interface BenchJobResult {
+interface BenchJobResult {
   ram: BenchSlotResult
   storage: BenchSlotResult
   before: { ramGb: number; storageGb: number; displayName: string }
@@ -131,7 +131,7 @@ function equalSplit(totalGb: number, count: number): number[] {
  * When the technician has not recorded a component graph, build modules from
  * the declared stick/drive count and the current total GB.
  */
-export function inferModules(req: BenchSlotRequest): BenchModule[] {
+function inferModules(req: BenchSlotRequest): BenchModule[] {
   if (req.currentModules && req.currentModules.length > 0) {
     return req.currentModules.map((m, idx) => ({
       ...m,
@@ -401,7 +401,7 @@ export function applyBenchSlot(req: BenchSlotRequest): BenchSlotResult {
   }
 }
 
-export function inferTransactionType(ram: BenchSlotResult, storage: BenchSlotResult): ReconfigTransactionType {
+function inferTransactionType(ram: BenchSlotResult, storage: BenchSlotResult): ReconfigTransactionType {
   const ramDelta = ram.action === 'none' ? 0 : ram.afterGb - ram.beforeGb
   const storDelta = storage.action === 'none' ? 0 : storage.afterGb - storage.beforeGb
   if (ramDelta < 0 && storDelta <= 0) return 'downgrade_for_sale'
@@ -424,7 +424,7 @@ function describeSlot(result: BenchSlotResult): string | null {
   return `Swap ${label} (${result.beforeGb}GB → ${result.afterGb}GB)`
 }
 
-export function describeBenchJob(ram: BenchSlotResult, storage: BenchSlotResult): string {
+function describeBenchJob(ram: BenchSlotResult, storage: BenchSlotResult): string {
   return [describeSlot(ram), describeSlot(storage)].filter(Boolean).join('. ') || 'Reconfiguration'
 }
 

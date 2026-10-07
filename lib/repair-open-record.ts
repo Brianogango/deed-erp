@@ -4,7 +4,7 @@
  * which hid the list and rendered nothing.
  */
 
-export type RepairWorkspaceIdKind = 'none' | 'repair' | 'refurb' | 'unknown'
+type RepairWorkspaceIdKind = 'none' | 'repair' | 'refurb' | 'unknown'
 
 export function resolveRepairWorkspaceId(
   activeId: string | null | undefined,
@@ -49,7 +49,7 @@ export function canApplyPolledRepair(opts: {
   return opts.fetchGeneration === opts.localGeneration
 }
 
-export type RepairDetailPanel = 'hidden' | 'detail' | 'loading' | 'missing'
+type RepairDetailPanel = 'hidden' | 'detail' | 'loading' | 'missing'
 
 export function repairDetailPanel(opts: {
   view: 'list' | 'intake' | 'detail'

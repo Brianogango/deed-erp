@@ -6,7 +6,7 @@ import {
   type ParsedInboundEmail,
 } from '@/lib/crm/sales-inbox-leads'
 
-export interface SalesImapConfig {
+interface SalesImapConfig {
   host: string
   port: number
   secure: boolean

@@ -6,27 +6,26 @@ import {
   Invoice, POSOrder, Expense, JournalEntry, Deposit,
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
-import { invoicePaymentStatus } from '@/lib/odoo-sales-flow'
 import { computeCashbookTotals } from '@/lib/finance-alerts'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { EmptyState } from '@/components/ui'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-export function monthLabel(ym: string) {
+function monthLabel(ym: string) {
   if (!ym) return 'All months'
   const [y, m] = ym.split('-')
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', month: 'long', year: 'numeric' })
 }
 
-export function toYM(d: string) { return d.slice(0, 7) }
+function toYM(d: string) { return d.slice(0, 7) }
 
 /**
  * Display label for a bank account. The account-holder `name` is the company
  * name on every account ("Deed Technologies Ltd"), so it can never tell
  * accounts apart — the bank name + account number is the differentiator.
  */
-export function bankAccountLabel(
+function bankAccountLabel(
   acc: { name?: string | null; bankName?: string | null; accountNo?: string | null } | null | undefined,
   opts?: { withAccountNo?: boolean },
 ): string {
@@ -41,7 +40,7 @@ export function bankAccountLabel(
 }
 
 /** Short badge for compact cards — initials of the bank name, never a raw id. */
-export function bankAccountCode(acc: { id: string; bankName?: string | null; name?: string | null }): string {
+function bankAccountCode(acc: { id: string; bankName?: string | null; name?: string | null }): string {
   const src = String(acc.bankName || acc.name || acc.id)
   const code = src.split(/\s+/).map(w => w[0] ?? '').join('').toUpperCase().slice(0, 5)
   return code || '—'
@@ -63,7 +62,7 @@ function expenseBank(pm: string): string {
 
 // ── COA category lookup ───────────────────────────────────────────────────────
 // Map a transaction sourceType (+ optional expense sub-category) to a COA account name.
-export function getCOACategory(
+function getCOACategory(
   sourceType: CashbookEntry['sourceType'],
   accounts: Account[],
   expenseCategory?: string,

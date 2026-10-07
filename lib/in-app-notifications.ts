@@ -57,11 +57,11 @@ const DEFAULT_ICON: Record<NotifType, string> = {
   repair: '🔧',
 }
 
-export function defaultNotifIcon(type: NotifType): string {
+function defaultNotifIcon(type: NotifType): string {
   return DEFAULT_ICON[type] ?? '🔔'
 }
 
-export function normalizeNotification(n: AppNotification): AppNotification {
+function normalizeNotification(n: AppNotification): AppNotification {
   const read = Boolean(n.read || n.readAt)
   return {
     ...n,
@@ -77,7 +77,7 @@ function pickEarliestReadAt(a?: string | null, b?: string | null): string | null
 }
 
 /** Prefer sticky read: if either side is read, result stays read. */
-export function stickyReadMerge(remote: AppNotification, local: AppNotification): AppNotification {
+function stickyReadMerge(remote: AppNotification, local: AppNotification): AppNotification {
   const base = normalizeNotification({ ...remote, ...local, id: local.id || remote.id })
   const read = Boolean(remote.read || local.read || remote.readAt || local.readAt)
   const readAt = read
@@ -149,8 +149,6 @@ export function userIdsWithRoles(
     excludeUserId,
   )
 }
-
-export interface BuiltNotification extends AppNotification {}
 
 /**
  * Build notification rows for recipients (pure). Caller prepends into state.

@@ -6,8 +6,8 @@ import {
 } from '@/lib/accounting/expense-pos-accounts'
 import { commitPosting, type PostingLineInput } from '@/lib/accounting/posting-service'
 
-export const LOAN_LIABILITY_ACCOUNT = '3401 - Bank Loan'
-export const LOAN_INTEREST_ACCOUNT = '6701 - Interest Expense'
+const LOAN_LIABILITY_ACCOUNT = '3401 - Bank Loan'
+const LOAN_INTEREST_ACCOUNT = '6701 - Interest Expense'
 
 /** Loan received: Dr bank, Cr Bank Loan (a liability, not income). */
 export function buildLoanDrawdownLines(params: {

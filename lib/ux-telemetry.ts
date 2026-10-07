@@ -1,4 +1,4 @@
-export type UxEventType =
+type UxEventType =
   | 'search_open'
   | 'search_navigate'
   | 'notification_open'
@@ -11,7 +11,7 @@ export type UxEventType =
   | 'task_abandon'
   | 'error'
 
-export type UxEvent = {
+type UxEvent = {
   id: string
   type: UxEventType
   at: string

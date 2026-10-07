@@ -158,7 +158,7 @@ export function resolveEmailProvider(): 'sendgrid' | 'ses' | 'smtp' {
   return 'sendgrid'
 }
 
-export type EmailConfigStatus = {
+type EmailConfigStatus = {
   ready: boolean
   provider: 'sendgrid' | 'ses' | 'smtp'
   nodeEnv: string
@@ -544,7 +544,7 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
 const escapeHtml = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-export type QuoteEmailKind = 'initial' | 'update'
+type QuoteEmailKind = 'initial' | 'update'
 
 const quoteCompanyName = () => process.env.PDF_COMPANY_NAME || 'Deed Technologies'
 const quoteSalesEmail = () => process.env.SALES_EMAIL || process.env.PDF_COMPANY_EMAIL || 'sales@deed.co.ke'
@@ -801,19 +801,6 @@ export const generateRfqEmail = (rfq: {
     ].filter(Boolean).join('\n'),
   }
 }
-
-/**
- * Send Quote via Email
- */
-export const sendQuoteEmail = async (quote: Parameters<typeof generateQuoteEmail>[0] & { to: string }): Promise<EmailResult> => {
-  const emailContent = generateQuoteEmail(quote)
-  return sendEmail({
-    to: quote.to,
-    mailbox: 'sales',
-    ...emailContent,
-  })
-}
-
 /**
  * Development Mode: Log email instead of sending
  */

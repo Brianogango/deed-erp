@@ -10,9 +10,9 @@
  * Pure: the component hands in the store lists.
  */
 
-export type TrailKind = 'repair' | 'quote' | 'sale_order' | 'invoice' | 'payment' | 'delivery'
+type TrailKind = 'repair' | 'quote' | 'sale_order' | 'invoice' | 'payment' | 'delivery'
 
-export type TrailStep = {
+type TrailStep = {
   kind: TrailKind
   label: string
   ref: string
@@ -21,7 +21,7 @@ export type TrailStep = {
   state: 'done' | 'current' | 'waiting'
 }
 
-export type NextStep = { label: string; href: string; tone: 'action' | 'waiting' | 'done' }
+type NextStep = { label: string; href: string; tone: 'action' | 'waiting' | 'done' }
 
 type Repair = { id: string; ref: string; status: string; saleOrderId?: string; linkedSaleOrderId?: string; salesQuoteId?: string; invoiceId?: string; linkedInvoiceId?: string; previousInvoiceIds?: string[]; quote?: { approvedDate?: string } | null }
 type SaleOrder = { id: string; ref?: string; orderNumber?: string; status: string; repairId?: string; quoteId?: string }

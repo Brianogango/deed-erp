@@ -3,7 +3,7 @@
  * Role lists intentionally mirror lib/auth/authorization.ts server matrix.
  */
 
-export type InventoryRole =
+type InventoryRole =
   | 'director'
   | 'admin_officer'
   | 'finance_officer'
@@ -82,16 +82,6 @@ export function canPrintInventoryLabels(role: InventoryRole | null | undefined) 
 
 export function canViewPurchaseCost(role: InventoryRole | null | undefined) {
   return !!role && COST_VIEWERS.includes(role)
-}
-
-export function canViewVendorLedger(role: InventoryRole | null | undefined) {
-  return !!role && [
-    'director',
-    'admin_officer',
-    'finance_officer',
-    'inventory_officer',
-    'technical_lead',
-  ].includes(role)
 }
 
 /** Archive / restore product masters (soft-hide via isActive). */

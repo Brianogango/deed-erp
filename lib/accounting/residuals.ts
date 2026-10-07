@@ -5,11 +5,8 @@
  * Payment "outstanding" = unallocated cash still on the receipt/payment.
  */
 
-import { invoiceResidual, roundMoney } from '@/lib/accounting/money'
-
-export { invoiceResidual, roundMoney }
-
-export type PaymentAllocationState =
+import { roundMoney } from '@/lib/accounting/money'
+type PaymentAllocationState =
   | 'unallocated'
   | 'partial'
   | 'fully_allocated'
@@ -49,9 +46,4 @@ export function isOutstandingPayment(params: {
 }): boolean {
   if (params.isVoided) return false
   return paymentUnallocated(params.amount, params.allocatedSum) > 0.009
-}
-
-/** Invoice open balance — alias kept for ageing / AR lists. */
-export function invoiceOpenResidual(total: number, amountPaid: number): number {
-  return invoiceResidual(total, amountPaid)
 }

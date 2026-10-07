@@ -2,7 +2,7 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { Contact } from '@/lib/store'
 import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
 
-export const CONTACT_STORE_KEY = 'deed_contacts'
+const CONTACT_STORE_KEY = 'deed_contacts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i
 
@@ -127,7 +127,7 @@ export function clientToContact(client: any): Contact {
   }
 }
 
-export function normalizeContact(body: ContactInput, existing?: Contact): Contact | string {
+function normalizeContact(body: ContactInput, existing?: Contact): Contact | string {
   const name = cleanText(body.name) ?? existing?.name ?? ''
   if (!name) return 'Contact name is required'
 
@@ -177,7 +177,7 @@ export function normalizeContact(body: ContactInput, existing?: Contact): Contac
   }
 }
 
-export function contactToClientData(contact: Contact, includeCreateFields = false): Record<string, unknown> {
+function contactToClientData(contact: Contact, includeCreateFields = false): Record<string, unknown> {
   return {
     ...(includeCreateFields && isUuid(contact.id) ? { id: contact.id } : {}),
     ...(includeCreateFields ? { clientNumber: clientNumber(), createdAt: asDate(contact.createdAt) } : {}),

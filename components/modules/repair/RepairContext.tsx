@@ -1,11 +1,11 @@
 'use client'
 import { createContext, useContext } from 'react'
-import type { ReactNode, RefObject, MutableRefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { useRepairStore } from '@/lib/store'
 
 type View = 'list' | 'intake' | 'detail'
 
-export interface RepairCtxValue {
+interface RepairCtxValue {
   // Store
   repairs: ReturnType<typeof useRepairStore>['repairs']
   contacts: ReturnType<typeof useRepairStore>['contacts']

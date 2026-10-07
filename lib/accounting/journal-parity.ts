@@ -5,14 +5,14 @@
  * Pure helpers — no DB.
  */
 
-export type JournalBlobLike = {
+type JournalBlobLike = {
   ref?: unknown
   totalDebit?: unknown
   totalCredit?: unknown
   lines?: Array<{ debit?: unknown; credit?: unknown }>
 }
 
-export type JournalRefCompareResult = {
+type JournalRefCompareResult = {
   blobRefCount: number
   prismaRefCount: number
   matched: number
@@ -23,7 +23,7 @@ export type JournalRefCompareResult = {
   ok: boolean
 }
 
-export type JournalAmountDriftSample = {
+type JournalAmountDriftSample = {
   ref: string
   blobDebit: number
   blobCredit: number
@@ -31,14 +31,14 @@ export type JournalAmountDriftSample = {
   prismaCredit: number
 }
 
-export type JournalAmountDriftResult = {
+type JournalAmountDriftResult = {
   sampled: number
   mismatched: number
   samples: JournalAmountDriftSample[]
   ok: boolean
 }
 
-export type JournalDeepParityResult = {
+type JournalDeepParityResult = {
   ok: boolean
   blobCount: number
   prismaCount: number

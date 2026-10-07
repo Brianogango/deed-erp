@@ -24,7 +24,7 @@ export function normalizeProductIdentity(value: unknown): string {
   return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
-export function productIdentityKeys(row: {
+function productIdentityKeys(row: {
   name?: unknown
   sku?: unknown
   barcode?: unknown

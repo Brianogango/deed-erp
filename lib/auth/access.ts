@@ -1,6 +1,6 @@
 import type { ModuleId, PublicUser, UserRole } from './types'
 
-export const MODULE_LABELS: Record<ModuleId, string> = {
+const MODULE_LABELS: Record<ModuleId, string> = {
   dashboard: 'Dashboard',
   sales: 'Sales',
   crm: 'CRM',
@@ -80,13 +80,13 @@ export const formatModuleLabel = (moduleId: string | null | undefined) => {
   return formatRoleLabel(moduleId)
 }
 
-export const COMPANY_PROPERTY_MANAGER_ROLES: readonly UserRole[] = ['director', 'admin_officer']
-export const COMPANY_PROPERTY_VIEWER_ROLES: readonly UserRole[] = ['director', 'admin_officer', 'finance_officer']
+const COMPANY_PROPERTY_MANAGER_ROLES: readonly UserRole[] = ['director', 'admin_officer']
+const COMPANY_PROPERTY_VIEWER_ROLES: readonly UserRole[] = ['director', 'admin_officer', 'finance_officer']
 
 export const canManageCompanyPropertyRole = (role?: string | null) =>
   COMPANY_PROPERTY_MANAGER_ROLES.includes(normalizeClientRole(role) as UserRole)
 
-export const canViewCompanyPropertyRole = (role?: string | null) =>
+const canViewCompanyPropertyRole = (role?: string | null) =>
   COMPANY_PROPERTY_VIEWER_ROLES.includes(normalizeClientRole(role) as UserRole)
 
 /** Monthly depreciation: Finance posts it; Admin/Director can too. */
@@ -125,14 +125,6 @@ export const formatRoleLabel = (role: string | null | undefined) => {
 
 // Convenience role-group helpers used across modules.
 export const isDirector         = (role?: string | null) => normalizeClientRole(role) === 'director'
-export const isAdminOfficer     = (role?: string | null) => normalizeClientRole(role) === 'admin_officer'
-export const isFinanceOfficer   = (role?: string | null) => normalizeClientRole(role) === 'finance_officer'
-export const isInventoryOfficer = (role?: string | null) => normalizeClientRole(role) === 'inventory_officer'
-export const isKilimallOfficer  = (role?: string | null) => normalizeClientRole(role) === 'kilimall_officer'
-export const isTechnicalLead    = (role?: string | null) => normalizeClientRole(role) === 'technical_lead'
-export const isTechnician       = (role?: string | null) => normalizeClientRole(role) === 'technician'
-export const isSalesRep         = (role?: string | null) => normalizeClientRole(role) === 'sales_rep'
-
 // Keep client-side HR controls aligned with the server permission matrix.
 // Leave decisions are intentionally broader than general HR administration:
 // finance and technical leads may decide leave through the dedicated API, while
@@ -153,10 +145,6 @@ export const canApproveLeaveRole = (role?: string | null) =>
 
 // Backward-compatible helper names retained for existing module code.
 export const isAdmin      = isDirector
-export const isFinance    = isFinanceOfficer
-export const isLeadTech   = isTechnicalLead
-export const isRepairTech = isTechnician
-
 // Composite checks.
 export const canManageMoney   = (role?: string | null) =>
   ['director', 'finance_officer', 'admin_officer'].includes(normalizeClientRole(role))
@@ -166,8 +154,3 @@ export const canManageFullFinance = (role?: string | null) =>
 /** Draft customer invoice from confirmed SO. */
 export const canCreateCustomerInvoiceFromSO = (role?: string | null) =>
   ['director', 'finance_officer', 'admin_officer'].includes(normalizeClientRole(role))
-export const canManageProcess = (role?: string | null) => ['director', 'admin_officer', 'finance_officer'].includes(normalizeClientRole(role))
-export const canManageTech    = (role?: string | null) => ['director', 'technical_lead'].includes(normalizeClientRole(role))
-export const canManageSettings = (role?: string | null) => ['director', 'admin_officer'].includes(normalizeClientRole(role))
-export const canViewAuditTrail = (role?: string | null) => normalizeClientRole(role) === 'director'
-export const isTechRole       = (role?: string | null) => ['technical_lead', 'technician'].includes(normalizeClientRole(role))

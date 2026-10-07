@@ -1,4 +1,4 @@
-export type EditableSerialFields = {
+type EditableSerialFields = {
   serial: string
   barcode?: string
   notes?: string
@@ -7,7 +7,7 @@ export type EditableSerialFields = {
   specs?: string
 }
 
-export type SerialEditContext = {
+type SerialEditContext = {
   id: string
   serial: string
   barcode?: string

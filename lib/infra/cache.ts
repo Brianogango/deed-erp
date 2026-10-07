@@ -1,12 +1,6 @@
 import 'server-only'
 import { getInfraRedis } from '@/lib/infra/redis'
 
-const KEY_PREFIX = 'deed:cache:'
-
-export function cacheKey(parts: Array<string | number | null | undefined>): string {
-  return KEY_PREFIX + parts.map(part => String(part ?? '')).join(':')
-}
-
 export async function cacheGet<T>(key: string): Promise<T | null> {
   try {
     const redis = await getInfraRedis()
@@ -24,15 +18,6 @@ export async function cacheSet(key: string, value: unknown, ttlSeconds: number):
     await redis.set(key, JSON.stringify(value), Math.max(1, ttlSeconds))
   } catch {
     // fail-open — callers still have the live path
-  }
-}
-
-export async function cacheDel(key: string): Promise<void> {
-  try {
-    const redis = await getInfraRedis()
-    await redis.del(key)
-  } catch {
-    // ignore
   }
 }
 

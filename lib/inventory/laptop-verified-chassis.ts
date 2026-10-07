@@ -13,13 +13,13 @@ export type VerifiedChassis = {
   ports: string | null
 }
 
-export type SkuOverride = {
+type SkuOverride = {
   test: RegExp
   description: string
 }
 
 /** Exact retail SKUs looked up by product number. */
-export const LAPTOP_SKU_OVERRIDES: SkuOverride[] = [
+const LAPTOP_SKU_OVERRIDES: SkuOverride[] = [
   {
     test: /14\s*-?\s*fm0013dx/i,
     description:
@@ -51,7 +51,7 @@ export const LAPTOP_SKU_OVERRIDES: SkuOverride[] = [
  * Most-specific regex first. Screen size is chassis-standard.
  * Resolution / touch / GPU are set only when the official spec lists a single value for every config.
  */
-export const VERIFIED_LAPTOP_CHASSIS: VerifiedChassis[] = [
+const VERIFIED_LAPTOP_CHASSIS: VerifiedChassis[] = [
   { test: /omnibook.*16-as|16\s*-?\s*as0043dx/i, screenSize: '16', resolution: '3K (2880 x 1800) OLED', touch: true, form: '2-in-1', graphics: 'Intel Arc 140V GPU', ports: '1 Thunderbolt 4 USB-C 40Gbps, 1 USB-C 10Gbps, 2 USB-A 10Gbps, HDMI 2.1, headphone/microphone combo' },
   { test: /14\s*-?\s*fm0013dx|omnibook.*fm0013/i, screenSize: '14', resolution: '2K (1920 x 1200)', touch: true, form: '2-in-1', graphics: 'Intel Arc 130V GPU (8GB)', ports: '1 Thunderbolt 4 USB-C 40Gbps, 1 USB-C 10Gbps, 2 USB-A 10Gbps, HDMI 2.1, headphone/microphone combo' },
   { test: /16-am0073dx|omen\s*16.*am0073/i, screenSize: '16', resolution: '2K (1920 x 1200)', touch: false, form: 'clamshell', graphics: 'NVIDIA GeForce RTX 5060 Laptop GPU (8GB GDDR7)', ports: '1 USB-C 10Gbps (Power Delivery, DisplayPort 1.4), 1 USB-A 10Gbps, 2 USB-A 5Gbps, HDMI 2.1, RJ-45, headphone/microphone combo' },

@@ -33,7 +33,7 @@ export const REPAIR_PROGRESS_ORDER: RepairStatus[] = [
   'closed',
 ]
 
-export type RepairProgressCandidate = {
+type RepairProgressCandidate = {
   status: RepairStatus | string
   repairPath?: 'diagnosis_first' | 'direct_repair' | string | null
   procurementRequests?: unknown[] | null

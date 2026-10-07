@@ -12,7 +12,7 @@ export const SERIAL_STATUS_LABEL: Record<SerialNumber['status'], string> = {
   capitalised: 'Capitalised',
 }
 
-export type ReceiptSerialView = {
+type ReceiptSerialView = {
   serial: string
   serialId?: string
   status?: SerialNumber['status']
@@ -22,7 +22,7 @@ export type ReceiptSerialView = {
   location?: LocationId
 }
 
-export type ReceiptLineView = {
+type ReceiptLineView = {
   productId: string
   productName: string
   qtyExpected: number

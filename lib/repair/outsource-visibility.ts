@@ -12,7 +12,7 @@
 
 export const OUTSOURCE_OVERDUE_DAYS = 7
 
-export type OutsourceJobLike = {
+type OutsourceJobLike = {
   repairOrderId?: string | null
   status?: string | null
   vendorName?: string | null

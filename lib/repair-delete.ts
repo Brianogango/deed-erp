@@ -1,4 +1,4 @@
-export type RepairDeleteLike = {
+type RepairDeleteLike = {
   status?: string
   invoiceId?: string
   linkedInvoiceId?: string

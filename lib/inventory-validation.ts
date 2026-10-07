@@ -1,4 +1,4 @@
-export type OpeningStockValidationLine = {
+type OpeningStockValidationLine = {
   productId: string
   productName?: string
   qty: number
@@ -7,7 +7,7 @@ export type OpeningStockValidationLine = {
   serialSkus?: string[]
 }
 
-export type ReceiptValidationLine = {
+type ReceiptValidationLine = {
   productId: string
   productName?: string
   qtyReceived: number

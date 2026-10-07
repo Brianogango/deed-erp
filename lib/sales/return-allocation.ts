@@ -5,7 +5,7 @@
  * Return after invoice   → reverse delivered qty + credit-note lines for posted qty.
  */
 
-export interface SalesReturnSoLine {
+interface SalesReturnSoLine {
   id: string
   productId: string
   productName?: string
@@ -16,30 +16,30 @@ export interface SalesReturnSoLine {
   taxRate?: number
 }
 
-export interface SalesReturnDraftInvoice {
+interface SalesReturnDraftInvoice {
   id: string
   lines: Array<{ id: string; productId?: string; qty: number }>
 }
 
-export interface SalesReturnLineInput {
+interface SalesReturnLineInput {
   productId: string
   productName?: string
   qty: number
 }
 
-export interface SoLineAdjustment {
+interface SoLineAdjustment {
   soLineId: string
   qtyDelivered: number
   qtyInvoiced: number
 }
 
-export interface DraftInvoiceDeduction {
+interface DraftInvoiceDeduction {
   invoiceId: string
   lineId: string
   deductQty: number
 }
 
-export interface SalesCreditNoteLine {
+interface SalesCreditNoteLine {
   productId: string
   productName: string
   qty: number
@@ -49,7 +49,7 @@ export interface SalesCreditNoteLine {
   taxAmount: number
 }
 
-export interface SalesReturnAllocation {
+interface SalesReturnAllocation {
   soLineAdjustments: SoLineAdjustment[]
   draftInvoiceDeductions: DraftInvoiceDeduction[]
   creditLines: SalesCreditNoteLine[]

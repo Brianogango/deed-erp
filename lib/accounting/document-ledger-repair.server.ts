@@ -10,27 +10,27 @@ import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
 import { planExtraPaymentEntries, planUnlinkedReversals, type ExtraPaymentPlan, type PaymentEntry, type UnlinkedReversal } from '@/lib/accounting/document-ledger-repair'
 
-export type UnbookedDoc = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; date: string; total: number; paid: number }
+type UnbookedDoc = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; date: string; total: number; paid: number }
 /**
  * record_payment: the ledger entry is the money; add the payment record it lacks.
  * book_payment:   the payment record is the money; post the entry it lacks.
  * Neither is applied without a director approving that row.
  */
-export type ReviewAction = 'record_payment' | 'book_payment'
-export type ReviewDoc = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; total: number; paid: number; ledgerPaid: number; reason: string; action?: ReviewAction }
+type ReviewAction = 'record_payment' | 'book_payment'
+type ReviewDoc = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; total: number; paid: number; ledgerPaid: number; reason: string; action?: ReviewAction }
 
 const money = (n: number) => Math.round(n * 100) / 100
 const POSTED = ['approved', 'invoiced', 'paid', 'partially_paid'] as const
 
-export type BillAsSale = { invoiceId: string; ref: string; journalRef: string; amount: number }
-export type StalePosting = { invoiceId: string; ref: string; journalRef: string; booked: number; total: number }
-export type Misattached = { journalId: string; journalRef: string; fromRef: string; toInvoiceId: string; toRef: string; amount: number }
-export type TillAsInvoice = { invoiceId: string; ref: string; date: string; total: number; method: string }
+type BillAsSale = { invoiceId: string; ref: string; journalRef: string; amount: number }
+type StalePosting = { invoiceId: string; ref: string; journalRef: string; booked: number; total: number }
+type Misattached = { journalId: string; journalRef: string; fromRef: string; toInvoiceId: string; toRef: string; amount: number }
+type TillAsInvoice = { invoiceId: string; ref: string; date: string; total: number; method: string }
 
 const SKIP_REF = /^JRN\/(PAY|PAY-AP|DEL|CAPP|DEP|REFUND)\//
 
 /** One live posting entry at an amount that is no longer the document's (edited after booking: INV/2026/0273). */
-export async function findStalePostings(): Promise<StalePosting[]> {
+async function findStalePostings(): Promise<StalePosting[]> {
   const docs = await prisma.invoice.findMany({
     where: { status: { in: [...POSTED] }, NOT: { totalAmount: 0 }, isPosInvoice: false },
     select: { id: true, invoiceNumber: true, totalAmount: true, internalNotes: true },
@@ -52,7 +52,7 @@ export async function findStalePostings(): Promise<StalePosting[]> {
 }
 
 /** A document's posting entry attached to another document (JRN/BILL/2026/0037 on BILL/2026/0166). */
-export async function findMisattachedPostings(): Promise<Misattached[]> {
+async function findMisattachedPostings(): Promise<Misattached[]> {
   const entries = await prisma.journalEntry.findMany({
     where: { sourceType: { in: ['invoice', 'bill'] }, isReversed: false, reversalOfId: null, invoiceId: { not: null }, ref: { startsWith: 'JRN/' } },
     select: { id: true, ref: true, invoiceId: true, totalDebit: true },
@@ -101,7 +101,7 @@ export async function findMisattachedPostings(): Promise<Misattached[]> {
  * shows as owing money paid at the till. The receipt is recorded and booked
  * on the sale date with the till's payment method.
  */
-export async function findTillSalesBookedAsInvoices(): Promise<TillAsInvoice[]> {
+async function findTillSalesBookedAsInvoices(): Promise<TillAsInvoice[]> {
   const docs = await prisma.invoice.findMany({
     where: { invoiceNumber: { startsWith: 'POS/' }, status: { in: [...POSTED] }, NOT: { totalAmount: 0 } },
     select: { id: true, invoiceNumber: true, invoiceDate: true, totalAmount: true },
@@ -132,7 +132,7 @@ export async function findTillSalesBookedAsInvoices(): Promise<TillAsInvoice[]> 
   return out
 }
 
-export async function findUnlinkedReversals(): Promise<UnlinkedReversal[]> {
+async function findUnlinkedReversals(): Promise<UnlinkedReversal[]> {
   const revs = await prisma.journalEntry.findMany({
     where: { ref: { startsWith: 'REV/' }, reversalOfId: null, isReversed: false },
     select: { id: true, ref: true, totalDebit: true, invoiceId: true, isReversed: true, reversalOfId: true },
@@ -152,7 +152,7 @@ export async function findUnlinkedReversals(): Promise<UnlinkedReversal[]> {
  * Cr 5000 revenue): BILL/2026/0008 was booked that way on 5 Aug, so a supplier
  * bill showed as revenue and as money owed to us, and never as money we owe.
  */
-export async function findBillsBookedAsSales(): Promise<BillAsSale[]> {
+async function findBillsBookedAsSales(): Promise<BillAsSale[]> {
   const entries = await prisma.journalEntry.findMany({
     where: { isPosted: true, isReversed: false, reversalOfId: null, sourceType: 'invoice', invoiceId: { not: null },
       lines: { some: { accountLabel: { startsWith: '1800' }, debit: { gt: 0 } } } },

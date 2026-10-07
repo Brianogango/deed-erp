@@ -3,17 +3,12 @@ import { ImageNormalizationError, normalizeUploadedRepairPhoto } from '@/lib/ser
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import prisma from '@/lib/prisma'
 import {
-  PRODUCT_IMAGE_SLOTS,
   type ProductImageSlot,
-  type PartnerProductImage,
   productImageBlobKey,
   productImagePublicPath,
-  productImageRole,
-  partnerImagesFromSlots,
+  productImageRole
 } from '@/lib/product-images'
-import { matchCatalogPhotoPack } from '@/lib/catalog-photos'
-
-export type StoredProductPhoto = {
+type StoredProductPhoto = {
   slot: ProductImageSlot
   role: 'hero' | 'detail'
   dataUrl: string
@@ -24,7 +19,7 @@ export type StoredProductPhoto = {
 
 export { ImageNormalizationError }
 
-export async function normalizeProductPhoto(dataUrl: string) {
+async function normalizeProductPhoto(dataUrl: string) {
   return normalizeUploadedRepairPhoto(dataUrl)
 }
 
@@ -95,22 +90,4 @@ export async function deleteProductPhoto(productId: string, slot: ProductImageSl
       data: { primaryImageUrl: hero ? productImagePublicPath(productId, 1) : null },
     }).catch(() => {})
   }
-}
-
-export async function uploadedSlotsFor(productId: string): Promise<Partial<Record<ProductImageSlot, boolean>>> {
-  const photos = await loadProductPhotos(productId)
-  const slots: Partial<Record<ProductImageSlot, boolean>> = {}
-  for (const photo of photos) slots[photo.slot] = true
-  return slots
-}
-
-export async function partnerImagesForProduct(input: {
-  id: string
-  name?: string | null
-  sku?: string | null
-}): Promise<PartnerProductImage[]> {
-  const uploaded = await uploadedSlotsFor(input.id)
-  const hasUpload = PRODUCT_IMAGE_SLOTS.some(slot => uploaded[slot])
-  const pack = hasUpload ? null : matchCatalogPhotoPack(input.name, input.sku)
-  return partnerImagesFromSlots(input.id, uploaded, pack?.id ?? null)
 }

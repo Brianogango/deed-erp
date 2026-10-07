@@ -23,7 +23,7 @@ export const PURCHASE_LIFECYCLE_STATUSES: PurchaseLifecycleStatus[] = [
   'cancelled',
 ]
 
-export interface PurchaseSavedView {
+interface PurchaseSavedView {
   typeFilter: PurchaseTypeFilter
   statusFilter: PurchaseStatusFilter
 }
@@ -81,7 +81,7 @@ export const PURCHASE_STATUS_FILTER_LABELS: Record<PurchaseLifecycleStatus, stri
   cancelled: 'Cancelled',
 }
 
-export interface PurchaseFilterRow {
+interface PurchaseFilterRow {
   status: string
 }
 
@@ -89,7 +89,7 @@ export function purchaseDocType(status: string): PurchaseDocType {
   return status === 'draft' || status === 'sent' ? 'rfq' : 'po'
 }
 
-export function matchesPurchaseTypeFilter(
+function matchesPurchaseTypeFilter(
   status: string,
   typeFilter: PurchaseTypeFilter,
 ): boolean {
@@ -97,7 +97,7 @@ export function matchesPurchaseTypeFilter(
   return purchaseDocType(status) === typeFilter
 }
 
-export function matchesPurchaseStatusFilter(
+function matchesPurchaseStatusFilter(
   status: string,
   statusFilter: PurchaseStatusFilter,
 ): boolean {
@@ -124,7 +124,7 @@ export function filterPurchaseOrders<T extends PurchaseFilterRow>(
   return orders.filter(po => matchesPurchaseFilters(po.status, typeFilter, statusFilter))
 }
 
-export interface PurchaseFilterFacetCounts {
+interface PurchaseFilterFacetCounts {
   type: { all: number; rfq: number; po: number }
   status: Record<'all' | PurchaseLifecycleStatus, number>
 }

@@ -6,7 +6,7 @@
 
 import { clip, corporateEmailDomain, type LeadIdentity } from '@/lib/crm/lead-convert'
 
-export type LeadClientMatch = {
+type LeadClientMatch = {
   id: string
   name: string
   email?: string | null

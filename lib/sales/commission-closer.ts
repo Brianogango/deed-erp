@@ -39,16 +39,13 @@ export function isRepairLinkedSaleOrder(
   return Boolean(extractRepairRefFromText(notes))
 }
 
-export const COMMISSION_CLOSER_ROLES = [
+const COMMISSION_CLOSER_ROLES = [
   'sales_rep',
   'director',
   'admin_officer',
   'kilimall_officer',
 ] as const
-
-export type CommissionCloserRole = (typeof COMMISSION_CLOSER_ROLES)[number]
-
-export type CommissionCloserUser = {
+type CommissionCloserUser = {
   id: string
   name: string
   role?: string | null
@@ -67,7 +64,7 @@ export function isCommissionCloserRole(role?: string | null): boolean {
   return (COMMISSION_CLOSER_ROLES as readonly string[]).includes(String(role || ''))
 }
 
-export function toCommissionCloserOption(user: CommissionCloserUser): CommissionCloserOption {
+function toCommissionCloserOption(user: CommissionCloserUser): CommissionCloserOption {
   return {
     id: user.id,
     name: String(user.name || '').trim() || 'Unnamed',

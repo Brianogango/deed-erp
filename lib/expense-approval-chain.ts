@@ -10,7 +10,7 @@ export type ExpenseApprovalStep = {
 const EXPENSE_AMOUNT_THRESHOLD = 50_000
 
 /** Default ladder when no DB `expense` approval rule is active. */
-export function defaultExpenseApproverRoles(amount: number): string[] {
+function defaultExpenseApproverRoles(amount: number): string[] {
   if (amount > EXPENSE_AMOUNT_THRESHOLD) return ['finance_officer', 'director']
   return ['finance_officer']
 }
@@ -34,7 +34,7 @@ export function expenseChainIsComplete(chain?: ExpenseApprovalStep[]) {
   return Boolean(chain?.length) && (chain ?? []).every(s => s.status === 'approved')
 }
 
-export function currentPendingExpenseStep(chain?: ExpenseApprovalStep[]) {
+function currentPendingExpenseStep(chain?: ExpenseApprovalStep[]) {
   return chain?.find(s => s.status === 'pending')
 }
 

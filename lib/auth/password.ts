@@ -2,7 +2,7 @@ import 'server-only'
 import bcrypt from 'bcryptjs'
 
 export { MIN_PASSWORD_LENGTH } from './password-policy'
-export type VerifyPasswordResult = {
+type VerifyPasswordResult = {
   verified: boolean
   /** True when the stored hash is legacy SHA-256 and should be upgraded to bcrypt. */
   needsRehash: boolean

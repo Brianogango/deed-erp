@@ -90,7 +90,7 @@ function identityKeys(row: { name?: unknown; sku?: unknown; barcode?: unknown; p
  * Drop extra rows that share name/SKU/barcode (optimistic UUID + Prisma UUID).
  * First occurrence wins — callers should put the preferred list first.
  */
-export function collapseProductIdentityDuplicates<T extends {
+function collapseProductIdentityDuplicates<T extends {
   id?: string
   name?: unknown
   sku?: unknown

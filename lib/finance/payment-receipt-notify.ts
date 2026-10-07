@@ -10,7 +10,7 @@ import prisma from '@/lib/prisma'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { configuredPhoneChannels } from '@/lib/notifications/channel-availability'
 
-export type PaymentReceiptNotifyInput = {
+type PaymentReceiptNotifyInput = {
   invoiceId: string
   paymentId: string
   amount: number

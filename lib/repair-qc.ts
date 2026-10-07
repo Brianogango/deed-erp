@@ -1,6 +1,6 @@
 import type { RepairQAItem } from '@/lib/repair-types'
 
-export const DEFAULT_REPAIR_QC_DESCRIPTIONS = [
+const DEFAULT_REPAIR_QC_DESCRIPTIONS = [
   'Device powers on successfully',
   'Reported issue(s) fully resolved',
   'No new issues introduced during repair',

@@ -72,7 +72,3 @@ export function inferProductKind(input: {
 export function kindRequiresInventoryAccounts(kind: ProductKind): boolean {
   return kind === 'storable'
 }
-
-export function kindAllowsStockTracking(kind: ProductKind): boolean {
-  return kind !== 'service'
-}

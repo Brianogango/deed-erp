@@ -5,7 +5,7 @@
 
 import { roundMoney } from '@/lib/accounting/money'
 
-export type TaxTxnLike = {
+type TaxTxnLike = {
   direction: string
   taxAmount: unknown
   taxableBase: unknown
@@ -18,7 +18,7 @@ export type TaxTxnLike = {
   withholdingVat?: unknown
 }
 
-export type StatutoryVatReturn = {
+type StatutoryVatReturn = {
   currency: string
   source: 'tax_transactions'
   dateFrom: string | null

@@ -24,7 +24,7 @@ const DeliverySchema = z.object({
     serials: z.array(z.string()),
   })),
 })
-export type DeliveryExtract = { supplierName: string; documentReference: string; documentDate: string; rows: InboundSourceRow[]; engine: string }
+type DeliveryExtract = { supplierName: string; documentReference: string; documentDate: string; rows: InboundSourceRow[]; engine: string }
 
 const INSTRUCTIONS = `This is a supplier invoice, delivery note or packing list for computer equipment received by a shop in Kenya.
 Extract every product line exactly as written:
@@ -35,10 +35,6 @@ Extract every product line exactly as written:
 - serials: every serial number, service tag or IMEI listed for that line (often under the line or in a separate list). Copy them character by character; do not invent or complete any. Empty list if none are printed.
 Also give supplierName, documentReference (invoice / delivery note number) and documentDate (YYYY-MM-DD, or "" if absent).
 Skip totals, VAT, delivery charges and payment details.`
-
-export function documentReaderConfigured(env: NodeJS.ProcessEnv = process.env) {
-  return Boolean((env.ANTHROPIC_API_KEY || '').trim() || (env.GEMINI_API_KEY || env.GOOGLE_AI_API_KEY || '').trim())
-}
 
 function toResult(data: z.infer<typeof DeliverySchema>, engine: string): DeliveryExtract {
   return {

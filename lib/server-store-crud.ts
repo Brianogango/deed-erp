@@ -36,7 +36,7 @@ function parseBody(request: NextRequest): Promise<AnyRecord | null> {
 
 // ─── Factory types ────────────────────────────────────────────────────────────
 
-export interface CrudConfig<T extends object> {
+interface CrudConfig<T extends object> {
   /** localStorage / app_state key, e.g. 'deed_saleOrders' */
   storeKey: string
   /** Build a new item from raw POST body. Must assign a unique id. */
@@ -181,7 +181,7 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
 /**
  * Returns a PATCH handler for `/api/<resource>/[id]`.
  */
-export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
+function makePatchHandler<T extends object>(config: CrudConfig<T>) {
   return async function PATCH(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
     const { session, error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
@@ -229,7 +229,7 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
 /**
  * Returns a DELETE handler for `/api/<resource>/[id]`.
  */
-export function makeDeleteHandler<T extends object>(config: CrudConfig<T>) {
+function makeDeleteHandler<T extends object>(config: CrudConfig<T>) {
   return async function DELETE(_: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
     const { session, error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
@@ -260,13 +260,6 @@ export function makeCollectionHandlers<T extends object>(config: CrudConfig<T>) 
     GET: makeListHandler(config),
     POST: makeCreateHandler(config),
   }
-}
-
-/**
- * Returns a PUT handler for `/api/<resource>/[id]` — replaces the item (behaves like PATCH merge).
- */
-export function makePutHandler<T extends object>(config: CrudConfig<T>) {
-  return makePatchHandler(config)
 }
 
 /**

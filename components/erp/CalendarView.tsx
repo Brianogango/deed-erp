@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 
-export type CalendarItem = {
+type CalendarItem = {
   id: string
   date: string
   title: string

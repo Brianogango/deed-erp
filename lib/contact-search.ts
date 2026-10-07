@@ -1,4 +1,4 @@
-export type PickerContact = {
+type PickerContact = {
   id: string
   name: string
   phone?: string

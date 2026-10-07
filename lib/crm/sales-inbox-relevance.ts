@@ -10,13 +10,13 @@
 import type { ParsedInboundEmail } from '@/lib/crm/sales-inbox-leads'
 import { isFreeMailDomain, shouldSkipInboundEmail } from '@/lib/crm/sales-inbox-leads'
 
-export type InboundDisposition =
+type InboundDisposition =
   | { action: 'skip'; reason: string }
   | { action: 'review'; reason: string; score: number; signals: string[] }
   | { action: 'accept'; reason: string; score: number; signals: string[] }
 
 /** Local-parts that almost never write real RFQs. */
-export const DEFAULT_BLOCK_LOCALS = [
+const DEFAULT_BLOCK_LOCALS = [
   'noreply', 'no-reply', 'donotreply', 'do-not-reply', 'mailer-daemon',
   'postmaster', 'newsletter', 'news', 'marketing', 'promo', 'promotions',
   'notifications', 'notification', 'alerts', 'bounce', 'bounces',
@@ -24,7 +24,7 @@ export const DEFAULT_BLOCK_LOCALS = [
 ]
 
 /** Domains that are typically bulk / vendor blast sources. Extend via env. */
-export const DEFAULT_BLOCK_DOMAINS = [
+const DEFAULT_BLOCK_DOMAINS = [
   'mailchimp.com', 'mailchimpapp.net', 'sendgrid.net', 'sendgrid.com',
   'constantcontact.com', 'cmail19.com', 'mailgun.org', 'amazonses.com',
 ]

@@ -33,18 +33,13 @@ export type CustomerBillingType = 'walk_in' | 'corporate'
 export const DIAGNOSIS_FEE_LINE_DESCRIPTION = 'Diagnosis Fee'
 /** Policy default — flat fee for all Diagnosis First jobs. */
 export const DEFAULT_DIAGNOSIS_FEE_KES = 1000
-/** @deprecated Prefer DEFAULT_DIAGNOSIS_FEE_KES — kept for older settings blobs. */
-export const DEFAULT_DIAGNOSIS_FEE_REGULAR_KES = DEFAULT_DIAGNOSIS_FEE_KES
-/** @deprecated Prefer DEFAULT_DIAGNOSIS_FEE_KES — kept for older settings blobs. */
-export const DEFAULT_DIAGNOSIS_FEE_HIGH_END_KES = DEFAULT_DIAGNOSIS_FEE_KES
-
 /**
  * Mandatory flat diagnosis fee starts at this instant (Africa/Nairobi).
  * Repairs with intakeDate before this are not charged the new fee.
  */
 export const DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT = '2026-08-03T15:00:00+03:00'
 
-export type DiagnosisFeeSettings = {
+type DiagnosisFeeSettings = {
   /** Flat Diagnosis First fee (KES). Preferred. */
   diagnosisFeeKes?: number
   /** @deprecated Legacy tier amount — used only if diagnosisFeeKes is unset. */
@@ -101,10 +96,6 @@ export function diagnosisFeeLineBadge(repair: {
 export function normalizeDeviceTier(value: unknown): DeviceTier | null {
   if (value === 'regular' || value === 'high_end') return value
   return null
-}
-
-export function deviceTierLabel(tier: unknown): string {
-  return normalizeDeviceTier(tier) === 'high_end' ? 'High-end' : 'Regular'
 }
 
 /** Flat diagnosis fee from settings (policy: KES 1,000). */
@@ -265,7 +256,7 @@ function formatDiagnosisFeeKes(amount: number): string {
   return 'KES ' + Number(amount).toLocaleString('en-KE', { minimumFractionDigits: 2 })
 }
 
-export type DiagnosisFeeCustomerNotice = {
+type DiagnosisFeeCustomerNotice = {
   amount: number
   status: 'due' | 'paid' | 'invoiced'
   body: string

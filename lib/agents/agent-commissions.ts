@@ -178,7 +178,7 @@ export function evaluateAgentSales(input: { saleOrders: Row[]; posOrders: Row[];
   return out
 }
 
-export type JournalIntent = {
+type JournalIntent = {
   kind: 'earn' | 'reverse' | 'clawback'
   ref: string
   date: string

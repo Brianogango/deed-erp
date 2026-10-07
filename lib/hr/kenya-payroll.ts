@@ -2,7 +2,7 @@
  * Versioned Kenya payroll rules. Historical payroll must retain the ruleVersion
  * and calculated components; never recompute a posted payslip with a newer rule.
  */
-export type KenyaPayrollRules = {
+type KenyaPayrollRules = {
   version: string
   effectiveFrom: string
   nssfEmployeeRate: number
