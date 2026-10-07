@@ -12,6 +12,78 @@ import { addInvoicesToList } from '@/lib/documents-broadcast.server'
 export type VatGap = { invoiceId: string; ref: string; type: string; vat: number; journalId: string }
 
 export type ListGap = { ref: string; date: string; total: number }
+export type TillGap = { ref: string; date: string; total: number; customer: string; cashier: string; inLedger: boolean }
+
+type Row = Record<string, any>
+const uuid = (v: unknown) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v ?? ''))
+
+/**
+ * Till sales whose invoice never reached the database (POS/0096): the ticket
+ * and the till's ledger entry exist, so the money is booked, but with no
+ * invoice Finance cannot list it. Tickets of KES 0 are left alone.
+ */
+async function findTillSalesWithoutInvoice(): Promise<Array<TillGap & { ticket: Row }>> {
+  const raw = (await loadAppState(['deed_posOrders'])).deed_posOrders
+  const tickets = (Array.isArray(raw) ? raw as Row[] : []).filter(t => t?.ref && Number(t.total) > 0)
+  if (!tickets.length) return []
+  const have = await prisma.invoice.findMany({
+    where: { OR: [{ invoiceNumber: { in: tickets.map(t => String(t.ref)) } }, { id: { in: tickets.map(t => String(t.invoiceId ?? '')).filter(uuid) } }] },
+    select: { id: true, invoiceNumber: true },
+  })
+  const ids = new Set(have.map(h => h.id))
+  const refs = new Set(have.map(h => h.invoiceNumber))
+  const missing = tickets.filter(t => !refs.has(String(t.ref)) && !ids.has(String(t.invoiceId ?? '')))
+  const ledger = new Set((await prisma.journalEntry.findMany({
+    where: { ref: { in: missing.map(t => `JRN/${t.ref}`) }, isReversed: false },
+    select: { ref: true },
+  })).map(j => j.ref))
+  return missing.map(t => ({
+    ref: String(t.ref),
+    date: String(t.date ?? t.createdAt ?? '').slice(0, 10),
+    total: Number(t.total),
+    customer: String(t.customerName ?? 'Walk-in Customer'),
+    cashier: String(t.createdByName ?? ''),
+    inLedger: ledger.has(`JRN/${t.ref}`),
+    ticket: t,
+  })).sort((a, b) => b.date.localeCompare(a.date))
+}
+
+/** The invoice the till would have saved, from its ticket. */
+async function invoiceFromTicket(t: Row): Promise<Row> {
+  const lines = Array.isArray(t.lines) ? t.lines as Row[] : []
+  const productIds = lines.map(l => String(l.productId ?? '')).filter(uuid)
+  const known = new Set((await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true } })).map(p => p.id))
+  const taxRate = Number(t.taxTotal) > 0 && Number(t.subtotal) > 0 ? Math.round((Number(t.taxTotal) / Number(t.subtotal)) * 100) : 0
+  const date = String(t.date ?? t.createdAt ?? '').slice(0, 10)
+  return {
+    id: uuid(t.invoiceId) ? t.invoiceId : undefined,
+    ref: String(t.ref),
+    invoiceNumber: String(t.ref),
+    type: 'customer_invoice',
+    status: 'posted',
+    partnerId: t.customerId ?? 'walk-in',
+    partnerName: t.customerName ?? 'Walk-in Customer',
+    date, invoiceDate: date, dueDate: date,
+    lines: lines.map(l => {
+      const qty = Number(l.qty) || 1
+      const unitPrice = Number(l.price ?? l.unitPrice ?? 0)
+      return {
+        description: l.serialNumber ? `${l.productName} ×${qty} · SN ${l.serialNumber}` : `${l.productName ?? 'Item'} ×${qty}`,
+        qty,
+        unitPrice,
+        taxRate,
+        subtotal: Number(l.subtotal ?? unitPrice * qty),
+        productId: known.has(String(l.productId)) ? l.productId : undefined,
+      }
+    }),
+    subtotal: Number(t.subtotal ?? t.total),
+    taxTotal: Number(t.taxTotal ?? 0),
+    total: Number(t.total),
+    amountPaid: Number(t.total),
+    notes: [`POS ${t.ref}`, t.paymentReference ? `Ref ${t.paymentReference}` : '', 'Invoice rebuilt from the till ticket'].filter(Boolean).join(' · '),
+    isPosInvoice: true,
+  }
+}
 
 /** Documents in the invoices table that the Finance list does not show. */
 async function findMissingFromList(): Promise<ListGap[]> {
@@ -26,7 +98,7 @@ async function findMissingFromList(): Promise<ListGap[]> {
     .sort((a, b) => b.date.localeCompare(a.date))
 }
 
-export async function findLedgerCleanup(): Promise<{ deposits: DepositDuplicate[]; vat: VatGap[]; listMissing: ListGap[] }> {
+export async function findLedgerCleanup(): Promise<{ deposits: DepositDuplicate[]; vat: VatGap[]; listMissing: ListGap[]; tillMissing: TillGap[] }> {
   const depositEntries = await prisma.journalEntry.findMany({
     where: {
       isPosted: true, isReversed: false, reversalOfId: null,
@@ -56,7 +128,8 @@ export async function findLedgerCleanup(): Promise<{ deposits: DepositDuplicate[
     if (!posting) continue
     vat.push({ invoiceId: inv.id, ref: inv.invoiceNumber, type: String(inv.documentType), vat: Number(inv.taxAmount), journalId: posting.id })
   }
-  return { deposits, vat: vat.sort((a, b) => a.ref.localeCompare(b.ref)), listMissing: await findMissingFromList() }
+  const tillMissing = (await findTillSalesWithoutInvoice()).map(({ ticket: _ticket, ...gap }) => gap)
+  return { deposits, vat: vat.sort((a, b) => a.ref.localeCompare(b.ref)), listMissing: await findMissingFromList(), tillMissing }
 }
 
 type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
@@ -90,7 +163,28 @@ export async function applyLedgerCleanup(actorId: string): Promise<Result[]> {
       results.push({ ref: g.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not write VAT record' })
     }
   }
-  if (listMissing.length) {
+  // Till sales with no invoice: saved through the normal invoice route (a
+  // till invoice posts no entry there — the till's own entry already did).
+  const tills = await findTillSalesWithoutInvoice()
+  if (tills.length) {
+    const { POST: createInvoice } = await import('@/app/api/invoices/route')
+    for (const gap of tills) {
+      try {
+        const res = await createInvoice(new Request('http://internal/api/invoices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(await invoiceFromTicket(gap.ticket)),
+        }))
+        const body = await res.json().catch(() => null) as { error?: string } | null
+        results.push(res.ok
+          ? { ref: gap.ref, status: 'fixed', message: `Invoice rebuilt from the till ticket${gap.inLedger ? '' : ' — the till entry is missing from the ledger too'}` }
+          : { ref: gap.ref, status: 'failed', message: body?.error || `server returned ${res.status}` })
+      } catch (err) {
+        results.push({ ref: gap.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not rebuild' })
+      }
+    }
+  }
+  if (listMissing.length || tills.length) {
     try {
       const added = await addInvoicesToList()
       for (const ref of added) results.push({ ref, status: 'fixed', message: 'Added to the Finance list' })

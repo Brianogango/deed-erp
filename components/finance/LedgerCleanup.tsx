@@ -6,6 +6,7 @@ import type { DepositDuplicate } from '@/lib/accounting/ledger-cleanup'
 
 type VatGap = { invoiceId: string; ref: string; type: string; vat: number }
 type ListGap = { ref: string; date: string; total: number }
+type TillGap = { ref: string; date: string; total: number; customer: string; cashier: string; inLedger: boolean }
 type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
 
 /**
@@ -13,10 +14,10 @@ type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
  * twice and booked documents with no VAT record (lib/accounting/ledger-cleanup.ts).
  */
 export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg: string, type?: 'error' | 'success' | 'info') => void; canApply: boolean }) {
-  const [data, setData] = useState<{ deposits: DepositDuplicate[]; vat: VatGap[]; listMissing: ListGap[] } | null>(null)
+  const [data, setData] = useState<{ deposits: DepositDuplicate[]; vat: VatGap[]; listMissing: ListGap[]; tillMissing: TillGap[] } | null>(null)
   const [failed, setFailed] = useState<Result[]>([])
   const [busy, setBusy] = useState(false)
-  const count = data ? data.deposits.length + data.vat.length + data.listMissing.length : 0
+  const count = data ? data.deposits.length + data.vat.length + data.listMissing.length + data.tillMissing.length : 0
   const vatTotal = (data?.vat ?? []).reduce((s, g) => s + g.vat, 0)
 
   const load = async () => {
@@ -25,7 +26,7 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
       const res = await fetch('/api/accounting/ledger-cleanup', { cache: 'no-store' })
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error(body?.error || `server returned ${res.status}`)
-      setData({ deposits: body?.deposits ?? [], vat: body?.vat ?? [], listMissing: body?.listMissing ?? [] })
+      setData({ deposits: body?.deposits ?? [], vat: body?.vat ?? [], listMissing: body?.listMissing ?? [], tillMissing: body?.tillMissing ?? [] })
     } catch (err) {
       showToast(`Could not check: ${err instanceof Error ? err.message : 'error'}`, 'error')
     } finally {
@@ -35,7 +36,7 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
 
   const fix = async () => {
     if (!data || !count) return
-    if (!window.confirm(`Reverse ${data.deposits.length} duplicate deposit entr${data.deposits.length === 1 ? 'y' : 'ies'} and write VAT records for ${data.vat.length} document${data.vat.length === 1 ? '' : 's'} (${fmtKes(vatTotal)}), and put ${data.listMissing.length} document${data.listMissing.length === 1 ? '' : 's'} missing from the Finance list back on it?\n\nThe server's own deposit entry is kept. Reversals are dated today and written to the audit log.`)) return
+    if (!window.confirm(`Reverse ${data.deposits.length} duplicate deposit entr${data.deposits.length === 1 ? 'y' : 'ies'} and write VAT records for ${data.vat.length} document${data.vat.length === 1 ? '' : 's'} (${fmtKes(vatTotal)}), and put ${data.listMissing.length} document${data.listMissing.length === 1 ? '' : 's'} missing from the Finance list back on it, and rebuild ${data.tillMissing.length} till sale invoice${data.tillMissing.length === 1 ? '' : 's'} from their tickets?\n\nThe server's own deposit entry is kept. Reversals are dated today and written to the audit log.`)) return
     setBusy(true)
     try {
       const res = await fetch('/api/accounting/ledger-cleanup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
@@ -103,6 +104,22 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
           {data.listMissing.length} document{data.listMissing.length === 1 ? '' : 's'} saved but not on the Finance list:{' '}
           <span className="font-mono text-text-3">{data.listMissing.slice(0, 15).map(g => g.ref).join(', ')}{data.listMissing.length > 15 ? ` +${data.listMissing.length - 15} more` : ''}</span>
         </p>
+      )}
+      {data && data.tillMissing.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <p className="mb-1 text-xs font-bold text-text-2">{data.tillMissing.length} till sale{data.tillMissing.length === 1 ? '' : 's'} with no invoice (rebuilt from the ticket)</p>
+          <table className="w-full text-left text-[11px]">
+            <thead className="text-text-3"><tr><th className="py-1 pr-3">Ticket</th><th className="py-1 pr-3">Date</th><th className="py-1 pr-3">Customer</th><th className="py-1 pr-3">Cashier</th><th className="py-1 pr-3 text-right">Total</th><th className="py-1">In ledger</th></tr></thead>
+            <tbody>
+              {data.tillMissing.map(t => (
+                <tr key={t.ref} className="border-t border-border-lt">
+                  <td className="py-1 pr-3 font-mono">{t.ref}</td><td className="py-1 pr-3">{t.date}</td><td className="py-1 pr-3">{t.customer}</td>
+                  <td className="py-1 pr-3">{t.cashier}</td><td className="py-1 pr-3 text-right">{fmtKes(t.total)}</td><td className="py-1">{t.inLedger ? 'Yes' : 'No'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {failed.length > 0 && (
         <ul className="mt-3 space-y-1 text-xs text-red-700">
