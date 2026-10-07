@@ -8,6 +8,7 @@ import {
   buildInvoiceJournalInput,
 } from '@/lib/accounting/invoice-journals'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
+import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
 import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { writeFinancialAudit } from '@/lib/finance-audit'
@@ -311,10 +312,8 @@ export async function repostOrphanedInvoice(params: {
   // the reversal — nothing deletes tax_transactions when a journal is reversed
   // — so the return feed still carried these sales while the GL did not. This
   // is what makes the two agree again.
-  await prisma.taxTransaction.updateMany({
-    where: { sourceType: type === 'vendor_bill' ? 'vendor_bill' : 'invoice', sourceId: invoice.id },
-    data: { journalEntryId: journal.id },
-  })
+  // Invoices that never had them get them now.
+  await recordInvoiceTax(invoice.id, journal.id)
 
   await writeFinancialAudit({
     userId: params.actorId,

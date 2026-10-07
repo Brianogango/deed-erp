@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
           }).catch(() => [] as Array<{ ref: string }>)
           const number = String(inv.ref || inv.invoiceNumber || '')
           if (live.some(j => isPostingRef(j.ref, number))) continue
-          await postInvoiceJournalToPrisma({
+          const journal = await postInvoiceJournalToPrisma({
             id: String(inv.id),
             ref: String(inv.ref || inv.invoiceNumber || inv.id),
             invoiceNumber: String(inv.ref || inv.invoiceNumber || ''),
@@ -155,6 +155,8 @@ export async function POST(request: NextRequest) {
             taxAmount: Number(inv.taxTotal ?? inv.taxAmount ?? 0),
             lines: Array.isArray(inv.lines) ? inv.lines as any[] : [],
           })
+          const { recordInvoiceTax } = await import('@/lib/accounting/invoice-tax.server')
+          await recordInvoiceTax(String(inv.id), journal.id).catch(err => console.error('[import] VAT record failed:', inv.id, err))
           journalsPosted++
         } catch (err) {
           console.error('[import] invoice journal failed:', inv.id, err)

@@ -5,6 +5,7 @@ import { reverseJournalEntry } from '@/lib/accounting/journal-service'
 import { postInvoiceJournalToPrisma } from '@/lib/accounting/invoice-journals'
 import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
+import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
 
 /**
  * Make sure a confirmed invoice is in the ledger at its current amount.
@@ -56,5 +57,6 @@ export async function ensureInvoiceBooked(invoiceId: string, actorId?: string): 
     where: { id: invoiceId },
     data: { postingStatus: 'posted', postedJournalEntryId: journal.id, postedAt: new Date(), ...(actorId ? { postedById: actorId } : {}) },
   })
+  await recordInvoiceTax(invoiceId, journal.id).catch(err => console.error('[ensureInvoiceBooked] VAT record failed:', err))
   return { ref: journal.ref, action: live.length ? 'rebooked' : 'booked' }
 }

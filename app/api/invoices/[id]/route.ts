@@ -12,6 +12,7 @@ import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { buildInvoiceJournalInput, allocateInvoiceJournalRef } from '@/lib/accounting/invoice-journals'
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
+import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -442,56 +443,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
     if (willPostNow && postingJournal) {
       try {
         const journal = await createJournalEntry(postingJournal)
-        const postedItems = await prisma.invoiceItem.findMany({ where: { invoiceId: id } })
-        const partner = before.clientId
-          ? await prisma.client.findUnique({ where: { id: before.clientId }, select: { kraPin: true } })
-          : null
-        const taxPoint = data.invoiceDate ?? before.invoiceDate ?? new Date()
-        for (const item of postedItems) {
-          const category = String((item as any).taxCategory || 'not_selected')
-          await prisma.taxTransaction.upsert({
-            where: {
-              sourceType_sourceId_sourceLineId: {
-                sourceType: postingInvoiceType === 'vendor_bill' ? 'vendor_bill' : 'invoice',
-                sourceId: id,
-                sourceLineId: item.id,
-              },
-            },
-            update: {
-              direction: postingInvoiceType === 'vendor_bill' ? 'input' : 'output',
-              taxCategory: category,
-              taxRate: item.taxRate,
-              taxableBase: (item as any).taxableBase ?? item.lineSubtotal,
-              taxAmount: item.lineTax,
-              taxPoint,
-              taxPeriod: new Date(taxPoint).toISOString().slice(0, 7),
-              partnerPin: partner?.kraPin ?? null,
-              transmissionStatus: postingInvoiceType === 'vendor_bill' ? 'pending_evidence' : 'pending',
-              inputClaimEligible: postingInvoiceType === 'vendor_bill'
-                ? Boolean((item as any).taxClaimEligible)
-                : false,
-              journalEntryId: journal.id,
-            },
-            create: {
-              sourceType: postingInvoiceType === 'vendor_bill' ? 'vendor_bill' : 'invoice',
-              sourceId: id,
-              sourceLineId: item.id,
-              direction: postingInvoiceType === 'vendor_bill' ? 'input' : 'output',
-              taxCategory: category,
-              taxRate: item.taxRate,
-              taxableBase: (item as any).taxableBase ?? item.lineSubtotal,
-              taxAmount: item.lineTax,
-              taxPoint,
-              taxPeriod: new Date(taxPoint).toISOString().slice(0, 7),
-              partnerPin: partner?.kraPin ?? null,
-              transmissionStatus: postingInvoiceType === 'vendor_bill' ? 'pending_evidence' : 'pending',
-              inputClaimEligible: postingInvoiceType === 'vendor_bill'
-                ? Boolean((item as any).taxClaimEligible)
-                : false,
-              journalEntryId: journal.id,
-            },
-          })
-        }
+        await recordInvoiceTax(id, journal.id)
         const postedInvoice = await prisma.invoice.update({
           where: { id },
           data: {

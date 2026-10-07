@@ -411,6 +411,8 @@ export async function POST(request: Request) {
         journalInput.skipIfExists = true
         journalInput.ref = await allocateInvoiceJournalRef(journalInput.ref)
         const journal = await createJournalEntry(journalInput)
+        const { recordInvoiceTax } = await import('@/lib/accounting/invoice-tax.server')
+        await recordInvoiceTax(invoice.id, journal.id).catch(err => console.error('[invoice] VAT record failed:', err))
         await prisma.invoice.update({
           where: { id: invoice.id },
           data: {
