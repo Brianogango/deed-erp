@@ -23,6 +23,114 @@ const money = (n: number) => Math.round(n * 100) / 100
 const POSTED = ['approved', 'invoiced', 'paid', 'partially_paid'] as const
 
 export type BillAsSale = { invoiceId: string; ref: string; journalRef: string; amount: number }
+export type StalePosting = { invoiceId: string; ref: string; journalRef: string; booked: number; total: number }
+export type Misattached = { journalId: string; journalRef: string; fromRef: string; toInvoiceId: string; toRef: string; amount: number }
+export type TillAsInvoice = { invoiceId: string; ref: string; date: string; total: number; method: string }
+
+const SKIP_REF = /^JRN\/(PAY|PAY-AP|DEL|CAPP|DEP|REFUND)\//
+
+/** One live posting entry at an amount that is no longer the document's (edited after booking: INV/2026/0273). */
+export async function findStalePostings(): Promise<StalePosting[]> {
+  const docs = await prisma.invoice.findMany({
+    where: { status: { in: [...POSTED] }, NOT: { totalAmount: 0 }, isPosInvoice: false },
+    select: { id: true, invoiceNumber: true, totalAmount: true, internalNotes: true },
+  })
+  const entries = await prisma.journalEntry.findMany({
+    where: { invoiceId: { in: docs.map(d => d.id) }, sourceType: { in: ['invoice', 'bill'] }, isReversed: false, reversalOfId: null },
+    select: { ref: true, invoiceId: true, totalDebit: true },
+  })
+  const out: StalePosting[] = []
+  for (const d of docs) {
+    if (d.invoiceNumber.startsWith('POS') || String(d.internalNotes ?? '').includes(OPENING_BALANCE_MARKER)) continue
+    const live = entries.filter(e => e.invoiceId === d.id && isPostingRef(e.ref, d.invoiceNumber))
+    if (live.length !== 1) continue
+    const booked = Number(live[0].totalDebit)
+    const total = Math.abs(Number(d.totalAmount))
+    if (Math.abs(booked - total) > 0.01) out.push({ invoiceId: d.id, ref: d.invoiceNumber, journalRef: live[0].ref, booked, total })
+  }
+  return out.sort((a, b) => a.ref.localeCompare(b.ref))
+}
+
+/** A document's posting entry attached to another document (JRN/BILL/2026/0037 on BILL/2026/0166). */
+export async function findMisattachedPostings(): Promise<Misattached[]> {
+  const entries = await prisma.journalEntry.findMany({
+    where: { sourceType: { in: ['invoice', 'bill'] }, isReversed: false, reversalOfId: null, invoiceId: { not: null }, ref: { startsWith: 'JRN/' } },
+    select: { id: true, ref: true, invoiceId: true, totalDebit: true },
+  })
+  const candidates = entries.filter(e => !SKIP_REF.test(e.ref))
+  const docs = await prisma.invoice.findMany({
+    where: { id: { in: [...new Set(candidates.map(e => e.invoiceId!))] } },
+    select: { id: true, invoiceNumber: true },
+  })
+  const numberOf = new Map(docs.map(d => [d.id, d.invoiceNumber]))
+  // The ref names a document number, possibly with a copy suffix (/2). The
+  // number itself can end in digits (INV/2026/0102), so both readings are tried.
+  const misplaced = candidates
+    .map(e => ({ e, own: numberOf.get(e.invoiceId!) ?? '' }))
+    .filter(x => x.own && !isPostingRef(x.e.ref, x.own))
+  if (!misplaced.length) return []
+  const readings = (ref: string) => { const full = ref.slice(4); return [full, full.replace(/\/\d+$/, '')] }
+  const targets = await prisma.invoice.findMany({
+    where: { invoiceNumber: { in: [...new Set(misplaced.flatMap(x => readings(x.e.ref)))] } },
+    select: { id: true, invoiceNumber: true, totalAmount: true },
+  })
+  const byNumber = new Map(targets.map(t => [t.invoiceNumber, t]))
+  const wrong = misplaced
+    .map(x => ({ ...x, named: readings(x.e.ref).find(n => byNumber.has(n) && isPostingRef(x.e.ref, n)) ?? '' }))
+    .filter(x => x.named && x.named !== x.own)
+  const out: Misattached[] = []
+  for (const w of wrong) {
+    const target = byNumber.get(w.named)
+    // Only when the named document exists and the entry is exactly its amount.
+    if (!target || Math.abs(Math.abs(Number(target.totalAmount)) - Number(w.e.totalDebit)) > 0.01) continue
+    const toInvoiceId = target.id
+    // Only when the named document has no live posting entry of its own.
+    const own = await prisma.journalEntry.findFirst({
+      where: { invoiceId: toInvoiceId, sourceType: { in: ['invoice', 'bill'] }, isReversed: false, reversalOfId: null, ref: { startsWith: `JRN/${w.named}` } },
+      select: { ref: true },
+    })
+    if (own && isPostingRef(own.ref, w.named)) continue
+    out.push({ journalId: w.e.id, journalRef: w.e.ref, fromRef: w.own, toInvoiceId, toRef: w.named, amount: Number(w.e.totalDebit) })
+  }
+  return out
+}
+
+/**
+ * Till sales re-booked as customer invoices (POS/0017: Dr receivables /
+ * Cr revenue on 4 Oct) with the till receipt never booked, so the customer
+ * shows as owing money paid at the till. The receipt is recorded and booked
+ * on the sale date with the till's payment method.
+ */
+export async function findTillSalesBookedAsInvoices(): Promise<TillAsInvoice[]> {
+  const docs = await prisma.invoice.findMany({
+    where: { invoiceNumber: { startsWith: 'POS/' }, status: { in: [...POSTED] }, NOT: { totalAmount: 0 } },
+    select: { id: true, invoiceNumber: true, invoiceDate: true, totalAmount: true },
+  })
+  if (!docs.length) return []
+  const entries = await prisma.journalEntry.findMany({
+    where: { invoiceId: { in: docs.map(d => d.id) }, isPosted: true },
+    select: { invoiceId: true, ref: true, sourceType: true, isReversed: true, reversalOfId: true, lines: { where: { accountLabel: { startsWith: '1800' } }, select: { debit: true, credit: true } } },
+  })
+  const payments = new Set((await prisma.payment.findMany({ where: { invoiceId: { in: docs.map(d => d.id) }, isVoided: false }, select: { invoiceId: true } })).map(p => p.invoiceId))
+  const tickets = (await import('@/lib/server-store')).loadAppState
+  const raw = (await tickets(['deed_posOrders'])).deed_posOrders
+  const methodOf = new Map((Array.isArray(raw) ? raw as Array<Record<string, any>> : []).map(t => [String(t.ref), String(t.payment ?? 'cash')]))
+  const out: TillAsInvoice[] = []
+  for (const d of docs) {
+    if (payments.has(d.id)) continue
+    const list = entries.filter(e => e.invoiceId === d.id)
+    const salesAsInvoice = list.some(e => !e.isReversed && !e.reversalOfId && e.sourceType === 'invoice' && isPostingRef(e.ref, d.invoiceNumber) && e.lines.some(l => Number(l.debit) > 0))
+    const arNet = list.reduce((s, e) => s + e.lines.reduce((t, l) => t + Number(l.debit) - Number(l.credit), 0), 0)
+    if (!salesAsInvoice || Math.abs(arNet - Number(d.totalAmount)) > 0.01) continue
+    const m = (methodOf.get(d.invoiceNumber) ?? 'cash').toLowerCase()
+    out.push({
+      invoiceId: d.id, ref: d.invoiceNumber, date: d.invoiceDate ? d.invoiceDate.toISOString().slice(0, 10) : '',
+      total: Number(d.totalAmount),
+      method: m.includes('mpesa') ? 'mpesa' : m.includes('card') ? 'card' : m.includes('bank') ? 'bank_transfer' : 'cash',
+    })
+  }
+  return out
+}
 
 export async function findUnlinkedReversals(): Promise<UnlinkedReversal[]> {
   const revs = await prisma.journalEntry.findMany({
@@ -62,7 +170,7 @@ export async function findBillsBookedAsSales(): Promise<BillAsSale[]> {
     .sort((a, b) => a.ref.localeCompare(b.ref))
 }
 
-export async function findDocumentLedgerRepairs(): Promise<{ extraPayments: ExtraPaymentPlan[]; unbooked: UnbookedDoc[]; review: ReviewDoc[]; unlinkedReversals: UnlinkedReversal[]; billsAsSales: BillAsSale[] }> {
+export async function findDocumentLedgerRepairs(): Promise<{ extraPayments: ExtraPaymentPlan[]; unbooked: UnbookedDoc[]; review: ReviewDoc[]; unlinkedReversals: UnlinkedReversal[]; billsAsSales: BillAsSale[]; stalePostings: StalePosting[]; misattached: Misattached[]; tillAsInvoice: TillAsInvoice[] }> {
   const docs = await prisma.invoice.findMany({
     where: { status: { in: [...POSTED] }, NOT: { totalAmount: 0 }, isPosInvoice: false },
     select: { id: true, invoiceNumber: true, documentType: true, invoiceDate: true, totalAmount: true, amountPaid: true, internalNotes: true },
@@ -129,9 +237,13 @@ export async function findDocumentLedgerRepairs(): Promise<{ extraPayments: Extr
     else if (recorded > ledgerPaid + 0.5) review.push({ ...base, ledgerPaid, reason: 'Payment recorded on the document but not in the ledger', action: 'book_payment' })
   }
   const byRef = (a: { ref: string }, b: { ref: string }) => a.ref.localeCompare(b.ref)
+  const misattached = await findMisattachedPostings()
+  // A document about to receive its own entry back is not "unbooked".
+  const receiving = new Set(misattached.map(m => m.toInvoiceId))
   return {
-    extraPayments: extraPayments.sort(byRef), unbooked: unbooked.sort(byRef), review: review.sort(byRef),
+    extraPayments: extraPayments.sort(byRef), unbooked: unbooked.filter(u => !receiving.has(u.invoiceId)).sort(byRef), review: review.sort(byRef),
     unlinkedReversals: await findUnlinkedReversals(), billsAsSales: await findBillsBookedAsSales(),
+    stalePostings: await findStalePostings(), misattached, tillAsInvoice: await findTillSalesBookedAsInvoices(),
   }
 }
 
@@ -179,7 +291,64 @@ export async function applyDocumentLedgerRepairs(actorId: string): Promise<Resul
       results.push({ ref: b.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not rebook' })
     }
   }
-  // 3. With those settled, the rest reads the current state.
+  // 3. A posting entry on the wrong document: move it to the one it names (no balance change).
+  for (const m of await findMisattachedPostings()) {
+    try {
+      await prisma.$transaction(async tx => {
+        await tx.journalEntry.update({ where: { id: m.journalId }, data: { invoiceId: m.toInvoiceId, sourceId: m.toInvoiceId } })
+        await tx.invoice.update({ where: { id: m.toInvoiceId }, data: { postingStatus: 'posted', postedJournalEntryId: m.journalId } })
+        await writeFinancialAuditInTx(tx, {
+          userId: actorId, action: 'reattach_posting_entry', entityType: 'journal_entry', entityId: m.journalId,
+          oldValues: { journalRef: m.journalRef, document: m.fromRef }, newValues: { document: m.toRef },
+        })
+      })
+      results.push({ ref: m.toRef, status: 'fixed', message: `${m.journalRef} moved from ${m.fromRef} to ${m.toRef} (no balance change)` })
+    } catch (err) {
+      results.push({ ref: m.toRef, status: 'failed', message: err instanceof Error ? err.message : 'could not move' })
+    }
+  }
+  // 4. Edited after booking: reverse the old amount, book the current one.
+  for (const s of await findStalePostings()) {
+    try {
+      const out = await ensureInvoiceBooked(s.invoiceId, actorId)
+      await writeFinancialAudit({
+        userId: actorId, action: 'rebook_edited_document', entityType: 'invoice', entityId: s.invoiceId,
+        oldValues: { journalRef: s.journalRef, booked: s.booked }, newValues: { journalRef: out.ref, total: s.total },
+      })
+      results.push({ ref: s.ref, status: 'fixed', message: `Re-booked at KES ${Math.round(s.total).toLocaleString('en-KE')} (was ${Math.round(s.booked).toLocaleString('en-KE')})` })
+    } catch (err) {
+      results.push({ ref: s.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not re-book' })
+    }
+  }
+  // 5. Till sales booked as invoices: record and book the till receipt.
+  for (const t of await findTillSalesBookedAsInvoices()) {
+    try {
+      const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: t.invoiceId }, include: { client: { select: { name: true } } } })
+      const paidAt = new Date(`${t.date}T12:00:00Z`)
+      const payment = await prisma.payment.create({
+        data: {
+          invoiceId: t.invoiceId, amount: t.total, amountBase: t.total, paymentType: 'customer_receipt',
+          partnerId: invoice.clientId, paymentMethod: t.method as never, paidAt,
+          reference: `Till ${t.ref}`, notes: 'Till receipt recorded in Integrity controls (sale was re-booked as an invoice)',
+          idempotencyKey: `till-receipt:${t.invoiceId}`, createdById: actorId,
+          allocations: { create: { invoiceId: t.invoiceId, amount: t.total, applicationDate: paidAt } },
+        },
+      })
+      const journal = await postInvoicePaymentJournalToPrisma({
+        invoice: { id: invoice.id, ref: invoice.invoiceNumber, invoiceNumber: invoice.invoiceNumber, type: 'customer_invoice', partnerName: invoice.client?.name ?? undefined } as never,
+        amount: t.total, paymentId: payment.id, method: t.method, createdById: actorId, date: t.date,
+      })
+      await prisma.payment.update({ where: { id: payment.id }, data: { journalId: journal.id, postingStatus: 'posted' } })
+      await writeFinancialAudit({
+        userId: actorId, action: 'book_till_receipt', entityType: 'invoice', entityId: t.invoiceId, relatedJournalId: journal.id,
+        oldValues: { payment: null }, newValues: { paymentId: payment.id, amount: t.total, method: t.method },
+      })
+      results.push({ ref: t.ref, status: 'fixed', message: `Till receipt of KES ${Math.round(t.total).toLocaleString('en-KE')} (${t.method}) booked` })
+    } catch (err) {
+      results.push({ ref: t.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not book the receipt' })
+    }
+  }
+  // 6. With those settled, the rest reads the current state.
   const { extraPayments, unbooked } = await findDocumentLedgerRepairs()
   for (const plan of extraPayments) {
     for (const r of plan.reverse) {

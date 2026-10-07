@@ -8,7 +8,10 @@ type Unbooked = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; date
 type Review = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; total: number; paid: number; ledgerPaid: number; reason: string; action?: 'record_payment' | 'book_payment' }
 type Reversal = { reversalRef: string; originalRef: string; amount: number }
 type BillAsSale = { invoiceId: string; ref: string; journalRef: string; amount: number }
-type Data = { extraPayments: ExtraPaymentPlan[]; unbooked: Unbooked[]; review: Review[]; unlinkedReversals: Reversal[]; billsAsSales: BillAsSale[] }
+type Stale = { ref: string; booked: number; total: number }
+type Misattached = { journalRef: string; fromRef: string; toRef: string }
+type TillAsInvoice = { ref: string; date: string; total: number; method: string }
+type Data = { extraPayments: ExtraPaymentPlan[]; unbooked: Unbooked[]; review: Review[]; unlinkedReversals: Reversal[]; billsAsSales: BillAsSale[]; stalePostings: Stale[]; misattached: Misattached[]; tillAsInvoice: TillAsInvoice[] }
 type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
 
 /**
@@ -51,7 +54,7 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
   const copies = (data?.extraPayments ?? []).reduce((n, p) => n + p.reverse.length, 0)
   const copyTotal = (data?.extraPayments ?? []).reduce((s, p) => s + p.reverse.reduce((t, r) => t + r.amount, 0), 0)
   const unbookedTotal = (data?.unbooked ?? []).reduce((s, d) => s + d.total, 0)
-  const count = copies + (data?.unbooked.length ?? 0) + (data?.unlinkedReversals.length ?? 0) + (data?.billsAsSales.length ?? 0)
+  const count = copies + (data?.unbooked.length ?? 0) + (data?.unlinkedReversals.length ?? 0) + (data?.billsAsSales.length ?? 0) + (data?.stalePostings.length ?? 0) + (data?.misattached.length ?? 0) + (data?.tillAsInvoice.length ?? 0)
 
   const load = async () => {
     setBusy(true)
@@ -59,7 +62,7 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
       const res = await fetch('/api/accounting/document-ledger-repair', { cache: 'no-store' })
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error(body?.error || `server returned ${res.status}`)
-      setData({ extraPayments: body?.extraPayments ?? [], unbooked: body?.unbooked ?? [], review: body?.review ?? [], unlinkedReversals: body?.unlinkedReversals ?? [], billsAsSales: body?.billsAsSales ?? [] })
+      setData({ extraPayments: body?.extraPayments ?? [], unbooked: body?.unbooked ?? [], review: body?.review ?? [], unlinkedReversals: body?.unlinkedReversals ?? [], billsAsSales: body?.billsAsSales ?? [], stalePostings: body?.stalePostings ?? [], misattached: body?.misattached ?? [], tillAsInvoice: body?.tillAsInvoice ?? [] })
     } catch (err) {
       showToast(`Could not check: ${err instanceof Error ? err.message : 'error'}`, 'error')
     } finally {
@@ -69,7 +72,7 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
 
   const fix = async () => {
     if (!data || !count) return
-    if (!window.confirm(`${data.unlinkedReversals.length ? `Mark ${data.unlinkedReversals.length} entr${data.unlinkedReversals.length === 1 ? 'y' : 'ies'} as reversed by the reversal already posted (no balance change). ` : ''}${data.billsAsSales.length ? `Re-book ${data.billsAsSales.length} bill${data.billsAsSales.length === 1 ? '' : 's'} booked as sales. ` : ''}Then: reverse ${copies} duplicate payment entr${copies === 1 ? 'y' : 'ies'} (${fmtKes(copyTotal)}) on ${data.extraPayments.length} document${data.extraPayments.length === 1 ? '' : 's'}, and book ${data.unbooked.length} confirmed document${data.unbooked.length === 1 ? '' : 's'} that have no ledger entry (${fmtKes(unbookedTotal)})?\n\nEach recorded payment keeps one entry. Documents are booked on their own date at their current amount. Everything is written to the audit log.`)) return
+    if (!window.confirm(`${data.unlinkedReversals.length ? `Mark ${data.unlinkedReversals.length} entr${data.unlinkedReversals.length === 1 ? 'y' : 'ies'} as reversed by the reversal already posted (no balance change). ` : ''}${data.billsAsSales.length ? `Re-book ${data.billsAsSales.length} bill${data.billsAsSales.length === 1 ? '' : 's'} booked as sales. ` : ''}${data.misattached.length ? `Move ${data.misattached.length} posting entr${data.misattached.length === 1 ? 'y' : 'ies'} to the document they belong to. ` : ''}${data.stalePostings.length ? `Re-book ${data.stalePostings.length} document${data.stalePostings.length === 1 ? '' : 's'} edited after booking. ` : ''}${data.tillAsInvoice.length ? `Book the till receipt for ${data.tillAsInvoice.length} till sale${data.tillAsInvoice.length === 1 ? '' : 's'} booked as invoices. ` : ''}Then: reverse ${copies} duplicate payment entr${copies === 1 ? 'y' : 'ies'} (${fmtKes(copyTotal)}) on ${data.extraPayments.length} document${data.extraPayments.length === 1 ? '' : 's'}, and book ${data.unbooked.length} confirmed document${data.unbooked.length === 1 ? '' : 's'} that have no ledger entry (${fmtKes(unbookedTotal)})?\n\nEach recorded payment keeps one entry. Documents are booked on their own date at their current amount. Everything is written to the audit log.`)) return
     setBusy(true)
     try {
       const res = await fetch('/api/accounting/document-ledger-repair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
@@ -120,6 +123,24 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
         <p className="mt-3 text-xs text-text-2">
           <span className="font-bold">{data.billsAsSales.length} bill{data.billsAsSales.length === 1 ? '' : 's'} booked as sales</span> (receivables and revenue instead of payables · {fmtKes(data.billsAsSales.reduce((t, b) => t + b.amount, 0))}):{' '}
           <span className="font-mono text-text-3">{data.billsAsSales.slice(0, 12).map(b => b.ref).join(', ')}{data.billsAsSales.length > 12 ? ` +${data.billsAsSales.length - 12} more` : ''}</span>
+        </p>
+      )}
+      {data && data.misattached.length > 0 && (
+        <p className="mt-3 text-xs text-text-2">
+          <span className="font-bold">{data.misattached.length} posting entr{data.misattached.length === 1 ? 'y' : 'ies'} on the wrong document</span> (moved, no balance change):{' '}
+          <span className="font-mono text-text-3">{data.misattached.map(m => `${m.toRef} (on ${m.fromRef})`).join(', ')}</span>
+        </p>
+      )}
+      {data && data.stalePostings.length > 0 && (
+        <p className="mt-3 text-xs text-text-2">
+          <span className="font-bold">{data.stalePostings.length} document{data.stalePostings.length === 1 ? '' : 's'} edited after booking</span> (re-booked at the current amount):{' '}
+          <span className="font-mono text-text-3">{data.stalePostings.map(x => `${x.ref} ${fmtKes(x.booked)} → ${fmtKes(x.total)}`).join(', ')}</span>
+        </p>
+      )}
+      {data && data.tillAsInvoice.length > 0 && (
+        <p className="mt-3 text-xs text-text-2">
+          <span className="font-bold">{data.tillAsInvoice.length} till sale{data.tillAsInvoice.length === 1 ? '' : 's'} booked as invoices with no receipt</span> (the till receipt is booked on the sale date):{' '}
+          <span className="font-mono text-text-3">{data.tillAsInvoice.map(x => `${x.ref} ${fmtKes(x.total)} ${x.method}`).join(', ')}</span>
         </p>
       )}
       {data && data.extraPayments.length > 0 && (
