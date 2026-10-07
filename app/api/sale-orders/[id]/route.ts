@@ -339,7 +339,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
  * still stops it: the actor must be on that repair, and nothing may have been
  * delivered or invoiced against the order.
  */
-async function applyRepairQuoteRevision(id: string, body: any, session: { user: { id: string; role: string } }) {
+async function applyRepairQuoteRevision(id: string, body: any, session: { user: { id: string; role: string; actsAsTechnician?: boolean } }) {
   const existing = await prisma.saleOrder.findUnique({ where: { id }, include: { items: true } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -349,6 +349,7 @@ async function applyRepairQuoteRevision(id: string, body: any, session: { user: 
   const accessError = repairRevisionAccessError({
     role: String(session.user.role),
     userId: session.user.id,
+    actsAsTechnician: Boolean(session.user.actsAsTechnician),
     repair,
     order: { id: existing.id, notes: existing.notes },
   })

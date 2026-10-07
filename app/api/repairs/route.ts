@@ -15,7 +15,7 @@ import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { resolveDiagnosisFee, normalizeDeviceTier } from '@/lib/diagnosis-fee'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { findOpenRepairWithSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+import { isUserAllowed } from '@/lib/auth/authorization'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
   const allowedRoles = ['director', 'admin_officer', 'technical_lead', 'technician']
   // Normalized: a Technical Lead stored as `lead_tech`, or a Director stored
   // as `super_admin`/`admin`, must not be locked out of their own module.
-  if (!isRoleAllowed(user?.role, allowedRoles)) {
+  if (!isUserAllowed(user, allowedRoles)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

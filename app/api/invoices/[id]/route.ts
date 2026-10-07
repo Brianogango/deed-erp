@@ -13,6 +13,7 @@ import { buildInvoiceJournalInput, allocateInvoiceJournalRef } from '@/lib/accou
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
+import { allowedOnlyAsTechnician } from '@/lib/auth/authorization'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -173,7 +174,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
     })
     if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (actor.role === 'technician' && !before.repairId) {
+    if (allowedOnlyAsTechnician(actor, REPAIR_WRITE_ROLES) && !before.repairId) {
       return NextResponse.json({ error: 'Technicians may only update invoices linked to an actual Repair record' }, { status: 403 })
     }
 

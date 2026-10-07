@@ -9,6 +9,7 @@
 
 import { canApproveLeaveRole } from '@/lib/auth/access'
 import type { ModuleId, PublicUser, UserRole } from '@/lib/auth/types'
+import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
 
 export interface DashboardSections {
   /** Revenue / receivables / payables KPIs and money-denominated analytics. */
@@ -62,7 +63,7 @@ export function dashboardSectionsForRole(role: UserRole | string | null | undefi
   }
 }
 
-type DashboardUser = Pick<PublicUser, 'id' | 'role' | 'modules'>
+type DashboardUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician'>
 
 const DASHBOARD_SECTION_MODULES: Record<keyof DashboardSections, ModuleId> = {
   finance: 'accounting',
@@ -149,6 +150,8 @@ export function dashboardSectionsForUser(
   user: DashboardUser | null | undefined,
 ): DashboardSections {
   const roleSections = dashboardSectionsForRole(user?.role)
+  // Acting as a technician brings the workshop section (their own jobs).
+  if (user?.actsAsTechnician === true) roleSections.workshop = true
   return Object.fromEntries(
     (Object.keys(roleSections) as (keyof DashboardSections)[]).map(section => [
       section,
@@ -187,7 +190,7 @@ export function visibleDashboardRepairs<T extends { assignedTechnicianId?: strin
 ): T[] {
   if (!dashboardSectionsForUser(user).workshop) return []
   const list = Array.isArray(repairs) ? repairs : []
-  if (user?.role === 'technician') {
+  if (user && isRepairTechActor({ role: String(user.role ?? ''), actsAsTechnician: user.actsAsTechnician })) {
     return list.filter(repair => repair.assignedTechnicianId === user.id || repair.createdByUserId === user.id)
   }
   return [...list]

@@ -26,6 +26,8 @@ type Any = Record<string, any>
 export type MyWorkInput = {
   role: string
   userId: string
+  /** users.acts_as_technician — gets the technician's repair queue too. */
+  actsAsTechnician?: boolean
   now: Date
   repairs: Any[]
   saleOrders: Any[]
@@ -65,7 +67,7 @@ export function buildMyWork(input: MyWorkInput): WorkQueue[] {
   const out: WorkQueue[] = []
 
   // ── Repairs ───────────────────────────────────────────────────────────
-  if (role === 'technician' || role === 'technical_lead') {
+  if (role === 'technician' || role === 'technical_lead' || input.actsAsTechnician === true) {
     const mine = input.repairs.filter(r =>
       r.assignedTechnicianId === input.userId
       && ['assigned', 'diagnosed', 'approved', 'in_repair', 'qc'].includes(r.status))

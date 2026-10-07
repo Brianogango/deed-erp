@@ -6,6 +6,7 @@ import { isUUID } from '@/lib/utils'
 import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
+import { isUserAllowed } from '@/lib/auth/authorization'
 
 async function broadcastQuotes() {
   try {
@@ -109,7 +110,7 @@ export async function POST(request: Request) {
     const session = await getRequiredSession()
     const body = await request.json()
     const allowedRoles = isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES
-    if (!allowedRoles.includes(session.user.role)) {
+    if (!isUserAllowed(session.user, allowedRoles)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const lines: any[] = body.lines ?? body.items ?? []

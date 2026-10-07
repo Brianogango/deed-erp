@@ -5,6 +5,7 @@ import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
+import { isUserAllowed } from '@/lib/auth/authorization'
 
 async function broadcastQuotes() {
   try {
@@ -108,7 +109,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const session = await getRequiredSession()
     const body = await request.json()
     const allowedRoles = isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES
-    if (!allowedRoles.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!isUserAllowed(session.user, allowedRoles)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const { lines, items } = body
     const linesData: any[] | undefined = lines ?? items ?? undefined

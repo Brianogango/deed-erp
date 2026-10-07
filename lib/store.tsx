@@ -17084,9 +17084,9 @@ const storeCtx: AppState = {
       if (repair.status !== 'qc') {
         showToast('Repair must be in QC to complete quality check', 'error'); return
       }
-      // Directors/leads can always QA; technicians can QA any repair they did NOT work on
+      // Directors/leads can always QA; technicians (and users acting as one) can QA any repair they did NOT work on
       const isAuthorized = ['director', 'technical_lead'].includes(user.role)
-        || (user.role === 'technician' && repair.assignedTechnicianId !== user.id)
+        || (isRepairTechActor(user) && repair.assignedTechnicianId !== user.id)
       if (!isAuthorized) {
         showToast('You cannot perform QA on a repair you worked on — a different technician must do QC', 'error'); return
       }
@@ -18145,12 +18145,9 @@ const storeCtx: AppState = {
       // when the same login also actsAsTechnician for shop-floor assignment.
       if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(normalizeClientRole(user.role))) return list
 
-      // Functional Firewall: Technicians / actsAsTechnician see assigned jobs + QC pool (role technicians only for peer QC)
+      // Functional Firewall: technicians and users acting as one see their own jobs + the QC pool (peer QC)
       if (isRepairTechActor(user)) {
-        if (user.role === 'technician') {
-          return list.filter(r => r.assignedTechnicianId === user.id || r.createdByUserId === user.id || (r.status === 'qc' && r.assignedTechnicianId !== user.id))
-        }
-        return list.filter(r => r.assignedTechnicianId === user.id || r.createdByUserId === user.id)
+        return list.filter(r => r.assignedTechnicianId === user.id || r.createdByUserId === user.id || (r.status === 'qc' && r.assignedTechnicianId !== user.id))
       }
 
       return list

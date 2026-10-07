@@ -38,6 +38,8 @@ export function isRepairsSaleOrder(repair: RevisionRepair, order: RevisionOrder)
 export function repairRevisionAccessError(input: {
   role: string
   userId: string
+  /** users.acts_as_technician — revises their own job's quotation like a technician. */
+  actsAsTechnician?: boolean
   repair: RevisionRepair | null | undefined
   order: RevisionOrder
 }): string | null {
@@ -45,7 +47,7 @@ export function repairRevisionAccessError(input: {
   if (!repair) return 'The repair for this quotation was not found'
   if (!isRepairsSaleOrder(repair, input.order)) return 'This sale order does not belong to that repair'
   if (REPAIR_REVISION_STAFF_ROLES.includes(input.role)) return null
-  if (input.role === 'technician' && repair.assignedTechnicianId && repair.assignedTechnicianId === input.userId) return null
+  if ((input.role === 'technician' || input.actsAsTechnician === true) && repair.assignedTechnicianId && repair.assignedTechnicianId === input.userId) return null
   return 'Only the assigned technician or repair staff can revise this repair quotation'
 }
 

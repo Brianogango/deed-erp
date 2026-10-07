@@ -16,6 +16,7 @@ export default function MyWork() {
   const queues = useMemo(() => buildMyWork({
     role: String(user?.role ?? ''),
     userId: String(user?.id ?? ''),
+    actsAsTechnician: user?.actsAsTechnician === true,
     now: new Date(),
     repairs: app.repairs ?? [],
     saleOrders: app.saleOrders ?? [],

@@ -4,7 +4,7 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getServerSession } from '@/lib/auth/server'
 import type { RepairOrder } from '@/lib/store'
 import { repairDatesWriteError } from '@/lib/data-validation'
-import { canAccessRecord, filterStoreValueForRole, normalizePermissionRole } from '@/lib/auth/authorization'
+import { allowedOnlyAsTechnician, canAccessRecord, filterStoreValueForRole, normalizePermissionRole } from '@/lib/auth/authorization'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { repairHardDeleteBlocker } from '@/lib/repair-delete'
 import { repairTransitionWriteError } from '@/lib/repair-transition-guard'
@@ -54,7 +54,8 @@ const config = {
   validateDelete: (repair: RepairOrder) => repairHardDeleteBlocker(repair as any),
   recordAccess: (user: any, repair: RepairOrder, action: 'patch' | 'delete') => {
     const role = normalizePermissionRole(user.role)
-    if (action === 'delete' && role === 'technician') return false
+    // Technicians (and users acting as one) never delete repairs.
+    if (action === 'delete' && (role === 'technician' || allowedOnlyAsTechnician(user, ['director', 'admin_officer', 'technical_lead', 'technician']))) return false
     return canAccessRecord(
       user.role,
       'repair',

@@ -45,6 +45,7 @@ import { pickRepairPrimaryAction } from '@/lib/repair-handover'
 import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
 import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
+import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
 
 const PROC_COLORS = {
   pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#F59E0B' },
@@ -217,7 +218,7 @@ export default function RepairDetailView() {
   // QC: director/lead always; technician only if they did NOT work on this repair
   const canPerformQA  = r.status === 'qc'
     && (['director', 'technical_lead'].includes(currentRole)
-    || (currentRole === 'technician' && !isMyRepair))
+    || (!!currentUser && isRepairTechActor(currentUser) && !isMyRepair))
     && !pendingOutsourceJob
   const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status) && !pendingOutsourceJob
   const isDirector  = currentRole === 'director'

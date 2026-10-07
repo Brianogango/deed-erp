@@ -5,6 +5,8 @@ import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 type StoreUser = {
   role?: unknown
   modules?: unknown
+  /** users.acts_as_technician — writes what a technician may write (see hasTechnicianCapability). */
+  actsAsTechnician?: unknown
 }
 
 type StoreWritePolicy = {
@@ -178,7 +180,11 @@ export function canWriteStoreKey(user: StoreUser, key: string): boolean {
   if (!entry) return false
 
   const role = normalizedRole(user.role)
-  if (!role || !normalizeRoles(entry.roles).has(role)) return false
+  const roles = normalizeRoles(entry.roles)
+  // A user acting as a technician writes what a technician writes; they need
+  // the module like anyone else (the repair module comes with the flag).
+  const asTechnician = user.actsAsTechnician === true && roles.has('technician')
+  if (!role || !(roles.has(role) || asTechnician)) return false
   if (!entry.modules?.length) return true
   if (role === 'director') return true
 

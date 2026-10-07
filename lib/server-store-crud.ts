@@ -1,7 +1,7 @@
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from './auth/server'
-import { isRoleAllowed } from './auth/authorization'
+import { isUserAllowed } from './auth/authorization'
 import type { PublicUser } from './auth/types'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from './server-store'
 import { parsePaginationParams, paginateArray } from './api-pagination'
@@ -14,7 +14,7 @@ type AnyRecord = Record<string, unknown>
 async function requireSession(allowedRoles?: string[]) {
   const session = await getServerSession()
   if (!session) return { session: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  if (allowedRoles && !isRoleAllowed(session.user.role, allowedRoles)) {
+  if (allowedRoles && !isUserAllowed(session.user, allowedRoles)) {
     return { session: null, error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
   }
   return { session, error: null }

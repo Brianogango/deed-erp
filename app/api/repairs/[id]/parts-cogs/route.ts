@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
 import { processStockRepairConsume } from '@/lib/inventory/valuation-service'
-import { canAccessRecord, isRoleAllowed } from '@/lib/auth/authorization'
+import { canAccessRecord, isUserAllowed } from '@/lib/auth/authorization'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { resolveConsumedLines } from '@/lib/repair/parts-cogs-lines'
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, ctx: { params: RouteParams<{ id: st
   const user = session.user as any
   // Roles are normalized so a Technical Lead stored as `lead_tech` (or a
   // Director stored as `super_admin`) is not silently locked out.
-  if (!isRoleAllowed(user?.role, WRITE_ROLES)) {
+  if (!isUserAllowed(user, WRITE_ROLES)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   if (!hasModuleAccess(user, 'repair')) {

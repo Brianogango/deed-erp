@@ -37,6 +37,33 @@ export const isRoleAllowed = (role: string | null | undefined, allowedRoles: str
   return !!normalizedRole && normalizedAllowedRoles.includes(normalizedRole)
 }
 
+type TechCapableUser = { role?: string | null; actsAsTechnician?: boolean | null } | null | undefined
+
+/**
+ * A technician, or a user given the technician capability on top of their
+ * own role (users.acts_as_technician — e.g. a chosen Kilimall officer). Such a
+ * user does repair work exactly as a technician does, scoped to their own
+ * jobs by canAccessRecord. Every "is this a technician" check goes through
+ * here so the two can never drift apart again: the flag used to let them see
+ * and be assigned jobs while every save of their work was refused.
+ */
+export const hasTechnicianCapability = (user: TechCapableUser) =>
+  normalizePermissionRole(user?.role) === 'technician' || user?.actsAsTechnician === true
+
+/** isRoleAllowed for a user: an acting technician passes wherever technicians do. */
+export const isUserAllowed = (user: TechCapableUser, allowedRoles: string[]) =>
+  isRoleAllowed(user?.role, allowedRoles)
+  || (user?.actsAsTechnician === true && allowedRoles.some(r => normalizePermissionRole(r) === 'technician'))
+
+/**
+ * True when the user gets in only through the list's technician entry — a
+ * technician, or a user acting as one whose own role is not listed. Such a
+ * write gets the technician's limits (own jobs, repair documents only).
+ */
+export const allowedOnlyAsTechnician = (user: TechCapableUser, allowedRoles: string[]) =>
+  !isRoleAllowed(user?.role, allowedRoles.filter(r => normalizePermissionRole(r) !== 'technician'))
+  && isUserAllowed(user, allowedRoles)
+
 const roleMatrix = {
   manageUsers:               ['director'] as UserRole[],
   viewUsers:                 ['director', 'admin_officer'] as UserRole[],

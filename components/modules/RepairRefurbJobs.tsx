@@ -1,4 +1,5 @@
 'use client'
+import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
 import { useMemo } from 'react'
 import { useRepair } from './repair/RepairContext'
 import { RefurbStatus, fmtDate, fmtKes } from '@/lib/store'
@@ -31,7 +32,7 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
 
   const isLeadTech = currentUser?.role === 'technical_lead' || currentUser?.role === 'director'
   const isAdmin = currentUser?.role === 'director' || currentUser?.role === 'admin_officer'
-  const isRepairTech = currentUser?.role === 'technician'
+  const isRepairTech = !!currentUser && isRepairTechActor(currentUser)
 
   const jobs = useMemo(() => {
     const query = search.trim().toLowerCase()
