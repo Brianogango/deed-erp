@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withApiErrorHandling } from '@/lib/auth/api'
 import { getServerSession } from '@/lib/auth/server'
+import prisma from '@/lib/prisma'
 import {
   findOrphanedPostedInvoices,
+  listNeverPostedSince,
   repostOrphanedInvoice,
   type RepostOutcome,
 } from '@/lib/accounting/orphaned-invoice-journals'
@@ -30,7 +32,12 @@ export const dynamic = 'force-dynamic'
  */
 
 const RepostSchema = z.object({
-  invoiceIds: z.array(z.string().uuid()).min(1).max(50),
+  invoiceIds: z.array(z.string().uuid()).max(50).default([]),
+  /**
+   * Invoices that never reached the ledger, named one by one by invoice
+   * number. Never a filter: the director types the numbers they mean.
+   */
+  neverPostedNumbers: z.array(z.string().min(3).max(60)).max(20).default([]),
   /**
    * 'invoice_date' posts each journal on its own invoice's date;
    * 'today' posts them all on the current date. Stated explicitly so the
@@ -74,6 +81,8 @@ export async function GET(request: NextRequest) {
       count: invoices.length,
       totalValue: invoices.reduce((sum, i) => sum + i.totalAmount, 0),
       invoices,
+      // For reading only: posted since the 13 Sep cutover, never in the ledger.
+      neverPosted: await listNeverPostedSince('2026-09-13'),
     })
   })
 }
@@ -115,6 +124,22 @@ export async function POST(request: NextRequest) {
           invoiceNumber: orphan.invoiceNumber,
           reason: err instanceof Error ? err.message : 'Posting failed',
         })
+      }
+    }
+
+    // Named by number: invoices that never reached the ledger at all.
+    for (const number of parsed.data.neverPostedNumbers) {
+      const invoice = await prisma.invoice.findFirst({ where: { invoiceNumber: number.trim() }, select: { id: true, invoiceDate: true } })
+      if (!invoice) {
+        results.push({ kind: 'skipped', invoiceNumber: number, reason: 'No invoice with that number' })
+        continue
+      }
+      const entryDate = parsed.data.entryDate === 'today' ? new Date() : invoice.invoiceDate
+      try {
+        results.push(await repostOrphanedInvoice({ invoiceId: invoice.id, entryDate, actorId: auth.actorId, namedNeverPosted: true }))
+      } catch (err) {
+        console.error(`[repost-never-posted] ${number} failed:`, err)
+        results.push({ kind: 'skipped', invoiceNumber: number, reason: err instanceof Error ? err.message : 'Posting failed' })
       }
     }
 

@@ -71,6 +71,8 @@ SELECT rule, problems, kes FROM (
   FROM invoices i LEFT JOIN live_sales s ON s.invoice_id = i.id
   WHERE i.status::text IN ('approved', 'invoiced', 'paid', 'partially_paid') AND i.invoice_date >= '2026-09-13'
     AND s.invoice_id IS NULL AND i.invoice_number NOT LIKE 'POS%'
+    AND coalesce(i.internal_notes, '') NOT LIKE '%[opening-balance]%'
+    AND NOT EXISTS (SELECT 1 FROM journal_entries o WHERE o.invoice_id = i.id AND o.source_type = 'opening_balance' AND NOT o.is_reversed)
   UNION ALL
   SELECT 4, 'Cancelled/voided invoices still booked (live entry)',
          count(*), coalesce(sum(s.amt), 0)
@@ -80,9 +82,14 @@ SELECT rule, problems, kes FROM (
   SELECT 5, 'Bill payments booked as customer receipts',
          count(*), coalesce(sum(amount), 0) FROM bill_receipts
   UNION ALL
-  SELECT 6, 'Payments with no ledger entry at all (not voided)',
+  SELECT 6, 'Payments since 13 Sep with no ledger entry at all',
          count(*), coalesce(sum(amount), 0)
-  FROM payments p WHERE NOT p.is_voided
+  FROM payments p WHERE NOT p.is_voided AND p.paid_at >= '2026-09-13'
+    AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE (j.payment_id = p.id OR j.id = p.journal_id) AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
+  UNION ALL
+  SELECT 6, '  (info) older payments, carried in opening balances',
+         count(*), coalesce(sum(amount), 0)
+  FROM payments p WHERE NOT p.is_voided AND p.paid_at < '2026-09-13'
     AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE (j.payment_id = p.id OR j.id = p.journal_id) AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
   UNION ALL
   SELECT 6, '  (info) payments booked but not marked as booked',

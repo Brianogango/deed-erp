@@ -31,12 +31,13 @@ FROM invoices i JOIN journal_entries j ON j.invoice_id = i.id
 WHERE i.status::text IN ('cancelled', 'void') AND j.source_type IN ('invoice', 'bill') AND NOT j.is_reversed AND j.reversal_of_id IS NULL;
 
 \echo ''
-\echo '== 6. Payments with no ledger entry — by kind =='
+\echo '== 6. Payments since 13 Sep with no ledger entry — by kind =='
 SELECT p.payment_type, p.payment_method::text AS method, substring(p.notes from 'method:([a-z_]+)') AS raw_method,
        coalesce(i.document_type, '(no invoice)') AS on_doc, p.bank_account_id IS NOT NULL AS bank_set,
        to_char(p.paid_at, 'YYYY-MM') AS month, count(*) AS payments, sum(p.amount) AS kes
 FROM payments p LEFT JOIN invoices i ON i.id = p.invoice_id
-WHERE NOT p.is_voided AND (p.posting_status <> 'posted' OR p.journal_id IS NULL)
+WHERE NOT p.is_voided AND p.paid_at >= '2026-09-13'
+  AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE (j.payment_id = p.id OR j.id = p.journal_id) AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
 GROUP BY 1, 2, 3, 4, 5, 6 ORDER BY 8 DESC;
 
 \echo ''
@@ -44,7 +45,8 @@ GROUP BY 1, 2, 3, 4, 5, 6 ORDER BY 8 DESC;
 SELECT i.invoice_number, p.amount, p.payment_method::text, p.paid_at::date, p.created_at::timestamp(0), p.posting_status,
        EXISTS (SELECT 1 FROM journal_entries j WHERE j.payment_id = p.id) AS has_any_entry
 FROM payments p LEFT JOIN invoices i ON i.id = p.invoice_id
-WHERE NOT p.is_voided AND (p.posting_status <> 'posted' OR p.journal_id IS NULL)
+WHERE NOT p.is_voided AND p.paid_at >= '2026-09-13'
+  AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE (j.payment_id = p.id OR j.id = p.journal_id) AND NOT j.is_reversed AND j.reversal_of_id IS NULL)
 ORDER BY p.created_at DESC LIMIT 10;
 
 \echo ''

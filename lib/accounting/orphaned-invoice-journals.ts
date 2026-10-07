@@ -1,4 +1,5 @@
 import 'server-only'
+import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
 import prisma from '@/lib/prisma'
 import { PRISMA_POSTED_INVOICE_STATUSES } from '@/lib/finance-invoice'
 import {
@@ -136,6 +137,34 @@ export async function findOrphanedPostedInvoices(): Promise<OrphanedInvoice[]> {
   }))
 }
 
+/**
+ * Posted invoices that never had any ledger entry, for a director to look at.
+ * Shown, never acted on by themselves: most such invoices predate the 13 Sep
+ * cutover and belong to the opening balances. Only the ones a director names
+ * explicitly (by number) can be posted — see repostOrphanedInvoice's
+ * `namedNeverPosted`. The date filter here only trims the list for reading.
+ */
+export async function listNeverPostedSince(since: string) {
+  const rows = await prisma.invoice.findMany({
+    where: {
+      status: { in: Array.from(PRISMA_POSTED_INVOICE_STATUSES) as any },
+      postingStatus: 'unposted',
+      invoiceDate: { gte: new Date(`${since}T00:00:00Z`) },
+      NOT: { invoiceNumber: { startsWith: 'POS' } },
+    },
+    select: { id: true, invoiceNumber: true, invoiceDate: true, totalAmount: true, documentType: true, internalNotes: true },
+    orderBy: { invoiceDate: 'asc' },
+  })
+  if (!rows.length) return []
+  const touched = new Set((await prisma.journalEntry.findMany({
+    where: { invoiceId: { in: rows.map(r => r.id) } },
+    select: { invoiceId: true },
+  })).map(j => j.invoiceId))
+  return rows
+    .filter(r => !touched.has(r.id) && !String(r.internalNotes ?? '').includes(OPENING_BALANCE_MARKER))
+    .map(r => ({ id: r.id, invoiceNumber: r.invoiceNumber, invoiceDate: r.invoiceDate, totalAmount: Number(r.totalAmount), documentType: r.documentType }))
+}
+
 export type RepostOutcome =
   | { kind: 'reposted'; invoiceNumber: string; journalRef: string; journalId: string; entryDate: string }
   | { kind: 'skipped'; invoiceNumber: string; reason: string }
@@ -162,6 +191,11 @@ export async function repostOrphanedInvoice(params: {
    * audit action name records what happened.
    */
   actorId: string | null
+  /**
+   * The director named this invoice by number as one that never reached the
+   * ledger and should. Allowed only when it has never had any entry at all.
+   */
+  namedNeverPosted?: boolean
 }): Promise<RepostOutcome> {
   const invoice = await prisma.invoice.findUnique({
     where: { id: params.invoiceId },
@@ -184,7 +218,25 @@ export async function repostOrphanedInvoice(params: {
     },
     select: { id: true },
   })
-  if (!isOrphanedPostedInvoice({
+  // Any entry at all — sales, bill, opening balance (JRN/OB/…), live or
+  // reversed — means the document is already accounted for somewhere.
+  const anyEntry = params.namedNeverPosted
+    ? await prisma.journalEntry.findFirst({ where: { invoiceId: invoice.id }, select: { ref: true } })
+    : null
+  const openingBalance = String(invoice.internalNotes ?? '').includes(OPENING_BALANCE_MARKER)
+  if (params.namedNeverPosted && (anyEntry || openingBalance)) {
+    return {
+      kind: 'skipped',
+      invoiceNumber: label,
+      reason: openingBalance
+        ? 'Opening-balance document — carried in the opening balances, not posted as a sale'
+        : `Already in the ledger (${anyEntry!.ref})`,
+    }
+  }
+  const namedAndNeverPosted = Boolean(params.namedNeverPosted)
+    && PRISMA_POSTED_INVOICE_STATUSES.has(String(invoice.status))
+    && invoice.postingStatus === 'unposted'
+  if (!namedAndNeverPosted && !isOrphanedPostedInvoice({
     status: String(invoice.status),
     postingStatus: invoice.postingStatus,
     hasReversedJournal: Boolean(reversed),

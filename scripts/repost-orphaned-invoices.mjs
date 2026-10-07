@@ -6,6 +6,11 @@
  *   node scripts/repost-orphaned-invoices.mjs                    # list only
  *   node scripts/repost-orphaned-invoices.mjs --apply invoice_date
  *   node scripts/repost-orphaned-invoices.mjs --apply today
+ *   node scripts/repost-orphaned-invoices.mjs --apply invoice_date --never-posted INV/2026/0301,INV/2026/0302
+ *
+ * --never-posted names invoices (by number) that never reached the ledger at
+ * all and should — e.g. posted after the 13 Sep cutover but their posting
+ * failed. They are never picked by a filter: the list below only shows them.
  *
  * The date argument is required with --apply and there is no default. Posting
  * on each invoice's own date puts the revenue in the month it was earned but
@@ -158,14 +163,24 @@ async function main() {
   const headers = { 'x-internal-secret': secret, 'Content-Type': 'application/json' }
 
   const { endpoint, res: listRes } = await resolveEndpoint(headers)
-  const { count, totalValue, invoices } = await listRes.json()
+  const { count, totalValue, invoices, neverPosted = [] } = await listRes.json()
+  const npIndex = process.argv.indexOf('--never-posted')
+  const neverPostedNumbers = npIndex === -1 ? [] : String(process.argv[npIndex + 1] ?? '').split(',').map(s => s.trim()).filter(Boolean)
 
-  if (count === 0) {
+  if (neverPosted.length) {
+    console.log(`\n  For information — ${neverPosted.length} posted since 13 Sep that never reached the ledger:`)
+    for (const inv of neverPosted) {
+      console.log(`    ${inv.invoiceNumber}  ${new Date(inv.invoiceDate).toISOString().slice(0, 10)}  KES ${money(inv.totalAmount)}  ${inv.documentType}`)
+    }
+    console.log('  To book named ones:  --apply invoice_date --never-posted NUMBER,NUMBER')
+  }
+
+  if (count === 0 && !neverPostedNumbers.length) {
     console.log('\n  No orphaned invoices. Every posted invoice has a live GL journal.\n')
     return
   }
 
-  console.log(`\n  ${count} invoice(s) whose GL journal was reversed and never replaced — KES ${money(totalValue)}\n`)
+  if (count) console.log(`\n  ${count} invoice(s) whose GL journal was reversed and never replaced — KES ${money(totalValue)}\n`)
   for (const inv of invoices) {
     const date = new Date(inv.invoiceDate).toISOString().slice(0, 10)
     console.log(`    ${inv.invoiceNumber}  ${date}  KES ${money(inv.totalAmount)}  paid ${money(inv.amountPaid)}`)
@@ -196,7 +211,7 @@ async function main() {
   const res = await fetch(endpoint, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ invoiceIds: invoices.map(i => i.id), entryDate }),
+    body: JSON.stringify({ invoiceIds: invoices.map(i => i.id), neverPostedNumbers, entryDate }),
   })
   const body = await res.json()
   if (!res.ok) fail(`Re-post failed with HTTP ${res.status}: ${body?.error ?? 'unknown error'}`)
