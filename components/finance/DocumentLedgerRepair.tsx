@@ -5,7 +5,7 @@ import { fmtKes } from '@/lib/store'
 import type { ExtraPaymentPlan } from '@/lib/accounting/document-ledger-repair'
 
 type Unbooked = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; date: string; total: number; paid: number }
-type Review = { ref: string; kind: 'invoice' | 'bill'; total: number; paid: number; ledgerPaid: number; reason: string }
+type Review = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; total: number; paid: number; ledgerPaid: number; reason: string; action?: 'record_payment' | 'book_payment' }
 type Data = { extraPayments: ExtraPaymentPlan[]; unbooked: Unbooked[]; review: Review[] }
 type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
 
@@ -19,6 +19,33 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
   const [failed, setFailed] = useState<Result[]>([])
   const [busy, setBusy] = useState(false)
   const [showReview, setShowReview] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const approvable = (data?.review ?? []).filter(r => r.action)
+  const togglePick = (id: string) => setPicked(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
+
+  const approve = async () => {
+    const ids = [...picked]
+    if (!ids.length) return
+    const rows = approvable.filter(r => picked.has(r.invoiceId))
+    const records = rows.filter(r => r.action === 'record_payment').length
+    const books = rows.length - records
+    if (!window.confirm(`Approve ${rows.length} document${rows.length === 1 ? '' : 's'}?\n\n${records ? `• ${records}: add the payment record the ledger entry is missing (no new entry; the document shows as paid)\n` : ''}${books ? `• ${books}: book the missing ledger entry for the recorded payment, on the payment's date\n` : ''}\nEverything is written to the audit log.`)) return
+    setBusy(true)
+    try {
+      const res = await fetch('/api/accounting/document-ledger-repair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approve: ids }) })
+      const body = await res.json().catch(() => null) as { results?: Result[]; error?: string } | null
+      if (!res.ok) throw new Error(body?.error || `server returned ${res.status}`)
+      const results = body?.results ?? []
+      setFailed(results.filter(r => r.status === 'failed'))
+      showToast(`${results.filter(r => r.status === 'fixed').length} approved`, results.some(r => r.status === 'failed') ? 'error' : 'success')
+      setPicked(new Set())
+      await load()
+    } catch (err) {
+      showToast(`Could not approve: ${err instanceof Error ? err.message : 'error'}`, 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
   const copies = (data?.extraPayments ?? []).reduce((n, p) => n + p.reverse.length, 0)
   const copyTotal = (data?.extraPayments ?? []).reduce((s, p) => s + p.reverse.reduce((t, r) => t + r.amount, 0), 0)
   const unbookedTotal = (data?.unbooked ?? []).reduce((s, d) => s + d.total, 0)
@@ -121,14 +148,33 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
           </button>
           {showReview && (
             <div className="mt-2 overflow-x-auto">
+              {canApply && approvable.length > 0 && (
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => setPicked(picked.size === approvable.length ? new Set() : new Set(approvable.map(r => r.invoiceId)))}>
+                    {picked.size === approvable.length ? 'Clear selection' : `Select all ${approvable.length}`}
+                  </button>
+                  <button type="button" className="btn-primary text-[11px]" disabled={busy || picked.size === 0} onClick={() => void approve()}>
+                    {busy ? 'Approving…' : `Approve ${picked.size} selected`}
+                  </button>
+                  <span className="text-[11px] text-text-3">Rows without a tick box need a manual decision.</span>
+                </div>
+              )}
               <table className="w-full text-left text-[11px]">
-                <thead className="text-text-3"><tr><th className="py-1 pr-3">Document</th><th className="py-1 pr-3 text-right">Total</th><th className="py-1 pr-3 text-right">Paid (document)</th><th className="py-1 pr-3 text-right">Paid (ledger)</th><th className="py-1">Why</th></tr></thead>
+                <thead className="text-text-3"><tr>{canApply && <th className="py-1 pr-2" />}<th className="py-1 pr-3">Document</th><th className="py-1 pr-3 text-right">Total</th><th className="py-1 pr-3 text-right">Paid (document)</th><th className="py-1 pr-3 text-right">Paid (ledger)</th><th className="py-1">Why</th></tr></thead>
                 <tbody>
                   {data.review.map(r => (
                     <tr key={r.ref} className="border-t border-border-lt">
+                      {canApply && (
+                        <td className="py-1 pr-2">
+                          {r.action && <input type="checkbox" aria-label={`Approve ${r.ref}`} checked={picked.has(r.invoiceId)} onChange={() => togglePick(r.invoiceId)} />}
+                        </td>
+                      )}
                       <td className="py-1 pr-3 font-mono">{r.ref}</td><td className="py-1 pr-3 text-right">{fmtKes(r.total)}</td>
                       <td className="py-1 pr-3 text-right">{fmtKes(r.paid)}</td><td className="py-1 pr-3 text-right">{fmtKes(r.ledgerPaid)}</td>
-                      <td className="py-1 text-text-3">{r.reason}</td>
+                      <td className="py-1 text-text-3">
+                        {r.reason}
+                        {r.action && <span className="block text-[10px] text-text-4">{r.action === 'record_payment' ? 'Approve → add the payment record' : 'Approve → book the ledger entry'}</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

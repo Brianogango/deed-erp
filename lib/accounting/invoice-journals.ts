@@ -282,8 +282,13 @@ export async function postInvoicePaymentJournalToPrisma(params: {
   paymentId: string
   method?: string
   createdById?: string
+  /** A fresh ref when the canonical one is taken by a reversed entry. */
+  ref?: string
+  /** Entry date (YYYY-MM-DD); today when omitted. */
+  date?: string
 }) {
   const ref = String(params.invoice.ref || params.invoice.invoiceNumber || params.invoice.id)
+  const journalRef = params.ref ?? `JRN/PAY/${ref}/${params.paymentId}`.slice(0, 80)
   const partner = params.invoice.partnerName || params.invoice.clientName || 'Customer'
   const amount = money(params.amount)
   const isVendor = params.invoice.type === 'vendor_bill'
@@ -291,7 +296,8 @@ export async function postInvoicePaymentJournalToPrisma(params: {
 
   if (!isVendor && isCustomerCreditMethod(method)) {
     return persistStoreJournalEntry({
-      ref: `JRN/PAY/${ref}/${params.paymentId}`.slice(0, 80),
+      ref: journalRef,
+      date: params.date,
       source: 'payment',
       description: `Customer credit applied to ${ref} — ${partner}`,
       invoiceId: params.invoice.id,
@@ -305,7 +311,8 @@ export async function postInvoicePaymentJournalToPrisma(params: {
 
   if (!isVendor && isDepositApplyMethod(method)) {
     return persistStoreJournalEntry({
-      ref: `JRN/PAY/${ref}/${params.paymentId}`.slice(0, 80),
+      ref: journalRef,
+      date: params.date,
       source: 'payment',
       description: `Deposit applied to ${ref} — ${partner}`,
       invoiceId: params.invoice.id,
@@ -329,7 +336,8 @@ export async function postInvoicePaymentJournalToPrisma(params: {
       ]
 
   return persistStoreJournalEntry({
-    ref: `JRN/PAY/${ref}/${params.paymentId}`.slice(0, 80),
+    ref: journalRef,
+    date: params.date,
     source: isVendor ? 'purchase_payment' : 'payment',
     description: `Payment for ${ref} — ${partner}`,
     invoiceId: params.invoice.id,

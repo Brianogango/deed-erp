@@ -4,12 +4,20 @@ import prisma from '@/lib/prisma'
 import { reverseJournalEntry } from '@/lib/accounting/journal-service'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { ensureInvoiceBooked } from '@/lib/accounting/ensure-invoice-booked.server'
+import { postInvoicePaymentJournalToPrisma } from '@/lib/accounting/invoice-journals'
+import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
 import { planExtraPaymentEntries, type ExtraPaymentPlan, type PaymentEntry } from '@/lib/accounting/document-ledger-repair'
 
 export type UnbookedDoc = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; date: string; total: number; paid: number }
-export type ReviewDoc = { ref: string; kind: 'invoice' | 'bill'; total: number; paid: number; ledgerPaid: number; reason: string }
+/**
+ * record_payment: the ledger entry is the money; add the payment record it lacks.
+ * book_payment:   the payment record is the money; post the entry it lacks.
+ * Neither is applied without a director approving that row.
+ */
+export type ReviewAction = 'record_payment' | 'book_payment'
+export type ReviewDoc = { invoiceId: string; ref: string; kind: 'invoice' | 'bill'; total: number; paid: number; ledgerPaid: number; reason: string; action?: ReviewAction }
 
 const money = (n: number) => Math.round(n * 100) / 100
 const POSTED = ['approved', 'invoiced', 'paid', 'partially_paid'] as const
@@ -66,19 +74,19 @@ export async function findDocumentLedgerRepairs(): Promise<{ extraPayments: Extr
     const recorded = money(payments.reduce((s, p) => s + p.amount, 0))
     const ledgerPaid = money(livePay.reduce((s, e) => s + e.amount, 0))
     const total = Number(d.totalAmount)
-    const base = { ref: d.invoiceNumber, kind, total, paid: Number(d.amountPaid) }
+    const base = { invoiceId: d.id, ref: d.invoiceNumber, kind, total, paid: Number(d.amountPaid) }
 
     const livePosting = list.some(e => !e.isReversed && !e.reversalOfId && ['invoice', 'bill'].includes(String(e.sourceType)) && isPostingRef(e.ref, d.invoiceNumber))
     if (!livePosting && Math.abs(booked) < 1 && !String(d.internalNotes ?? '').includes(OPENING_BALANCE_MARKER) && !d.invoiceNumber.startsWith('POS')) {
-      unbooked.push({ invoiceId: d.id, ...base, date: d.invoiceDate ? d.invoiceDate.toISOString().slice(0, 10) : '' })
+      unbooked.push({ ...base, date: d.invoiceDate ? d.invoiceDate.toISOString().slice(0, 10) : '' })
     }
 
     const plan = planExtraPaymentEntries({ invoiceId: d.id, ref: d.invoiceNumber, payments, entries: livePay })
     if (plan) extraPayments.push(plan)
     const after = money(ledgerPaid - (plan?.reverse.reduce((s, r) => s + r.amount, 0) ?? 0))
-    if (recorded < 0.5 && ledgerPaid > 0.5) review.push({ ...base, ledgerPaid, reason: 'Ledger has payment entries but no payment is recorded on the document' })
+    if (recorded < 0.5 && ledgerPaid > 0.5) review.push({ ...base, ledgerPaid, reason: 'Ledger has payment entries but no payment is recorded on the document', action: 'record_payment' })
     else if (after > recorded + 0.5) review.push({ ...base, ledgerPaid: after, reason: 'Ledger payments exceed recorded payments by an amount that is not a copy' })
-    else if (recorded > ledgerPaid + 0.5) review.push({ ...base, ledgerPaid, reason: 'Payment recorded on the document but not in the ledger' })
+    else if (recorded > ledgerPaid + 0.5) review.push({ ...base, ledgerPaid, reason: 'Payment recorded on the document but not in the ledger', action: 'book_payment' })
   }
   const byRef = (a: { ref: string }, b: { ref: string }) => a.ref.localeCompare(b.ref)
   return { extraPayments: extraPayments.sort(byRef), unbooked: unbooked.sort(byRef), review: review.sort(byRef) }
@@ -123,6 +131,137 @@ export async function applyDocumentLedgerRepairs(actorId: string): Promise<Resul
       results.push({ ref: doc.ref, status: 'fixed', message: `Booked as ${out.ref}` })
     } catch (err) {
       results.push({ ref: doc.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not book' })
+    }
+  }
+  return results
+}
+
+const methodFromAccount = (label: string): 'cash' | 'mpesa' | 'bank_transfer' | 'credit' => {
+  const l = label.toLowerCase()
+  if (l.startsWith('3313') || l.includes('credit')) return 'credit'
+  if (l.includes('mpesa') || l.includes('m-pesa') || l.includes('mobile')) return 'mpesa'
+  if (l.startsWith('22') && l.includes('bank')) return 'bank_transfer'
+  return 'cash'
+}
+
+const isPayRef = (ref: string) => ref.startsWith('JRN/PAY')
+
+/** Add the payment record for each live payment entry that has none. */
+async function recordMissingPayments(invoiceId: string, actorId: string): Promise<string> {
+  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId }, select: { id: true, invoiceNumber: true, documentType: true, clientId: true, totalAmount: true, amountPaid: true } })
+  const isBill = invoice.documentType === 'vendor_bill'
+  const own = isBill ? '3000' : '1800'
+  const entries = await prisma.journalEntry.findMany({
+    where: { invoiceId, isPosted: true, isReversed: false, reversalOfId: null },
+    select: { id: true, ref: true, paymentId: true, entryDate: true, lines: { select: { accountLabel: true, debit: true, credit: true } } },
+  })
+  const livePayments = new Set((await prisma.payment.findMany({ where: { invoiceId, isVoided: false }, select: { id: true } })).map(p => p.id))
+  let added = 0
+  let total = 0
+  for (const e of entries.filter(x => isPayRef(x.ref) && !(x.paymentId && livePayments.has(x.paymentId)))) {
+    const ownLines = e.lines.filter(l => l.accountLabel.startsWith(own))
+    const amount = money(ownLines.reduce((s, l) => s + (isBill ? Number(l.debit) - Number(l.credit) : Number(l.credit) - Number(l.debit)), 0))
+    if (!(amount > 0)) continue
+    const counter = e.lines.find(l => !l.accountLabel.startsWith(own))?.accountLabel ?? ''
+    await prisma.$transaction(async tx => {
+      const payment = await tx.payment.create({
+        data: {
+          invoiceId, amount, amountBase: amount,
+          paymentType: isBill ? 'vendor_payment' : 'customer_receipt',
+          partnerId: invoice.clientId,
+          journalId: e.id,
+          idempotencyKey: `ledger-entry:${e.id}`,
+          postingStatus: 'posted',
+          paymentMethod: methodFromAccount(counter),
+          reference: e.ref.slice(0, 80),
+          paidAt: e.entryDate,
+          notes: `Recorded from ledger entry ${e.ref} (approved in Integrity controls)`,
+          createdById: actorId,
+          allocations: { create: { invoiceId, amount, applicationDate: e.entryDate } },
+        },
+      })
+      await tx.journalEntry.update({ where: { id: e.id }, data: { paymentId: payment.id } })
+      await writeFinancialAuditInTx(tx, {
+        userId: actorId,
+        action: 'record_payment_from_ledger_entry',
+        entityType: 'invoice',
+        entityId: invoiceId,
+        relatedJournalId: e.id,
+        oldValues: { payment: null, journalRef: e.ref },
+        newValues: { paymentId: payment.id, amount },
+      })
+    })
+    added++
+    total = money(total + amount)
+  }
+  if (!added) throw new Error('No payment entry without a payment record was found')
+  // The document's paid figure follows its payments.
+  const recorded = await prisma.paymentAllocation.aggregate({ where: { invoiceId, reversedAt: null, payment: { isVoided: false } }, _sum: { amount: true } })
+  const paid = Math.min(Number(recorded._sum.amount ?? 0), Math.abs(Number(invoice.totalAmount)))
+  if (paid > Number(invoice.amountPaid) + 0.005) await prisma.invoice.update({ where: { id: invoiceId }, data: { amountPaid: paid } })
+  return `${added} payment record${added === 1 ? '' : 's'} added (KES ${Math.round(total).toLocaleString('en-KE')})`
+}
+
+/** Post the entry for each recorded payment the ledger lacks. */
+async function bookMissingPaymentEntries(invoiceId: string, actorId: string): Promise<string> {
+  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId }, include: { client: { select: { name: true } } } })
+  const payments = await prisma.payment.findMany({
+    where: { isVoided: false, OR: [{ invoiceId }, { allocations: { some: { invoiceId, reversedAt: null } } }] },
+    include: { allocations: { where: { invoiceId, reversedAt: null } } },
+  })
+  const live = await prisma.journalEntry.findMany({
+    where: { invoiceId, isReversed: false, reversalOfId: null },
+    select: { id: true, ref: true, paymentId: true },
+  })
+  let booked = 0
+  let total = 0
+  for (const p of payments) {
+    const has = live.some(e => e.paymentId === p.id || e.id === p.journalId || (isPayRef(e.ref) && e.ref.endsWith(`/${p.id}`)))
+    if (has) continue
+    const amount = money(p.allocations.length ? p.allocations.reduce((s, a) => s + Number(a.amount), 0) : Number(p.amount))
+    if (!(amount > 0)) continue
+    let ref = `JRN/PAY/${invoice.invoiceNumber}/${p.id}`.slice(0, 80)
+    for (let n = 2; await prisma.journalEntry.findUnique({ where: { ref }, select: { id: true } }); n++) {
+      ref = `JRN/PAY/${invoice.invoiceNumber}/${p.id.slice(0, 8)}/R${n}`.slice(0, 80)
+    }
+    const journal = await postInvoicePaymentJournalToPrisma({
+      invoice: {
+        id: invoice.id, ref: invoice.invoiceNumber, invoiceNumber: invoice.invoiceNumber,
+        type: invoice.documentType === 'vendor_bill' ? 'vendor_bill' : 'customer_invoice',
+        partnerName: invoice.client?.name ?? undefined,
+      } as never,
+      amount, paymentId: p.id, method: p.paymentMethod, createdById: actorId,
+      ref, date: p.paidAt.toISOString().slice(0, 10),
+    })
+    await prisma.payment.update({ where: { id: p.id }, data: { journalId: journal.id, postingStatus: 'posted' } })
+    await writeFinancialAudit({
+      userId: actorId,
+      action: 'book_missing_payment_entry',
+      entityType: 'invoice',
+      entityId: invoiceId,
+      relatedJournalId: journal.id,
+      oldValues: { paymentId: p.id, journal: null },
+      newValues: { journalRef: journal.ref, amount },
+    })
+    booked++
+    total = money(total + amount)
+  }
+  if (!booked) throw new Error('Every recorded payment already has a ledger entry')
+  return `${booked} payment entr${booked === 1 ? 'y' : 'ies'} booked (KES ${Math.round(total).toLocaleString('en-KE')})`
+}
+
+/** Apply the review rows a director approved, re-checked against current data. */
+export async function approveReviewRows(invoiceIds: string[], actorId: string): Promise<Result[]> {
+  const { review } = await findDocumentLedgerRepairs()
+  const results: Result[] = []
+  for (const id of invoiceIds) {
+    const row = review.find(r => r.invoiceId === id)
+    if (!row?.action) { results.push({ ref: row?.ref ?? id, status: 'failed', message: 'No longer needs this correction, or has no automatic correction' }); continue }
+    try {
+      const message = row.action === 'record_payment' ? await recordMissingPayments(id, actorId) : await bookMissingPaymentEntries(id, actorId)
+      results.push({ ref: row.ref, status: 'fixed', message })
+    } catch (err) {
+      results.push({ ref: row.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not correct' })
     }
   }
   return results
