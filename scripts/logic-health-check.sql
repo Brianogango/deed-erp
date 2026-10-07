@@ -1,0 +1,104 @@
+-- Read-only logic health check for the ledger and documents. Writes nothing.
+--
+--   cd /var/www/deed-erp
+--   DB=$(grep -h '^DATABASE_URL' .env* | head -1 | sed -E 's#.*/([^/?"]+).*#\1#')
+--   sudo -u postgres psql -P pager=off -d "$DB" < scripts/logic-health-check.sql
+--
+-- Every line is a rule that should hold; "problems" should be 0. A non-zero
+-- row names a logic fault to fix (or a one-off to correct).
+
+\echo ''
+\echo '== Logic health check =='
+
+WITH
+live_sales AS (
+  SELECT invoice_id, count(*) AS n, max(total_debit) AS amt
+  FROM journal_entries
+  WHERE source_type = 'invoice' AND NOT is_reversed AND reversal_of_id IS NULL AND invoice_id IS NOT NULL
+  GROUP BY invoice_id
+),
+line_totals AS (
+  SELECT j.id, j.ref, round(sum(l.debit), 2) AS dr, round(sum(l.credit), 2) AS cr
+  FROM journal_entries j JOIN journal_entry_lines l ON l.journal_entry_id = j.id
+  GROUP BY j.id, j.ref
+),
+alloc AS (
+  SELECT a.invoice_id, sum(a.amount) AS paid
+  FROM payment_allocations a JOIN payments p ON p.id = a.payment_id
+  WHERE NOT p.is_voided AND a.reversed_at IS NULL
+  GROUP BY a.invoice_id
+),
+screen AS (
+  SELECT payload->>'id' AS id, payload->>'ref' AS ref, payload->>'type' AS type, payload->>'status' AS status,
+         coalesce((payload->>'total')::numeric, 0) AS total,
+         coalesce((payload->>'amountPaid')::numeric, 0) AS paid
+  FROM erp_state_records WHERE key = 'deed_invoices'
+),
+bill_receipts AS (
+  SELECT p.id, p.amount
+  FROM payments p
+  JOIN invoices i ON i.id = p.invoice_id
+  JOIN journal_entries j ON (j.payment_id = p.id OR j.id = p.journal_id) AND NOT j.is_reversed AND j.reversal_of_id IS NULL
+  WHERE NOT p.is_voided
+    AND (i.document_type = 'vendor_bill' OR i.invoice_number LIKE 'BILL%')
+    AND EXISTS (SELECT 1 FROM journal_entry_lines l WHERE l.journal_entry_id = j.id AND l.account_label LIKE '1800%' AND l.credit > 0)
+    AND NOT EXISTS (SELECT 1 FROM journal_entry_lines l WHERE l.journal_entry_id = j.id AND l.account_label LIKE '3000%')
+  GROUP BY p.id, p.amount
+)
+SELECT rule, problems, kes FROM (
+  SELECT 1 AS o, 'Entries where debits <> credits' AS rule,
+         count(*) AS problems, coalesce(sum(abs(dr - cr)), 0) AS kes
+  FROM line_totals WHERE dr <> cr
+  UNION ALL
+  SELECT 2, 'Invoices/bills booked more than once (extra live sales entries)',
+         coalesce(sum(n - 1), 0), coalesce(sum((n - 1) * amt), 0)
+  FROM live_sales WHERE n > 1
+  UNION ALL
+  SELECT 3, 'Posted invoices/bills since 13 Sep with no live sales entry',
+         count(*), coalesce(sum(i.total_amount), 0)
+  FROM invoices i LEFT JOIN live_sales s ON s.invoice_id = i.id
+  WHERE i.status::text IN ('approved', 'invoiced', 'paid', 'partially_paid') AND i.invoice_date >= '2026-09-13'
+    AND s.invoice_id IS NULL AND i.invoice_number NOT LIKE 'POS%'
+  UNION ALL
+  SELECT 4, 'Cancelled/voided invoices still booked (live sales entry)',
+         count(*), coalesce(sum(s.amt), 0)
+  FROM invoices i JOIN live_sales s ON s.invoice_id = i.id
+  WHERE i.status::text IN ('cancelled', 'void')
+  UNION ALL
+  SELECT 5, 'Bill payments booked as customer receipts',
+         count(*), coalesce(sum(amount), 0) FROM bill_receipts
+  UNION ALL
+  SELECT 6, 'Payments with no ledger entry (not voided)',
+         count(*), coalesce(sum(amount), 0)
+  FROM payments WHERE NOT is_voided AND (posting_status <> 'posted' OR journal_id IS NULL)
+  UNION ALL
+  SELECT 7, 'Ledger paid amount below its recorded payments',
+         count(*), coalesce(sum(a.paid - i.amount_paid), 0)
+  FROM invoices i JOIN alloc a ON a.invoice_id = i.id
+  WHERE a.paid > i.amount_paid + 0.01
+  UNION ALL
+  SELECT 8, 'Screen and ledger disagree: total',
+         count(*), coalesce(sum(abs(s.total - i.total_amount)), 0)
+  FROM screen s JOIN invoices i ON i.id::text = s.id
+  WHERE abs(s.total - i.total_amount) > 0.01
+  UNION ALL
+  SELECT 9, 'Screen and ledger disagree: amount paid',
+         count(*), coalesce(sum(abs(s.paid - i.amount_paid)), 0)
+  FROM screen s JOIN invoices i ON i.id::text = s.id
+  WHERE abs(s.paid - i.amount_paid) > 0.01
+  UNION ALL
+  SELECT 10, 'Screen and ledger disagree: cancelled on one side only',
+         count(*), coalesce(sum(i.total_amount), 0)
+  FROM screen s JOIN invoices i ON i.id::text = s.id
+  WHERE (s.status IN ('cancelled', 'voided')) <> (i.status::text IN ('cancelled', 'void'))
+  UNION ALL
+  SELECT 11, 'Paid more than the invoice total',
+         count(*), coalesce(sum(amount_paid - total_amount), 0)
+  FROM invoices WHERE total_amount > 0 AND amount_paid > total_amount + 0.01
+  UNION ALL
+  SELECT 12, 'Invoices on the screen missing from the ledger',
+         count(*), coalesce(sum(s.total), 0)
+  FROM screen s LEFT JOIN invoices i ON i.id::text = s.id
+  WHERE i.id IS NULL AND s.status NOT IN ('draft', 'cancelled', 'voided')
+) checks
+ORDER BY o;
