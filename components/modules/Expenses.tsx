@@ -370,6 +370,47 @@ function ExpensesContent() {
     setPreviewUrl(null)
   }
 
+  // Put the original file back for an expense whose receipt image has gone
+  // missing from the server. Only offered when the preview could not load, so
+  // it can never replace a receipt that is still there.
+  const [reattaching, setReattaching] = useState(false)
+  async function reattachReceipt(exp: Expense, file: File) {
+    const MAX = 8 * 1024 * 1024
+    if (exp.receiptFileType && file.type !== exp.receiptFileType) {
+      showToast(`This expense's receipt was a ${exp.receiptFileType === 'application/pdf' ? 'PDF' : 'picture'}; choose the same kind of file.`, 'error')
+      return
+    }
+    setReattaching(true)
+    try {
+      let dataUrl: string
+      if (file.type.startsWith('image/')) {
+        dataUrl = await readGuardedImageAsDataUrl(file, { label: 'Receipt image', maxBytes: MAX })
+      } else if (file.type === 'application/pdf' && file.size <= MAX) {
+        dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result))
+          reader.onerror = () => reject(new Error('Could not read the file'))
+          reader.readAsDataURL(file)
+        })
+      } else {
+        showToast('Choose a picture or a PDF under 8 MB.', 'error')
+        return
+      }
+      const res = await fetch(`/api/expense-receipts/${exp.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl, fileName: file.name, fileType: file.type, fileSize: file.size }),
+      })
+      if (!res.ok) throw new Error('The server did not save the receipt')
+      showToast('Receipt attached', 'success')
+      openReceiptPreview(exp)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Receipt could not be attached', 'error')
+    } finally {
+      setReattaching(false)
+    }
+  }
+
   // ── Stats ──
   const myTotal      = myExpenses.reduce((s, e) => s + e.amount, 0)
   const myPending    = myExpenses.filter(e => e.status === 'submitted').length
@@ -945,6 +986,27 @@ function ExpensesContent() {
                 <div className="flex flex-col items-center justify-center h-48 text-t3 text-sm gap-2">
                   <span style={{ fontSize: 40 }} aria-hidden="true"><Fa icon={faTriangleExclamation} /></span>
                   <p className="text-[12px]">Receipt could not be loaded</p>
+                  {(isFinance || previewExp.submittedByUserId === currentUserId) && previewExp.receiptFileName && (
+                    <>
+                      <p className="text-[11px] text-t3 max-w-xs text-center">
+                        The stored copy of {previewExp.receiptFileName} is missing. Attach the original again to restore it.
+                      </p>
+                      <label className="btn-primary text-[11px] py-2 px-4 cursor-pointer" style={{ opacity: reattaching ? 0.6 : 1 }}>
+                        {reattaching ? 'Attaching…' : 'Attach the original'}
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          disabled={reattaching}
+                          style={{ display: 'none' }}
+                          onChange={e => {
+                            const file = e.target.files?.[0]
+                            e.target.value = ''
+                            if (file && previewExp) void reattachReceipt(previewExp, file)
+                          }}
+                        />
+                      </label>
+                    </>
+                  )}
                 </div>
               )}
             </div>
