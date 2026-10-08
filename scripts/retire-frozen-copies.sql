@@ -14,7 +14,11 @@ CREATE OR REPLACE FUNCTION pg_temp.in_table(k text, p jsonb) RETURNS boolean AS 
     WHEN 'deed_invoices' THEN EXISTS (SELECT 1 FROM invoices t WHERE t.id::text = p->>'id' OR t.invoice_number = p->>'ref')
     WHEN 'deed_saleOrders' THEN EXISTS (SELECT 1 FROM sale_orders t WHERE t.id::text = p->>'id' OR t.order_number = p->>'ref')
     WHEN 'deed_quotes' THEN EXISTS (SELECT 1 FROM quotes t WHERE t.id::text = p->>'id' OR t.quote_number = p->>'ref')
+    -- A journal whose lines carry no money (browser leftovers such as
+    -- JRN/POS/0083) has nothing the ledger needs.
     WHEN 'deed_journalEntries' THEN EXISTS (SELECT 1 FROM journal_entries t WHERE t.id::text = p->>'id' OR t.blob_id = p->>'id' OR t.ref = p->>'ref')
+      OR coalesce((SELECT sum(abs(coalesce((l->>'debit')::numeric, 0)) + abs(coalesce((l->>'credit')::numeric, 0)))
+                   FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p->'lines') = 'array' THEN p->'lines' ELSE '[]'::jsonb END) l), 0) = 0
     WHEN 'deed_accounts' THEN EXISTS (SELECT 1 FROM account_codes t WHERE t.code = p->>'code')
     WHEN 'deed_contacts' THEN EXISTS (SELECT 1 FROM clients t WHERE t.id::text = p->>'id')
     WHEN 'deed_purchaseOrders' THEN EXISTS (SELECT 1 FROM purchase_orders t WHERE t.id::text = p->>'id' OR t.po_number = p->>'ref')
