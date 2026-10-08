@@ -32,6 +32,8 @@ import { canTrimFulfillmentQty, isFulfillmentQtyTrim } from '@/lib/sales/fulfill
 import { notifySaleOrderConfirmed } from '@/lib/notifications/business-events'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import { reopenAsQuotationData, repairRevisionAccessError, repairRevisionStatusError } from '@/lib/sales/repair-quote-revision'
+import { mergeScreenExtras, SALE_ORDER_EXTRA_KEYS } from '@/lib/screen-extras'
+import { Prisma } from '@prisma/client'
 
 /** Serialize blob rewrites so a slower soft/findMany cannot overwrite a newer Save. */
 let broadcastSaleOrdersChain: Promise<void> = Promise.resolve()
@@ -149,6 +151,9 @@ async function buildSaleOrderUpdateData(body: any, existing: any) {
     data.totalAmount = totals.totalAmount
   }
 
+  // Screen-only fields with no column (lib/screen-extras.ts).
+  const extras = mergeScreenExtras(existing?.screenExtras, body, SALE_ORDER_EXTRA_KEYS)
+  if (SALE_ORDER_EXTRA_KEYS.some(k => k in (body ?? {}))) data.screenExtras = extras ?? Prisma.DbNull
   return data
 }
 

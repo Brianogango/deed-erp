@@ -1513,6 +1513,8 @@ model SaleOrder {
   // versioned — it is implicitly its own v1.
   versionNumber   Int           @default(1) @map("version_number")
   versionGroupId  String?       @map("version_group_id") @db.Uuid
+  /** Screen-only fields with no column (lib/screen-extras.ts). */
+  screenExtras    Json?    @map("screen_extras")
   lockVersion     Int           @default(0) @map("lock_version")
   createdById     String        @map("created_by") @db.Uuid
   createdAt       DateTime      @default(now()) @map("created_at")
@@ -1601,6 +1603,8 @@ model Quote {
   approvedById   String?        @map("approved_by") @db.Uuid
   approvedAt     DateTime?      @map("approved_at")
   convertedToId  String?        @map("converted_to") @db.Uuid
+  /** Screen-only fields with no column (lib/screen-extras.ts). */
+  screenExtras    Json?    @map("screen_extras")
   createdById    String         @map("created_by") @db.Uuid
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")

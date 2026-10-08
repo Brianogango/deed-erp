@@ -6,6 +6,8 @@ import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { isUserAllowed } from '@/lib/auth/authorization'
+import { mergeScreenExtras, QUOTE_EXTRA_KEYS } from '@/lib/screen-extras'
+import { Prisma } from '@prisma/client'
 
 async function broadcastQuotes() {
   try {
@@ -119,13 +121,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // Return a proper 404 (instead of a Prisma 500) so callers can fall back
     // to re-creating a quote that never reached the server.
-    const exists = await prisma.quote.findUnique({ where: { id: resolvedParams.id }, select: { id: true } })
+    const exists = await prisma.quote.findUnique({ where: { id: resolvedParams.id }, select: { id: true, screenExtras: true } })
     if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const quote = await prisma.quote.update({
       where: { id: resolvedParams.id },
       data: {
         ...mapQuoteUpdateToDb(body, clientId),
+        // Screen-only fields with no column (lib/screen-extras.ts).
+        ...(QUOTE_EXTRA_KEYS.some(k => k in (body ?? {})) ? { screenExtras: mergeScreenExtras(exists.screenExtras, body, QUOTE_EXTRA_KEYS) ?? Prisma.DbNull } : {}),
         ...(linesData !== undefined ? {
           items: {
             deleteMany: {},

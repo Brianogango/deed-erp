@@ -110,7 +110,7 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * these keys are dropped — the change has already been saved through the
  * document's own API route — but other tabs are still told to re-read.
  */
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -118,6 +118,22 @@ async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[])
     .then(m => m.loadScreenInvoices(state.deed_invoices))
     .catch(err => { console.error('[server-store] invoices from table failed:', err); return null })
   if (fromPrisma) state.deed_invoices = fromPrisma
+}
+
+async function overlayAuthoritativeSales(state: AppStateMap, keys?: string[]) {
+  const want = (key: string) => !keys || keys.includes(key)
+  if (!want('deed_saleOrders') && !want('deed_quotes')) return
+  const m = await import('./sales-read-model.server')
+  if (want('deed_saleOrders')) {
+    const orders = await m.loadScreenSaleOrders(state.deed_saleOrders)
+      .catch(err => { console.error('[server-store] sale orders from table failed:', err); return null })
+    if (orders) state.deed_saleOrders = orders
+  }
+  if (want('deed_quotes')) {
+    const quotes = await m.loadScreenQuotes(state.deed_quotes)
+      .catch(err => { console.error('[server-store] quotes from table failed:', err); return null })
+    if (quotes) state.deed_quotes = quotes
+  }
 }
 
 /** Tell open tabs a frozen key changed (its table was written). */
@@ -141,6 +157,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     await overlayExternalBlobs(state, wantedKeys)
     await overlayAuthoritativeRepairs(state, wantedKeys)
     await overlayAuthoritativeInvoices(state, wantedKeys)
+    await overlayAuthoritativeSales(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -158,6 +175,7 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   await overlayExternalBlobs(state, wantedKeys)
   await overlayAuthoritativeRepairs(state, wantedKeys)
   await overlayAuthoritativeInvoices(state, wantedKeys)
+  await overlayAuthoritativeSales(state, wantedKeys)
   return state
 }
 

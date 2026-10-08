@@ -15,6 +15,7 @@ import { calcSaleOrderLineMoney, calcSaleOrderTotals } from '@/lib/sales/line-ca
 import { quotationPaymentTermsDays } from '@/lib/sales/quotation-defaults'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import { normalizeOptionalProducts } from '@/lib/sales/sale-order-commercial-change'
+import { mergeScreenExtras, SALE_ORDER_EXTRA_KEYS } from '@/lib/screen-extras'
 
 async function broadcastSaleOrders() {
   try {
@@ -213,6 +214,7 @@ export async function POST(request: Request) {
         termsAndConditions: body.termsAndConditions ? String(body.termsAndConditions).slice(0, 20000) : null,
         optionalProducts: normalizeOptionalProducts(body.optionalProducts),
         customerRef: body.customerRef ? String(body.customerRef).slice(0, 120) : null,
+        screenExtras: mergeScreenExtras(null, body, SALE_ORDER_EXTRA_KEYS) ?? undefined,
         invoiceAddress: body.invoiceAddress ?? null,
         deliveryAddress: body.deliveryAddress ?? null,
         pricelist: body.pricelist ?? null,

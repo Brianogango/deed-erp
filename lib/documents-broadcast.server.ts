@@ -1,35 +1,17 @@
 import 'server-only'
-import prisma from '@/lib/prisma'
-import { loadAppState, notifyStoreKeysChanged, saveStoreKeys } from '@/lib/server-store'
-import { mergeInvoiceMirror } from '@/lib/invoice-mirror-merge'
-import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
-import { normalizeQuotesForClient } from '@/lib/quote-normalization'
-import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
 
+/**
+ * Sale orders and quotes are read from their tables
+ * (lib/sales-read-model.server.ts); their screen copies are frozen. Nothing to
+ * rewrite — open tabs are told to re-read.
+ */
 export async function refreshSaleOrdersBlob(): Promise<void> {
-  try {
-    const all = await prisma.saleOrder.findMany({ include: { client: true, items: true }, orderBy: { createdAt: 'desc' } })
-    // Merge, never replace: an order that only the store list knows about (its
-    // table save failed) must survive the refresh. See mergeInvoiceMirror.
-    const existing = (await loadAppState(['deed_saleOrders'])).deed_saleOrders
-    const { merged, kept } = mergeInvoiceMirror(all.map(mapSaleOrderToClient) as Array<{ id?: unknown }>, existing)
-    if (kept > 0) console.warn(`[documents-broadcast] kept ${kept} sale order(s) present in the store but missing from the table`)
-    await saveStoreKeys({ deed_saleOrders: JSON.stringify(merged) })
-  } catch (err) {
-    console.error('[documents-broadcast] refreshSaleOrdersBlob failed:', err)
-  }
+  await notifyStoreKeysChanged(['deed_saleOrders'])
 }
 
 export async function refreshQuotesBlob(): Promise<void> {
-  try {
-    const all = await prisma.quote.findMany({ include: { items: true, client: true, opportunity: true }, orderBy: { quoteDate: 'desc' } })
-    const existing = (await loadAppState(['deed_quotes'])).deed_quotes
-    const { merged, kept } = mergeInvoiceMirror(normalizeQuotesForClient(all) as Array<{ id?: unknown }>, existing)
-    if (kept > 0) console.warn(`[documents-broadcast] kept ${kept} quote(s) present in the store but missing from the table`)
-    await saveStoreKeys({ deed_quotes: JSON.stringify(merged) })
-  } catch (err) {
-    console.error('[documents-broadcast] refreshQuotesBlob failed:', err)
-  }
+  await notifyStoreKeysChanged(['deed_quotes'])
 }
 
 /**

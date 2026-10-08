@@ -7,6 +7,7 @@ import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { isUserAllowed } from '@/lib/auth/authorization'
+import { mergeScreenExtras, QUOTE_EXTRA_KEYS } from '@/lib/screen-extras'
 
 async function broadcastQuotes() {
   try {
@@ -136,6 +137,7 @@ export async function POST(request: Request) {
         ...mapped,
         quoteNumber,
         createdById: session.user.id,
+        screenExtras: mergeScreenExtras(null, body, QUOTE_EXTRA_KEYS) ?? undefined,
         items: { create: items },
       } as any,
       include: { items: true, client: true, opportunity: true },
