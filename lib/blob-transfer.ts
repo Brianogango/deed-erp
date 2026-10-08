@@ -245,11 +245,14 @@ async function transferStockMoves(rows: unknown[], actorId: string | null): Prom
       screenExtras: row as Prisma.InputJsonObject,
     }
     try {
-      await prisma.stockMovement.upsert({
-        where: { blobId },
-        create: { blobId, ...data, createdById: actor, createdAt: validDate(row.date) },
-        update: data,
-      })
+      // Insert or update by blob_id directly — not an upsert, which needs the
+      // blob_id unique index (production went without it for a while).
+      if (have.has(blobId)) {
+        await prisma.stockMovement.updateMany({ where: { blobId }, data })
+      } else {
+        await prisma.stockMovement.create({ data: { blobId, ...data, createdById: actor, createdAt: validDate(row.date) } })
+        have.set(blobId, row as never)
+      }
       upserted += 1
     } catch (err) {
       skipped += 1
