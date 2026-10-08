@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planDepositDuplicates } from '@/lib/accounting/ledger-cleanup'
+import { planCreditApplicationDuplicates, planDepositDuplicates } from '@/lib/accounting/ledger-cleanup'
 
 const e = (ref: string, sourceType: string, amount: number) => ({ ref, sourceType, amount, date: '2026-09-20' })
 
@@ -41,5 +41,25 @@ describe('planDepositDuplicates', () => {
       e('JRN/DEP/DEP/0003/BBBBBBBB', 'manual', 500),
     ])
     expect(plan).toHaveLength(1)
+  })
+})
+
+describe('planCreditApplicationDuplicates', () => {
+  it('reverses the browser copy of a credit application the server also booked', () => {
+    const plan = planCreditApplicationDuplicates(
+      [{ ref: 'JRN/CAPP/INV/2026/0262/1790267362522', invoiceId: 'i-262', amount: 15000 }],
+      [{ ref: 'JRN/PAY/INV/2026/0262/73c5fc16', invoiceId: 'i-262', amount: 15000 }],
+    )
+    expect(plan.reverse).toEqual([{ ref: 'JRN/CAPP/INV/2026/0262/1790267362522', invoiceId: 'i-262', amount: 15000, keeps: 'JRN/PAY/INV/2026/0262/73c5fc16' }])
+    expect(plan.unpaired).toEqual([])
+  })
+
+  it('leaves a browser copy with no server twin (it may be the only booking)', () => {
+    const plan = planCreditApplicationDuplicates(
+      [{ ref: 'JRN/CAPP/INV/1/1', invoiceId: 'i-1', amount: 500 }, { ref: 'JRN/CAPP/INV/1/2', invoiceId: 'i-1', amount: 500 }],
+      [{ ref: 'JRN/PAY/INV/1/a', invoiceId: 'i-1', amount: 500 }],
+    )
+    expect(plan.reverse.map(r => r.ref)).toEqual(['JRN/CAPP/INV/1/1'])
+    expect(plan.unpaired.map(r => r.ref)).toEqual(['JRN/CAPP/INV/1/2'])
   })
 })

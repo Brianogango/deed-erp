@@ -58,3 +58,26 @@ export function planDepositDuplicates(entries: JournalLite[]): DepositDuplicate[
   }
   return out
 }
+
+/**
+ * Customer credit applied to an invoice was booked twice: the browser posted
+ * JRN/CAPP/<invoice>/<time> and /api/invoices/[id]/payments booked the same
+ * application as a payment entry (Dr 3313 / Cr 1800). Each browser copy is
+ * paired with a server entry for the same invoice and amount and reversed;
+ * one with no server twin may be the only booking, so it is only listed.
+ */
+export type CreditEntry = { ref: string; invoiceId: string; amount: number }
+export type CreditApplicationDuplicate = { ref: string; invoiceId: string; amount: number; keeps: string }
+
+export function planCreditApplicationDuplicates(browser: CreditEntry[], server: CreditEntry[]): { reverse: CreditApplicationDuplicate[]; unpaired: CreditEntry[] } {
+  const used = new Set<string>()
+  const reverse: CreditApplicationDuplicate[] = []
+  const unpaired: CreditEntry[] = []
+  for (const b of [...browser].sort((x, y) => x.ref.localeCompare(y.ref))) {
+    const twin = server.find(s => !used.has(s.ref) && s.invoiceId === b.invoiceId && Math.abs(s.amount - b.amount) < 0.01)
+    if (!twin) { unpaired.push(b); continue }
+    used.add(twin.ref)
+    reverse.push({ ...b, keeps: twin.ref })
+  }
+  return { reverse, unpaired }
+}

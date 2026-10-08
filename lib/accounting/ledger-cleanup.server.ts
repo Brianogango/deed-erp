@@ -5,7 +5,7 @@ import { reverseJournalEntry } from '@/lib/accounting/journal-service'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
 import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
-import { planDepositDuplicates, type DepositDuplicate } from '@/lib/accounting/ledger-cleanup'
+import { planCreditApplicationDuplicates, planDepositDuplicates, type CreditApplicationDuplicate, type CreditEntry, type DepositDuplicate } from '@/lib/accounting/ledger-cleanup'
 import { loadAppState } from '@/lib/server-store'
 import { addInvoicesToList } from '@/lib/documents-broadcast.server'
 
@@ -98,7 +98,29 @@ async function findMissingFromList(): Promise<ListGap[]> {
     .sort((a, b) => b.date.localeCompare(a.date))
 }
 
-export async function findLedgerCleanup(): Promise<{ deposits: DepositDuplicate[]; vat: VatGap[]; listMissing: ListGap[]; tillMissing: TillGap[] }> {
+/** Credit applications booked twice (browser JRN/CAPP copy + server payment entry). */
+async function findCreditApplicationDuplicates(): Promise<{ reverse: Array<CreditApplicationDuplicate & { invoiceRef: string }>; unpaired: Array<CreditEntry & { invoiceRef: string }> }> {
+  const live = { isPosted: true, isReversed: false, reversalOfId: null }
+  const browser = await prisma.journalEntry.findMany({
+    where: { ...live, ref: { startsWith: 'JRN/CAPP/' }, invoiceId: { not: null } },
+    select: { ref: true, invoiceId: true, totalDebit: true },
+  })
+  if (!browser.length) return { reverse: [], unpaired: [] }
+  const invoiceIds = [...new Set(browser.map(b => b.invoiceId!))]
+  const server = await prisma.journalEntry.findMany({
+    where: { ...live, ref: { startsWith: 'JRN/PAY/' }, invoiceId: { in: invoiceIds }, lines: { some: { accountLabel: { startsWith: '3313' }, debit: { gt: 0 } } } },
+    select: { ref: true, invoiceId: true, totalDebit: true },
+  })
+  const refs = new Map((await prisma.invoice.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, invoiceNumber: true } })).map(i => [i.id, i.invoiceNumber]))
+  const asEntry = (e: { ref: string; invoiceId: string | null; totalDebit: unknown }) => ({ ref: e.ref, invoiceId: e.invoiceId!, amount: Number(e.totalDebit) })
+  const plan = planCreditApplicationDuplicates(browser.map(asEntry), server.map(asEntry))
+  return {
+    reverse: plan.reverse.map(r => ({ ...r, invoiceRef: refs.get(r.invoiceId) ?? '' })),
+    unpaired: plan.unpaired.map(r => ({ ...r, invoiceRef: refs.get(r.invoiceId) ?? '' })),
+  }
+}
+
+export async function findLedgerCleanup(): Promise<{ deposits: DepositDuplicate[]; vat: VatGap[]; listMissing: ListGap[]; tillMissing: TillGap[]; creditCopies: Array<CreditApplicationDuplicate & { invoiceRef: string }>; creditUnpaired: Array<CreditEntry & { invoiceRef: string }> }> {
   const depositEntries = await prisma.journalEntry.findMany({
     where: {
       isPosted: true, isReversed: false, reversalOfId: null,
@@ -129,14 +151,33 @@ export async function findLedgerCleanup(): Promise<{ deposits: DepositDuplicate[
     vat.push({ invoiceId: inv.id, ref: inv.invoiceNumber, type: String(inv.documentType), vat: Number(inv.taxAmount), journalId: posting.id })
   }
   const tillMissing = (await findTillSalesWithoutInvoice()).map(({ ticket: _ticket, ...gap }) => gap)
-  return { deposits, vat: vat.sort((a, b) => a.ref.localeCompare(b.ref)), listMissing: await findMissingFromList(), tillMissing }
+  const credit = await findCreditApplicationDuplicates()
+  return { deposits, vat: vat.sort((a, b) => a.ref.localeCompare(b.ref)), listMissing: await findMissingFromList(), tillMissing, creditCopies: credit.reverse, creditUnpaired: credit.unpaired }
 }
 
 type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
 
 export async function applyLedgerCleanup(actorId: string): Promise<Result[]> {
-  const { deposits, vat, listMissing } = await findLedgerCleanup()
+  const { deposits, vat, listMissing, creditCopies } = await findLedgerCleanup()
   const results: Result[] = []
+  for (const c of creditCopies) {
+    try {
+      const original = await prisma.journalEntry.findUniqueOrThrow({ where: { ref: c.ref }, select: { id: true } })
+      const rev = await reverseJournalEntry(c.ref, actorId)
+      await writeFinancialAudit({
+        userId: actorId,
+        action: 'reverse_duplicate_credit_application',
+        entityType: 'invoice',
+        entityId: c.invoiceId,
+        relatedJournalId: rev.id,
+        oldValues: { journalRef: c.ref, journalId: original.id, amount: c.amount },
+        newValues: { reversedBy: rev.ref, kept: c.keeps },
+      })
+      results.push({ ref: c.invoiceRef || c.ref, status: 'fixed', message: `Credit applied twice: reversed ${c.ref} (KES ${Math.round(c.amount).toLocaleString('en-KE')}), kept ${c.keeps}` })
+    } catch (err) {
+      results.push({ ref: c.invoiceRef || c.ref, status: 'failed', message: err instanceof Error ? err.message : 'could not reverse' })
+    }
+  }
   for (const d of deposits) {
     try {
       const original = await prisma.journalEntry.findUniqueOrThrow({ where: { ref: d.ref }, select: { id: true } })

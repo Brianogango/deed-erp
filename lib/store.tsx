@@ -3019,25 +3019,6 @@ const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: num
   }
 }
 
-const buildCustomerCreditApplicationJournal = (inv: Invoice, amount: number, creditRefs: string): JournalEntry => {
-  const lines = [
-    accountLine('3313 - Customer Credits', `Apply credit ${creditRefs}`, amount, 0),
-    accountLine('1800 - Accounts Receivable', `Credit applied to ${inv.ref}`, 0, amount),
-  ]
-  return {
-    id: uid(),
-    ref: `JRN/CAPP/${inv.ref}/${Date.now()}`,
-    date: now(),
-    source: 'payment',
-    description: `Customer credit applied to ${inv.ref}`,
-    status: 'posted',
-    invoiceId: inv.id,
-    lines,
-    totalDebit: amount,
-    totalCredit: amount,
-  }
-}
-
 const canManageProcurement = (user: User | null) =>
   !!user && ['director', 'admin_officer', 'inventory_officer'].includes(normalizeClientRole(user.role))
 
@@ -7654,7 +7635,10 @@ const storeCtx: AppState = {
         notes: `${inv.notes || ''}\nApplied customer credit ${applications.map(a => `${a.ref} (${fmtKes(a.amount)})`).join(', ')}`.trim(),
       }
       setInvoices(prev => prev.map(i => i.id === inv.id ? updatedInvoice : i))
-      setJournalEntries(prev => [buildCustomerCreditApplicationJournal(inv, applied, applications.map(a => a.ref).join(', ')), ...prev])
+      // No journal is built here: /api/invoices/[id]/payments books the credit
+      // application itself (Dr 3313 / Cr 1800). The browser's own JRN/CAPP copy
+      // reached the ledger too, so every applied credit came off the customer's
+      // balance twice (INV/2026/0262).
 
       try {
         const res = await fetch(`/api/invoices/${inv.id}/payments`, {
@@ -7675,7 +7659,6 @@ const storeCtx: AppState = {
       } catch (err: any) {
         setCustomerCredits(prevCredits)
         setInvoices(prev => prev.map(i => i.id === inv.id ? prevInvoice : i))
-        setJournalEntries(prev => prev.filter(j => !j.ref.startsWith(`JRN/CAPP/${inv.ref}/`)))
         showToast(err?.message || 'Failed to apply customer credit', 'error')
         return
       }

@@ -6,6 +6,8 @@ import type { DepositDuplicate } from '@/lib/accounting/ledger-cleanup'
 
 type VatGap = { invoiceId: string; ref: string; type: string; vat: number }
 type ListGap = { ref: string; date: string; total: number }
+type CreditCopy = { ref: string; invoiceRef: string; amount: number; keeps: string }
+type CreditUnpaired = { ref: string; invoiceRef: string; amount: number }
 type TillGap = { ref: string; date: string; total: number; customer: string; cashier: string; inLedger: boolean }
 type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
 
@@ -14,10 +16,10 @@ type Result = { ref: string; status: 'fixed' | 'failed'; message: string }
  * twice and booked documents with no VAT record (lib/accounting/ledger-cleanup.ts).
  */
 export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg: string, type?: 'error' | 'success' | 'info') => void; canApply: boolean }) {
-  const [data, setData] = useState<{ deposits: DepositDuplicate[]; vat: VatGap[]; listMissing: ListGap[]; tillMissing: TillGap[] } | null>(null)
+  const [data, setData] = useState<{ deposits: DepositDuplicate[]; vat: VatGap[]; listMissing: ListGap[]; tillMissing: TillGap[]; creditCopies: CreditCopy[]; creditUnpaired: CreditUnpaired[] } | null>(null)
   const [failed, setFailed] = useState<Result[]>([])
   const [busy, setBusy] = useState(false)
-  const count = data ? data.deposits.length + data.vat.length + data.listMissing.length + data.tillMissing.length : 0
+  const count = data ? data.deposits.length + data.vat.length + data.listMissing.length + data.tillMissing.length + data.creditCopies.length : 0
   const vatTotal = (data?.vat ?? []).reduce((s, g) => s + g.vat, 0)
 
   const load = async () => {
@@ -26,7 +28,7 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
       const res = await fetch('/api/accounting/ledger-cleanup', { cache: 'no-store' })
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error(body?.error || `server returned ${res.status}`)
-      setData({ deposits: body?.deposits ?? [], vat: body?.vat ?? [], listMissing: body?.listMissing ?? [], tillMissing: body?.tillMissing ?? [] })
+      setData({ deposits: body?.deposits ?? [], vat: body?.vat ?? [], listMissing: body?.listMissing ?? [], tillMissing: body?.tillMissing ?? [], creditCopies: body?.creditCopies ?? [], creditUnpaired: body?.creditUnpaired ?? [] })
     } catch (err) {
       showToast(`Could not check: ${err instanceof Error ? err.message : 'error'}`, 'error')
     } finally {
@@ -36,7 +38,7 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
 
   const fix = async () => {
     if (!data || !count) return
-    if (!window.confirm(`Reverse ${data.deposits.length} duplicate deposit entr${data.deposits.length === 1 ? 'y' : 'ies'} and write VAT records for ${data.vat.length} document${data.vat.length === 1 ? '' : 's'} (${fmtKes(vatTotal)}), and put ${data.listMissing.length} document${data.listMissing.length === 1 ? '' : 's'} missing from the Finance list back on it, and rebuild ${data.tillMissing.length} till sale invoice${data.tillMissing.length === 1 ? '' : 's'} from their tickets?\n\nThe server's own deposit entry is kept. Reversals are dated today and written to the audit log.`)) return
+    if (!window.confirm(`Reverse ${data.deposits.length} duplicate deposit entr${data.deposits.length === 1 ? 'y' : 'ies'} and write VAT records for ${data.vat.length} document${data.vat.length === 1 ? '' : 's'} (${fmtKes(vatTotal)}), and put ${data.listMissing.length} document${data.listMissing.length === 1 ? '' : 's'} missing from the Finance list back on it, reverse ${data.creditCopies.length} customer-credit application${data.creditCopies.length === 1 ? '' : 's'} booked twice, and rebuild ${data.tillMissing.length} till sale invoice${data.tillMissing.length === 1 ? '' : 's'} from their tickets?\n\nThe server's own deposit entry is kept. Reversals are dated today and written to the audit log.`)) return
     setBusy(true)
     try {
       const res = await fetch('/api/accounting/ledger-cleanup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
@@ -58,7 +60,7 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
     <div className="mx-4 mt-4 rounded-2xl border border-border-lt bg-card p-4 sm:mx-6">
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-sm font-extrabold text-text-1">Deposits booked twice, missing VAT records, documents missing from Finance</h3>
+          <h3 className="text-sm font-extrabold text-text-1">Deposits and credits booked twice, missing VAT records, documents missing from Finance</h3>
           <p className="mt-1 max-w-3xl text-xs text-text-3">
             Deposit receipts and refunds the browser booked beside the server&apos;s own entry, and booked invoices and bills whose VAT
             never reached the VAT records (so the VAT return missed it), and saved documents — often till
@@ -103,6 +105,18 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
         <p className="mt-3 text-xs text-text-2">
           {data.listMissing.length} document{data.listMissing.length === 1 ? '' : 's'} saved but not on the Finance list:{' '}
           <span className="font-mono text-text-3">{data.listMissing.slice(0, 15).map(g => g.ref).join(', ')}{data.listMissing.length > 15 ? ` +${data.listMissing.length - 15} more` : ''}</span>
+        </p>
+      )}
+      {data && data.creditCopies.length > 0 && (
+        <p className="mt-3 text-xs text-text-2">
+          <span className="font-bold">{data.creditCopies.length} customer-credit application{data.creditCopies.length === 1 ? '' : 's'} booked twice</span> (the browser&apos;s copy is reversed, the payment entry kept):{' '}
+          <span className="font-mono text-text-3">{data.creditCopies.map(c => `${c.invoiceRef} ${fmtKes(c.amount)}`).join(', ')}</span>
+        </p>
+      )}
+      {data && data.creditUnpaired.length > 0 && (
+        <p className="mt-3 text-xs text-amber-800">
+          {data.creditUnpaired.length} credit application{data.creditUnpaired.length === 1 ? '' : 's'} booked only by the browser (not changed — check the customer&apos;s credit):{' '}
+          <span className="font-mono">{data.creditUnpaired.map(c => `${c.invoiceRef} ${fmtKes(c.amount)}`).join(', ')}</span>
         </p>
       )}
       {data && data.tillMissing.length > 0 && (
