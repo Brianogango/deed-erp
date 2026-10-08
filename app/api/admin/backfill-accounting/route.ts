@@ -4,8 +4,6 @@ import { loadAppState } from '@/lib/server-store'
 import { mirrorJournalEntriesToPrisma } from '@/lib/accounting/account-journal-mirror'
 import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mirror'
 import { mirrorRepairsToPrisma } from '@/lib/repair-mirror'
-import { mirrorDepositsToPrisma } from '@/lib/accounting/deposit-mirror'
-import { mirrorHoldoversToPrisma } from '@/lib/accounting/holdover-mirror'
 import { bootstrapChartOfAccounts } from '@/lib/accounting/coa-bootstrap'
 
 export const dynamic = 'force-dynamic'
@@ -31,7 +29,7 @@ export async function POST(request: NextRequest) {
   const force = !!body.force
   const sections: string[] = Array.isArray(body.sections)
     ? body.sections
-    : ['coa', 'journals', 'reservations', 'repairs', 'deposits', 'holdovers']
+    : ['coa', 'journals', 'reservations', 'repairs']
 
   const state = await loadAppState([
     'deed_accounts',
@@ -69,12 +67,6 @@ export async function POST(request: NextRequest) {
   }
   if (sections.includes('repairs')) {
     result.repairs = await mirrorRepairsToPrisma(state.deed_repairs_v2 ?? [], { force })
-  }
-  if (sections.includes('deposits')) {
-    result.deposits = await mirrorDepositsToPrisma(state.deed_deposits ?? state.deed_deposits_v1 ?? [], { force })
-  }
-  if (sections.includes('holdovers')) {
-    result.holdovers = await mirrorHoldoversToPrisma(state.deed_holdovers ?? [], { force })
   }
 
   return NextResponse.json(result)

@@ -5455,6 +5455,18 @@ const postSystemJournal = (
   }, onFailure, `${journal.ref} was not posted to the ledger — please retry`)
 }
 
+/** Save a holdover (holdovers table). Resolves to the saved record, or an error message. */
+async function saveHoldoverToServer(method: 'POST' | 'PATCH', url: string, body: Partial<Holdover>): Promise<Holdover | string> {
+  try {
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await res.json().catch(() => null)
+    if (res.ok && data?.id) return data as Holdover
+    return String(data?.error ?? `server returned ${res.status}`)
+  } catch {
+    return 'check your connection and try again'
+  }
+}
+
 /** Save an account to the chart (account_codes). Resolves to an error message, or null when saved. */
 async function saveAccountToServer(method: 'POST' | 'PUT', url: string, account: Account): Promise<string | null> {
   try {
@@ -6526,13 +6538,11 @@ function StoreProvider({
         window.localStorage.removeItem('deed_holdovers_v1')
         return
       }
-      setHoldovers(prev => {
-        if (!Array.isArray(prev) || prev.length === 0) return legacy as Holdover[]
-        const ids = new Set(prev.map(h => h.id))
-        const missing = (legacy as Holdover[]).filter(h => h?.id && !ids.has(h.id))
-        return missing.length ? [...missing, ...prev] : prev
+      // Saved to the server; they show up once the list next loads.
+      const legacyRows = (legacy as Holdover[]).filter(h => h?.id)
+      void Promise.all(legacyRows.map(h => saveHoldoverToServer('POST', '/api/holdovers', h))).then(results => {
+        if (results.every(r => typeof r !== 'string')) window.localStorage.removeItem('deed_holdovers_v1')
       })
-      window.localStorage.removeItem('deed_holdovers_v1')
     } catch {
       /* ignore corrupt legacy */
     }
@@ -8945,15 +8955,30 @@ const storeCtx: AppState = {
       showToast('Deposit cancelled', 'info')
     },
 
-    // Holdovers — synced via useLS('deed_holdovers') → app_state
+    // Holdovers are saved to the holdovers table (the deed_holdovers copy is frozen).
     holdovers,
     addHoldover: (h) => {
       setHoldovers(prev => [h, ...prev])
       try { window.localStorage.removeItem('deed_holdovers_v1') } catch { /* ignore */ }
+      void saveHoldoverToServer('POST', '/api/holdovers', h).then(result => {
+        if (typeof result === 'string') {
+          setHoldovers(prev => prev.filter(x => x.id !== h.id))
+          showToast(`${h.ref} not saved: ${result}`, 'error')
+        } else if (result.ref !== h.ref) {
+          // The number was taken by another issue at the same moment.
+          setHoldovers(prev => prev.map(x => (x.id === h.id ? result : x)))
+        }
+      })
       showToast(`${h.ref} issued to ${h.clientName}`, 'success')
     },
     updateHoldover: (id, patch) => {
+      const before = holdovers.find(h => h.id === id)
       setHoldovers(prev => prev.map(h => (h.id === id ? { ...h, ...patch } : h)))
+      void saveHoldoverToServer('PATCH', `/api/holdovers/${encodeURIComponent(id)}`, patch).then(result => {
+        if (typeof result !== 'string') return
+        if (before) setHoldovers(prev => prev.map(h => (h.id === id ? before : h)))
+        showToast(`${before?.ref ?? 'Holdover'} not saved: ${result}`, 'error')
+      })
     },
 
     companyAssets,

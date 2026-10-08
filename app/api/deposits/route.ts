@@ -4,6 +4,8 @@ import prisma from '@/lib/prisma'
 import { getNextDepositRef } from '@/lib/deposit-ref-counter'
 import { createDepositWithReceipt } from '@/lib/accounting/deposit-service'
 import { z } from 'zod'
+import { depositToScreen } from '@/lib/deposit-read-model.server'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
 
 const DEPOSIT_WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
 export const dynamic = 'force-dynamic'
@@ -35,44 +37,6 @@ const depositCreateSchema = z.object({
   totalValue: z.coerce.number().finite().nonnegative().optional(),
 }).strict()
 
-function toClient(d: any) {
-  return {
-    id: d.id,
-    ref: d.ref,
-    customerId: d.customerId ?? '',
-    customerName: d.customerName ?? '',
-    customerPhone: d.customerPhone ?? '',
-    items: (d.items ?? []).map((x: any) => ({
-      id: x.id,
-      productId: x.productId ?? '',
-      productName: x.productName ?? '',
-      sku: x.sku ?? '',
-      qty: x.qty,
-      unitPrice: Number(x.unitPrice),
-      total: Number(x.lineTotal),
-    })),
-    totalValue: Number(d.totalValue),
-    totalPaid: Number(d.totalPaid),
-    balance: Number(d.balance),
-    status: d.status,
-    payments: (d.payments ?? []).map((p: any) => ({
-      id: p.id,
-      date: p.paidAt.toISOString(),
-      amount: Number(p.amount),
-      method: p.method,
-      ref: p.paymentRef ?? undefined,
-      recordedBy: p.recordedBy ?? '',
-    })),
-    notes: d.notes ?? undefined,
-    dueDate: d.dueDate?.toISOString().slice(0,10),
-    completedAt: d.completedAt?.toISOString(),
-    cancelledAt: d.cancelledAt?.toISOString(),
-    cancelReason: d.cancelReason ?? undefined,
-    createdAt: d.createdAt.toISOString(),
-    createdBy: d.createdBy ?? '',
-  }
-}
-
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -80,7 +44,7 @@ export async function GET() {
       include: { items: { orderBy: { sortOrder: 'asc' } }, payments: { orderBy: { paidAt: 'asc' } } },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(rows.map(toClient))
+    return NextResponse.json(rows.map(depositToScreen))
   })
 }
 
@@ -123,6 +87,7 @@ export async function POST(request: Request) {
       notes: body.notes || null,
       actor: { id: actor.id, name: actor.name },
     })
-    return NextResponse.json(toClient(row), { status: 201 })
+    await notifyStoreKeysChanged(['deed_deposits'])
+    return NextResponse.json(depositToScreen(row), { status: 201 })
   })
 }

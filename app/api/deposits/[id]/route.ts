@@ -3,6 +3,7 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 import prisma from '@/lib/prisma'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { z } from 'zod'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
 
 export const dynamic = 'force-dynamic'
 const DEPOSIT_WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
@@ -61,6 +62,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       })
       return row
     })
+    await notifyStoreKeysChanged(['deed_deposits'])
     return NextResponse.json(updated)
   })
 }

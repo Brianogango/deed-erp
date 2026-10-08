@@ -110,7 +110,7 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * these keys are dropped — the change has already been saved through the
  * document's own API route — but other tabs are still told to re-read.
  */
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -201,6 +201,8 @@ const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
   deed_journalEntries: `SELECT max(created_at)::text || ':' || count(*) || ':' || count(*) FILTER (WHERE is_reversed) FROM journal_entries`,
   deed_accounts: `SELECT max(updated_at)::text || ':' || count(*) FROM account_codes`,
   deed_contacts: `SELECT max(updated_at)::text || ':' || count(*) FROM clients`,
+  deed_deposits: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM deposits) || ':' || (SELECT count(*) || ':' || coalesce(sum(amount), 0) FROM deposit_payments)`,
+  deed_holdovers: `SELECT max(updated_at)::text || ':' || count(*) FROM holdovers`,
   deed_purchaseOrders: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM purchase_orders) || ':' || (SELECT coalesce(sum(qty_received), 0) || '/' || coalesce(sum(qty_billed), 0) FROM purchase_order_items)`,
 }
 
@@ -215,6 +217,22 @@ async function frozenTableFingerprints(keys: string[]): Promise<Record<string, s
     if (value != null) out[key] = String(value)
   }))
   return out
+}
+
+async function overlayAuthoritativeDeposits(state: AppStateMap, keys?: string[]) {
+  if (keys && !keys.includes('deed_deposits')) return
+  const fromPrisma = await import('./deposit-read-model.server')
+    .then(m => m.loadScreenDeposits(state.deed_deposits))
+    .catch(err => { console.error('[server-store] deposits from table failed:', err); return null })
+  if (fromPrisma) state.deed_deposits = fromPrisma
+}
+
+async function overlayAuthoritativeHoldovers(state: AppStateMap, keys?: string[]) {
+  if (keys && !keys.includes('deed_holdovers')) return
+  const fromPrisma = await import('./holdover-read-model.server')
+    .then(m => m.loadScreenHoldovers(state.deed_holdovers))
+    .catch(err => { console.error('[server-store] holdovers from table failed:', err); return null })
+  if (fromPrisma) state.deed_holdovers = fromPrisma
 }
 
 async function overlayAuthoritativeRepairs(state: AppStateMap, keys?: string[]) {
@@ -237,6 +255,8 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     await overlayAuthoritativeAccounts(state, wantedKeys)
     await overlayAuthoritativeContacts(state, wantedKeys)
     await overlayAuthoritativePurchaseOrders(state, wantedKeys)
+    await overlayAuthoritativeDeposits(state, wantedKeys)
+    await overlayAuthoritativeHoldovers(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -259,6 +279,8 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   await overlayAuthoritativeAccounts(state, wantedKeys)
   await overlayAuthoritativeContacts(state, wantedKeys)
   await overlayAuthoritativePurchaseOrders(state, wantedKeys)
+  await overlayAuthoritativeDeposits(state, wantedKeys)
+  await overlayAuthoritativeHoldovers(state, wantedKeys)
   return state
 }
 
@@ -534,25 +556,10 @@ export async function saveStoreKeys(
     }
     // Accounting / inventory dual-write mirrors — NEVER delete app_state keys.
     if (process.env.NODE_ENV !== 'test') {
-      if (entries['deed_journalEntries']) {
-        void import('./accounting/account-journal-mirror')
-          .then(m => m.mirrorJournalEntriesToPrisma(entries['deed_journalEntries']))
-          .catch(err => console.error('[journal-mirror] sync write failed:', err))
-      }
       if (entries['deed_stockReservations']) {
         void import('./inventory/reservation-mirror')
           .then(m => m.mirrorStockReservationsToPrisma(entries['deed_stockReservations']))
           .catch(err => console.error('[reservation-mirror] sync write failed:', err))
-      }
-      if (entries['deed_deposits'] || entries['deed_deposits_v1']) {
-        void import('./accounting/deposit-mirror')
-          .then(m => m.mirrorDepositsToPrisma(entries['deed_deposits'] || entries['deed_deposits_v1']))
-          .catch(err => console.error('[deposit-mirror] sync write failed:', err))
-      }
-      if (entries['deed_holdovers']) {
-        void import('./accounting/holdover-mirror')
-          .then(m => m.mirrorHoldoversToPrisma(entries['deed_holdovers']))
-          .catch(err => console.error('[holdover-mirror] sync write failed:', err))
       }
       if (entries['deed_deliveries']) {
         void import('./delivery-mirror')

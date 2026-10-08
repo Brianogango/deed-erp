@@ -2865,6 +2865,8 @@ model Holdover {
   returnCondition  String?   @map("return_condition") @db.VarChar(40)
   notes            String?
   createdBy        String?   @map("created_by") @db.VarChar(80)
+  /// Screen fields with no column (accessories, repair link, extensions …) — lib/holdover-read-model.server.ts.
+  screenExtras     Json?     @map("screen_extras")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 

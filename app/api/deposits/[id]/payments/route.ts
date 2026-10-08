@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { addDepositReceipt } from '@/lib/accounting/deposit-service'
 import { z } from 'zod'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const mapped = depositPaymentError(err)
       return NextResponse.json({ error: mapped.message }, { status: mapped.status })
     }
+    await notifyStoreKeysChanged(['deed_deposits'])
     return NextResponse.json({
       ...row,
       totalValue: Number(row.totalValue),

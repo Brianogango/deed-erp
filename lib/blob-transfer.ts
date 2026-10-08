@@ -212,16 +212,6 @@ export async function mirrorKnownDomain(key: string, value: string, actorId: str
       await mirrorStockReservationsToPrisma(value)
       return { upserted: rows.length, skipped: 0 }
     }
-    if (key === 'deed_deposits' || key === 'deed_deposits_v1') {
-      const { mirrorDepositsToPrisma } = await import('@/lib/accounting/deposit-mirror')
-      await mirrorDepositsToPrisma(value)
-      return { upserted: rows.length, skipped: 0 }
-    }
-    if (key === 'deed_holdovers') {
-      const { mirrorHoldoversToPrisma } = await import('@/lib/accounting/holdover-mirror')
-      await mirrorHoldoversToPrisma(value)
-      return { upserted: rows.length, skipped: 0 }
-    }
     if (key === 'deed_deliveries') {
       const { mirrorDeliveriesToPrisma } = await import('@/lib/delivery-mirror')
       await mirrorDeliveriesToPrisma(rows)

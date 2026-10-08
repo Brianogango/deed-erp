@@ -67,12 +67,6 @@ vi.mock('@/lib/accounting/account-journal-mirror', () => ({
 vi.mock('@/lib/inventory/reservation-mirror', () => ({
   mirrorStockReservationsToPrisma: vi.fn().mockResolvedValue(undefined),
 }))
-vi.mock('@/lib/accounting/deposit-mirror', () => ({
-  mirrorDepositsToPrisma: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock('@/lib/accounting/holdover-mirror', () => ({
-  mirrorHoldoversToPrisma: vi.fn().mockResolvedValue(undefined),
-}))
 vi.mock('@/lib/delivery-mirror', () => ({
   mirrorDeliveryToPrisma: vi.fn().mockResolvedValue({ mirrored: true }),
 }))

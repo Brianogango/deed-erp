@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { refundDeposit } from '@/lib/accounting/deposit-service'
 import { z } from 'zod'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       reason: body.reason,
       actor: { id: actor.id, name: actor.name },
     })
+    await notifyStoreKeysChanged(['deed_deposits'])
     return NextResponse.json({ ok: true, ...result })
   })
 }
