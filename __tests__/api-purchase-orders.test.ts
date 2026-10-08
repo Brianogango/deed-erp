@@ -11,6 +11,7 @@ const {
   mockGetNextDocNumber,
   mockLoadAppState,
   mockSaveStoreKeys,
+  mockNotify,
   mockWriteFinancialAudit,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -29,6 +30,7 @@ const {
   mockGetNextDocNumber: vi.fn(),
   mockLoadAppState: vi.fn(),
   mockSaveStoreKeys: vi.fn().mockResolvedValue(undefined),
+  mockNotify: vi.fn().mockResolvedValue(undefined),
   mockWriteFinancialAudit: vi.fn().mockResolvedValue(undefined),
 }))
 
@@ -65,6 +67,7 @@ vi.mock('@/lib/doc-ref-counter', () => ({ getNextDocNumber: mockGetNextDocNumber
 vi.mock('@/lib/server-store', () => ({
   loadAppState: mockLoadAppState,
   saveStoreKeys: mockSaveStoreKeys,
+  notifyStoreKeysChanged: mockNotify,
 }))
 
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: mockWriteFinancialAudit }))
@@ -134,7 +137,7 @@ beforeEach(() => {
 })
 
 describe('POST /api/purchase-orders', () => {
-  it('creates a PO, resolves the vendor client, and mirrors it into the blob', async () => {
+  it('creates a PO, resolves the vendor client, and tells open tabs to re-read', async () => {
     mockPrismaPurchaseOrder.create.mockResolvedValue(dbPo)
 
     const res = await POST(postReq({
@@ -156,13 +159,13 @@ describe('POST /api/purchase-orders', () => {
         data: expect.objectContaining({ clientId: VENDOR_ID, poNumber: 'PO/2026/0001' }),
       }),
     )
-    expect(mockSaveStoreKeys).toHaveBeenCalled()
-    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_purchaseOrders)
-    expect(saved[0].vendorId).toBe(VENDOR_ID)
-    expect(saved[0].vendorName).toBe('Acme Supplies')
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+    expect(mockNotify).toHaveBeenCalledWith(['deed_purchaseOrders'])
 
     const body = await res.json()
     expect(body.ref).toBe('PO/2026/0001')
+    expect(body.vendorId).toBe(VENDOR_ID)
+    expect(body.vendorName).toBe('Acme Supplies')
   })
 
   it('preserves the client-reserved UUID and PO reference instead of creating a shadow RFQ', async () => {
@@ -241,17 +244,17 @@ describe('POST /api/purchase-orders', () => {
     expect(mockPrismaPurchaseOrder.create).not.toHaveBeenCalled()
   })
 
-  it('preserves passthrough fields (receiptIds, billId) already on the blob record', async () => {
-    mockLoadAppState.mockResolvedValue({
-      deed_purchaseOrders: [{ id: PO_ID, receiptIds: ['rcpt-1'], billId: 'bill-1' }],
-    })
+  it('keeps the repair link and approval fields, but never takes receipt / bill links from the body', async () => {
     mockPrismaPurchaseOrder.create.mockResolvedValue(dbPo)
 
-    const res = await POST(postReq({ vendorName: 'Acme Supplies', lines: [] }))
+    const res = await POST(postReq({
+      vendorName: 'Acme Supplies', lines: [],
+      repairId: 'rep-1', repairRef: 'RPR/0001', approvalStatus: 'pending',
+      receiptIds: ['rcpt-forged'], billId: 'bill-forged',
+    }))
     expect(res.status).toBe(201)
-    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_purchaseOrders)
-    expect(saved[0].receiptIds).toEqual(['rcpt-1'])
-    expect(saved[0].billId).toBe('bill-1')
+    const data = mockPrismaPurchaseOrder.create.mock.calls[0][0].data
+    expect(data.screenExtras).toEqual({ repairId: 'rep-1', repairRef: 'RPR/0001', approvalStatus: 'pending' })
   })
 })
 

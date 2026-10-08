@@ -15018,6 +15018,22 @@ const storeCtx: AppState = {
       const po = poRef.current.find(p => p.id === ret.poId)
       if (!po) { showToast('Linked purchase order not found', 'error'); return false }
 
+      // Decide what each returned unit does to the money trail: wind back
+      // unbilled received qty, shrink draft bills, and only credit quantities
+      // that were billed on a POSTED bill. VAT mirrors each PO line's tax rate
+      // (zero unless the line was bought with VAT).
+      const draftBills = invRef.current.filter(i =>
+        i.type === 'vendor_bill' && i.purchaseOrderId === po.id && invoiceDocState(i.status) === 'draft' && i.total > 0,
+      )
+      const allocation = allocatePurchaseReturn({
+        poLines: po.lines.map(l => ({
+          id: l.id, productId: l.productId, productName: l.productName,
+          qtyReceived: l.qtyReceived, qtyBilled: l.qtyBilled,
+          unitPrice: l.unitPrice, taxRate: l.taxRate, accountCode: l.accountCode,
+        })),
+        returnLines: ret.lines.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty })),
+        draftBills: draftBills.map(b => ({ id: b.id, lines: b.lines.map(x => ({ id: x.id, productId: x.productId, qty: x.qty })) })),
+      })
       // Authoritative stock + valuation (GRNI restore) on the server.
       try {
         const stockRes = await fetch('/api/inventory/apply-vendor-return-stock', {
@@ -15033,6 +15049,7 @@ const storeCtx: AppState = {
               serialIds: l.serialIds,
               requiresSerial: l.requiresSerial,
             })),
+            po: { id: po.id, lines: allocation.poLineAdjustments },
           }),
         })
         if (!stockRes.ok) {
@@ -15051,22 +15068,6 @@ const storeCtx: AppState = {
         }
       })
 
-      // Decide what each returned unit does to the money trail: wind back
-      // unbilled received qty, shrink draft bills, and only credit quantities
-      // that were billed on a POSTED bill. VAT mirrors each PO line's tax rate
-      // (zero unless the line was bought with VAT).
-      const draftBills = invRef.current.filter(i =>
-        i.type === 'vendor_bill' && i.purchaseOrderId === po.id && invoiceDocState(i.status) === 'draft' && i.total > 0,
-      )
-      const allocation = allocatePurchaseReturn({
-        poLines: po.lines.map(l => ({
-          id: l.id, productId: l.productId, productName: l.productName,
-          qtyReceived: l.qtyReceived, qtyBilled: l.qtyBilled,
-          unitPrice: l.unitPrice, taxRate: l.taxRate, accountCode: l.accountCode,
-        })),
-        returnLines: ret.lines.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty })),
-        draftBills: draftBills.map(b => ({ id: b.id, lines: b.lines.map(x => ({ id: x.id, productId: x.productId, qty: x.qty })) })),
-      })
       // Wind back the PO's received/billed counters so three-way match stays true.
       if (allocation.poLineAdjustments.length > 0) {
         setPurchaseOrders(p => {

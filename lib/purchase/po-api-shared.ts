@@ -1,8 +1,9 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { resolveClientId, optionalUuid } from '@/lib/legacy-compat'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
+import { mergeScreenExtras, PO_EXTRA_KEYS, PO_LINE_EXTRA_KEYS, readScreenExtras } from '@/lib/screen-extras'
 
 /**
  * Shared helpers for the purchase-order API routes. Next.js route files may
@@ -11,10 +12,12 @@ import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifie
  */
 export const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
 
-const PASSTHROUGH_KEYS = [
-  'receiptIds', 'billId', 'approvalStatus', 'approvalRequestIds',
-  'repairId', 'repairRef', 'procurementRequestId',
-] as const
+/**
+ * Screen fields a PO create / edit may set. The receipt and bill links are
+ * not among them: they come from the receipts and bills that point at the
+ * order (see lib/purchase-order-read-model.server.ts).
+ */
+export const PO_WRITABLE_EXTRA_KEYS = PO_EXTRA_KEYS.filter(k => k !== 'receiptIds' && k !== 'billId')
 
 function mapPOLineToClient(item: any) {
   const requiresSerial = item.product ? isSerialTracking(inferTrackingMethod(item.product)) : false
@@ -30,6 +33,7 @@ function mapPOLineToClient(item: any) {
     subtotal: Number(item.lineTotal),
     requiresSerial,
     ...(item.accountCode ? { accountCode: item.accountCode } : {}),
+    ...readScreenExtras(item.screenExtras, PO_LINE_EXTRA_KEYS),
   }
 }
 
@@ -47,8 +51,15 @@ export function mapPOToClient(po: any) {
     taxTotal: Number(po.taxAmount ?? 0),
     total: Number(po.totalAmount ?? 0),
     notes: po.notes ?? '',
+    receiptIds: [] as string[],
+    ...readScreenExtras(po.screenExtras, PO_EXTRA_KEYS),
     lockVersion: Number(po.lockVersion ?? 0),
   }
+}
+
+/** Line screen fields (import serials, specs) for a create, or merged onto the stored ones. */
+export function poLineExtras(line: unknown, stored?: unknown) {
+  return mergeScreenExtras(stored, line, PO_LINE_EXTRA_KEYS) ?? undefined
 }
 
 const safeMoney = (value: unknown) => {
@@ -94,6 +105,7 @@ export function mapPOItemsForCreate(lines: any[]) {
         taxRate,
         lineTotal: Math.round(qtyOrdered * unitCost * 100) / 100,
         accountCode: safeShortText(l.accountCode, 80),
+        screenExtras: poLineExtras(l),
       }
     })
 }
@@ -121,21 +133,12 @@ export async function resolveVendorClientId(body: any): Promise<string> {
   return id
 }
 
-/** Merge Prisma-authoritative fields into the deed_purchaseOrders blob mirror, one record at a time. */
-export async function mirrorPurchaseOrder(prismaOrder: any, body: Record<string, unknown> = {}) {
-  const state = await loadAppState(['deed_purchaseOrders'])
-  const existing = Array.isArray(state.deed_purchaseOrders) ? (state.deed_purchaseOrders as any[]) : []
-  const idx = existing.findIndex((p: any) => p.id === prismaOrder.id)
-  const prevRecord = idx >= 0 ? existing[idx] : {}
-  const passthrough: Record<string, unknown> = {}
-  for (const key of PASSTHROUGH_KEYS) {
-    // Receipt, billing and approval linkage is workflow-owned. Preserve the
-    // existing server copy but never accept these fields from a client PO body.
-    if (prevRecord[key] !== undefined) passthrough[key] = prevRecord[key]
-  }
-  void body
-  const merged = { receiptIds: [], ...prevRecord, ...passthrough, ...mapPOToClient(prismaOrder) }
-  const next = idx >= 0 ? existing.map((p: any, i: number) => (i === idx ? merged : p)) : [merged, ...existing]
-  await saveStoreKeys({ deed_purchaseOrders: JSON.stringify(next) })
-  return merged
+/**
+ * The saved order as the screens show it, and a nudge to open tabs to re-read
+ * purchase orders. The deed_purchaseOrders screen copy is frozen; the table
+ * is the source.
+ */
+export async function publishPurchaseOrder(prismaOrder: any) {
+  await notifyStoreKeysChanged(['deed_purchaseOrders'])
+  return mapPOToClient(prismaOrder)
 }

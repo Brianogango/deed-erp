@@ -4,7 +4,9 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid } from '@/lib/legacy-compat'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { WRITE_ROLES, mapPOToClient, mirrorPurchaseOrder, computePOTotals } from '@/lib/purchase/po-api-shared'
+import { WRITE_ROLES, mapPOToClient, publishPurchaseOrder, computePOTotals, poLineExtras, PO_WRITABLE_EXTRA_KEYS } from '@/lib/purchase/po-api-shared'
+import { mergeScreenExtras } from '@/lib/screen-extras'
+import { Prisma } from '@prisma/client'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
 
 /** PO statuses that must never be removed from the record (audit FIN-003). */
@@ -52,6 +54,7 @@ function mapPOItemsForUpdate(lines: any[], existingItems: any[]) {
         taxRate,
         lineTotal: Math.round(qtyOrdered * unitCost * 100) / 100,
         accountCode: l.accountCode ? String(l.accountCode).trim().slice(0, 80) : null,
+        screenExtras: poLineExtras(l, prev?.screenExtras) ?? Prisma.DbNull,
       }
     })
 }
@@ -137,6 +140,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
     }
     if (body.notes !== undefined) data.notes = body.notes == null ? null : String(body.notes).trim().slice(0, 5_000)
+    if (PO_WRITABLE_EXTRA_KEYS.some(key => key in body)) {
+      data.screenExtras = mergeScreenExtras(existing.screenExtras, body, PO_WRITABLE_EXTRA_KEYS) ?? Prisma.DbNull
+    }
 
     if (Array.isArray(body.lines)) {
       // Same P2003 guard as PO create: resolve/auto-create missing products.
@@ -197,7 +203,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       include: { vendor: true, items: { include: { product: true } } },
     })
 
-    const mirrored = await mirrorPurchaseOrder(updated, body)
+    const mirrored = await publishPurchaseOrder(updated)
     return NextResponse.json(mirrored)
   })
 }
@@ -246,7 +252,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       newValues: { status: 'cancelled' },
     })
 
-    const mirrored = await mirrorPurchaseOrder(cancelled, {})
+    const mirrored = await publishPurchaseOrder(cancelled)
     return NextResponse.json({ ok: true, item: mirrored })
   })
 }

@@ -28,7 +28,8 @@ export async function refreshInvoicesBlob(): Promise<void> {
  * this only tells open tabs to re-read. Kept so callers need not change.
  */
 export async function addInvoicesToList(_ids?: string[]): Promise<string[]> {
-  await notifyStoreKeysChanged(['deed_invoices'])
+  // A vendor bill against a purchase order also moves that order's billed counts.
+  await notifyStoreKeysChanged(['deed_invoices', 'deed_purchaseOrders'])
   return []
 }
 

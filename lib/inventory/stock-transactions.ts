@@ -3,7 +3,7 @@ import { isSalePickLocation, stockStageLabel } from '@/lib/inventory/sellable-st
 import { pickVendorReturnSources } from '@/lib/inventory/vendor-return-source'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
-import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
+import { loadAppState, notifyStoreKeysChanged, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { adjustStockLevel, createZeroStockLevel } from '@/lib/inventory/stock-level'
 import { calcStockByLocation, upsertBulkStock } from '@/lib/business-logic'
 import type { BulkStockLevel } from '@/lib/business-logic'
@@ -1158,6 +1158,8 @@ export async function applyReceiptStockMutation(params: {
         }),
       })
       grnItemsByProductId = relational.grnItemsByProductId
+      // The order's received counts and status changed in its table.
+      if (params.purchaseOrderId) await notifyStoreKeysChanged(['deed_purchaseOrders'])
       resolvedProductIds = relational.resolvedProductIds
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Stock update failed'

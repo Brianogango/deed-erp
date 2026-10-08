@@ -110,7 +110,7 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * these keys are dropped — the change has already been saved through the
  * document's own API route — but other tabs are still told to re-read.
  */
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -160,10 +160,61 @@ async function overlayAuthoritativeContacts(state: AppStateMap, keys?: string[])
   if (fromPrisma) state.deed_contacts = fromPrisma
 }
 
-/** Tell open tabs a frozen key changed (its table was written). */
+async function overlayAuthoritativePurchaseOrders(state: AppStateMap, keys?: string[]) {
+  if (keys && !keys.includes('deed_purchaseOrders')) return
+  const receipts = state.deed_receipts !== undefined
+    ? state.deed_receipts
+    : (await loadStateWithLegacyFallback(['deed_receipts']).catch(() => ({} as AppStateMap))).deed_receipts
+  const fromPrisma = await import('./purchase-order-read-model.server')
+    .then(m => m.loadScreenPurchaseOrders(state.deed_purchaseOrders, receipts))
+    .catch(err => { console.error('[server-store] purchase orders from table failed:', err); return null })
+  if (fromPrisma) state.deed_purchaseOrders = fromPrisma
+}
+
+/**
+ * Tell open tabs a frozen key changed (its table was written).
+ *
+ * The store's versions, conditional fetches and live change feed all go by
+ * when a key's screen copy last changed. A frozen copy never changes, so the
+ * notice also moves that key's change stamp forward — otherwise browsers
+ * holding the list are told nothing changed and keep showing the old one.
+ */
 export async function notifyStoreKeysChanged(keys: string[]): Promise<void> {
   if (!keys.length || process.env.NODE_ENV === 'test') return
+  await import('./prisma')
+    .then(m => m.default.erpStateKey.updateMany({ where: { key: { in: keys } }, data: { version: { increment: 1 } } }))
+    .catch(() => null)
+  await sql`UPDATE app_state SET updated_at = now() WHERE key = ANY(${keys})`.catch(() => null)
   await sql`SELECT pg_notify('app_state_changed', ${keys.join(',')})`.catch(() => null)
+}
+
+/**
+ * Fingerprint of the table behind each frozen key (latest change and row
+ * count), folded into the key's version. A table write that never sent a
+ * notice still changes the version, so a conditional fetch cannot answer
+ * "unchanged" with an old list.
+ */
+const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
+  deed_invoices: `SELECT max(updated_at)::text || ':' || count(*) FROM invoices`,
+  deed_saleOrders: `SELECT max(updated_at)::text || ':' || count(*) FROM sale_orders`,
+  deed_quotes: `SELECT max(updated_at)::text || ':' || count(*) FROM quotes`,
+  deed_journalEntries: `SELECT max(created_at)::text || ':' || count(*) || ':' || count(*) FILTER (WHERE is_reversed) FROM journal_entries`,
+  deed_accounts: `SELECT max(updated_at)::text || ':' || count(*) FROM account_codes`,
+  deed_contacts: `SELECT max(updated_at)::text || ':' || count(*) FROM clients`,
+  deed_purchaseOrders: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM purchase_orders) || ':' || (SELECT coalesce(sum(qty_received), 0) || '/' || coalesce(sum(qty_billed), 0) FROM purchase_order_items)`,
+}
+
+async function frozenTableFingerprints(keys: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  const wanted = keys.filter(key => FROZEN_STORE_KEYS.has(key) && FROZEN_TABLE_FINGERPRINTS[key])
+  if (!wanted.length || process.env.NODE_ENV === 'test') return out
+  const prisma = (await import('./prisma')).default
+  await Promise.all(wanted.map(async key => {
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(FROZEN_TABLE_FINGERPRINTS[key]).catch(() => null)
+    const value = rows?.[0] ? Object.values(rows[0])[0] : null
+    if (value != null) out[key] = String(value)
+  }))
+  return out
 }
 
 async function overlayAuthoritativeRepairs(state: AppStateMap, keys?: string[]) {
@@ -185,6 +236,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     await overlayAuthoritativeJournals(state, wantedKeys)
     await overlayAuthoritativeAccounts(state, wantedKeys)
     await overlayAuthoritativeContacts(state, wantedKeys)
+    await overlayAuthoritativePurchaseOrders(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -206,6 +258,7 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   await overlayAuthoritativeJournals(state, wantedKeys)
   await overlayAuthoritativeAccounts(state, wantedKeys)
   await overlayAuthoritativeContacts(state, wantedKeys)
+  await overlayAuthoritativePurchaseOrders(state, wantedKeys)
   return state
 }
 
@@ -225,7 +278,9 @@ export async function getAppStateVersion(keys: string[]): Promise<string> {
       WHERE key = ANY(${keys})
     `
     const row = rows?.[0] as { latest?: string; n?: string | number } | undefined
-    return `${prismaVersion}|legacy:${row?.latest ?? ''}:${row?.n ?? 0}`
+    const tables = await frozenTableFingerprints(keys)
+    const tableVersion = Object.keys(tables).sort().map(key => `${key}=${tables[key]}`).join(';')
+    return `${prismaVersion}|legacy:${row?.latest ?? ''}:${row?.n ?? 0}${tableVersion ? `|tables:${tableVersion}` : ''}`
   } catch {
     return ''
   }
@@ -245,10 +300,12 @@ export async function getAppStateKeyVersions(keys: string[]): Promise<Record<str
     await ensureTable()
     const { rows } = await sql`SELECT key, updated_at FROM app_state WHERE key = ANY(${keys})`
     const legacy = new Map((rows as { key: string; updated_at: string }[]).map(r => [r.key, r.updated_at]))
+    const tables = await frozenTableFingerprints(keys)
     for (const key of keys) {
       const p = projected[key] ?? ''
       const l = legacy.get(key) ?? ''
-      out[key] = p || l ? `${p}|${l}` : ''
+      const t = tables[key] ? `|${tables[key]}` : ''
+      out[key] = p || l ? `${p}|${l}${t}` : ''
     }
   } catch {
     for (const key of keys) out[key] = ''

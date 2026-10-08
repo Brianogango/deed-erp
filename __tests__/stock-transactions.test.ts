@@ -29,6 +29,7 @@ vi.mock('@/lib/server-store', () => ({
   loadAppState: (...args: unknown[]) => mockLoadAppState(...args),
   saveStoreKeys: (...args: unknown[]) => mockSaveStoreKeys(...args),
   withAppStateKeyLock: (_key: string, fn: () => Promise<unknown>) => fn(),
+  notifyStoreKeysChanged: async () => {},
 }))
 
 vi.mock('@/lib/inventory/reservation-mirror', () => ({

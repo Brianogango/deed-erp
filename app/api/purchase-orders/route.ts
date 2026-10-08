@@ -4,17 +4,13 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
-import { WRITE_ROLES, mapPOToClient, mapPOItemsForCreate, computePOTotals, resolveVendorClientId, mirrorPurchaseOrder } from '@/lib/purchase/po-api-shared'
+import { WRITE_ROLES, mapPOToClient, mapPOItemsForCreate, computePOTotals, resolveVendorClientId, publishPurchaseOrder, PO_WRITABLE_EXTRA_KEYS } from '@/lib/purchase/po-api-shared'
+import { mergeScreenExtras } from '@/lib/screen-extras'
 
-// Purchase Orders were entirely blob-only (deed_purchaseOrders via generic
-// JSON-collection CRUD) despite PurchaseOrder/PurchaseOrderItem existing as
-// unused Prisma models. This is a real relational write path now — Prisma is
-// authoritative for ref/status/vendor/dates/lines/totals/lockVersion — but
-// GRN receiving, billing, and PO-approval-request linkage are not migrated
-// in this pass, so those specific fields (receiptIds, billId,
-// approvalStatus, approvalRequestIds, repairId/repairRef/
-// procurementRequestId) are carried through from the client body / the
-// existing blob record rather than derived from Prisma.
+// Purchase orders live in purchase_orders / purchase_order_items; the
+// deed_purchaseOrders screen copy is frozen. Approval and repair-link fields
+// are kept in screen_extras; the receipt and bill links are worked out from
+// the receipts and bills that point at the order.
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -108,12 +104,13 @@ export async function POST(request: NextRequest) {
         taxAmount: totals.taxAmount,
         totalAmount: totals.totalAmount,
         notes,
+        screenExtras: mergeScreenExtras(null, body, PO_WRITABLE_EXTRA_KEYS) ?? undefined,
         createdById: session.user.id,
         items: { create: items },
       } as any,
       include: { vendor: true, items: { include: { product: true } } },
     })
-    const mirrored = await mirrorPurchaseOrder(created, body)
+    const mirrored = await publishPurchaseOrder(created)
     return NextResponse.json(mirrored, { status: 201 })
   })
 }

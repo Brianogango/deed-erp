@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
-import { computePOTotals, mapPOItemsForCreate, mirrorPurchaseOrder } from '@/lib/purchase/po-api-shared'
+import { computePOTotals, mapPOItemsForCreate, publishPurchaseOrder } from '@/lib/purchase/po-api-shared'
 import { purchaseConsignment, returnConsignment } from '@/lib/inventory/consignment'
 import { CONSIGNMENT_WRITE_ROLES, consignmentFromRow, consignmentPurchaseOrderBody } from '@/lib/inventory/consignment-server'
 
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return { order, updated }
       })
       // The purchase screens still read the purchase-order list from the store.
-      await mirrorPurchaseOrder(order).catch(() => {})
+      await publishPurchaseOrder(order).catch(() => {})
       return NextResponse.json({ device: consignmentFromRow(updated, order.poNumber), purchaseOrder: { id: order.id, ref: order.poNumber } })
     }
 

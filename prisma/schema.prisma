@@ -1203,6 +1203,8 @@ model PurchaseOrder {
   approvedById    String?             @map("approved_by") @db.Uuid
   approvedAt      DateTime?           @map("approved_at")
   lockVersion     Int                 @default(0) @map("lock_version")
+  /// Screen-only fields (approval, repair link, receipt/bill links) — lib/screen-extras.ts.
+  screenExtras    Json?               @map("screen_extras")
   createdById     String              @map("created_by") @db.Uuid
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
@@ -1235,6 +1237,8 @@ model PurchaseOrderItem {
   // Cost account override for GL posting (e.g. '6101') — client-side POLine.accountCode.
   accountCode String?  @map("account_code") @db.VarChar(20)
   notes       String?
+  /// Serials pre-loaded from an import and specs — lib/screen-extras.ts.
+  screenExtras Json?   @map("screen_extras")
 
   po       PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
   product  Product       @relation(fields: [productId], references: [id])

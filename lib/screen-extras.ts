@@ -1,10 +1,11 @@
 import type { Prisma } from '@prisma/client'
 
 /**
- * Fields a sale order or quote carries on the screens that the tables have no
- * column for. They used to live only in the deed_saleOrders / deed_quotes
- * screen copies; with the copies frozen they are kept in each row's
- * screen_extras JSON column instead, so nothing the screens rely on is lost.
+ * Fields a sale order, quote or purchase order carries on the screens that
+ * the tables have no column for. They used to live only in the screen copies
+ * (deed_saleOrders, deed_quotes, deed_purchaseOrders); with the copies frozen
+ * they are kept in each row's screen_extras JSON column instead, so nothing
+ * the screens rely on is lost.
  */
 
 export const SALE_ORDER_EXTRA_KEYS = [
@@ -22,6 +23,13 @@ export const QUOTE_EXTRA_KEYS = [
   'saleOrderId', 'invoiceId', 'convertedDate', 'parentQuoteId',
   'approvalStatus', 'approvalRequestIds', 'approvalRequiredReason',
 ] as const
+
+export const PO_EXTRA_KEYS = [
+  'receiptIds', 'billId', 'approvalStatus', 'approvalRequestIds',
+  'repairId', 'repairRef', 'procurementRequestId',
+] as const
+
+export const PO_LINE_EXTRA_KEYS = ['importedSerials', 'specs'] as const
 
 type Extras = Record<string, unknown>
 
