@@ -945,6 +945,10 @@ model SerialNumber {
   inventoryBarcode String?        @unique @map("inventory_barcode") @db.VarChar(120)
   conditionGrade   ConditionGrade? @map("condition_grade")
   status           String         @default("in_stock") @db.VarChar(30)
+  /// warehouse, shop, repair_unit, customer … — from the deed_serials copy.
+  location         String?        @db.VarChar(40)
+  /// Cost, received date, sale order, specs … — the screen fields with no column.
+  screenExtras     Json?          @map("screen_extras")
   purchaseItemId   String?        @map("purchase_item_id") @db.Uuid
   soldViaInvoiceId String?        @map("sold_via_invoice_id") @db.Uuid
   notes            String?

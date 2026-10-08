@@ -38,8 +38,8 @@ const { mockSql, mockPrisma, mockWriteStoreRecords } = vi.hoisted(() => {
       storeRecord: {
         findUnique: vi.fn(),
       },
-      product: { findUnique: vi.fn() },
-      serialNumber: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
+      product: { findUnique: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      serialNumber: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), update: vi.fn(), create: vi.fn() },
       stockMovement: { upsert: vi.fn() },
       goodsReceivedNote: { upsert: vi.fn() },
       purchaseOrder: { findUnique: vi.fn() },

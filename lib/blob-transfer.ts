@@ -1,5 +1,6 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { sql } from '@/lib/auth/db'
 import { isBlobKey } from '@/lib/blob-store'
 import { writeStoreRecords, storeBackend } from '@/lib/prisma-store'
@@ -74,31 +75,68 @@ async function productExists(id: string): Promise<boolean> {
   return Boolean(row)
 }
 
+/** deed_serials fields kept in their own column; every other field goes to screen_extras. */
+export const SERIAL_COLUMN_FIELDS = ['id', 'serial', 'serialNumber', 'productId', 'productName', 'status', 'barcode', 'location'] as const
+
+function serialRow(row: Record<string, unknown>) {
+  const extras: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(row)) {
+    if (v == null || (SERIAL_COLUMN_FIELDS as readonly string[]).includes(k)) continue
+    extras[k] = v
+  }
+  return {
+    productId: String(row.productId || ''),
+    serialNumber: String(row.serial || row.serialNumber || '').trim().slice(0, 100),
+    inventoryBarcode: row.barcode ? String(row.barcode).slice(0, 120) : null,
+    status: (SERIAL_STATUS[String(row.status || 'available')] || 'in_stock').slice(0, 30),
+    location: row.location ? String(row.location).slice(0, 40) : null,
+    notes: row.specs ? String(row.specs) : null,
+    screenExtras: Object.keys(extras).length ? extras as Prisma.InputJsonObject : Prisma.DbNull,
+  }
+}
+
+/** JSON text with object keys sorted — the database stores jsonb keys in its own order. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as object).sort().map(k => `${JSON.stringify(k)}:${stableJson((value as Record<string, unknown>)[k])}`).join(',')}}`
+  }
+  return JSON.stringify(value ?? null)
+}
+const sameJson = (a: unknown, b: unknown) => stableJson(a) === stableJson(b)
+
+/**
+ * deed_serials → serial_numbers, location and screen details included.
+ * Only serials that differ from their row are written: every serial save
+ * used to rewrite all of them, two queries per serial.
+ */
 async function transferSerials(rows: unknown[]): Promise<{ upserted: number; skipped: number }> {
   let upserted = 0
   let skipped = 0
+  const existing = await prisma.serialNumber.findMany({
+    select: { id: true, serialNumber: true, productId: true, inventoryBarcode: true, status: true, location: true, notes: true, screenExtras: true },
+  })
+  const bySerial = new Map(existing.map(s => [s.serialNumber, s]))
+  const byId = new Map(existing.map(s => [s.id, s]))
+  const products = new Set((await prisma.product.findMany({ select: { id: true } })).map(p => p.id))
   for (const raw of rows) {
     const row = raw as Record<string, unknown>
-    const serial = String(row.serial || row.serialNumber || '').trim()
-    const productId = String(row.productId || '')
-    if (!serial || !isUuid(productId)) { skipped += 1; continue }
-    if (!(await productExists(productId))) { skipped += 1; continue }
-    const status = SERIAL_STATUS[String(row.status || 'available')] || 'in_stock'
+    const data = serialRow(row)
+    if (!data.serialNumber || !isUuid(data.productId) || !products.has(data.productId)) { skipped += 1; continue }
     const id = isUuid(row.id) ? String(row.id) : undefined
+    const current = bySerial.get(data.serialNumber) ?? (id ? byId.get(id) : undefined)
+    if (current
+      && current.productId === data.productId
+      && current.inventoryBarcode === data.inventoryBarcode
+      && current.status === data.status
+      && current.location === data.location
+      && current.notes === data.notes
+      && sameJson(current.screenExtras, data.screenExtras === Prisma.DbNull ? null : data.screenExtras)) {
+      continue
+    }
     try {
-      const existing = await prisma.serialNumber.findFirst({
-        where: { OR: id ? [{ id }, { serialNumber: serial }] : [{ serialNumber: serial }] },
-        select: { id: true },
-      })
-      const data = {
-        productId,
-        serialNumber: serial.slice(0, 100),
-        inventoryBarcode: row.barcode ? String(row.barcode).slice(0, 120) : null,
-        status: status.slice(0, 30),
-        notes: row.specs ? String(row.specs) : null,
-      }
-      if (existing) {
-        await prisma.serialNumber.update({ where: { id: existing.id }, data })
+      if (current) {
+        await prisma.serialNumber.update({ where: { id: current.id }, data })
       } else {
         await prisma.serialNumber.create({ data: { id: id || undefined, ...data } })
       }
