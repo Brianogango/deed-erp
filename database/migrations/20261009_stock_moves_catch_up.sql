@@ -12,6 +12,21 @@
 --   DB=$(grep -h '^DATABASE_URL' .env* | head -1 | sed -E 's#.*/([^/?"]+).*#\1#')
 --   sudo -u postgres psql -v ON_ERROR_STOP=1 -d "$DB" < database/migrations/20261009_stock_moves_catch_up.sql
 
+-- The app expects blob_id to be unique (uq_stock_movements_blob_id); this
+-- database never had that index, so the copy and the app's own writes into
+-- stock_movements failed. Added here when no blob_id is duplicated; the
+-- duplicates, if any, are listed instead.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uq_stock_movements_blob_id') THEN
+    IF EXISTS (SELECT blob_id FROM stock_movements WHERE blob_id IS NOT NULL GROUP BY blob_id HAVING count(*) > 1) THEN
+      RAISE NOTICE 'stock_movements has duplicated blob_id values; unique index not added';
+    ELSE
+      CREATE UNIQUE INDEX uq_stock_movements_blob_id ON stock_movements (blob_id);
+    END IF;
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION pg_temp.safe_ts(v text, fallback timestamptz) RETURNS timestamp AS $$
 BEGIN
   RETURN (v::timestamptz) AT TIME ZONE 'UTC';
@@ -53,8 +68,7 @@ FROM (
   ORDER BY payload->>'id', updated_at DESC NULLS LAST
 ) r
 LEFT JOIN "products" p ON p.id::text = r.payload->>'productId'
-WHERE NOT EXISTS (SELECT 1 FROM "stock_movements" m WHERE m.blob_id = r.payload->>'id')
-ON CONFLICT (blob_id) DO NOTHING;
+WHERE NOT EXISTS (SELECT 1 FROM "stock_movements" m WHERE m.blob_id = r.payload->>'id');
 
 -- Moves already in the table from before: keep them exactly as saved too.
 UPDATE "stock_movements" m SET "screen_extras" = r.payload
@@ -69,6 +83,10 @@ BEGIN
     EXECUTE format('ALTER TABLE public.consignment_devices OWNER TO %I', app_owner);
   END IF;
 END $$;
+
+SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uq_stock_movements_blob_id') AS blob_id_unique;
+
+SELECT blob_id, count(*) AS copies FROM stock_movements WHERE blob_id IS NOT NULL GROUP BY blob_id HAVING count(*) > 1 LIMIT 10;
 
 SELECT (SELECT count(*) FROM "erp_state_records" WHERE key = 'deed_stockMoves') AS moves_in_copy,
        (SELECT count(*) FROM "erp_state_records" r WHERE r.key = 'deed_stockMoves'
