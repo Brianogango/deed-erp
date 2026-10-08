@@ -20991,7 +20991,7 @@ const storeCtx: AppState = {
         })
       }
       if (allocation && allocation.draftInvoiceDeductions.length > 0) {
-        setInvoices(prev => prev.map(inv => {
+        const reduceDraft = (inv: Invoice): Invoice => {
           const deductions = allocation.draftInvoiceDeductions.filter(d => d.invoiceId === inv.id)
           if (deductions.length === 0) return inv
           const deductByLine = new Map(deductions.map(d => [d.lineId, d.deductQty]))
@@ -21005,7 +21005,18 @@ const storeCtx: AppState = {
           const subtotal = lines.reduce((s, l) => s + (Number(l.subtotal) || 0), 0)
           const taxTotal = lines.reduce((s, l) => s + Math.round((Number(l.subtotal) || 0) * (Number(l.taxRate) || 0) / 100), 0)
           return { ...inv, lines, subtotal, taxTotal, total: subtotal + taxTotal }
-        }))
+        }
+        // Saved to the invoices table — the screen copy is no longer written.
+        for (const inv of invRef.current) {
+          if (!allocation.draftInvoiceDeductions.some(d => d.invoiceId === inv.id)) continue
+          const next = reduceDraft(inv)
+          syncOrWarn(`/api/invoices/${inv.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lines: next.lines }),
+          }, message => showToast(message, 'error'), `Draft invoice ${inv.ref} could not be reduced for the return — adjust it by hand`)
+        }
+        setInvoices(prev => prev.map(reduceDraft))
       }
 
       addAuditLog('rma_receive', ro.ref, `Received return ${ro.ref} for ${ro.customerName}${allocation?.requiresCreditNote ? ' · credit note required' : ' · reverse transfer only'}${orcTargets.length ? ` · ORC stamped (${orcTargets.length})` : ''}`)

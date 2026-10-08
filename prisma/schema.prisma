@@ -1672,6 +1672,12 @@ model Invoice {
   // Finance dispute flag — Odoo's "Blocked" payment status is derived from it.
   paymentBlocked Boolean        @default(false) @map("payment_blocked")
   isPosInvoice   Boolean        @default(false) @map("is_pos_invoice")
+  /** Rider logistics job (DeliveryJob id) — moved off the deed_invoices screen copy. */
+  deliveryJobId   String?  @map("delivery_job_id") @db.VarChar(64)
+  salespersonId   String?  @map("salesperson_id") @db.VarChar(64)
+  salespersonName String?  @map("salesperson_name") @db.VarChar(120)
+  /** Goods receipt a vendor bill came from. */
+  receiptId       String?  @map("receipt_id") @db.VarChar(64)
   // Odoo-style down payment: deposit invoice against a Sale Order. Does not
   // bump product qtyInvoiced; final invoice deducts unapplied downs.
   isDownPayment          Boolean  @default(false) @map("is_down_payment")

@@ -307,6 +307,8 @@ export async function POST(
       await notifyInvoicePayment({ invoiceId, paymentId: payment.id, amount: capped, actorUserId: actor.id })
     }
 
+    // Open tabs re-read the document from the invoices table.
+    await import('@/lib/server-store').then(m => m.notifyStoreKeysChanged(['deed_invoices'])).catch(() => {})
     return NextResponse.json({ payment, invoice: updatedInvoice, idempotent: result.idempotent })
   })
 }

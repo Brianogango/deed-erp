@@ -1,81 +1,10 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
+import { loadAppState, notifyStoreKeysChanged, saveStoreKeys } from '@/lib/server-store'
 import { mergeInvoiceMirror } from '@/lib/invoice-mirror-merge'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
-import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
-import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
-
-function mapDbInvoiceStatusToClient(status: string): string {
-  // Posted documents; whether they are paid comes from amountPaid. Leaving
-  // 'paid' / 'invoiced' as the status took them out of the store-write guards.
-  if (status === 'approved' || status === 'invoiced' || status === 'paid' || status === 'partially_paid') return 'posted'
-  if (status === 'pending_approval') return 'draft'
-  return status
-}
-
-function mapInvoiceToClient(invoice: any) {
-  return {
-    id: invoice.id,
-    ref: invoice.invoiceNumber,
-    // The document says which way it runs, not the contact: a customer who is
-    // also a supplier must not have their invoices filed under Bills.
-    type: invoiceDocumentType(invoice),
-    status: mapDbInvoiceStatusToClient(String(invoice.status)),
-    partnerId: invoice.clientId,
-    partnerName: invoice.client?.name ?? '',
-    date: invoice.invoiceDate ? new Date(invoice.invoiceDate).toISOString().slice(0, 10) : '',
-    dueDate: invoice.dueDate ? new Date(invoice.dueDate).toISOString().slice(0, 10) : '',
-    lines: mapDbInvoiceItemsToClientLines(invoice.items),
-    subtotal: Number(invoice.subtotal ?? 0),
-    taxTotal: Number(invoice.taxAmount ?? 0),
-    total: Number(invoice.totalAmount ?? 0),
-    amountPaid: Number(invoice.amountPaid ?? 0),
-    saleOrderId: invoice.saleOrderId ?? undefined,
-    repairId: invoice.repairId ?? undefined,
-    notes: invoice.notes ?? '',
-    invoiceAddress: invoice.invoiceAddress ?? undefined,
-    deliveryAddress: invoice.deliveryAddress ?? undefined,
-    currencyCode: invoice.currencyCode ?? 'KES',
-    baseCurrencyCode: invoice.baseCurrencyCode ?? 'KES',
-    exchangeRateToBase: Number(invoice.exchangeRateToBase ?? 1) || 1,
-    paymentBlocked: Boolean(invoice.paymentBlocked),
-    lockVersion: Number(invoice.lockVersion ?? 0),
-    ...(invoice.isPosInvoice ? { isPosInvoice: true } : {}),
-  }
-}
-
-/**
- * Put documents that exist in the invoices table onto the Finance list
- * (deed_invoices) when the list does not have them yet. Rows already on the
- * list are left exactly as they are.
- *
- * The list used to be written only by the browser that created the document.
- * A till sale by a role that may sell but may not write the invoice list
- * (kilimall_officer), a closed tab or a refused save left the sale in the
- * database and the ledger but invisible in Finance (POS/0096).
- *
- * Returns the refs added.
- */
-export async function addInvoicesToList(ids?: string[]): Promise<string[]> {
-  return withAppStateKeyLock('deed_invoices', async () => {
-    const existing = (await loadAppStateForWrite(['deed_invoices'])).deed_invoices
-    const rows = Array.isArray(existing) ? existing as Array<Record<string, unknown>> : []
-    const haveIds = new Set(rows.map(r => String(r?.id ?? '')))
-    const haveRefs = new Set(rows.map(r => String(r?.ref ?? '')))
-    const missing = await prisma.invoice.findMany({
-      where: { ...(ids ? { id: { in: ids } } : {}), NOT: { id: { in: [...haveIds].filter(id => /^[0-9a-f-]{36}$/i.test(id)) } } },
-      include: { client: true, items: true },
-      orderBy: { invoiceDate: 'desc' },
-    })
-    const add = missing.filter(i => !haveIds.has(i.id) && !haveRefs.has(i.invoiceNumber)).map(mapInvoiceToClient)
-    if (!add.length) return []
-    await saveStoreKeys({ deed_invoices: JSON.stringify([...add, ...rows]) })
-    return add.map(r => r.ref)
-  })
-}
 
 export async function refreshSaleOrdersBlob(): Promise<void> {
   try {
@@ -103,18 +32,22 @@ export async function refreshQuotesBlob(): Promise<void> {
   }
 }
 
+/**
+ * Invoices are read from the invoices table (lib/invoice-read-model.server.ts);
+ * the deed_invoices screen copy is frozen. Nothing to rewrite — open tabs are
+ * told to re-read.
+ */
 export async function refreshInvoicesBlob(): Promise<void> {
-  try {
-    const all = await prisma.invoice.findMany({ include: { client: true, items: true }, orderBy: { invoiceDate: 'desc' } })
-    // Never replace the list outright: a document that only the store list
-    // knows about (its table save failed) must survive the refresh.
-    const existing = (await loadAppState(['deed_invoices'])).deed_invoices
-    const { merged, kept } = mergeInvoiceMirror(all.map(mapInvoiceToClient), existing)
-    if (kept > 0) console.warn(`[documents-broadcast] kept ${kept} invoice(s) present in the store but missing from the invoices table`)
-    await saveStoreKeys({ deed_invoices: JSON.stringify(merged) })
-  } catch (err) {
-    console.error('[documents-broadcast] refreshInvoicesBlob failed:', err)
-  }
+  await notifyStoreKeysChanged(['deed_invoices'])
+}
+
+/**
+ * New documents show on the Finance list straight from the invoices table;
+ * this only tells open tabs to re-read. Kept so callers need not change.
+ */
+export async function addInvoicesToList(_ids?: string[]): Promise<string[]> {
+  await notifyStoreKeysChanged(['deed_invoices'])
+  return []
 }
 
 /** Call after a Client/Contact (customer or vendor) update so their name/details

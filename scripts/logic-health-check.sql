@@ -97,26 +97,13 @@ SELECT rule, problems, kes FROM (
   FROM invoices i JOIN alloc a ON a.invoice_id = i.id
   WHERE a.paid > i.amount_paid + 0.01
   UNION ALL
-  SELECT 8, 'Screen and ledger disagree: total',
-         count(*), coalesce(sum(abs(s.total - i.total_amount)), 0)
-  FROM screen s JOIN invoices i ON i.id::text = s.id
-  WHERE abs(s.total - i.total_amount) > 0.01
-  UNION ALL
-  SELECT 9, 'Screen and ledger disagree: amount paid',
-         count(*), coalesce(sum(abs(s.paid - i.amount_paid)), 0)
-  FROM screen s JOIN invoices i ON i.id::text = s.id
-  WHERE abs(s.paid - i.amount_paid) > 0.5
-  UNION ALL
-  SELECT 10, 'Screen and ledger disagree: cancelled on one side only',
-         count(*), coalesce(sum(i.total_amount), 0)
-  FROM screen s JOIN invoices i ON i.id::text = s.id
-  WHERE (s.status IN ('cancelled', 'voided')) <> (i.status::text IN ('cancelled', 'void'))
-  UNION ALL
   SELECT 11, 'Paid more than the invoice total',
          count(*), coalesce(sum(amount_paid - total_amount), 0)
   FROM invoices WHERE total_amount > 0 AND amount_paid > total_amount + 0.01
   UNION ALL
-  SELECT 12, 'Invoices on the screen missing from the ledger',
+  -- Rules 8-10 compared the deed_invoices screen copy with the table. The
+  -- screens now read the table and the copy is frozen, so they are gone.
+  SELECT 12, 'Documents only in the frozen screen copy (never reached the table)',
          count(*), coalesce(sum(s.total), 0)
   FROM screen s LEFT JOIN invoices i ON i.id::text = s.id
   WHERE i.id IS NULL AND s.status NOT IN ('draft', 'cancelled', 'voided')

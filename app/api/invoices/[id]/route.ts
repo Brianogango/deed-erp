@@ -77,11 +77,22 @@ function mapInvoiceUpdateToDb(body: any, clientId?: string) {
     invoiceAddress: body.invoiceAddress ?? undefined,
     deliveryAddress: body.deliveryAddress ?? undefined,
     paymentBlocked: body.paymentBlocked !== undefined ? Boolean(body.paymentBlocked) : undefined,
+    deliveryJobId: textOrUndefined(body.deliveryJobId, 64),
+    salespersonId: textOrUndefined(body.salespersonId, 64),
+    salespersonName: textOrUndefined(body.salespersonName, 120),
+    receiptId: textOrUndefined(body.receiptId, 64),
     // A number is assigned when the draft is posted; accept it on update.
     invoiceNumber: body.invoiceNumber ?? body.ref ?? undefined,
   }
   Object.keys(data).forEach(k => data[k] === undefined && delete data[k])
   return data
+}
+
+/** undefined = not sent (leave as is); '' or null = clear it. */
+function textOrUndefined(v: unknown, max: number): string | null | undefined {
+  if (v === undefined) return undefined
+  const s = typeof v === 'string' ? v.trim() : ''
+  return s ? s.slice(0, max) : null
 }
 
 function mapInvoiceItems(lines: any[]) {

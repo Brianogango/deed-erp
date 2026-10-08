@@ -104,6 +104,28 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
   }
 }
 
+/**
+ * Store keys whose screen copy is frozen: the Prisma table is the source and
+ * the copy is no longer written (lib/invoice-read-model.server.ts). Saves of
+ * these keys are dropped — the change has already been saved through the
+ * document's own API route — but other tabs are still told to re-read.
+ */
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices'])
+
+async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
+  if (keys && !keys.includes('deed_invoices')) return
+  const fromPrisma = await import('./invoice-read-model.server')
+    .then(m => m.loadScreenInvoices(state.deed_invoices))
+    .catch(err => { console.error('[server-store] invoices from table failed:', err); return null })
+  if (fromPrisma) state.deed_invoices = fromPrisma
+}
+
+/** Tell open tabs a frozen key changed (its table was written). */
+export async function notifyStoreKeysChanged(keys: string[]): Promise<void> {
+  if (!keys.length || process.env.NODE_ENV === 'test') return
+  await sql`SELECT pg_notify('app_state_changed', ${keys.join(',')})`.catch(() => null)
+}
+
 async function overlayAuthoritativeRepairs(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_repairs_v2')) return
   const fromPrisma = await import('./repair-mirror')
@@ -118,6 +140,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     const state = await loadStateWithLegacyFallback(wantedKeys)
     await overlayExternalBlobs(state, wantedKeys)
     await overlayAuthoritativeRepairs(state, wantedKeys)
+    await overlayAuthoritativeInvoices(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -134,6 +157,7 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   const state = await loadStateWithLegacyFallback(wantedKeys)
   await overlayExternalBlobs(state, wantedKeys)
   await overlayAuthoritativeRepairs(state, wantedKeys)
+  await overlayAuthoritativeInvoices(state, wantedKeys)
   return state
 }
 
@@ -354,6 +378,11 @@ export async function saveStoreKeys(
   opts?: SaveStoreKeysOptions,
 ): Promise<void> {
   try {
+    const frozen = Object.keys(entries).filter(key => FROZEN_STORE_KEYS.has(key))
+    if (frozen.length) {
+      entries = Object.fromEntries(Object.entries(entries).filter(([key]) => !FROZEN_STORE_KEYS.has(key)))
+      await notifyStoreKeysChanged(frozen)
+    }
     // Binary payloads stay outside the database.
     const blobWrites = Object.entries(entries).filter(([key]) => isBlobKey(key))
     if (blobWrites.length > 0) {

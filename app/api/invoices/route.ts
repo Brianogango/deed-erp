@@ -96,12 +96,21 @@ function mapInvoiceBodyToDb(body: any, clientId: string) {
     deliveryAddress: body.deliveryAddress ?? null,
     paymentBlocked: Boolean(body.paymentBlocked),
     isPosInvoice: Boolean(body.isPosInvoice),
+    deliveryJobId: textOrNull(body.deliveryJobId, 64),
+    salespersonId: textOrNull(body.salespersonId, 64),
+    salespersonName: textOrNull(body.salespersonName, 120),
+    receiptId: textOrNull(body.receiptId, 64),
     // Set at creation, not only when the document is posted. The column
     // defaults to 'customer_invoice', so a draft vendor bill used to sit in
     // the table claiming to be a receivable — and documentType is what every
     // AR/AP split, the ageing report and the dashboard read.
     documentType: body.type === 'vendor_bill' ? 'vendor_bill' : 'customer_invoice',
   }
+}
+
+function textOrNull(v: unknown, max: number): string | null {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return s ? s.slice(0, max) : null
 }
 
 function absLine(l: any) {

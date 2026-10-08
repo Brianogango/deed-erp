@@ -21,7 +21,8 @@ s AS (SELECT payload->>'id' AS id, payload->>'ref' AS ref FROM erp_state_records
 SELECT t.ref, t.date, t.total, t.cashier, t.customer,
        i.id IS NOT NULL AS in_database,
        i.status::text AS db_status,
-       EXISTS (SELECT 1 FROM s WHERE s.id = t.invoice_id OR s.ref = t.ref) AS in_finance_list,
+       -- Finance lists the invoices table (the screen copy is frozen).
+       i.id IS NOT NULL AS in_finance_list,
        EXISTS (SELECT 1 FROM journal_entries j WHERE j.ref = 'JRN/' || t.ref AND NOT j.is_reversed) AS in_ledger
 FROM t
 LEFT JOIN invoices i ON i.id::text = t.invoice_id OR i.invoice_number = t.ref;
