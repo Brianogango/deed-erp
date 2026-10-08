@@ -4,6 +4,7 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { z } from 'zod'
+import { findJournalsForScreen } from '@/lib/journal-read-model.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,40 +43,8 @@ export async function GET(request: NextRequest) {
     }
     if (source && source !== 'all') where.sourceType = source
 
-    const rows = await prisma.journalEntry.findMany({
-      where,
-      include: { lines: { orderBy: { sortOrder: 'asc' } }, journal: true },
-      orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
-      take,
-    })
-
-    const mapped = rows
+    const mapped = (await findJournalsForScreen(where, take))
       .filter(e => !q || e.ref.toLowerCase().includes(q) || (e.description || '').toLowerCase().includes(q))
-      .map(e => ({
-        id: e.id,
-        ref: e.ref,
-        date: e.entryDate.toISOString().slice(0, 10),
-        source: e.sourceType || e.journal?.journalType || 'general',
-        description: e.description || '',
-        status: e.isPosted ? 'posted' : 'draft',
-        totalDebit: Number(e.totalDebit),
-        totalCredit: Number(e.totalCredit),
-        invoiceId: e.invoiceId || undefined,
-        paymentId: e.paymentId || undefined,
-        sourceId: e.sourceId || undefined,
-        payrollRunId: e.sourceType === 'payroll_payment' ? (e.sourceId || undefined) : undefined,
-        bankAccountId: e.sourceType === 'payroll_payment' && e.blobId?.startsWith('bank:')
-          ? e.blobId.slice('bank:'.length)
-          : undefined,
-        lines: e.lines.map(l => ({
-          id: l.id,
-          account: l.accountLabel,
-          description: l.label || '',
-          debit: Number(l.debit),
-          credit: Number(l.credit),
-          analyticAccountId: l.analyticAccountId,
-        })),
-      }))
 
     return NextResponse.json({
       currency: 'KES',

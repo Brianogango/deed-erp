@@ -110,7 +110,7 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * these keys are dropped — the change has already been saved through the
  * document's own API route — but other tabs are still told to re-read.
  */
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -136,6 +136,14 @@ async function overlayAuthoritativeSales(state: AppStateMap, keys?: string[]) {
   }
 }
 
+async function overlayAuthoritativeJournals(state: AppStateMap, keys?: string[]) {
+  if (keys && !keys.includes('deed_journalEntries')) return
+  const fromPrisma = await import('./journal-read-model.server')
+    .then(m => m.loadScreenJournals())
+    .catch(err => { console.error('[server-store] journals from table failed:', err); return null })
+  if (fromPrisma) state.deed_journalEntries = fromPrisma
+}
+
 /** Tell open tabs a frozen key changed (its table was written). */
 export async function notifyStoreKeysChanged(keys: string[]): Promise<void> {
   if (!keys.length || process.env.NODE_ENV === 'test') return
@@ -158,6 +166,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     await overlayAuthoritativeRepairs(state, wantedKeys)
     await overlayAuthoritativeInvoices(state, wantedKeys)
     await overlayAuthoritativeSales(state, wantedKeys)
+    await overlayAuthoritativeJournals(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -176,6 +185,7 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   await overlayAuthoritativeRepairs(state, wantedKeys)
   await overlayAuthoritativeInvoices(state, wantedKeys)
   await overlayAuthoritativeSales(state, wantedKeys)
+  await overlayAuthoritativeJournals(state, wantedKeys)
   return state
 }
 

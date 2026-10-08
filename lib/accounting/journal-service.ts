@@ -261,8 +261,14 @@ export async function createJournalEntryInTx(tx: Prisma.TransactionClient, param
   return createJournalEntryWith(tx, params)
 }
 
+/** Open journal screens re-read from the table (the screen copy is frozen). */
+const notifyJournalsChanged = () =>
+  import('@/lib/server-store').then(m => m.notifyStoreKeysChanged(['deed_journalEntries'])).catch(() => {})
+
 export async function createJournalEntry(params: CreateJournalEntryInput) {
-  return createJournalEntryWith(prisma, params)
+  const entry = await createJournalEntryWith(prisma, params)
+  void notifyJournalsChanged()
+  return entry
 }
 
 export async function persistStoreJournalEntryInTx(
@@ -356,5 +362,8 @@ export async function reverseJournalEntry(ref: string, userId?: string) {
     await tx.journalEntry.update({ where: { id: original.id }, data: { isReversed: true } })
     await tx.journalEntry.update({ where: { id: reversal.id }, data: { reversalOfId: original.id } })
     return reversal
-  }, { isolationLevel: 'Serializable' })
+  }, { isolationLevel: 'Serializable' }).then(reversal => {
+    void notifyJournalsChanged()
+    return reversal
+  })
 }
