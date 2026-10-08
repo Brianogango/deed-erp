@@ -254,7 +254,7 @@ async function overlayAuthoritativeActivities(state: AppStateMap, keys?: string[
 
 async function overlayStockTables(state: AppStateMap, keys?: string[]) {
   const want = (key: string) => !keys || keys.includes(key)
-  if (!['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts'].some(want)) return
+  if (!['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products'].some(want)) return
   const m = await import('./stock-read-model.server')
   if (want('deed_serials')) {
     const serials = await m.loadScreenSerials(state.deed_serials)
@@ -270,6 +270,11 @@ async function overlayStockTables(state: AppStateMap, keys?: string[]) {
     const moves = await m.loadScreenStockMoves(state.deed_stockMoves)
       .catch(err => { console.error('[server-store] stock moves from table failed:', err); return null })
     if (moves) state.deed_stockMoves = moves
+  }
+  if (want('deed_products')) {
+    const products = await m.loadScreenProducts(state.deed_products)
+      .catch(err => { console.error('[server-store] products from table failed:', err); return null })
+    if (products) state.deed_products = products
   }
   if (want('deed_receipts')) {
     const receipts = await m.loadScreenReceipts(state.deed_receipts)
@@ -591,6 +596,15 @@ export async function saveStoreKeys(
           .catch(err => console.error('[repair-mirror] save failed:', err))
       }
       await notifyStoreKeysChanged(frozen)
+    }
+    // Products: the screens read them from the products table; each save is
+    // written there (screen_extras) before it returns. The copy is still
+    // written until the tables are confirmed to hold the same.
+    if (entries['deed_products'] && process.env.NODE_ENV !== 'test') {
+      const result = await import('./blob-transfer')
+        .then(m => m.mirrorKnownDomain('deed_products', entries['deed_products'], null))
+        .catch(err => ({ upserted: 0, skipped: 0, error: String(err) }))
+      if (result?.error) console.error('[server-store] deed_products not fully saved to its table:', result.error)
     }
     // Binary payloads stay outside the database.
     const blobWrites = Object.entries(entries).filter(([key]) => isBlobKey(key))

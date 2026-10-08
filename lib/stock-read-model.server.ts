@@ -85,6 +85,46 @@ export async function loadScreenReceipts(screenCopy: unknown): Promise<Row[]> {
   return out
 }
 
+const PRODUCT_SELECT = {
+  id: true, name: true, sku: true, barcode: true, sellingPrice: true, costPrice: true,
+  isActive: true, trackingMethod: true, reorderLevel: true, screenExtras: true,
+} as const
+
+/**
+ * A product as the screens use it: the catalog details from their columns
+ * (the product routes write those), everything else as the screens saved it.
+ */
+function toScreenProduct(p: { id: string; name: string; sku: string; barcode: string | null; sellingPrice: unknown; costPrice: unknown; isActive: boolean; trackingMethod: string; reorderLevel: number | null; screenExtras: unknown }): Row {
+  const extras = asObject(p.screenExtras)
+  return {
+    ...extras,
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    ...(p.barcode ? { barcode: p.barcode } : {}),
+    salePrice: Number(p.sellingPrice),
+    costPrice: Number(p.costPrice),
+    isActive: p.isActive,
+    trackingMethod: p.trackingMethod,
+    minStock: p.reorderLevel ?? 0,
+  }
+}
+
+/**
+ * Products for the screens, from the products table: those the screens show
+ * (screen_extras set). Products only the table has stay off the screens, as
+ * before; products only the copy has stay listed from it.
+ */
+export async function loadScreenProducts(screenCopy: unknown): Promise<Row[]> {
+  const rows = await prisma.product.findMany({ where: { screenExtras: { not: Prisma.DbNull } }, select: PRODUCT_SELECT })
+  const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  if (!rows.length) return copy
+  const out: Row[] = rows.map(toScreenProduct)
+  const listed = new Set(out.map(p => String(p.id)))
+  for (const p of copy) if (p?.id && !listed.has(String(p.id))) out.push(p)
+  return out
+}
+
 /** JSON with sorted keys, empty values dropped — how two copies of a row are compared. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
@@ -100,7 +140,7 @@ function canonical(value: unknown): string {
  * Do the tables hold exactly what the copies hold? Read-only; this decides
  * when the copies can be frozen.
  */
-export async function stockTableParity(copySerials: unknown, copyBulk: unknown, copyMoves?: unknown, copyReceipts?: unknown) {
+export async function stockTableParity(copySerials: unknown, copyBulk: unknown, copyMoves?: unknown, copyReceipts?: unknown, copyProducts?: unknown) {
   const serialCopy = (Array.isArray(copySerials) ? copySerials : []) as Row[]
   const tableRows = await tableSerials()
   const table = new Map(tableRows.map(r => [r.serialNumber, toScreenSerial(r)]))
@@ -140,7 +180,16 @@ export async function stockTableParity(copySerials: unknown, copyBulk: unknown, 
   const receiptsMissing = receiptCopy.filter(r => r?.id && !receiptTable.has(String(r.id))).map(r => String(r.ref ?? r.id))
   const receiptsDiffering = receiptCopy.filter(r => r?.id && receiptTable.has(String(r.id)) && canonical(receiptTable.get(String(r.id))) !== canonical(r)).map(r => String(r.ref ?? r.id))
 
+  const productCopy = (Array.isArray(copyProducts) ? copyProducts : []) as Row[]
+  const productRows = await prisma.product.findMany({ where: { screenExtras: { not: Prisma.DbNull } }, select: PRODUCT_SELECT })
+  const productTable = new Map(productRows.map(p => [p.id, toScreenProduct(p)]))
+  const numericSame = (a: Row, b: Row) => canonical({ ...a, salePrice: Number(a.salePrice) || 0, costPrice: Number(a.costPrice) || 0, minStock: Number(a.minStock) || 0, trackingMethod: String(a.trackingMethod ?? 'QUANTITY').toUpperCase() })
+    === canonical({ ...b, salePrice: Number(b.salePrice) || 0, costPrice: Number(b.costPrice) || 0, minStock: Number(b.minStock) || 0, trackingMethod: String(b.trackingMethod ?? 'QUANTITY').toUpperCase() })
+  const productsMissing = productCopy.filter(p => p?.id && !productTable.has(String(p.id))).map(p => String(p.name ?? p.id))
+  const productsDiffering = productCopy.filter(p => p?.id && productTable.has(String(p.id)) && !numericSame(productTable.get(String(p.id))!, p)).map(p => String(p.name ?? p.id))
+
   return {
+    products: { copy: productCopy.length, table: productTable.size, missingFromTable: productsMissing.length, differing: productsDiffering.length, samples: { missing: productsMissing.slice(0, 20), differing: productsDiffering.slice(0, 5) } },
     receipts: { copy: receiptCopy.length, table: receiptTable.size, missingFromTable: receiptsMissing.length, differing: receiptsDiffering.length, samples: { missing: receiptsMissing.slice(0, 5), differing: receiptsDiffering.slice(0, 5) } },
     stockMoves: { copy: moveCopy.length, missingFromTable: movesMissing.length, differing: movesDiffering.length, samples: { missing: movesMissing.slice(0, 5), differing: movesDiffering.slice(0, 5) } },
     serials: {

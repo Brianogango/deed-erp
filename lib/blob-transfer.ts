@@ -306,6 +306,34 @@ async function transferReceipts(rows: unknown[]): Promise<{ upserted: number; sk
   return { upserted, skipped, ...(errors.length ? { error: errors.join(' | ') } : {}) }
 }
 
+/**
+ * deed_products → products.screen_extras: each product as the screens saved
+ * it (images, specs, units, stock count …). Catalog columns (name, prices,
+ * active …) are written by the product routes and are not touched here.
+ * Products the table does not have are counted as skipped.
+ */
+async function transferProducts(rows: unknown[]): Promise<{ upserted: number; skipped: number; error?: string }> {
+  let upserted = 0
+  let skipped = 0
+  const errors: string[] = []
+  const existing = await prisma.product.findMany({ select: { id: true, screenExtras: true } })
+  const have = new Map(existing.map(p => [p.id, p.screenExtras]))
+  for (const raw of rows) {
+    const row = raw as Record<string, unknown>
+    const id = String(row.id || '')
+    if (!have.has(id)) { skipped += 1; continue }
+    if (sameJson(have.get(id), row)) continue
+    try {
+      await prisma.product.update({ where: { id }, data: { screenExtras: row as Prisma.InputJsonObject } })
+      upserted += 1
+    } catch (err) {
+      skipped += 1
+      if (errors.length < 3) errors.push(err instanceof Error ? err.message.split('\n').filter(Boolean).slice(-1)[0] : String(err))
+    }
+  }
+  return { upserted, skipped, ...(errors.length ? { error: errors.join(' | ') } : {}) }
+}
+
 export async function mirrorKnownDomain(key: string, value: string, actorId: string | null): Promise<TransferDomainResult['relational']> {
   const rows = asArray(value)
   try {
@@ -350,6 +378,7 @@ export async function mirrorKnownDomain(key: string, value: string, actorId: str
     if (key === 'deed_bulkStock') return transferBulkStock(rows)
     if (key === 'deed_stockMoves') return transferStockMoves(rows, actorId)
     if (key === 'deed_receipts') return transferReceipts(rows)
+    if (key === 'deed_products') return transferProducts(rows)
   } catch (err) {
     return { upserted: 0, skipped: rows.length, error: err instanceof Error ? err.message : String(err) }
   }

@@ -880,6 +880,8 @@ model Product {
   validatedAt      DateTime?   @map("validated_at")
   isListedKilimall Boolean     @default(false) @map("is_listed_kilimall")
   primaryImageUrl  String?     @map("primary_image_url")
+  /// The product as the screens saved it (deed_products row); null = not shown on the screens.
+  screenExtras     Json?       @map("screen_extras")
   createdById      String?     @map("created_by") @db.Uuid
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")

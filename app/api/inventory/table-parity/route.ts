@@ -19,8 +19,8 @@ export async function GET() {
   return withApiErrorHandling(async () => {
     await requireRole(['director', 'admin_officer', 'inventory_officer'])
     try {
-      const copies = await readStoreCopies(['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts'])
-      return NextResponse.json(await stockTableParity(copies.deed_serials, copies.deed_bulkStock, copies.deed_stockMoves, copies.deed_receipts))
+      const copies = await readStoreCopies(['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products'])
+      return NextResponse.json(await stockTableParity(copies.deed_serials, copies.deed_bulkStock, copies.deed_stockMoves, copies.deed_receipts, copies.deed_products))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       const migration = /does not exist|P2021|P2022/i.test(message) ? missingMigration(message) : null
