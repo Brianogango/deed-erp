@@ -110,7 +110,7 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * these keys are dropped — the change has already been saved through the
  * document's own API route — but other tabs are still told to re-read.
  */
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -203,6 +203,7 @@ const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
   deed_contacts: `SELECT max(updated_at)::text || ':' || count(*) FROM clients`,
   deed_deposits: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM deposits) || ':' || (SELECT count(*) || ':' || coalesce(sum(amount), 0) FROM deposit_payments)`,
   deed_repairs_v2: `SELECT max(updated_at)::text || ':' || count(*) FROM repairs`,
+  deed_oppActivities: `SELECT max(created_at)::text || ':' || count(*) || ':' || md5(coalesce(string_agg(screen_extras::text, ',' ORDER BY id), '')) FROM opportunity_activities`,
   deed_holdovers: `SELECT max(updated_at)::text || ':' || count(*) FROM holdovers`,
   deed_purchaseOrders: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM purchase_orders) || ':' || (SELECT coalesce(sum(qty_received), 0) || '/' || coalesce(sum(qty_billed), 0) FROM purchase_order_items)`,
 }
@@ -236,6 +237,14 @@ async function overlayAuthoritativeHoldovers(state: AppStateMap, keys?: string[]
   if (fromPrisma) state.deed_holdovers = fromPrisma
 }
 
+async function overlayAuthoritativeActivities(state: AppStateMap, keys?: string[]) {
+  if (keys && !keys.includes('deed_oppActivities')) return
+  const fromPrisma = await import('./opportunity-activity-read-model.server')
+    .then(m => m.loadScreenActivities(state.deed_oppActivities))
+    .catch(err => { console.error('[server-store] activities from table failed:', err); return null })
+  if (fromPrisma) state.deed_oppActivities = fromPrisma
+}
+
 async function overlayAuthoritativeRepairs(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_repairs_v2')) return
   const fromPrisma = await import('./repair-mirror')
@@ -258,6 +267,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     await overlayAuthoritativePurchaseOrders(state, wantedKeys)
     await overlayAuthoritativeDeposits(state, wantedKeys)
     await overlayAuthoritativeHoldovers(state, wantedKeys)
+    await overlayAuthoritativeActivities(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -282,6 +292,7 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   await overlayAuthoritativePurchaseOrders(state, wantedKeys)
   await overlayAuthoritativeDeposits(state, wantedKeys)
   await overlayAuthoritativeHoldovers(state, wantedKeys)
+  await overlayAuthoritativeActivities(state, wantedKeys)
   return state
 }
 

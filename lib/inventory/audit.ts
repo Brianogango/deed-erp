@@ -1,9 +1,13 @@
-/**
- * Server-side audit helper for inventory mutations.
- * Appends to deed_auditLogs in the wholesale store (client mirror source).
- */
-import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
+import prisma from '@/lib/prisma'
 
+/**
+ * Server-side audit entry for document and stock actions: one row in
+ * audit_logs (entity_type 'document', entity_key = the document reference).
+ *
+ * It used to rewrite the whole deed_auditLogs list (5,000 entries) under a
+ * lock for every entry; that copy is frozen and its entries were moved into
+ * audit_logs.
+ */
 export async function appendInventoryAuditLog(entry: {
   action: string
   documentRef: string
@@ -11,23 +15,16 @@ export async function appendInventoryAuditLog(entry: {
   userId?: string | null
   username?: string | null
 }) {
-  // Locked: two appends at once each rewrote the log from the same copy, and
-  // one entry was lost.
-  await withAppStateKeyLock('deed_auditLogs', async () => {
-  const state = await loadAppStateForWrite(['deed_auditLogs'])
-  const logs = Array.isArray(state.deed_auditLogs) ? state.deed_auditLogs as Array<Record<string, unknown>> : []
-  const next = [
-    {
-      id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      action: entry.action,
-      documentRef: entry.documentRef,
-      details: entry.details,
-      userId: entry.userId || null,
-      username: entry.username || 'system',
-      timestamp: new Date().toISOString(),
+  const userId = entry.userId && /^[0-9a-f-]{36}$/i.test(entry.userId)
+    ? (await prisma.user.findUnique({ where: { id: entry.userId }, select: { id: true } }))?.id ?? null
+    : null
+  await prisma.auditLog.create({
+    data: {
+      userId,
+      action: String(entry.action).slice(0, 100),
+      entityType: 'document',
+      entityKey: String(entry.documentRef).slice(0, 120) || null,
+      newValues: { details: entry.details, username: entry.username || 'system' },
     },
-    ...logs,
-  ].slice(0, 5000)
-  await saveStoreKeys({ deed_auditLogs: JSON.stringify(next) })
   })
 }

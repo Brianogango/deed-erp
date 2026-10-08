@@ -1344,6 +1344,8 @@ model OpportunityActivity {
   type          String    @db.VarChar(50)
   description   String?   @db.Text
   scheduledAt   DateTime? @map("scheduled_at")
+  /// Subject, outcome, status, completion date, author name — the screen fields with no column.
+  screenExtras  Json?     @map("screen_extras")
   createdById   String    @map("created_by") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at")
 

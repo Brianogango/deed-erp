@@ -10525,7 +10525,7 @@ const storeCtx: AppState = {
         outcome: outcome ?? a.outcome,
       } : a)
       const updated = next.find(a => a.id === id)
-      if (updated) sync(`/api/activities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }) // If you want to build this PUT endpoint later, else it falls back gracefully
+      if (updated) sync(`/api/opportunity-activities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       showToast('Activity completed')
       return next
     }),

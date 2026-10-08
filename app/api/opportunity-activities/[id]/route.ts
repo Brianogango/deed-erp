@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
-import { saveStoreKeys } from '@/lib/server-store'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
+import { activityExtras, toScreenActivity } from '@/lib/opportunity-activity-read-model.server'
 
-async function broadcastOppActivities() {
-  try {
-    const all = await prisma.opportunityActivity.findMany({ orderBy: { createdAt: 'desc' } })
-    void saveStoreKeys({ deed_oppActivities: JSON.stringify(all) })
-  } catch {}
-}
+/** Open tabs re-read activities from the table (the deed_oppActivities copy is frozen). */
+const broadcastOppActivities = () => notifyStoreKeysChanged(['deed_oppActivities'])
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep']
 
@@ -34,12 +31,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const body = await request.json()
+    const existing = await prisma.opportunityActivity.findUnique({ where: { id: resolvedParams.id } })
+    if (!existing) return NextResponse.json({ error: 'Activity not found' }, { status: 404 })
     const activity = await prisma.opportunityActivity.update({
       where: { id: resolvedParams.id },
-      data: mapActivityToDb(body),
+      data: { ...mapActivityToDb(body), screenExtras: activityExtras(body, existing.screenExtras) },
     })
-    void broadcastOppActivities()
-    return NextResponse.json(activity)
+    await broadcastOppActivities()
+    return NextResponse.json(toScreenActivity(activity))
   })
 }
 
@@ -54,7 +53,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     await prisma.opportunityActivity.delete({ where: { id: resolvedParams.id } })
-    void broadcastOppActivities()
+    await broadcastOppActivities()
     return NextResponse.json({ ok: true })
   })
 }

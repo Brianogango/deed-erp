@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { saveStoreKeys } from '@/lib/server-store'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
+import { activityExtras, toScreenActivity } from '@/lib/opportunity-activity-read-model.server'
 
-async function broadcastOppActivities() {
-  try {
-    const all = await prisma.opportunityActivity.findMany({ orderBy: { createdAt: 'desc' } })
-    void saveStoreKeys({ deed_oppActivities: JSON.stringify(all) })
-  } catch {}
-}
+/** Open tabs re-read activities from the table (the deed_oppActivities copy is frozen). */
+const broadcastOppActivities = () => notifyStoreKeysChanged(['deed_oppActivities'])
 
 function mapActivityToDb(body: any) {
   return {
@@ -29,7 +26,7 @@ export async function GET() {
     const activities = await prisma.opportunityActivity.findMany({
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(activities)
+    return NextResponse.json(activities.map(toScreenActivity))
   })
 }
 
@@ -38,9 +35,15 @@ export async function POST(request: Request) {
     const session = await getRequiredSession()
     const body = await request.json()
 
+    // Keep the browser's id, so later edits (completing it) find the row.
+    const id = typeof body.id === 'string' && /^[0-9a-f-]{36}$/i.test(body.id) ? body.id : undefined
+    const existing = id ? await prisma.opportunityActivity.findUnique({ where: { id } }) : null
+    if (existing) return NextResponse.json(toScreenActivity(existing))
     const activity = await prisma.opportunityActivity.create({
       data: {
+        ...(id ? { id } : {}),
         ...mapActivityToDb(body),
+        screenExtras: activityExtras(body),
         createdById: session.user.id,
       }
     })
@@ -50,7 +53,7 @@ export async function POST(request: Request) {
       data: { updatedAt: new Date() }
     })
 
-    void broadcastOppActivities()
-    return NextResponse.json(activity, { status: 201 })
+    await broadcastOppActivities()
+    return NextResponse.json(toScreenActivity(activity), { status: 201 })
   })
 }
