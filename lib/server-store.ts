@@ -185,7 +185,20 @@ async function overlayAuthoritativePurchaseOrders(state: AppStateMap, keys?: str
 export async function notifyStoreKeysChanged(keys: string[]): Promise<void> {
   if (!keys.length || process.env.NODE_ENV === 'test') return
   await import('./prisma')
-    .then(m => m.default.erpStateKey.updateMany({ where: { key: { in: keys } }, data: { version: { increment: 1 } } }))
+    .then(async m => {
+      const prisma = m.default
+      const bumped = await prisma.erpStateKey.updateMany({ where: { key: { in: keys } }, data: { version: { increment: 1 } } })
+      if (bumped.count >= keys.length) return
+      // A retired copy (scripts/retire-frozen-copies.sql) has no key row
+      // left; the change feed goes by that row, so it is recreated (empty)
+      // for frozen keys whose copy is gone from both stores.
+      const have = new Set((await prisma.erpStateKey.findMany({ where: { key: { in: keys } }, select: { key: true } })).map(r => r.key))
+      for (const key of keys.filter(k => !have.has(k) && FROZEN_STORE_KEYS.has(k))) {
+        const legacy = await sql`SELECT 1 FROM app_state WHERE key = ${key} LIMIT 1`.catch(() => ({ rows: [1] }))
+        if ((legacy as { rows?: unknown[] }).rows?.length) continue
+        await prisma.erpStateKey.create({ data: { key, kind: 'collection', version: 1 } }).catch(() => null)
+      }
+    })
     .catch(() => null)
   await sql`UPDATE app_state SET updated_at = now() WHERE key = ANY(${keys})`.catch(() => null)
   await sql`SELECT pg_notify('app_state_changed', ${keys.join(',')})`.catch(() => null)
@@ -211,6 +224,8 @@ const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
   deed_bulkStock: `SELECT max(updated_at)::text || ':' || count(*) || ':' || coalesce(sum(qty), 0) FROM stock_location_levels`,
   deed_stockMoves: `SELECT max(created_at)::text || ':' || count(*) FROM stock_movements`,
   deed_receipts: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE removed_at IS NULL) FROM receipt_documents`,
+  deed_deposits_v1: `SELECT max(updated_at)::text || ':' || count(*) FROM deposits`,
+  deed_auditLogs: `SELECT max(created_at)::text || ':' || count(*) FROM audit_logs`,
   deed_holdovers: `SELECT max(updated_at)::text || ':' || count(*) FROM holdovers`,
   deed_purchaseOrders: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM purchase_orders) || ':' || (SELECT coalesce(sum(qty_received), 0) || '/' || coalesce(sum(qty_billed), 0) FROM purchase_order_items)`,
 }
@@ -386,7 +401,7 @@ export async function getAppStateKeyVersions(keys: string[]): Promise<Record<str
       const p = projected[key] ?? ''
       const l = legacy.get(key) ?? ''
       const t = tables[key] ? `|${tables[key]}` : ''
-      out[key] = p || l ? `${p}|${l}${t}` : ''
+      out[key] = p || l || t ? `${p}|${l}${t}` : ''
     }
   } catch {
     for (const key of keys) out[key] = ''
