@@ -110,7 +110,7 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * these keys are dropped — the change has already been saved through the
  * document's own API route — but other tabs are still told to re-read.
  */
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -202,6 +202,7 @@ const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
   deed_accounts: `SELECT max(updated_at)::text || ':' || count(*) FROM account_codes`,
   deed_contacts: `SELECT max(updated_at)::text || ':' || count(*) FROM clients`,
   deed_deposits: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM deposits) || ':' || (SELECT count(*) || ':' || coalesce(sum(amount), 0) FROM deposit_payments)`,
+  deed_repairs_v2: `SELECT max(updated_at)::text || ':' || count(*) FROM repairs`,
   deed_holdovers: `SELECT max(updated_at)::text || ':' || count(*) FROM holdovers`,
   deed_purchaseOrders: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM purchase_orders) || ':' || (SELECT coalesce(sum(qty_received), 0) || '/' || coalesce(sum(qty_billed), 0) FROM purchase_order_items)`,
 }
@@ -507,7 +508,15 @@ export async function saveStoreKeys(
   try {
     const frozen = Object.keys(entries).filter(key => FROZEN_STORE_KEYS.has(key))
     if (frozen.length) {
+      // Repairs are still saved through this path; they go to the repairs
+      // table (synchronously, only the changed rows) instead of the copy.
+      const repairs = entries['deed_repairs_v2']
       entries = Object.fromEntries(Object.entries(entries).filter(([key]) => !FROZEN_STORE_KEYS.has(key)))
+      if (repairs && process.env.NODE_ENV !== 'test') {
+        await import('./repair-mirror')
+          .then(m => m.mirrorRepairsToPrisma(repairs))
+          .catch(err => console.error('[repair-mirror] save failed:', err))
+      }
       await notifyStoreKeysChanged(frozen)
     }
     // Binary payloads stay outside the database.
@@ -545,15 +554,6 @@ export async function saveStoreKeys(
       await sql`SELECT pg_notify('app_state_changed', ${keys.join(',')})`.catch(() => null)
     }
 
-    // Repairs migration phase 2c: the repairs table is authoritative — upsert
-    // synchronously (fingerprinted — only changed rows) so a following read
-    // never sees a pre-write state. The blob write above is now a write-only
-    // backup copy; nothing reads it. Removing that write is the final cleanup.
-    if (entries['deed_repairs_v2'] && process.env.NODE_ENV !== 'test') {
-      await import('./repair-mirror')
-        .then(m => m.mirrorRepairsToPrisma(entries['deed_repairs_v2']))
-        .catch(err => console.error('[repair-mirror] sync write failed:', err))
-    }
     // Accounting / inventory dual-write mirrors — NEVER delete app_state keys.
     if (process.env.NODE_ENV !== 'test') {
       if (entries['deed_stockReservations']) {

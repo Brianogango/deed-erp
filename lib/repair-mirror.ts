@@ -117,12 +117,10 @@ function fingerprint(r: any): string {
 }
 
 let _mirrorRunning = false
-// Set when a repair write arrives mid-pass. The pass then re-runs once from
-// the freshest blob state instead of dropping that write — dropping it was
-// the drift behind "customer approved but the ERP never showed it" (the blob
-// moved on while the relational payload that all read surfaces use stayed
-// stale until some later, uncontended write happened to re-mirror the row).
-let _mirrorPendingRerun = false
+// Repair saves that arrive mid-pass, applied in order once it ends. Dropping
+// such a write was the drift behind "customer approved but the ERP never
+// showed it".
+const _mirrorQueue: unknown[] = []
 
 /**
  * Phase 2a read path: full repairs from the relational table (payload first).
@@ -207,7 +205,10 @@ export async function deleteRepairFromPrisma(refOrId: string): Promise<{ deleted
 export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force?: boolean } = {}): Promise<{ mirrored: number; skipped: number; failed: number }> {
   const result = { mirrored: 0, skipped: 0, failed: 0 }
   if (_mirrorRunning) {
-    _mirrorPendingRerun = true
+    // Each save is applied in turn once the running pass ends. The repairs
+    // table is the only copy now (deed_repairs_v2 is frozen), so the queued
+    // list itself is kept — there is no saved copy to re-read later.
+    _mirrorQueue.push(repairsInput)
     return result
   }
   _mirrorRunning = true
@@ -312,16 +313,12 @@ export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force
     _mirrorRunning = false
   }
 
-  if (_mirrorPendingRerun) {
-    _mirrorPendingRerun = false
+  const next = _mirrorQueue.shift()
+  if (next !== undefined) {
     try {
-      // Re-read the freshest blob — the write that queued this rerun carried
-      // a newer array than the one this pass just mirrored.
-      const fresh = await loadAppState(['deed_repairs_v2'])
-      const rows = fresh['deed_repairs_v2']
-      if (Array.isArray(rows) && rows.length > 0) await mirrorRepairsToPrisma(rows)
+      await mirrorRepairsToPrisma(next)
     } catch (err) {
-      console.error('[repair-mirror] trailing rerun failed:', err)
+      console.error('[repair-mirror] queued save failed:', err)
     }
   }
   return result

@@ -72,13 +72,12 @@ const config = {
 const handlers = makeDetailHandlers(config)
 
 /**
- * Delete the repair from the relational table as well as the blob.
+ * Delete the repair row from the repairs table.
  *
- * `loadAppState` overlays deed_repairs_v2 from Prisma, so the generic blob
- * delete on its own is cosmetic — the row is served straight back on the next
- * read and written into the blob again by the next save. The blob delete runs
- * first because it carries the role, record-access and hard-delete-blocker
- * checks; only once it has succeeded is the row removed for real.
+ * The generic delete only drops the repair from the list it saves, and saves
+ * never remove repair rows, so on its own it is cosmetic. It runs first
+ * because it carries the role, record-access and hard-delete-blocker checks;
+ * only once it has succeeded is the row removed for real.
  */
 export async function DELETE(request: NextRequest, ctx: { params: RouteParams<{ id: string }> }) {
   const response = await handlers.DELETE(request, ctx)
@@ -99,30 +98,7 @@ export async function DELETE(request: NextRequest, ctx: { params: RouteParams<{ 
   return NextResponse.json({ ok: true, deleted })
 }
 
-/**
- * Prisma is the repair read SoT. If the blob backup is missing this job,
- * seed it from Prisma before the generic PATCH so diagnosis/assignment
- * cannot 404 after the list hydrated from the relational table.
- */
-export async function PATCH(request: NextRequest, ctx: { params: RouteParams<{ id: string }> }) {
-  const { id } = await resolveRouteParams(ctx.params)
-  try {
-    const state = await loadAppState(['deed_repairs_v2'])
-    const blob = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as RepairOrder[] : []
-    if (!blob.some(row => String(row.id) === id || String(row.ref) === id)) {
-      const fromPrisma = await loadRepairsFromPrisma()
-      if (fromPrisma?.length) {
-        const merged = mergeRepairsStoreWrite(blob, fromPrisma)
-        if (merged.some(row => String(row.id) === id || String(row.ref) === id)) {
-          await saveStoreKeys({ deed_repairs_v2: JSON.stringify(merged) })
-        }
-      }
-    }
-  } catch (err) {
-    console.error('[repairs PATCH] prisma hydrate failed:', err)
-  }
-  return handlers.PATCH(request, ctx)
-}
+export const PATCH = handlers.PATCH
 
 /**
  * Lightweight authoritative read for an open Repair detail.

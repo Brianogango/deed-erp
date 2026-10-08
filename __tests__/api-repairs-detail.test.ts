@@ -78,8 +78,9 @@ describe('GET /api/repairs/:id', () => {
 })
 
 describe('PATCH /api/repairs/:id', () => {
-  it('hydrates the blob from Prisma so diagnosis can persist when the backup row is missing', async () => {
-    mockFindRepairInPrisma.mockResolvedValue(prismaRepair)
+  it('saves a diagnosis on a repair read from the repairs table', async () => {
+    // loadAppState serves deed_repairs_v2 from the repairs table.
+    mockLoadAppState.mockImplementation(async () => ({ deed_repairs_v2: [prismaRepair], deed_warranties: [] }))
     const res = await PATCH(
       new NextRequest(`http://localhost/api/repairs/${REPAIR_ID}`, {
         method: 'PATCH',
