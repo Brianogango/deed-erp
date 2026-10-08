@@ -254,37 +254,47 @@ async function transferStockMoves(rows: unknown[], actorId: string | null): Prom
   return { upserted, skipped }
 }
 
-async function transferReceipts(rows: unknown[], actorId: string | null): Promise<{ upserted: number; skipped: number }> {
+/**
+ * deed_receipts → receipt_documents: each receipt (drafts included) kept as
+ * saved. Only new or changed receipts are written; receipts gone from the
+ * list are marked removed (unless the list is clearly partial).
+ *
+ * This used to write goods_received_notes, but only when a user id was
+ * passed — saves never pass one, so nothing was ever written. Validating a
+ * receipt writes goods_received_notes itself.
+ */
+async function transferReceipts(rows: unknown[]): Promise<{ upserted: number; skipped: number }> {
   let upserted = 0
   let skipped = 0
-  if (!actorId) return { upserted, skipped: rows.length }
+  const existing = await prisma.receiptDocument.findMany({ select: { id: true, record: true, removedAt: true } })
+  const have = new Map(existing.map(r => [r.id, r]))
+  const listed = new Set<string>()
   for (const raw of rows) {
     const row = raw as Record<string, unknown>
-    const id = String(row.id || '')
-    const poId = String(row.poId || '')
-    const grnNumber = String(row.ref || id).slice(0, 30)
-    if (!isUuid(id) || !isUuid(poId) || !grnNumber) { skipped += 1; continue }
-    const po = await prisma.purchaseOrder.findUnique({ where: { id: poId }, include: { items: true } })
-    if (!po) { skipped += 1; continue }
+    const id = String(row.id || '').slice(0, 80)
+    if (!id) { skipped += 1; continue }
+    listed.add(id)
+    const current = have.get(id)
+    if (current && current.removedAt === null && sameJson(current.record, row)) continue
+    const data = {
+      ref: row.ref ? String(row.ref).slice(0, 40) : null,
+      poId: row.poId ? String(row.poId).slice(0, 80) : null,
+      status: row.status ? String(row.status).slice(0, 20) : null,
+      receiptDate: row.date ? String(row.date).slice(0, 40) : null,
+      record: row as Prisma.InputJsonObject,
+      removedAt: null,
+    }
     try {
-      await prisma.goodsReceivedNote.upsert({
-        where: { id },
-        create: {
-          id,
-          grnNumber,
-          poId,
-          receivedDate: row.date ? new Date(String(row.date)) : new Date(),
-          notes: row.vendorName ? String(row.vendorName) : null,
-          createdById: actorId,
-        },
-        update: {
-          notes: row.vendorName ? String(row.vendorName) : null,
-        },
-      })
+      await prisma.receiptDocument.upsert({ where: { id }, create: { id, ...data }, update: data })
       upserted += 1
     } catch {
       skipped += 1
     }
+  }
+  const active = existing.filter(r => r.removedAt === null)
+  const gone = active.filter(r => !listed.has(r.id))
+  if (gone.length && listed.size >= active.length * 0.9) {
+    await prisma.receiptDocument.updateMany({ where: { id: { in: gone.map(r => r.id) } }, data: { removedAt: new Date() } })
   }
   return { upserted, skipped }
 }
@@ -332,7 +342,7 @@ export async function mirrorKnownDomain(key: string, value: string, actorId: str
     if (key === 'deed_serials') return transferSerials(rows)
     if (key === 'deed_bulkStock') return transferBulkStock(rows)
     if (key === 'deed_stockMoves') return transferStockMoves(rows, actorId)
-    if (key === 'deed_receipts') return transferReceipts(rows, actorId)
+    if (key === 'deed_receipts') return transferReceipts(rows)
   } catch (err) {
     return { upserted: 0, skipped: rows.length, error: err instanceof Error ? err.message : String(err) }
   }

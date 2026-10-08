@@ -4119,3 +4119,21 @@ model StockLocationLevel {
   @@id([productId, location])
   @@map("stock_location_levels")
 }
+
+/// Goods receipts as the screens use them, drafts included (the deed_receipts
+/// screen copy). goods_received_notes stays the record of what a validated
+/// receipt put into stock.
+model ReceiptDocument {
+  id          String    @id @db.VarChar(80)
+  ref         String?   @db.VarChar(40)
+  poId        String?   @map("po_id") @db.VarChar(80)
+  status      String?   @db.VarChar(20)
+  receiptDate String?   @map("receipt_date") @db.VarChar(40)
+  /// The receipt exactly as the screens saved it.
+  record      Json
+  removedAt   DateTime? @map("removed_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([poId], map: "idx_receipt_documents_po")
+  @@map("receipt_documents")
+}

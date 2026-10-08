@@ -247,7 +247,7 @@ async function overlayAuthoritativeActivities(state: AppStateMap, keys?: string[
 
 async function overlayStockTables(state: AppStateMap, keys?: string[]) {
   const want = (key: string) => !keys || keys.includes(key)
-  if (!want('deed_serials') && !want('deed_bulkStock') && !want('deed_stockMoves')) return
+  if (!['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts'].some(want)) return
   const m = await import('./stock-read-model.server')
   if (want('deed_serials')) {
     const serials = await m.loadScreenSerials(state.deed_serials)
@@ -263,6 +263,11 @@ async function overlayStockTables(state: AppStateMap, keys?: string[]) {
     const moves = await m.loadScreenStockMoves(state.deed_stockMoves)
       .catch(err => { console.error('[server-store] stock moves from table failed:', err); return null })
     if (moves) state.deed_stockMoves = moves
+  }
+  if (want('deed_receipts')) {
+    const receipts = await m.loadScreenReceipts(state.deed_receipts)
+      .catch(err => { console.error('[server-store] receipts from table failed:', err); return null })
+    if (receipts) state.deed_receipts = receipts
   }
 }
 
@@ -611,9 +616,9 @@ export async function saveStoreKeys(
           })
           .catch(err => console.error('[delivery-mirror] sync write failed:', err))
       }
-      // Serials, quantity stock and stock moves are read from their tables: written
+      // Serials, quantity stock, stock moves and receipts are read from their tables: written
       // before the save returns, so a reload right after shows the change.
-      const readMirrors = (['deed_serials', 'deed_bulkStock', 'deed_stockMoves'] as const).filter(key => entries[key])
+      const readMirrors = (['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts'] as const).filter(key => entries[key])
       if (readMirrors.length) {
         await import('./blob-transfer')
           .then(async m => {
@@ -621,7 +626,7 @@ export async function saveStoreKeys(
           })
           .catch(err => console.error('[blob-transfer] stock mirror write failed:', err))
       }
-      const extraMirrors = ['deed_purchaseOrders', 'deed_receipts'] as const
+      const extraMirrors = ['deed_purchaseOrders'] as const
       if (extraMirrors.some(key => entries[key])) {
         void import('./blob-transfer')
           .then(async m => {

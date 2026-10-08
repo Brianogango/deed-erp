@@ -74,6 +74,17 @@ export async function loadScreenStockMoves(screenCopy: unknown): Promise<Row[]> 
   return out
 }
 
+/** Goods receipts (drafts included) from receipt_documents, newest first. Receipts only the copy has stay listed. */
+export async function loadScreenReceipts(screenCopy: unknown): Promise<Row[]> {
+  const rows = await prisma.receiptDocument.findMany({ where: { removedAt: null }, select: { id: true, record: true }, orderBy: { receiptDate: 'desc' } })
+  const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  if (!rows.length) return copy
+  const out: Row[] = rows.map(r => ({ ...asObject(r.record), id: r.id }))
+  const listed = new Set(out.map(r => String(r.id)))
+  for (const r of copy) if (r?.id && !listed.has(String(r.id))) out.push(r)
+  return out
+}
+
 /** JSON with sorted keys, empty values dropped — how two copies of a row are compared. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
@@ -89,7 +100,7 @@ function canonical(value: unknown): string {
  * Do the tables hold exactly what the copies hold? Read-only; this decides
  * when the copies can be frozen.
  */
-export async function stockTableParity(copySerials: unknown, copyBulk: unknown, copyMoves?: unknown) {
+export async function stockTableParity(copySerials: unknown, copyBulk: unknown, copyMoves?: unknown, copyReceipts?: unknown) {
   const serialCopy = (Array.isArray(copySerials) ? copySerials : []) as Row[]
   const tableRows = await tableSerials()
   const table = new Map(tableRows.map(r => [r.serialNumber, toScreenSerial(r)]))
@@ -123,7 +134,14 @@ export async function stockTableParity(copySerials: unknown, copyBulk: unknown, 
   const movesMissing = moveCopy.filter(m => m?.id && !moveTable.has(String(m.id))).map(m => String(m.id))
   const movesDiffering = moveCopy.filter(m => m?.id && moveTable.has(String(m.id)) && canonical(moveTable.get(String(m.id))) !== canonical(m)).map(m => String(m.id))
 
+  const receiptCopy = (Array.isArray(copyReceipts) ? copyReceipts : []) as Row[]
+  const receiptRows = await prisma.receiptDocument.findMany({ where: { removedAt: null }, select: { id: true, record: true } })
+  const receiptTable = new Map(receiptRows.map(r => [r.id, r.record]))
+  const receiptsMissing = receiptCopy.filter(r => r?.id && !receiptTable.has(String(r.id))).map(r => String(r.ref ?? r.id))
+  const receiptsDiffering = receiptCopy.filter(r => r?.id && receiptTable.has(String(r.id)) && canonical(receiptTable.get(String(r.id))) !== canonical(r)).map(r => String(r.ref ?? r.id))
+
   return {
+    receipts: { copy: receiptCopy.length, table: receiptTable.size, missingFromTable: receiptsMissing.length, differing: receiptsDiffering.length, samples: { missing: receiptsMissing.slice(0, 5), differing: receiptsDiffering.slice(0, 5) } },
     stockMoves: { copy: moveCopy.length, missingFromTable: movesMissing.length, differing: movesDiffering.length, samples: { missing: movesMissing.slice(0, 5), differing: movesDiffering.slice(0, 5) } },
     serials: {
       copy: copyBySerial.size, table: table.size,
@@ -131,6 +149,6 @@ export async function stockTableParity(copySerials: unknown, copyBulk: unknown, 
       samples: { missing: missing.slice(0, 10), onlyInTable: extra.slice(0, 10), differing: differing.slice(0, 5) },
     },
     quantityStock: { copyRows: bulk.size, tableRows: levelMap.size, differing: qtyDiff.length, samples: qtyDiff.slice(0, 10) },
-    sameAsCopies: !missing.length && !extra.length && !differing.length && !qtyDiff.length && !movesMissing.length && !movesDiffering.length,
+    sameAsCopies: !missing.length && !extra.length && !differing.length && !qtyDiff.length && !movesMissing.length && !movesDiffering.length && !receiptsMissing.length && !receiptsDiffering.length,
   }
 }
