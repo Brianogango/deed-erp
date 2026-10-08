@@ -5455,6 +5455,22 @@ const postSystemJournal = (
   }, onFailure, `${journal.ref} was not posted to the ledger — please retry`)
 }
 
+/** Save an account to the chart (account_codes). Resolves to an error message, or null when saved. */
+async function saveAccountToServer(method: 'POST' | 'PUT', url: string, account: Account): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(account),
+    })
+    if (res.ok) return null
+    const data = await res.json().catch(() => null)
+    return String(data?.error ?? `server returned ${res.status}`)
+  } catch {
+    return 'check your connection and try again'
+  }
+}
+
 async function patchSaleOrderPersist(
   id: string,
   order: Record<string, unknown>,
@@ -10185,8 +10201,30 @@ const storeCtx: AppState = {
     },
 
     // ── Chart of Accounts ──────────────────────────────────────────────────────
-    addAccount: (a) => { const account = { ...a, id: uid() }; setAccounts(p => [...p, account]); showToast(`Account ${a.code} added`); return account },
-    updateAccount: (id, p) => { setAccounts(prev => prev.map(a => a.id === id ? { ...a, ...p } : a)); showToast('Account updated') },
+    // The chart of accounts is saved to account_codes; the deed_accounts screen copy is frozen.
+    addAccount: (a) => {
+      const account = { ...a, id: uid() }
+      setAccounts(p => [...p, account])
+      void saveAccountToServer('POST', '/api/accounting/accounts', account).then(error => {
+        if (!error) return
+        setAccounts(p => p.filter(x => x.id !== account.id))
+        showToast(`Account ${a.code} not saved: ${error}`, 'error')
+      })
+      showToast(`Account ${a.code} added`)
+      return account
+    },
+    updateAccount: (id, p) => {
+      const before = accountRef.current.find(a => a.id === id)
+      if (!before) return
+      const next = { ...before, ...p }
+      setAccounts(prev => prev.map(a => a.id === id ? next : a))
+      void saveAccountToServer('PUT', `/api/accounting/accounts/${encodeURIComponent(id)}`, next).then(error => {
+        if (!error) return
+        setAccounts(prev => prev.map(a => a.id === id ? before : a))
+        showToast(`Account ${before.code} not saved: ${error}`, 'error')
+      })
+      showToast('Account updated')
+    },
 
     
     // ── CRM - Companies ────────────────────────────────────────────────────────

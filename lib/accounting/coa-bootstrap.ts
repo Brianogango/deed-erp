@@ -1,15 +1,7 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-import { mirrorAccountsToPrisma } from '@/lib/accounting/account-journal-mirror'
-import {
-  buildZeroBalanceCoaTemplate,
-  coaTemplateToBlobAccounts,
-} from '@/lib/accounting/coa-template'
-
-function asAccounts(value: unknown): any[] {
-  return Array.isArray(value) ? value : []
-}
+import { notifyStoreKeysChanged } from '@/lib/server-store'
+import { buildZeroBalanceCoaTemplate } from '@/lib/accounting/coa-template'
 
 const BANK_SEEDS: Array<{ name: string; accountNumber: string; glCode: string }> = [
   { name: 'NCBA Current Account', accountNumber: '1005157785', glCode: '2201' },
@@ -51,27 +43,7 @@ async function ensureMissingControlAccounts() {
     accountsCreated += 1
   }
 
-  const state = await loadAppState(['deed_accounts'])
-  const blob = asAccounts(state.deed_accounts)
-  if (blob.length > 0) {
-    const blobCodes = new Set(blob.map((a: any) => String(a?.code || '')))
-    const extras = template.filter(t => !blobCodes.has(t.code)).map(t => ({
-      id: `coa-control-${t.code}`,
-      code: t.code,
-      name: t.name,
-      type: t.type,
-      group: t.group,
-      subGroup: t.subGroup,
-      isActive: true,
-      balance: 0,
-      isDynamic: Boolean(t.isDynamic),
-      dynamicKey: t.dynamicKey,
-      notes: t.notes,
-    }))
-    if (extras.length) {
-      await saveStoreKeys({ deed_accounts: JSON.stringify([...blob, ...extras]) })
-    }
-  }
+  if (accountsCreated) await notifyStoreKeysChanged(['deed_accounts'])
 
   const glByCode = new Map(
     (await prisma.accountCode.findMany({ select: { id: true, code: true } })).map(r => [r.code, r.id]),
@@ -118,56 +90,17 @@ async function ensureMissingControlAccounts() {
 }
 
 /**
- * Ensure deed_accounts exists and is dual-written — never deletes keys,
- * never overwrites live relational balances with seed demo numbers.
+ * Make sure the chart of accounts exists in account_codes (which the screens
+ * read): the zero-balance template when the table is empty, then any control
+ * accounts it is missing. Never deletes or renames an account, never touches a
+ * balance.
  */
 export async function bootstrapChartOfAccounts() {
-  const state = await loadAppState(['deed_accounts'])
-  const blob = asAccounts(state.deed_accounts)
-  let result: Record<string, unknown>
-  if (blob.length > 0) {
-    const mirror = await mirrorAccountsToPrisma(blob, { force: true })
-    result = {
-      source: 'blob' as const,
-      blobCount: blob.length,
-      mirror,
-      note: 'deed_accounts already present — mirrored metadata only',
-    }
-  } else {
-    const relational = await prisma.accountCode.findMany({ orderBy: { code: 'asc' } })
-    if (relational.length > 0) {
-      const fromPrisma = relational.map((r) => ({
-        id: `coa-prisma-${r.code}`,
-        code: r.code,
-        name: r.name,
-        type: r.accountType,
-        group: r.accountGroup || 'General',
-        subGroup: r.subGroup || 'General',
-        isActive: r.isActive,
-        balance: 0,
-        isDynamic: r.isDynamic,
-        dynamicKey: r.dynamicKey || undefined,
-        notes: r.notes || undefined,
-      }))
-      await saveStoreKeys({ deed_accounts: JSON.stringify(fromPrisma) })
-      result = {
-        source: 'prisma' as const,
-        blobCount: fromPrisma.length,
-        mirror: { mirrored: 0, skipped: relational.length, failed: 0 },
-        note: 'Synthesized deed_accounts from account_codes (balances zeroed for blob; TB from journals)',
-      }
-    } else {
-      const template = coaTemplateToBlobAccounts(buildZeroBalanceCoaTemplate())
-      await saveStoreKeys({ deed_accounts: JSON.stringify(template) })
-      const mirror = await mirrorAccountsToPrisma(template, { force: true })
-      result = {
-        source: 'template' as const,
-        blobCount: template.length,
-        mirror,
-        note: 'Created zero-balance CoA template into deed_accounts + account_codes',
-      }
-    }
-  }
+  const before = await prisma.accountCode.count()
   const controls = await ensureMissingControlAccounts()
-  return { ...result, controls }
+  return {
+    source: before > 0 ? 'table' as const : 'template' as const,
+    accountsBefore: before,
+    controls,
+  }
 }

@@ -2548,6 +2548,10 @@ model AccountCode {
   dynamicKey   String?  @map("dynamic_key") @db.VarChar(40)
   balance      Decimal  @default(0) @db.Decimal(14, 2)
   notes        String?
+  /// Id the screens use for the account (from the deed_accounts screen copy).
+  screenId     String?  @map("screen_id")
+  /// Cashbook wallet this liquidity account belongs to.
+  bankAccountId String? @map("bank_account_id")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

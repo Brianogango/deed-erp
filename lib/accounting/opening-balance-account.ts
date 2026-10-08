@@ -1,6 +1,6 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
 import { buildZeroBalanceCoaTemplate } from '@/lib/accounting/coa-template'
 import { OPENING_BALANCE_EQUITY_CODE } from '@/lib/finance/opening-balance'
 
@@ -30,22 +30,6 @@ export async function ensureOpeningBalanceEquityAccount(): Promise<void> {
       // Another request created it first.
       if (String((err as { code?: string })?.code) !== 'P2002') throw err
     })
-  }
-  const state = await loadAppState(['deed_accounts'])
-  const blob = Array.isArray(state.deed_accounts) ? state.deed_accounts as Array<{ code?: string }> : []
-  if (blob.length && !blob.some(a => String(a?.code) === template.code)) {
-    await saveStoreKeys({
-      deed_accounts: JSON.stringify([...blob, {
-        id: `coa-control-${template.code}`,
-        code: template.code,
-        name: template.name,
-        type: template.type,
-        group: template.group,
-        subGroup: template.subGroup,
-        isActive: true,
-        balance: 0,
-        notes: template.notes,
-      }]),
-    })
+    await notifyStoreKeysChanged(['deed_accounts'])
   }
 }

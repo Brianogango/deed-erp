@@ -110,7 +110,7 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * these keys are dropped — the change has already been saved through the
  * document's own API route — but other tabs are still told to re-read.
  */
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -144,6 +144,14 @@ async function overlayAuthoritativeJournals(state: AppStateMap, keys?: string[])
   if (fromPrisma) state.deed_journalEntries = fromPrisma
 }
 
+async function overlayAuthoritativeAccounts(state: AppStateMap, keys?: string[]) {
+  if (keys && !keys.includes('deed_accounts')) return
+  const fromPrisma = await import('./account-read-model.server')
+    .then(m => m.loadScreenAccounts(state.deed_accounts))
+    .catch(err => { console.error('[server-store] accounts from table failed:', err); return null })
+  if (fromPrisma) state.deed_accounts = fromPrisma
+}
+
 /** Tell open tabs a frozen key changed (its table was written). */
 export async function notifyStoreKeysChanged(keys: string[]): Promise<void> {
   if (!keys.length || process.env.NODE_ENV === 'test') return
@@ -167,6 +175,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     await overlayAuthoritativeInvoices(state, wantedKeys)
     await overlayAuthoritativeSales(state, wantedKeys)
     await overlayAuthoritativeJournals(state, wantedKeys)
+    await overlayAuthoritativeAccounts(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -186,6 +195,7 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   await overlayAuthoritativeInvoices(state, wantedKeys)
   await overlayAuthoritativeSales(state, wantedKeys)
   await overlayAuthoritativeJournals(state, wantedKeys)
+  await overlayAuthoritativeAccounts(state, wantedKeys)
   return state
 }
 
@@ -457,11 +467,6 @@ export async function saveStoreKeys(
     }
     // Accounting / inventory dual-write mirrors — NEVER delete app_state keys.
     if (process.env.NODE_ENV !== 'test') {
-      if (entries['deed_accounts']) {
-        void import('./accounting/account-journal-mirror')
-          .then(m => m.mirrorAccountsToPrisma(entries['deed_accounts']))
-          .catch(err => console.error('[account-mirror] sync write failed:', err))
-      }
       if (entries['deed_journalEntries']) {
         void import('./accounting/account-journal-mirror')
           .then(m => m.mirrorJournalEntriesToPrisma(entries['deed_journalEntries']))

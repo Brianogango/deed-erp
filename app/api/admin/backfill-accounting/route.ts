@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
-import { mirrorAccountsToPrisma, mirrorJournalEntriesToPrisma } from '@/lib/accounting/account-journal-mirror'
+import { mirrorJournalEntriesToPrisma } from '@/lib/accounting/account-journal-mirror'
 import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mirror'
 import { mirrorRepairsToPrisma } from '@/lib/repair-mirror'
 import { mirrorDepositsToPrisma } from '@/lib/accounting/deposit-mirror'
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   const force = !!body.force
   const sections: string[] = Array.isArray(body.sections)
     ? body.sections
-    : ['coa', 'accounts', 'journals', 'reservations', 'repairs', 'deposits', 'holdovers']
+    : ['coa', 'journals', 'reservations', 'repairs', 'deposits', 'holdovers']
 
   const state = await loadAppState([
     'deed_accounts',
@@ -59,9 +59,6 @@ export async function POST(request: NextRequest) {
 
   if (sections.includes('coa')) {
     result.coa = await bootstrapChartOfAccounts()
-  }
-  if (sections.includes('accounts')) {
-    result.accounts = await mirrorAccountsToPrisma(state.deed_accounts ?? [], { force })
   }
   if (sections.includes('journals')) {
     result.journals = await mirrorJournalEntriesToPrisma(state.deed_journalEntries ?? [], { force })
