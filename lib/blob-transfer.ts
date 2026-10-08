@@ -192,7 +192,8 @@ async function transferBulkStock(rows: unknown[]): Promise<{ upserted: number; s
     })
     upserted += 1
   }
-  const stale = current.filter(r => !next.has(`${r.productId}|${r.location}`))
+  // A list much shorter than the table is a partial save: nothing is removed.
+  const stale = next.size >= current.length * 0.5 ? current.filter(r => !next.has(`${r.productId}|${r.location}`)) : []
   for (const r of stale) {
     await prisma.stockLocationLevel.delete({ where: { productId_location: { productId: r.productId, location: r.location } } })
   }

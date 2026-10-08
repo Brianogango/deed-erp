@@ -110,7 +110,10 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * these keys are dropped — the change has already been saved through the
  * document's own API route — but other tabs are still told to re-read.
  */
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities'])
+/** Frozen stock keys whose saves are written into their tables on the save path. */
+const TABLE_FED_KEYS = ['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts'] as const
+
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -204,6 +207,10 @@ const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
   deed_deposits: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM deposits) || ':' || (SELECT count(*) || ':' || coalesce(sum(amount), 0) FROM deposit_payments)`,
   deed_repairs_v2: `SELECT max(updated_at)::text || ':' || count(*) FROM repairs`,
   deed_oppActivities: `SELECT max(created_at)::text || ':' || count(*) || ':' || md5(coalesce(string_agg(screen_extras::text, ',' ORDER BY id), '')) FROM opportunity_activities`,
+  deed_serials: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE removed_at IS NULL) FROM serial_numbers`,
+  deed_bulkStock: `SELECT max(updated_at)::text || ':' || count(*) || ':' || coalesce(sum(qty), 0) FROM stock_location_levels`,
+  deed_stockMoves: `SELECT max(created_at)::text || ':' || count(*) FROM stock_movements`,
+  deed_receipts: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE removed_at IS NULL) FROM receipt_documents`,
   deed_holdovers: `SELECT max(updated_at)::text || ':' || count(*) FROM holdovers`,
   deed_purchaseOrders: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM purchase_orders) || ':' || (SELECT coalesce(sum(qty_received), 0) || '/' || coalesce(sum(qty_billed), 0) FROM purchase_order_items)`,
 }
@@ -554,10 +561,30 @@ export async function saveStoreKeys(
   try {
     const frozen = Object.keys(entries).filter(key => FROZEN_STORE_KEYS.has(key))
     if (frozen.length) {
-      // Repairs are still saved through this path; they go to the repairs
-      // table (synchronously, only the changed rows) instead of the copy.
+      // Repairs, serials, quantity stock, stock moves and receipts are still
+      // saved through this path; they go to their tables (synchronously, only
+      // the changed rows) instead of the copy. A stock save the table could
+      // not fully take (an error, or a row it cannot hold — e.g. a serial
+      // whose product the products table lacks) is written to the copy as
+      // well, so nothing is lost; those rows stay listed from the copy.
       const repairs = entries['deed_repairs_v2']
-      entries = Object.fromEntries(Object.entries(entries).filter(([key]) => !FROZEN_STORE_KEYS.has(key)))
+      const tableFed = TABLE_FED_KEYS.filter(key => entries[key])
+      const keepInCopy: Record<string, string> = {}
+      if (tableFed.length && process.env.NODE_ENV !== 'test') {
+        const m = await import('./blob-transfer')
+        for (const key of tableFed) {
+          const result = await m.mirrorKnownDomain(key, entries[key], null)
+            .catch(err => ({ upserted: 0, skipped: 1, error: String(err) }))
+          if (!result || result.error || result.skipped > 0) {
+            keepInCopy[key] = entries[key]
+            if (result?.error) console.error(`[server-store] ${key} not fully saved to its table, kept in the copy:`, result.error)
+          }
+        }
+      }
+      entries = {
+        ...Object.fromEntries(Object.entries(entries).filter(([key]) => !FROZEN_STORE_KEYS.has(key))),
+        ...keepInCopy,
+      }
       if (repairs && process.env.NODE_ENV !== 'test') {
         await import('./repair-mirror')
           .then(m => m.mirrorRepairsToPrisma(repairs))
@@ -615,16 +642,6 @@ export async function saveStoreKeys(
             await m.mirrorDeliveriesToPrisma(parsed)
           })
           .catch(err => console.error('[delivery-mirror] sync write failed:', err))
-      }
-      // Serials, quantity stock, stock moves and receipts are read from their tables: written
-      // before the save returns, so a reload right after shows the change.
-      const readMirrors = (['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts'] as const).filter(key => entries[key])
-      if (readMirrors.length) {
-        await import('./blob-transfer')
-          .then(async m => {
-            for (const key of readMirrors) await m.mirrorKnownDomain(key, entries[key], null)
-          })
-          .catch(err => console.error('[blob-transfer] stock mirror write failed:', err))
       }
       const extraMirrors = ['deed_purchaseOrders'] as const
       if (extraMirrors.some(key => entries[key])) {
