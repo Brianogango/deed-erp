@@ -114,9 +114,10 @@ const sameJson = (a: unknown, b: unknown) => stableJson(a) === stableJson(b)
  * Only serials that differ from their row are written: every serial save
  * used to rewrite all of them, two queries per serial.
  */
-async function transferSerials(rows: unknown[]): Promise<{ upserted: number; skipped: number }> {
+async function transferSerials(rows: unknown[]): Promise<{ upserted: number; skipped: number; error?: string }> {
   let upserted = 0
   let skipped = 0
+  const errors: string[] = []
   const existing = await prisma.serialNumber.findMany({
     select: { id: true, serialNumber: true, productId: true, inventoryBarcode: true, status: true, location: true, notes: true, screenExtras: true, removedAt: true },
   })
@@ -148,8 +149,9 @@ async function transferSerials(rows: unknown[]): Promise<{ upserted: number; ski
         await prisma.serialNumber.create({ data: { id: id || undefined, ...data } })
       }
       upserted += 1
-    } catch {
+    } catch (err) {
       skipped += 1
+      if (errors.length < 3) errors.push(err instanceof Error ? err.message.split('\n').filter(Boolean).slice(-1)[0] : String(err))
     }
   }
   // Serials gone from the list are marked removed, not deleted: invoices,
@@ -160,7 +162,7 @@ async function transferSerials(rows: unknown[]): Promise<{ upserted: number; ski
   if (gone.length && listed.size >= active.length * 0.9) {
     await prisma.serialNumber.updateMany({ where: { id: { in: gone.map(s => s.id) } }, data: { removedAt: new Date() } })
   }
-  return { upserted, skipped }
+  return { upserted, skipped, ...(errors.length ? { error: errors.join(' | ') } : {}) }
 }
 
 /**
@@ -211,9 +213,10 @@ const validDate = (v: unknown) => {
  * product. Only new or changed moves are written: the history only grows,
  * and every save used to upsert all of it.
  */
-async function transferStockMoves(rows: unknown[], actorId: string | null): Promise<{ upserted: number; skipped: number }> {
+async function transferStockMoves(rows: unknown[], actorId: string | null): Promise<{ upserted: number; skipped: number; error?: string }> {
   let upserted = 0
   let skipped = 0
+  const errors: string[] = []
   const existing = await prisma.stockMovement.findMany({
     where: { blobId: { not: null } },
     select: { blobId: true, screenExtras: true },
@@ -248,11 +251,12 @@ async function transferStockMoves(rows: unknown[], actorId: string | null): Prom
         update: data,
       })
       upserted += 1
-    } catch {
+    } catch (err) {
       skipped += 1
+      if (errors.length < 3) errors.push(`${blobId}: ${err instanceof Error ? err.message.split('\n').filter(Boolean).slice(-1)[0] : String(err)}`)
     }
   }
-  return { upserted, skipped }
+  return { upserted, skipped, ...(errors.length ? { error: errors.join(' | ') } : {}) }
 }
 
 /**
@@ -264,9 +268,10 @@ async function transferStockMoves(rows: unknown[], actorId: string | null): Prom
  * passed — saves never pass one, so nothing was ever written. Validating a
  * receipt writes goods_received_notes itself.
  */
-async function transferReceipts(rows: unknown[]): Promise<{ upserted: number; skipped: number }> {
+async function transferReceipts(rows: unknown[]): Promise<{ upserted: number; skipped: number; error?: string }> {
   let upserted = 0
   let skipped = 0
+  const errors: string[] = []
   const existing = await prisma.receiptDocument.findMany({ select: { id: true, record: true, removedAt: true } })
   const have = new Map(existing.map(r => [r.id, r]))
   const listed = new Set<string>()
@@ -288,8 +293,9 @@ async function transferReceipts(rows: unknown[]): Promise<{ upserted: number; sk
     try {
       await prisma.receiptDocument.upsert({ where: { id }, create: { id, ...data }, update: data })
       upserted += 1
-    } catch {
+    } catch (err) {
       skipped += 1
+      if (errors.length < 3) errors.push(err instanceof Error ? err.message.split('\n').filter(Boolean).slice(-1)[0] : String(err))
     }
   }
   const active = existing.filter(r => r.removedAt === null)
@@ -297,7 +303,7 @@ async function transferReceipts(rows: unknown[]): Promise<{ upserted: number; sk
   if (gone.length && listed.size >= active.length * 0.9) {
     await prisma.receiptDocument.updateMany({ where: { id: { in: gone.map(r => r.id) } }, data: { removedAt: new Date() } })
   }
-  return { upserted, skipped }
+  return { upserted, skipped, ...(errors.length ? { error: errors.join(' | ') } : {}) }
 }
 
 export async function mirrorKnownDomain(key: string, value: string, actorId: string | null): Promise<TransferDomainResult['relational']> {

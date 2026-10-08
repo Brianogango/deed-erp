@@ -577,7 +577,7 @@ export async function saveStoreKeys(
             .catch(err => ({ upserted: 0, skipped: 1, error: String(err) }))
           if (!result || result.error || result.skipped > 0) {
             keepInCopy[key] = entries[key]
-            if (result?.error) console.error(`[server-store] ${key} not fully saved to its table, kept in the copy:`, result.error)
+            console.error(`[server-store] ${key} not fully saved to its table (${result?.skipped ?? '?'} row(s)), kept in the copy:`, result?.error ?? 'rows the table cannot hold')
           }
         }
       }
