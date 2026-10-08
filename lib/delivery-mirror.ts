@@ -114,27 +114,31 @@ export async function mirrorDeliveriesToPrisma(deliveries: unknown[]): Promise<v
       if (hashes[c.blobId] === fp) continue
       changed.push({ blobId: c.blobId, mapped, fp })
     }
-    if (changed.length > 0) {
-      const changedBlobIds = changed.map(c => c.blobId)
-      await prisma.$transaction(async tx => {
-        for (const c of changed) {
-          const { lineItems, ...dnData } = c.mapped
+    // Each delivery note in its own transaction: one that cannot be written
+    // (a clashing number, a missing link) used to fail the whole batch, so
+    // no delivery note reached the table. It is now named in the log and
+    // retried on the next save; the others go through.
+    let written = 0
+    for (const c of changed) {
+      const { lineItems, ...dnData } = c.mapped
+      try {
+        await prisma.$transaction(async tx => {
           await tx.deliveryNote.upsert({
             where: { blobId: c.blobId },
             create: { id: c.blobId, ...dnData },
             update: dnData,
           })
-        }
-        await tx.deliveryNoteItem.deleteMany({ where: { dnId: { in: changedBlobIds } } })
-        const allItems = changed.flatMap(c =>
-          c.mapped.lineItems.map(item => ({ dnId: c.blobId, ...item })),
-        )
-        if (allItems.length > 0) {
-          await tx.deliveryNoteItem.createMany({ data: allItems })
-        }
-      })
-
-      for (const c of changed) hashes[c.blobId] = c.fp
+          await tx.deliveryNoteItem.deleteMany({ where: { dnId: c.blobId } })
+          if (lineItems.length > 0) {
+            await tx.deliveryNoteItem.createMany({ data: lineItems.map(item => ({ dnId: c.blobId, ...item })) })
+          }
+        })
+        hashes[c.blobId] = c.fp
+        written += 1
+      } catch (err) {
+        const reason = err instanceof Error ? err.message.split('\n').filter(Boolean).slice(-1)[0] : String(err)
+        console.error(`[delivery-mirror] ${String((dnData as Record<string, unknown>).dnNumber ?? c.blobId)} not saved to delivery_notes: ${reason}`)
+      }
     }
 
     const activeIds = new Set(deliveries.map(d => String((d as Record<string, any>)?.id ?? '').trim()).filter(Boolean))
@@ -143,7 +147,7 @@ export async function mirrorDeliveriesToPrisma(deliveries: unknown[]): Promise<v
       if (!activeIds.has(id)) { delete hashes[id]; evicted++ }
     }
 
-    if (changed.length > 0 || evicted > 0) {
+    if (written > 0 || evicted > 0) {
       await saveStoreKeys({ [HASH_KEY]: JSON.stringify(hashes) })
     }
   } catch (err) {
