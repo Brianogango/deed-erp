@@ -199,41 +199,52 @@ async function transferBulkStock(rows: unknown[]): Promise<{ upserted: number; s
   return { upserted: upserted + stale.length, skipped: 0 }
 }
 
+const validDate = (v: unknown) => {
+  const d = v ? new Date(String(v)) : new Date()
+  return Number.isNaN(d.getTime()) ? new Date() : d
+}
+
+/**
+ * deed_stockMoves → stock_movements. Each move is kept exactly as saved
+ * (screen_extras); its product link is set when the products table has the
+ * product. Only new or changed moves are written: the history only grows,
+ * and every save used to upsert all of it.
+ */
 async function transferStockMoves(rows: unknown[], actorId: string | null): Promise<{ upserted: number; skipped: number }> {
   let upserted = 0
   let skipped = 0
+  const existing = await prisma.stockMovement.findMany({
+    where: { blobId: { not: null } },
+    select: { blobId: true, screenExtras: true },
+  })
+  const have = new Map(existing.map(m => [String(m.blobId), m.screenExtras]))
+  const products = new Set((await prisma.product.findMany({ select: { id: true } })).map(p => p.id))
+  const actor = actorId && isUuid(actorId) ? actorId : null
   for (const raw of rows) {
     const row = raw as Record<string, unknown>
     const blobId = String(row.id || '').slice(0, 80)
-    const productId = String(row.productId || '')
-    if (!blobId || !isUuid(productId)) { skipped += 1; continue }
-    if (!(await productExists(productId))) { skipped += 1; continue }
+    if (!blobId) { skipped += 1; continue }
+    if (have.has(blobId) && sameJson(have.get(blobId), row)) continue
+    const productId = isUuid(row.productId) && products.has(String(row.productId)) ? String(row.productId) : null
     const qty = Math.max(0, Math.floor(Number(row.qty) || 0))
-    const movementType = MOVE_TYPE[String(row.type || 'adjustment')] || 'adjustment_in'
+    const data = {
+      productId,
+      movementType: (MOVE_TYPE[String(row.type || 'adjustment')] || 'adjustment_in') as never,
+      qty,
+      qtyBefore: 0,
+      qtyAfter: qty,
+      notes: row.reason ? String(row.reason) : null,
+      fromLocation: row.fromLocation ? String(row.fromLocation).slice(0, 40) : null,
+      toLocation: row.toLocation ? String(row.toLocation).slice(0, 40) : null,
+      documentRef: row.documentRef ? String(row.documentRef).slice(0, 80) : null,
+      serialNumbers: Array.isArray(row.serialNumbers) ? row.serialNumbers.map(String) : [],
+      screenExtras: row as Prisma.InputJsonObject,
+    }
     try {
       await prisma.stockMovement.upsert({
         where: { blobId },
-        create: {
-          blobId,
-          productId,
-          movementType: movementType as never,
-          qty,
-          qtyBefore: 0,
-          qtyAfter: qty,
-          notes: row.reason ? String(row.reason) : null,
-          fromLocation: row.fromLocation ? String(row.fromLocation).slice(0, 40) : null,
-          toLocation: row.toLocation ? String(row.toLocation).slice(0, 40) : null,
-          documentRef: row.documentRef ? String(row.documentRef).slice(0, 80) : null,
-          serialNumbers: Array.isArray(row.serialNumbers) ? row.serialNumbers.map(String) : [],
-          createdById: actorId && isUuid(actorId) ? actorId : null,
-          createdAt: row.date ? new Date(String(row.date)) : new Date(),
-        },
-        update: {
-          productId,
-          qty,
-          notes: row.reason ? String(row.reason) : null,
-          documentRef: row.documentRef ? String(row.documentRef).slice(0, 80) : null,
-        },
+        create: { blobId, ...data, createdById: actor, createdAt: validDate(row.date) },
+        update: data,
       })
       upserted += 1
     } catch {

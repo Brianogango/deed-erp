@@ -1113,7 +1113,8 @@ model CustomerAsset {
 
 model StockMovement {
   id             String            @id @default(uuid()) @db.Uuid
-  productId      String            @map("product_id") @db.Uuid
+  /// Empty for a move whose product the products table does not have (kept in screenExtras).
+  productId      String?           @map("product_id") @db.Uuid
   serialNumberId String?           @map("serial_number_id") @db.Uuid
   movementType   StockMovementType @map("movement_type")
   qty            Int
@@ -1136,8 +1137,10 @@ model StockMovement {
   toLocation     String?           @map("to_location") @db.VarChar(40)
   documentRef    String?           @map("document_ref") @db.VarChar(80)
   serialNumbers  String[]          @default([]) @map("serial_numbers")
+  /// The move exactly as the screens saved it (deed_stockMoves row).
+  screenExtras   Json?             @map("screen_extras")
 
-  product      Product       @relation(fields: [productId], references: [id])
+  product      Product?      @relation(fields: [productId], references: [id])
   serialNumber SerialNumber? @relation(fields: [serialNumberId], references: [id])
   createdBy    User?         @relation(fields: [createdById], references: [id])
 

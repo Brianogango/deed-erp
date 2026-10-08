@@ -1,11 +1,12 @@
 import 'server-only'
 
 import prisma from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 
 /**
- * Serials and quantity stock as the screens use them, read from
- * serial_numbers and stock_location_levels. The deed_serials /
- * deed_bulkStock copies are still written on every save (and mirrored into
+ * Serials, quantity stock and stock moves as the screens use them, read from
+ * serial_numbers, stock_location_levels and stock_movements. The
+ * deed_serials / deed_bulkStock / deed_stockMoves copies are still written on every save (and mirrored into
  * the tables before the save returns) until the parity check shows the
  * tables hold exactly what the copies hold; then the copies are frozen.
  *
@@ -55,6 +56,24 @@ export async function loadScreenBulkStock(screenCopy: unknown): Promise<Row[]> {
   return rows.map(r => ({ productId: r.productId, location: r.location, qty: r.qty }))
 }
 
+/**
+ * The stock-movement history, newest first, read from stock_movements (each
+ * move kept as saved). Moves only the copy has stay listed.
+ */
+export async function loadScreenStockMoves(screenCopy: unknown): Promise<Row[]> {
+  const rows = await prisma.stockMovement.findMany({
+    where: { screenExtras: { not: Prisma.DbNull } },
+    select: { blobId: true, screenExtras: true },
+    orderBy: { createdAt: 'desc' },
+  })
+  const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  if (!rows.length) return copy
+  const out: Row[] = rows.map(r => ({ ...asObject(r.screenExtras), id: asObject(r.screenExtras).id ?? r.blobId }))
+  const listed = new Set(out.map(m => String(m.id)))
+  for (const m of copy) if (m?.id && !listed.has(String(m.id))) out.push(m)
+  return out
+}
+
 /** JSON with sorted keys, empty values dropped — how two copies of a row are compared. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
@@ -70,7 +89,7 @@ function canonical(value: unknown): string {
  * Do the tables hold exactly what the copies hold? Read-only; this decides
  * when the copies can be frozen.
  */
-export async function stockTableParity(copySerials: unknown, copyBulk: unknown) {
+export async function stockTableParity(copySerials: unknown, copyBulk: unknown, copyMoves?: unknown) {
   const serialCopy = (Array.isArray(copySerials) ? copySerials : []) as Row[]
   const tableRows = await tableSerials()
   const table = new Map(tableRows.map(r => [r.serialNumber, toScreenSerial(r)]))
@@ -98,13 +117,20 @@ export async function stockTableParity(copySerials: unknown, copyBulk: unknown) 
     .filter(k => (bulk.get(k) ?? 0) !== (levelMap.get(k) ?? 0))
     .map(k => ({ productLocation: k, copy: bulk.get(k) ?? 0, table: levelMap.get(k) ?? 0 }))
 
+  const moveCopy = (Array.isArray(copyMoves) ? copyMoves : []) as Row[]
+  const moveRows = await prisma.stockMovement.findMany({ where: { blobId: { not: null } }, select: { blobId: true, screenExtras: true } })
+  const moveTable = new Map(moveRows.map(m => [String(m.blobId), m.screenExtras]))
+  const movesMissing = moveCopy.filter(m => m?.id && !moveTable.has(String(m.id))).map(m => String(m.id))
+  const movesDiffering = moveCopy.filter(m => m?.id && moveTable.has(String(m.id)) && canonical(moveTable.get(String(m.id))) !== canonical(m)).map(m => String(m.id))
+
   return {
+    stockMoves: { copy: moveCopy.length, missingFromTable: movesMissing.length, differing: movesDiffering.length, samples: { missing: movesMissing.slice(0, 5), differing: movesDiffering.slice(0, 5) } },
     serials: {
       copy: copyBySerial.size, table: table.size,
       missingFromTable: missing.length, onlyInTable: extra.length, differing: differing.length,
       samples: { missing: missing.slice(0, 10), onlyInTable: extra.slice(0, 10), differing: differing.slice(0, 5) },
     },
     quantityStock: { copyRows: bulk.size, tableRows: levelMap.size, differing: qtyDiff.length, samples: qtyDiff.slice(0, 10) },
-    sameAsCopies: !missing.length && !extra.length && !differing.length && !qtyDiff.length,
+    sameAsCopies: !missing.length && !extra.length && !differing.length && !qtyDiff.length && !movesMissing.length && !movesDiffering.length,
   }
 }

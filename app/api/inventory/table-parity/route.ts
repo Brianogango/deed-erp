@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   return withApiErrorHandling(async () => {
     await requireRole(['director', 'admin_officer', 'inventory_officer'])
-    const copies = await readStoreCopies(['deed_serials', 'deed_bulkStock'])
-    return NextResponse.json(await stockTableParity(copies.deed_serials, copies.deed_bulkStock))
+    const copies = await readStoreCopies(['deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+    return NextResponse.json(await stockTableParity(copies.deed_serials, copies.deed_bulkStock, copies.deed_stockMoves))
   })
 }
