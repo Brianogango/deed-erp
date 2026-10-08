@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { applyPosStockMutation } from '@/lib/inventory/stock-transactions'
 import { postPosValuationFromPayload } from '@/lib/inventory/valuation-hooks'
+import prisma from '@/lib/prisma'
+import { notifyStoreKeysChanged } from '@/lib/server-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +33,8 @@ export async function POST(request: NextRequest) {
       serialNumber?: string
       sourceLocation?: string
     }>
+    /** Loyalty points the sale earned / redeemed for its customer. */
+    loyalty?: { customerId?: string; earned?: number; redeemed?: number }
   } | null
 
   if (!body?.orderRef || !Array.isArray(body.lines) || body.lines.length === 0) {
@@ -59,5 +63,23 @@ export async function POST(request: NextRequest) {
     valuation = { ok: false, reason: err instanceof Error ? err.message : 'POS valuation failed' }
   }
 
+  await applyLoyalty(body.loyalty)
+
   return NextResponse.json({ ok: true, moves: result.moves, valuation })
+}
+
+/**
+ * The customer's loyalty balance lives on the clients row (the deed_contacts
+ * screen copy is frozen). Never below zero; a failure does not undo the sale.
+ */
+async function applyLoyalty(loyalty: { customerId?: string; earned?: number; redeemed?: number } | undefined) {
+  const customerId = String(loyalty?.customerId ?? '')
+  const delta = Math.floor(Number(loyalty?.earned) || 0) - Math.floor(Number(loyalty?.redeemed) || 0)
+  if (!/^[0-9a-f-]{36}$/i.test(customerId) || !delta) return
+  try {
+    await prisma.$executeRaw`UPDATE clients SET loyalty_points = GREATEST(0, loyalty_points + ${delta}) WHERE id = ${customerId}::uuid`
+    await notifyStoreKeysChanged(['deed_contacts'])
+  } catch (err) {
+    console.error('[pos] loyalty update failed:', err)
+  }
 }

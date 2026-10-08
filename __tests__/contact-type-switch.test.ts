@@ -4,6 +4,7 @@ import { updateContactById } from '@/lib/contact-prisma'
 vi.mock('@/lib/server-store', () => ({
   loadAppState: vi.fn().mockResolvedValue({}),
   saveStoreKeys: vi.fn().mockResolvedValue(undefined),
+  notifyStoreKeysChanged: vi.fn().mockResolvedValue(undefined),
 }))
 
 function clientRow(overrides: Record<string, unknown> = {}) {

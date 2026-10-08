@@ -10817,23 +10817,30 @@ const storeCtx: AppState = {
       if (!contact) {
         const company = companies.find(comp => comp.id === quote.companyId)
         if (company) {
-          contact = {
-            id: uid(),
-            type: 'company',
-            name: company.name,
-            email: company.email,
-            phone: company.phone,
-            address: company.physicalAddress,
-            vatNumber: company.taxId,
-            companyId: company.id,
-            isCustomer: true,
-            isVendor: false,
-            tags: company.tags,
-            createdAt: now(),
-            creditLimit: company.creditLimit,
-            paymentTerms: `${company.paymentTerms} days`,
+          // Saved to the clients table (the deed_contacts screen copy is frozen).
+          const res = await fetch('/api/contacts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'company',
+              name: company.name,
+              email: company.email,
+              phone: company.phone,
+              address: company.physicalAddress,
+              vatNumber: company.taxId,
+              companyId: company.id,
+              isCustomer: true,
+              isVendor: false,
+              tags: company.tags,
+              creditLimit: company.creditLimit,
+              paymentTerms: `${company.paymentTerms} days`,
+            }),
+          }).catch(() => null)
+          const saved = res?.ok ? await res.json().catch(() => null) as Contact | null : null
+          if (saved?.id) {
+            contact = saved
+            setContacts(p => p.some(c => c.id === saved.id) ? p : [saved, ...p])
           }
-          setContacts(p => [...p, contact!])
         }
       }
       
@@ -19552,7 +19559,11 @@ const storeCtx: AppState = {
         const res = await fetch('/api/inventory/apply-pos-stock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderRef: order.ref, lines: stockLines }),
+          body: JSON.stringify({
+            orderRef: order.ref,
+            lines: stockLines,
+            ...(customerId && (pointsEarned || pointsRedeemed) ? { loyalty: { customerId, earned: pointsEarned, redeemed: pointsRedeemed } } : {}),
+          }),
         })
         if (!res.ok) {
           const payload = await res.json().catch(() => null) as { error?: string } | null

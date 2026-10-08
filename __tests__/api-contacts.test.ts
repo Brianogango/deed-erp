@@ -6,12 +6,14 @@ const {
   mockRequireRole,
   mockLoadAppState,
   mockSaveStoreKeys,
+  mockNotify,
   mockPrisma,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockRequireRole: vi.fn(),
   mockLoadAppState: vi.fn(),
   mockSaveStoreKeys: vi.fn(),
+  mockNotify: vi.fn(),
   mockPrisma: {
     client: {
       count: vi.fn(),
@@ -50,6 +52,7 @@ vi.mock('@/lib/auth/api', () => ({
 vi.mock('@/lib/server-store', () => ({
   loadAppState: mockLoadAppState,
   saveStoreKeys: mockSaveStoreKeys,
+  notifyStoreKeysChanged: mockNotify,
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -174,7 +177,7 @@ describe('GET /api/contacts', () => {
     const res = await GET(new Request('http://localhost/api/contacts'))
     expect(res.status).toBe(200)
     expect(mockPrisma.client.create).toHaveBeenCalled()
-    expect(mockSaveStoreKeys).toHaveBeenCalled()
+    expect(mockNotify).toHaveBeenCalledWith(['deed_contacts'])
   })
 
   it('returns 401 when unauthenticated', async () => {
@@ -249,16 +252,10 @@ describe('POST /api/contacts', () => {
     expect((await res.json()).type).toBe('individual')
   })
 
-  it('broadcasts Prisma contacts back to the legacy store key after creating', async () => {
-    let savedContacts: any[] | null = null
-    mockPrisma.client.findMany.mockResolvedValueOnce([makeClient({ name: 'New First' }), existingClient])
-    mockSaveStoreKeys.mockImplementation((data: any) => {
-      savedContacts = JSON.parse(data.deed_contacts)
-      return Promise.resolve()
-    })
+  it('tells open tabs to re-read contacts after creating, without writing the frozen copy', async () => {
     await POST(postReq({ name: 'New First' }))
-    expect(savedContacts![0].name).toBe('New First')
-    expect(savedContacts![1].name).toBe('ACME Corp')
+    expect(mockNotify).toHaveBeenCalledWith(['deed_contacts'])
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 
   it('updates an existing Prisma contact when a duplicate email is posted', async () => {

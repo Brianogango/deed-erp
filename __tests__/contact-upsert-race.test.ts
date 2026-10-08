@@ -69,6 +69,7 @@ function buildMockPrisma() {
 vi.mock('@/lib/server-store', () => ({
   loadAppState: vi.fn().mockResolvedValue({}),
   saveStoreKeys: vi.fn().mockResolvedValue(undefined),
+  notifyStoreKeysChanged: vi.fn().mockResolvedValue(undefined),
 }))
 
 beforeEach(() => {

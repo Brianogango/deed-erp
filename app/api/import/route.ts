@@ -1,13 +1,13 @@
 // Bulk data import — accepts JSON arrays for any store key.
 // Used to seed products, contacts, etc. from external sources.
 // POST body: { "deed_products": [...], "deed_contacts": [...] }
-// Merges by id (upsert) to avoid duplicates.
+// Merges by id (upsert) to avoid duplicates. Contacts go to the clients table;
+// keys whose screen copy is frozen (invoices, sale orders…) are refused.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-import { preservePostedInvoicePaymentProgress } from '@/lib/finance-invoice'
-import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
+import { FROZEN_STORE_KEYS, loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { upsertContact, type ContactInput } from '@/lib/contact-prisma'
 
 type AnyRecord = Record<string, unknown>
 
@@ -87,85 +87,51 @@ export async function POST(request: NextRequest) {
   const updates: Record<string, string> = {}
   const summary: Record<string, { imported: number; skipped: number; total: number }> = {}
 
+  const refused: string[] = []
   for (const [key, incoming] of Object.entries(body)) {
     if (!ALLOWED_KEYS.has(key)) continue
     if (!Array.isArray(incoming)) continue
+    if (key === 'deed_contacts') {
+      // Contacts live in the clients table (the screen copy is frozen).
+      const prisma = (await import('@/lib/prisma')).default
+      let imported = 0
+      let skipped = 0
+      for (const item of incoming as ContactInput[]) {
+        const result = await upsertContact(prisma, item).catch(() => 'failed')
+        if (typeof result === 'string' || !result.created) skipped++
+        else imported++
+      }
+      summary[key] = { imported, skipped, total: incoming.length }
+      continue
+    }
+    if (FROZEN_STORE_KEYS.has(key)) {
+      // Saved through their own screens / routes now; a write here would be dropped.
+      refused.push(key)
+      continue
+    }
 
     const existing = Array.isArray(state[key]) ? (state[key] as AnyRecord[]) : []
     const result = key === 'deed_products'
       ? mergeProductsWithoutDuplicates(existing, incoming as AnyRecord[])
       : { merged: mergeById(existing, incoming as AnyRecord[]), imported: (incoming as AnyRecord[]).length, skipped: 0 }
-    // Re-importing an older invoices file must not take payments away:
-    // amountPaid and the payment list never go down through an import.
-    const merged = key === 'deed_invoices'
-      ? preservePostedInvoicePaymentProgress(existing, result.merged) as AnyRecord[]
-      : result.merged
+    const merged = result.merged
     updates[key]   = JSON.stringify(merged)
     summary[key]   = { imported: result.imported, skipped: result.skipped, total: merged.length }
   }
 
-  if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: 'No valid keys provided' }, { status: 422 })
+  if (Object.keys(updates).length === 0 && !summary.deed_contacts) {
+    return NextResponse.json({
+      error: refused.length ? `${refused.join(', ')} can no longer be bulk-imported here` : 'No valid keys provided',
+    }, { status: 422 })
   }
 
   try {
-    await saveStoreKeys(updates)
+    if (Object.keys(updates).length) await saveStoreKeys(updates)
   } catch (err) {
     // e.g. the bulk-delete guard refusing a save that would drop records.
     console.error('[import] save failed:', err)
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Import could not be saved' }, { status: 409 })
   }
 
-  // Posted opening invoices/bills must create Prisma journals so TB stays truthful.
-  let journalsPosted = 0
-  if (updates.deed_invoices) {
-    try {
-      const { postInvoiceJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
-      // Only the documents in this request. Re-posting every posted invoice
-      // in the ledger made each import hundreds of journal writes long (and
-      // retried old documents' journals).
-      const incomingIds = new Set((Array.isArray(body.deed_invoices) ? body.deed_invoices as AnyRecord[] : []).map(inv => String(inv.id ?? '')))
-      const invoices = (JSON.parse(updates.deed_invoices) as Array<Record<string, unknown>>)
-        .filter(inv => incomingIds.has(String(inv.id ?? '')))
-      const posted = invoices.filter(inv => {
-        const status = String(inv.status || '')
-        return status === 'posted' || status === 'approved' || status === 'paid' || status === 'partially_paid'
-      })
-      const prisma = (await import('@/lib/prisma')).default
-      for (const inv of posted) {
-        try {
-          // Already on the ledger: re-importing it again used to post another
-          // copy (JRN/INV/<ref>/2, /3, …) each time, multiplying the revenue.
-          // Bills post with source 'bill', invoices with 'invoice'.
-          const live = await prisma.journalEntry.findMany({
-            where: { invoiceId: String(inv.id), sourceType: { in: ['invoice', 'bill'] }, isReversed: false, reversalOfId: null },
-            select: { ref: true },
-          }).catch(() => [] as Array<{ ref: string }>)
-          const number = String(inv.ref || inv.invoiceNumber || '')
-          if (live.some(j => isPostingRef(j.ref, number))) continue
-          const journal = await postInvoiceJournalToPrisma({
-            id: String(inv.id),
-            ref: String(inv.ref || inv.invoiceNumber || inv.id),
-            invoiceNumber: String(inv.ref || inv.invoiceNumber || ''),
-            type: inv.type === 'vendor_bill' ? 'vendor_bill' : 'customer_invoice',
-            purchaseOrderId: typeof inv.purchaseOrderId === 'string' ? inv.purchaseOrderId : undefined,
-            partnerName: typeof inv.partnerName === 'string' ? inv.partnerName : undefined,
-            totalAmount: Number(inv.total ?? inv.totalAmount ?? 0),
-            subtotal: Number(inv.subtotal ?? inv.total ?? 0),
-            taxAmount: Number(inv.taxTotal ?? inv.taxAmount ?? 0),
-            lines: Array.isArray(inv.lines) ? inv.lines as any[] : [],
-          })
-          const { recordInvoiceTax } = await import('@/lib/accounting/invoice-tax.server')
-          await recordInvoiceTax(String(inv.id), journal.id).catch(err => console.error('[import] VAT record failed:', inv.id, err))
-          journalsPosted++
-        } catch (err) {
-          console.error('[import] invoice journal failed:', inv.id, err)
-        }
-      }
-    } catch (err) {
-      console.error('[import] journal pass failed:', err)
-    }
-  }
-
-  return NextResponse.json({ ok: true, summary, journalsPosted })
+  return NextResponse.json({ ok: true, summary, ...(refused.length ? { refused } : {}) })
 }

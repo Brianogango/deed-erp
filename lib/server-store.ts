@@ -110,7 +110,7 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * these keys are dropped — the change has already been saved through the
  * document's own API route — but other tabs are still told to re-read.
  */
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -152,6 +152,14 @@ async function overlayAuthoritativeAccounts(state: AppStateMap, keys?: string[])
   if (fromPrisma) state.deed_accounts = fromPrisma
 }
 
+async function overlayAuthoritativeContacts(state: AppStateMap, keys?: string[]) {
+  if (keys && !keys.includes('deed_contacts')) return
+  const fromPrisma = await Promise.all([import('./contact-prisma'), import('./prisma')])
+    .then(([m, p]) => m.loadScreenContacts(p.default as any, state.deed_contacts))
+    .catch(err => { console.error('[server-store] contacts from table failed:', err); return null })
+  if (fromPrisma) state.deed_contacts = fromPrisma
+}
+
 /** Tell open tabs a frozen key changed (its table was written). */
 export async function notifyStoreKeysChanged(keys: string[]): Promise<void> {
   if (!keys.length || process.env.NODE_ENV === 'test') return
@@ -176,6 +184,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     await overlayAuthoritativeSales(state, wantedKeys)
     await overlayAuthoritativeJournals(state, wantedKeys)
     await overlayAuthoritativeAccounts(state, wantedKeys)
+    await overlayAuthoritativeContacts(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -196,6 +205,7 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   await overlayAuthoritativeSales(state, wantedKeys)
   await overlayAuthoritativeJournals(state, wantedKeys)
   await overlayAuthoritativeAccounts(state, wantedKeys)
+  await overlayAuthoritativeContacts(state, wantedKeys)
   return state
 }
 

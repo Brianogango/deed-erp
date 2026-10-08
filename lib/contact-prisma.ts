@@ -1,4 +1,4 @@
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppState, notifyStoreKeysChanged } from '@/lib/server-store'
 import type { Contact } from '@/lib/store'
 import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
 
@@ -401,13 +401,24 @@ export async function deleteContactById(prisma: PrismaClientLike, id: string): P
   return true
 }
 
-export async function broadcastContacts(prisma: PrismaClientLike): Promise<void> {
-  try {
-    const clients = await prisma.client.findMany({ orderBy: [{ createdAt: 'desc' }, { name: 'asc' }] })
-    await saveStoreKeys({ [CONTACT_STORE_KEY]: JSON.stringify(clients.map(clientToContact)) })
-  } catch (error) {
-    console.error('[contacts] Failed to broadcast Prisma contacts:', error)
+/** Tell open tabs the contacts changed; they re-read them from the clients table. */
+export async function broadcastContacts(_prisma?: PrismaClientLike): Promise<void> {
+  await notifyStoreKeysChanged([CONTACT_STORE_KEY])
+}
+
+/**
+ * Contacts as the screens use them, read from the clients table (the
+ * deed_contacts screen copy is frozen). Contacts only the frozen copy has stay
+ * listed so nothing disappears from a screen.
+ */
+export async function loadScreenContacts(prisma: PrismaClientLike, screenCopy: unknown): Promise<Contact[]> {
+  const clients = await prisma.client.findMany({ orderBy: [{ createdAt: 'desc' }, { name: 'asc' }] })
+  const out = clients.map(clientToContact)
+  const ids = new Set(out.map(c => c.id))
+  for (const c of Array.isArray(screenCopy) ? screenCopy as Contact[] : []) {
+    if (c?.id && !ids.has(String(c.id))) out.push(c)
   }
+  return out
 }
 
 async function seedLegacyContactsIfEmpty(prisma: PrismaClientLike): Promise<void> {

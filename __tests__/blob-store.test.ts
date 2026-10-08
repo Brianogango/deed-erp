@@ -73,11 +73,11 @@ describe('server-store blob integration', () => {
 
   it('saveStoreKeys still upserts regular keys alongside blob keys', async () => {
     mockSql.mockResolvedValue({ rows: [] })
-    await saveStoreKeys({ deed_contacts: '[]', expense_receipt_int2: 'data:image/png;base64,CC' })
+    await saveStoreKeys({ deed_warranties: '[]', expense_receipt_int2: 'data:image/png;base64,CC' })
     const upsert = mockSql.mock.calls.find(c => String(c[0]).includes('INSERT INTO app_state'))
     expect(upsert).toBeDefined()
     // Tagged-template args: [strings, now, keysArray, valuesArray]
-    expect(upsert![2]).toEqual(['deed_contacts'])
+    expect(upsert![2]).toEqual(['deed_warranties'])
   })
 
   it('loadAppState overlays blob values from disk for requested keys', async () => {

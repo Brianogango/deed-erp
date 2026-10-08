@@ -78,7 +78,7 @@ describe('saveStoreKeys()', () => {
     mockSql.mockResolvedValue(undefined)
 
     await saveStoreKeys({
-      deed_contacts: '[{"id":"1"}]',
+      deed_warranties: '[{"id":"1"}]',
       deed_products: '[{"id":"2"}]',
     })
 
@@ -87,7 +87,7 @@ describe('saveStoreKeys()', () => {
     const upsertCall = mockSql.mock.calls[2]
     // Tagged template call: values arrive as trailing args — keys and values arrays
     expect(upsertCall).toEqual(expect.arrayContaining([
-      expect.arrayContaining(['deed_contacts', 'deed_products']),
+      expect.arrayContaining(['deed_warranties', 'deed_products']),
       expect.arrayContaining(['[{"id":"1"}]', '[{"id":"2"}]']),
     ]))
   })
