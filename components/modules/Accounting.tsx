@@ -9,6 +9,7 @@ import BillPaymentFix from '@/components/finance/BillPaymentFix'
 import DuplicateInvoiceJournals from '@/components/finance/DuplicateInvoiceJournals'
 import ScreenLedgerSync from '@/components/finance/ScreenLedgerSync'
 import LedgerCleanup from '@/components/finance/LedgerCleanup'
+import StockReconcile from '@/components/finance/StockReconcile'
 import DocumentLedgerRepair from '@/components/finance/DocumentLedgerRepair'
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -1639,6 +1640,7 @@ function AccountingContent() {
               {canManageFullFinance && <ScreenLedgerSync showToast={showToast} canApply={currentUser?.role === 'director'} />}
               {canManageFullFinance && <LedgerCleanup showToast={showToast} canApply={currentUser?.role === 'director'} />}
               {canManageFullFinance && <DocumentLedgerRepair showToast={showToast} canApply={currentUser?.role === 'director'} />}
+              {canManageFullFinance && <StockReconcile showToast={showToast} canApply={currentUser?.role === 'director'} />}
               <IntegrityDashboard />
             </>
           ) : tab === 'invoices' || tab === 'bills' ? (
