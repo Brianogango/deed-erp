@@ -313,22 +313,52 @@ async function overlayAuthoritativeRepairs(state: AppStateMap, keys?: string[]) 
   if (fromPrisma) state.deed_repairs_v2 = fromPrisma
 }
 
+/**
+ * Rebuild every table-backed list on top of the stored copy.
+ *
+ * Each overlay reads its own table(s) and replaces its own key(s) in `state`,
+ * so they are independent and run together instead of one after another (a
+ * screen load used to wait for all of them in turn, ~1.2 s). The one
+ * dependency is purchase orders, which read the receipts copy BEFORE the
+ * stock overlay replaces it, so those two stay in order inside one branch.
+ * A load slower than 400 ms logs which overlays took the time.
+ */
+async function applyOverlays(state: AppStateMap, keys?: string[]): Promise<void> {
+  const t0 = Date.now()
+  const spans: string[] = []
+  const timed = (name: string, run: () => Promise<void>) => async () => {
+    const start = Date.now()
+    await run()
+    const ms = Date.now() - start
+    if (ms >= 50) spans.push(`${name} ${ms}`)
+  }
+  await overlayExternalBlobs(state, keys)
+  await Promise.all([
+    timed('repairs', () => overlayAuthoritativeRepairs(state, keys))(),
+    timed('invoices', () => overlayAuthoritativeInvoices(state, keys))(),
+    timed('sales', () => overlayAuthoritativeSales(state, keys))(),
+    timed('journals', () => overlayAuthoritativeJournals(state, keys))(),
+    timed('accounts', () => overlayAuthoritativeAccounts(state, keys))(),
+    timed('contacts', () => overlayAuthoritativeContacts(state, keys))(),
+    timed('purchase-orders+stock', async () => {
+      await overlayAuthoritativePurchaseOrders(state, keys)
+      await overlayStockTables(state, keys)
+    })(),
+    timed('deposits', () => overlayAuthoritativeDeposits(state, keys))(),
+    timed('holdovers', () => overlayAuthoritativeHoldovers(state, keys))(),
+    timed('activities', () => overlayAuthoritativeActivities(state, keys))(),
+  ])
+  const total = Date.now() - t0
+  if (total >= 400 && process.env.NODE_ENV !== 'test') {
+    console.warn(`[server-store] slow overlay phase ${total}ms (${(keys?.length ?? 'all')} keys): ${spans.join(', ')}`)
+  }
+}
+
 export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
   try {
     const wantedKeys = keys?.filter(Boolean)
     const state = await loadStateWithLegacyFallback(wantedKeys)
-    await overlayExternalBlobs(state, wantedKeys)
-    await overlayAuthoritativeRepairs(state, wantedKeys)
-    await overlayAuthoritativeInvoices(state, wantedKeys)
-    await overlayAuthoritativeSales(state, wantedKeys)
-    await overlayAuthoritativeJournals(state, wantedKeys)
-    await overlayAuthoritativeAccounts(state, wantedKeys)
-    await overlayAuthoritativeContacts(state, wantedKeys)
-    await overlayAuthoritativePurchaseOrders(state, wantedKeys)
-    await overlayAuthoritativeDeposits(state, wantedKeys)
-    await overlayAuthoritativeHoldovers(state, wantedKeys)
-    await overlayAuthoritativeActivities(state, wantedKeys)
-    await overlayStockTables(state, wantedKeys)
+    await applyOverlays(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -343,18 +373,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
 export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap> {
   const wantedKeys = keys?.filter(Boolean)
   const state = await loadStateWithLegacyFallback(wantedKeys)
-  await overlayExternalBlobs(state, wantedKeys)
-  await overlayAuthoritativeRepairs(state, wantedKeys)
-  await overlayAuthoritativeInvoices(state, wantedKeys)
-  await overlayAuthoritativeSales(state, wantedKeys)
-  await overlayAuthoritativeJournals(state, wantedKeys)
-  await overlayAuthoritativeAccounts(state, wantedKeys)
-  await overlayAuthoritativeContacts(state, wantedKeys)
-  await overlayAuthoritativePurchaseOrders(state, wantedKeys)
-  await overlayAuthoritativeDeposits(state, wantedKeys)
-  await overlayAuthoritativeHoldovers(state, wantedKeys)
-  await overlayAuthoritativeActivities(state, wantedKeys)
-  await overlayStockTables(state, wantedKeys)
+  await applyOverlays(state, wantedKeys)
   return state
 }
 
