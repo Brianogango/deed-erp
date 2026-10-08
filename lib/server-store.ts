@@ -245,6 +245,29 @@ async function overlayAuthoritativeActivities(state: AppStateMap, keys?: string[
   if (fromPrisma) state.deed_oppActivities = fromPrisma
 }
 
+async function overlayStockTables(state: AppStateMap, keys?: string[]) {
+  const want = (key: string) => !keys || keys.includes(key)
+  if (!want('deed_serials') && !want('deed_bulkStock')) return
+  const m = await import('./stock-read-model.server')
+  if (want('deed_serials')) {
+    const serials = await m.loadScreenSerials(state.deed_serials)
+      .catch(err => { console.error('[server-store] serials from table failed:', err); return null })
+    if (serials) state.deed_serials = serials
+  }
+  if (want('deed_bulkStock')) {
+    const levels = await m.loadScreenBulkStock(state.deed_bulkStock)
+      .catch(err => { console.error('[server-store] stock levels from table failed:', err); return null })
+    if (levels) state.deed_bulkStock = levels
+  }
+}
+
+/** The screen copies as stored, without the table overlays — for parity checks. */
+export async function readStoreCopies(keys: string[]): Promise<AppStateMap> {
+  const state = await loadStateWithLegacyFallback(keys)
+  await overlayExternalBlobs(state, keys)
+  return state
+}
+
 async function overlayAuthoritativeRepairs(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_repairs_v2')) return
   const fromPrisma = await import('./repair-mirror')
@@ -268,6 +291,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     await overlayAuthoritativeDeposits(state, wantedKeys)
     await overlayAuthoritativeHoldovers(state, wantedKeys)
     await overlayAuthoritativeActivities(state, wantedKeys)
+    await overlayStockTables(state, wantedKeys)
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -293,6 +317,7 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   await overlayAuthoritativeDeposits(state, wantedKeys)
   await overlayAuthoritativeHoldovers(state, wantedKeys)
   await overlayAuthoritativeActivities(state, wantedKeys)
+  await overlayStockTables(state, wantedKeys)
   return state
 }
 
@@ -581,7 +606,17 @@ export async function saveStoreKeys(
           })
           .catch(err => console.error('[delivery-mirror] sync write failed:', err))
       }
-      const extraMirrors = ['deed_purchaseOrders', 'deed_serials', 'deed_stockMoves', 'deed_receipts'] as const
+      // Serials and quantity stock are read from their tables: written
+      // before the save returns, so a reload right after shows the change.
+      const readMirrors = (['deed_serials', 'deed_bulkStock'] as const).filter(key => entries[key])
+      if (readMirrors.length) {
+        await import('./blob-transfer')
+          .then(async m => {
+            for (const key of readMirrors) await m.mirrorKnownDomain(key, entries[key], null)
+          })
+          .catch(err => console.error('[blob-transfer] stock mirror write failed:', err))
+      }
+      const extraMirrors = ['deed_purchaseOrders', 'deed_stockMoves', 'deed_receipts'] as const
       if (extraMirrors.some(key => entries[key])) {
         void import('./blob-transfer')
           .then(async m => {

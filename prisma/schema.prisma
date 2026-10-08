@@ -949,6 +949,8 @@ model SerialNumber {
   location         String?        @db.VarChar(40)
   /// Cost, received date, sale order, specs … — the screen fields with no column.
   screenExtras     Json?          @map("screen_extras")
+  /// Set when the serial left the serial list; the row stays (documents point at it).
+  removedAt        DateTime?      @map("removed_at")
   purchaseItemId   String?        @map("purchase_item_id") @db.Uuid
   soldViaInvoiceId String?        @map("sold_via_invoice_id") @db.Uuid
   notes            String?
@@ -4100,4 +4102,17 @@ model ConsignmentDevice {
   @@index([vendorId], map: "idx_consignment_vendor")
   @@index([status], map: "idx_consignment_status")
   @@map("consignment_devices")
+}
+
+/// Quantity stock per product and location (the deed_bulkStock screen copy).
+/// productId is not a foreign key: the copy can hold products the products
+/// table does not have yet.
+model StockLocationLevel {
+  productId String   @map("product_id") @db.VarChar(80)
+  location  String   @db.VarChar(40)
+  qty       Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@id([productId, location])
+  @@map("stock_location_levels")
 }

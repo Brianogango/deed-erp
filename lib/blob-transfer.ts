@@ -75,8 +75,12 @@ async function productExists(id: string): Promise<boolean> {
   return Boolean(row)
 }
 
-/** deed_serials fields kept in their own column; every other field goes to screen_extras. */
-export const SERIAL_COLUMN_FIELDS = ['id', 'serial', 'serialNumber', 'productId', 'productName', 'status', 'barcode', 'location'] as const
+/**
+ * deed_serials fields read back from their own column; every other field
+ * (the screen id, exact status and product name included) is kept in
+ * screen_extras so the serial reads back as the screens saved it.
+ */
+export const SERIAL_COLUMN_FIELDS = ['serial', 'serialNumber', 'productId', 'barcode', 'location'] as const
 
 function serialRow(row: Record<string, unknown>) {
   const extras: Record<string, unknown> = {}
@@ -114,14 +118,16 @@ async function transferSerials(rows: unknown[]): Promise<{ upserted: number; ski
   let upserted = 0
   let skipped = 0
   const existing = await prisma.serialNumber.findMany({
-    select: { id: true, serialNumber: true, productId: true, inventoryBarcode: true, status: true, location: true, notes: true, screenExtras: true },
+    select: { id: true, serialNumber: true, productId: true, inventoryBarcode: true, status: true, location: true, notes: true, screenExtras: true, removedAt: true },
   })
   const bySerial = new Map(existing.map(s => [s.serialNumber, s]))
   const byId = new Map(existing.map(s => [s.id, s]))
   const products = new Set((await prisma.product.findMany({ select: { id: true } })).map(p => p.id))
+  const listed = new Set<string>()
   for (const raw of rows) {
     const row = raw as Record<string, unknown>
-    const data = serialRow(row)
+    const data = { ...serialRow(row), removedAt: null }
+    if (data.serialNumber) listed.add(data.serialNumber)
     if (!data.serialNumber || !isUuid(data.productId) || !products.has(data.productId)) { skipped += 1; continue }
     const id = isUuid(row.id) ? String(row.id) : undefined
     const current = bySerial.get(data.serialNumber) ?? (id ? byId.get(id) : undefined)
@@ -131,6 +137,7 @@ async function transferSerials(rows: unknown[]): Promise<{ upserted: number; ski
       && current.status === data.status
       && current.location === data.location
       && current.notes === data.notes
+      && current.removedAt === null
       && sameJson(current.screenExtras, data.screenExtras === Prisma.DbNull ? null : data.screenExtras)) {
       continue
     }
@@ -145,7 +152,51 @@ async function transferSerials(rows: unknown[]): Promise<{ upserted: number; ski
       skipped += 1
     }
   }
+  // Serials gone from the list are marked removed, not deleted: invoices,
+  // deliveries and repairs point at their row. A list much shorter than the
+  // table is a partial save, not removals, and is left alone.
+  const active = existing.filter(s => s.removedAt === null)
+  const gone = active.filter(s => !listed.has(s.serialNumber))
+  if (gone.length && listed.size >= active.length * 0.9) {
+    await prisma.serialNumber.updateMany({ where: { id: { in: gone.map(s => s.id) } }, data: { removedAt: new Date() } })
+  }
   return { upserted, skipped }
+}
+
+/**
+ * deed_bulkStock → stock_location_levels: the quantity per product and
+ * location, rows the list no longer has removed. Only changed rows are
+ * written. An empty list never empties the table.
+ */
+async function transferBulkStock(rows: unknown[]): Promise<{ upserted: number; skipped: number }> {
+  const next = new Map<string, { productId: string; location: string; qty: number }>()
+  for (const raw of rows) {
+    const row = raw as Record<string, unknown>
+    const productId = String(row.productId || '').slice(0, 80)
+    if (!productId) continue
+    const location = String(row.location || 'warehouse').slice(0, 40)
+    const key = `${productId}|${location}`
+    const prev = next.get(key)
+    next.set(key, { productId, location, qty: (prev?.qty ?? 0) + Math.round(Number(row.qty) || 0) })
+  }
+  const current = await prisma.stockLocationLevel.findMany()
+  if (!next.size && current.length) return { upserted: 0, skipped: 0 }
+  const have = new Map(current.map(r => [`${r.productId}|${r.location}`, r]))
+  let upserted = 0
+  for (const [key, row] of next) {
+    if (have.get(key)?.qty === row.qty) continue
+    await prisma.stockLocationLevel.upsert({
+      where: { productId_location: { productId: row.productId, location: row.location } },
+      create: row,
+      update: { qty: row.qty },
+    })
+    upserted += 1
+  }
+  const stale = current.filter(r => !next.has(`${r.productId}|${r.location}`))
+  for (const r of stale) {
+    await prisma.stockLocationLevel.delete({ where: { productId_location: { productId: r.productId, location: r.location } } })
+  }
+  return { upserted: upserted + stale.length, skipped: 0 }
 }
 
 async function transferStockMoves(rows: unknown[], actorId: string | null): Promise<{ upserted: number; skipped: number }> {
@@ -268,6 +319,7 @@ export async function mirrorKnownDomain(key: string, value: string, actorId: str
       return { upserted, skipped }
     }
     if (key === 'deed_serials') return transferSerials(rows)
+    if (key === 'deed_bulkStock') return transferBulkStock(rows)
     if (key === 'deed_stockMoves') return transferStockMoves(rows, actorId)
     if (key === 'deed_receipts') return transferReceipts(rows, actorId)
   } catch (err) {
