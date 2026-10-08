@@ -46,3 +46,6 @@ UNION ALL
 SELECT 'deed_bulkStock copy', count(*), sum(round(coalesce((payload->>'qty')::numeric, 0)))::bigint FROM "erp_state_records" WHERE key = 'deed_bulkStock'
 UNION ALL
 SELECT 'serials listed', count(*) FILTER (WHERE removed_at IS NULL), count(*) FILTER (WHERE removed_at IS NOT NULL) FROM "serial_numbers";
+
+-- The table must belong to the app user (see 20261009_new_table_owner_fix.sql).
+DO $$ DECLARE o text; BEGIN SELECT tableowner INTO o FROM pg_tables WHERE schemaname = 'public' AND tablename = 'invoices'; IF o IS NOT NULL THEN EXECUTE format('ALTER TABLE public.%I OWNER TO %I', 'stock_location_levels', o); END IF; END $$;

@@ -34,3 +34,6 @@ SELECT (SELECT count(*) FROM "erp_state_records" WHERE key = 'deed_receipts') AS
        (SELECT count(*) FROM "receipt_documents" WHERE removed_at IS NULL) AS receipts_in_table,
        (SELECT count(*) FROM "receipt_documents" WHERE status = 'validated') AS validated,
        (SELECT count(*) FROM "goods_received_notes") AS stock_records;
+
+-- The table must belong to the app user (see 20261009_new_table_owner_fix.sql).
+DO $$ DECLARE o text; BEGIN SELECT tableowner INTO o FROM pg_tables WHERE schemaname = 'public' AND tablename = 'invoices'; IF o IS NOT NULL THEN EXECUTE format('ALTER TABLE public.%I OWNER TO %I', 'receipt_documents', o); END IF; END $$;
