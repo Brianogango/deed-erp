@@ -2379,9 +2379,39 @@ export type CandidateStage = 'applied' | 'screening' | 'interview' | 'offered' |
 
 export interface JobPosting {
   id: string; title: string; departmentId: string; location: string; type: 'full_time' | 'part_time' | 'contract'; status: JobStatus; postedDate: string; closingDate?: string; description: string;
+  /** Number of positions to fill; defaults to 1. */
+  openings?: number;
+}
+export interface CandidateInterview {
+  id: string
+  scheduledAt: string
+  mode: 'in_person' | 'video' | 'phone'
+  interviewer: string
+  location?: string
+  status: 'scheduled' | 'done' | 'cancelled'
+  /** 1 to 5, set after the interview. */
+  rating?: number
+  feedback?: string
+}
+export interface CandidateOffer {
+  salary: number
+  startDate: string
+  offeredDate: string
+  status: 'pending' | 'accepted' | 'declined'
+  notes?: string
 }
 export interface Candidate {
   id: string; jobId: string; firstName: string; lastName: string; email: string; phone: string; stage: CandidateStage; appliedDate: string; resumeUrl?: string; notes?: string;
+  source?: string
+  /** Overall rating, 1 to 5. */
+  rating?: number
+  stageChangedDate?: string
+  rejectionReason?: string
+  interviews?: CandidateInterview[]
+  offer?: CandidateOffer
+  /** CV uploaded to the server (see /api/hr-documents/[candidateId]/file). */
+  resumeFile?: { name: string; size: number; type: string }
+  hiredEmployeeId?: string
 }
 
 export type TrainingStatus = 'not_started' | 'in_progress' | 'completed'
