@@ -111,6 +111,109 @@ function CreateLoginModal({ employee, onClose, onCreated }: { employee: Employee
   )
 }
 
+function CreateMailboxModal({ employee, onClose, onCreated }: { employee: Employee; onClose: () => void; onCreated: () => void }) {
+  const { showToast } = useApp()
+  const [info, setInfo] = useState<{ configured: boolean; domain: string | null; suggested: string; existing: string | null } | null>(null)
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [result, setResult] = useState<{ email: string; password: string } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/employees/${employee.id}/work-mailbox`, { cache: 'no-store' })
+      .then(async res => {
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(body?.error || 'Could not check the mail server')
+        if (!cancelled) { setInfo(body); setName(body.suggested) }
+      })
+      .catch(e => { if (!cancelled) showToast(e instanceof Error ? e.message : 'Could not check the mail server', 'error') })
+    return () => { cancelled = true }
+  }, [employee.id, showToast])
+
+  const submit = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/work-mailbox`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || 'The mailbox could not be created')
+      setResult(body)
+      updateLocalWorkEmail(body.email)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'The mailbox could not be created', 'error')
+    } finally { setSaving(false) }
+  }
+  // The server saved the address; refresh the in-memory employee so the profile shows it.
+  const { updateEmployee } = useHrStore()
+  const updateLocalWorkEmail = (email: string) => updateEmployee(employee.id, { workEmail: email })
+
+  return (
+    <Modal title="Create work mailbox" subtitle={employee.fullName} onClose={result ? onCreated : onClose} width={480}>
+      {!result && (
+        <>
+          {info && !info.configured && (
+            <p className="text-[11px] rounded-lg p-2 mb-3" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
+              cPanel is not connected yet. Ask whoever manages the server to add CPANEL_HOST, CPANEL_USER, CPANEL_API_TOKEN and CPANEL_MAIL_DOMAIN to the ERP settings. Meanwhile create the mailbox in cPanel (Email Accounts) and type the address into the Work email field on the profile.
+            </p>
+          )}
+          <Field label="Mailbox name" required>
+            <div className="flex items-center gap-2">
+              <Input value={name} onChange={setName} />
+              <span className="text-xs" style={{ color: 'var(--text-3)' }}>@{info?.domain ?? '…'}</span>
+            </div>
+          </Field>
+          {info?.existing && <p className="text-[11px] mt-2" style={{ color: 'var(--danger)' }}>This employee already has {info.existing}.</p>}
+          <div className="hr-modal-actions flex justify-end gap-2 pt-3">
+            <button className="btn-secondary px-4 py-2 text-xs" onClick={onClose}>Cancel</button>
+            <button className="btn-primary px-4 py-2 text-xs" disabled={saving || !info?.configured || !!info?.existing || !name.trim()} onClick={submit}>{saving ? 'Creating…' : 'Create mailbox'}</button>
+          </div>
+        </>
+      )}
+      {result && (
+        <div className="flex flex-col gap-3 text-xs">
+          <p style={{ color: 'var(--success-text)' }}>Mailbox created and saved as the work email.</p>
+          <div className="rounded-lg p-3 font-mono" style={{ background: 'var(--bg-muted)' }}>
+            <div>{result.email}</div>
+            <div className="mt-1">{result.password}</div>
+          </div>
+          <p style={{ color: 'var(--warning-text)' }}>This password is shown only now and is not stored anywhere. Give it to {employee.fullName.split(' ')[0]} in person or by phone, not by email, and ask them to change it after signing in.</p>
+          <div className="flex justify-end gap-2">
+            <button className="btn-outline text-[11px]" onClick={() => { void navigator.clipboard?.writeText(`${result.email}\n${result.password}`); showToast('Copied', 'success') }}>Copy</button>
+            <button className="btn-primary text-[11px]" onClick={onCreated}>Done</button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+function SuspendMailboxModal({ employee, onClose, onDone }: { employee: Employee; onClose: () => void; onDone: () => void }) {
+  const { showToast } = useApp()
+  const [saving, setSaving] = useState(false)
+  const submit = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/work-mailbox/suspend`, { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || 'The mailbox could not be disabled')
+      showToast(`Sign-in to ${body.email} is blocked. Its mail is kept.`, 'success')
+      onDone()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'The mailbox could not be disabled', 'error')
+    } finally { setSaving(false) }
+  }
+  return (
+    <Modal title="Disable work mailbox" subtitle={employee.fullName} onClose={onClose} width={440}>
+      <p className="text-[11px] mb-3" style={{ color: 'var(--text-3)' }}>
+        {employee.workEmail ? `This blocks sign-in to ${employee.workEmail}. The mailbox and its mail are kept, so you can add forwarding or reopen it later.` : 'This employee has no work email recorded.'}
+      </p>
+      <div className="hr-modal-actions flex justify-end gap-2 pt-3">
+        <button className="btn-secondary px-4 py-2 text-xs" onClick={onClose}>Cancel</button>
+        <button className="btn-primary px-4 py-2 text-xs" disabled={saving || !employee.workEmail} onClick={submit}>{saving ? 'Disabling…' : 'Disable mailbox'}</button>
+      </div>
+    </Modal>
+  )
+}
+
 function WelcomeEmailModal({ employee, onClose, onSent }: { employee: Employee; onClose: () => void; onSent: () => void }) {
   const { showToast } = useApp()
   const [note, setNote] = useState('')
@@ -146,7 +249,7 @@ export default function EmployeeLifecyclePanel({ employee, canManage }: { employ
   const { showToast, companySettings, employeeAssetAssignments } = useApp()
   const { updateEmployee } = useHrStore()
   const router = useRouter()
-  const [modal, setModal] = useState<null | { kind: 'login' | 'welcome'; itemId: string }>(null)
+  const [modal, setModal] = useState<null | { kind: 'login' | 'welcome' | 'mailbox' | 'suspend'; itemId: string }>(null)
   const [tab, setTab] = useState<Tab>(employee.status === 'exited' ? 'exit' : 'onboarding')
 
   const company = { name: companySettings.name, address: companySettings.address, city: companySettings.city, phone: companySettings.phone, email: companySettings.email, kraPin: companySettings.kraPin }
@@ -167,6 +270,8 @@ export default function EmployeeLifecyclePanel({ employee, canManage }: { employ
   const runAction = (link: ChecklistLink, item: EmployeeChecklistItem) => {
     if (link === 'create_login') setModal({ kind: 'login', itemId: item.id })
     else if (link === 'welcome_email') setModal({ kind: 'welcome', itemId: item.id })
+    else if (link === 'create_mailbox') setModal({ kind: 'mailbox', itemId: item.id })
+    else if (link === 'disable_mailbox') setModal({ kind: 'suspend', itemId: item.id })
     else if (link === 'assets') router.push('/hr?tab=assets')
     else if (link === 'training') router.push('/hr?tab=training')
   }
@@ -399,6 +504,8 @@ export default function EmployeeLifecyclePanel({ employee, canManage }: { employ
         </div>
       )}
       {modal?.kind === 'login' && <CreateLoginModal employee={employee} onClose={() => setModal(null)} onCreated={() => { completeItem('onboardingChecklist', modal.itemId); setModal(null) }} />}
+      {modal?.kind === 'mailbox' && <CreateMailboxModal employee={employee} onClose={() => setModal(null)} onCreated={() => { completeItem('onboardingChecklist', modal.itemId); setModal(null) }} />}
+      {modal?.kind === 'suspend' && <SuspendMailboxModal employee={employee} onClose={() => setModal(null)} onDone={() => { completeItem('exitChecklist', modal.itemId); setModal(null) }} />}
       {modal?.kind === 'welcome' && <WelcomeEmailModal employee={employee} onClose={() => setModal(null)} onSent={() => { completeItem('onboardingChecklist', modal.itemId); setModal(null) }} />}
     </div>
   )

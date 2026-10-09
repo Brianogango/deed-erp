@@ -5,7 +5,7 @@
 import type { EmployeeChecklistItem } from '@/lib/store'
 
 export type ChecklistOwner = 'hr' | 'it' | 'finance' | 'manager' | 'employee'
-export type ChecklistLink = 'create_login' | 'welcome_email' | 'assets' | 'training'
+export type ChecklistLink = 'create_login' | 'welcome_email' | 'assets' | 'training' | 'create_mailbox' | 'disable_mailbox'
 
 interface TaskTemplate {
   key: string
@@ -26,6 +26,8 @@ export const LINK_LABELS: Record<ChecklistLink, string> = {
   welcome_email: 'Send welcome email',
   assets: 'Issue equipment',
   training: 'Enrol in training',
+  create_mailbox: 'Create work mailbox',
+  disable_mailbox: 'Disable mailbox',
 }
 
 export const ONBOARDING_TEMPLATES: TaskTemplate[] = [
@@ -46,8 +48,8 @@ export const ONBOARDING_TEMPLATES: TaskTemplate[] = [
     instructions: 'On the employee profile set "Salary paid by", then enter the bank name and account, or the M-Pesa number. Set the house and transport allowance if the contract includes them. Confirm basic salary matches the offer.',
   },
   {
-    key: 'work_email', label: 'Work email created', owner: 'it', dueOffsetDays: -1,
-    instructions: 'Create the mailbox in your email provider (for example firstname.lastname@yourdomain). Then enter it in the Work email field on the employee profile so leave and payslip emails reach it. Share the temporary password with the new hire in person or by phone, never by email.',
+    key: 'work_email', label: 'Work email created', owner: 'it', dueOffsetDays: -1, link: 'create_mailbox',
+    instructions: 'Use the button here to create the mailbox in cPanel. It is saved as the Work email on the profile, and the password is shown once on screen: give it to the new hire in person or by phone, never by email. If cPanel is not connected, create the mailbox under cPanel > Email Accounts and type the address into the Work email field on the profile.',
   },
   {
     key: 'erp_login', label: 'ERP login created and role assigned', owner: 'it', dueOffsetDays: 0, link: 'create_login',
@@ -76,7 +78,7 @@ export const EXIT_TEMPLATES: TaskTemplate[] = [
   { key: 'handover', label: 'Handover of work completed', owner: 'manager', dueOffsetDays: -2, instructions: 'The line manager agrees a written handover: open tasks, customer contacts, passwords held in shared tools, and who takes over each item.' },
   { key: 'equipment', label: 'Company equipment returned and inspected', owner: 'it', dueOffsetDays: 0, link: 'assets', instructions: 'Record the return of each item under HR > Assets with its condition. Unreturned items show on the final dues screen.' },
   { key: 'interview', label: 'Exit interview held', owner: 'hr', dueOffsetDays: -1, instructions: 'Hold the exit interview and record the main reasons for leaving in the exit notes.' },
-  { key: 'accounts', label: 'System accounts and work email disabled', owner: 'it', dueOffsetDays: 0, instructions: 'On the last working day deactivate the ERP login (Settings > Users) and disable the mailbox. Forward important mail to the line manager.' },
+  { key: 'accounts', label: 'System accounts and work email disabled', owner: 'it', dueOffsetDays: 0, link: 'disable_mailbox', instructions: 'On the last working day deactivate the ERP login (Settings > Users) and block sign-in to the mailbox with the button here. The mailbox and its mail are kept; set up forwarding to the line manager in cPanel if needed.' },
   { key: 'dues_agreed', label: 'Final dues statement agreed and signed', owner: 'finance', dueOffsetDays: 3, instructions: 'Generate the final dues statement on the Exit tab, review the figures with the employee, and have both parties sign it.' },
   { key: 'dues_paid', label: 'Final dues paid', owner: 'finance', dueOffsetDays: 7, instructions: 'Pay the agreed amount through payroll. Employment Act s.18 expects dues to be paid on the last working day or promptly after.' },
   { key: 'certificate', label: 'Certificate of service issued', owner: 'hr', dueOffsetDays: 7, instructions: 'Generate the certificate of service from the Exit tab and hand it over.' },

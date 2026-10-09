@@ -2377,7 +2377,7 @@ export interface EmployeeChecklistItem {
   instructions?: string
   owner?: 'hr' | 'it' | 'finance' | 'manager' | 'employee'
   dueDate?: string
-  link?: 'create_login' | 'welcome_email' | 'assets' | 'training'
+  link?: 'create_login' | 'welcome_email' | 'assets' | 'training' | 'create_mailbox' | 'disable_mailbox'
 }
 
 export type JobStatus = 'open' | 'closed' | 'draft'
