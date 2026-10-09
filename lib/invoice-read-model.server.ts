@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
+import { cachedByFingerprint } from '@/lib/read-model-cache'
 
 /**
  * Invoices and bills as the screens use them, read from the invoices table.
@@ -164,6 +165,26 @@ export function toScreenInvoice(inv: DbInvoice, screen?: Row, postedByName?: str
  * visible until it is booked or cleared.
  */
 export async function loadScreenInvoices(screenCopy: unknown): Promise<Row[]> {
+  const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  return cachedByFingerprint(
+    'invoices',
+    async () => {
+      const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(`
+        SELECT concat_ws('|',
+          (SELECT max(updated_at)::text || ':' || count(*) FROM invoices),
+          (SELECT count(*) || ':' || coalesce(sum(line_total), 0) || ':' || coalesce(sum(qty), 0) FROM invoice_items),
+          (SELECT count(*) || ':' || max(created_at)::text || ':' || count(*) FILTER (WHERE is_voided) || ':' || coalesce(sum(amount), 0) FROM payments),
+          (SELECT count(*) || ':' || max(created_at)::text || ':' || count(reversed_at) || ':' || coalesce(sum(amount), 0) FROM payment_allocations),
+          (SELECT max(updated_at)::text FROM users),
+          (SELECT max(updated_at)::text || ':' || count(*) FROM clients)
+        ) AS fp`)
+      return `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
+    },
+    () => buildScreenInvoices(screenCopy),
+  )
+}
+
+async function buildScreenInvoices(screenCopy: unknown): Promise<Row[]> {
   const screen = Array.isArray(screenCopy) ? screenCopy as Row[] : []
   const screenById = new Map(screen.filter(r => r?.id).map(r => [String(r.id), r]))
   const rows = await loadRows()
