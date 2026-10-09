@@ -9,6 +9,7 @@ import { Fa } from '@/components/icons'
 import { faCheck, faCircleCheck, faMoneyBillWave, faDownload, faPrint } from '@fortawesome/free-solid-svg-icons'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import { StatutoryFilesModal, AnnualP9Modal } from './HRStatutoryPanel'
+import { PayrollVarianceModal } from './HRPayrollVariance'
 import { downloadPayslipPdfFile, openPayslipPdfForPrint } from '@/lib/hr/payslip-pdf'
 
 export default function HRPayrollTab() {
@@ -71,6 +72,7 @@ export default function HRPayrollTab() {
   const [payDate, setPayDate] = useState('')
   const [statutoryRun, setStatutoryRun] = useState<{ id: string; ref: string } | null>(null)
   const [showAnnual, setShowAnnual] = useState(false)
+  const [varianceRunId, setVarianceRunId] = useState<string | null>(null)
 
   const payrollPaymentFor = (runId: string) =>
     journalEntries.find(j => j.payrollRunId === runId && j.ref.startsWith('JRN/PAYROLL-PAY/'))
@@ -228,6 +230,12 @@ export default function HRPayrollTab() {
           <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: 'var(--navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             onClick={e => { e.stopPropagation(); postPayrollRun(run.id) }}>
             <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
+          </button>
+        )}
+        {canManagePayroll && (
+          <button style={{ background: 'var(--bg-muted)', border: 'none', borderRadius: 6, color: 'var(--text-2)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }}
+            onClick={e => { e.stopPropagation(); setVarianceRunId(run.id) }}>
+            Compare
           </button>
         )}
         {(run.status === 'approved' || run.status === 'posted') && canManagePayroll && (
@@ -455,6 +463,7 @@ export default function HRPayrollTab() {
       })()}
 
       {statutoryRun && <StatutoryFilesModal runId={statutoryRun.id} runRef={statutoryRun.ref} onClose={() => setStatutoryRun(null)} />}
+      {varianceRunId && (() => { const r = payrollRuns.find(x => x.id === varianceRunId); return r ? <PayrollVarianceModal run={r} onClose={() => setVarianceRunId(null)} /> : null })()}
       {showAnnual && <AnnualP9Modal onClose={() => setShowAnnual(false)} />}
 
       {/* Create Payroll Run modal */}
