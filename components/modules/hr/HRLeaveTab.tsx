@@ -8,6 +8,7 @@ import { Fa } from '@/components/icons'
 import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
 import { CALENDAR_DAY_TYPES, employeeLeaveTypesFor, isLeaveTypeAllowedForGender, leaveDaysForRange, LEAVE_LABELS, type StoreLeaveType } from '@/lib/leave-utils'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
+import HRLeaveCalendar, { usePublicHolidays } from './HRLeaveCalendar'
 
 // Days are always derived from the date range so a request can never claim
 // more (or fewer) days than the dates cover — maternity/paternity count
@@ -68,6 +69,7 @@ export default function HRLeaveTab() {
   const isAdminOfficer = currentUser?.role === 'admin_officer'
   const isLeadTech  = currentUser?.role === 'technical_lead'
   const canViewTeamHR = isAdmin || isFinance || isAdminOfficer || isLeadTech
+  const { holidays, reload: reloadHolidays, version: holidayVersion } = usePublicHolidays()
 
   const [decideId, setDecideId] = useState<string | null>(null)
   const [decideNote, setDecideNote] = useState('')
@@ -375,6 +377,10 @@ export default function HRLeaveTab() {
           exportFilename="leave-requests"
         />
       </div>
+
+      {canViewTeamHR && (
+        <HRLeaveCalendar canManage={isAdmin || isAdminOfficer} holidays={holidays} onChanged={reloadHolidays} version={holidayVersion} />
+      )}
 
       {/* Leave balances */}
       <div className="hr-submodule-panel card overflow-hidden">
