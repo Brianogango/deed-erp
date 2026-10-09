@@ -1,0 +1,317 @@
+'use client'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useApp, fmtDate, fmtKes, uid, type Employee, type EmployeeChecklistItem } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
+import { Field, Input, Select, Textarea } from '@/components/ui'
+import { calculateFinalDues, type FinalDuesInput } from '@/lib/hr/final-dues'
+import { buildCertificateOfService, buildFinalDuesPdf, lengthOfService } from '@/lib/hr/exit-documents'
+
+const ONBOARDING_ITEMS = [
+  'Signed employment contract on file',
+  'ID copy, KRA PIN certificate, NSSF and SHA numbers collected',
+  'Bank or M-Pesa payment details captured',
+  'System account created and role assigned',
+  'Work email created',
+  'Equipment issued and acknowledged',
+  'Induction and mandatory training scheduled',
+  'Probation review date agreed',
+]
+const EXIT_ITEMS = [
+  'Resignation or termination letter on file',
+  'Company equipment returned and inspected',
+  'System accounts and work email disabled',
+  'Handover of work completed',
+  'Exit interview held',
+  'Final dues statement agreed and signed',
+  'Final dues paid',
+  'Certificate of service issued',
+]
+const EXIT_REASONS = [
+  { value: '', label: 'Select reason…' },
+  { value: 'resignation', label: 'Resignation' },
+  { value: 'termination', label: 'Termination' },
+  { value: 'end_of_contract', label: 'End of contract' },
+  { value: 'redundancy', label: 'Redundancy' },
+  { value: 'retirement', label: 'Retirement' },
+  { value: 'death', label: 'Death' },
+  { value: 'other', label: 'Other' },
+]
+const RECORD_TYPES = [
+  { value: 'verbal_warning', label: 'Verbal warning' },
+  { value: 'written_warning', label: 'Written warning' },
+  { value: 'final_warning', label: 'Final warning' },
+  { value: 'suspension', label: 'Suspension' },
+  { value: 'commendation', label: 'Commendation' },
+  { value: 'other', label: 'Other' },
+]
+
+const seed = (labels: string[]): EmployeeChecklistItem[] => labels.map(label => ({ id: uid(), label, done: false }))
+const today = () => new Date().toISOString().slice(0, 10)
+
+type Tab = 'onboarding' | 'exit' | 'conduct' | 'history'
+interface Disciplinary { id: string; recordType: string; incidentDate: string; description: string; actionTaken: string; issuedByName: string }
+interface HistoryRow { id: string; action: string; at: string; by: string; oldValues: Record<string, unknown> | null; newValues: Record<string, unknown> | null }
+
+function Checklist({ items, onToggle }: { items: EmployeeChecklistItem[]; onToggle: (id: string) => void }) {
+  const done = items.filter(i => i.done).length
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-[11px]" style={{ color: 'var(--text-4)' }}>{done} of {items.length} complete</p>
+      {items.map(i => (
+        <label key={i.id} className="flex items-start gap-2 text-xs cursor-pointer">
+          <input type="checkbox" checked={i.done} onChange={() => onToggle(i.id)} className="mt-0.5" />
+          <span style={{ color: i.done ? 'var(--text-4)' : 'var(--text-1)', textDecoration: i.done ? 'line-through' : 'none' }}>
+            {i.label}{i.done && i.doneAt ? ` · ${fmtDate(i.doneAt)}` : ''}
+          </span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
+export default function EmployeeLifecyclePanel({ employee, canManage }: { employee: Employee; canManage: boolean }) {
+  const { showToast, companySettings, employeeAssetAssignments } = useApp()
+  const { updateEmployee } = useHrStore()
+  const [tab, setTab] = useState<Tab>(employee.status === 'exited' ? 'exit' : 'onboarding')
+
+  const company = { name: companySettings.name, address: companySettings.address, city: companySettings.city, phone: companySettings.phone, email: companySettings.email, kraPin: companySettings.kraPin }
+
+  // ── Checklists ───────────────────────────────────────────────────────────
+  const onboarding = employee.onboardingChecklist?.length ? employee.onboardingChecklist : null
+  const exitList = employee.exitChecklist?.length ? employee.exitChecklist : null
+  const toggle = (key: 'onboardingChecklist' | 'exitChecklist', current: EmployeeChecklistItem[], id: string) => {
+    updateEmployee(employee.id, {
+      [key]: current.map(i => i.id === id ? { ...i, done: !i.done, doneAt: !i.done ? today() : undefined } : i),
+    })
+  }
+
+  // ── Exit and final dues ──────────────────────────────────────────────────
+  const [exitDate, setExitDate] = useState(employee.exitDate || today())
+  const [exitReason, setExitReason] = useState(employee.exitReason || '')
+  const [exitNotes, setExitNotes] = useState(employee.exitNotes || '')
+  const [probation, setProbation] = useState(employee.probationEndDate || '')
+  const [dues, setDues] = useState<FinalDuesInput | null>(null)
+  const [duesLoading, setDuesLoading] = useState(false)
+  const [assetCharge, setAssetCharge] = useState('0')
+
+  const unreturned = useMemo(
+    () => employeeAssetAssignments.filter(a => a.employeeId === employee.id && a.status === 'assigned'),
+    [employeeAssetAssignments, employee.id],
+  )
+
+  const loadDues = useCallback(async () => {
+    setDuesLoading(true)
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/final-dues?exitDate=${exitDate}`, { cache: 'no-store' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || 'Could not load final dues figures')
+      setDues({
+        basicSalary: body.basicSalary, housingAllowance: body.housingAllowance, transportAllowance: body.transportAllowance,
+        exitDate, unusedLeaveDays: body.unusedLeaveDays, noticePayDays: 0, exitMonthSalaryPaid: false,
+        outstandingLoans: body.outstandingLoans, outstandingAdvances: body.outstandingAdvances,
+        unreturnedAssetsCharge: 0, otherDeductions: 0,
+      })
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not load final dues figures', 'error')
+    } finally {
+      setDuesLoading(false)
+    }
+  }, [employee.id, exitDate, showToast])
+
+  const statement = useMemo(() => dues ? calculateFinalDues({ ...dues, exitDate, unreturnedAssetsCharge: Number(assetCharge) || 0 }) : null, [dues, exitDate, assetCharge])
+  const setDue = (k: keyof FinalDuesInput) => (v: string) => setDues(d => d ? { ...d, [k]: Number(v) || 0 } : d)
+
+  const exitPerson = {
+    name: employee.fullName, employeeNo: employee.employeeNo, jobTitle: employee.jobTitle, department: employee.departmentId,
+    idNumber: employee.nationalId, startDate: employee.startDate, exitDate,
+    exitReason: EXIT_REASONS.find(r => r.value === exitReason)?.label,
+  }
+
+  const recordExit = () => {
+    if (!exitReason) { showToast('Choose the reason for exit', 'error'); return }
+    updateEmployee(employee.id, {
+      status: 'exited', exitDate, exitReason, exitNotes,
+      exitChecklist: employee.exitChecklist?.length ? employee.exitChecklist : seed(EXIT_ITEMS),
+    })
+  }
+  const reinstate = () => updateEmployee(employee.id, { status: 'active', exitDate: '', exitReason: '', exitNotes: '' })
+
+  // ── Conduct records ──────────────────────────────────────────────────────
+  const [records, setRecords] = useState<Disciplinary[] | null>(null)
+  const [recForm, setRecForm] = useState({ recordType: 'verbal_warning', incidentDate: today(), description: '', actionTaken: '' })
+  const loadRecords = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/disciplinary`, { cache: 'no-store' })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Could not load conduct records')
+      setRecords(await res.json())
+    } catch (e) { setRecords([]); showToast(e instanceof Error ? e.message : 'Could not load conduct records', 'error') }
+  }, [employee.id, showToast])
+  const addRecord = async () => {
+    if (!recForm.description.trim()) { showToast('Describe what happened', 'error'); return }
+    const res = await fetch(`/api/employees/${employee.id}/disciplinary`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(recForm) })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) { showToast(body?.error || 'Record was not saved', 'error'); return }
+    setRecForm({ recordType: 'verbal_warning', incidentDate: today(), description: '', actionTaken: '' })
+    void loadRecords()
+  }
+  const removeRecord = async (id: string) => {
+    const res = await fetch(`/api/employees/${employee.id}/disciplinary/${id}`, { method: 'DELETE' })
+    if (!res.ok) { showToast((await res.json().catch(() => ({})))?.error || 'Only a director can remove a record', 'error'); return }
+    void loadRecords()
+  }
+
+  // ── Salary and status history ────────────────────────────────────────────
+  const [history, setHistory] = useState<HistoryRow[] | null>(null)
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/history`, { cache: 'no-store' })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Could not load history')
+      setHistory(await res.json())
+    } catch (e) { setHistory([]); showToast(e instanceof Error ? e.message : 'Could not load history', 'error') }
+  }, [employee.id, showToast])
+
+  useEffect(() => { if (tab === 'conduct' && records === null) void loadRecords() }, [tab, records, loadRecords])
+  useEffect(() => { if (tab === 'history' && history === null) void loadHistory() }, [tab, history, loadHistory])
+
+  const tabs: Array<[Tab, string]> = [['onboarding', 'Onboarding'], ['exit', 'Exit'], ['conduct', 'Conduct'], ['history', 'History']]
+  const num = (v: unknown) => Number(v) || 0
+
+  return (
+    <div className="hr-employee-lifecycle pt-3 border-t border-[var(--border-lt)]">
+      <div className="flex gap-1 mb-3">
+        {tabs.map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} className={tab === id ? 'btn-primary text-[11px]' : 'btn-outline text-[11px]'}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 'onboarding' && (
+        <div className="flex flex-col gap-3">
+          <Field label="Probation ends">
+            <div className="flex gap-2">
+              <Input type="date" value={probation} onChange={setProbation} />
+              {canManage && <button className="btn-outline text-[11px]" onClick={() => updateEmployee(employee.id, { probationEndDate: probation })}>Save</button>}
+            </div>
+          </Field>
+          {employee.probationEndDate && (() => {
+            const days = Math.ceil((new Date(`${employee.probationEndDate}T00:00:00`).getTime() - Date.now()) / 86400000)
+            return <p className="text-[11px]" style={{ color: days < 0 ? 'var(--text-4)' : days <= 14 ? 'var(--warning-text)' : 'var(--text-3)' }}>
+              {days < 0 ? `Probation ended ${fmtDate(employee.probationEndDate)}` : `Probation ends in ${days} day${days === 1 ? '' : 's'} (${fmtDate(employee.probationEndDate)})`}
+            </p>
+          })()}
+          {onboarding
+            ? <Checklist items={onboarding} onToggle={id => canManage && toggle('onboardingChecklist', onboarding, id)} />
+            : canManage
+              ? <button className="btn-outline text-[11px] self-start" onClick={() => updateEmployee(employee.id, { onboardingChecklist: seed(ONBOARDING_ITEMS) })}>Start onboarding checklist</button>
+              : <p className="text-xs" style={{ color: 'var(--text-4)' }}>No onboarding checklist</p>}
+        </div>
+      )}
+
+      {tab === 'exit' && (
+        <div className="flex flex-col gap-3">
+          {!canManage && <p className="text-xs" style={{ color: 'var(--text-4)' }}>Only HR can manage exits.</p>}
+          {canManage && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Last working day"><Input type="date" value={exitDate} onChange={setExitDate} /></Field>
+                <Field label="Reason"><Select value={exitReason} onChange={setExitReason} options={EXIT_REASONS} /></Field>
+              </div>
+              <Field label="Notes"><Textarea value={exitNotes} onChange={setExitNotes} rows={2} /></Field>
+              <div className="flex gap-2 flex-wrap">
+                {employee.status !== 'exited'
+                  ? <button className="btn-primary text-[11px]" onClick={recordExit}>Record exit</button>
+                  : <button className="btn-outline text-[11px]" onClick={reinstate}>Reinstate employee</button>}
+                {employee.status === 'exited' && <button className="btn-outline text-[11px]" onClick={() => updateEmployee(employee.id, { exitDate, exitReason, exitNotes })}>Save exit details</button>}
+                <button className="btn-outline text-[11px]" disabled={!exitDate} onClick={() => buildCertificateOfService(exitPerson, company, today()).save(`Certificate-of-service-${employee.employeeNo}.pdf`)}>Certificate of service</button>
+              </div>
+              <p className="text-[11px]" style={{ color: 'var(--text-3)' }}>Length of service: {lengthOfService(employee.startDate, exitDate)}</p>
+
+              {employee.exitChecklist?.length ? <Checklist items={employee.exitChecklist} onToggle={id => toggle('exitChecklist', exitList!, id)} /> : null}
+
+              <div className="rounded-xl p-3" style={{ border: '1px solid var(--border-lt)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>Final dues</h4>
+                  <button className="btn-outline text-[11px]" onClick={loadDues} disabled={duesLoading}>{duesLoading ? 'Loading…' : dues ? 'Reload figures' : 'Calculate'}</button>
+                </div>
+                {unreturned.length > 0 && (
+                  <p className="text-[11px] mb-2" style={{ color: 'var(--warning-text)' }}>
+                    Not yet returned: {unreturned.map(a => a.productName).join(', ')}. Enter a charge below only if HR decides to recover it.
+                  </p>
+                )}
+                {dues && statement && (
+                  <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <Field label="Unused leave days"><Input type="number" value={String(dues.unusedLeaveDays)} onChange={setDue('unusedLeaveDays')} /></Field>
+                      <Field label="Notice pay days"><Input type="number" value={String(dues.noticePayDays)} onChange={setDue('noticePayDays')} /></Field>
+                      <Field label="Loan outstanding"><Input type="number" value={String(dues.outstandingLoans)} onChange={setDue('outstandingLoans')} /></Field>
+                      <Field label="Advance outstanding"><Input type="number" value={String(dues.outstandingAdvances)} onChange={setDue('outstandingAdvances')} /></Field>
+                      <Field label="Asset charge"><Input type="number" value={assetCharge} onChange={setAssetCharge} /></Field>
+                      <Field label="Other deductions"><Input type="number" value={String(dues.otherDeductions)} onChange={setDue('otherDeductions')} /></Field>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={dues.exitMonthSalaryPaid} onChange={e => setDues(d => d ? { ...d, exitMonthSalaryPaid: e.target.checked } : d)} /> Exit-month salary already paid through payroll</label>
+                    <div className="text-xs flex flex-col gap-1">
+                      {statement.earnings.map(e => <div key={e.label} className="flex justify-between"><span>{e.label}</span><span className="font-mono">{fmtKes(e.amount)}</span></div>)}
+                      {statement.statutory.map(e => <div key={e.label} className="flex justify-between" style={{ color: 'var(--text-3)' }}><span>{e.label}</span><span className="font-mono">-{fmtKes(e.amount)}</span></div>)}
+                      {statement.recoveries.map(e => <div key={e.label} className="flex justify-between" style={{ color: 'var(--text-3)' }}><span>{e.label}</span><span className="font-mono">-{fmtKes(e.amount)}</span></div>)}
+                      <div className="flex justify-between font-bold pt-1" style={{ borderTop: '1px solid var(--border-lt)' }}>
+                        <span>{statement.net >= 0 ? 'Net payable' : 'Owed by employee'}</span>
+                        <span className="font-mono" style={{ color: statement.net >= 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtKes(Math.abs(statement.net))}</span>
+                      </div>
+                    </div>
+                    <button className="btn-primary text-[11px] self-start" onClick={() => buildFinalDuesPdf(exitPerson, company, statement).save(`Final-dues-${employee.employeeNo}.pdf`)}>Download statement (PDF)</button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === 'conduct' && (
+        <div className="flex flex-col gap-3">
+          {!canManage && <p className="text-xs" style={{ color: 'var(--text-4)' }}>Conduct records are visible to HR only.</p>}
+          {canManage && (
+            <>
+              <div className="rounded-xl p-3 flex flex-col gap-2" style={{ border: '1px solid var(--border-lt)' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Field label="Type"><Select value={recForm.recordType} onChange={v => setRecForm(f => ({ ...f, recordType: v }))} options={RECORD_TYPES} /></Field>
+                  <Field label="Incident date"><Input type="date" value={recForm.incidentDate} onChange={v => setRecForm(f => ({ ...f, incidentDate: v }))} /></Field>
+                </div>
+                <Field label="What happened"><Textarea value={recForm.description} onChange={v => setRecForm(f => ({ ...f, description: v }))} rows={2} /></Field>
+                <Field label="Action taken"><Input value={recForm.actionTaken} onChange={v => setRecForm(f => ({ ...f, actionTaken: v }))} /></Field>
+                <button className="btn-primary text-[11px] self-start" onClick={addRecord}>Add record</button>
+              </div>
+              {records === null && <p className="text-xs" style={{ color: 'var(--text-4)' }}>Loading…</p>}
+              {records?.length === 0 && <p className="text-xs" style={{ color: 'var(--text-4)' }}>No conduct records</p>}
+              {records?.map(r => (
+                <div key={r.id} className="rounded-lg p-2 text-xs" style={{ border: '1px solid var(--border-lt)' }}>
+                  <div className="flex justify-between gap-2">
+                    <span className="font-semibold">{RECORD_TYPES.find(t => t.value === r.recordType)?.label ?? r.recordType} · {fmtDate(r.incidentDate)}</span>
+                    <button className="text-[10px]" style={{ color: 'var(--danger)' }} onClick={() => removeRecord(r.id)}>Remove</button>
+                  </div>
+                  <p className="mt-1">{r.description}</p>
+                  {r.actionTaken && <p style={{ color: 'var(--text-3)' }}>Action: {r.actionTaken}</p>}
+                  {r.issuedByName && <p style={{ color: 'var(--text-4)' }}>Recorded by {r.issuedByName}</p>}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <div className="flex flex-col gap-2 text-xs">
+          {history === null && <p style={{ color: 'var(--text-4)' }}>Loading…</p>}
+          {history?.length === 0 && <p style={{ color: 'var(--text-4)' }}>No recorded salary or status changes</p>}
+          {history?.map(h => (
+            <div key={h.id} className="rounded-lg p-2" style={{ border: '1px solid var(--border-lt)' }}>
+              <div className="flex justify-between"><span className="font-semibold">
+                {h.action === 'change_employee_salary' ? 'Salary changed' : h.action === 'exit_employee' ? 'Exited' : 'Employee created'}
+              </span><span style={{ color: 'var(--text-4)' }}>{fmtDate(h.at)}{h.by ? ` · ${h.by}` : ''}</span></div>
+              {h.action === 'change_employee_salary' && <p className="font-mono">{fmtKes(num(h.oldValues?.basicSalary))} → {fmtKes(num(h.newValues?.basicSalary))}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

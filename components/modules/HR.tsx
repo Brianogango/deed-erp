@@ -67,6 +67,7 @@ import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget, type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
+import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS & TYPES
@@ -1003,6 +1004,7 @@ function HRContent() {
                   <div><span className="text-[var(--text-4)]">Bank Name</span><p className="font-semibold">{viewEmployee.bankName || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Bank Account Number</span><p className="font-semibold">{viewEmployee.bankAccount || '—'}</p></div>
                 </div>
+                <EmployeeLifecyclePanel employee={viewEmployee} canManage={canManageHR} />
                 <div className="hr-employee-profile__actions flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
                   <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '' }); setEditEmpId(viewEmployee.id) }}>
