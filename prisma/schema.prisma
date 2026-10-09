@@ -1689,6 +1689,7 @@ model Invoice {
   terms          String?
   // Carried forward from the source sale order (Odoo invoice/delivery address).
   invoiceAddress  String?       @map("invoice_address")
+  customerPoNumber String?      @map("customer_po_number") @db.VarChar(60)
   deliveryAddress String?       @map("delivery_address")
   // Finance dispute flag — Odoo's "Blocked" payment status is derived from it.
   paymentBlocked Boolean        @default(false) @map("payment_blocked")

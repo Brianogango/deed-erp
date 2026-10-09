@@ -143,6 +143,7 @@ export function toScreenInvoice(inv: DbInvoice, screen?: Row, postedByName?: str
     notes: inv.notes ?? '',
     subject: inv.subject ?? undefined,
     invoiceAddress: inv.invoiceAddress ?? undefined,
+    customerPoNumber: inv.customerPoNumber ?? undefined,
     deliveryAddress: inv.deliveryAddress ?? undefined,
     currencyCode: inv.currencyCode ?? 'KES',
     baseCurrencyCode: inv.baseCurrencyCode ?? 'KES',

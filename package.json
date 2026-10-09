@@ -27,6 +27,7 @@
     "fix:bill-document-type": "node scripts/fix-bill-document-type.mjs",
     "reconcile:bill-payments": "node scripts/reconcile-bill-payments.mjs",
     "parity:invoices": "node scripts/invoice-parity.mjs",
+    "migrate:invoice-customer-po-number:safe": "node scripts/run-safe-invoice-customer-po-number.mjs",
     "migrate:invoice-item-account-code:safe": "node scripts/run-safe-invoice-item-account-code.mjs",
     "migrate:delivery-notes-mirror:safe": "node scripts/run-safe-delivery-notes-mirror.mjs",
     "migrate:infra-platform:safe": "node scripts/run-safe-infra-platform.mjs",
