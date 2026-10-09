@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { QUOTE_EXTRA_KEYS, readScreenExtras, SALE_ORDER_EXTRA_KEYS } from '@/lib/screen-extras'
+import { cachedByFingerprint } from '@/lib/read-model-cache'
 
 /**
  * Sale orders and quotes as the screens use them, read from their tables
@@ -40,6 +41,25 @@ function withCopyOnlyRows(out: Row[], copy: Row[], tableIds: Set<string>, tableR
 }
 
 export async function loadScreenSaleOrders(screenCopy: unknown): Promise<Row[]> {
+  const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  return cachedByFingerprint(
+    'sale-orders',
+    async () => {
+      const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(`
+        SELECT concat_ws('|',
+          (SELECT max(updated_at)::text || ':' || count(*) FROM sale_orders),
+          (SELECT count(*) || ':' || coalesce(sum(line_total), 0) || ':' || coalesce(sum(qty), 0) FROM sale_order_items),
+          (SELECT max(updated_at)::text || ':' || count(*) FROM invoices WHERE sale_order_id IS NOT NULL),
+          (SELECT max(updated_at)::text || ':' || count(*) FROM delivery_notes),
+          (SELECT max(updated_at)::text || ':' || count(*) FROM clients)
+        ) AS fp`)
+      return `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
+    },
+    () => buildScreenSaleOrders(screenCopy),
+  )
+}
+
+async function buildScreenSaleOrders(screenCopy: unknown): Promise<Row[]> {
   const { list, map } = byId(screenCopy)
   const orders = await prisma.saleOrder.findMany({
     include: {
