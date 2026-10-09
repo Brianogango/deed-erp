@@ -468,6 +468,8 @@ model Employee {
   gender           String?   @db.VarChar(10)
   phone            String?   @db.VarChar(20)
   email            String?   @db.VarChar(150)
+  // Company mailbox. Notifications (leave, advances, payslips) prefer this over the personal `email`.
+  workEmail        String?   @map("work_email") @db.VarChar(150)
   address          String?
   departmentId     String?   @map("department_id") @db.Uuid
   jobTitle         String?   @map("job_title") @db.VarChar(100)
@@ -482,6 +484,12 @@ model Employee {
   annualLeaveDays  Int       @default(21) @map("annual_leave_days")
   sickLeaveDays    Int       @default(10) @map("sick_leave_days")
   emergencyContact Json?     @map("emergency_contact")
+  probationEndDate DateTime? @map("probation_end_date") @db.Date
+  exitReason       String?   @map("exit_reason") @db.VarChar(60)
+  exitNotes        String?   @map("exit_notes")
+  // [{ id, label, done, doneAt?, doneBy? }] checklists driven from the HR screen.
+  onboardingChecklist Json?  @map("onboarding_checklist")
+  exitChecklist       Json?  @map("exit_checklist")
   isActive         Boolean   @default(true) @map("is_active")
   notes            String?
   createdAt        DateTime  @default(now()) @map("created_at")
@@ -498,9 +506,36 @@ model Employee {
   loans         EmployeeLoan[]
   salaryAdvances SalaryAdvance[]
   commissions   SalesCommission[]
+  disciplinaryRecords EmployeeDisciplinaryRecord[]
 
   @@index([departmentId], map: "idx_employees_department")
   @@map("employees")
+}
+
+model EmployeeDisciplinaryRecord {
+  id           String   @id @default(uuid()) @db.Uuid
+  employeeId   String   @map("employee_id") @db.Uuid
+  recordType   String   @map("record_type") @db.VarChar(30)
+  incidentDate DateTime @map("incident_date") @db.Date
+  description  String
+  actionTaken  String?  @map("action_taken")
+  issuedByName String?  @map("issued_by_name") @db.VarChar(160)
+  createdById  String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId], map: "idx_disciplinary_employee")
+  @@map("employee_disciplinary_records")
+}
+
+model PublicHoliday {
+  id          String   @id @default(uuid()) @db.Uuid
+  holidayDate DateTime @unique @map("holiday_date") @db.Date
+  name        String   @db.VarChar(120)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("public_holidays")
 }
 
 model LeaveRequest {

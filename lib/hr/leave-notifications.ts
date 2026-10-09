@@ -114,12 +114,12 @@ export async function resolveLeaveApplyCcEmails(): Promise<string[]> {
           { firstName: { equals: 'Dennis', mode: 'insensitive' } },
         ],
       },
-      select: { firstName: true, email: true, user: { select: { email: true } } },
+      select: { firstName: true, email: true, workEmail: true, user: { select: { email: true } } },
     })
     const byName = new Map<string, string>()
     for (const row of rows) {
       const key = String(row.firstName || '').trim().toLowerCase()
-      const email = normalizeEmail(row.email) || normalizeEmail(row.user?.email)
+      const email = normalizeEmail(row.workEmail) || normalizeEmail(row.email) || normalizeEmail(row.user?.email)
       if ((key === 'edwin' || key === 'dennis') && email) byName.set(key, email)
     }
     const resolved = ['edwin', 'dennis']
@@ -134,8 +134,8 @@ export async function resolveLeaveApplyCcEmails(): Promise<string[]> {
 }
 
 /**
- * Resolve the applier's email from their HR record (`Employee.email`),
- * falling back to the linked User.email when the HR email field is blank.
+ * Resolve the applier's email from their HR record: work email first, then the personal
+ * `Employee.email`, then the linked User.email when both are blank.
  */
 export async function resolveApplicantEmail(employeeId: string, _submittedByUserId?: string | null): Promise<{
   email: string | null
@@ -148,13 +148,14 @@ export async function resolveApplicantEmail(employeeId: string, _submittedByUser
         firstName: true,
         lastName: true,
         email: true,
+        workEmail: true,
         user: { select: { email: true } },
       },
     })
     const name = employee
       ? `${employee.firstName} ${employee.lastName}`.trim()
       : 'Employee'
-    const email = normalizeEmail(employee?.email) || normalizeEmail(employee?.user?.email)
+    const email = normalizeEmail(employee?.workEmail) || normalizeEmail(employee?.email) || normalizeEmail(employee?.user?.email)
     return { email, name }
   } catch (err) {
     console.error('[leave-notifications] failed to resolve applicant email', err)

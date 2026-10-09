@@ -2334,7 +2334,10 @@ export interface Employee {
   id: string
   employeeNo: string
   fullName: string
+  /** Personal email. */
   email: string
+  /** Company mailbox; notifications prefer this over `email`. */
+  workEmail?: string
   phone: string
   nationalId: string
   kraPin: string
