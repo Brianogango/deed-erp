@@ -477,6 +477,8 @@ model Employee {
   startDate        DateTime  @map("start_date") @db.Date
   endDate          DateTime? @map("end_date") @db.Date
   basicSalary      Decimal   @default(0) @map("basic_salary") @db.Decimal(12, 2)
+  housingAllowance   Decimal @default(0) @map("housing_allowance") @db.Decimal(12, 2)
+  transportAllowance Decimal @default(0) @map("transport_allowance") @db.Decimal(12, 2)
   paymentMode      String    @default("mpesa") @map("payment_mode") @db.VarChar(20)
   bankName         String?   @map("bank_name") @db.VarChar(100)
   bankAccount      String?   @map("bank_account") @db.VarChar(50)

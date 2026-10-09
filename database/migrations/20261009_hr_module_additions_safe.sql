@@ -1,6 +1,8 @@
 -- Additive, non-destructive: new nullable columns and two new tables. Old code ignores them.
 -- Apply BEFORE deploying the release that reads or writes them.
 ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "work_email" VARCHAR(150);
+ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "housing_allowance" DECIMAL(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "transport_allowance" DECIMAL(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "probation_end_date" DATE;
 ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "exit_reason" VARCHAR(60);
 ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "exit_notes" TEXT;

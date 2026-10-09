@@ -279,14 +279,14 @@ function HRContent() {
     fullName: string; employeeNo: string; email: string; workEmail: string; phone: string
     nationalId: string; kraPin: string; nssfNumber: string; gender: string; departmentId: string; jobTitle: string
     shift: string; startDate: string; status: 'active' | 'on_leave' | 'exited'
-    basicSalary: string; housingAllowance: string; transportAllowance: string; bankName: string; bankAccount: string
+    basicSalary: string; housingAllowance: string; transportAllowance: string; bankName: string; bankAccount: string; paymentMode: string; mpesaNumber: string
   }
   const blankEmp = (): EmpFormState => ({
     fullName: '', employeeNo: '', email: '', workEmail: '', phone: '', nationalId: '',
     kraPin: '', nssfNumber: '', gender: '', departmentId: '', jobTitle: '',
     shift: '', startDate: '',
     status: 'active', basicSalary: '', housingAllowance: '',
-    transportAllowance: '', bankName: '', bankAccount: '',
+    transportAllowance: '', bankName: '', bankAccount: '', paymentMode: 'mpesa', mpesaNumber: '',
   })
   // ── Shared saving flag ─────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false)
@@ -330,6 +330,8 @@ function HRContent() {
         transportAllowance: Number(empForm.transportAllowance) || 0,
         bankName: empForm.bankName.trim(),
         bankAccount: empForm.bankAccount.trim(),
+        paymentMode: empForm.paymentMode as 'bank' | 'mpesa' | 'cash',
+        mpesaNumber: empForm.mpesaNumber.trim(),
       })
       setShowEmployeeModal(false)
       setEmpForm(blankEmp())
@@ -371,6 +373,8 @@ function HRContent() {
         transportAllowance: Number(empForm.transportAllowance) || 0,
         bankName: empForm.bankName.trim(),
         bankAccount: empForm.bankAccount.trim(),
+        paymentMode: empForm.paymentMode as 'bank' | 'mpesa' | 'cash',
+        mpesaNumber: empForm.mpesaNumber.trim(),
       })
       setEditEmpId(null)
       setViewEmpId(null)
@@ -827,6 +831,16 @@ function HRContent() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Salary paid by">
+                <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
+                  { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
+                ]} />
+              </Field>
+              <Field label="M-Pesa number">
+                <Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} placeholder="07xx xxx xxx" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Bank Name">
                 <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
               </Field>
@@ -940,6 +954,16 @@ function HRContent() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Salary paid by">
+                    <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
+                      { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
+                    ]} />
+                  </Field>
+                  <Field label="M-Pesa number">
+                    <Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} placeholder="07xx xxx xxx" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Bank Name">
                     <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
                   </Field>
@@ -981,7 +1005,7 @@ function HRContent() {
                 </div>
                 <div className="hr-employee-profile__actions flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
-                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '' }); setEditEmpId(viewEmployee.id) }}>
+                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '' }); setEditEmpId(viewEmployee.id) }}>
                     <Fa icon={faPen} />
                     <span>Edit</span>
                   </button>

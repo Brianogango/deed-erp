@@ -2355,6 +2355,9 @@ export interface Employee {
   transportAllowance: number
   bankName?: string
   bankAccount: string
+  /** How salary is paid; drives the bank vs M-Pesa salary files. */
+  paymentMode?: 'bank' | 'mpesa' | 'cash'
+  mpesaNumber?: string
 }
 
 export type JobStatus = 'open' | 'closed' | 'draft'
