@@ -21,13 +21,14 @@ describe('cachedByFingerprint', () => {
   })
 
   it('hands out copies, so a caller editing a result cannot change the cache', async () => {
+    type Rows = Array<{ id: string; amountPaid?: number }>
     const fp = async () => 'v1'
-    const first = await cachedByFingerprint('t', fp, async () => [{ id: 'a', amountPaid: 0 }])
+    const first = await cachedByFingerprint<Rows>('t', fp, async () => [{ id: 'a', amountPaid: 0 }])
     first[0].amountPaid = 999
-    const second = await cachedByFingerprint('t', fp, async () => [{ id: 'never' }])
+    const second = await cachedByFingerprint<Rows>('t', fp, async () => [{ id: 'never' }])
     expect(second).toEqual([{ id: 'a', amountPaid: 0 }])
     second[0].amountPaid = 5
-    const third = await cachedByFingerprint('t', fp, async () => [{ id: 'never' }])
+    const third = await cachedByFingerprint<Rows>('t', fp, async () => [{ id: 'never' }])
     expect(third[0].amountPaid).toBe(0)
   })
 
