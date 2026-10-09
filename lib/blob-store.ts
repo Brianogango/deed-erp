@@ -2,7 +2,7 @@ import 'server-only'
 
 import { getObjectStore } from '@/lib/infra/object-store'
 
-const BLOB_KEY_PATTERNS = [/^expense_receipt_/, /^repair_photos_/, /^repair_payment_proof_/, /^product_photos_/]
+const BLOB_KEY_PATTERNS = [/^expense_receipt_/, /^repair_photos_/, /^repair_payment_proof_/, /^product_photos_/, /^hr_document_/]
 
 export const isBlobKey = (key: string) => BLOB_KEY_PATTERNS.some(re => re.test(key))
 
