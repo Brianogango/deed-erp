@@ -1284,6 +1284,8 @@ export interface Invoice {
   currencyCode?: string
   baseCurrencyCode?: string
   exchangeRateToBase?: number
+  /** Customer's own purchase order number (optional), printed on the invoice. */
+  customerPoNumber?: string
   // Carried forward from the source sale order (Odoo invoice/delivery address).
   invoiceAddress?: string
   deliveryAddress?: string
@@ -3659,7 +3661,7 @@ interface AppState {
   deleteSaleOrder: (id: string) => void
 
   // Invoices
-  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string; account?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice | null
+  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string; account?: string }[], vatRate: number, notes?: string, documentDate?: string, customerPoNumber?: string) => Invoice | null
   /** Migration opening balances: saved to the server one by one (which posts each journal once), then shown. */
   importOpeningBalances: (invoices: Invoice[]) => Promise<{ saved: Invoice[]; failed: string[] }>
   updateInvoice: (id: string, p: Partial<Invoice>) => void
@@ -13597,6 +13599,7 @@ const storeCtx: AppState = {
             notes: remote.notes || `Created from ${so.ref}`,
             invoiceAddress: so.invoiceAddress,
             deliveryAddress: so.deliveryAddress,
+            ...(so.customerRef ? { customerPoNumber: so.customerRef } : {}),
             ...documentMoneySnapshot({
               currencyCode: (remote as any).currencyCode || so.currencyCode || companySettings.currency,
               exchangeRateToBase: (remote as any).exchangeRateToBase ?? so.exchangeRateToBase,
@@ -13836,7 +13839,7 @@ const storeCtx: AppState = {
     },
 
     // ── Invoices ──────────────────────────────────────────────────────────────
-    createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate, notes = '', documentDate) => {
+    createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate, notes = '', documentDate, customerPoNumber) => {
       if (type === 'customer_invoice') {
         // Laptops and other serial-tracked machines leave stock only through a
         // validated delivery or the POS till (lib/sales/serial-invoice-gate.ts).
@@ -13907,6 +13910,7 @@ const storeCtx: AppState = {
         total: subtotal + taxTotal,
         amountPaid: 0,
         notes,
+        ...(customerPoNumber?.trim() ? { customerPoNumber: customerPoNumber.trim() } : {}),
       }
       setInvoices(prev => [invoice, ...prev])
       void saveInvoiceToServer(invoice, msg => showToast(msg, 'error'))

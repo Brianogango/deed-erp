@@ -33,6 +33,7 @@ function invoicePdfInput(
     dueLabel: 'Due Date',
     dueDate: inv.dueDate,
     sourceRef: so?.ref,
+    customerPoNumber: inv.customerPoNumber || undefined,
     customerName: inv.partnerName,
     customerAddress: inv.invoiceAddress || [contact?.address, contact?.city, contact?.country].filter(Boolean).join(', ') || undefined,
     customerCountry: contact?.country || 'Kenya',

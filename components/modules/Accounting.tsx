@@ -616,6 +616,7 @@ function AccountingContent() {
     })
   }
   const [newNotes, setNewNotes] = useState('')
+  const [newPoNumber, setNewPoNumber] = useState('')
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [applyVat, setApplyVat] = useState(false)
   const [changingPartner, setChangingPartner] = useState(false)
@@ -1107,6 +1108,7 @@ function AccountingContent() {
     dueDateEditedRef.current = false
     setNewLines([newManualInvoiceLine()])
     setNewNotes('')
+    setNewPoNumber('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setApplyVat(false)
     setChangingPartner(false)
@@ -1150,6 +1152,7 @@ function AccountingContent() {
       account: l.accountCode ?? '',
     })))
     setNewNotes(inv.notes ?? '')
+    setNewPoNumber(inv.customerPoNumber ?? '')
     setNewPaymentDetails(
       inv.type === 'customer_invoice'
         ? getDocumentPaymentDetails(inv.id)
@@ -1406,6 +1409,7 @@ function AccountingContent() {
         taxTotal: invoicePreview.taxTotal,
         total: invoicePreview.total,
         notes: newNotes,
+        customerPoNumber: type === 'customer_invoice' ? newPoNumber.trim() : undefined,
       })
       if (type === 'customer_invoice') {
         setDocumentPaymentDetails(editingInvId, normalizeDocumentPaymentDetails(newPaymentDetails))
@@ -1413,7 +1417,7 @@ function AccountingContent() {
       savedId = editingInvId
       showToast(tab === 'bills' ? 'Bill updated' : 'Invoice updated', 'success')
     } else {
-      const created = createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate, newNotes.trim(), newDocumentDate)
+      const created = createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate, newNotes.trim(), newDocumentDate, type === 'customer_invoice' ? newPoNumber.trim() : undefined)
       if (!created) return
       if (type === 'customer_invoice' && created?.id) {
         setDocumentPaymentDetails(created.id, normalizeDocumentPaymentDetails(newPaymentDetails))
@@ -3068,6 +3072,18 @@ function AccountingContent() {
                       Apply VAT to all lines ({invoiceVatRate}%)
                     </span>
                   </label>
+                  {tab === 'invoices' && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Customer PO number (optional)</label>
+                      <input
+                        className="form-input text-xs"
+                        maxLength={60}
+                        placeholder="e.g. PO-12345"
+                        value={newPoNumber}
+                        onChange={e => setNewPoNumber(e.target.value)}
+                      />
+                    </div>
+                  )}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
                     <textarea

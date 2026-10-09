@@ -93,6 +93,7 @@ function mapInvoiceBodyToDb(body: any, clientId: string) {
     amountPaid: isCreditNote ? Math.min(0, Number(body.amountPaid) || 0) : clampAmountPaid(body.amountPaid, totals.totalAmount),
     notes: body.notes ?? null,
     invoiceAddress: body.invoiceAddress ?? null,
+    customerPoNumber: textOrNull(body.customerPoNumber, 60),
     deliveryAddress: body.deliveryAddress ?? null,
     paymentBlocked: Boolean(body.paymentBlocked),
     isPosInvoice: Boolean(body.isPosInvoice),

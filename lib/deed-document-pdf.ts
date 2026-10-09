@@ -72,6 +72,7 @@ export interface DeedPdfInput {
   dueDate?: string
   salesperson?: string
   sourceRef?: string
+  customerPoNumber?: string
   customerName: string
   customerAddress?: string
   customerCountry?: string
@@ -252,11 +253,12 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
     company.phone,
     company.email,
     cleanWebsite(company.website),
+    company.kraPin ? `KRA PIN: ${company.kraPin}` : '',
   ].filter(Boolean) as string[]
 
   const headerText = inverse ? ([255, 255, 255] as [number, number, number]) : INK
   doc.setFont(pdfFont(company.printFont), 'normal').setFontSize(7.4).setTextColor(...headerText)
-  details.slice(0, 4).forEach((item, index) => doc.text(item, right(doc), 25 + index * 11, { align: 'right' }))
+  details.slice(0, 5).forEach((item, index) => doc.text(item, right(doc), 25 + index * 11, { align: 'right' }))
 
   if (company.printTagline) {
     doc.setFont(pdfFont(company.printFont), 'italic').setFontSize(7).setTextColor(...(inverse ? [255, 255, 255] as [number, number, number] : secondary))
@@ -395,6 +397,7 @@ export function buildDeedDocumentPdf(
   const meta: Array<[string, string]> = [
     ['Issue date', fmtDate(input.date)],
     ...(input.sourceRef ? [['Source document', input.sourceRef] as [string, string]] : []),
+    ...(input.customerPoNumber ? [['Customer PO', input.customerPoNumber] as [string, string]] : []),
     ...(input.dueDate ? [[input.dueLabel || (kind === 'sales-order' ? 'Delivery date' : 'Valid until'), fmtDate(input.dueDate)] as [string, string]] : []),
     ...(input.salesperson ? [['Salesperson', input.salesperson] as [string, string]] : []),
     ...(showAmounts ? [['Currency', currency] as [string, string]] : []),

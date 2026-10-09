@@ -35,6 +35,7 @@ export interface CommercialPdfInput {
   dueDate?: string
   salesperson?: string
   sourceRef?: string
+  customerPoNumber?: string
   customerName: string
   customerAddress?: string
   customerCountry?: string
@@ -89,6 +90,7 @@ export async function buildCommercialPdf(
     dueDate: input.dueDate,
     salesperson: input.salesperson,
     sourceRef: input.sourceRef,
+    customerPoNumber: input.customerPoNumber,
     customerName: input.customerName,
     customerAddress: input.customerAddress,
     customerCountry: input.customerCountry,

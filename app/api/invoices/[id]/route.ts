@@ -75,6 +75,7 @@ function mapInvoiceUpdateToDb(body: any, clientId?: string) {
     invoiceDate,
     status,
     invoiceAddress: body.invoiceAddress ?? undefined,
+    customerPoNumber: textOrUndefined(body.customerPoNumber, 60),
     deliveryAddress: body.deliveryAddress ?? undefined,
     paymentBlocked: body.paymentBlocked !== undefined ? Boolean(body.paymentBlocked) : undefined,
     deliveryJobId: textOrUndefined(body.deliveryJobId, 64),
