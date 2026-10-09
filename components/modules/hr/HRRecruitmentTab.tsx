@@ -10,7 +10,7 @@ import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import {
   PIPELINE_STAGES, REJECTION_REASONS, averageRating, daysInStage, findDuplicates, groupByStage, jobFunnel, nextEmployeeNumber, stageLabel,
 } from '@/lib/hr/recruitment'
-import { ONBOARDING_ITEMS } from '@/lib/hr/checklists'
+import { ONBOARDING_TEMPLATES, buildChecklist } from '@/lib/hr/checklists'
 
 type JobForm = {
   title: string; departmentId: string; location: string; type: JobPosting['type'] | ''
@@ -310,7 +310,7 @@ export default function HRRecruitmentTab() {
                 nationalId: '', kraPin: '', departmentId: job?.departmentId ?? '', jobTitle: job?.title ?? '',
                 startDate: form.startDate, status: 'active', basicSalary: Number(form.salary) || 0, housingAllowance: 0, transportAllowance: 0,
                 bankAccount: '', probationEndDate: form.probationEndDate || undefined,
-                onboardingChecklist: ONBOARDING_ITEMS.map(label => ({ id: uid(), label, done: false })),
+                onboardingChecklist: buildChecklist(ONBOARDING_TEMPLATES, form.startDate, uid),
               })
               updateCandidate(c.id, {
                 stage: 'hired', stageChangedDate: nowIso(), hiredEmployeeId: saved.id,

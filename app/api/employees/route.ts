@@ -96,6 +96,11 @@ const checklistField = (v: unknown) => {
     label: String((item as { label?: unknown })?.label ?? '').slice(0, 160),
     done: Boolean((item as { done?: unknown })?.done),
     doneAt: (item as { doneAt?: unknown })?.doneAt ? String((item as { doneAt?: unknown }).doneAt).slice(0, 40) : undefined,
+    key: (item as { key?: unknown })?.key ? String((item as { key?: unknown }).key).slice(0, 40) : undefined,
+    instructions: (item as { instructions?: unknown })?.instructions ? String((item as { instructions?: unknown }).instructions).slice(0, 800) : undefined,
+    owner: ['hr', 'it', 'finance', 'manager', 'employee'].includes(String((item as { owner?: unknown })?.owner)) ? (item as { owner: string }).owner : undefined,
+    dueDate: /^\d{4}-\d{2}-\d{2}$/.test(String((item as { dueDate?: unknown })?.dueDate ?? '')) ? (item as { dueDate: string }).dueDate : undefined,
+    link: ['create_login', 'welcome_email', 'assets', 'training'].includes(String((item as { link?: unknown })?.link)) ? (item as { link: string }).link : undefined,
   })) as Prisma.InputJsonValue
 }
 

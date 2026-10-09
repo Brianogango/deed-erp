@@ -2372,6 +2372,12 @@ export interface EmployeeChecklistItem {
   label: string
   done: boolean
   doneAt?: string
+  /** Template key, instructions, owner, due date and shortcut for tasks built from a template. */
+  key?: string
+  instructions?: string
+  owner?: 'hr' | 'it' | 'finance' | 'manager' | 'employee'
+  dueDate?: string
+  link?: 'create_login' | 'welcome_email' | 'assets' | 'training'
 }
 
 export type JobStatus = 'open' | 'closed' | 'draft'
