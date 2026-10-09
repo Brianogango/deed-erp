@@ -67,6 +67,7 @@ import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget, type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
+import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS & TYPES
@@ -276,17 +277,17 @@ function HRContent() {
   ]
 
   type EmpFormState = {
-    fullName: string; employeeNo: string; email: string; phone: string
+    fullName: string; employeeNo: string; email: string; workEmail: string; phone: string
     nationalId: string; kraPin: string; nssfNumber: string; gender: string; departmentId: string; jobTitle: string
     shift: string; startDate: string; status: 'active' | 'on_leave' | 'exited'
-    basicSalary: string; housingAllowance: string; transportAllowance: string; bankName: string; bankAccount: string
+    basicSalary: string; housingAllowance: string; transportAllowance: string; bankName: string; bankAccount: string; paymentMode: string; mpesaNumber: string
   }
   const blankEmp = (): EmpFormState => ({
-    fullName: '', employeeNo: '', email: '', phone: '', nationalId: '',
+    fullName: '', employeeNo: '', email: '', workEmail: '', phone: '', nationalId: '',
     kraPin: '', nssfNumber: '', gender: '', departmentId: '', jobTitle: '',
     shift: '', startDate: '',
     status: 'active', basicSalary: '', housingAllowance: '',
-    transportAllowance: '', bankName: '', bankAccount: '',
+    transportAllowance: '', bankName: '', bankAccount: '', paymentMode: 'mpesa', mpesaNumber: '',
   })
   // ── Shared saving flag ─────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false)
@@ -314,6 +315,7 @@ function HRContent() {
         fullName: empForm.fullName.trim(),
         employeeNo: empForm.employeeNo.trim(),
         email: empForm.email.trim(),
+        workEmail: empForm.workEmail.trim(),
         phone: empForm.phone.trim(),
         nationalId: empForm.nationalId.trim(),
         kraPin: empForm.kraPin.trim(),
@@ -329,6 +331,8 @@ function HRContent() {
         transportAllowance: Number(empForm.transportAllowance) || 0,
         bankName: empForm.bankName.trim(),
         bankAccount: empForm.bankAccount.trim(),
+        paymentMode: empForm.paymentMode as 'bank' | 'mpesa' | 'cash',
+        mpesaNumber: empForm.mpesaNumber.trim(),
       })
       setShowEmployeeModal(false)
       setEmpForm(blankEmp())
@@ -354,6 +358,7 @@ function HRContent() {
         fullName: empForm.fullName.trim(),
         employeeNo: empForm.employeeNo.trim(),
         email: empForm.email.trim(),
+        workEmail: empForm.workEmail.trim(),
         phone: empForm.phone.trim(),
         nationalId: empForm.nationalId.trim(),
         kraPin: empForm.kraPin.trim(),
@@ -369,6 +374,8 @@ function HRContent() {
         transportAllowance: Number(empForm.transportAllowance) || 0,
         bankName: empForm.bankName.trim(),
         bankAccount: empForm.bankAccount.trim(),
+        paymentMode: empForm.paymentMode as 'bank' | 'mpesa' | 'cash',
+        mpesaNumber: empForm.mpesaNumber.trim(),
       })
       setEditEmpId(null)
       setViewEmpId(null)
@@ -747,8 +754,11 @@ function HRContent() {
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Email">
+              <Field label="Personal email">
                 <Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" />
+              </Field>
+              <Field label="Work email">
+                <Input type="email" value={empForm.workEmail} onChange={setEF('workEmail')} placeholder="jane@deedtechnologies.com" />
               </Field>
               <Field label="Phone">
                 <Input value={empForm.phone} onChange={setEF('phone')} placeholder="+254 7xx xxx xxx" />
@@ -822,6 +832,16 @@ function HRContent() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Salary paid by">
+                <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
+                  { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
+                ]} />
+              </Field>
+              <Field label="M-Pesa number">
+                <Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} placeholder="07xx xxx xxx" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Bank Name">
                 <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
               </Field>
@@ -857,8 +877,11 @@ function HRContent() {
                   </Field>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Email">
+                  <Field label="Personal email">
                     <Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" />
+                  </Field>
+                  <Field label="Work email">
+                    <Input type="email" value={empForm.workEmail} onChange={setEF('workEmail')} placeholder="jane@deedtechnologies.com" />
                   </Field>
                   <Field label="Phone">
                     <Input value={empForm.phone} onChange={setEF('phone')} placeholder="+254 7xx xxx xxx" />
@@ -932,6 +955,16 @@ function HRContent() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Salary paid by">
+                    <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
+                      { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
+                    ]} />
+                  </Field>
+                  <Field label="M-Pesa number">
+                    <Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} placeholder="07xx xxx xxx" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Bank Name">
                     <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
                   </Field>
@@ -960,7 +993,8 @@ function HRContent() {
                 <div className="hr-employee-profile__facts grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
                   <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold capitalize">{viewEmployee.departmentId || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Status</span><p className="font-semibold capitalize">{viewEmployee.status}</p></div>
-                  <div><span className="text-[var(--text-4)]">Email</span><p className="font-semibold">{viewEmployee.email || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">Work email</span><p className="font-semibold">{viewEmployee.workEmail || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">Personal email</span><p className="font-semibold">{viewEmployee.email || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Phone</span><p className="font-semibold">{viewEmployee.phone || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">National ID</span><p className="font-semibold">{viewEmployee.nationalId || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">KRA PIN</span><p className="font-semibold">{viewEmployee.kraPin || '—'}</p></div>
@@ -970,9 +1004,10 @@ function HRContent() {
                   <div><span className="text-[var(--text-4)]">Bank Name</span><p className="font-semibold">{viewEmployee.bankName || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Bank Account Number</span><p className="font-semibold">{viewEmployee.bankAccount || '—'}</p></div>
                 </div>
+                <EmployeeLifecyclePanel key={viewEmployee.id} employee={viewEmployee} canManage={canManageHR} />
                 <div className="hr-employee-profile__actions flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
-                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '' }); setEditEmpId(viewEmployee.id) }}>
+                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '' }); setEditEmpId(viewEmployee.id) }}>
                     <Fa icon={faPen} />
                     <span>Edit</span>
                   </button>

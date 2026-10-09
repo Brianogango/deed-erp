@@ -96,14 +96,35 @@ const KE_EASTER: Record<number, [string, string]> = {
   2030: ['04-19', '04-22'],
 }
 
+// Gazetted one-off holidays (Idd-ul-Fitr, Idd-ul-Azha, special days) that HR adds
+// from the database. Replaced wholesale whenever the list is loaded.
+let extraHolidays = new Set<string>()
+
+export function registerExtraPublicHolidays(isoDates: string[]): void {
+  extraHolidays = new Set(isoDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)))
+}
+
+/** The built-in fixed and Easter holidays for a year, as ISO dates. */
+export function builtInPublicHolidays(year: number): string[] {
+  const fixed = KE_FIXED.map(md => `${year}-${md}`)
+  const easter = (KE_EASTER[year] ?? []).map(md => `${year}-${md}`)
+  return [...fixed, ...easter]
+}
+
 function isKenyaPublicHoliday(date: Date): boolean {
   const mm   = String(date.getMonth() + 1).padStart(2, '0')
   const dd   = String(date.getDate()).padStart(2, '0')
   const mmdd = `${mm}-${dd}`
   const year = date.getFullYear()
   if (KE_FIXED.includes(mmdd)) return true
+  if (extraHolidays.has(`${year}-${mmdd}`)) return true
   const easter = KE_EASTER[year]
   return !!easter && easter.includes(mmdd)
+}
+
+/** True when an ISO date (YYYY-MM-DD) is a public holiday, built-in or added by HR. */
+export function isPublicHolidayIso(iso: string): boolean {
+  return isKenyaPublicHoliday(new Date(`${iso}T00:00:00`))
 }
 
 /**

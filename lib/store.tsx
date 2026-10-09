@@ -2334,7 +2334,10 @@ export interface Employee {
   id: string
   employeeNo: string
   fullName: string
+  /** Personal email. */
   email: string
+  /** Company mailbox; notifications prefer this over `email`. */
+  workEmail?: string
   phone: string
   nationalId: string
   kraPin: string
@@ -2352,6 +2355,23 @@ export interface Employee {
   transportAllowance: number
   bankName?: string
   bankAccount: string
+  /** How salary is paid; drives the bank vs M-Pesa salary files. */
+  paymentMode?: 'bank' | 'mpesa' | 'cash'
+  mpesaNumber?: string
+  /** Last working day, set when the employee exits. */
+  exitDate?: string
+  exitReason?: string
+  exitNotes?: string
+  probationEndDate?: string
+  onboardingChecklist?: EmployeeChecklistItem[]
+  exitChecklist?: EmployeeChecklistItem[]
+}
+
+export interface EmployeeChecklistItem {
+  id: string
+  label: string
+  done: boolean
+  doneAt?: string
 }
 
 export type JobStatus = 'open' | 'closed' | 'draft'

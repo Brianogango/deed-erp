@@ -8,11 +8,14 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCheck, faCircleCheck, faMoneyBillWave, faDownload, faPrint } from '@fortawesome/free-solid-svg-icons'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
+import { StatutoryFilesModal, AnnualP9Modal } from './HRStatutoryPanel'
+import { PayrollVarianceModal } from './HRPayrollVariance'
+import { downloadPayslipPdfFile, openPayslipPdfForPrint } from '@/lib/hr/payslip-pdf'
 
 export default function HRPayrollTab() {
   const {
     users, currentUserId, payrollRuns, payslips, journalEntries, bankAccounts,
-    createPayrollRun, approvePayrollRun, postPayrollRun, payPayrollRun, systemSettings, showToast,
+    createPayrollRun, approvePayrollRun, postPayrollRun, payPayrollRun, systemSettings, showToast, companySettings,
   } = useApp()
   const { employees, departments } = useHrStore()
 
@@ -67,6 +70,9 @@ export default function HRPayrollTab() {
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payReference, setPayReference] = useState('')
   const [payDate, setPayDate] = useState('')
+  const [statutoryRun, setStatutoryRun] = useState<{ id: string; ref: string } | null>(null)
+  const [showAnnual, setShowAnnual] = useState(false)
+  const [varianceRunId, setVarianceRunId] = useState<string | null>(null)
 
   const payrollPaymentFor = (runId: string) =>
     journalEntries.find(j => j.payrollRunId === runId && j.ref.startsWith('JRN/PAYROLL-PAY/'))
@@ -128,8 +134,26 @@ export default function HRPayrollTab() {
     }
   }
 
-  const downloadPayslipPdf = (id: string) => { const p = buildPayslipLines(id); if (p) downloadPdf(p.fileName, p.lines) }
-  const printPayslipPdf    = (id: string) => { const p = buildPayslipLines(id); if (p) printPdf(p.fileName, p.lines) }
+  // Full breakdown from the server; payslips that predate the Prisma payroll tables fall back to the simple summary PDF.
+  const fetchPayslipDetail = async (id: string) => {
+    try {
+      const res = await fetch(`/api/payroll/payslip/${id}`, { cache: 'no-store' })
+      if (!res.ok) return null
+      return await res.json()
+    } catch { return null }
+  }
+  const downloadPayslipPdf = async (id: string) => {
+    if (!buildPayslipLines(id)) { showToast('You can only download a published payslip you are allowed to see', 'error'); return }
+    const detail = await fetchPayslipDetail(id)
+    if (detail) { downloadPayslipPdfFile(detail, companySettings); return }
+    const p = buildPayslipLines(id); if (p) downloadPdf(p.fileName, p.lines)
+  }
+  const printPayslipPdf = async (id: string) => {
+    if (!buildPayslipLines(id)) { showToast('You can only print a published payslip you are allowed to see', 'error'); return }
+    const detail = await fetchPayslipDetail(id)
+    if (detail) { if (!openPayslipPdfForPrint(detail, companySettings)) showToast('Allow pop-ups to print the payslip', 'error'); return }
+    const p = buildPayslipLines(id); if (p) printPdf(p.fileName, p.lines)
+  }
 
   const filteredRuns = payrollRuns.filter(r => {
     const s = payrollSearch.toLowerCase()
@@ -206,6 +230,18 @@ export default function HRPayrollTab() {
           <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: 'var(--navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             onClick={e => { e.stopPropagation(); postPayrollRun(run.id) }}>
             <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
+          </button>
+        )}
+        {canManagePayroll && (
+          <button style={{ background: 'var(--bg-muted)', border: 'none', borderRadius: 6, color: 'var(--text-2)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }}
+            onClick={e => { e.stopPropagation(); setVarianceRunId(run.id) }}>
+            Compare
+          </button>
+        )}
+        {(run.status === 'approved' || run.status === 'posted') && canManagePayroll && (
+          <button style={{ background: 'var(--bg-muted)', border: 'none', borderRadius: 6, color: 'var(--text-2)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }}
+            onClick={e => { e.stopPropagation(); setStatutoryRun({ id: run.id, ref: run.ref }) }}>
+            Statutory files
           </button>
         )}
         {run.status === 'posted' && payrollPaymentFor(run.id) && (
@@ -305,6 +341,7 @@ export default function HRPayrollTab() {
         <PanelHeader title="Payroll Runs" count={filteredRuns.length}>
           <input className="form-input text-[11px] py-1.5" style={{ width: 160 }}
             placeholder="Search ref, period…" value={payrollSearch} onChange={e => setPayrollSearch(e.target.value)} />
+          <button className="btn-outline text-[11px]" onClick={() => setShowAnnual(true)}>Annual P9</button>
           {canManageHR && (
             <button className="btn-primary text-[11px]" onClick={openPayrollModal}>+ Create Payroll Run</button>
           )}
@@ -424,6 +461,10 @@ export default function HRPayrollTab() {
           </Modal>
         )
       })()}
+
+      {statutoryRun && <StatutoryFilesModal runId={statutoryRun.id} runRef={statutoryRun.ref} onClose={() => setStatutoryRun(null)} />}
+      {varianceRunId && (() => { const r = payrollRuns.find(x => x.id === varianceRunId); return r ? <PayrollVarianceModal run={r} onClose={() => setVarianceRunId(null)} /> : null })()}
+      {showAnnual && <AnnualP9Modal onClose={() => setShowAnnual(false)} />}
 
       {/* Create Payroll Run modal */}
       {showPayrollModal && (

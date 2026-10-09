@@ -6,6 +6,7 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { Field, Input, Modal, Select, Textarea, Badge } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
+import { documentExpiry, expiryCounts } from '@/lib/hr/document-status'
 import {
   faGraduationCap, faPlus, faFileLines, faUsers, faBuilding,
   faCalendarMinus, faMoneyBillWave, faCircleCheck,
@@ -136,35 +137,85 @@ export function HRDocumentsTab() {
   const [show, setShow] = useState(false)
   const emptyDocForm = () => ({ employeeId: '', type: '', title: '', expiryDate: '', notes: '' })
   const [form, setForm] = useState(emptyDocForm)
+  const [file, setFile] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'attention'>('all')
   const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }))
   const empName = (id: string) => employees.find(e => e.id === id)?.fullName ?? '—'
 
-  const save = () => {
+  const readAsDataUrl = (f: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Could not read the file'))
+    reader.readAsDataURL(f)
+  })
+
+  const save = async () => {
     const missing: string[] = []
     if (!form.employeeId) missing.push('Employee')
     if (!form.type) missing.push('Type')
     if (!form.title.trim()) missing.push('Title')
     if (missing.length) { showToast(`Please fill in: ${missing.join(', ')}`, 'error'); return }
-    addHRDocument({
-      employeeId: form.employeeId,
-      type: form.type as any,
-      title: form.title.trim(),
-      expiryDate: form.expiryDate || undefined,
-      visibility: 'hr_only',
-      status: 'active',
-      notes: form.notes.trim() || undefined,
-      uploadedDate: new Date().toISOString(),
-    })
-    setForm(emptyDocForm())
-    setShow(false)
+    if (file && file.size > 4 * 1024 * 1024) { showToast('The file is larger than 4 MB', 'error'); return }
+    if (saving) return
+    setSaving(true)
+    try {
+      const doc = addHRDocument({
+        employeeId: form.employeeId,
+        type: form.type as any,
+        title: form.title.trim(),
+        expiryDate: form.expiryDate || undefined,
+        visibility: 'hr_only',
+        status: 'active',
+        notes: form.notes.trim() || undefined,
+        uploadedDate: new Date().toISOString(),
+        ...(file ? { fileName: file.name, fileSize: file.size, fileType: file.type } : {}),
+      })
+      if (file) {
+        const dataUrl = await readAsDataUrl(file)
+        const res = await fetch(`/api/hr-documents/${doc.id}/file`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl, fileName: file.name }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          showToast(`Document saved, but the file was not uploaded: ${body?.error || res.statusText}`, 'error')
+        }
+      }
+      setForm(emptyDocForm())
+      setFile(null)
+      setShow(false)
+    } finally {
+      setSaving(false)
+    }
   }
+
+  const { expiring, expired } = expiryCounts(hrDocuments)
+  const visibleDocs = filter === 'attention'
+    ? hrDocuments.filter(d => documentExpiry(d.expiryDate).status !== 'active')
+    : hrDocuments
 
   const columns: ColumnDef<typeof hrDocuments[0]>[] = [
     { key: 'title', label: 'Title', priority: 1, render: d => <span className="font-semibold text-[var(--text-1)]">{d.title}</span>, exportValue: d => d.title },
     { key: 'employeeId', label: 'Employee', priority: 1, render: d => empName(d.employeeId), exportValue: d => empName(d.employeeId) },
     { key: 'type', label: 'Type', priority: 2, render: d => <span className="capitalize">{d.type.replace(/_/g, ' ')}</span>, exportValue: d => d.type },
     { key: 'expiryDate', label: 'Expiry', priority: 2, render: d => d.expiryDate ? fmtDate(d.expiryDate) : '—', exportValue: d => d.expiryDate ?? '' },
-    { key: 'status', label: 'Status', priority: 1, render: d => <Badge status={d.status === 'active' ? 'active' : 'pending'} label={d.status} />, exportValue: d => d.status },
+    {
+      key: 'status', label: 'Status', priority: 1,
+      render: d => {
+        const e = documentExpiry(d.expiryDate)
+        const label = e.status === 'expired' ? 'expired' : e.status === 'expiring' ? `expires in ${e.daysLeft}d` : 'active'
+        return <Badge status={e.status === 'active' ? 'active' : e.status === 'expired' ? 'cancelled' : 'pending'} label={label} />
+      },
+      exportValue: d => documentExpiry(d.expiryDate).status,
+    },
+    {
+      key: 'file', label: 'File', priority: 2,
+      render: d => d.fileName
+        ? <a className="text-primary-600 hover:underline text-xs" href={`/api/hr-documents/${d.id}/file`} target="_blank" rel="noreferrer">View</a>
+        : <span className="text-xs text-[var(--text-4)]">None</span>,
+      exportValue: d => d.fileName ?? '',
+    },
   ]
 
   return (
@@ -173,10 +224,20 @@ export function HRDocumentsTab() {
         <h3 className="text-sm font-bold text-[var(--text-1)] flex items-center gap-2"><Fa icon={faFileLines} /> HR Documents</h3>
         <button className="btn-primary flex items-center gap-2" onClick={() => { setForm(emptyDocForm()); setShow(true) }}><Fa icon={faPlus} /> Add Document</button>
       </div>
+      {(expiring > 0 || expired > 0) && (
+        <div className="hr-submodule-alert m-4 mb-0 rounded-xl p-3 flex items-center justify-between gap-3 text-[12px]" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A', color: 'var(--warning-text)' }}>
+          <span>
+            {expired > 0 && <><strong>{expired} expired</strong>{expiring > 0 ? ' and ' : ''}</>}
+            {expiring > 0 && <strong>{expiring} expiring within 60 days</strong>}
+            {' '}— renew these contracts, permits or certificates.
+          </span>
+          <button className="btn-outline text-[11px]" onClick={() => setFilter(f => f === 'all' ? 'attention' : 'all')}>{filter === 'all' ? 'Show only these' : 'Show all'}</button>
+        </div>
+      )}
       <DataTable
         tableId="hr_documents"
         columns={columns}
-        rows={hrDocuments}
+        rows={visibleDocs}
         rowKey={d => d.id}
         emptyMessage="No HR documents recorded yet"
         exportTitle="HR Documents"
@@ -194,7 +255,10 @@ export function HRDocumentsTab() {
             </div>
             <Field label="Title" required><Input value={form.title} onChange={set('title')} placeholder="e.g. Employment Contract 2026" /></Field>
             <Field label="Notes"><Textarea value={form.notes} onChange={set('notes')} rows={2} /></Field>
-            <div className="hr-modal-actions flex justify-end gap-2"><button className="btn-outline" onClick={() => setShow(false)}>Cancel</button><button className="btn-primary" onClick={save}>Save</button></div>
+            <Field label="File (PDF or image, up to 4 MB)">
+              <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => setFile(e.target.files?.[0] ?? null)} className="text-xs" />
+            </Field>
+            <div className="hr-modal-actions flex justify-end gap-2"><button className="btn-outline" onClick={() => { setShow(false); setFile(null) }}>Cancel</button><button className="btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button></div>
           </div>
         </Modal>
       )}

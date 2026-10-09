@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
@@ -76,6 +77,27 @@ const resolveDepartmentId = async (value?: string | null) => {
   return department.id
 }
 
+// undefined = leave the column alone; '' / null clears it.
+const dateField = (v: unknown): Date | null | undefined => {
+  if (v === undefined) return undefined
+  const raw = String(v ?? '').trim()
+  if (!raw) return null
+  const d = new Date(`${raw.slice(0, 10)}T00:00:00Z`)
+  return Number.isNaN(d.getTime()) ? undefined : d
+}
+const textField = (v: unknown, max: number): string | null | undefined =>
+  v === undefined ? undefined : (String(v ?? '').trim().slice(0, max) || null)
+const checklistField = (v: unknown) => {
+  if (v === undefined) return undefined
+  if (!Array.isArray(v) || v.length === 0) return Prisma.DbNull
+  return v.slice(0, 40).map(item => ({
+    id: String((item as { id?: unknown })?.id ?? '').slice(0, 60),
+    label: String((item as { label?: unknown })?.label ?? '').slice(0, 160),
+    done: Boolean((item as { done?: unknown })?.done),
+    doneAt: (item as { doneAt?: unknown })?.doneAt ? String((item as { doneAt?: unknown }).doneAt).slice(0, 40) : undefined,
+  })) as Prisma.InputJsonValue
+}
+
 type DbEmployee = Awaited<ReturnType<typeof prisma.employee.findFirst>> & {
   department?: { name: string } | null
   user?: { id: string } | null
@@ -86,6 +108,7 @@ const toClientEmployee = (employee: NonNullable<DbEmployee>) => ({
   employeeNo: employee.employeeNumber,
   fullName: `${employee.firstName} ${employee.lastName}`.trim(),
   email: employee.email ?? '',
+  workEmail: employee.workEmail ?? '',
   phone: employee.phone ?? '',
   nationalId: employee.idNumber ?? '',
   kraPin: employee.kraPin ?? '',
@@ -98,8 +121,16 @@ const toClientEmployee = (employee: NonNullable<DbEmployee>) => ({
   status: employee.isActive ? 'active' : 'exited',
   userId: employee.user?.id,
   basicSalary: Number(employee.basicSalary ?? 0),
-  housingAllowance: 0,
-  transportAllowance: 0,
+  housingAllowance: Number(employee.housingAllowance ?? 0),
+  transportAllowance: Number(employee.transportAllowance ?? 0),
+  paymentMode: employee.paymentMode,
+  mpesaNumber: employee.mpesaNumber ?? '',
+  exitDate: employee.endDate ? employee.endDate.toISOString().slice(0, 10) : '',
+  exitReason: employee.exitReason ?? '',
+  exitNotes: employee.exitNotes ?? '',
+  probationEndDate: employee.probationEndDate ? employee.probationEndDate.toISOString().slice(0, 10) : '',
+  onboardingChecklist: Array.isArray(employee.onboardingChecklist) ? employee.onboardingChecklist : [],
+  exitChecklist: Array.isArray(employee.exitChecklist) ? employee.exitChecklist : [],
   bankName: employee.bankName ?? '',
   bankAccount: employee.bankAccount ?? '',
 })
@@ -126,6 +157,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         firstName,
         lastName,
         email: String(body.email ?? '').trim() || null,
+        workEmail: body.workEmail === undefined ? undefined : (String(body.workEmail ?? '').trim().toLowerCase() || null),
         phone: String(body.phone ?? '').trim() || null,
         idNumber: String(body.nationalId ?? body.idNumber ?? '').trim() || null,
         kraPin: String(body.kraPin ?? '').trim() || null,
@@ -137,6 +169,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         jobTitle: String(body.jobTitle ?? '').trim() || null,
         startDate: body.startDate ? new Date(body.startDate) : new Date(),
         basicSalary: Number(body.basicSalary) || 0,
+        housingAllowance: body.housingAllowance === undefined ? undefined : Math.max(0, Number(body.housingAllowance) || 0),
+        transportAllowance: body.transportAllowance === undefined ? undefined : Math.max(0, Number(body.transportAllowance) || 0),
+        paymentMode: ['bank', 'mpesa', 'cash'].includes(String(body.paymentMode)) ? String(body.paymentMode) : undefined,
+        mpesaNumber: body.mpesaNumber === undefined ? undefined : (String(body.mpesaNumber ?? '').trim() || null),
+        endDate: dateField(body.exitDate),
+        probationEndDate: dateField(body.probationEndDate),
+        exitReason: textField(body.exitReason, 60),
+        exitNotes: textField(body.exitNotes, 4000),
+        onboardingChecklist: checklistField(body.onboardingChecklist),
+        exitChecklist: checklistField(body.exitChecklist),
         bankName: String(body.bankName ?? '').trim() || null,
         bankAccount: String(body.bankAccount ?? '').trim() || null,
         isActive: body.status !== 'exited',
