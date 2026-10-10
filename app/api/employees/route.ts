@@ -86,6 +86,14 @@ const dateField = (v: unknown): Date | null | undefined => {
   const d = new Date(`${raw.slice(0, 10)}T00:00:00Z`)
   return Number.isNaN(d.getTime()) ? undefined : d
 }
+// undefined = leave alone; '' clears; anything that is not a UUID, or is the employee themselves, is ignored.
+const managerField = (v: unknown, selfId?: string): string | null | undefined => {
+  if (v === undefined) return undefined
+  const raw = String(v ?? '').trim()
+  if (!raw) return null
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw) || raw === selfId) return undefined
+  return raw
+}
 const textField = (v: unknown, max: number): string | null | undefined =>
   v === undefined ? undefined : (String(v ?? '').trim().slice(0, max) || null)
 const checklistField = (v: unknown) => {
@@ -132,6 +140,7 @@ const toClientEmployee = (employee: NonNullable<DbEmployee>) => ({
   transportAllowance: Number(employee.transportAllowance ?? 0),
   paymentMode: employee.paymentMode,
   mpesaNumber: employee.mpesaNumber ?? '',
+  managerEmployeeId: employee.managerId ?? '',
   exitDate: employee.endDate ? employee.endDate.toISOString().slice(0, 10) : '',
   exitReason: employee.exitReason ?? '',
   exitNotes: employee.exitNotes ?? '',
@@ -222,6 +231,7 @@ export async function POST(request: Request) {
         paymentMode: ['bank', 'mpesa', 'cash'].includes(String(body.paymentMode)) ? String(body.paymentMode) : undefined,
         mpesaNumber: body.mpesaNumber === undefined ? undefined : (String(body.mpesaNumber ?? '').trim() || null),
         endDate: dateField(body.exitDate),
+        managerId: managerField(body.managerEmployeeId),
         probationEndDate: dateField(body.probationEndDate),
         exitReason: textField(body.exitReason, 60),
         exitNotes: textField(body.exitNotes, 4000),
