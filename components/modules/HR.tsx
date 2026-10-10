@@ -234,18 +234,19 @@ function HRContent() {
     router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
+  // Follow the URL, not the local tab. Depending on `tab` here made the effect
+  // run right after a click, while the URL still held the old tab, and snap the
+  // selection back before the navigation landed (a visible flicker).
   useEffect(() => {
     const urlTab = searchParams.get('tab') as HRTab | null
     const safeTab = urlTab && allowedTabs.includes(urlTab) ? urlTab : defaultTab
-    if (safeTab !== tab) {
-      setLocalTab(safeTab)
-      if (urlTab && safeTab !== urlTab) {
-        const params = new URLSearchParams(searchParams.toString())
-        params.set('tab', safeTab)
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-      }
+    setLocalTab(current => (current === safeTab ? current : safeTab))
+    if (urlTab && safeTab !== urlTab) {
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('tab', safeTab)
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
     }
-  }, [searchParams, tab, defaultTab, allowedTabs, router, pathname])
+  }, [searchParams, defaultTab, allowedTabs, router, pathname])
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
