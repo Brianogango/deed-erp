@@ -29,6 +29,9 @@ export interface StatutoryRow {
   employerHousingLevy: number
   pension: number
   personalRelief: number
+  /** Non-cash benefits taxed in the month (not paid out) and insurance relief given against PAYE. */
+  nonCashBenefits: number
+  insuranceRelief: number
   paye: number
   loanDeductions: number
   otherDeductions: number
@@ -61,6 +64,7 @@ export interface AnnualEmployeeRow {
     taxablePay: number
     taxCharged: number
     personalRelief: number
+    insuranceRelief: number
     paye: number
   }>
 }
@@ -81,6 +85,8 @@ export interface PayslipDetail {
   deductions: Array<{ label: string; amount: number }>
   employer: Array<{ label: string; amount: number }>
   advances: Array<{ ref: string; amount: number; remainingAfter: number }>
+  /** Tax-only items shown under the totals: non-cash benefits taxed but not paid, insurance relief given. */
+  taxNotes: Array<{ label: string; amount: number }>
   gross: number
   totalDeductions: number
   net: number

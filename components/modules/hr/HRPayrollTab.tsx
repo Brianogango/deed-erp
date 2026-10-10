@@ -10,6 +10,7 @@ import { faCheck, faCircleCheck, faMoneyBillWave, faDownload, faPrint } from '@f
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import { StatutoryFilesModal, AnnualP9Modal } from './HRStatutoryPanel'
 import { PayrollVarianceModal } from './HRPayrollVariance'
+import { PayrollAdjustmentsPanel, StaffLoansPanel, EmailPayslipsModal } from './HRPayrollExtras'
 import { downloadPayslipPdfFile, openPayslipPdfForPrint } from '@/lib/hr/payslip-pdf'
 
 export default function HRPayrollTab() {
@@ -73,6 +74,7 @@ export default function HRPayrollTab() {
   const [statutoryRun, setStatutoryRun] = useState<{ id: string; ref: string } | null>(null)
   const [showAnnual, setShowAnnual] = useState(false)
   const [varianceRunId, setVarianceRunId] = useState<string | null>(null)
+  const [emailRun, setEmailRun] = useState<{ id: string; ref: string } | null>(null)
 
   const payrollPaymentFor = (runId: string) =>
     journalEntries.find(j => j.payrollRunId === runId && j.ref.startsWith('JRN/PAYROLL-PAY/'))
@@ -232,6 +234,12 @@ export default function HRPayrollTab() {
             <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
           </button>
         )}
+        {run.status === 'posted' && (isAdmin || isFinance) && (
+          <button style={{ background: 'var(--bg-muted)', border: 'none', borderRadius: 6, color: 'var(--text-2)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }}
+            onClick={e => { e.stopPropagation(); setEmailRun({ id: run.id, ref: run.ref }) }}>
+            Email payslips
+          </button>
+        )}
         {canManagePayroll && (
           <button style={{ background: 'var(--bg-muted)', border: 'none', borderRadius: 6, color: 'var(--text-2)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }}
             onClick={e => { e.stopPropagation(); setVarianceRunId(run.id) }}>
@@ -383,6 +391,9 @@ export default function HRPayrollTab() {
         />
       </div>
 
+      {canManagePayroll && <PayrollAdjustmentsPanel />}
+      {canManagePayroll && <StaffLoansPanel />}
+
       {/* Payroll → Accounting journal postings */}
       {canManagePayroll && payrollJournals.length > 0 && (
         <div className="hr-submodule-panel hr-payroll-journals card overflow-hidden">
@@ -463,6 +474,7 @@ export default function HRPayrollTab() {
       })()}
 
       {statutoryRun && <StatutoryFilesModal runId={statutoryRun.id} runRef={statutoryRun.ref} onClose={() => setStatutoryRun(null)} />}
+      {emailRun && <EmailPayslipsModal runId={emailRun.id} runRef={emailRun.ref} onClose={() => setEmailRun(null)} />}
       {varianceRunId && (() => { const r = payrollRuns.find(x => x.id === varianceRunId); return r ? <PayrollVarianceModal run={r} onClose={() => setVarianceRunId(null)} /> : null })()}
       {showAnnual && <AnnualP9Modal onClose={() => setShowAnnual(false)} />}
 

@@ -487,6 +487,7 @@ model Employee {
   sickLeaveDays    Int       @default(10) @map("sick_leave_days")
   emergencyContact Json?     @map("emergency_contact")
   probationEndDate DateTime? @map("probation_end_date") @db.Date
+  managerId        String?   @map("manager_id") @db.Uuid
   exitReason       String?   @map("exit_reason") @db.VarChar(60)
   exitNotes        String?   @map("exit_notes")
   // [{ id, label, done, doneAt?, doneBy? }] checklists driven from the HR screen.
@@ -509,6 +510,9 @@ model Employee {
   salaryAdvances SalaryAdvance[]
   commissions   SalesCommission[]
   disciplinaryRecords EmployeeDisciplinaryRecord[]
+  payrollAdjustments  PayrollAdjustment[]
+  policyAcknowledgements PolicyAcknowledgement[]
+  appraisals          Appraisal[]
 
   @@index([departmentId], map: "idx_employees_department")
   @@map("employees")
@@ -4176,4 +4180,84 @@ model ReceiptDocument {
 
   @@index([poId], map: "idx_receipt_documents_po")
   @@map("receipt_documents")
+}
+
+// One-off pay items for a payroll month: bonuses, allowances, deductions, non-cash
+// benefits and insurance premiums. Pending items are picked up when the run for
+// that month is created and marked applied.
+model PayrollAdjustment {
+  id           String   @id @default(uuid()) @db.Uuid
+  employeeId   String   @map("employee_id") @db.Uuid
+  periodYear   Int      @map("period_year")
+  periodMonth  Int      @map("period_month")
+  // earning | deduction | benefit_in_kind | insurance_premium
+  kind         String   @db.VarChar(24)
+  label        String   @db.VarChar(120)
+  amount       Decimal  @db.Decimal(12, 2)
+  // pending | applied | cancelled
+  status       String   @default("pending") @db.VarChar(12)
+  appliedRunId String?  @map("applied_run_id") @db.Uuid
+  createdById  String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([periodYear, periodMonth, status], map: "idx_payroll_adjustments_period")
+  @@index([employeeId], map: "idx_payroll_adjustments_employee")
+  @@map("payroll_adjustments")
+}
+
+model PolicyAcknowledgement {
+  id             String   @id @default(uuid()) @db.Uuid
+  employeeId     String   @map("employee_id") @db.Uuid
+  policyId       String   @map("policy_id") @db.VarChar(80)
+  policyTitle    String   @map("policy_title") @db.VarChar(200)
+  policyVersion  String   @map("policy_version") @db.VarChar(40)
+  acknowledgedAt DateTime @default(now()) @map("acknowledged_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, policyId, policyVersion], map: "uq_policy_ack")
+  @@map("policy_acknowledgements")
+}
+
+model AppraisalCycle {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(120)
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd   DateTime @map("period_end") @db.Date
+  // open | closed
+  status      String   @default("open") @db.VarChar(12)
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  appraisals Appraisal[]
+
+  @@map("appraisal_cycles")
+}
+
+model Appraisal {
+  id               String   @id @default(uuid()) @db.Uuid
+  cycleId          String   @map("cycle_id") @db.Uuid
+  employeeId       String   @map("employee_id") @db.Uuid
+  reviewerName     String?  @map("reviewer_name") @db.VarChar(160)
+  // pending_self | pending_manager | completed
+  status           String   @default("pending_self") @db.VarChar(20)
+  goals            Json     @default("[]")
+  selfComments     String?  @map("self_comments")
+  managerComments  String?  @map("manager_comments")
+  strengths        String?
+  improvements     String?
+  selfRating       Int?     @map("self_rating")
+  managerRating    Int?     @map("manager_rating")
+  finalRating      Int?     @map("final_rating")
+  employeeAckAt    DateTime? @map("employee_ack_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  cycle    AppraisalCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, employeeId], map: "uq_appraisal_cycle_employee")
+  @@map("appraisals")
 }

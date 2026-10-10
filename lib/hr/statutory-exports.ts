@@ -28,17 +28,18 @@ export function buildPayeReturn(report: StatutoryReport, residentOverride?: (r: 
     const resident = residentOverride ? residentOverride(r) : true
     const otherAllowances = m2(r.commission + r.otherAdditions)
     const cash = m2(r.gross)
+    const nonCash = m2(r.nonCashBenefits)
     const deductible = m2(r.nssf + r.shif + r.housingLevy + r.pension)
-    const taxable = Math.max(0, m2(cash - deductible))
+    const taxable = Math.max(0, m2(cash + nonCash - deductible))
     return [
       r.kraPin, r.employeeName, resident ? 'Resident' : 'Non-Resident', 'Primary Employee',
       m2(r.basic), m2(r.housingAllowance), m2(r.transportAllowance), 0, m2(r.overtimePay),
       0, 0, otherAllowances, cash,
-      0, 0, 0, cash,
+      0, nonCash, nonCash, m2(cash + nonCash),
       'Benefit not given', 0, 0, 0, 0,
-      cash, m2(cash * 0.3), m2(r.nssf + r.pension), 30000,
+      m2(cash + nonCash), m2(cash * 0.3), m2(r.nssf + r.pension), 30000,
       0, 0, deductible, taxable,
-      m2(r.paye + r.personalRelief), m2(r.personalRelief), 0, m2(r.paye), m2(r.paye),
+      m2(r.paye + r.personalRelief + r.insuranceRelief), m2(r.personalRelief), m2(r.insuranceRelief), m2(r.paye), m2(r.paye),
     ]
   })
   return { headers, rows, filename: `PAYE-return-${tag(report)}` }
@@ -112,20 +113,20 @@ export function normalizeKenyanMsisdn(raw: string): string | null {
 
 /** P9 (tax deduction card) rows for a single employee, with an annual total row. */
 export function buildP9(emp: AnnualEmployeeRow, year: number): CsvTable {
-  const headers = ['Month', 'Basic Salary', 'Benefits / Allowances', 'Gross Pay', 'NSSF', 'SHIF', 'Housing Levy', 'Pension', 'Taxable Pay', 'Tax Charged', 'Personal Relief', 'PAYE Deducted']
+  const headers = ['Month', 'Basic Salary', 'Benefits / Allowances', 'Gross Pay', 'NSSF', 'SHIF', 'Housing Levy', 'Pension', 'Taxable Pay', 'Tax Charged', 'Personal Relief', 'Insurance Relief', 'PAYE Deducted']
   const names = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-  const rows = emp.months.map(x => [names[x.month - 1], x.basic, x.benefits, x.gross, x.nssf, x.shif, x.housingLevy, x.pension, x.taxablePay, x.taxCharged, x.personalRelief, x.paye])
+  const rows = emp.months.map(x => [names[x.month - 1], x.basic, x.benefits, x.gross, x.nssf, x.shif, x.housingLevy, x.pension, x.taxablePay, x.taxCharged, x.personalRelief, x.insuranceRelief, x.paye])
   const total = (i: number) => m2(rows.reduce((s, r) => s + Number(r[i]), 0))
-  rows.push(['TOTAL', total(1), total(2), total(3), total(4), total(5), total(6), total(7), total(8), total(9), total(10), total(11)])
+  rows.push(['TOTAL', total(1), total(2), total(3), total(4), total(5), total(6), total(7), total(8), total(9), total(10), total(11), total(12)])
   return { headers, rows, filename: `P9-${year}-${emp.employeeNo}` }
 }
 
 /** One-file annual summary of every employee's P9 totals (for the accountant / year-end iTax). */
 export function buildAnnualSummary(employees: AnnualEmployeeRow[], year: number): CsvTable {
-  const headers = ['Employee No', 'KRA PIN', 'Name', 'Months Paid', 'Gross Pay', 'NSSF', 'SHIF', 'Housing Levy', 'Taxable Pay', 'Tax Charged', 'Personal Relief', 'PAYE Deducted']
+  const headers = ['Employee No', 'KRA PIN', 'Name', 'Months Paid', 'Gross Pay', 'NSSF', 'SHIF', 'Housing Levy', 'Taxable Pay', 'Tax Charged', 'Personal Relief', 'Insurance Relief', 'PAYE Deducted']
   const rows = employees.map(e => {
     const s = (f: (x: AnnualEmployeeRow['months'][number]) => number) => m2(e.months.reduce((a, x) => a + f(x), 0))
-    return [e.employeeNo, e.kraPin, e.employeeName, e.months.length, s(x => x.gross), s(x => x.nssf), s(x => x.shif), s(x => x.housingLevy), s(x => x.taxablePay), s(x => x.taxCharged), s(x => x.personalRelief), s(x => x.paye)]
+    return [e.employeeNo, e.kraPin, e.employeeName, e.months.length, s(x => x.gross), s(x => x.nssf), s(x => x.shif), s(x => x.housingLevy), s(x => x.taxablePay), s(x => x.taxCharged), s(x => x.personalRelief), s(x => x.insuranceRelief), s(x => x.paye)]
   })
   return { headers, rows, filename: `Annual-PAYE-summary-${year}` }
 }

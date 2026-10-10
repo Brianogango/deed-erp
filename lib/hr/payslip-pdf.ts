@@ -150,7 +150,19 @@ export function buildPayslipPdf(d: PayslipDetail, company: PayslipCompany): jsPD
   })
   const ytdEnd = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
 
-  const footY = Math.max(erEnd, ytdEnd) + 28
+  let notesEnd = Math.max(erEnd, ytdEnd)
+  if (d.taxNotes?.length) {
+    autoTable(doc, {
+      ...tableOpts,
+      startY: notesEnd + 12,
+      margin: { left: M, right: M },
+      columnStyles: { 1: { halign: 'right' } },
+      head: [['Tax notes', { content: 'Amount', styles: { halign: 'right' as const } }]],
+      body: d.taxNotes.map(r => [r.label, kes(r.amount)]),
+    })
+    notesEnd = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+  }
+  const footY = notesEnd + 28
   doc.setFont('helvetica', 'italic').setFontSize(7.5).setTextColor(...MUTED)
   doc.text('This is a computer-generated payslip and does not require a signature.', M, Math.min(footY, 790))
   doc.text(`Run ${d.period.runReference}${d.paymentStatus === 'paid' ? ' · Paid' : ''}`, W - M, Math.min(footY, 790), { align: 'right' })
@@ -168,7 +180,7 @@ export function openPayslipPdfForPrint(d: PayslipDetail, company: PayslipCompany
 
 /** KRA P9 tax deduction card (annual, one employee). */
 export function buildP9Pdf(
-  emp: { employeeNo: string; employeeName: string; kraPin: string; months: Array<{ month: number; basic: number; benefits: number; gross: number; nssf: number; shif: number; housingLevy: number; pension: number; taxablePay: number; taxCharged: number; personalRelief: number; paye: number }> },
+  emp: { employeeNo: string; employeeName: string; kraPin: string; months: Array<{ month: number; basic: number; benefits: number; gross: number; nssf: number; shif: number; housingLevy: number; pension: number; taxablePay: number; taxCharged: number; personalRelief: number; insuranceRelief: number; paye: number }> },
   year: number,
   company: PayslipCompany,
 ): jsPDF {
@@ -184,7 +196,7 @@ export function buildP9Pdf(
   doc.text(`Employee: ${emp.employeeName} (${emp.employeeNo})   PIN: ${emp.kraPin || '—'}`, M, 76)
 
   const n = (v: number) => (Number(v) || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  const body = emp.months.map(x => [MONTHS[x.month - 1], n(x.basic), n(x.benefits), n(x.gross), n(x.nssf + x.pension), n(x.shif + x.housingLevy), n(x.taxablePay), n(x.taxCharged), n(x.personalRelief), n(x.paye)])
+  const body = emp.months.map(x => [MONTHS[x.month - 1], n(x.basic), n(x.benefits), n(x.gross), n(x.nssf + x.pension), n(x.shif + x.housingLevy), n(x.taxablePay), n(x.taxCharged), n(x.personalRelief + x.insuranceRelief), n(x.paye)])
   const sum = (f: (x: typeof emp.months[number]) => number) => emp.months.reduce((s, x) => s + f(x), 0)
   autoTable(doc, {
     startY: 92,
@@ -193,9 +205,9 @@ export function buildP9Pdf(
     styles: { font: 'helvetica', fontSize: 8, cellPadding: 4, textColor: INK, lineColor: LINE },
     headStyles: { fillColor: SOFT, textColor: NAVY, fontStyle: 'bold' },
     columnStyles: Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => [i, { halign: 'right' }])),
-    head: [['Month', 'Basic salary', 'Benefits', 'Gross pay', 'NSSF + pension', 'SHIF + housing levy', 'Taxable pay', 'Tax charged', 'Personal relief', 'PAYE']],
+    head: [['Month', 'Basic salary', 'Benefits', 'Gross pay', 'NSSF + pension', 'SHIF + housing levy', 'Taxable pay', 'Tax charged', 'Personal + insurance relief', 'PAYE']],
     body,
-    foot: [['TOTAL', n(sum(x => x.basic)), n(sum(x => x.benefits)), n(sum(x => x.gross)), n(sum(x => x.nssf + x.pension)), n(sum(x => x.shif + x.housingLevy)), n(sum(x => x.taxablePay)), n(sum(x => x.taxCharged)), n(sum(x => x.personalRelief)), n(sum(x => x.paye))]],
+    foot: [['TOTAL', n(sum(x => x.basic)), n(sum(x => x.benefits)), n(sum(x => x.gross)), n(sum(x => x.nssf + x.pension)), n(sum(x => x.shif + x.housingLevy)), n(sum(x => x.taxablePay)), n(sum(x => x.taxCharged)), n(sum(x => x.personalRelief + x.insuranceRelief)), n(sum(x => x.paye))]],
     footStyles: { fillColor: SOFT, textColor: INK, fontStyle: 'bold' },
   })
   return doc

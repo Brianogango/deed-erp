@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { isRoleAllowed } from '@/lib/auth/authorization'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
+import { allocateLoanRepayment } from '@/lib/hr/loans'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 import prisma from '@/lib/prisma'
@@ -184,6 +185,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         where: { payrollRunId: resolvedParams.id },
         data: { status: 'published' },
       })
+      // Staff loans are only reduced once the run is posted, by what each payslip actually deducted.
+      for (const slip of existing.payslips) {
+        const deducted = Number(slip.loanDeductions || 0)
+        if (deducted <= 0) continue
+        const open = await tx.employeeLoan.findMany({ where: { employeeId: slip.employeeId, isCleared: false }, orderBy: { issueDate: 'asc' } })
+        const plan = allocateLoanRepayment(
+          open.map(l => ({ id: l.id, issueDate: l.issueDate, monthlyDeduction: Number(l.monthlyDeduction), outstanding: Number(l.outstanding) })),
+          deducted,
+        )
+        for (const a of plan) {
+          await tx.employeeLoan.update({ where: { id: a.id }, data: { outstanding: a.outstandingAfter, isCleared: a.cleared } })
+        }
+      }
       await writeFinancialAuditInTx(tx, {
         userId: actorId,
         action: 'post_payroll',

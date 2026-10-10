@@ -10,6 +10,7 @@ const detail: PayslipDetail = {
   deductions: [{ label: 'PAYE', amount: 20000 }, { label: 'NSSF', amount: 6000 }],
   employer: [{ label: 'Employer NSSF', amount: 6000 }],
   advances: [{ ref: 'ADV/001', amount: 3000, remainingAfter: 6000 }],
+  taxNotes: [{ label: 'Non-cash benefit (taxed, not paid)', amount: 20000 }, { label: 'Insurance relief (reduces PAYE)', amount: 1500 }],
   gross: 105000, totalDeductions: 29000, net: 76000,
   ytd: { gross: 945000, paye: 180000, nssf: 54000, net: 684000 },
 }
@@ -22,7 +23,7 @@ describe('payslip pdf', () => {
     expect(payslipFileName(detail)).toBe('Payslip-PS-2026-09-001.pdf')
   })
   it('builds a P9 card', () => {
-    const m = { month: 1, basic: 1, benefits: 0, gross: 1, nssf: 0, shif: 0, housingLevy: 0, pension: 0, taxablePay: 1, taxCharged: 0, personalRelief: 0, paye: 0 }
+    const m = { month: 1, basic: 1, benefits: 0, gross: 1, nssf: 0, shif: 0, housingLevy: 0, pension: 0, taxablePay: 1, taxCharged: 0, personalRelief: 0, insuranceRelief: 0, paye: 0 }
     const doc = buildP9Pdf({ employeeNo: 'E1', employeeName: 'Jane', kraPin: 'A1', months: [m] }, 2026, { name: 'Deed' })
     expect(doc.getNumberOfPages()).toBe(1)
   })
