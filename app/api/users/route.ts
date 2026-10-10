@@ -10,16 +10,17 @@ import { generateTemporaryPassword } from '@/lib/auth/temporary-credentials'
 
 const sanitizeUsername = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9_.-]+/g, '.').replace(/^\.+|\.+$/g, '')
 
-const buildUsernameCandidates = (employee: { email: string | null; employeeNumber: string; firstName: string; lastName: string }) => {
+const buildUsernameCandidates = (employee: { email: string | null; workEmail?: string | null; employeeNumber: string; firstName: string; lastName: string }) => {
   const fullName = `${employee.firstName ?? ''} ${employee.lastName ?? ''}`.trim()
   return [
+    employee.workEmail?.split('@')[0] ?? '',
     employee.email?.split('@')[0] ?? '',
     employee.employeeNumber,
     fullName,
   ].map(sanitizeUsername).filter(Boolean)
 }
 
-const resolveAvailableUsername = async (employee: { email: string | null; employeeNumber: string; firstName: string; lastName: string }) => {
+const resolveAvailableUsername = async (employee: { email: string | null; workEmail?: string | null; employeeNumber: string; firstName: string; lastName: string }) => {
   const candidates = buildUsernameCandidates(employee)
   for (const candidate of candidates) {
     if (!(await findAuthUserByUsername(candidate))) return candidate
@@ -79,7 +80,8 @@ export async function POST(request: Request) {
     const input = {
       ...requested,
       employeeId: employee.id,
-      email: employee.email || `${username}@deed.africa`,
+      // Credentials go to the personal address first: the work mailbox may not exist yet on day one.
+      email: employee.email || employee.workEmail || `${username}@deed.africa`,
       username,
       name,
       modules,
