@@ -31469,3 +31469,86 @@ body :is(.dt-toolbar, .table-row, .data-table-actions, .compact-actions, .sectio
     font-size: .78rem !important;
   }
 }
+
+/* ── In-app notification pop-ups ───────────────────────────────────────── */
+.notification-popups {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 1200;
+  width: min(380px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.notification-popup {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 14px 36px 14px 14px;
+  background: var(--bg-card);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  animation: notificationPopupIn 220ms ease-out;
+}
+.notification-popup--urgent { border-left-color: var(--danger); }
+.notification-popup__icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--bg-muted);
+  font-size: 18px;
+}
+.notification-popup__body { min-width: 0; flex: 1; }
+.notification-popup__title { margin: 0; font-size: 13px; font-weight: 700; line-height: 1.3; }
+.notification-popup__text {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notification-popup__actions { display: flex; gap: 8px; margin-top: 10px; }
+.notification-popup__btn {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.notification-popup__btn:hover { background: var(--bg-muted); }
+.notification-popup__btn--primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.notification-popup__btn--primary:hover { background: var(--primary); filter: brightness(0.92); }
+.notification-popup__close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-4);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+@keyframes notificationPopupIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notification-popup { animation: none; }
+}
