@@ -2405,6 +2405,17 @@ export interface CandidateOffer {
   offeredDate: string
   status: 'pending' | 'accepted' | 'declined'
   notes?: string
+  probationMonths?: number
+  reportsTo?: string
+  /** Last day the candidate can accept. */
+  validUntil?: string
+  additionalTerms?: string
+}
+export interface CandidateCommunication {
+  id: string
+  kind: 'interview_invite' | 'rejection' | 'offer'
+  at: string
+  to: string
 }
 export interface Candidate {
   id: string; jobId: string; firstName: string; lastName: string; email: string; phone: string; stage: CandidateStage; appliedDate: string; resumeUrl?: string; notes?: string;
@@ -2418,6 +2429,8 @@ export interface Candidate {
   /** CV uploaded to the server (see /api/hr-documents/[candidateId]/file). */
   resumeFile?: { name: string; size: number; type: string }
   hiredEmployeeId?: string
+  /** Emails sent to the candidate from the ERP. */
+  communications?: CandidateCommunication[]
 }
 
 export type TrainingStatus = 'not_started' | 'in_progress' | 'completed'

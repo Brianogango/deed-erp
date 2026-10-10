@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { sendEmail } from '@/lib/integrations/email'
-import { loadAppState } from '@/lib/server-store'
+import { companyForPdf } from '@/lib/hr/company-server'
 import { loadPayslipDetail } from '@/lib/hr/payroll-reports.server'
 import { buildPayslipPdf, payslipFileName } from '@/lib/hr/payslip-pdf'
 import { buildPayslipEmail } from '@/lib/hr/payslip-email'
@@ -14,15 +14,6 @@ const ROLES = ['director', 'finance_officer']
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const pickEmail = (e: { workEmail: string | null; email: string | null }) =>
   [e.workEmail, e.email].map(v => String(v ?? '').trim()).find(v => EMAIL_RE.test(v)) ?? null
-
-async function companyForPdf() {
-  const state = await loadAppState(['deed_companySettings']).catch(() => ({} as Record<string, unknown>))
-  const c = (state.deed_companySettings ?? {}) as Record<string, string | undefined>
-  return {
-    name: c.name || process.env.COMPANY_NAME || 'Deed Technologies',
-    address: c.address, city: c.city, phone: c.phone, email: c.email, kraPin: c.kraPin,
-  }
-}
 
 /** Who would receive a payslip, and who has no usable email. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
