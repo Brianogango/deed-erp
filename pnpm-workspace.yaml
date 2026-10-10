@@ -4,6 +4,7 @@ allowBuilds:
   prisma: true
   puppeteer: true
   sharp: true
+  tesseract.js: true
 auditConfig:
   ignoreGhsas:
     - GHSA-jmr9-qjv8-65gv
