@@ -11,6 +11,7 @@ import {
   PIPELINE_STAGES, REJECTION_REASONS, averageRating, daysInStage, findDuplicates, groupByStage, jobFunnel, nextEmployeeNumber, stageLabel,
 } from '@/lib/hr/recruitment'
 import { ONBOARDING_TEMPLATES, buildChecklist } from '@/lib/hr/checklists'
+import { buildOfferLetterPdf } from '@/lib/hr/offer-letter'
 
 type JobForm = {
   title: string; departmentId: string; location: string; type: JobPosting['type'] | ''
@@ -287,7 +288,7 @@ export default function HRRecruitmentTab() {
 
       {active && (
         <CandidateDetail
-          key={active.id} candidate={active} jobTitle={jobTitle(active.jobId)} canManage={canManage}
+          key={active.id} candidate={active} jobTitle={jobTitle(active.jobId)} job={jobPostings.find(j => j.id === active.jobId)} departmentName={departments.find(d => d.id === jobPostings.find(j => j.id === active.jobId)?.departmentId)?.name} canManage={canManage}
           onClose={() => setActiveId(null)} onMove={moveStage} onUpdate={updateCandidate}
           onReject={() => setRejectId(active.id)} onHire={() => setHireId(active.id)}
         />
@@ -295,7 +296,20 @@ export default function HRRecruitmentTab() {
 
       {rejectId && (() => {
         const c = candidates.find(x => x.id === rejectId)
-        return c ? <RejectModal candidate={c} onClose={() => setRejectId(null)} onConfirm={reason => { updateCandidate(c.id, { stage: 'rejected', stageChangedDate: nowIso(), rejectionReason: reason }); setRejectId(null) }} /> : null
+        return c ? <RejectModal candidate={c} onClose={() => setRejectId(null)} onConfirm={async (reason, sendMail) => {
+          const communications = [...(c.communications ?? [])]
+          if (sendMail && c.email) {
+            try {
+              const res = await fetch('/api/recruitment/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'rejection', to: c.email, candidateId: c.id, candidateName: `${c.firstName} ${c.lastName}`.trim(), jobTitle: jobTitle(c.jobId) }) })
+              const body = await res.json().catch(() => ({}))
+              if (!res.ok) throw new Error(body?.error || 'The email could not be sent')
+              communications.push({ id: uid(), kind: 'rejection', at: nowIso(), to: c.email })
+              showToast(`Rejection email sent to ${c.email}`, 'success')
+            } catch (e) { showToast(`Candidate rejected, but the email was not sent: ${e instanceof Error ? e.message : 'unknown error'}`, 'error') }
+          }
+          updateCandidate(c.id, { stage: 'rejected', stageChangedDate: nowIso(), rejectionReason: reason, communications })
+          setRejectId(null)
+        }} /> : null
       })()}
 
       {hireId && (() => {
@@ -327,17 +341,18 @@ export default function HRRecruitmentTab() {
 }
 
 // ── Candidate detail ──────────────────────────────────────────────────────────
-function CandidateDetail({ candidate: c, jobTitle, canManage, onClose, onMove, onUpdate, onReject, onHire }: {
-  candidate: Candidate; jobTitle: string; canManage: boolean; onClose: () => void
+function CandidateDetail({ candidate: c, jobTitle, job, departmentName, canManage, onClose, onMove, onUpdate, onReject, onHire }: {
+  candidate: Candidate; jobTitle: string; job?: JobPosting; departmentName?: string; canManage: boolean; onClose: () => void
   onMove: (c: Candidate, s: CandidateStage) => void
   onUpdate: (id: string, patch: Partial<Candidate>) => void
   onReject: () => void; onHire: () => void
 }) {
-  const { showToast } = useApp()
+  const { showToast, companySettings } = useApp()
   const [tab, setTab] = useState<'profile' | 'interviews' | 'offer'>('profile')
+  const [emailing, setEmailing] = useState(false)
   const [notes, setNotes] = useState(c.notes ?? '')
   const [iv, setIv] = useState({ scheduledAt: '', mode: 'in_person' as CandidateInterview['mode'], interviewer: '', location: '' })
-  const [offer, setOffer] = useState({ salary: String(c.offer?.salary ?? ''), startDate: c.offer?.startDate ?? '', notes: c.offer?.notes ?? '' })
+  const [offer, setOffer] = useState({ salary: String(c.offer?.salary ?? ''), startDate: c.offer?.startDate ?? '', notes: c.offer?.notes ?? '', probationMonths: String(c.offer?.probationMonths ?? 3), reportsTo: c.offer?.reportsTo ?? '', validUntil: c.offer?.validUntil ?? '', additionalTerms: c.offer?.additionalTerms ?? '' })
   const [uploading, setUploading] = useState(false)
   const interviews = c.interviews ?? []
   const avg = averageRating(c)
@@ -359,9 +374,48 @@ function CandidateDetail({ candidate: c, jobTitle, canManage, onClose, onMove, o
     if (!Number.isFinite(salary) || salary <= 0) { showToast('Enter the offered monthly basic salary', 'error'); return }
     if (!offer.startDate) { showToast('Enter the proposed start date', 'error'); return }
     onUpdate(c.id, {
-      offer: { salary, startDate: offer.startDate, notes: offer.notes.trim() || undefined, offeredDate: c.offer?.offeredDate ?? today(), status: c.offer?.status ?? 'pending' },
+      offer: {
+        salary, startDate: offer.startDate, notes: offer.notes.trim() || undefined, offeredDate: c.offer?.offeredDate ?? today(), status: c.offer?.status ?? 'pending',
+        probationMonths: Number(offer.probationMonths) > 0 ? Math.floor(Number(offer.probationMonths)) : undefined,
+        reportsTo: offer.reportsTo.trim() || undefined, validUntil: offer.validUntil || undefined, additionalTerms: offer.additionalTerms.trim() || undefined,
+      },
       ...(c.stage !== 'offered' && c.stage !== 'hired' ? { stage: 'offered' as CandidateStage, stageChangedDate: nowIso() } : {}),
     })
+  }
+
+  const logEmail = (kind: 'interview_invite' | 'rejection' | 'offer', to: string) =>
+    onUpdate(c.id, { communications: [...(c.communications ?? []), { id: uid(), kind, at: nowIso(), to }] })
+
+  const emailCandidate = async (kind: 'interview_invite' | 'offer', extra: Record<string, unknown>) => {
+    if (!c.email) { showToast('This candidate has no email address', 'error'); return }
+    setEmailing(true)
+    try {
+      const res = await fetch('/api/recruitment/email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, to: c.email, candidateId: c.id, candidateName: `${c.firstName} ${c.lastName}`.trim(), jobTitle, ...extra }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || 'The email could not be sent')
+      showToast(`Email sent to ${body.to ?? c.email}`, 'success')
+      logEmail(kind, c.email)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'The email could not be sent', 'error')
+    } finally { setEmailing(false) }
+  }
+
+  const offerPayload = () => c.offer && ({
+    startDate: c.offer.startDate, monthlyBasicSalary: c.offer.salary, validUntil: c.offer.validUntil, probationMonths: c.offer.probationMonths,
+    reportsTo: c.offer.reportsTo, additionalTerms: c.offer.additionalTerms, department: departmentName, location: job?.location, employmentType: job?.type,
+  })
+
+  const downloadOfferLetter = () => {
+    if (!c.offer) { showToast('Record the offer first', 'error'); return }
+    buildOfferLetterPdf({
+      candidateName: `${c.firstName} ${c.lastName}`.trim(), jobTitle, department: departmentName, location: job?.location, employmentType: job?.type,
+      startDate: c.offer.startDate, monthlyBasicSalary: c.offer.salary, probationMonths: c.offer.probationMonths, reportsTo: c.offer.reportsTo,
+      validUntil: c.offer.validUntil, additionalTerms: c.offer.additionalTerms, issuedOn: today(),
+    }, { name: companySettings.name, address: companySettings.address, city: companySettings.city, phone: companySettings.phone, email: companySettings.email, kraPin: companySettings.kraPin })
+      .save(`Offer letter - ${c.firstName} ${c.lastName}.pdf`)
   }
 
   const upload = async (file: File) => {
@@ -428,6 +482,14 @@ function CandidateDetail({ candidate: c, jobTitle, canManage, onClose, onMove, o
               {canManage && <label className="btn-outline text-[11px] cursor-pointer">{uploading ? 'Uploading…' : c.resumeFile ? 'Replace' : 'Upload CV'}<input type="file" hidden accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = '' }} /></label>}
             </div>
           </div>
+          {c.communications && c.communications.length > 0 && (
+            <div>
+              <span className="text-[var(--text-4)]">Emails sent</span>
+              {c.communications.map(m => (
+                <p key={m.id} className="text-[11px]">{m.kind === 'interview_invite' ? 'Interview invitation' : m.kind === 'offer' ? 'Offer letter' : 'Rejection'} to {m.to} · {fmtDate(m.at)}</p>
+              ))}
+            </div>
+          )}
           <Field label="Notes">
             <Textarea rows={3} value={notes} onChange={setNotes} />
           </Field>
@@ -446,6 +508,11 @@ function CandidateDetail({ candidate: c, jobTitle, canManage, onClose, onMove, o
               </div>
               {i.location && <p style={{ color: 'var(--text-3)' }}>{i.location}</p>}
               {i.status === 'done' && <p className="mt-1"><Stars value={i.rating ?? null} /> {i.feedback && <span>· {i.feedback}</span>}</p>}
+              {canManage && i.status === 'scheduled' && (
+                <button className="btn-outline text-[10px] mt-1" disabled={emailing} onClick={() => emailCandidate('interview_invite', { interview: { scheduledAt: i.scheduledAt, mode: i.mode, interviewer: i.interviewer, location: i.location } })}>
+                  {emailing ? 'Sending…' : 'Email invitation'}
+                </button>
+              )}
               {canManage && i.status === 'scheduled' && <InterviewResult onSave={(rating, feedback) => patchInterview(i.id, { status: 'done', rating, feedback })} onCancel={() => patchInterview(i.id, { status: 'cancelled' })} />}
             </div>
           ))}
@@ -476,9 +543,17 @@ function CandidateDetail({ candidate: c, jobTitle, canManage, onClose, onMove, o
                 <Field label="Monthly basic salary (KSh)"><Input type="number" value={offer.salary} onChange={v => setOffer(p => ({ ...p, salary: v }))} /></Field>
                 <Field label="Start date"><Input type="date" value={offer.startDate} onChange={v => setOffer(p => ({ ...p, startDate: v }))} /></Field>
               </div>
-              <Field label="Offer notes"><Textarea rows={2} value={offer.notes} onChange={v => setOffer(p => ({ ...p, notes: v }))} /></Field>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Field label="Probation (months)"><Input type="number" value={offer.probationMonths} onChange={v => setOffer(p => ({ ...p, probationMonths: v }))} /></Field>
+                <Field label="Reports to"><Input value={offer.reportsTo} onChange={v => setOffer(p => ({ ...p, reportsTo: v }))} /></Field>
+                <Field label="Offer valid until"><Input type="date" value={offer.validUntil} onChange={v => setOffer(p => ({ ...p, validUntil: v }))} /></Field>
+              </div>
+              <Field label="Additional terms (printed on the letter)"><Textarea rows={2} value={offer.additionalTerms} onChange={v => setOffer(p => ({ ...p, additionalTerms: v }))} placeholder="e.g. Company laptop and phone provided." /></Field>
+              <Field label="Internal notes (not printed)"><Textarea rows={2} value={offer.notes} onChange={v => setOffer(p => ({ ...p, notes: v }))} /></Field>
+              <div className="flex gap-2 flex-wrap">
                 <button className="btn-primary text-[11px]" onClick={saveOffer}>{c.offer ? 'Update offer' : 'Record offer'}</button>
+                {c.offer && <button className="btn-outline text-[11px]" onClick={downloadOfferLetter}>Download offer letter</button>}
+                {c.offer && <button className="btn-outline text-[11px]" disabled={emailing} onClick={() => emailCandidate('offer', { offer: offerPayload() })}>{emailing ? 'Sending…' : 'Email offer letter'}</button>}
                 {c.offer?.status === 'pending' && <button className="btn-outline text-[11px]" onClick={() => onUpdate(c.id, { offer: { ...c.offer!, status: 'declined' } })}>Candidate declined</button>}
               </div>
             </>
@@ -502,15 +577,20 @@ function InterviewResult({ onSave, onCancel }: { onSave: (rating: number, feedba
   )
 }
 
-function RejectModal({ candidate, onClose, onConfirm }: { candidate: Candidate; onClose: () => void; onConfirm: (reason: string) => void }) {
+function RejectModal({ candidate, onClose, onConfirm }: { candidate: Candidate; onClose: () => void; onConfirm: (reason: string, sendEmail: boolean) => void }) {
   const { showToast } = useApp()
   const [reason, setReason] = useState('')
+  const [sendEmail, setSendEmail] = useState(Boolean(candidate.email))
   return (
     <Modal title="Reject candidate" subtitle={`${candidate.firstName} ${candidate.lastName}`} onClose={onClose} width={420}>
-      <Field label="Reason" required><Select value={reason} onChange={setReason} options={[{ value: '', label: 'Select reason…' }, ...REJECTION_REASONS.map(r => ({ value: r, label: r }))]} /></Field>
+      <Field label="Reason (internal, never sent to the candidate)" required><Select value={reason} onChange={setReason} options={[{ value: '', label: 'Select reason…' }, ...REJECTION_REASONS.map(r => ({ value: r, label: r }))]} /></Field>
+      <label className="flex items-center gap-2 text-xs mt-3" style={{ opacity: candidate.email ? 1 : 0.5 }}>
+        <input type="checkbox" disabled={!candidate.email} checked={sendEmail} onChange={e => setSendEmail(e.target.checked)} />
+        Send a polite rejection email to {candidate.email || 'the candidate (no email on file)'}
+      </label>
       <div className="hr-modal-actions flex justify-end gap-2 pt-3">
         <button className="btn-secondary px-4 py-2 text-xs" onClick={onClose}>Cancel</button>
-        <button className="btn-primary px-4 py-2 text-xs" onClick={() => reason ? onConfirm(reason) : showToast('Choose a reason', 'error')}>Reject</button>
+        <button className="btn-primary px-4 py-2 text-xs" onClick={() => reason ? onConfirm(reason, sendEmail) : showToast('Choose a reason', 'error')}>Reject</button>
       </div>
     </Modal>
   )

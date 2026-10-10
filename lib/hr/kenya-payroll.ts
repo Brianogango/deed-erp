@@ -15,6 +15,9 @@ type KenyaPayrollRules = {
   housingLevyEmployerRate: number
   pensionDeductionMonthlyLimit: number
   personalRelief: number
+  /** Insurance relief: 15% of premiums paid, capped per month. */
+  insuranceReliefRate: number
+  insuranceReliefMonthlyCap: number
   payeBands: Array<{ limit: number | null; rate: number }>
 }
 
@@ -31,6 +34,8 @@ export const KENYA_PAYROLL_RULES_2026_02: KenyaPayrollRules = {
   housingLevyEmployerRate: 0.015,
   pensionDeductionMonthlyLimit: 30000,
   personalRelief: 2400,
+  insuranceReliefRate: 0.15,
+  insuranceReliefMonthlyCap: 5000,
   payeBands: [
     { limit: 24000, rate: 0.10 },
     { limit: 32333, rate: 0.25 },
@@ -67,6 +72,10 @@ export function calculateKenyaPayroll(
     otherAdditions?: number
     pensionContribution?: number
     otherTaxDeductible?: number
+    /** Non-cash benefits (car, housing, loans at low interest). Taxed, but not paid out. */
+    nonCashBenefits?: number
+    /** Premiums paid for life, health or education insurance this month. */
+    insurancePremiums?: number
     resident?: boolean
     otherDeductions?: number
     loanDeductions?: number
@@ -98,10 +107,13 @@ export function calculateKenyaPayroll(
     rules.pensionDeductionMonthlyLimit,
   ))
   const otherTaxDeductible = money(Math.max(0, Number(opts?.otherTaxDeductible) || 0))
-  const taxablePay = money(Math.max(0, grossSalary - nssf - shif - housingLevy - pensionContribution - otherTaxDeductible))
+  const nonCashBenefits = money(Math.max(0, Number(opts?.nonCashBenefits) || 0))
+  const taxablePay = money(Math.max(0, grossSalary + nonCashBenefits - nssf - shif - housingLevy - pensionContribution - otherTaxDeductible))
   const grossPaye = progressiveTax(taxablePay, rules.payeBands)
   const personalRelief = opts?.resident === false ? 0 : rules.personalRelief
-  const paye = money(Math.max(0, grossPaye - personalRelief))
+  const insurancePremiums = money(Math.max(0, Number(opts?.insurancePremiums) || 0))
+  const insuranceRelief = money(Math.min(insurancePremiums * rules.insuranceReliefRate, rules.insuranceReliefMonthlyCap))
+  const paye = money(Math.max(0, grossPaye - personalRelief - insuranceRelief))
 
   const otherDeductions = money(Math.max(0, Number(opts?.otherDeductions) || 0))
   const loanDeductions = money(Math.max(0, Number(opts?.loanDeductions) || 0))
@@ -131,6 +143,8 @@ export function calculateKenyaPayroll(
     employerHousingLevy,
     pensionContribution,
     personalRelief: money(personalRelief),
+    nonCashBenefits,
+    insuranceRelief,
     paye,
     otherDeductions,
     loanDeductions,
@@ -138,4 +152,33 @@ export function calculateKenyaPayroll(
     totalDeductions,
     netSalary,
   }
+}
+
+type PayrollOpts = NonNullable<Parameters<typeof calculateKenyaPayroll>[3]>
+
+/**
+ * Employment Act s.19: deductions other than statutory ones may not take more
+ * than two thirds of wages. Salary advances are already recorded as recovered by
+ * the time payroll is built, so only loan repayments and other deductions are
+ * scaled back here (loans first). Returns what was actually deducted.
+ */
+export function calculateKenyaPayrollCapped(
+  basicSalary: number,
+  housingAllowance: number,
+  transportAllowance: number,
+  opts: PayrollOpts = {},
+) {
+  const first = calculateKenyaPayroll(basicSalary, housingAllowance, transportAllowance, opts)
+  const voluntary = money((opts.loanDeductions ?? 0) + (opts.otherDeductions ?? 0) + (opts.advanceDeductions ?? 0))
+  const statutory = money(first.totalDeductions - voluntary)
+  const maxVoluntary = money(Math.max(0, first.grossSalary - statutory - first.grossSalary / 3))
+  if (voluntary <= maxVoluntary + 0.005) return { ...first, capped: false as const }
+
+  const advance = Math.max(0, Number(opts.advanceDeductions) || 0)
+  let room = Math.max(0, maxVoluntary - advance)
+  const loan = Math.min(Math.max(0, Number(opts.loanDeductions) || 0), room)
+  room -= loan
+  const other = Math.min(Math.max(0, Number(opts.otherDeductions) || 0), room)
+  const second = calculateKenyaPayroll(basicSalary, housingAllowance, transportAllowance, { ...opts, loanDeductions: loan, otherDeductions: other })
+  return { ...second, capped: true as const }
 }

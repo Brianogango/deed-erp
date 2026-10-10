@@ -7,6 +7,7 @@ import { Field, Input, Modal, Select, Textarea, Badge } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { documentExpiry, expiryCounts } from '@/lib/hr/document-status'
+import { PolicyAckReport } from './HRPolicies'
 import {
   faGraduationCap, faPlus, faFileLines, faUsers, faBuilding,
   faCalendarMinus, faMoneyBillWave, faCircleCheck,
@@ -135,7 +136,7 @@ export function HRDocumentsTab() {
   const { employees, hrDocuments, addHRDocument } = useHrStore()
   const { showToast } = useApp()
   const [show, setShow] = useState(false)
-  const emptyDocForm = () => ({ employeeId: '', type: '', title: '', expiryDate: '', notes: '' })
+  const emptyDocForm = () => ({ employeeId: '', type: '', title: '', expiryDate: '', notes: '', visibility: 'hr_only' })
   const [form, setForm] = useState(emptyDocForm)
   const [file, setFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
@@ -165,7 +166,7 @@ export function HRDocumentsTab() {
         type: form.type as any,
         title: form.title.trim(),
         expiryDate: form.expiryDate || undefined,
-        visibility: 'hr_only',
+        visibility: form.visibility as 'hr_only' | 'hr_finance' | 'employee_visible',
         status: 'active',
         notes: form.notes.trim() || undefined,
         uploadedDate: new Date().toISOString(),
@@ -198,6 +199,7 @@ export function HRDocumentsTab() {
   const columns: ColumnDef<typeof hrDocuments[0]>[] = [
     { key: 'title', label: 'Title', priority: 1, render: d => <span className="font-semibold text-[var(--text-1)]">{d.title}</span>, exportValue: d => d.title },
     { key: 'employeeId', label: 'Employee', priority: 1, render: d => empName(d.employeeId), exportValue: d => empName(d.employeeId) },
+    { key: 'visibility', label: 'Visible to', priority: 3, render: d => <span className="text-xs">{d.visibility === 'employee_visible' ? 'Employee' : d.visibility === 'hr_finance' ? 'HR + finance' : 'HR only'}</span>, exportValue: d => d.visibility },
     { key: 'type', label: 'Type', priority: 2, render: d => <span className="capitalize">{d.type.replace(/_/g, ' ')}</span>, exportValue: d => d.type },
     { key: 'expiryDate', label: 'Expiry', priority: 2, render: d => d.expiryDate ? fmtDate(d.expiryDate) : '—', exportValue: d => d.expiryDate ?? '' },
     {
@@ -254,6 +256,13 @@ export function HRDocumentsTab() {
               <Field label="Expiry Date"><Input type="date" value={form.expiryDate} onChange={set('expiryDate')} /></Field>
             </div>
             <Field label="Title" required><Input value={form.title} onChange={set('title')} placeholder="e.g. Employment Contract 2026" /></Field>
+            <Field label="Who can see it">
+              <Select value={form.visibility} onChange={set('visibility')} options={[
+                { value: 'hr_only', label: 'HR only' },
+                { value: 'hr_finance', label: 'HR and finance' },
+                { value: 'employee_visible', label: 'HR, finance and the employee (shown in their portal)' },
+              ]} />
+            </Field>
             <Field label="Notes"><Textarea value={form.notes} onChange={set('notes')} rows={2} /></Field>
             <Field label="File (PDF or image, up to 4 MB)">
               <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => setFile(e.target.files?.[0] ?? null)} className="text-xs" />
@@ -308,6 +317,7 @@ export function HRReportsTab() {
           ))}
         </div>
       </div>
+      <PolicyAckReport />
     </div>
   )
 }

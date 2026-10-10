@@ -1,7 +1,8 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import type { PayrollRun, Payslip, PayrollLine } from '@/lib/store'
-import { calculateKenyaPayroll, KENYA_PAYROLL_RULES_2026_02, money } from '@/lib/hr/kenya-payroll'
+import { calculateKenyaPayrollCapped, KENYA_PAYROLL_RULES_2026_02, money } from '@/lib/hr/kenya-payroll'
+import { plannedLoanDeduction } from '@/lib/hr/loans'
 
 // Map the relational payroll_runs / payslips rows to the client PayrollRun /
 // Payslip shapes. The client's PayrollRun.lines are reconstructed from the
@@ -79,17 +80,51 @@ export async function createRunFromClient(run: PayrollRun, payslips: Payslip[], 
     },
   })
 
+  // One-off pay items for this month and open staff loans, read here so the
+  // server stays the authority on what each payslip contains.
+  const periodMonthNumber = Number(run.month) || 0
+  const periodEndDate = monthEnd(run.month, run.year)
+  const employeeIds = payslips.map(p => p.employeeId)
+  const [pendingAdjustments, openLoans] = await Promise.all([
+    prisma.payrollAdjustment.findMany({
+      where: { periodYear: run.year, periodMonth: periodMonthNumber, status: 'pending', employeeId: { in: employeeIds } },
+    }),
+    prisma.employeeLoan.findMany({
+      where: { employeeId: { in: employeeIds }, isCleared: false },
+      orderBy: { issueDate: 'asc' },
+    }),
+  ])
+  const adjustmentIds: string[] = []
+
   const computed = payslips.map(ps => {
     const runLine = run.lines.find(l => l.employeeId === ps.employeeId)
     const basic = num(runLine?.basicSalary) || num(ps.grossPay)
     const allowances = num(runLine?.allowances)
     const advanceRows = ps.salaryAdvanceDeductions ?? []
     const advanceTotal = money(advanceRows.reduce((sum, item: any) => sum + num(item?.amount), 0))
-    const calc = calculateKenyaPayroll(
+
+    const mine = pendingAdjustments.filter(a => a.employeeId === ps.employeeId)
+    const sumKind = (kind: string) => money(mine.filter(a => a.kind === kind).reduce((s, a) => s + num(a.amount), 0))
+    mine.forEach(a => adjustmentIds.push(a.id))
+    const loanPlan = plannedLoanDeduction(
+      openLoans.filter(l => l.employeeId === ps.employeeId).map(l => ({
+        id: l.id, issueDate: l.issueDate, monthlyDeduction: num(l.monthlyDeduction), outstanding: num(l.outstanding),
+      })),
+      periodEndDate,
+    )
+
+    const calc = calculateKenyaPayrollCapped(
       basic,
       allowances,
       0,
-      { advanceDeductions: advanceTotal },
+      {
+        advanceDeductions: advanceTotal,
+        otherAdditions: sumKind('earning'),
+        otherDeductions: sumKind('deduction'),
+        nonCashBenefits: sumKind('benefit_in_kind'),
+        insurancePremiums: sumKind('insurance_premium'),
+        loanDeductions: loanPlan,
+      },
     )
     return { ps, runLine, calc, advanceRows }
   })
@@ -174,6 +209,11 @@ export async function createRunFromClient(run: PayrollRun, payslips: Payslip[], 
         ['AHL', 'statutory_deduction', calc.housingLevy, calc.employerHousingLevy, true],
         ['PENSION', 'deduction', calc.pensionContribution, 0, true],
         ['SALARY_ADVANCE', 'receivable_recovery', calc.advanceDeductions, 0, false],
+        ['OTHER_ADDITIONS', 'earning', calc.otherAdditions, 0, true],
+        ['BENEFIT_IN_KIND', 'benefit_in_kind', calc.nonCashBenefits, 0, true],
+        ['INSURANCE_RELIEF', 'relief', calc.insuranceRelief, 0, false],
+        ['STAFF_LOAN', 'receivable_recovery', calc.loanDeductions, 0, false],
+        ['OTHER_DEDUCTIONS', 'deduction', calc.otherDeductions, 0, false],
       ] as const
       for (const [componentCode, componentType, amount, employerAmount, taxable] of components) {
         if (money(amount) === 0 && money(employerAmount) === 0) continue
@@ -191,6 +231,12 @@ export async function createRunFromClient(run: PayrollRun, payslips: Payslip[], 
           },
         })
       }
+    }
+    if (adjustmentIds.length > 0) {
+      await tx.payrollAdjustment.updateMany({
+        where: { id: { in: adjustmentIds } },
+        data: { status: 'applied', appliedRunId: payrollRun.id },
+      })
     }
     return payrollRun
   }, { isolationLevel: 'Serializable' })

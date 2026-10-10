@@ -27,6 +27,7 @@
     "fix:bill-document-type": "node scripts/fix-bill-document-type.mjs",
     "reconcile:bill-payments": "node scripts/reconcile-bill-payments.mjs",
     "parity:invoices": "node scripts/invoice-parity.mjs",
+    "migrate:hr-payroll-reviews:safe": "node scripts/run-safe-hr-payroll-reviews.mjs",
     "migrate:hr-module-additions:safe": "node scripts/run-safe-hr-module-additions.mjs",
     "migrate:invoice-customer-po-number:safe": "node scripts/run-safe-invoice-customer-po-number.mjs",
     "migrate:invoice-item-account-code:safe": "node scripts/run-safe-invoice-item-account-code.mjs",

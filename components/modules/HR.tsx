@@ -68,6 +68,11 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget, type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
+import HROrgChart from './hr/HROrgChart'
+import { MyPolicies } from './hr/HRPolicies'
+import HRMyDocuments from './hr/HRMyDocuments'
+import AppraisalsPanel from './hr/HRAppraisals'
+import { documentExpiry } from '@/lib/hr/document-status'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS & TYPES
@@ -86,9 +91,10 @@ type HRTab =
   | 'sops'
   | 'reports'
   | 'performance'
+  | 'org_chart'
   | 'system_users'
 
-const MANAGEMENT_TABS: HRTab[] = ['employees', 'recruitment', 'training', 'documents', 'performance', 'reports']
+const MANAGEMENT_TABS: HRTab[] = ['employees', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'reports']
 const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
 
 const SOP_CATEGORIES: {
@@ -281,14 +287,14 @@ function HRContent() {
     fullName: string; employeeNo: string; email: string; workEmail: string; phone: string
     nationalId: string; kraPin: string; nssfNumber: string; gender: string; departmentId: string; jobTitle: string
     shift: string; startDate: string; status: 'active' | 'on_leave' | 'exited'
-    basicSalary: string; housingAllowance: string; transportAllowance: string; bankName: string; bankAccount: string; paymentMode: string; mpesaNumber: string
+    basicSalary: string; housingAllowance: string; transportAllowance: string; bankName: string; bankAccount: string; paymentMode: string; mpesaNumber: string; managerEmployeeId: string
   }
   const blankEmp = (): EmpFormState => ({
     fullName: '', employeeNo: '', email: '', workEmail: '', phone: '', nationalId: '',
     kraPin: '', nssfNumber: '', gender: '', departmentId: '', jobTitle: '',
     shift: '', startDate: '',
     status: 'active', basicSalary: '', housingAllowance: '',
-    transportAllowance: '', bankName: '', bankAccount: '', paymentMode: 'mpesa', mpesaNumber: '',
+    transportAllowance: '', bankName: '', bankAccount: '', paymentMode: 'mpesa', mpesaNumber: '', managerEmployeeId: '',
   })
   // ── Shared saving flag ─────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false)
@@ -334,6 +340,7 @@ function HRContent() {
         bankAccount: empForm.bankAccount.trim(),
         paymentMode: empForm.paymentMode as 'bank' | 'mpesa' | 'cash',
         mpesaNumber: empForm.mpesaNumber.trim(),
+        managerEmployeeId: empForm.managerEmployeeId || undefined,
       })
       setShowEmployeeModal(false)
       setEmpForm(blankEmp())
@@ -377,6 +384,7 @@ function HRContent() {
         bankAccount: empForm.bankAccount.trim(),
         paymentMode: empForm.paymentMode as 'bank' | 'mpesa' | 'cash',
         mpesaNumber: empForm.mpesaNumber.trim(),
+        managerEmployeeId: empForm.managerEmployeeId || undefined,
       })
       setEditEmpId(null)
       setViewEmpId(null)
@@ -510,6 +518,7 @@ function HRContent() {
           { id: 'leave', label: 'Leave' },
           { id: 'payroll', label: 'Payroll' },
           { id: 'recruitment', label: 'Recruitment' },
+          { id: 'org_chart', label: 'Org chart' },
           { id: 'training', label: 'Training' },
           { id: 'documents', label: 'Documents' },
           { id: 'performance', label: 'Performance' },
@@ -627,6 +636,43 @@ function HRContent() {
                   ))}
                   {payrollRuns.every(run => run.status === 'posted') && <p className="hr-attention__empty">No payroll reviews pending.</p>}
                 </section>
+                {canManageHR && (() => {
+                  const dayMs = 86400000
+                  const todayStart = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime()
+                  const probation = employees
+                    .filter(e => e.status === 'active' && e.probationEndDate)
+                    .map(e => ({ e, days: Math.round((new Date(`${e.probationEndDate}T00:00:00`).getTime() - todayStart) / dayMs) }))
+                    .filter(x => x.days <= 30 && x.days >= -14)
+                    .sort((a, b) => a.days - b.days)
+                  const docs = hrDocuments
+                    .map(d => ({ d, x: documentExpiry(d.expiryDate) }))
+                    .filter(x => x.x.status !== 'active')
+                    .sort((a, b) => (a.x.daysLeft ?? 0) - (b.x.daysLeft ?? 0))
+                  return (
+                    <>
+                      <section>
+                        <header><strong>Probation reviews</strong><button type="button" onClick={() => setTab('employees')}>View all</button></header>
+                        {probation.slice(0, 3).map(({ e, days }) => (
+                          <button key={e.id} type="button" className="hr-attention__item" onClick={() => { setTab('employees'); setViewEmpId(e.id) }}>
+                            <span><strong>{e.fullName}</strong><small>{e.jobTitle || 'Probation'}</small></span>
+                            <span>{days < 0 ? `${-days}d overdue` : days === 0 ? 'Today' : `${days}d`}</span>
+                          </button>
+                        ))}
+                        {probation.length === 0 && <p className="hr-attention__empty">No probation reviews due in the next 30 days.</p>}
+                      </section>
+                      <section>
+                        <header><strong>Documents to renew</strong><button type="button" onClick={() => setTab('documents')}>View all</button></header>
+                        {docs.slice(0, 3).map(({ d, x }) => (
+                          <button key={d.id} type="button" className="hr-attention__item" onClick={() => setTab('documents')}>
+                            <span><strong>{d.title}</strong><small>{employees.find(e => e.id === d.employeeId)?.fullName ?? ''}</small></span>
+                            <span>{x.status === 'expired' ? 'Expired' : `${x.daysLeft}d`}</span>
+                          </button>
+                        ))}
+                        {docs.length === 0 && <p className="hr-attention__empty">No documents expiring soon.</p>}
+                      </section>
+                    </>
+                  )
+                })()}
               </aside>
             </div>
           </div>
@@ -638,6 +684,8 @@ function HRContent() {
           <HRPayrollTab />
         ) : tab === 'recruitment' && canManageHR ? (
           <HRRecruitmentTab />
+        ) : tab === 'org_chart' && canManageHR ? (
+          <HROrgChart />
         ) : tab === 'training' && canManageHR ? (
           <HRTrainingTab />
         ) : tab === 'documents' && canManageHR ? (
@@ -650,6 +698,9 @@ function HRContent() {
           <HRAssetsTab />
         ) : tab === 'self_service' ? (
           <div className="hr-self-service p-6 flex flex-col gap-8">
+            <MyPolicies />
+            <HRMyDocuments />
+            <AppraisalsPanel manage={false} />
             <div className="hr-self-service__hero flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="hr-self-service__identity flex items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-primary-500/10 flex items-center justify-center text-primary-600 text-2xl font-bold border border-primary-500/20">
@@ -833,6 +884,12 @@ function HRContent() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Reports to">
+                <Select value={empForm.managerEmployeeId} onChange={setEF('managerEmployeeId')} options={[
+                  { value: '', label: 'No one (top of the chart)' },
+                  ...employees.filter(x => x.status !== 'exited' && x.id !== editEmpId).map(x => ({ value: x.id, label: `${x.fullName}${x.jobTitle ? ` · ${x.jobTitle}` : ''}` })),
+                ]} />
+              </Field>
               <Field label="Salary paid by">
                 <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
                   { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
@@ -956,7 +1013,13 @@ function HRContent() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Salary paid by">
+                  <Field label="Reports to">
+                <Select value={empForm.managerEmployeeId} onChange={setEF('managerEmployeeId')} options={[
+                  { value: '', label: 'No one (top of the chart)' },
+                  ...employees.filter(x => x.status !== 'exited' && x.id !== editEmpId).map(x => ({ value: x.id, label: `${x.fullName}${x.jobTitle ? ` · ${x.jobTitle}` : ''}` })),
+                ]} />
+              </Field>
+              <Field label="Salary paid by">
                     <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
                       { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
                     ]} />
@@ -1008,7 +1071,7 @@ function HRContent() {
                 <EmployeeLifecyclePanel key={viewEmployee.id} employee={viewEmployee} canManage={canManageHR} />
                 <div className="hr-employee-profile__actions flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
-                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '' }); setEditEmpId(viewEmployee.id) }}>
+                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', workEmail: viewEmployee.workEmail || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '', paymentMode: viewEmployee.paymentMode || 'mpesa', mpesaNumber: viewEmployee.mpesaNumber || '', managerEmployeeId: viewEmployee.managerEmployeeId || '' }); setEditEmpId(viewEmployee.id) }}>
                     <Fa icon={faPen} />
                     <span>Edit</span>
                   </button>

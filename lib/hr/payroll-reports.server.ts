@@ -25,17 +25,19 @@ export async function loadStatutoryReport(runId: string): Promise<StatutoryRepor
     }),
     prisma.payrollComponentLine.findMany({ where: { payrollRunId: runId } }),
   ])
-  const employer = new Map<string, { nssf: number; ahl: number }>()
+  const employer = new Map<string, { nssf: number; ahl: number; benefit: number; insurance: number }>()
   for (const c of components) {
-    const cur = employer.get(c.payslipId) ?? { nssf: 0, ahl: 0 }
+    const cur = employer.get(c.payslipId) ?? { nssf: 0, ahl: 0, benefit: 0, insurance: 0 }
     if (c.componentCode === 'NSSF') cur.nssf += num(c.employerAmount)
     if (c.componentCode === 'AHL') cur.ahl += num(c.employerAmount)
+    if (c.componentCode === 'BENEFIT_IN_KIND') cur.benefit += num(c.amount)
+    if (c.componentCode === 'INSURANCE_RELIEF') cur.insurance += num(c.amount)
     employer.set(c.payslipId, cur)
   }
 
   const rows: StatutoryRow[] = payslips.map(p => {
     const e = p.employee
-    const er = employer.get(p.id) ?? { nssf: 0, ahl: 0 }
+    const er = employer.get(p.id) ?? { nssf: 0, ahl: 0, benefit: 0, insurance: 0 }
     return {
       employeeId: p.employeeId,
       employeeNo: e.employeeNumber,
@@ -64,6 +66,8 @@ export async function loadStatutoryReport(runId: string): Promise<StatutoryRepor
       employerHousingLevy: r2(er.ahl),
       pension: num(p.pensionContribution),
       personalRelief: num(p.personalRelief),
+      nonCashBenefits: r2(er.benefit),
+      insuranceRelief: r2(er.insurance),
       paye: num(p.paye),
       loanDeductions: num(p.loanDeductions),
       otherDeductions: num(p.otherDeductions),
@@ -101,6 +105,11 @@ export async function loadAnnualReport(year: number): Promise<AnnualEmployeeRow[
     where: { payrollRun: { periodYear: year, status: { in: ['approved', 'posted'] } } },
     include: { employee: true, payrollRun: { select: { periodMonth: true } } },
   })
+  const taxItems = await prisma.payrollComponentLine.findMany({
+    where: { payslipId: { in: payslips.map(p => p.id) }, componentCode: { in: ['BENEFIT_IN_KIND', 'INSURANCE_RELIEF'] } },
+  })
+  const itemOf = (payslipId: string, code: string) =>
+    r2(taxItems.filter(c => c.payslipId === payslipId && c.componentCode === code).reduce((s, c) => s + num(c.amount), 0))
   const byEmployee = new Map<string, AnnualEmployeeRow>()
   for (const p of payslips) {
     const month = Number(p.payrollRun.periodMonth) || 0
@@ -114,16 +123,19 @@ export async function loadAnnualReport(year: number): Promise<AnnualEmployeeRow[
     }
     const gross = num(p.grossPay)
     const nssf = num(p.nssf), shif = num(p.shif), levy = num(p.housingLevy), pension = num(p.pensionContribution)
-    const taxablePay = Math.max(0, r2(gross - nssf - shif - levy - pension))
+    const nonCash = itemOf(p.id, 'BENEFIT_IN_KIND')
+    const insuranceRelief = itemOf(p.id, 'INSURANCE_RELIEF')
+    const taxablePay = Math.max(0, r2(gross + nonCash - nssf - shif - levy - pension))
     const relief = num(p.personalRelief)
     const paye = num(p.paye)
     row.months.push({
       month,
       basic: num(p.basicSalary),
-      benefits: r2(num(p.houseAllowance) + num(p.transportAllowance) + num(p.commission) + num(p.overtimePay) + num(p.otherAdditions)),
+      benefits: r2(num(p.houseAllowance) + num(p.transportAllowance) + num(p.commission) + num(p.overtimePay) + num(p.otherAdditions) + nonCash),
       gross, nssf, shif, housingLevy: levy, pension, taxablePay,
-      taxCharged: r2(paye + relief),
+      taxCharged: r2(paye + relief + insuranceRelief),
       personalRelief: relief,
+      insuranceRelief,
       paye,
     })
     byEmployee.set(p.employeeId, row)
@@ -142,6 +154,7 @@ export async function loadPayslipDetail(payslipId: string): Promise<PayslipDetai
   if (!p) return null
   const comps = await prisma.payrollComponentLine.findMany({ where: { payslipId } })
   const er = (code: string) => r2(comps.filter(c => c.componentCode === code).reduce((s, c) => s + num(c.employerAmount), 0))
+  const amt = (code: string) => r2(comps.filter(c => c.componentCode === code).reduce((s, c) => s + num(c.amount), 0))
 
   const year = p.payrollRun.periodYear ?? p.payrollRun.periodStart.getUTCFullYear()
   const month = Number(p.payrollRun.periodMonth) || p.payrollRun.periodStart.getUTCMonth() + 1
@@ -211,6 +224,10 @@ export async function loadPayslipDetail(payslipId: string): Promise<PayslipDetai
       line('Employer housing levy', er('AHL')),
     ], []),
     advances,
+    taxNotes: [
+      ...(amt('BENEFIT_IN_KIND') ? [{ label: 'Non-cash benefit (taxed, not paid)', amount: amt('BENEFIT_IN_KIND') }] : []),
+      ...(amt('INSURANCE_RELIEF') ? [{ label: 'Insurance relief (reduces PAYE)', amount: amt('INSURANCE_RELIEF') }] : []),
+    ],
     gross: num(p.grossPay),
     totalDeductions: num(p.totalDeductions),
     net: num(p.netPay),

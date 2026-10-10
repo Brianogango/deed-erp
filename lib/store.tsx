@@ -2405,6 +2405,17 @@ export interface CandidateOffer {
   offeredDate: string
   status: 'pending' | 'accepted' | 'declined'
   notes?: string
+  probationMonths?: number
+  reportsTo?: string
+  /** Last day the candidate can accept. */
+  validUntil?: string
+  additionalTerms?: string
+}
+export interface CandidateCommunication {
+  id: string
+  kind: 'interview_invite' | 'rejection' | 'offer'
+  at: string
+  to: string
 }
 export interface Candidate {
   id: string; jobId: string; firstName: string; lastName: string; email: string; phone: string; stage: CandidateStage; appliedDate: string; resumeUrl?: string; notes?: string;
@@ -2418,6 +2429,8 @@ export interface Candidate {
   /** CV uploaded to the server (see /api/hr-documents/[candidateId]/file). */
   resumeFile?: { name: string; size: number; type: string }
   hiredEmployeeId?: string
+  /** Emails sent to the candidate from the ERP. */
+  communications?: CandidateCommunication[]
 }
 
 export type TrainingStatus = 'not_started' | 'in_progress' | 'completed'
@@ -9843,7 +9856,16 @@ const storeCtx: AppState = {
               if (persisted) sync(`/api/salary-advances/${advanceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deductions: persisted.deductions, amountRecovered: persisted.amountRecovered, outstandingAmount: persisted.outstandingAmount, status: persisted.status }) })
             })
           }
-          sync('/api/payroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run: payroll, payslips: newPayslips }) })
+          // The server recalculates each payslip (one-off pay items, staff loans, deduction cap), so
+          // once it has saved the run, reload the runs and payslips it holds so the screen shows the same figures.
+          void sync('/api/payroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run: payroll, payslips: newPayslips }) })
+            .then(async res => {
+              if (!res || !res.ok) return
+              const fresh = await fetch('/api/payroll', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null)
+              if (fresh?.runs) setPayrollRuns(fresh.runs)
+              if (fresh?.payslips) setPayslips(fresh.payslips)
+            })
+            .catch(() => {})
           
       setWorkflowApprovals(prev => [{ id: uid(), process: 'payroll', ref: payroll.ref, targetId: payroll.id, targetName: `Payroll ${month}/${year}`, stepName: 'Finance Approval', approverRole: 'finance_officer', status: 'pending', requestedBy: currentUser()?.name ?? 'HR', requestedDate: now() }, ...prev])
       addAuditLog('create_payroll', payroll.ref, `Payroll prepared for ${month}/${year}`)
