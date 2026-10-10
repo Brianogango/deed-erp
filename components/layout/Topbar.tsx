@@ -3,6 +3,7 @@
 import { SAVE_FAILED_EVENT } from '@/lib/save-failure'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
+import NotificationPopups, { usePopupPreference } from '@/components/layout/NotificationPopups'
 import { useShellStore, ModuleId, AppNotification, SYNC_STATUS_EVENT, LAST_SYNC_AT_LS, DIRTY_KEYS_LS } from '@/lib/store'
 import type { UpdateUserInput } from '@/lib/auth/types'
 import { passwordPolicyError } from '@/lib/auth/password-policy'
@@ -572,10 +573,14 @@ function AccountChannelIcon({ kind }: { kind: 'inapp' | 'push' | 'email' | 'what
 function NotificationPreferenceControls({
   soundEnabled,
   setSoundEnabled,
+  popupsEnabled,
+  setPopupsEnabled,
   showToast,
 }: {
   soundEnabled: boolean
   setSoundEnabled: (v: boolean) => void
+  popupsEnabled: boolean
+  setPopupsEnabled: (v: boolean) => void
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const [pref, setPref] = useState<GlobalNotificationPreference>({
@@ -788,6 +793,15 @@ function NotificationPreferenceControls({
         </div>
 
         <div className="acct-channel-row">
+          <span className="acct-channel-icon"><AccountChannelIcon kind="inapp" /></span>
+          <span className="acct-channel-copy">
+            <span className="acct-channel-title">Pop-up alerts</span>
+            <span className="acct-channel-detail">Show a pop-up on this device when a new notification arrives</span>
+          </span>
+          <Toggle on={popupsEnabled} onChange={setPopupsEnabled} />
+        </div>
+
+        <div className="acct-channel-row">
           <span className="acct-channel-icon"><AccountChannelIcon kind="sound" /></span>
           <span className="acct-channel-copy">
             <span className="acct-channel-title">Sound Alerts</span>
@@ -853,10 +867,14 @@ function AccountPanel({
   onClose,
   soundEnabled,
   setSoundEnabled,
+  popupsEnabled,
+  setPopupsEnabled,
 }: {
   onClose: () => void
   soundEnabled: boolean
   setSoundEnabled: (v: boolean) => void
+  popupsEnabled: boolean
+  setPopupsEnabled: (v: boolean) => void
 }) {
   const { users, currentUserId, updateUser, logout, profileImages, setProfileImage, showToast } = useShellStore()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -1015,7 +1033,7 @@ function AccountPanel({
                 <small>Choose how you’d like to stay updated</small>
               </span>
             </div>
-            <NotificationPreferenceControls soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled} showToast={showToast} />
+            <NotificationPreferenceControls soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled} popupsEnabled={popupsEnabled} setPopupsEnabled={setPopupsEnabled} showToast={showToast} />
           </section>
 
           <section className="acct-section">
@@ -1107,6 +1125,7 @@ export default function Topbar() {
   const [notifOpen, setNotifOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useSoundPreference()
+  const [popupsEnabled, setPopupsEnabled] = usePopupPreference()
   const [dateLabel, setDateLabel] = useState('')
   const [timeLabel, setTimeLabel] = useState('')
   const [serverNotifs, setServerNotifs] = useState<BellNotification[]>([])
@@ -1286,6 +1305,45 @@ export default function Topbar() {
       if (res.ok) await loadNotifications()
     } catch {}
   }, [loadNotifications])
+
+  // Navigate to the module and path a notification points at (used by the bell and the pop-ups).
+  const goToNotification = useCallback((mod: ModuleId, path?: string) => {
+    setModule(mod)
+    const routeMap: Record<string, string> = {
+      dashboard: '/',
+      sales: '/sales',
+      pos: '/pos',
+      ecommerce: '/ecommerce',
+      kilimall: '/kilimall',
+      contacts: '/contacts',
+      after_sales: '/aftersales',
+      operations: '/inventory',
+      inventory: '/inventory',
+      purchase: '/purchases',
+      delivery: '/delivery',
+      repair: '/repairs',
+      refurbishment: '/refurbishment',
+      outsource: '/outsource',
+      accounting: '/finance',
+      deposits: '/deposits',
+      holdovers: '/holdovers',
+      company_property: '/property',
+      expenses: '/expenses',
+      cashbook: '/cashbook',
+      hr: '/hr',
+      my_documents: '/documents',
+      documents: '/documents',
+      crm: '/crm',
+      sops: '/sops',
+      sop_documents: '/sop-documents',
+      settings: '/settings',
+    }
+    const baseRoute = routeMap[mod] || '/'
+    const target = path
+      ? (path.startsWith('/') ? path : `${baseRoute}${path}`)
+      : baseRoute
+    router.push(target)
+  }, [router, setModule])
 
   const myNotifs = [...serverNotifs].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -1571,41 +1629,7 @@ export default function Topbar() {
                 onClearRead={() => { void mutateNotification('clear_read') }}
                 onAcknowledge={(id) => { void mutateNotification('acknowledge', id) }}
                 onNavigate={(mod, path) => {
-                  setModule(mod)
-                  const routeMap: Record<string, string> = {
-                    dashboard: '/',
-                    sales: '/sales',
-                    pos: '/pos',
-                    ecommerce: '/ecommerce',
-                    kilimall: '/kilimall',
-                    contacts: '/contacts',
-                    after_sales: '/aftersales',
-                    operations: '/inventory',
-                    inventory: '/inventory',
-                    purchase: '/purchases',
-                    delivery: '/delivery',
-                    repair: '/repairs',
-                    refurbishment: '/refurbishment',
-                    outsource: '/outsource',
-                    accounting: '/finance',
-                    deposits: '/deposits',
-                    holdovers: '/holdovers',
-                    company_property: '/property',
-                    expenses: '/expenses',
-                    cashbook: '/cashbook',
-                    hr: '/hr',
-                    my_documents: '/documents',
-                    documents: '/documents',
-                    crm: '/crm',
-                    sops: '/sops',
-                    sop_documents: '/sop-documents',
-                    settings: '/settings',
-                  }
-                  const baseRoute = routeMap[mod] || '/'
-                  const target = path
-                    ? (path.startsWith('/') ? path : `${baseRoute}${path}`)
-                    : baseRoute
-                  router.push(target)
+                  goToNotification(mod, path)
                   setNotifOpen(false)
                 }}
               />
@@ -1658,11 +1682,23 @@ export default function Topbar() {
         </div>
       </header>
 
+      <NotificationPopups
+        notifications={myNotifs}
+        enabled={popupsEnabled}
+        onView={n => {
+          void mutateNotification('read', n.id)
+          if (n.module) goToNotification(n.module as ModuleId, n.path)
+          else if (n.path?.startsWith('/')) router.push(n.path)
+        }}
+      />
+
       {panelOpen && (
         <AccountPanel
           onClose={() => setPanelOpen(false)}
           soundEnabled={soundEnabled}
           setSoundEnabled={setSoundEnabled}
+          popupsEnabled={popupsEnabled}
+          setPopupsEnabled={setPopupsEnabled}
         />
       )}
 
