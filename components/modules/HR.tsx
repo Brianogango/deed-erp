@@ -71,6 +71,7 @@ import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
 import HROrgChart from './hr/HROrgChart'
 import { MyPolicies } from './hr/HRPolicies'
 import HRMyDocuments from './hr/HRMyDocuments'
+import AppraisalsPanel from './hr/HRAppraisals'
 import { documentExpiry } from '@/lib/hr/document-status'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -699,6 +700,7 @@ function HRContent() {
           <div className="hr-self-service p-6 flex flex-col gap-8">
             <MyPolicies />
             <HRMyDocuments />
+            <AppraisalsPanel manage={false} />
             <div className="hr-self-service__hero flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="hr-self-service__identity flex items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-primary-500/10 flex items-center justify-center text-primary-600 text-2xl font-bold border border-primary-500/20">

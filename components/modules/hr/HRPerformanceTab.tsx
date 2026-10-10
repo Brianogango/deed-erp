@@ -5,6 +5,7 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { Fa } from '@/components/icons'
 import { faChartLine, faBullseye, faTrophy, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
+import AppraisalsPanel from './HRAppraisals'
 
 type TargetForm = {
   employeeId: string
@@ -117,6 +118,7 @@ export default function HRPerformanceTab() {
 
   return (
     <div className="hr-submodule hr-performance flex flex-col">
+      <div className="p-4"><AppraisalsPanel manage /></div>
       <div className="hr-submodule-kpis hr-performance-kpis p-6 grid grid-cols-1 md:grid-cols-3 gap-6 bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
         <div className="hr-metric-card hr-metric-card--accent flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl">
