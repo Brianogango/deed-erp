@@ -116,3 +116,49 @@
   .contacts-workspace .contacts-credit-summary { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
   .contacts-workspace .contacts-banking-details > div { grid-template-columns: minmax(88px,.8fr) minmax(0,1.2fr); }
 }
+
+/* History grid: remove the floating, sticky status block which created white islands.
+   The base Table component still controls header/row columns from the same grid. */
+.contacts-profile .table-scroll.responsive-table .data-table-cell-sticky-right,
+.contacts-profile .table-scroll.responsive-table .table-head > [role="columnheader"].data-table-cell-sticky-right {
+  position: static !important;
+  inset-inline-end: auto !important;
+  right: auto !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.contacts-profile .table-scroll.responsive-table .table-head {
+  background: #eef3f9;
+}
+.contacts-profile .table-scroll.responsive-table .table-row > [role="gridcell"],
+.contacts-profile .table-scroll.responsive-table .table-head > [role="columnheader"] {
+  min-width: 0;
+  overflow-wrap: normal;
+}
+.contacts-profile .table-scroll.responsive-table .table-head > [role="columnheader"] {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+}
+.contacts-profile .table-scroll.responsive-table .table-row {
+  background: #fff;
+}
+.contacts-profile .table-scroll.responsive-table .table-row:hover { background: #f6f9fd; }
+.contacts-profile .contacts-banking-details > div {
+  display: grid !important;
+  grid-template-columns: minmax(100px, 42%) minmax(0,1fr) !important;
+  align-items: baseline !important;
+  gap: 12px !important;
+}
+.contacts-profile .contacts-banking-details > div > dt,
+.contacts-profile .contacts-banking-details > div > dd {
+  display: block;
+  margin: 0;
+  min-width: 0;
+}
+.contacts-profile .contacts-history__metrics .contacts-metric {
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 14px;
+}
