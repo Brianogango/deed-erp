@@ -1,5 +1,6 @@
 'use client'
 
+import { closeHandledPopups } from '@/lib/notifications/push-popups'
 import { SAVE_FAILED_EVENT } from '@/lib/save-failure'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
@@ -1271,7 +1272,9 @@ export default function Topbar() {
       const res = await fetch('/api/notifications?limit=50', { cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json()
-      setServerNotifs(Array.isArray(data.notifications) ? data.notifications : [])
+      const list = Array.isArray(data.notifications) ? data.notifications : []
+      setServerNotifs(list)
+      void closeHandledPopups(list, list.length < 50).catch(() => {})
     } catch {
       // Keep the last known notification list during transient network failures.
     }
@@ -1288,7 +1291,11 @@ export default function Topbar() {
     const refresh = () => { void loadNotifications() }
     source.addEventListener('notification', refresh)
     source.addEventListener('ready', refresh)
+    // Coming back to the ERP re-checks the bell, which also closes desktop
+    // pop-ups for alerts resolved in the meantime.
+    window.addEventListener('focus', refresh)
     return () => {
+      window.removeEventListener('focus', refresh)
       source.removeEventListener('notification', refresh)
       source.removeEventListener('ready', refresh)
       source.close()

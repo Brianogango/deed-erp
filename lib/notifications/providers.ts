@@ -36,8 +36,8 @@ type ProviderDeliveryInput = {
   eventType: string
   title: string
   body: string
-  /** Critical and approval-type ("attention") alerts stay on screen until dismissed. */
-  severity?: string | null
+  /** Lets the ERP close this pop-up once the alert is read or dealt with. */
+  eventId?: string | null
   actionUrl?: string | null
   destination?: string | null
   endpoint?: { endpoint: string; p256dh: string; authSecret: string } | null
@@ -113,7 +113,7 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
       body: input.body,
       url: input.actionUrl || '/',
       eventType: input.eventType,
-      sticky: input.severity === 'critical' || input.severity === 'attention',
+      eventId: input.eventId || null,
     })
   }
 

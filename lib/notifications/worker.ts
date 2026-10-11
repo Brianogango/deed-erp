@@ -466,7 +466,7 @@ async function dispatchPendingNotificationDeliveries(limit = 100) {
       eventType: delivery.event.eventType,
       title: rendered.subject,
       body: rendered.text,
-      severity: delivery.event.severity,
+      eventId: delivery.eventId,
       actionUrl: delivery.event.actionUrl,
       destination: delivery.destination,
       endpoint,

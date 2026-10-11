@@ -166,11 +166,12 @@ self.addEventListener('push', event => {
     body: payload.body || 'You have a new notification.',
     icon: '/deed-logo.png',
     badge: '/deed-logo.png',
-    data: { url: payload.url || '/' },
-    tag: payload.eventType || 'deed-notification',
+    data: { url: payload.url || '/', eventId: payload.eventId || null },
+    // One pop-up per alert, so the ERP can close each when it is dealt with.
+    tag: payload.eventId ? `deed-event-${payload.eventId}` : (payload.eventType || 'deed-notification'),
     renotify: true,
-    // Approvals and critical alerts stay on screen until clicked or closed.
-    requireInteraction: Boolean(payload.sticky),
+    // Stays on screen until closed, clicked, or read/resolved in the ERP.
+    requireInteraction: true,
   }
   event.waitUntil(self.registration.showNotification(title, options))
 })
