@@ -111,9 +111,9 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * document's own API route — but other tabs are still told to re-read.
  */
 /** Frozen stock keys whose saves are written into their tables on the save path. */
-const TABLE_FED_KEYS = ['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts'] as const
+const TABLE_FED_KEYS = ['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products'] as const
 
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -224,6 +224,7 @@ const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
   deed_bulkStock: `SELECT max(updated_at)::text || ':' || count(*) || ':' || coalesce(sum(qty), 0) FROM stock_location_levels`,
   deed_stockMoves: `SELECT max(created_at)::text || ':' || count(*) FROM stock_movements`,
   deed_receipts: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE removed_at IS NULL) FROM receipt_documents`,
+  deed_products: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE screen_extras IS NOT NULL) FROM products`,
   deed_deposits_v1: `SELECT max(updated_at)::text || ':' || count(*) FROM deposits`,
   deed_auditLogs: `SELECT max(created_at)::text || ':' || count(*) FROM audit_logs`,
   deed_holdovers: `SELECT max(updated_at)::text || ':' || count(*) FROM holdovers`,
@@ -600,7 +601,7 @@ export async function saveStoreKeys(
   try {
     const frozen = Object.keys(entries).filter(key => FROZEN_STORE_KEYS.has(key))
     if (frozen.length) {
-      // Repairs, serials, quantity stock, stock moves and receipts are still
+      // Repairs, products, serials, quantity stock, stock moves and receipts are still
       // saved through this path; they go to their tables (synchronously, only
       // the changed rows) instead of the copy. A stock save the table could
       // not fully take (an error, or a row it cannot hold — e.g. a serial
@@ -630,15 +631,6 @@ export async function saveStoreKeys(
           .catch(err => console.error('[repair-mirror] save failed:', err))
       }
       await notifyStoreKeysChanged(frozen)
-    }
-    // Products: the screens read them from the products table; each save is
-    // written there (screen_extras) before it returns. The copy is still
-    // written until the tables are confirmed to hold the same.
-    if (entries['deed_products'] && process.env.NODE_ENV !== 'test') {
-      const result = await import('./blob-transfer')
-        .then(m => m.mirrorKnownDomain('deed_products', entries['deed_products'], null))
-        .catch(err => ({ upserted: 0, skipped: 0, error: String(err) }))
-      if (result?.error) console.error('[server-store] deed_products not fully saved to its table:', result.error)
     }
     // Binary payloads stay outside the database.
     const blobWrites = Object.entries(entries).filter(([key]) => isBlobKey(key))

@@ -315,6 +315,8 @@ async function transferReceipts(rows: unknown[]): Promise<{ upserted: number; sk
  * active …) are written by the product routes and are not touched here.
  * Products the table does not have are counted as skipped.
  */
+const UUID_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 async function transferProducts(rows: unknown[]): Promise<{ upserted: number; skipped: number; error?: string }> {
   let upserted = 0
   let skipped = 0
@@ -324,6 +326,9 @@ async function transferProducts(rows: unknown[]): Promise<{ upserted: number; sk
   for (const raw of rows) {
     const row = raw as Record<string, unknown>
     const id = String(row.id || '')
+    // Built-in demo products (ids such as p1) were never in the table and are
+    // no longer listed; they are not a row the table failed to take.
+    if (!UUID_ID.test(id)) continue
     if (!have.has(id)) { skipped += 1; continue }
     if (sameJson(have.get(id), row)) continue
     try {

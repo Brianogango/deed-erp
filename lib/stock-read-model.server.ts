@@ -110,6 +110,8 @@ function toScreenProduct(p: { id: string; name: string; sku: string; barcode: st
   }
 }
 
+const UUID_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const productKey = (v: unknown) => String(v ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 
 /**
@@ -134,7 +136,7 @@ async function tableTwinOf(): Promise<(row: Row) => boolean> {
  * Products for the screens, from the products table: those the screens show
  * (screen_extras set). Products only the table has stay off the screens, as
  * before; products only the copy has stay listed from it, unless they are a
- * stale duplicate of a table product.
+ * stale duplicate of a table product or a built-in demo product.
  */
 export async function loadScreenProducts(screenCopy: unknown): Promise<Row[]> {
   const rows = await prisma.product.findMany({ where: { screenExtras: { not: Prisma.DbNull } }, select: PRODUCT_SELECT })
@@ -142,7 +144,8 @@ export async function loadScreenProducts(screenCopy: unknown): Promise<Row[]> {
   if (!rows.length) return copy
   const out: Row[] = rows.map(toScreenProduct)
   const listed = new Set(out.map(p => String(p.id)))
-  const copyOnly = copy.filter(p => p?.id && !listed.has(String(p.id)))
+  // Ids that are not UUIDs are the built-in demo products (p1 …), never real stock.
+  const copyOnly = copy.filter(p => p?.id && !listed.has(String(p.id)) && UUID_ID.test(String(p.id)))
   if (!copyOnly.length) return out
   const hasTwin = await tableTwinOf()
   for (const p of copyOnly) if (!hasTwin(p)) out.push(p)
@@ -210,7 +213,7 @@ export async function stockTableParity(copySerials: unknown, copyBulk: unknown, 
   const numericSame = (a: Row, b: Row) => canonical({ ...a, salePrice: Number(a.salePrice) || 0, costPrice: Number(a.costPrice) || 0, minStock: Number(a.minStock) || 0, trackingMethod: String(a.trackingMethod ?? 'QUANTITY').toUpperCase() })
     === canonical({ ...b, salePrice: Number(b.salePrice) || 0, costPrice: Number(b.costPrice) || 0, minStock: Number(b.minStock) || 0, trackingMethod: String(b.trackingMethod ?? 'QUANTITY').toUpperCase() })
   const hasTwin = await tableTwinOf()
-  const productsNotInTable = productCopy.filter(p => p?.id && !productTable.has(String(p.id)))
+  const productsNotInTable = productCopy.filter(p => p?.id && !productTable.has(String(p.id)) && UUID_ID.test(String(p.id)))
   const productsMissing = productsNotInTable.filter(p => !hasTwin(p)).map(p => String(p.name ?? p.id))
   const productsReplaced = productsNotInTable.length - productsMissing.length
   const productsDiffering = productCopy.filter(p => p?.id && productTable.has(String(p.id)) && !numericSame(productTable.get(String(p.id))!, p)).map(p => String(p.name ?? p.id))
