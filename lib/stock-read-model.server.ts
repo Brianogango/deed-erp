@@ -42,7 +42,9 @@ export async function loadScreenSerials(screenCopy: unknown): Promise<Row[]> {
   const rows = await tableSerials()
   if (!rows.length) return Array.isArray(screenCopy) ? screenCopy as Row[] : []
   const out = rows.map(toScreenSerial)
-  const listed = new Set(rows.map(r => r.serialNumber))
+  // Removed serials count as known, so the frozen copy cannot bring them back.
+  const removed = await prisma.serialNumber.findMany({ where: { removedAt: { not: null } }, select: { serialNumber: true } })
+  const listed = new Set([...rows.map(r => r.serialNumber), ...removed.map(r => r.serialNumber)])
   for (const s of Array.isArray(screenCopy) ? screenCopy as Row[] : []) {
     const serial = String(s?.serial ?? s?.serialNumber ?? '').trim()
     if (serial && !listed.has(serial)) out.push(s)
@@ -63,13 +65,16 @@ export async function loadScreenBulkStock(screenCopy: unknown): Promise<Row[]> {
 export async function loadScreenStockMoves(screenCopy: unknown): Promise<Row[]> {
   const rows = await prisma.stockMovement.findMany({
     where: { screenExtras: { not: Prisma.DbNull } },
-    select: { blobId: true, screenExtras: true },
+    select: { blobId: true, screenExtras: true, removedAt: true },
     orderBy: { createdAt: 'desc' },
   })
   const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
   if (!rows.length) return copy
-  const out: Row[] = rows.map(r => ({ ...asObject(r.screenExtras), id: asObject(r.screenExtras).id ?? r.blobId }))
-  const listed = new Set(out.map(m => String(m.id)))
+  const out: Row[] = rows
+    .filter(r => r.removedAt === null)
+    .map(r => ({ ...asObject(r.screenExtras), id: asObject(r.screenExtras).id ?? r.blobId }))
+  // Removed moves count as known, so the frozen copy cannot bring them back.
+  const listed = new Set(rows.map(r => String(asObject(r.screenExtras).id ?? r.blobId)))
   for (const m of copy) if (m?.id && !listed.has(String(m.id))) out.push(m)
   return out
 }
@@ -108,11 +113,13 @@ export async function loadScreenReservations(screenCopy: unknown): Promise<Row[]
 
 /** Goods receipts (drafts included) from receipt_documents, newest first. Receipts only the copy has stay listed. */
 export async function loadScreenReceipts(screenCopy: unknown): Promise<Row[]> {
-  const rows = await prisma.receiptDocument.findMany({ where: { removedAt: null }, select: { id: true, record: true }, orderBy: { receiptDate: 'desc' } })
+  const all = await prisma.receiptDocument.findMany({ select: { id: true, record: true, removedAt: true }, orderBy: { receiptDate: 'desc' } })
+  const rows = all.filter(r => r.removedAt === null)
   const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
   if (!rows.length) return copy
   const out: Row[] = rows.map(r => ({ ...asObject(r.record), id: r.id }))
-  const listed = new Set(out.map(r => String(r.id)))
+  // Removed receipts count as known, so the frozen copy cannot bring them back.
+  const listed = new Set(all.map(r => String(r.id)))
   for (const r of copy) if (r?.id && !listed.has(String(r.id))) out.push(r)
   return out
 }
@@ -228,7 +235,7 @@ export async function stockTableParity(copySerials: unknown, copyBulk: unknown, 
     .map(k => ({ productLocation: k, copy: bulk.get(k) ?? 0, table: levelMap.get(k) ?? 0 }))
 
   const moveCopy = (Array.isArray(copyMoves) ? copyMoves : []) as Row[]
-  const moveRows = await prisma.stockMovement.findMany({ where: { blobId: { not: null } }, select: { blobId: true, screenExtras: true } })
+  const moveRows = await prisma.stockMovement.findMany({ where: { blobId: { not: null }, removedAt: null }, select: { blobId: true, screenExtras: true } })
   const moveTable = new Map(moveRows.map(m => [String(m.blobId), m.screenExtras]))
   const movesMissing = moveCopy.filter(m => m?.id && !moveTable.has(String(m.id))).map(m => String(m.id))
   const movesDiffering = moveCopy.filter(m => m?.id && moveTable.has(String(m.id)) && canonical(moveTable.get(String(m.id))) !== canonical(m)).map(m => String(m.id))

@@ -219,16 +219,19 @@ async function transferStockMoves(rows: unknown[], actorId: string | null): Prom
   const errors: string[] = []
   const existing = await prisma.stockMovement.findMany({
     where: { blobId: { not: null } },
-    select: { blobId: true, screenExtras: true },
+    select: { blobId: true, screenExtras: true, removedAt: true },
   })
   const have = new Map(existing.map(m => [String(m.blobId), m.screenExtras]))
+  const removed = new Set(existing.filter(m => m.removedAt !== null).map(m => String(m.blobId)))
+  const listed = new Set<string>()
   const products = new Set((await prisma.product.findMany({ select: { id: true } })).map(p => p.id))
   const actor = actorId && isUuid(actorId) ? actorId : null
   for (const raw of rows) {
     const row = raw as Record<string, unknown>
     const blobId = String(row.id || '').slice(0, 80)
     if (!blobId) { skipped += 1; continue }
-    if (have.has(blobId) && sameJson(have.get(blobId), row)) continue
+    listed.add(blobId)
+    if (have.has(blobId) && !removed.has(blobId) && sameJson(have.get(blobId), row)) continue
     const productId = isUuid(row.productId) && products.has(String(row.productId)) ? String(row.productId) : null
     const qty = Math.max(0, Math.floor(Number(row.qty) || 0))
     const data = {
@@ -243,6 +246,7 @@ async function transferStockMoves(rows: unknown[], actorId: string | null): Prom
       documentRef: row.documentRef ? String(row.documentRef).slice(0, 80) : null,
       serialNumbers: Array.isArray(row.serialNumbers) ? row.serialNumbers.map(String) : [],
       screenExtras: row as Prisma.InputJsonObject,
+      removedAt: null,
     }
     try {
       // Insert or update by blob_id directly — not an upsert, which needs the
@@ -258,6 +262,14 @@ async function transferStockMoves(rows: unknown[], actorId: string | null): Prom
       skipped += 1
       if (errors.length < 3) errors.push(`${blobId}: ${err instanceof Error ? err.message.split('\n').filter(Boolean).slice(-1)[0] : String(err)}`)
     }
+  }
+  // Moves gone from the list (a reversed receipt or delivery takes its moves
+  // off) are marked removed, not deleted. A list much shorter than the table
+  // is a partial save, not removals, and is left alone.
+  const active = existing.filter(m => m.removedAt === null && m.screenExtras !== null)
+  const gone = active.filter(m => !listed.has(String(m.blobId)))
+  if (gone.length && listed.size >= active.length * 0.9) {
+    await prisma.stockMovement.updateMany({ where: { blobId: { in: gone.map(m => String(m.blobId)) } }, data: { removedAt: new Date() } })
   }
   return { upserted, skipped, ...(errors.length ? { error: errors.join(' | ') } : {}) }
 }

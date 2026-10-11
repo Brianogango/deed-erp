@@ -222,7 +222,7 @@ const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
   deed_oppActivities: `SELECT max(created_at)::text || ':' || count(*) || ':' || md5(coalesce(string_agg(screen_extras::text, ',' ORDER BY id), '')) FROM opportunity_activities`,
   deed_serials: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE removed_at IS NULL) FROM serial_numbers`,
   deed_bulkStock: `SELECT max(updated_at)::text || ':' || count(*) || ':' || coalesce(sum(qty), 0) FROM stock_location_levels`,
-  deed_stockMoves: `SELECT max(created_at)::text || ':' || count(*) FROM stock_movements`,
+  deed_stockMoves: `SELECT max(created_at)::text || ':' || count(*) || ':' || count(*) FILTER (WHERE removed_at IS NOT NULL) FROM stock_movements`,
   deed_receipts: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE removed_at IS NULL) FROM receipt_documents`,
   deed_products: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE screen_extras IS NOT NULL) FROM products`,
   deed_stockReservations: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE removed_at IS NULL) || ':' || count(*) FILTER (WHERE status = 'reserved' AND removed_at IS NULL) FROM stock_reservations`,
