@@ -167,7 +167,7 @@ function canonical(value: unknown): string {
  * Do the tables hold exactly what the copies hold? Read-only; this decides
  * when the copies can be frozen.
  */
-export async function stockTableParity(copySerials: unknown, copyBulk: unknown, copyMoves?: unknown, copyReceipts?: unknown, copyProducts?: unknown) {
+export async function stockTableParity(copySerials: unknown, copyBulk: unknown, copyMoves?: unknown, copyReceipts?: unknown, copyProducts?: unknown, copyReservations?: unknown) {
   const serialCopy = (Array.isArray(copySerials) ? copySerials : []) as Row[]
   const tableRows = await tableSerials()
   const table = new Map(tableRows.map(r => [r.serialNumber, toScreenSerial(r)]))
@@ -218,7 +218,29 @@ export async function stockTableParity(copySerials: unknown, copyBulk: unknown, 
   const productsReplaced = productsNotInTable.length - productsMissing.length
   const productsDiffering = productCopy.filter(p => p?.id && productTable.has(String(p.id)) && !numericSame(productTable.get(String(p.id))!, p)).map(p => String(p.name ?? p.id))
 
+  const reservationCopy = (Array.isArray(copyReservations) ? copyReservations : []) as Row[]
+  const reservationRows = await prisma.stockReservation.findMany({
+    where: { blobId: { not: null }, removedAt: null },
+    select: { blobId: true, screenExtras: true, status: true },
+  })
+  const reservationTable = new Map(reservationRows.map(r => [String(r.blobId), r]))
+  const reservationsMissing = reservationCopy.filter(r => r?.id && !reservationTable.has(String(r.id))).map(r => String(r.referenceRef || r.id))
+  const reservationsDiffering = reservationCopy.filter(r => r?.id && reservationTable.has(String(r.id)) && canonical(reservationTable.get(String(r.id))!.screenExtras) !== canonical(r)).map(r => String(r.referenceRef || r.id))
+  const copyReservationIds = new Set(reservationCopy.map(r => String(r?.id ?? '')))
+  const reservationsOnlyInTable = reservationRows.filter(r => !copyReservationIds.has(String(r.blobId))).length
+  // Released by the server (a sale order cancelled or reopened) while the copy still says reserved.
+  const reservationsReleasedByServer = reservationCopy.filter(r => {
+    const t = r?.id ? reservationTable.get(String(r.id)) : null
+    return t && String(r.status ?? 'reserved') === 'reserved' && t.status !== 'reserved'
+  }).map(r => String(r.referenceRef || r.id))
+
   return {
+    reservations: {
+      copy: reservationCopy.length, table: reservationTable.size,
+      missingFromTable: reservationsMissing.length, onlyInTable: reservationsOnlyInTable, differing: reservationsDiffering.length,
+      releasedByServer: reservationsReleasedByServer.length,
+      samples: { missing: reservationsMissing.slice(0, 10), differing: reservationsDiffering.slice(0, 5), releasedByServer: reservationsReleasedByServer.slice(0, 10) },
+    },
     products: { copy: productCopy.length, table: productTable.size, missingFromTable: productsMissing.length, staleDuplicates: productsReplaced, differing: productsDiffering.length, samples: { missing: productsMissing.slice(0, 20), differing: productsDiffering.slice(0, 5) } },
     receipts: { copy: receiptCopy.length, table: receiptTable.size, missingFromTable: receiptsMissing.length, differing: receiptsDiffering.length, samples: { missing: receiptsMissing.slice(0, 5), differing: receiptsDiffering.slice(0, 5) } },
     stockMoves: { copy: moveCopy.length, missingFromTable: movesMissing.length, differing: movesDiffering.length, samples: { missing: movesMissing.slice(0, 5), differing: movesDiffering.slice(0, 5) } },

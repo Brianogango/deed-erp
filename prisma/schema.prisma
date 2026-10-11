@@ -2810,6 +2810,11 @@ model StockReservation {
   reservedAt    DateTime  @default(now()) @map("reserved_at")
   releasedAt    DateTime? @map("released_at")
   createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+  /// The reservation exactly as the screens saved it (deed_stockReservations).
+  screenExtras  Json?     @map("screen_extras")
+  /// Set when the reservation is gone from the screens' list.
+  removedAt     DateTime? @map("removed_at")
 
   product Product?      @relation(fields: [productId], references: [id])
   serial  SerialNumber? @relation(fields: [serialId], references: [id])

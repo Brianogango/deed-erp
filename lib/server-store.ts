@@ -670,9 +670,10 @@ export async function saveStoreKeys(
     // Accounting / inventory dual-write mirrors — NEVER delete app_state keys.
     if (process.env.NODE_ENV !== 'test') {
       if (entries['deed_stockReservations']) {
-        void import('./inventory/reservation-mirror')
+        // Awaited so the table holds the save before the caller moves on.
+        await import('./inventory/reservation-mirror')
           .then(m => m.mirrorStockReservationsToPrisma(entries['deed_stockReservations']))
-          .catch(err => console.error('[reservation-mirror] sync write failed:', err))
+          .catch(err => console.error('[reservation-mirror] save failed:', err))
       }
       if (entries['deed_deliveries']) {
         void import('./delivery-mirror')
