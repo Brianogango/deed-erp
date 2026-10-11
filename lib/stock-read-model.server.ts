@@ -110,10 +110,31 @@ function toScreenProduct(p: { id: string; name: string; sku: string; barcode: st
   }
 }
 
+const productKey = (v: unknown) => String(v ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+
+/**
+ * Copy rows whose id the table lacks but whose SKU, barcode or name a table
+ * product carries: stale duplicates of that product under an old id. The
+ * screens already show the table product in their place (catalog merge).
+ */
+async function tableTwinOf(): Promise<(row: Row) => boolean> {
+  const all = await prisma.product.findMany({ select: { sku: true, barcode: true, name: true } })
+  const skus = new Set(all.map(p => productKey(p.sku)).filter(Boolean))
+  const barcodes = new Set(all.map(p => productKey(p.barcode)).filter(Boolean))
+  const names = new Set(all.map(p => productKey(p.name)).filter(Boolean))
+  return row => {
+    const sku = productKey(row.sku)
+    const barcode = productKey(row.barcode)
+    const name = productKey(row.name)
+    return Boolean((sku && skus.has(sku)) || (barcode && barcodes.has(barcode)) || (name && names.has(name)))
+  }
+}
+
 /**
  * Products for the screens, from the products table: those the screens show
  * (screen_extras set). Products only the table has stay off the screens, as
- * before; products only the copy has stay listed from it.
+ * before; products only the copy has stay listed from it, unless they are a
+ * stale duplicate of a table product.
  */
 export async function loadScreenProducts(screenCopy: unknown): Promise<Row[]> {
   const rows = await prisma.product.findMany({ where: { screenExtras: { not: Prisma.DbNull } }, select: PRODUCT_SELECT })
@@ -121,7 +142,10 @@ export async function loadScreenProducts(screenCopy: unknown): Promise<Row[]> {
   if (!rows.length) return copy
   const out: Row[] = rows.map(toScreenProduct)
   const listed = new Set(out.map(p => String(p.id)))
-  for (const p of copy) if (p?.id && !listed.has(String(p.id))) out.push(p)
+  const copyOnly = copy.filter(p => p?.id && !listed.has(String(p.id)))
+  if (!copyOnly.length) return out
+  const hasTwin = await tableTwinOf()
+  for (const p of copyOnly) if (!hasTwin(p)) out.push(p)
   return out
 }
 
@@ -185,11 +209,14 @@ export async function stockTableParity(copySerials: unknown, copyBulk: unknown, 
   const productTable = new Map(productRows.map(p => [p.id, toScreenProduct(p)]))
   const numericSame = (a: Row, b: Row) => canonical({ ...a, salePrice: Number(a.salePrice) || 0, costPrice: Number(a.costPrice) || 0, minStock: Number(a.minStock) || 0, trackingMethod: String(a.trackingMethod ?? 'QUANTITY').toUpperCase() })
     === canonical({ ...b, salePrice: Number(b.salePrice) || 0, costPrice: Number(b.costPrice) || 0, minStock: Number(b.minStock) || 0, trackingMethod: String(b.trackingMethod ?? 'QUANTITY').toUpperCase() })
-  const productsMissing = productCopy.filter(p => p?.id && !productTable.has(String(p.id))).map(p => String(p.name ?? p.id))
+  const hasTwin = await tableTwinOf()
+  const productsNotInTable = productCopy.filter(p => p?.id && !productTable.has(String(p.id)))
+  const productsMissing = productsNotInTable.filter(p => !hasTwin(p)).map(p => String(p.name ?? p.id))
+  const productsReplaced = productsNotInTable.length - productsMissing.length
   const productsDiffering = productCopy.filter(p => p?.id && productTable.has(String(p.id)) && !numericSame(productTable.get(String(p.id))!, p)).map(p => String(p.name ?? p.id))
 
   return {
-    products: { copy: productCopy.length, table: productTable.size, missingFromTable: productsMissing.length, differing: productsDiffering.length, samples: { missing: productsMissing.slice(0, 20), differing: productsDiffering.slice(0, 5) } },
+    products: { copy: productCopy.length, table: productTable.size, missingFromTable: productsMissing.length, staleDuplicates: productsReplaced, differing: productsDiffering.length, samples: { missing: productsMissing.slice(0, 20), differing: productsDiffering.slice(0, 5) } },
     receipts: { copy: receiptCopy.length, table: receiptTable.size, missingFromTable: receiptsMissing.length, differing: receiptsDiffering.length, samples: { missing: receiptsMissing.slice(0, 5), differing: receiptsDiffering.slice(0, 5) } },
     stockMoves: { copy: moveCopy.length, missingFromTable: movesMissing.length, differing: movesDiffering.length, samples: { missing: movesMissing.slice(0, 5), differing: movesDiffering.slice(0, 5) } },
     serials: {
