@@ -10,6 +10,7 @@ import DuplicateInvoiceJournals from '@/components/finance/DuplicateInvoiceJourn
 import ScreenLedgerSync from '@/components/finance/ScreenLedgerSync'
 import LedgerCleanup from '@/components/finance/LedgerCleanup'
 import StockReconcile from '@/components/finance/StockReconcile'
+import CreditApplicationsQueue from '@/components/credit/CreditApplicationsQueue'
 import DocumentLedgerRepair from '@/components/finance/DocumentLedgerRepair'
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -120,6 +121,7 @@ type MainTab =
   | 'journals'
   | 'refunds'
   | 'credits'
+  | 'credit_applications'
   | 'commissions'
   | 'agent_commissions'
   | 'coa'
@@ -155,6 +157,7 @@ const FINANCE_SECTION_TABS: Record<FinanceSection, Array<{ id: MainTab; label: s
   money_in: [
     { id: 'invoices', label: 'Customer invoices' },
     { id: 'credits', label: 'Customer credits' },
+    { id: 'credit_applications', label: 'Credit applications' },
     { id: 'refunds', label: 'Refunds' },
     { id: 'commissions', label: 'Sales commissions' },
   ],
@@ -913,6 +916,7 @@ function AccountingContent() {
       subtitle: `${vendorBills.length} records · ${fmtKes(outstandingAP)} outstanding`,
     },
     credits: { title: 'Customer credits', subtitle: 'Credit balances and applications' },
+    credit_applications: { title: 'Credit applications', subtitle: 'Corporate credit terms: documents, credit check and approval' },
     commissions: { title: 'Salespeople', subtitle: 'Commission statements and payment status' },
     agent_commissions: { title: 'Agent commissions', subtitle: 'Deed Express agents: commissions earned and payouts' },
     refunds: { title: 'Refunds', subtitle: 'Approved customer refund payments' },
@@ -1845,6 +1849,8 @@ function AccountingContent() {
             <div className="finance-subview finance-subview--refunds"><RefundsTab /></div>
           ) : tab === 'credits' ? (
             <div className="finance-subview finance-subview--credits"><CustomerCreditsTab /></div>
+          ) : tab === 'credit_applications' ? (
+            <div className="finance-subview finance-subview--credit-applications"><CreditApplicationsQueue role={currentUser?.role} userId={currentUserId} showToast={showToast} /></div>
           ) : tab === 'agent_commissions' ? (
             <div className="finance-subview finance-subview--agent-commissions">
               {canManageFullFinance ? (

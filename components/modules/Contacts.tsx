@@ -1,6 +1,8 @@
 'use client'
 import { rememberRecentRecord } from '@/lib/recent-records'
 import CustomerSnapshot from '@/components/contacts/CustomerSnapshot'
+import CreditFacilityPanel, { CREDIT_STANDING_LABELS } from '@/components/credit/CreditFacilityPanel'
+import { normalizeClientRole } from '@/lib/auth/access'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS, isQuotationStage } from '@/lib/odoo-sales-flow'
@@ -28,7 +30,7 @@ import {
 } from '@/lib/customer-credit-view'
 
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
-type ViewTab   = 'info' | 'financial' | 'persons' | 'history' | 'chatter'
+type ViewTab   = 'info' | 'financial' | 'credit' | 'persons' | 'history' | 'chatter'
 
 function contactToFormValues(c: Contact): ContactFormValues {
   const { id: _id, createdAt: _createdAt, ...rest } = c
@@ -167,6 +169,7 @@ function ContactsInner() {
   const { contacts, addContact,
     saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
+  const canSeeCredit = ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(normalizeClientRole(currentUser?.role))
   const [tabValue, setTabValue] = useUrlQueryState('tab', 'all')
   const tab: FilterTab = ['all', 'companies', 'individuals', 'customers', 'vendors'].includes(tabValue)
     ? tabValue as FilterTab
@@ -242,7 +245,7 @@ function ContactsInner() {
     ].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 5)
     return { clientSOs, clientInvoices, clientRepairs, clientPOS, totalRevenue, openBalance, repairRevenue, clientCredits, historyCount, recentBusiness }
   }, [viewContact, saleOrders, invoices, repairs, posOrders, customerCredits])
-  const viewTab: ViewTab = ['info', 'financial', 'persons', 'history', 'chatter'].includes(viewTabValue)
+  const viewTab: ViewTab = ['info', 'financial', 'credit', 'persons', 'history', 'chatter'].includes(viewTabValue)
     ? viewTabValue as ViewTab
     : 'info'
   const setViewTab = (next: ViewTab) => setViewTabValue(next)
@@ -694,6 +697,7 @@ function ContactsInner() {
               {([
                 ['info',      'Overview'],
                 ['financial', 'Financial'],
+                ...(vc.type === 'company' && vc.isCustomer && canSeeCredit ? [['credit', 'Credit']] : []),
                 ...(vc.type === 'company' ? [['persons', `Contact persons ${persons.length}`]] : []),
                 ['history',   `Sales & service ${historyCount}`],
                 ['chatter',   'Notes & activity'],
@@ -781,6 +785,11 @@ function ContactsInner() {
               </div>
             )}
 
+            {/* Tab: Credit */}
+            {viewTab === 'credit' && vc.type === 'company' && canSeeCredit && (
+              <CreditFacilityPanel clientId={vc.id} clientName={vc.name} role={currentUser?.role} userId={currentUserId} showToast={showToast} />
+            )}
+
             {/* Tab: Financial */}
             {viewTab === 'financial' && (
               <div className="contacts-financial-layout">
@@ -790,6 +799,7 @@ function ContactsInner() {
                     <div><span>Available store credit</span><strong className={storeCredit > 0 ? 'is-positive' : ''}>{fmtKes(storeCredit)}</strong></div>
                     <div><span>Payment terms</span><strong>{vc.paymentTermsDays === 0 ? 'Due immediately' : `${vc.paymentTermsDays ?? 0} days`}</strong></div>
                     <div><span>Credit limit</span><strong>{vc.creditLimit ? fmtKes(vc.creditLimit) : '—'}</strong></div>
+                    {vc.type === 'company' && <div><span>Credit standing</span><strong>{CREDIT_STANDING_LABELS[vc.creditStatus ?? 'none'] ?? vc.creditStatus}{vc.creditReviewDue ? ` · review ${fmtDate(vc.creditReviewDue)}` : ''}</strong></div>}
                     <div><span>Open balance</span><strong>{fmtKes(openBalance)}</strong></div>
                   </div>
                   <p className="contacts-help-copy">Credit can be applied to posted unpaid invoices from Finance.</p>

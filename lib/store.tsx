@@ -611,6 +611,9 @@ export interface Contact {
   creditLimit?: number
   paymentTermsDays?: number
   paymentTerms?: string   // kept for backward compat
+  /** none (pay on receipt) | approved | suspended | revoked | legacy — set by credit applications. */
+  creditStatus?: string
+  creditReviewDue?: string
   bankName?: string
   bankAccount?: string
   bankBranch?: string

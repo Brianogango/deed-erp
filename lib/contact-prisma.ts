@@ -114,6 +114,8 @@ export function clientToContact(client: any): Contact {
     industry: client.industry ?? undefined,
     tags: tagsFrom(client.tags),
     creditLimit: numberOr(client.creditLimit, 0),
+    creditStatus: client.creditStatus ?? 'none',
+    ...(client.creditReviewDue ? { creditReviewDue: dateOnly(client.creditReviewDue) } : {}),
     paymentTermsDays,
     paymentTerms: `${paymentTermsDays} days`,
     bankName: client.bankName ?? undefined,

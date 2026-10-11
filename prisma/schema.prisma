@@ -798,6 +798,9 @@ model Client {
   companyId     String?  @map("company_id") @db.Uuid
   jobTitle      String?  @map("job_title") @db.VarChar(120)
 
+  /// none (cash / pay on receipt) | approved | suspended | revoked | legacy (credit given before applications existed)
+  creditStatus    String    @default("none") @map("credit_status") @db.VarChar(20)
+  creditReviewDue DateTime? @map("credit_review_due") @db.Date
   createdById   String?  @map("created_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -4260,4 +4263,70 @@ model Appraisal {
 
   @@unique([cycleId, employeeId], map: "uq_appraisal_cycle_employee")
   @@map("appraisals")
+}
+
+/// A corporate customer's application for credit (Deed Technologies Credit
+/// Application Form), its credit check and the decision.
+model CreditFacilityApplication {
+  id                   String    @id @default(uuid()) @db.Uuid
+  ref                  String    @unique @db.VarChar(30)
+  clientId             String    @map("client_id") @db.Uuid
+  /// draft | sent | submitted | under_review | info_requested | recommended | approved | declined | withdrawn | suspended | revoked
+  status               String    @default("draft") @db.VarChar(30)
+  requestedLimit       Decimal   @default(0) @map("requested_limit") @db.Decimal(14, 2)
+  requestedTermsDays   Int       @default(30) @map("requested_terms_days")
+  /// The application form as filled (business, ownership, directors, banks, references, signatories).
+  form                 Json      @default("{}")
+  /// Finance's credit check findings.
+  assessment           Json      @default("{}")
+  riskClass            String?   @map("risk_class") @db.VarChar(10)
+  recommendedLimit     Decimal?  @map("recommended_limit") @db.Decimal(14, 2)
+  recommendedTermsDays Int?      @map("recommended_terms_days")
+  approvedLimit        Decimal?  @map("approved_limit") @db.Decimal(14, 2)
+  approvedTermsDays    Int?      @map("approved_terms_days")
+  conditions           String?
+  decisionNote         String?   @map("decision_note")
+  paidTransactions     Int?      @map("paid_transactions")
+  requestedById        String?   @map("requested_by") @db.Uuid
+  recommendedById      String?   @map("recommended_by") @db.Uuid
+  decidedById          String?   @map("decided_by") @db.Uuid
+  decidedAt            DateTime? @map("decided_at")
+  reviewDue            DateTime? @map("review_due") @db.Date
+  portalToken          String?   @unique @map("portal_token") @db.VarChar(80)
+  portalExpiresAt      DateTime? @map("portal_expires_at")
+  /// What happened, oldest first: { at, by, byName, action, note }.
+  events               Json      @default("[]")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  documents CreditFacilityDocument[]
+
+  @@index([clientId], map: "idx_credit_facility_applications_client")
+  @@index([status], map: "idx_credit_facility_applications_status")
+  @@map("credit_facility_applications")
+}
+
+model CreditFacilityDocument {
+  id            String    @id @default(uuid()) @db.Uuid
+  applicationId String    @map("application_id") @db.Uuid
+  kind          String    @db.VarChar(40)
+  name          String    @db.VarChar(255)
+  contentType   String    @map("content_type") @db.VarChar(120)
+  size          Int
+  objectKey     String    @map("object_key") @db.VarChar(400)
+  /// received | verified | rejected
+  status        String    @default("received") @db.VarChar(20)
+  expiresOn     DateTime? @map("expires_on") @db.Date
+  note          String?
+  uploadedById  String?   @map("uploaded_by") @db.Uuid
+  /// staff | client
+  uploadedVia   String    @default("staff") @map("uploaded_via") @db.VarChar(10)
+  reviewedById  String?   @map("reviewed_by") @db.Uuid
+  reviewedAt    DateTime? @map("reviewed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  application CreditFacilityApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId], map: "idx_credit_facility_documents_app")
+  @@map("credit_facility_documents")
 }
