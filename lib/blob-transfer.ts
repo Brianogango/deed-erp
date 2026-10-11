@@ -362,8 +362,8 @@ export async function mirrorKnownDomain(key: string, value: string, actorId: str
     }
     if (key === 'deed_stockReservations') {
       const { mirrorStockReservationsToPrisma } = await import('@/lib/inventory/reservation-mirror')
-      await mirrorStockReservationsToPrisma(value)
-      return { upserted: rows.length, skipped: 0 }
+      const result = await mirrorStockReservationsToPrisma(value)
+      return { upserted: result.mirrored, skipped: result.failed, ...(result.error ? { error: result.error } : {}) }
     }
     if (key === 'deed_deliveries') {
       const { mirrorDeliveriesToPrisma } = await import('@/lib/delivery-mirror')

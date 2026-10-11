@@ -74,6 +74,38 @@ export async function loadScreenStockMoves(screenCopy: unknown): Promise<Row[]> 
   return out
 }
 
+/**
+ * Stock reservations from stock_reservations, each as the screens saved it.
+ * The status column wins over the saved one: the server releases
+ * reservations there directly (a sale order cancelled or reopened).
+ * Reservations only the copy has stay listed; ones the table marked removed
+ * do not come back from the copy.
+ */
+export async function loadScreenReservations(screenCopy: unknown): Promise<Row[]> {
+  const rows = await prisma.stockReservation.findMany({
+    where: { blobId: { not: null } },
+    select: { blobId: true, screenExtras: true, status: true, releasedAt: true, removedAt: true },
+    orderBy: { reservedAt: 'asc' },
+  })
+  const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  if (!rows.some(r => r.screenExtras !== null)) return copy
+  const out: Row[] = []
+  for (const r of rows) {
+    if (r.removedAt || r.screenExtras === null) continue
+    const extras = asObject(r.screenExtras)
+    const released = r.status !== 'reserved' && String(extras.status ?? 'reserved') === 'reserved'
+    out.push({
+      ...extras,
+      id: String(r.blobId),
+      status: r.status,
+      ...(released && r.releasedAt && !extras.releasedDate ? { releasedDate: r.releasedAt.toISOString() } : {}),
+    })
+  }
+  const known = new Set(rows.map(r => String(r.blobId)))
+  for (const r of copy) if (r?.id && !known.has(String(r.id))) out.push(r)
+  return out
+}
+
 /** Goods receipts (drafts included) from receipt_documents, newest first. Receipts only the copy has stay listed. */
 export async function loadScreenReceipts(screenCopy: unknown): Promise<Row[]> {
   const rows = await prisma.receiptDocument.findMany({ where: { removedAt: null }, select: { id: true, record: true }, orderBy: { receiptDate: 'desc' } })

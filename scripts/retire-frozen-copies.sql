@@ -35,6 +35,7 @@ CREATE OR REPLACE FUNCTION pg_temp.in_table(k text, p jsonb) RETURNS boolean AS 
     -- Built-in demo products (ids such as p1) were never real stock.
     WHEN 'deed_products' THEN EXISTS (SELECT 1 FROM products t WHERE t.id::text = p->>'id' AND t.screen_extras IS NOT NULL)
       OR p->>'id' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    WHEN 'deed_stockReservations' THEN EXISTS (SELECT 1 FROM stock_reservations t WHERE t.blob_id = p->>'id' AND t.screen_extras IS NOT NULL)
     ELSE false END
 $$ LANGUAGE sql;
 
@@ -61,7 +62,7 @@ BEGIN;
 CREATE TEMP TABLE retire_keys ON COMMIT DROP AS
 SELECT r.key
 FROM erp_state_records r
-WHERE r.key IN ('deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products')
+WHERE r.key IN ('deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations')
 GROUP BY r.key
 HAVING count(*) FILTER (WHERE NOT pg_temp.in_table(r.key, r.payload)) = 0;
 
@@ -87,6 +88,6 @@ COMMIT;
 \echo 'Kept (still hold rows their table lacks) — see scripts/frozen-copies-preview.sql'
 SELECT r.key AS kept, count(*) FILTER (WHERE NOT pg_temp.in_table(r.key, r.payload)) AS only_in_copy
 FROM erp_state_records r
-WHERE r.key IN ('deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products')
+WHERE r.key IN ('deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations')
 GROUP BY r.key
 ORDER BY 1;

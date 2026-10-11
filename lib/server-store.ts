@@ -111,9 +111,9 @@ async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
  * document's own API route — but other tabs are still told to re-read.
  */
 /** Frozen stock keys whose saves are written into their tables on the save path. */
-const TABLE_FED_KEYS = ['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products'] as const
+const TABLE_FED_KEYS = ['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations'] as const
 
-export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products'])
+export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations'])
 
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
@@ -225,6 +225,7 @@ const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
   deed_stockMoves: `SELECT max(created_at)::text || ':' || count(*) FROM stock_movements`,
   deed_receipts: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE removed_at IS NULL) FROM receipt_documents`,
   deed_products: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE screen_extras IS NOT NULL) FROM products`,
+  deed_stockReservations: `SELECT max(updated_at)::text || ':' || count(*) FILTER (WHERE removed_at IS NULL) || ':' || count(*) FILTER (WHERE status = 'reserved' AND removed_at IS NULL) FROM stock_reservations`,
   deed_deposits_v1: `SELECT max(updated_at)::text || ':' || count(*) FROM deposits`,
   deed_auditLogs: `SELECT max(created_at)::text || ':' || count(*) FROM audit_logs`,
   deed_holdovers: `SELECT max(updated_at)::text || ':' || count(*) FROM holdovers`,
@@ -270,7 +271,7 @@ async function overlayAuthoritativeActivities(state: AppStateMap, keys?: string[
 
 async function overlayStockTables(state: AppStateMap, keys?: string[]) {
   const want = (key: string) => !keys || keys.includes(key)
-  if (!['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products'].some(want)) return
+  if (!['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations'].some(want)) return
   const m = await import('./stock-read-model.server')
   if (want('deed_serials')) {
     const serials = await m.loadScreenSerials(state.deed_serials)
@@ -296,6 +297,11 @@ async function overlayStockTables(state: AppStateMap, keys?: string[]) {
     const receipts = await m.loadScreenReceipts(state.deed_receipts)
       .catch(err => { console.error('[server-store] receipts from table failed:', err); return null })
     if (receipts) state.deed_receipts = receipts
+  }
+  if (want('deed_stockReservations')) {
+    const reservations = await m.loadScreenReservations(state.deed_stockReservations)
+      .catch(err => { console.error('[server-store] reservations from table failed:', err); return null })
+    if (reservations) state.deed_stockReservations = reservations
   }
 }
 
@@ -669,12 +675,6 @@ export async function saveStoreKeys(
 
     // Accounting / inventory dual-write mirrors — NEVER delete app_state keys.
     if (process.env.NODE_ENV !== 'test') {
-      if (entries['deed_stockReservations']) {
-        // Awaited so the table holds the save before the caller moves on.
-        await import('./inventory/reservation-mirror')
-          .then(m => m.mirrorStockReservationsToPrisma(entries['deed_stockReservations']))
-          .catch(err => console.error('[reservation-mirror] save failed:', err))
-      }
       if (entries['deed_deliveries']) {
         void import('./delivery-mirror')
           .then(async m => {

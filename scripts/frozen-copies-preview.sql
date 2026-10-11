@@ -33,6 +33,7 @@ CREATE OR REPLACE FUNCTION pg_temp.in_table(k text, p jsonb) RETURNS boolean AS 
     -- Built-in demo products (ids such as p1) were never real stock.
     WHEN 'deed_products' THEN EXISTS (SELECT 1 FROM products t WHERE t.id::text = p->>'id' AND t.screen_extras IS NOT NULL)
       OR p->>'id' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    WHEN 'deed_stockReservations' THEN EXISTS (SELECT 1 FROM stock_reservations t WHERE t.blob_id = p->>'id' AND t.screen_extras IS NOT NULL)
     ELSE false END
 $$ LANGUAGE sql;
 
@@ -42,7 +43,7 @@ SELECT r.key AS copy,
        max(r.updated_at)::date AS last_written,
        CASE WHEN count(*) FILTER (WHERE NOT pg_temp.in_table(r.key, r.payload)) = 0 THEN 'ready' ELSE 'keep' END AS retire
 FROM erp_state_records r
-WHERE r.key IN ('deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products')
+WHERE r.key IN ('deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations')
 GROUP BY r.key
 ORDER BY r.key;
 
@@ -51,7 +52,7 @@ SELECT key, left(payload::text, 160) AS row
 FROM (
   SELECT r.key, r.payload, row_number() OVER (PARTITION BY r.key ORDER BY r.updated_at DESC) AS n
   FROM erp_state_records r
-  WHERE r.key IN ('deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products') AND NOT pg_temp.in_table(r.key, r.payload)
+  WHERE r.key IN ('deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations') AND NOT pg_temp.in_table(r.key, r.payload)
 ) x
 WHERE n <= 3
 ORDER BY key;
