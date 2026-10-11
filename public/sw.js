@@ -169,6 +169,8 @@ self.addEventListener('push', event => {
     data: { url: payload.url || '/' },
     tag: payload.eventType || 'deed-notification',
     renotify: true,
+    // Approvals and critical alerts stay on screen until clicked or closed.
+    requireInteraction: Boolean(payload.sticky),
   }
   event.waitUntil(self.registration.showNotification(title, options))
 })
