@@ -10,17 +10,23 @@
 -- Since stock moves moved to this table, a reversal took the moves off the
 -- list but the table kept them, so they stayed on screen and a receipt
 -- validated again after a reversal could find its old moves and skip adding
--- the stock. Nothing is marked here; the next save of the list does it.
+-- the stock. Moves of deliveries already reversed are marked removed here
+-- (what the reversal did before the move to this table); receipts that look
+-- reset are only listed for review.
 
 ALTER TABLE "stock_movements" ADD COLUMN IF NOT EXISTS "removed_at" TIMESTAMPTZ;
 
-\echo 'Moves still listed under a document that has since been reversed or reset (for review)'
+\echo 'Moves of reversed deliveries, marked removed'
+UPDATE "stock_movements" m SET removed_at = now()
+WHERE m.removed_at IS NULL AND m.screen_extras IS NOT NULL AND m.document_ref IS NOT NULL
+  AND EXISTS (SELECT 1 FROM "erp_state_records" r WHERE r.key = 'deed_deliveries' AND r.payload->>'ref' = m.document_ref AND r.payload ? 'reversedAt')
+  AND NOT EXISTS (SELECT 1 FROM "erp_state_records" r WHERE r.key = 'deed_deliveries' AND r.payload->>'ref' = m.document_ref AND NOT (r.payload ? 'reversedAt'));
+
+\echo 'Moves still listed under a receipt that is not validated (for review)'
 SELECT m.document_ref, count(*) AS moves, min(m.created_at)::date AS first_move
 FROM "stock_movements" m
 WHERE m.screen_extras IS NOT NULL
   AND m.document_ref IS NOT NULL
-  AND (
-    EXISTS (SELECT 1 FROM "erp_state_records" r WHERE r.key = 'deed_deliveries' AND r.payload->>'ref' = m.document_ref AND r.payload ? 'reversedAt')
-    OR EXISTS (SELECT 1 FROM "receipt_documents" d WHERE d.ref = m.document_ref AND d.removed_at IS NULL AND coalesce(d.status, '') NOT IN ('done', 'validated'))
-  )
+  AND m.removed_at IS NULL
+  AND EXISTS (SELECT 1 FROM "receipt_documents" d WHERE d.ref = m.document_ref AND d.removed_at IS NULL AND coalesce(d.status, '') NOT IN ('done', 'validated'))
 GROUP BY 1 ORDER BY 1;
