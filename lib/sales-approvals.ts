@@ -1,6 +1,7 @@
 // ─── Approval Workflow Engine ─────────────────────────────────────────────────
 
 import type { ApprovalRequest, ApprovalLevel, ApprovalType } from './sales-flow-types'
+import { normalizeClientRole } from '@/lib/auth/access'
 import {
   APPROVAL_RULES,
   approvalRolesAreAnyOf,
@@ -211,8 +212,8 @@ export function approvalRecipientIds(
   const currentLevel = request.approvers.find(a => a.level === request.currentLevel)
   if (!currentLevel) return []
   const fromSnapshot = currentLevel.approverIds ?? []
-  const allowed = new Set(levelRoles(currentLevel))
-  const fromRole = users.filter(u => allowed.has(u.role)).map(u => u.id)
+  const allowed = new Set(levelRoles(currentLevel).map(normalizeClientRole))
+  const fromRole = users.filter(u => allowed.has(normalizeClientRole(u.role))).map(u => u.id)
   return [...new Set([...fromSnapshot, ...fromRole].filter(Boolean))]
 }
 

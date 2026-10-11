@@ -3,6 +3,9 @@ import 'server-only'
 import { HR_MANAGER_ROLES, LEAVE_APPROVER_ROLES } from './access'
 import type { ModuleId, PublicUser, UserRole } from './types'
 
+/** Old role names still accepted when read; new users are always saved under the current name. */
+export const LEGACY_ROLE_NAMES = ['super_admin', 'admin', 'finance', 'inventory', 'kilimall', 'sales', 'lead_tech', 'repair_tech'] as const
+
 export const normalizePermissionRole = (role: string | null | undefined): UserRole | null => {
   if (!role) return null
   const aliases: Record<string, UserRole> = {
@@ -24,6 +27,22 @@ export const normalizePermissionRole = (role: string | null | undefined): UserRo
     technician: 'technician',
   }
   return aliases[role] ?? (role as UserRole)
+}
+
+/**
+ * Every name a role may be stored under: the current name plus its old names
+ * (finance → finance_officer, sales → sales_rep, admin/super_admin → director …).
+ * Use it whenever users are looked up by role in the database, so a user
+ * saved under an old name is never left out.
+ */
+export const storedRoleNames = (roles: readonly string[]): string[] => {
+  const wanted = new Set(roles.map(r => normalizePermissionRole(r)).filter(Boolean) as string[])
+  const out = new Set<string>(wanted)
+  for (const alias of LEGACY_ROLE_NAMES) {
+    const canonical = normalizePermissionRole(alias)
+    if (canonical && wanted.has(canonical)) out.add(alias)
+  }
+  return [...out]
 }
 
 export const isSuperAdminRole = (role: string | null | undefined) => normalizePermissionRole(role) === 'director'

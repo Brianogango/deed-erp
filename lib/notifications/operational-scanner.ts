@@ -868,7 +868,7 @@ async function scanDirectorBrief() {
   const weekAhead = plusDays(current, 7)
   const money = (v: unknown) => Number(v) || 0
 
-  const [bills, receivables, leave, advances, payroll, pos, blob] = await Promise.all([
+  const [bills, receivables, leave, advances, payroll, blob] = await Promise.all([
     prisma.invoice.findMany({
       where: { documentType: 'vendor_bill', postingStatus: 'posted', dueDate: { not: null, lte: weekAhead } },
       select: { invoiceNumber: true, dueDate: true, totalAmount: true, amountPaid: true, client: { select: { name: true } } },
@@ -887,10 +887,6 @@ async function scanDirectorBrief() {
       select: { reference: true, id: true, employeeName: true, amount: true },
     }),
     prisma.payrollRun.findMany({ where: { status: 'pending_approval', approvedAt: null }, select: { runReference: true } }),
-    prisma.purchaseOrder.findMany({
-      where: { status: 'sent', approvedAt: null },
-      select: { poNumber: true, totalAmount: true, vendor: { select: { name: true } } },
-    }),
     loadAppState(['deed_stockCheckouts', 'deed_saleOrders', 'deed_invoices', 'deed_deliveries', 'deed_products']).catch(() => ({} as Record<string, unknown>)),
   ])
 
@@ -928,7 +924,8 @@ async function scanDirectorBrief() {
     })),
     advancesPending: advances.map(a => ({ ref: a.reference || a.id, employee: a.employeeName || 'Employee', amount: money(a.amount) })),
     payrollPending: payroll.map(p => ({ ref: p.runReference })),
-    posAwaitingApproval: pos.map(p => ({ ref: p.poNumber, supplier: p.vendor?.name, total: money(p.totalAmount) })),
+    // PO approval is not used; the brief no longer lists purchase orders.
+    posAwaitingApproval: [],
     checkoutsPending: checkouts
       .filter(c => c.status === 'pending')
       .map(c => ({ ref: String(c.ref), product: String(c.productName || 'item'), qty: money(c.qty), receiver: String(c.receiverName || '—') })),

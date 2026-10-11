@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import prisma from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { defaultNotificationPolicy } from './registry'
+import { storedRoleNames } from '@/lib/auth/authorization'
 import {
   bypassPreference,
   channelEnabled,
@@ -606,7 +607,7 @@ async function processNotificationEscalations(limit = 50) {
     // re-sending it to them as an "escalation" only doubled their inbox.
     const alreadyNotified = new Set(event.recipients.map(r => r.userId))
     const escalationUsers = (await prisma.user.findMany({
-      where: { isActive: true, role: { in: roles as any } },
+      where: { isActive: true, role: { in: storedRoleNames(roles) as any } },
       select: { id: true },
     })).map(u => u.id).filter(id => !alreadyNotified.has(id))
     if (!escalationUsers.length) {

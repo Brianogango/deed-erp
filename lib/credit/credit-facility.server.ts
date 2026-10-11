@@ -258,9 +258,9 @@ async function notifyCreditAction(app: AppRow, action: CreditAction, actor: Acto
   const actionUrl = `/contacts?id=${app.clientId}&contactTab=credit`
   const base = { entityType: 'credit_application', entityId: app.id, actorUserId: actor.id || null, actionUrl }
   if (action === 'submit') {
-    await publishNotificationEvent({ ...base, eventType: 'credit.application.submitted', roles: ['finance_officer', 'finance'], title: `Credit application to review — ${who}`, body: `${app.ref}: KES ${Number(app.requestedLimit).toLocaleString('en-KE')} on ${app.requestedTermsDays} days requested.`, idempotencyKey: `credit-submitted:${app.id}:${app.updatedAt.getTime()}` })
+    await publishNotificationEvent({ ...base, eventType: 'credit.application.submitted', roles: ['finance_officer'], title: `Credit application to review — ${who}`, body: `${app.ref}: KES ${Number(app.requestedLimit).toLocaleString('en-KE')} on ${app.requestedTermsDays} days requested.`, idempotencyKey: `credit-submitted:${app.id}:${app.updatedAt.getTime()}` })
   } else if (action === 'recommend') {
-    await publishNotificationEvent({ ...base, eventType: 'credit.application.recommended', roles: ['director', 'super_admin', 'admin'], title: `Credit approval needed — ${who}`, body: `${app.ref}: Finance recommends KES ${Number(app.recommendedLimit).toLocaleString('en-KE')} on ${app.recommendedTermsDays} days.`, idempotencyKey: `credit-recommended:${app.id}:${app.updatedAt.getTime()}` })
+    await publishNotificationEvent({ ...base, eventType: 'credit.application.recommended', roles: ['director'], title: `Credit approval needed — ${who}`, body: `${app.ref}: Finance recommends KES ${Number(app.recommendedLimit).toLocaleString('en-KE')} on ${app.recommendedTermsDays} days.`, idempotencyKey: `credit-recommended:${app.id}:${app.updatedAt.getTime()}` })
   } else if (['approve', 'decline', 'request_info'].includes(action) && app.requestedById) {
     const title = action === 'approve' ? `Credit approved — ${who}` : action === 'decline' ? `Credit declined — ${who}` : `More information needed — ${who}`
     const body = action === 'approve'

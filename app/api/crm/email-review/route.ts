@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { pickRoundRobinOwner } from '@/lib/crm/sales-inbox-leads'
 import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
+import { storedRoleNames } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 
@@ -119,7 +120,7 @@ export async function POST(req: NextRequest) {
       let ownerId = body.ownerId || lead.ownerId || null
       if (!ownerId) {
         const reps = await prisma.user.findMany({
-          where: { isActive: true, role: { in: [...LEAD_ASSIGNEE_ROLES] } },
+          where: { isActive: true, role: { in: storedRoleNames(LEAD_ASSIGNEE_ROLES) as any } },
           select: { id: true },
           orderBy: { username: 'asc' },
         })

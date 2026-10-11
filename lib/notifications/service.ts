@@ -5,6 +5,7 @@ import { createHash } from 'crypto'
 import prisma from '@/lib/prisma'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { defaultNotificationPolicy } from './registry'
+import { storedRoleNames } from '@/lib/auth/authorization'
 import type {
   ExternalNotificationRecipient,
   NotificationRouting,
@@ -63,7 +64,7 @@ async function resolveUserIds(
 
   if (roleNames.length) {
     const rows = await db.user.findMany({
-      where: { isActive: true, role: { in: roleNames as any } },
+      where: { isActive: true, role: { in: storedRoleNames(roleNames) as any } },
       select: { id: true },
     })
     for (const row of rows) ids.add(row.id)
