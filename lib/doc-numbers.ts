@@ -3,8 +3,6 @@
  * Server routes should call getNextDocNumber from lib/doc-ref-counter directly.
  */
 
-import { safeLocalStorageSet } from '@/lib/client-store-cache'
-
 type DocKind =
   | 'quote'
   | 'quotation'
@@ -56,14 +54,17 @@ export async function allocateDocNumber(kind: string): Promise<string> {
   return data.number
 }
 
-/** Local fallback using the same per-year localStorage high-water mark as docSeq. */
+/**
+ * Used only when the server could not hand out a number. It used to count
+ * up from this browser's own copy of the sequence, so two browsers (or one
+ * after the server had moved on) issued the same number twice (the likely
+ * reason DN/2026/0082–0088 each ended up on two delivery notes). It now returns a
+ * number that cannot clash with the server's sequence: the prefix and year,
+ * then "L" and a time-based code (e.g. DN/2026/L5K2J9QX).
+ */
 export function allocateDocNumberSync(prefix: string): string {
   const year = new Date().getFullYear()
-  const lsKey = `deed_docseq_${prefix}_${year}`
-  const stored = typeof window !== 'undefined'
-    ? parseInt(localStorage.getItem(lsKey) ?? '0', 10)
-    : 0
-  const next = (Number.isFinite(stored) ? stored : 0) + 1
-  safeLocalStorageSet(lsKey, String(next))
-  return `${prefix}/${year}/${String(next).padStart(4, '0')}`
+  const stamp = Date.now().toString(36).toUpperCase()
+  const salt = Math.floor(Math.random() * 36 * 36).toString(36).toUpperCase().padStart(2, '0')
+  return `${prefix}/${year}/L${stamp}${salt}`
 }

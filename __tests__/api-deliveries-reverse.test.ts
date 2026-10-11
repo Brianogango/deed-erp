@@ -76,6 +76,18 @@ describe('POST /api/deliveries/:id/reverse', () => {
     expect(savedDeliveries()[0].status).toBe('cancelled')
   })
 
+  it('refuses to reverse a note whose number another delivered note also carries', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_deliveries: [
+      delivery('done'),
+      { ...delivery('done'), id: 'delivery-2', saleOrderRef: 'SO/2026/0072' },
+    ] })
+    const res = await call()
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('SO/2026/0072') })
+    expect(mockReverseStock).not.toHaveBeenCalled()
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
   it('refuses a second reversal', async () => {
     mockLoadAppState.mockResolvedValue({ deed_deliveries: [delivery('cancelled')] })
     const res = await call()

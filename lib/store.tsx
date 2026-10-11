@@ -14524,11 +14524,16 @@ const storeCtx: AppState = {
         return nextPosTicketRef(posOrders.map(o => o.ref))
       }
       if (typeof window !== 'undefined' && kind) {
-        try {
-          return await allocateDocNumber(kind)
-        } catch {
-          /* fall through to local sequence */
+        // Two more tries before the clash-free local number: a brief network
+        // blip should still get the next number in the real sequence.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            return await allocateDocNumber(kind)
+          } catch {
+            if (attempt < 2) await new Promise(r => setTimeout(r, 400 * (attempt + 1)))
+          }
         }
+        console.warn(`[doc-numbers] server did not issue a ${prefix} number; using a temporary one`)
       }
       return allocateDocNumberSync(prefix)
     },

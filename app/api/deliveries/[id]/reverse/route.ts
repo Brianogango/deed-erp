@@ -45,6 +45,20 @@ export async function POST(request: NextRequest, { params }: { params: RoutePara
         return { status: 409 as const, error: 'This delivery is already cancelled' }
       }
 
+      // Stock moves are tied to a delivery by its number. When another
+      // delivery note carries the same number (DN/2026/0082–0088 were issued
+      // twice), reversing this one would also return the other note's stock.
+      const ref = String(delivery.ref ?? '')
+      const sharedWith = ref
+        ? deliveries.filter(d => d.id !== delivery.id && String(d.ref ?? '') === ref && normalizeDeliveryStatus(d.status) === 'done')
+        : []
+      if (status === 'done' && sharedWith.length > 0) {
+        return {
+          status: 409 as const,
+          error: `${ref} is also the number of another delivery note (${sharedWith.map(d => d.saleOrderRef || d.customerName || 'another order').join(', ')}). Reversing it would also undo that note's stock. Ask an administrator to renumber the duplicate first.`,
+        }
+      }
+
       const lines = (Array.isArray(delivery.lines) ? delivery.lines : [])
         .map((line: any) => ({
           productId: String(line.productId ?? ''),
