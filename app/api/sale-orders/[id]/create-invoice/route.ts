@@ -27,7 +27,7 @@ import {
   confirmRepairLinkedQuotationForInvoice,
   ensureConfirmedSaleOrderForFulfillment,
 } from '@/lib/sale-order-confirm-heal.server'
-import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
+import { assertSaleOrderCreditOnConfirm, payOnReceiptEnforced } from '@/lib/sale-order-credit.server'
 import { isPayOnReceipt } from '@/lib/customer-credit-gate'
 import { isDiagnosisFeeLine } from '@/lib/diagnosis-fee'
 import { orderedSaleOrderItems } from '@/lib/sales/sale-order-line-order'
@@ -405,7 +405,8 @@ export async function POST(
     // Repair orders are minted in the browser without terms; fall back to the
     // customer's own credit period rather than treating "unset" as 0 days.
     // Payment policy: a corporate customer without approved credit pays on receipt.
-    const paymentTermsDays = isPayOnReceipt(confirmed.client) ? 0 : Number(confirmed.paymentTermsDays ?? confirmed.client?.paymentTermsDays)
+    const enforced = payOnReceiptEnforced(await loadAppState(['deed_systemSettings']).catch(() => null))
+    const paymentTermsDays = enforced && isPayOnReceipt(confirmed.client) ? 0 : Number(confirmed.paymentTermsDays ?? confirmed.client?.paymentTermsDays)
     const dueDate = new Date(Date.now() + (Number.isFinite(paymentTermsDays) && paymentTermsDays >= 0 ? paymentTermsDays : 0) * 86400000)
     const invoiceNotes = downDeduction > 0
       ? `Created from ${confirmed.orderNumber} · Down payments deducted: KES ${downDeduction.toLocaleString()}`

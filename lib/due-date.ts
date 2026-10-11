@@ -38,7 +38,9 @@ export function dueDateFromTerms(documentDate: string, termsDays: number): strin
 export function customerPaymentTermsDays(
   contact: { paymentTermsDays?: number | string | null; type?: string | null; creditStatus?: string | null } | null | undefined,
   fallback: number,
+  /** System setting accCreditPayOnReceiptEnforced. */
+  enforced?: boolean | null,
 ): number {
-  if (contact?.type === 'company' && contact.creditStatus && ['none', 'suspended', 'revoked'].includes(contact.creditStatus)) return 0
+  if (enforced && contact?.type === 'company' && contact.creditStatus && ['none', 'suspended', 'revoked'].includes(contact.creditStatus)) return 0
   return contactPaymentTermsDays(contact, fallback)
 }

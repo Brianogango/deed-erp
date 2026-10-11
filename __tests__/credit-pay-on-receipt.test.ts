@@ -27,9 +27,12 @@ describe('pay on receipt (corporate customers without approved credit)', () => {
   })
 
   it('invoices for pay-on-receipt companies fall due on the day; vendors keep their terms', () => {
-    expect(customerPaymentTermsDays({ type: 'company', creditStatus: 'none', paymentTermsDays: 30 }, 14)).toBe(0)
-    expect(customerPaymentTermsDays({ type: 'company', creditStatus: 'approved', paymentTermsDays: 45 }, 14)).toBe(45)
-    expect(customerPaymentTermsDays({ type: 'individual', creditStatus: 'none', paymentTermsDays: 7 }, 14)).toBe(7)
+    expect(customerPaymentTermsDays({ type: 'company', creditStatus: 'none', paymentTermsDays: 30 }, 14, true)).toBe(0)
+    expect(customerPaymentTermsDays({ type: 'company', creditStatus: 'approved', paymentTermsDays: 45 }, 14, true)).toBe(45)
+    expect(customerPaymentTermsDays({ type: 'individual', creditStatus: 'none', paymentTermsDays: 7 }, 14, true)).toBe(7)
+    // Switched off (the default): the contact's own terms apply.
+    expect(customerPaymentTermsDays({ type: 'company', creditStatus: 'none', paymentTermsDays: 30 }, 14)).toBe(30)
+    expect(customerPaymentTermsDays({ type: 'company', creditStatus: 'none', paymentTermsDays: 30 }, 14, false)).toBe(30)
     expect(contactPaymentTermsDays({ paymentTermsDays: 30 }, 14)).toBe(30)
   })
 })

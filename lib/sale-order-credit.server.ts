@@ -13,6 +13,12 @@ const OPEN_INVOICE_STATUSES = [
   'paid',
 ] as const
 
+/** System setting: is the pay-on-receipt rule switched on? */
+export function payOnReceiptEnforced(state: unknown): boolean {
+  const settings = (state as { deed_systemSettings?: { accCreditPayOnReceiptEnforced?: unknown } } | null)?.deed_systemSettings
+  return settings?.accCreditPayOnReceiptEnforced === true
+}
+
 const CREDIT_OVERRIDE_ROLES = new Set(['director', 'finance_officer'])
 
 type SaleOrderCreditCheck =
@@ -49,7 +55,7 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
       },
       select: { totalAmount: true, amountPaid: true, dueDate: true, status: true },
     }),
-    loadAppState(['deed_customerCredits']),
+    loadAppState(['deed_customerCredits', 'deed_systemSettings']),
   ])
 
   if (!client) return { ok: true }
@@ -85,7 +91,7 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
     outstandingBalance: outstanding,
     newOrderTotal: opts.orderTotal,
     document: opts.document ?? 'order',
-    payOnReceipt: isPayOnReceipt(client),
+    payOnReceipt: payOnReceiptEnforced(state) && isPayOnReceipt(client),
   })
 
   if (!gate.ok && !canOverride) {

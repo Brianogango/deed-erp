@@ -329,6 +329,7 @@ function AccountingContent() {
     refundPayments,
     users,
     currentUserId,
+    systemSettings,
     registerPayment,
     deleteInvoice,
     updateInvoice,
@@ -699,9 +700,9 @@ function AccountingContent() {
     if (!newPartnerId || !newDocumentDate) return
     const partner = contacts.find(c => c.id === newPartnerId)
     if (!partner) return
-    const derived = dueDateFromTerms(newDocumentDate, tab === 'invoices' ? customerPaymentTermsDays(partner, 0) : contactPaymentTermsDays(partner, 0))
+    const derived = dueDateFromTerms(newDocumentDate, tab === 'invoices' ? customerPaymentTermsDays(partner, 0, systemSettings.accCreditPayOnReceiptEnforced) : contactPaymentTermsDays(partner, 0))
     if (derived) setNewDueDate(derived)
-  }, [showNewForm, editingInvId, newPartnerId, newDocumentDate, contacts, tab])
+  }, [showNewForm, editingInvId, newPartnerId, newDocumentDate, contacts, tab, systemSettings.accCreditPayOnReceiptEnforced])
   const invoiceVatRate = companySettings.vatRate ?? 16
 
   // Align manual invoice payment bank: VAT → NCBA; non-VAT → ABSA / I&M

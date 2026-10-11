@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Badge, Modal } from '@/components/ui'
-import { fmtDate, fmtKes } from '@/lib/store'
+import { fmtDate, fmtKes, useApp } from '@/lib/store'
+import { normalizeClientRole } from '@/lib/auth/access'
 import { STATUS_LABELS } from '@/lib/credit/credit-facility-rules'
 import CreditFacilityPanel, { type CreditApplicationView } from './CreditFacilityPanel'
 
@@ -21,6 +22,17 @@ const FILTERS: Array<[string, string]> = [
 
 /** Finance → Invoices → Credit applications: every application waiting on someone, newest first. */
 export default function CreditApplicationsQueue({ role, userId, showToast }: { role: string | null | undefined; userId?: string | null; showToast: Toast }) {
+  const { systemSettings, updateSystemSettings } = useApp()
+  const enforced = Boolean(systemSettings.accCreditPayOnReceiptEnforced)
+  const isDirector = normalizeClientRole(role) === 'director'
+  const toggleEnforced = () => {
+    const next = !enforced
+    if (!window.confirm(next
+      ? 'Turn ON pay on receipt?\n\nCompany customers without approved credit (or with credit suspended / revoked) cannot have a sale order confirmed or invoiced while they owe money, and their invoices fall due on the day. Finance/Director can still override.'
+      : 'Turn OFF pay on receipt?\n\nCompany customers without approved credit are treated as before: their contact payment terms apply and owing money does not block new orders (overdue invoices still do).')) return
+    updateSystemSettings({ accCreditPayOnReceiptEnforced: next })
+    showToast(`Pay on receipt is now ${next ? 'on' : 'off'}`, 'success')
+  }
   const [filter, setFilter] = useState('open')
   const [rows, setRows] = useState<CreditApplicationView[] | null>(null)
   const [openApp, setOpenApp] = useState<CreditApplicationView | null>(null)
@@ -87,6 +99,18 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-2 rounded-xl border border-border-lt bg-muted px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-text-2">
+          <b>Pay on receipt: {enforced ? 'on' : 'off'}.</b>{' '}
+          {enforced
+            ? 'Company customers without approved credit cannot get a new order or invoice while they owe money; their invoices fall due on the day.'
+            : 'Off — company customers without approved credit are not blocked yet. Mark real credit customers as legacy or approve their applications, then turn it on.'}
+        </p>
+        {isDirector
+          ? <button type="button" className={enforced ? 'btn-secondary text-[11px]' : 'btn-primary text-[11px]'} onClick={toggleEnforced}>{enforced ? 'Turn off' : 'Turn on'}</button>
+          : <span className="text-[11px] text-text-3">A director switches this.</span>}
       </div>
 
       {filter === 'reviews' ? (

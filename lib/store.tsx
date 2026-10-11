@@ -860,6 +860,12 @@ interface SystemSettings {
   purStoreLeadTimes: boolean
   /** Vendor bill due-date fallback when the vendor record sets no terms. */
   purDefaultPaymentTermsDays: number
+  /**
+   * Payment policy enforcement: corporate customers without approved credit
+   * pay on receipt — no new order or invoice while money is owed, invoices
+   * due on the day. Off until existing balances are sorted out.
+   */
+  accCreditPayOnReceiptEnforced?: boolean
   // Repair
   repRepairOrders: boolean
   repWarrantyTracking: boolean
@@ -929,6 +935,7 @@ const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   purPurchaseAgreements: false, purVendorPricelists: true, purRequireApprovalHighValue: false,
   purHighValueThreshold: 50000, purEnforceRFQFlow: true, purStoreLeadTimes: true,
   purDefaultPaymentTermsDays: 30,
+  accCreditPayOnReceiptEnforced: false,
   repRepairOrders: true, repWarrantyTracking: true, repPartsConsumption: true,
   repEnforceFlow: true, repOnlyAssignedTechSeesJob: true, repAdminAssignsJobs: true,
   diagnosisFeeKes: 1000, diagnosisFeeRegularKes: 1000, diagnosisFeeHighEndKes: 1000,
@@ -11062,7 +11069,7 @@ const storeCtx: AppState = {
         partnerId: quote.companyId,
         partnerName: quote.companyName,
         date: now(),
-        dueDate: addDays(now(), customerPaymentTermsDays(contacts.find(c => c.id === quote.companyId), 14)),
+        dueDate: addDays(now(), customerPaymentTermsDays(contacts.find(c => c.id === quote.companyId), 14, systemSettings.accCreditPayOnReceiptEnforced)),
         lines: invLines,
         subtotal: quote.subtotal,
         taxTotal: quote.taxTotal,
@@ -20511,7 +20518,7 @@ const storeCtx: AppState = {
           const invoice: Invoice = {
             id: uid(), ref: await storeCtxRef.current!.allocateDocRef('INV'), type: 'customer_invoice', status: 'posted',
             partnerId: delivery.customerId, partnerName: delivery.customerName,
-            date: now(), dueDate: addDays(now(), customerPaymentTermsDays(contacts.find(c => c.id === delivery.customerId), 0)),
+            date: now(), dueDate: addDays(now(), customerPaymentTermsDays(contacts.find(c => c.id === delivery.customerId), 0, systemSettings.accCreditPayOnReceiptEnforced)),
             lines: delivery.lines.map(l => ({
               id: uid(), description: l.productName, qty: l.qty,
               unitPrice: soLineMap[l.productId]?.unitPrice ?? 0, taxRate: companySettings.vatRate ?? 16,
@@ -20717,7 +20724,7 @@ const storeCtx: AppState = {
         newOrderTotal,
         document: opts?.document ?? 'order',
         formatMoney: fmtKes,
-        payOnReceipt: isPayOnReceipt(contact),
+        payOnReceipt: Boolean(systemSettings.accCreditPayOnReceiptEnforced) && isPayOnReceipt(contact),
       })
 
       return {
