@@ -63,3 +63,60 @@
   .contacts-overview-grid { grid-template-columns: minmax(0,1fr); gap: 12px; }
   .contacts-overview-grid .contacts-info-list { grid-template-columns: minmax(0,1fr); }
 }
+
+/* Contacts navigation: one visual baseline, no boxed active tab. */
+.contacts-workspace .mod-tabs {
+  min-width: 0;
+  border-bottom: 1px solid #dce5f0;
+  background: #fff;
+}
+.contacts-workspace .mod-tablist {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+.contacts-workspace .mod-tablist .mod-tab {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  outline-offset: -3px;
+  background: transparent;
+  color: #526278;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.contacts-workspace .mod-tablist .mod-tab.active,
+.contacts-workspace .mod-tablist .mod-tab[aria-selected="true"] {
+  border: 0;
+  border-bottom: 2px solid #0097d9;
+  border-radius: 0;
+  background: transparent;
+  color: #006d9e;
+  font-weight: 700;
+  box-shadow: none;
+}
+.contacts-workspace .mod-tablist .mod-tab:hover:not(.active) {
+  color: #17243b;
+  background: #f4f8fc;
+}
+.contacts-workspace .mod-tablist .mod-tab:focus-visible {
+  outline: 2px solid #0097d9;
+}
+@media (max-width: 767px) {
+  .contacts-workspace .mod-tablist { gap: 2px; }
+  .contacts-workspace .mod-tablist .mod-tab {
+    min-height: 44px;
+    padding-inline: 12px;
+    font-size: 12px;
+  }
+}
