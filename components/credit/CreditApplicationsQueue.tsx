@@ -7,9 +7,11 @@ import { STATUS_LABELS } from '@/lib/credit/credit-facility-rules'
 import CreditFacilityPanel, { type CreditApplicationView } from './CreditFacilityPanel'
 
 type Toast = (msg: string, type?: 'error' | 'success' | 'info') => void
+type ReviewRow = { clientId: string; name: string; creditStatus: string; reviewDue: string | null; creditLimit: number; paymentTermsDays: number; isCompany: boolean; openApplication: { id: string; ref: string } | null }
 
 const FILTERS: Array<[string, string]> = [
   ['open', 'Open'],
+  ['reviews', 'Reviews due'],
   ['recommended', 'Awaiting director'],
   ['approved', 'Approved'],
   ['suspended', 'Suspended'],
@@ -23,7 +25,21 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
   const [rows, setRows] = useState<CreditApplicationView[] | null>(null)
   const [openApp, setOpenApp] = useState<CreditApplicationView | null>(null)
 
+  const [reviews, setReviews] = useState<ReviewRow[] | null>(null)
+
   const load = useCallback(async () => {
+    if (filter === 'reviews') {
+      try {
+        const res = await fetch('/api/credit-applications/reviews', { cache: 'no-store' })
+        const body = await res.json().catch(() => null)
+        if (!res.ok) throw new Error(body?.error || `Server returned ${res.status}`)
+        setReviews(body?.reviews ?? [])
+      } catch (err) {
+        setReviews([])
+        showToast(`Could not load reviews: ${err instanceof Error ? err.message : 'error'}`, 'error')
+      }
+      return
+    }
     try {
       const res = await fetch(`/api/credit-applications${filter ? `?status=${filter}` : ''}`, { cache: 'no-store' })
       const body = await res.json().catch(() => null)
@@ -38,6 +54,21 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
   useEffect(() => { void load() }, [load])
 
   const today = new Date().toISOString().slice(0, 10)
+
+  const startReview = async (r: ReviewRow) => {
+    try {
+      const res = await fetch('/api/credit-applications', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: r.clientId, requestedLimit: r.creditLimit, requestedTermsDays: r.paymentTermsDays || 30, note: 'Credit review' }),
+      })
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(body?.error || `Server returned ${res.status}`)
+      showToast(`Review started — ${body.application.ref}`, 'success')
+      setOpenApp(body.application)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not start the review', 'error')
+    }
+  }
 
   return (
     <div className="p-4 sm:p-6">
@@ -58,7 +89,35 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
         </div>
       </div>
 
-      {rows === null ? (
+      {filter === 'reviews' ? (
+        reviews === null ? <p className="mt-4 text-xs text-text-3">Loading…</p>
+        : reviews.length === 0 ? <p className="mt-4 text-xs text-text-3">No credit is due for review in the next 30 days.</p>
+        : (
+          <div className="mt-4 overflow-x-auto">
+            <p className="mb-2 text-xs text-text-3">Customers whose credit is due for review within 30 days. "Legacy" credit was given before applications existed — start an application to collect the documents.</p>
+            <table className="w-full min-w-[640px] text-left text-xs">
+              <thead className="text-[11px] text-text-3">
+                <tr><th className="py-2 pr-3">Customer</th><th className="py-2 pr-3">Standing</th><th className="py-2 pr-3 text-right">Limit · terms</th><th className="py-2 pr-3">Review due</th><th className="py-2" /></tr>
+              </thead>
+              <tbody>
+                {reviews.map(r => (
+                  <tr key={r.clientId} className="border-t border-border-lt">
+                    <td className="py-2 pr-3 font-semibold">{r.name}</td>
+                    <td className="py-2 pr-3">{r.creditStatus === 'legacy' ? 'Legacy' : 'Approved'}</td>
+                    <td className="py-2 pr-3 text-right">{r.creditLimit ? fmtKes(r.creditLimit) : '—'} · {r.paymentTermsDays}d</td>
+                    <td className={`py-2 pr-3 ${r.reviewDue && r.reviewDue < today ? 'font-semibold text-red-700' : ''}`}>{r.reviewDue ? fmtDate(r.reviewDue) : '—'}</td>
+                    <td className="py-2 text-right">
+                      {r.openApplication
+                        ? <button type="button" className="contacts-inline-link" onClick={() => setOpenApp({ id: r.openApplication!.id, clientId: r.clientId, ref: r.openApplication!.ref, client: { name: r.name } } as CreditApplicationView)}>{r.openApplication.ref}</button>
+                        : <button type="button" className="btn-secondary text-[11px]" onClick={() => void startReview(r)}>Start review</button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : rows === null ? (
         <p className="mt-4 text-xs text-text-3">Loading…</p>
       ) : rows.length === 0 ? (
         <p className="mt-4 text-xs text-text-3">No credit applications here. Start one from the customer's page (Contacts → customer → Credit).</p>

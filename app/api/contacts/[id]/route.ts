@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { clientToContact, deleteContactById, updateContactById, type ContactInput } from '@/lib/contact-prisma'
+import { clientToContact, deleteContactById, updateContactById, withoutCreditTerms, type ContactInput } from '@/lib/contact-prisma'
 import { refreshDocumentBlobsForClientChange } from '@/lib/documents-broadcast.server'
 
 export const dynamic = 'force-dynamic'
@@ -11,9 +11,9 @@ const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep'
 async function updateContact(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
-    const body = await request.json() as ContactInput
-    const updated = await updateContactById(prisma, resolvedParams.id, body)
+    const user = await requireRole(WRITE_ROLES)
+    const body = withoutCreditTerms(await request.json() as ContactInput, user.role)
+    const updated = await updateContactById(prisma, resolvedParams.id, body, user.id)
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (typeof updated === 'string') {
       return NextResponse.json({ error: updated }, { status: 422 })

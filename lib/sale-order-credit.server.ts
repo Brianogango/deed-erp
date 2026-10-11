@@ -1,7 +1,7 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { loadAppState } from '@/lib/server-store'
-import { evaluateCustomerCreditGate, type CreditSalesDocument } from '@/lib/customer-credit-gate'
+import { evaluateCustomerCreditGate, isPayOnReceipt, type CreditSalesDocument } from '@/lib/customer-credit-gate'
 /** Prisma `DocumentStatus` values that can still carry an unpaid residual. */
 const OPEN_INVOICE_STATUSES = [
   'approved',
@@ -40,7 +40,7 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
   const [client, openInvoices, state] = await Promise.all([
     prisma.client.findUnique({
       where: { id: clientId },
-      select: { creditLimit: true, name: true },
+      select: { creditLimit: true, name: true, clientType: true, creditStatus: true },
     }),
     prisma.invoice.findMany({
       where: {
@@ -85,11 +85,14 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
     outstandingBalance: outstanding,
     newOrderTotal: opts.orderTotal,
     document: opts.document ?? 'order',
+    payOnReceipt: isPayOnReceipt(client),
   })
 
   if (!gate.ok && !canOverride) {
     const action = opts.document === 'invoice' ? 'invoice' : 'confirm'
-    const error = gate.isLocked && (opts.document ?? 'order') !== 'quote'
+    const error = gate.payOnReceiptBlocked
+      ? `${client.name}: ${gate.message} Finance/Director can ${action} anyway.`
+      : gate.isLocked && (opts.document ?? 'order') !== 'quote'
       ? `${gate.message.replace(/Clear outstanding bills to unlock\.$/, `Clear overdue invoices or ask Finance/Director to ${action}.`)}`
       : `${gate.message.replace(/\.$/, '')}. Ask Finance/Director to ${action}, or reduce the order.`
     return { ok: false, status: 409, error }

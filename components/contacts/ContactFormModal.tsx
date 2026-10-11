@@ -1,4 +1,5 @@
 'use client'
+import { normalizeClientRole } from '@/lib/auth/access'
 
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
@@ -91,7 +92,11 @@ export default function ContactFormModal({
   const {
     contacts, addContact, updateContact, showToast,
     contactPersons: linkedPersons, createContactPerson, deleteContactPerson,
+    users, currentUserId,
   } = useCrmStore()
+  // Credit limit and payment terms are granted by Finance (credit applications).
+  const canSetCreditTerms = ['director', 'finance_officer'].includes(normalizeClientRole(users.find(u => u.id === currentUserId)?.role))
+  const creditTermsHint = 'Set by Finance through a credit application (Contacts → Credit)'
   const [form, setForm] = useState<ContactFormValues>(() => ({
     ...initial,
     // Editing keeps the record's value (legacy rows fall back to the house default);
@@ -228,9 +233,9 @@ export default function ContactFormModal({
     const errors: Partial<Record<ErrorField, string>> = {}
     if (!form.name.trim()) errors.name = form.type === 'company' ? 'Company name is required' : 'Full name is required'
     if (!(form.country ?? '').trim()) errors.country = 'Country is required'
-    if (form.paymentTermsDays == null || !Number.isFinite(form.paymentTermsDays)) errors.paymentTermsDays = 'Payment terms are required'
+    if (canSetCreditTerms && (form.paymentTermsDays == null || !Number.isFinite(form.paymentTermsDays))) errors.paymentTermsDays = 'Payment terms are required'
     const creditLimitNum = creditLimitText.trim() === '' ? NaN : Number(creditLimitText)
-    if (form.type === 'company' && (!Number.isFinite(creditLimitNum) || creditLimitNum < 0)) {
+    if (canSetCreditTerms && form.type === 'company' && (!Number.isFinite(creditLimitNum) || creditLimitNum < 0)) {
       errors.creditLimit = creditLimitText.trim() === '' ? 'Credit limit is required (enter 0 for none)' : 'Credit limit must be a number of 0 or more'
     }
     const errorKeys = Object.keys(errors) as ErrorField[]
@@ -251,7 +256,7 @@ export default function ContactFormModal({
         ...form,
         name: form.name.trim(),
         country: (form.country ?? '').trim(),
-        ...(form.type === 'company' ? { creditLimit: creditLimitNum } : {}),
+        ...(form.type === 'company' && canSetCreditTerms ? { creditLimit: creditLimitNum } : {}),
         ...(forceCustomer ? { isCustomer: true } : {}),
         ...(forceVendor ? { isVendor: true } : {}),
       }
@@ -457,11 +462,11 @@ export default function ContactFormModal({
                     <Field label="Currency" hint="Defaults to your base currency">
                       <Input value="KES — Kenyan Shilling" onChange={() => {}} disabled />
                     </Field>
-                    <Field label="Credit limit (KES)" required id="contact-creditLimit" error={fieldErrors.creditLimit} hint="Maximum approved account exposure (0 for none)">
-                      <Input type="number" value={creditLimitText} onChange={v => { setCreditLimitText(String(v)); if (fieldErrors.creditLimit) setFieldErrors(prev => ({ ...prev, creditLimit: undefined })) }} placeholder="0.00" />
+                    <Field label="Credit limit (KES)" required={canSetCreditTerms} id="contact-creditLimit" error={fieldErrors.creditLimit} hint={canSetCreditTerms ? 'Maximum approved account exposure (0 for none)' : creditTermsHint}>
+                      <Input type="number" disabled={!canSetCreditTerms} value={creditLimitText} onChange={v => { setCreditLimitText(String(v)); if (fieldErrors.creditLimit) setFieldErrors(prev => ({ ...prev, creditLimit: undefined })) }} placeholder="0.00" />
                     </Field>
-                    <Field label="Payment terms" required id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays} hint="Used to calculate invoice due dates">
-                      <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
+                    <Field label="Payment terms" required={canSetCreditTerms} id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays} hint={canSetCreditTerms ? 'Used to calculate invoice due dates' : creditTermsHint}>
+                      <Select disabled={!canSetCreditTerms} value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
                     </Field>
                   </>
                 ) : (
@@ -469,8 +474,8 @@ export default function ContactFormModal({
                     <Field label="National ID / Passport Number" hint="For identification where required">
                       <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="National ID or passport number" />
                     </Field>
-                    <Field label="Payment terms" required id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays} hint="Used when this individual buys on account">
-                      <Select value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
+                    <Field label="Payment terms" required={canSetCreditTerms} id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays} hint={canSetCreditTerms ? 'Used when this individual buys on account' : creditTermsHint}>
+                      <Select disabled={!canSetCreditTerms} value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
                     </Field>
                   </>
                 )}

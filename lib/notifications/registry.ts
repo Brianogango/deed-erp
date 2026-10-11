@@ -92,6 +92,13 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'delivery.pod_missing': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 48 }),
 
   // ── Finance ─────────────────────────────────────────────────────────────
+  // Credit applications (corporate credit terms)
+  'credit.application.submitted': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['finance_officer'] }),
+  'credit.application.recommended': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 1440 }),
+  'credit.application.approve': POLICY(['in_app', 'push'], 'success'),
+  'credit.application.decline': POLICY(['in_app', 'push'], 'warning'),
+  'credit.application.request_info': POLICY(['in_app', 'push'], 'attention'),
+  'credit.review_due': POLICY(['in_app', 'email'], 'warning', { recipientRoles: ['finance_officer'] }),
   'finance.invoice_overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 72 }),
   // Supplier credit notes (purchase returns) nobody has used or had refunded.
   'finance.vendor_credit_unapplied': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer', 'director'], cooldownHours: 72 }),

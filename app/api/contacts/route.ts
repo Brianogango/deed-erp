@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { listContactClients, upsertContact, type ContactInput } from '@/lib/contact-prisma'
+import { listContactClients, upsertContact, withoutCreditTerms, type ContactInput } from '@/lib/contact-prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,8 +22,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
-    const body = await request.json() as ContactInput
+    const user = await requireRole(WRITE_ROLES)
+    const body = withoutCreditTerms(await request.json() as ContactInput, user.role)
     const result = await upsertContact(prisma, body)
     if (typeof result === 'string') {
       return NextResponse.json({ error: result }, { status: 422 })

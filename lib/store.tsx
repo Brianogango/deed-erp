@@ -214,7 +214,7 @@ import {
   canPayBuyBackCash,
 } from '@/lib/buyback-credit'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
-import { evaluateCustomerCreditGate } from '@/lib/customer-credit-gate'
+import { evaluateCustomerCreditGate, isPayOnReceipt } from '@/lib/customer-credit-gate'
 import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
 import {
   nextSseRetryMs,
@@ -269,7 +269,7 @@ import { repairPriceChangeImpact, describeRepairPriceChange } from '@/lib/repair
 import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
 import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
 import { resolveBillProductId } from '@/lib/purchase/bill-product-id'
-import { contactPaymentTermsDays } from '@/lib/due-date'
+import { contactPaymentTermsDays, customerPaymentTermsDays } from '@/lib/due-date'
 import { deniedSaveMessage } from '@/lib/store-denied-message'
 import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
 import { isSellableSerial } from '@/lib/inventory/sellable-stock'
@@ -11062,7 +11062,7 @@ const storeCtx: AppState = {
         partnerId: quote.companyId,
         partnerName: quote.companyName,
         date: now(),
-        dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === quote.companyId), 14)),
+        dueDate: addDays(now(), customerPaymentTermsDays(contacts.find(c => c.id === quote.companyId), 14)),
         lines: invLines,
         subtotal: quote.subtotal,
         taxTotal: quote.taxTotal,
@@ -20511,7 +20511,7 @@ const storeCtx: AppState = {
           const invoice: Invoice = {
             id: uid(), ref: await storeCtxRef.current!.allocateDocRef('INV'), type: 'customer_invoice', status: 'posted',
             partnerId: delivery.customerId, partnerName: delivery.customerName,
-            date: now(), dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === delivery.customerId), 0)),
+            date: now(), dueDate: addDays(now(), customerPaymentTermsDays(contacts.find(c => c.id === delivery.customerId), 0)),
             lines: delivery.lines.map(l => ({
               id: uid(), description: l.productName, qty: l.qty,
               unitPrice: soLineMap[l.productId]?.unitPrice ?? 0, taxRate: companySettings.vatRate ?? 16,
@@ -20717,6 +20717,7 @@ const storeCtx: AppState = {
         newOrderTotal,
         document: opts?.document ?? 'order',
         formatMoney: fmtKes,
+        payOnReceipt: isPayOnReceipt(contact),
       })
 
       return {

@@ -1011,6 +1011,54 @@ async function scanDirectorBrief() {
   return 1
 }
 
+/**
+ * Credit control: approved (or legacy) credit coming up for review, document
+ * expiries on approved credit (tax compliance, business permit) and
+ * applications waiting on Finance. One daily summary to Finance.
+ */
+async function scanCredit() {
+  const today = new Date(dateOnly(now()))
+  const soon = new Date(today.getTime() + 30 * 24 * HOUR)
+  const items: DigestItem[] = []
+  const reviews = await prisma.client.findMany({
+    where: { creditStatus: { in: ['approved', 'legacy'] }, creditReviewDue: { lte: soon }, isActive: true },
+    select: { id: true, name: true, creditStatus: true, creditReviewDue: true },
+    orderBy: { creditReviewDue: 'asc' },
+    take: 200,
+  })
+  for (const c of reviews) {
+    const due = dateOnly(c.creditReviewDue!)
+    const overdue = c.creditReviewDue! < today
+    items.push({ id: `review:${c.id}`, line: `${c.name} — credit review ${overdue ? 'overdue since' : 'due'} ${due}${c.creditStatus === 'legacy' ? ' (credit given before applications: request the documents)' : ''}` })
+  }
+  const expiring = await prisma.creditFacilityDocument.findMany({
+    where: { status: 'verified', expiresOn: { lte: soon }, application: { status: 'approved' } },
+    select: { id: true, kind: true, expiresOn: true, application: { select: { clientId: true, ref: true } } },
+    take: 200,
+  })
+  const names = new Map((await prisma.client.findMany({ where: { id: { in: [...new Set(expiring.map(d => d.application.clientId))] } }, select: { id: true, name: true } })).map(c => [c.id, c.name]))
+  const label: Record<string, string> = { tax_compliance_certificate: 'tax compliance certificate', business_permit: 'business permit' }
+  for (const d of expiring) {
+    items.push({ id: `doc:${d.id}`, line: `${names.get(d.application.clientId) ?? d.application.ref} — ${label[d.kind] ?? d.kind} ${d.expiresOn! < today ? 'expired' : 'expires'} ${dateOnly(d.expiresOn!)}` })
+  }
+  const waiting = await prisma.creditFacilityApplication.findMany({
+    where: { status: { in: ['submitted', 'under_review'] }, updatedAt: { lte: new Date(Date.now() - 3 * 24 * HOUR) } },
+    select: { id: true, ref: true, clientId: true, status: true, updatedAt: true },
+    take: 100,
+  })
+  const waitNames = new Map((await prisma.client.findMany({ where: { id: { in: [...new Set(waiting.map(a => a.clientId))] } }, select: { id: true, name: true } })).map(c => [c.id, c.name]))
+  for (const a of waiting) {
+    items.push({ id: `app:${a.id}`, line: `${a.ref} ${waitNames.get(a.clientId) ?? ''} — ${a.status.replace('_', ' ')} since ${dateOnly(a.updatedAt)}` })
+  }
+  return publishDigest({
+    eventType: 'credit.review_due',
+    legacyEntityType: 'credit_review',
+    items,
+    title: count => `${count} credit item${count === 1 ? '' : 's'} need attention`,
+    actionUrl: '/finance?tab=credit_applications',
+  })
+}
+
 async function safeDomain(name: string, fn: () => Promise<number>) {
   try {
     return { name, emitted: await fn(), ok: true }
@@ -1029,6 +1077,7 @@ export async function scanOperationalNotificationEvents() {
     ['inventory', scanInventory],
     ['delivery', scanDelivery],
     ['finance', scanFinance],
+    ['credit', scanCredit],
     ['hr', scanHr],
     ['aftersales', scanAftersales],
     ['director_brief', scanDirectorBrief],

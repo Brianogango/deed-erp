@@ -8,10 +8,14 @@ type CustomerCreditGateInput = {
   newOrderTotal: number
   document: CreditSalesDocument
   formatMoney?: (amount: number) => string
+  /** Corporate customer without approved credit: pays on receipt (payment policy). */
+  payOnReceipt?: boolean
 }
 
 type CustomerCreditGateResult = {
   ok: boolean
+  /** Blocked because a pay-on-receipt customer still owes money. */
+  payOnReceiptBlocked?: boolean
   isLocked: boolean
   creditLimitExceeded: boolean
   creditAvailable: number
@@ -49,6 +53,19 @@ export function evaluateCustomerCreditGate(input: CustomerCreditGateInput): Cust
     message = `Customer has ${overdueCount} overdue invoice${overdueCount === 1 ? '' : 's'} totalling ${formatMoney(overdueBalance)}. Quotation can be saved; confirming a sale order or creating an invoice stays blocked until overdue invoices are cleared.`
   }
 
+  // Payment policy: a corporate customer without approved credit pays on
+  // receipt — nothing new is confirmed or invoiced while money is owed.
+  if (input.payOnReceipt && blockOverdue && outstandingBalance > 0) {
+    return {
+      ok: false,
+      payOnReceiptBlocked: true,
+      isLocked,
+      creditLimitExceeded: false,
+      creditAvailable: 0,
+      message: `Pays on receipt (no approved credit) — ${formatMoney(outstandingBalance)} is still unpaid. Collect it first, or apply for credit (Contacts → Credit).`,
+    }
+  }
+
   return {
     ok: !(blockOverdue && isLocked) && !creditLimitExceeded,
     isLocked,
@@ -56,4 +73,19 @@ export function evaluateCustomerCreditGate(input: CustomerCreditGateInput): Cust
     creditAvailable,
     message,
   }
+}
+
+/** Credit standings under which a corporate customer pays on receipt. */
+const PAY_ON_RECEIPT_STANDINGS = new Set(['none', 'suspended', 'revoked'])
+
+/**
+ * Does this customer pay on receipt? Corporate customers do until credit is
+ * approved (or while it is suspended / revoked). Individuals are not covered
+ * by the corporate credit policy. An unknown standing (an old cached record)
+ * is not treated as pay-on-receipt; the server decides from the database.
+ */
+export function isPayOnReceipt(customer: { type?: string | null; clientType?: string | null; creditStatus?: string | null } | null | undefined): boolean {
+  if (!customer || !customer.creditStatus) return false
+  const kind = customer.type ?? (customer.clientType === 'individual' ? 'individual' : 'company')
+  return kind === 'company' && PAY_ON_RECEIPT_STANDINGS.has(customer.creditStatus)
 }

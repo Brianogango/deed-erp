@@ -1,3 +1,4 @@
+import { normalizeClientRole } from '@/lib/auth/access'
 import { loadAppState, notifyStoreKeysChanged } from '@/lib/server-store'
 import type { Contact } from '@/lib/store'
 import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
@@ -19,6 +20,7 @@ type PrismaClientLike = {
   /** Present on the real Prisma client; absent on lightweight test doubles. */
   $transaction?: (fn: (tx: PrismaClientLike) => Promise<any>) => Promise<any>
   $executeRawUnsafe?: (query: string, ...values: unknown[]) => Promise<number>
+  auditLog?: { create: (args: any) => Promise<any> }
 }
 
 export type ContactInput = Partial<Omit<Contact, 'id' | 'createdAt'>> & {
@@ -382,16 +384,44 @@ export async function upsertContact(
   return result
 }
 
-export async function updateContactById(prisma: PrismaClientLike, id: string, body: ContactInput): Promise<Contact | null | string> {
+/** Roles that may set a customer's credit limit and payment terms directly. */
+const CREDIT_TERMS_ROLES = new Set(['director', 'finance_officer'])
+
+/**
+ * Credit limit and payment terms are granted through a credit application
+ * (Contacts → Credit). Other roles' contact saves keep the current values.
+ */
+export function withoutCreditTerms(body: ContactInput, role: string | null | undefined): ContactInput {
+  if (CREDIT_TERMS_ROLES.has(normalizeClientRole(role))) return body
+  const { creditLimit: _limit, paymentTermsDays: _terms, ...rest } = body as ContactInput & Record<string, unknown>
+  return rest as ContactInput
+}
+
+export async function updateContactById(prisma: PrismaClientLike, id: string, body: ContactInput, actorId?: string | null): Promise<Contact | null | string> {
   const existingClient = await prisma.client.findUnique({ where: { id } })
   if (!existingClient) return null
 
-  const normalized = normalizeContact(body, clientToContact(existingClient))
+  const before = clientToContact(existingClient)
+  const normalized = normalizeContact(body, before)
   if (typeof normalized === 'string') return normalized
 
   const client = await prisma.client.update({ where: { id }, data: contactToClientData(normalized) })
+  const after = clientToContact(client)
+  if ((before.creditLimit ?? 0) !== (after.creditLimit ?? 0) || (before.paymentTermsDays ?? 0) !== (after.paymentTermsDays ?? 0)) {
+    // A direct change outside a credit application is recorded.
+    await prisma.auditLog?.create?.({
+      data: {
+        userId: actorId ?? null,
+        action: 'contact.credit_terms_changed',
+        entityType: 'client',
+        entityId: id,
+        oldValues: { creditLimit: before.creditLimit ?? 0, paymentTermsDays: before.paymentTermsDays ?? 0 },
+        newValues: { creditLimit: after.creditLimit ?? 0, paymentTermsDays: after.paymentTermsDays ?? 0 },
+      },
+    }).catch?.(() => null)
+  }
   void broadcastContacts(prisma)
-  return clientToContact(client)
+  return after
 }
 
 export async function deleteContactById(prisma: PrismaClientLike, id: string): Promise<boolean> {

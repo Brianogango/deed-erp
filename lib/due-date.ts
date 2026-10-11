@@ -29,3 +29,16 @@ export function dueDateFromTerms(documentDate: string, termsDays: number): strin
   if (!Number.isFinite(base) || !Number.isFinite(termsDays)) return ''
   return new Date(base + Math.trunc(termsDays) * 86400000).toISOString().slice(0, 10)
 }
+
+/**
+ * Days a customer has to pay an invoice: none for a corporate customer
+ * without approved credit (payment policy: payment on receipt), otherwise
+ * the contact's credit period. Vendor bills use contactPaymentTermsDays.
+ */
+export function customerPaymentTermsDays(
+  contact: { paymentTermsDays?: number | string | null; type?: string | null; creditStatus?: string | null } | null | undefined,
+  fallback: number,
+): number {
+  if (contact?.type === 'company' && contact.creditStatus && ['none', 'suspended', 'revoked'].includes(contact.creditStatus)) return 0
+  return contactPaymentTermsDays(contact, fallback)
+}

@@ -9,7 +9,7 @@ import { validateFileContent } from '@/lib/file-validation'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import {
-  ACTION_ROLES, DOCUMENT_KINDS, OPEN_STATUSES, STANDARD_TERMS_DAYS,
+  ACTION_ROLES, DOCUMENT_KINDS, DOCUMENT_RULES, OPEN_STATUSES, STANDARD_TERMS_DAYS,
   approvalCheck, canDecide, clientCreditStatus, documentChecklist, nextRef, nextStatus, reviewDueFrom,
   type CreditAction, type CreditFacilityStatus,
 } from './credit-facility-rules'
@@ -90,6 +90,7 @@ export async function toScreen(app: AppRow, opts: { withChecks?: boolean } = {})
     decidedBy: app.decidedById ? names.get(app.decidedById) ?? null : null,
     decidedAt: app.decidedAt?.toISOString() ?? null,
     reviewDue: isoDay(app.reviewDue),
+    portalLink: app.portalToken ? { url: portalUrl(app.portalToken), expiresAt: app.portalExpiresAt?.toISOString() ?? null, expired: !app.portalExpiresAt || app.portalExpiresAt < new Date() } : null,
     events: app.events,
     documents,
     createdAt: app.createdAt.toISOString(),
@@ -255,7 +256,7 @@ async function notifyCreditAction(app: AppRow, action: CreditAction, actor: Acto
   const client = await prisma.client.findUnique({ where: { id: app.clientId }, select: { name: true } })
   const who = client?.name ?? 'Customer'
   const actionUrl = `/contacts?id=${app.clientId}&contactTab=credit`
-  const base = { entityType: 'credit_application', entityId: app.id, actorUserId: actor.id, actionUrl }
+  const base = { entityType: 'credit_application', entityId: app.id, actorUserId: actor.id || null, actionUrl }
   if (action === 'submit') {
     await publishNotificationEvent({ ...base, eventType: 'credit.application.submitted', roles: ['finance_officer', 'finance'], title: `Credit application to review — ${who}`, body: `${app.ref}: KES ${Number(app.requestedLimit).toLocaleString('en-KE')} on ${app.requestedTermsDays} days requested.`, idempotencyKey: `credit-submitted:${app.id}:${app.updatedAt.getTime()}` })
   } else if (action === 'recommend') {
@@ -340,4 +341,178 @@ export async function readDocument(id: string, docId: string) {
   const bytes = await getObject('uploads', doc.objectKey)
   if (!bytes) throw new CreditFacilityError('The file is missing from storage', 404)
   return { doc, bytes }
+}
+
+// ── Client link (portal) ──────────────────────────────────────────────────
+
+/** How long a client link stays open. */
+export const PORTAL_LINK_DAYS = 30
+/** Statuses in which the client can still fill in and upload. */
+const CLIENT_EDITABLE = new Set(['draft', 'sent', 'info_requested'])
+/** A client can add at most this many files to one application. */
+const MAX_CLIENT_DOCUMENTS = 40
+
+const appBaseUrl = () => (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://erp.deed.co.ke').replace(/\/+$/, '')
+export const portalUrl = (token: string) => `${appBaseUrl()}/portal/credit/${token}`
+
+/**
+ * Give the application a client link (a fresh one when the old one expired or
+ * `renew` is set), move a draft to "sent", and optionally email the link with
+ * the blank forms attached.
+ */
+export async function issuePortalLink(actor: Actor, id: string, opts: { email?: string | null; renew?: boolean } = {}) {
+  const role = roleOf(actor)
+  if (!ACTION_ROLES.mark_sent.includes(role)) throw new CreditFacilityError('You are not allowed to do this', 403)
+  const app = await loadApplication(id)
+  if (!CLIENT_EDITABLE.has(app.status)) throw new CreditFacilityError('The client can no longer change this application', 409)
+  const live = app.portalToken && app.portalExpiresAt && app.portalExpiresAt > new Date()
+  const token = live && !opts.renew ? app.portalToken! : (await import('crypto')).randomBytes(24).toString('base64url')
+  const expires = live && !opts.renew ? app.portalExpiresAt! : new Date(Date.now() + PORTAL_LINK_DAYS * 86_400_000)
+  const url = portalUrl(token)
+
+  let emailed: string | null = null
+  const to = String(opts.email ?? '').trim()
+  if (to) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new CreditFacilityError('That email address does not look right')
+    const client = await prisma.client.findUnique({ where: { id: app.clientId }, select: { name: true } })
+    const { sendEmail } = await import('@/lib/integrations/email')
+    const { readFile } = await import('fs/promises')
+    const forms = await Promise.all([
+      ['Deed Technologies Credit Application Form.pdf', 'deed-credit-application-form.pdf'],
+      ['Deed Technologies Payment Policy Acceptance Form.pdf', 'deed-payment-policy-acceptance-form.pdf'],
+    ].map(async ([filename, file]) => ({ filename, content: await readFile(path.join(process.cwd(), 'public', 'credit-forms', file)).catch(() => null), contentType: 'application/pdf' })))
+    const result = await sendEmail({
+      to,
+      replyTo: 'finance@deed.co.ke',
+      subject: `Deed Technologies credit application — ${client?.name ?? ''}`.trim(),
+      html: `<p>Dear ${client?.name ?? 'Partner'},</p>
+<p>Thank you for choosing Deed Technologies. To apply for credit terms, please complete the credit application and upload the required documents using this secure link:</p>
+<p><a href="${url}">${url}</a></p>
+<p>The link is valid until ${expires.toISOString().slice(0, 10)}. The signed application form and payment policy acceptance form are attached — please print, sign, stamp and upload them with the other documents.</p>
+<p>All information is treated confidentially and used solely for internal purposes. For queries, contact finance@deed.co.ke.</p>
+<p>Deed Technologies</p>`,
+      text: `Complete your Deed Technologies credit application here: ${url} (valid until ${expires.toISOString().slice(0, 10)}).`,
+      attachments: forms.filter(f => f.content).map(f => ({ filename: f.filename, content: f.content as Buffer, contentType: f.contentType })),
+    })
+    if (!result.success) throw new CreditFacilityError(`The link was not emailed: ${result.error ?? 'email failed'}`, 502)
+    emailed = to
+  }
+
+  const note = emailed ? `link emailed to ${emailed}` : 'client link created'
+  const updated = await prisma.creditFacilityApplication.update({
+    where: { id },
+    data: {
+      portalToken: token,
+      portalExpiresAt: expires,
+      ...(app.status === 'draft' ? { status: 'sent' } : {}),
+      events: appendEvent(app.events, event(actor, 'link_sent', note)),
+    },
+    include: { documents: true },
+  })
+  return { app: updated, url, expiresAt: expires.toISOString(), emailed }
+}
+
+/** The application behind a client link, if the link is valid. */
+export async function applicationForToken(token: string): Promise<AppRow> {
+  if (!/^[A-Za-z0-9_-]{20,80}$/.test(token)) throw new CreditFacilityError('This link is not valid', 404)
+  const app = await prisma.creditFacilityApplication.findUnique({ where: { portalToken: token }, include: { documents: true } })
+  if (!app) throw new CreditFacilityError('This link is not valid', 404)
+  if (!app.portalExpiresAt || app.portalExpiresAt < new Date()) throw new CreditFacilityError('This link has expired — please ask Deed Technologies for a new one', 410)
+  return app
+}
+
+/** What the client sees: their form, the checklist and the names of files they sent — no internal review. */
+export async function toPortalView(app: AppRow) {
+  const client = await prisma.client.findUnique({ where: { id: app.clientId }, select: { name: true, email: true, phone: true, kraPin: true } })
+  return {
+    ref: app.ref,
+    customer: client?.name ?? '',
+    status: app.status,
+    editable: CLIENT_EDITABLE.has(app.status),
+    requestedLimit: Number(app.requestedLimit),
+    requestedTermsDays: app.requestedTermsDays,
+    form: app.form,
+    prefill: { registeredName: client?.name ?? '', email: client?.email ?? '', telephone: client?.phone ?? '', taxPin: client?.kraPin ?? '' },
+    infoRequest: app.status === 'info_requested'
+      ? ((Array.isArray(app.events) ? [...app.events].reverse().find((e: any) => e?.action === 'request_info') : null) as { note?: string } | null)?.note ?? null
+      : null,
+    documents: app.documents
+      .filter(d => d.status !== 'rejected' || d.uploadedVia === 'client')
+      .map(d => ({ id: d.id, kind: d.kind, name: d.name, status: d.status === 'rejected' ? 'rejected' : 'received', uploadedVia: d.uploadedVia, createdAt: d.createdAt.toISOString(), note: d.status === 'rejected' ? d.note : null })),
+    expiresAt: app.portalExpiresAt?.toISOString() ?? null,
+  }
+}
+
+const portalActor = (app: AppRow, name?: string | null): Actor => ({ id: '', name: name ? `${name} (client)` : 'Client', role: 'client' })
+
+/** The client saves the form (any time before submitting). */
+export async function portalSaveForm(token: string, input: { form?: unknown; requestedLimit?: unknown; requestedTermsDays?: unknown }) {
+  const app = await applicationForToken(token)
+  if (!CLIENT_EDITABLE.has(app.status)) throw new CreditFacilityError('This application has been submitted and can no longer be changed', 409)
+  if (!input.form || typeof input.form !== 'object' || Array.isArray(input.form)) throw new CreditFacilityError('Nothing to save')
+  const json = JSON.stringify(input.form)
+  if (json.length > 100_000) throw new CreditFacilityError('The form is too large')
+  const data: Prisma.CreditFacilityApplicationUpdateInput = { form: JSON.parse(json) as Prisma.InputJsonValue }
+  if (input.requestedLimit != null && Number(input.requestedLimit) > 0) data.requestedLimit = Math.min(1e11, Number(input.requestedLimit))
+  if (input.requestedTermsDays != null && Number(input.requestedTermsDays) > 0) data.requestedTermsDays = Math.min(365, Math.trunc(Number(input.requestedTermsDays)))
+  return prisma.creditFacilityApplication.update({ where: { id: app.id }, data, include: { documents: true } })
+}
+
+export async function portalAddDocument(token: string, file: { name: string; type: string; bytes: Buffer }, kind: string) {
+  const app = await applicationForToken(token)
+  if (!CLIENT_EDITABLE.has(app.status)) throw new CreditFacilityError('This application has been submitted — send further documents to finance@deed.co.ke', 409)
+  if (app.documents.length >= MAX_CLIENT_DOCUMENTS) throw new CreditFacilityError('Too many files on this application — please contact finance@deed.co.ke')
+  return addDocument(null, app.id, file, kind, 'client')
+}
+
+export async function portalRemoveDocument(token: string, docId: string) {
+  const app = await applicationForToken(token)
+  if (!CLIENT_EDITABLE.has(app.status)) throw new CreditFacilityError('This application has been submitted and can no longer be changed', 409)
+  const doc = app.documents.find(d => d.id === docId)
+  if (!doc || doc.uploadedVia !== 'client' || doc.status === 'verified') throw new CreditFacilityError('That file cannot be removed', 404)
+  await prisma.creditFacilityDocument.delete({ where: { id: docId } })
+  await prisma.creditFacilityApplication.update({ where: { id: app.id }, data: { events: appendEvent(app.events, { ...event(portalActor(app), 'document_removed'), note: `${doc.kind}: ${doc.name}` }) } })
+  return loadApplication(app.id)
+}
+
+/** What the client must provide before submitting. */
+export function portalSubmitBlockers(form: Record<string, any>, docs: Array<{ kind: string; status: string }>): string[] {
+  const out: string[] = []
+  const need = (v: unknown) => typeof v === 'string' ? v.trim() !== '' : v != null && v !== ''
+  for (const [key, label] of [['registeredName', 'Registered business name'], ['physicalAddress', 'Physical address'], ['email', 'Email address'], ['taxPin', 'Tax PIN'], ['incorporationNumber', 'Certificate of incorporation number'], ['natureOfBusiness', 'Nature of business'], ['businessType', 'Type of business']] as const) {
+    if (!need(form[key])) out.push(label)
+  }
+  const directors = Array.isArray(form.directors) ? form.directors : []
+  if (!directors.some((d: any) => need(d?.fullName) && need(d?.idNumber))) out.push('At least one director (name and ID / passport number)')
+  const banks = Array.isArray(form.banks) ? form.banks : []
+  if (!banks.some((b: any) => need(b?.bankName) && need(b?.accountNumber))) out.push('At least one bank account')
+  const refs = Array.isArray(form.tradeReferences) ? form.tradeReferences : []
+  if (refs.filter((r: any) => need(r?.supplierName) && (need(r?.email) || need(r?.phone))).length < 2) out.push('Two trade / supplier references with a contact')
+  const signers = Array.isArray(form.declarationSignatories) ? form.declarationSignatories : []
+  if (!signers.some((s: any) => need(s?.fullName) && need(s?.title))) out.push('An authorised signatory for the declaration')
+  if (!form.declarationAccepted) out.push('Confirm the customer declaration')
+  if (!form.policyAccepted) out.push('Accept the payment policy')
+  for (const rule of DOCUMENT_RULES) {
+    if (!rule.required) continue
+    if (!docs.some(d => d.kind === rule.kind && d.status !== 'rejected')) out.push(`Upload: ${rule.label}`)
+  }
+  return out
+}
+
+/** The client submits: the application goes to Finance. */
+export async function portalSubmit(token: string) {
+  const app = await applicationForToken(token)
+  if (!CLIENT_EDITABLE.has(app.status)) throw new CreditFacilityError('This application has already been submitted', 409)
+  const form = (app.form ?? {}) as Record<string, any>
+  const blockers = portalSubmitBlockers(form, app.documents)
+  if (blockers.length) throw new CreditFacilityError(`Still needed: ${blockers.join('; ')}`, 409)
+  const signer = (Array.isArray(form.declarationSignatories) ? form.declarationSignatories : []).find((s: any) => s?.fullName)?.fullName ?? null
+  const actor = portalActor(app, signer)
+  const updated = await prisma.creditFacilityApplication.update({
+    where: { id: app.id },
+    data: { status: 'submitted', events: appendEvent(app.events, event(actor, 'submit', 'submitted by the client through the link')) },
+    include: { documents: true },
+  })
+  await notifyCreditAction(updated, 'submit', { id: app.requestedById ?? '', name: actor.name, role: 'client' }).catch(err => console.error('[credit-facility] notify failed:', err))
+  return updated
 }

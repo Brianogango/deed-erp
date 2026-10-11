@@ -8,6 +8,7 @@ import {
   ACTION_ROLES, DECIDED_STATUSES, FINANCE_APPROVAL_LIMIT, MIN_PAID_TRANSACTIONS, STANDARD_TERMS_DAYS, STATUS_LABELS,
   TRANSITIONS, type CreditAction, type CreditFacilityStatus,
 } from '@/lib/credit/credit-facility-rules'
+import { BUSINESS_FIELDS, BUSINESS_TYPES, GROUPS, PAYMENT_METHODS, STAKEHOLDERS, type FieldDef, type GroupDef } from '@/lib/credit/credit-form-fields'
 
 type Toast = (msg: string, type?: 'error' | 'success' | 'info') => void
 type Json = Record<string, any>
@@ -24,6 +25,7 @@ export type CreditApplicationView = {
   conditions: string | null; decisionNote: string | null
   requestedBy: string | null; requestedById: string | null; recommendedBy: string | null; decidedBy: string | null; decidedAt: string | null
   reviewDue: string | null
+  portalLink?: { url: string; expiresAt: string | null; expired: boolean } | null
   events: Array<{ at: string; byName: string | null; action: string; note?: string }>
   documents: Doc[]
   paidTransactions?: number
@@ -56,57 +58,6 @@ const ACTION_LABELS: Record<CreditAction, string> = {
   revoke: 'Revoke credit',
 }
 const NOTE_REQUIRED = new Set<CreditAction>(['request_info', 'decline', 'suspend', 'revoke'])
-
-// ── The Deed Technologies Credit Application Form, as fields ──────────────
-type FieldDef = { key: string; label: string; type?: 'text' | 'email' | 'date' | 'number' | 'textarea' }
-const BUSINESS_FIELDS: FieldDef[] = [
-  { key: 'registeredName', label: 'Registered business name' },
-  { key: 'tradingName', label: 'Trading name' },
-  { key: 'physicalAddress', label: 'Physical address' },
-  { key: 'postalAddress', label: 'Postal address (incl. postal code)' },
-  { key: 'city', label: 'City' },
-  { key: 'telephone', label: 'Telephone number' },
-  { key: 'cellphone', label: 'Cellphone number' },
-  { key: 'email', label: 'Email address', type: 'email' },
-  { key: 'website', label: 'Website' },
-  { key: 'incorporationDate', label: 'Date of incorporation', type: 'date' },
-  { key: 'incorporationNumber', label: 'Certificate of incorporation no.' },
-  { key: 'vatNumber', label: 'VAT number' },
-  { key: 'taxPin', label: 'Tax PIN' },
-  { key: 'natureOfBusiness', label: 'Nature of business', type: 'textarea' },
-  { key: 'employees', label: 'Total number of employees', type: 'number' },
-]
-const BUSINESS_TYPES = [
-  ['public_limited', 'Public limited company'], ['private_limited', 'Private limited company'], ['sole_proprietorship', 'Sole proprietorship'],
-  ['partnership', 'Partnership'], ['society', 'Society'], ['foreign_branch', 'Registered branch of a foreign-registered company'],
-]
-type GroupDef = { key: string; title: string; min: number; max: number; fields: FieldDef[]; note?: string }
-const GROUPS: GroupDef[] = [
-  { key: 'directors', title: 'Owners / directors / partners / shareholders', min: 2, max: 10, fields: [
-    { key: 'fullName', label: 'Full name (as per ID / passport)' }, { key: 'citizenship', label: 'Citizenship / nationality' },
-    { key: 'idNumber', label: 'ID / passport number' }, { key: 'residentialAddress', label: 'Residential address' },
-    { key: 'email', label: 'Email', type: 'email' }, { key: 'cellphone', label: 'Cellphone' },
-  ] },
-  { key: 'poSignatories', title: 'Authorised purchase order signatories', min: 2, max: 4, fields: [
-    { key: 'fullName', label: 'Full name' }, { key: 'title', label: 'Designation / title' },
-  ], note: 'Purchase orders must be in writing on the company letterhead.' },
-  { key: 'banks', title: 'Bank accounts', min: 2, max: 2, fields: [
-    { key: 'bankName', label: 'Bank name' }, { key: 'branch', label: 'Branch' }, { key: 'accountNumber', label: 'Account number' },
-  ] },
-  { key: 'tradeReferences', title: 'Trade / supplier references', min: 2, max: 3, fields: [
-    { key: 'supplierName', label: 'Supplier name' }, { key: 'address', label: 'Address' }, { key: 'creditLimit', label: 'Credit limit' },
-    { key: 'paymentTerms', label: 'Payment terms' }, { key: 'contactPerson', label: 'Contact person' }, { key: 'designation', label: 'Designation' },
-    { key: 'email', label: 'Email', type: 'email' }, { key: 'phone', label: 'Telephone' },
-  ] },
-  { key: 'declarationSignatories', title: 'Customer declaration — authorised signatories', min: 2, max: 2, fields: [
-    { key: 'fullName', label: 'Full name' }, { key: 'title', label: 'Designation / title' }, { key: 'idNumber', label: 'ID / passport number' },
-  ], note: 'Signature and company stamp go on the signed form uploaded under Documents.' },
-]
-const STAKEHOLDERS = [
-  ['managingDirector', 'Managing director'], ['financialController', 'Financial controller (receives statements)'],
-  ['purchasingManager', 'Purchasing manager'], ['salesManager', 'Sales manager'],
-]
-const PAYMENT_METHODS = [['bank_transfer', 'Bank transfer'], ['cheque', 'Cheque'], ['mobile_money', 'Mobile money']]
 
 // ── Finance's credit check (Credit Check checklist) ───────────────────────
 const CHECK_FLAGS: Array<[string, string]> = [
@@ -296,6 +247,26 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
     }))
   }
 
+  const sendLink = async (opts: { email?: string; renew?: boolean }) => {
+    if (!detail) return
+    setBusy(true)
+    try {
+      const body = await call(`/api/credit-applications/${detail.id}/link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opts),
+      })
+      if (body?.application) adopt(body.application)
+      if (body?.emailed) showToast(`Link emailed to ${body.emailed}`, 'success')
+      else {
+        try { await navigator.clipboard.writeText(body.url); showToast('Client link copied', 'success') } catch { showToast('Client link ready', 'success') }
+      }
+      onChanged?.()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not create the link', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const upload = (kind: string, file: File | undefined) => {
     if (!detail || !file) return
     const fd = new FormData()
@@ -395,6 +366,37 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
             {detail.conditions && <p className="mt-2 text-xs text-text-2"><b>Conditions:</b> {detail.conditions}</p>}
             {detail.decisionNote && <p className="mt-1 text-xs text-text-2"><b>Decision note:</b> {detail.decisionNote}</p>}
           </section>
+
+          {/* Client link */}
+          {['draft', 'sent', 'info_requested'].includes(detail.status) && (
+            <section className={sectionCls}>
+              <h4 className="text-sm font-extrabold text-text-1">Client link</h4>
+              <p className="mt-1 text-xs text-text-3">
+                The client fills in the application and uploads the documents themselves through a secure link (valid 30 days). Emailing it attaches the two blank forms for signing.
+              </p>
+              {detail.portalLink && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-muted px-3 py-2 text-[11px]">
+                  <span className="min-w-0 flex-1 break-all font-mono text-text-2">{detail.portalLink.url}</span>
+                  <span className={detail.portalLink.expired ? 'font-semibold text-red-700' : 'text-text-3'}>{detail.portalLink.expired ? 'expired' : `until ${fmtDate(detail.portalLink.expiresAt ?? '')}`}</span>
+                  {!detail.portalLink.expired && <button type="button" className="contacts-inline-link" onClick={() => { void navigator.clipboard?.writeText(detail.portalLink!.url).then(() => showToast('Client link copied', 'success')).catch(() => null) }}>Copy</button>}
+                </div>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="btn-primary text-[11px]" disabled={busy} onClick={() => {
+                  const email = window.prompt("Client's email address (the financial controller or the person completing the form)", detail.client?.email ?? '')
+                  if (email?.trim()) void sendLink({ email: email.trim(), renew: Boolean(detail.portalLink?.expired) })
+                }}>Email link to client</button>
+                <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => void sendLink({ renew: Boolean(detail.portalLink?.expired) })}>
+                  {detail.portalLink && !detail.portalLink.expired ? 'Copy link' : 'Create link'}
+                </button>
+                {detail.portalLink && !detail.portalLink.expired && (
+                  <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => {
+                    if (window.confirm('Make a new link? The current one stops working.')) void sendLink({ renew: true })
+                  }}>New link</button>
+                )}
+              </div>
+            </section>
+          )}
 
           {/* Documents */}
           <section className={sectionCls}>

@@ -23,6 +23,7 @@ vi.mock('@/lib/contact-prisma', () => ({
   updateContactById: mockUpdateContactById,
   deleteContactById: vi.fn(),
   clientToContact: (c: unknown) => c,
+  withoutCreditTerms: (body: unknown) => body,
 }))
 vi.mock('@/lib/documents-broadcast.server', () => ({
   refreshDocumentBlobsForClientChange: mockRefresh,

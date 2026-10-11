@@ -108,7 +108,7 @@ import {
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
-import { contactPaymentTermsDays, dueDateFromTerms } from '@/lib/due-date'
+import { contactPaymentTermsDays, customerPaymentTermsDays, dueDateFromTerms } from '@/lib/due-date'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES & CONSTANTS
@@ -699,9 +699,9 @@ function AccountingContent() {
     if (!newPartnerId || !newDocumentDate) return
     const partner = contacts.find(c => c.id === newPartnerId)
     if (!partner) return
-    const derived = dueDateFromTerms(newDocumentDate, contactPaymentTermsDays(partner, 0))
+    const derived = dueDateFromTerms(newDocumentDate, tab === 'invoices' ? customerPaymentTermsDays(partner, 0) : contactPaymentTermsDays(partner, 0))
     if (derived) setNewDueDate(derived)
-  }, [showNewForm, editingInvId, newPartnerId, newDocumentDate, contacts])
+  }, [showNewForm, editingInvId, newPartnerId, newDocumentDate, contacts, tab])
   const invoiceVatRate = companySettings.vatRate ?? 16
 
   // Align manual invoice payment bank: VAT → NCBA; non-VAT → ABSA / I&M
