@@ -45,7 +45,7 @@ function contactInitials(name: string) {
 }
 
 const contactSoColumns: ColumnDef<SaleOrder>[] = [
-  { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: so => <span className="font-mono text-[11px] font-semibold text-primary-600">{so.ref ?? so.orderNumber ?? so.id.slice(0, 8)}</span>, accessor: so => so.ref ?? so.orderNumber ?? so.id },
+  { key: 'ref', label: 'Ref', priority: 1, width: 'minmax(105px, 1fr)', render: so => <span className="font-mono text-[11px] font-semibold text-primary-600">{so.ref ?? so.orderNumber ?? so.id.slice(0, 8)}</span>, accessor: so => so.ref ?? so.orderNumber ?? so.id },
   { key: 'date', label: 'Date', priority: 2, width: '100px', render: so => <span className="text-xs text-t3">{fmtDate(so.date)}</span>, accessor: so => so.date },
   { key: 'items', label: 'Items', priority: 1, width: '1.4fr', render: so => {
     const items = (so.lines ?? []).map(l => l.productName).join(', ')
@@ -53,11 +53,11 @@ const contactSoColumns: ColumnDef<SaleOrder>[] = [
   }, accessor: so => (so.lines ?? []).map(l => l.productName).join(' ') },
   { key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right', render: so => <span className="font-mono text-[11px]">{fmtKes(so.total)}</span>, accessor: so => so.total },
   { key: 'invoiced', label: 'Invoiced', priority: 3, width: '80px', render: so => <span className="text-[10px]" style={{ color: so.invoiceId ? 'var(--success)' : 'var(--text-3)' }}>{so.invoiceId ? 'Yes' : 'No'}</span>, accessor: so => so.invoiceId ? 'Yes' : 'No' },
-  { key: 'status', label: 'Status', priority: 1, width: '120px', render: so => <Badge status={so.status} size="xs" />, accessor: so => so.status },
+  { key: 'status', label: 'Status', priority: 1, width: 'minmax(120px, 1fr)', render: so => <Badge status={so.status} size="xs" />, accessor: so => so.status },
 ]
 
 const contactRepairColumns: ColumnDef<RepairOrder>[] = [
-  { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: r => <span className="font-mono text-[11px] font-semibold text-primary-600">{r.ref}</span>, accessor: r => r.ref },
+  { key: 'ref', label: 'Ref', priority: 1, width: 'minmax(105px, 1fr)', render: r => <span className="font-mono text-[11px] font-semibold text-primary-600">{r.ref}</span>, accessor: r => r.ref },
   { key: 'date', label: 'Booked', priority: 2, width: '140px', render: r => <span className="text-xs text-t3">{fmtDateTime(r.intakeDate)}</span>, accessor: r => r.intakeDate },
   { key: 'device', label: 'Device', priority: 1, width: '1fr', render: r => (
     <div className="min-w-0">
@@ -67,11 +67,11 @@ const contactRepairColumns: ColumnDef<RepairOrder>[] = [
   ), accessor: r => `${r.productName} ${r.serialNumber ?? ''}` },
   { key: 'issue', label: 'Issue', priority: 2, width: '1fr', render: r => <span className="text-xs text-t2 truncate">{r.issueDescription}</span>, accessor: r => r.issueDescription },
   { key: 'cost', label: 'Cost', priority: 1, width: '90px', align: 'right', render: r => <span className="font-mono text-[11px]" style={{ color: r.total > 0 ? 'var(--success)' : 'var(--text-3)' }}>{r.total > 0 ? fmtKes(r.total) : '—'}</span>, accessor: r => r.total },
-  { key: 'status', label: 'Status', priority: 1, width: '120px', render: r => <Badge status={r.status} size="xs" />, accessor: r => r.status },
+  { key: 'status', label: 'Status', priority: 1, width: 'minmax(120px, 1fr)', render: r => <Badge status={r.status} size="xs" />, accessor: r => r.status },
 ]
 
 const contactInvoiceColumns: ColumnDef<Invoice>[] = [
-  { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: inv => <span className="font-mono text-[11px] font-semibold text-primary-600">{displayDocRef(inv.ref)}</span>, accessor: inv => inv.ref },
+  { key: 'ref', label: 'Ref', priority: 1, width: 'minmax(105px, 1fr)', render: inv => <span className="font-mono text-[11px] font-semibold text-primary-600">{displayDocRef(inv.ref)}</span>, accessor: inv => inv.ref },
   { key: 'date', label: 'Date', priority: 2, width: '90px', render: inv => <span className="text-xs text-t3">{fmtDate(inv.date)}</span>, accessor: inv => inv.date },
   { key: 'due', label: 'Due', priority: 3, width: '90px', render: inv => <span className="text-xs text-t3">{fmtDate(inv.dueDate)}</span>, accessor: inv => inv.dueDate },
   { key: 'total', label: 'Total', priority: 1, width: '90px', align: 'right', render: inv => <span className="font-mono text-[11px]">{fmtKes(inv.total)}</span>, accessor: inv => inv.total },
@@ -95,14 +95,14 @@ const contactInvoiceColumns: ColumnDef<Invoice>[] = [
 ]
 
 const contactPosColumns: ColumnDef<POSOrder>[] = [
-  { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: tx => <span className="font-mono text-[11px] font-semibold text-primary-600">{tx.ref}</span>, accessor: tx => tx.ref },
+  { key: 'ref', label: 'Ref', priority: 1, width: 'minmax(105px, 1fr)', render: tx => <span className="font-mono text-[11px] font-semibold text-primary-600">{tx.ref}</span>, accessor: tx => tx.ref },
   { key: 'date', label: 'Date', priority: 2, width: '100px', render: tx => <span className="text-xs text-t3">{fmtDate(tx.date)}</span>, accessor: tx => tx.date },
   { key: 'items', label: 'Items', priority: 1, width: '1.4fr', render: tx => {
     const items = (tx.lines ?? []).map(l => l.productName).join(', ')
     return <span className="text-xs text-t2 truncate" title={items}>{items}</span>
   }, accessor: tx => (tx.lines ?? []).map(l => l.productName).join(' ') },
   { key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right', render: tx => <span className="font-mono text-[11px]">{fmtKes(tx.total)}</span>, accessor: tx => tx.total },
-  { key: 'payment', label: 'Payment', priority: 2, width: '90px', render: tx => <span className="text-[10px] text-t2 capitalize">{tx.payment}</span>, accessor: tx => tx.payment },
+  { key: 'payment', label: 'Payment', priority: 2, width: 'minmax(110px, 1fr)', render: tx => <span className="text-[10px] text-t2 capitalize">{tx.payment}</span>, accessor: tx => tx.payment },
 ]
 
 // ── CSV helpers ──────────────────────────────────────────────────────────────
@@ -797,12 +797,12 @@ function ContactsInner() {
 
                 <section className="contacts-panel contacts-panel--banking">
                   <h4>Banking details</h4>
-                  <dl className="contacts-banking-details">
-                    <div><dt>Bank</dt><dd>{vc.bankName || '—'}</dd></div>
-                    <div><dt>Account</dt><dd className="font-mono">{vc.bankAccount || '—'}</dd></div>
-                    <div><dt>Branch</dt><dd>{vc.bankBranch || '—'}</dd></div>
-                    {Boolean(vc.vendorRating) && <div><dt>Vendor rating</dt><dd>{vc.vendorRating} / 5</dd></div>}
-                    {vc.isCustomer && <div><dt>Loyalty points</dt><dd>{vc.loyaltyPoints ?? 0}</dd></div>}
+                  <dl className="contacts-banking-details" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 0 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Bank</dt><dd>{vc.bankName || '—'}</dd></div>
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Account</dt><dd className="font-mono">{vc.bankAccount || '—'}</dd></div>
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Branch</dt><dd>{vc.bankBranch || '—'}</dd></div>
+                    {Boolean(vc.vendorRating) && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Vendor rating</dt><dd>{vc.vendorRating} / 5</dd></div>}
+                    {vc.isCustomer && <div style={{ display: "grid", gridTemplateColumns: "minmax(100px, 42%) minmax(0, 1fr)", gap: 12, alignItems: "baseline" }}><dt>Loyalty points</dt><dd>{vc.loyaltyPoints ?? 0}</dd></div>}
                   </dl>
                 </section>
 
