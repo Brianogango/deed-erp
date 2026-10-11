@@ -64,6 +64,8 @@ export const INTERNAL_SECRET_API_PATHS = new Set([
 export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
   '/dashboard': '/',
   '/purchase': '/purchases',
+  // Repair notifications raised from the browser link to /repair?id=…
+  '/repair': '/repairs',
   '/operations': '/inventory',
   '/accounting': '/finance',
   '/after_sales': '/aftersales',

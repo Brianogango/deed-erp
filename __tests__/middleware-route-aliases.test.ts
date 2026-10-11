@@ -33,6 +33,13 @@ describe('legacy ERP route aliases', () => {
     )
   })
 
+  it('opens a repair notification link (/repair?id=…) on the repairs page', async () => {
+    const response = await middleware(new NextRequest('https://erp.example.test/repair?id=abc-123'))
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('https://erp.example.test/repairs?id=abc-123')
+  })
+
   it('sends the retired operations URL to inventory without dropping query params', async () => {
     const response = await middleware(
       new NextRequest('https://erp.example.test/operations?tab=reports&serial=ABC'),

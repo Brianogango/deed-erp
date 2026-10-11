@@ -406,24 +406,9 @@ async function scanPurchasing() {
   const current = now()
   let emitted = 0
 
-  const approval = await prisma.purchaseOrder.findMany({
-    where: { status: 'sent', approvedAt: null },
-    select: { id: true, poNumber: true, createdById: true, updatedAt: true },
-  })
-  for (const po of approval) {
-    if (await publishCondition({
-      eventType: 'purchase.po_approval_required',
-      entityType: 'purchase_order',
-      entityId: po.id,
-      userIds: [po.createdById],
-      title: `Purchase order approval required — ${po.poNumber}`,
-      body: `Purchase order ${po.poNumber} is awaiting approval.`,
-      actionUrl: `/purchase?po=${po.id}`,
-      idempotencyKey: '',
-      stateVersion: po.updatedAt,
-    })) emitted++
-  }
-  await resolveInactive('purchase.po_approval_required', 'purchase_order', approval.map(p => p.id))
+  // PO approval alerts were removed (PO approval is not used); close any
+  // still open so they leave the inboxes.
+  await resolveInactive('purchase.po_approval_required', 'purchase_order', [])
 
   const overdue = await prisma.purchaseOrder.findMany({
     where: {
@@ -447,26 +432,8 @@ async function scanPurchasing() {
   }
   await resolveInactive('purchase.po_overdue', 'purchase_order', overdue.map(p => p.id))
 
-  const grns = await prisma.goodsReceivedNote.findMany({
-    where: { po: { status: { not: 'received' } } },
-    select: { id: true, grnNumber: true, createdById: true, createdAt: true },
-    take: 100,
-    orderBy: { createdAt: 'desc' },
-  })
-  for (const grn of grns) {
-    if (await publishCondition({
-      eventType: 'purchase.grn_validation_required',
-      entityType: 'grn',
-      entityId: grn.id,
-      userIds: [grn.createdById],
-      title: `Receipt review required — ${grn.grnNumber}`,
-      body: `Goods receipt ${grn.grnNumber} has been recorded while its purchase order is not yet fully received.`,
-      actionUrl: `/purchase?receipt=${grn.id}`,
-      idempotencyKey: '',
-      stateVersion: grn.createdAt,
-    })) emitted++
-  }
-  await resolveInactive('purchase.grn_validation_required', 'grn', grns.map(g => g.id))
+  // "Receipt review required" alerts were removed as noise; close any still open.
+  await resolveInactive('purchase.grn_validation_required', 'grn', [])
 
   const vendorBills = await prisma.invoice.findMany({
     where: {
@@ -843,32 +810,8 @@ async function scanHr() {
   }
   await resolveInactive('hr.payroll.approval_required', 'payroll_run', payroll.map(p => p.id))
 
-  const clock = nairobiClock()
-  if (['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(clock.weekday) && clock.hour >= 10) {
-    const workDate = new Date(`${clock.date}T00:00:00.000Z`)
-    const employees = await prisma.employee.findMany({
-      where: { isActive: true },
-      select: {
-        id: true, firstName: true, lastName: true,
-        user: { select: { id: true } },
-        attendance: { where: { workDate }, select: { id: true } },
-      },
-    })
-    const missing = employees.filter(emp => emp.attendance.length === 0 && emp.user?.id)
-    for (const emp of missing) {
-      if (await publishCondition({
-        eventType: 'hr.attendance.missing',
-        entityType: 'employee_attendance',
-        entityId: `${emp.id}:${clock.date}`,
-        userIds: [emp.user?.id],
-        title: 'Attendance record missing',
-        body: `No attendance record is present for ${clock.date}. If you are working today, please complete the required attendance process.`,
-        actionUrl: '/hr?tab=self_service',
-        idempotencyKey: '',
-        stateVersion: clock.date,
-      })) emitted++
-    }
-  }
+  // "Attendance record missing" alerts were removed as noise; close any still open.
+  await resolveInactive('hr.attendance.missing', 'employee_attendance', [])
   return emitted
 }
 
