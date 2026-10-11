@@ -10,7 +10,7 @@ vi.mock('@/lib/notifications/service', () => ({ publishNotificationEvent: mockPu
 
 import { notifyCustomerPaymentReceived } from '@/lib/finance/payment-receipt-notify'
 
-const KEYS = ['WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_ACCESS_TOKEN', 'SMS_PROVIDER', 'TELERIVET_API_KEY', 'TELERIVET_PROJECT_ID', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER']
+const KEYS = ['NOTIFICATIONS_PAUSE_SMS', 'NOTIFICATIONS_PAUSE_EMAIL_SMS', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_ACCESS_TOKEN', 'SMS_PROVIDER', 'TELERIVET_API_KEY', 'TELERIVET_PROJECT_ID', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER']
 const saved: Record<string, string | undefined> = {}
 
 const invoice = (client: Record<string, unknown>) => ({
@@ -42,9 +42,17 @@ describe('payment receipt channels', () => {
     expect(mockPublish).not.toHaveBeenCalled()
   })
 
+  it('SMS keys alone are not enough while SMS is paused (the default)', async () => {
+    mockPrisma.invoice.findUnique.mockResolvedValue(invoice({ email: 'a@acme.co.ke', phone: '+254700000000' }))
+    process.env.TELERIVET_API_KEY = 'k'; process.env.TELERIVET_PROJECT_ID = 'p'
+    await notifyCustomerPaymentReceived(input)
+    expect(channelsSent()).toEqual(['email'])
+  })
+
   it('adds each phone channel once its provider keys are set', async () => {
     mockPrisma.invoice.findUnique.mockResolvedValue(invoice({ email: 'a@acme.co.ke', phone: '+254700000000' }))
     process.env.TELERIVET_API_KEY = 'k'; process.env.TELERIVET_PROJECT_ID = 'p'
+    process.env.NOTIFICATIONS_PAUSE_SMS = 'false'
     await notifyCustomerPaymentReceived(input)
     expect(channelsSent()).toEqual(['email', 'sms'])
 

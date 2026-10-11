@@ -25,4 +25,13 @@ describe('notification outbound pause', () => {
     expect(isPausedOutboundChannel('sms', { NOTIFICATIONS_PAUSE_EMAIL_SMS: '0' })).toBe(false)
     expect(isEmailSmsPaused({ NOTIFICATIONS_PAUSE_EMAIL_SMS: 'true' })).toBe(true)
   })
+
+  it('email and SMS can be switched separately', () => {
+    const emailOn = { NOTIFICATIONS_PAUSE_EMAIL: 'false' }
+    expect(isPausedOutboundChannel('email', emailOn)).toBe(false)
+    expect(isPausedOutboundChannel('sms', emailOn)).toBe(true)
+    expect(isPausedOutboundChannel('sms', { NOTIFICATIONS_PAUSE_EMAIL_SMS: 'false', NOTIFICATIONS_PAUSE_SMS: 'true' })).toBe(true)
+    expect(isPausedOutboundChannel('email', { NOTIFICATIONS_PAUSE_EMAIL_SMS: 'false', NOTIFICATIONS_PAUSE_SMS: 'true' })).toBe(false)
+    expect(isEmailSmsPaused(emailOn)).toBe(false)
+  })
 })

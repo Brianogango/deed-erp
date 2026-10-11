@@ -3,6 +3,7 @@ import 'server-only'
 import prisma from '@/lib/prisma'
 import { publishNotificationEvent } from './service'
 import { defaultNotificationPolicy } from './registry'
+import { configuredPhoneChannels } from './channel-availability'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
 import { loadAppState } from '@/lib/server-store'
 import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
@@ -72,6 +73,21 @@ async function resolveInactive(eventType: string, entityType: string, activeIds:
 }
 
 type DigestItem = { id: string; line: string }
+
+/**
+ * A customer to notify, on the channels that can actually deliver: email
+ * when they have an address, WhatsApp / SMS only when that provider is set
+ * up. Null when nothing can reach them, so no event is raised.
+ */
+export function customerRecipient(input: { name?: string | null; email?: string | null; phone?: string | null }, phoneChannels = configuredPhoneChannels()) {
+  const email = String(input.email || '').trim() || null
+  const phone = String(input.phone || '').trim() || null
+  const channels: Array<'email' | 'whatsapp' | 'sms'> = []
+  if (email) channels.push('email')
+  if (phone) channels.push(...phoneChannels)
+  if (!channels.length) return null
+  return { name: input.name || null, email, phone, channels }
+}
 
 /**
  * Credit a supplier credit note still has to give. Vendor credit notes are
@@ -290,16 +306,13 @@ async function scanRepairs() {
 
     if (String(repair.status) === 'ready') {
       readyIds.push(repair.id)
-      if (await publishCondition({
+      const customer = customerRecipient({ name: repair.client.name, email: repair.client.email, phone: repair.client.phone || repair.client.phoneAlt })
+      if (customer && await publishCondition({
         eventType: 'repair.ready',
         entityType: 'repair',
         entityId: repair.id,
-        externalRecipients: [{
-          name: repair.client.name,
-          email: repair.client.email,
-          phone: repair.client.phone || repair.client.phoneAlt,
-          channels: ['email', 'whatsapp', 'sms'],
-        }],
+        externalRecipients: [customer],
+        channels: customer.channels,
         title: `Your repair ${ref} is ready`,
         body: `Hello ${repair.client.name}, your ${repair.deviceBrand || ''} ${repair.deviceModel || repair.deviceType} is ready. Please contact Deed Technologies to arrange collection.`.trim(),
         actionUrl: `/portal/repair/${encodeURIComponent(ref)}`,
@@ -310,16 +323,12 @@ async function scanRepairs() {
       const readySince = repair.completedDate || repair.updatedAt
       if (readySince <= minusDays(current, 3)) {
         uncollectedIds.push(repair.id)
-        if (await publishCondition({
+        if (customer && await publishCondition({
           eventType: 'repair.uncollected',
           entityType: 'repair',
           entityId: repair.id,
-          externalRecipients: [{
-            name: repair.client.name,
-            email: repair.client.email,
-            phone: repair.client.phone || repair.client.phoneAlt,
-            channels: ['email', 'whatsapp', 'sms'],
-          }],
+          externalRecipients: [customer],
+          channels: customer.channels,
           title: `Repair awaiting collection — ${ref}`,
           body: `Your device has been ready for collection for more than 3 days. Please contact Deed Technologies to arrange collection.`,
           actionUrl: `/portal/repair/${encodeURIComponent(ref)}`,
@@ -537,19 +546,19 @@ async function scanDelivery() {
 
   for (const row of rows) {
     const status = String(row.status).toLowerCase()
-    const recipient = {
+    const recipient = customerRecipient({
       name: row.customerName || row.client?.name || 'Customer',
       email: row.client?.email || null,
       phone: row.recipientPhone || row.client?.phone || row.client?.phoneAlt || null,
-      channels: ['email', 'whatsapp', 'sms'] as const,
-    }
+    })
     if (status === 'dispatched') {
       dispatchedIds.push(row.id)
-      if (await publishCondition({
+      if (recipient && await publishCondition({
         eventType: 'delivery.dispatched',
         entityType: 'delivery',
         entityId: row.id,
-        externalRecipients: [recipient as any],
+        externalRecipients: [recipient],
+        channels: recipient.channels,
         title: `Delivery dispatched — ${row.dnNumber}`,
         body: `Your delivery ${row.dnNumber} has been dispatched.${row.trackingNumber ? ` Tracking: ${row.trackingNumber}.` : ''}`,
         actionUrl: null,
@@ -829,16 +838,13 @@ async function scanAftersales() {
     },
   })
   for (const asset of assets) {
-    if (await publishCondition({
+    const customer = customerRecipient({ name: asset.customer.name, email: asset.customer.email, phone: asset.customer.phone || asset.customer.phoneAlt })
+    if (customer && await publishCondition({
       eventType: 'aftersales.warranty.expiring',
       entityType: 'customer_asset',
       entityId: asset.id,
-      externalRecipients: [{
-        name: asset.customer.name,
-        email: asset.customer.email,
-        phone: asset.customer.phone || asset.customer.phoneAlt,
-        channels: ['email', 'whatsapp', 'sms'],
-      }],
+      externalRecipients: [customer],
+      channels: customer.channels,
       title: `Warranty expiring — ${asset.product.name}`,
       body: `The warranty for ${asset.product.name}${asset.serialNumber ? ` (S/N ${asset.serialNumber})` : ''} expires on ${asset.warrantyEnd ? dateOnly(asset.warrantyEnd) : 'soon'}.`,
       actionUrl: null,

@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockGetServerSession, mockPrisma, mockNotifyLeaveDecision } = vi.hoisted(() => ({
+const { mockGetServerSession, mockPrisma } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
-  mockNotifyLeaveDecision: vi.fn(),
   mockPrisma: {
     leaveRequest: { findUnique: vi.fn(), update: vi.fn() },
     leaveBalance: { findUnique: vi.fn(), upsert: vi.fn() },
@@ -19,27 +18,9 @@ const { mockGetServerSession, mockPrisma, mockNotifyLeaveDecision } = vi.hoisted
 vi.mock('@/lib/auth/server', () => ({ getServerSession: mockGetServerSession }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
-vi.mock('@/lib/hr/leave-notifications', () => ({
-  notifyLeaveDecision: mockNotifyLeaveDecision,
-  queueLeaveNotification: (task: () => Promise<void>) => { void task() },
-  toLeaveNotifyPayload: (row: any) => ({
-    id: row.id,
-    ref: row.reference,
-    employeeId: row.employeeId,
-    employeeName: row.employeeName,
-    leaveType: row.leaveType,
-    startDate: row.startDate,
-    endDate: row.endDate,
-    days: Number(row.daysRequested),
-    reason: row.reason,
-    status: row.status,
-    reviewerName: row.reviewedByName,
-    reviewNotes: row.reviewNotes,
-  }),
-}))
 
 // The route publishes through the notification platform (hr-events →
-// notification service), not the legacy leave-notifications helper.
+// notification service).
 const { mockPublishLeaveDecision, mockPublishLeaveCancelled } = vi.hoisted(() => ({
   mockPublishLeaveDecision: vi.fn(),
   mockPublishLeaveCancelled: vi.fn(),

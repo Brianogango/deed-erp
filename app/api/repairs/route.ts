@@ -13,6 +13,7 @@ import prisma from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { resolveDiagnosisFee, normalizeDeviceTier } from '@/lib/diagnosis-fee'
+import { configuredPhoneChannels } from '@/lib/notifications/channel-availability'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { findOpenRepairWithSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
 import { isUserAllowed } from '@/lib/auth/authorization'
@@ -411,7 +412,8 @@ export async function POST(request: NextRequest) {
       : [mergedRepair, ...repairs]
     await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(updatedRepairs) })
 
-    if (!existing && mergedRepair.customerPhone) {
+    // SMS only goes out once an SMS provider is set up.
+    if (!existing && mergedRepair.customerPhone && configuredPhoneChannels().includes('sms')) {
       await publishNotificationEvent({
         eventType: 'repair.received',
         entityType: 'repair',

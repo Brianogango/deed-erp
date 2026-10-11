@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/prisma'
 import { getServerSession } from '@/lib/auth/server'
+import { configuredPhoneChannels } from '@/lib/notifications/channel-availability'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { runNotificationWorker } from '@/lib/notifications/worker'
 import type { NotificationChannel } from '@/lib/notifications/types'
@@ -103,7 +104,15 @@ export async function POST(request: NextRequest) {
       const record = await loadRepairRecipient(repairRef)
       if (!record) return NextResponse.json({ error: 'Repair record not found' }, { status: 404 })
 
-      const channels = requestedChannels(params, type === 'quote' ? ['email', 'whatsapp', 'sms'] : ['whatsapp', 'sms'])
+      // Only channels that can deliver: WhatsApp / SMS once their provider is
+      // set up; otherwise email, when the customer has an address.
+      const phoneChannels = configuredPhoneChannels()
+      let channels = requestedChannels(params, type === 'quote' ? ['email', 'whatsapp', 'sms'] : ['whatsapp', 'sms'])
+        .filter(c => c === 'email' || phoneChannels.includes(c as 'whatsapp' | 'sms'))
+      if (!channels.length && record.recipient.email) channels = ['email']
+      if (!channels.length) {
+        return NextResponse.json({ success: false, error: 'No messaging channel is set up for this customer (no email address, and WhatsApp/SMS are not configured)' })
+      }
       const deviceName = [record.repair.deviceBrand, record.repair.deviceModel || record.repair.deviceType].filter(Boolean).join(' ')
       const quoteTotal = Number(params.quoteTotal || record.repair.estimatedCost || 0)
       const quoteRevision = type === 'quote' && Boolean(params.isRevision)

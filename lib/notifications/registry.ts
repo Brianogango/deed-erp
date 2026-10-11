@@ -31,16 +31,14 @@ const POLICY = (
  */
 export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   // ── CRM & Sales ──────────────────────────────────────────────────────────
-  'crm.lead.created': POLICY(['in_app', 'push'], 'attention', { escalationMinutes: 60, escalationRoles: ['director'] }),
-  'crm.opportunity.assigned': POLICY(['in_app'], 'info'),
-  'crm.opportunity.stale': POLICY(['in_app'], 'warning', { cooldownHours: 72, escalationMinutes: 1440, escalationRoles: ['director'] }),
+  'crm.lead.created': POLICY(['in_app', 'push'], 'attention'),
+  'crm.opportunity.stale': POLICY(['in_app'], 'warning', { cooldownHours: 72 }),
   'crm.opportunity.close_due': POLICY(['in_app', 'push'], 'warning', { cooldownHours: 24 }),
   'sales.quote.approval_required': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 120 }),
   'sales.quote.expiring': POLICY(['in_app'], 'warning', { cooldownHours: 24 }),
   'sales.order.confirmed': POLICY(['in_app', 'push'], 'success'),
   'sales.invoice.payment': POLICY(['in_app'], 'success'),
   'sales.invoice.paid': POLICY(['in_app', 'push'], 'success'),
-  'sales.followup.overdue': POLICY(['in_app'], 'warning', { cooldownHours: 24 }),
 
   // ── Repairs (customer-facing) ────────────────────────────────────────────
   'repair.received': POLICY(['sms'], 'success'),
@@ -54,38 +52,26 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   // is assigned / back on schedule. Directors no longer get a per-job
   // escalation 30–60 min later; they get `repair.director_digest` instead.
   'repair.unassigned': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['technical_lead'], mandatory: true, cooldownHours: 4 }),
-  'repair.assignment': POLICY(['in_app', 'push'], 'attention'),
   'repair.diagnosis_overdue': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['technical_lead'], cooldownHours: 24 }),
-  'repair.customer_approval': POLICY(['in_app'], 'attention'),
-  'repair.quote_declined': POLICY(['in_app'], 'warning'),
   'repair.parts_requested': POLICY(['in_app'], 'attention', { recipientRoles: ['inventory_officer'] }),
-  'repair.parts_received': POLICY(['in_app', 'push'], 'attention'),
   'repair.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead'], mandatory: true, cooldownHours: 12 }),
   // One summary per working day for the directors (see scanRepairs).
   'repair.director_digest': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['director'] }),
 
   // ── Purchasing ──────────────────────────────────────────────────────────
-  'purchase.rfq_ready': POLICY(['in_app'], 'attention'),
-  'purchase.po_approval_required': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director', 'finance_officer'], requiresAcknowledgement: true, escalationMinutes: 180 }),
   'purchase.po_overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['inventory_officer'], cooldownHours: 48 }),
-  'purchase.grn_validation_required': POLICY(['in_app'], 'attention', { recipientRoles: ['inventory_officer'], cooldownHours: 24 }),
-  'purchase.match_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer'], requiresAcknowledgement: true, escalationMinutes: 120, escalationRoles: ['director'], mandatory: true, cooldownHours: 24 }),
   'purchase.vendor_bill_blocked': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 48 }),
   // Bills to pay reach the directors too — they sign the payments.
   'purchase.vendor_bill_due': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['finance_officer', 'director'], cooldownHours: 24 }),
 
   // ── Inventory ───────────────────────────────────────────────────────────
   'inventory.low_stock': POLICY(['in_app'], 'warning', { recipientRoles: ['inventory_officer'], cooldownHours: 72 }),
-  'inventory.negative_stock_attempt': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['inventory_officer'], requiresAcknowledgement: true, escalationMinutes: 30, escalationRoles: ['director'], mandatory: true }),
-  'inventory.serial_mismatch': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['inventory_officer', 'technical_lead'], requiresAcknowledgement: true, escalationMinutes: 60, escalationRoles: ['director'] }),
-  'inventory.transfer_overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['inventory_officer'], cooldownHours: 48 }),
   'inventory.checkout.approval_required': POLICY(['in_app', 'push'], 'attention', { recipientRoles: ['director', 'inventory_officer', 'technical_lead'] }),
   'inventory.checkout.approved': POLICY(['in_app', 'push'], 'success'),
   'inventory.checkout.rejected': POLICY(['in_app', 'push'], 'warning'),
-  'inventory.valuation_exception': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 48, escalationMinutes: 1440, escalationRoles: ['director'] }),
+  'inventory.valuation_exception': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 48 }),
 
   // ── Delivery ────────────────────────────────────────────────────────────
-  'delivery.assigned': POLICY(['in_app', 'push'], 'attention'),
   'delivery.dispatched': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true }),
   'delivery.failed': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['admin_officer'], requiresAcknowledgement: true, escalationMinutes: 30, escalationRoles: ['director'] }),
   'delivery.overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 24 }),
@@ -104,8 +90,8 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'finance.vendor_credit_unapplied': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer', 'director'], cooldownHours: 72 }),
   'finance.payment_received': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true }),
   'finance.payment_allocation_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer'], requiresAcknowledgement: true, escalationMinutes: 60, escalationRoles: ['director'], mandatory: true, cooldownHours: 24 }),
-  'finance.bank_reconciliation_exception': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 72, escalationMinutes: 1440, escalationRoles: ['director'] }),
-  'finance.vat_exception': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 48, escalationMinutes: 1440, escalationRoles: ['director'] }),
+  'finance.bank_reconciliation_exception': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 72 }),
+  'finance.vat_exception': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 48 }),
   'finance.integrity_failure': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['finance_officer'], requiresAcknowledgement: true, escalationMinutes: 120, escalationRoles: ['director'], mandatory: true, cooldownHours: 24 }),
   'finance.month_end_action': POLICY(['in_app'], 'attention', { recipientRoles: ['finance_officer'] }),
 
@@ -124,12 +110,9 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'hr.payslip.ready': POLICY(['in_app', 'push'], 'success'),
   'hr.salary.paid': POLICY(['in_app', 'push', 'sms'], 'success'),
   'hr.contract.expiring': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 168 }),
-  'hr.attendance.missing': POLICY(['in_app'], 'info', { cooldownHours: 12 }),
 
   // ── Aftersales ──────────────────────────────────────────────────────────
   'aftersales.warranty.expiring': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true, cooldownHours: 168 }),
-  'aftersales.rma_action_required': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['admin_officer', 'technical_lead'], cooldownHours: 24 }),
-  'aftersales.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead'], requiresAcknowledgement: true, escalationMinutes: 60, escalationRoles: ['director'], mandatory: true, cooldownHours: 12 }),
 
   // ── Directors ───────────────────────────────────────────────────────────
   // One brief each working morning: bills to pay, approvals waiting (leave,
@@ -142,8 +125,8 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'system.push_test': POLICY(['push'], 'info'),
   'system.manual_message': POLICY(['email'], 'info'),
   'system.sms_reply': POLICY(['sms'], 'info'),
-  'system.security': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 30, mandatory: true }),
-  'system.integration_failure': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
+  // A provider (email, SMS, WhatsApp) failing to deliver: one alert per channel per day.
+  'system.integration_failure': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['director', 'admin_officer'], mandatory: true }),
 }
 
 export const defaultNotificationPolicy = (eventType: string): NotificationPolicy =>

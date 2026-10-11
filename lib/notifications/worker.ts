@@ -315,6 +315,30 @@ async function deadLetter(delivery: any, reason: string) {
   await maybeCreateSmsFallback(delivery)
 }
 
+/**
+ * A provider gave up on a message after every retry: tell the directors and
+ * admin officers, once per channel per day, so a broken email, SMS or
+ * WhatsApp setup does not go unnoticed. Bad addresses are not a provider
+ * failure, and the alert never reports on itself.
+ */
+export async function reportIntegrationFailure(channel: string, eventType: string, error: string, errorCode?: string | null) {
+  if (!['email', 'sms', 'whatsapp'].includes(channel)) return
+  if (eventType === 'system.integration_failure') return
+  if (errorCode === 'missing_destination') return
+  const day = new Date().toISOString().slice(0, 10)
+  const label = channel === 'sms' ? 'SMS' : channel === 'email' ? 'Email' : 'WhatsApp'
+  await publishNotificationEvent({
+    eventType: 'system.integration_failure',
+    entityType: 'notification_channel',
+    entityId: channel,
+    title: `${label} messages are failing`,
+    body: `A ${label} message (${eventType}) could not be delivered after ${MAX_ATTEMPTS} attempts.\nLast error: ${String(error).slice(0, 300)}\n\nCheck the ${label} provider settings, then retry failed messages in Settings → Notifications.`,
+    actionUrl: '/settings?tab=notifications',
+    metadata: { channel, eventType, error: String(error).slice(0, 500), errorCode: errorCode || null },
+    idempotencyKey: `integration-failure:${channel}:${day}`,
+  }).catch(err => console.error('[notifications] could not raise the integration failure alert', err))
+}
+
 async function dispatchPendingNotificationDeliveries(limit = 100) {
   const claimed = await claimDeliveries(limit)
   let sent = 0
@@ -334,7 +358,7 @@ async function dispatchPendingNotificationDeliveries(limit = 100) {
         data: {
           status: 'suppressed',
           failedAt: null,
-          lastError: 'paused_email_sms_by_operator',
+          lastError: `paused_${delivery.channel}_by_operator`,
         },
       })
       continue
@@ -523,6 +547,7 @@ async function dispatchPendingNotificationDeliveries(limit = 100) {
 
     if (attemptNo >= MAX_ATTEMPTS) {
       await deadLetter({ ...delivery, event: delivery.event }, error)
+      await reportIntegrationFailure(channel, delivery.event.eventType, error, result.errorCode)
       if (channel === 'sms' && delivery.destination) {
         await recordOutboundSms({
           notificationDeliveryId: delivery.id,
