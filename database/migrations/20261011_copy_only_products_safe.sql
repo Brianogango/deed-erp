@@ -11,7 +11,8 @@
 --    row's screen details (images, specs, unit …) when it has none yet; the
 --    stale copy row stays in the copy but is no longer listed.
 -- 2. No twin: the product is added to the table under its own id, with the
---    copy's name, SKU, prices, active flag and tracking.
+--    copy's name, SKU, prices, active flag and tracking (a name longer than
+--    500 characters is cut to fit; the full one stays in screen_extras).
 
 BEGIN;
 
@@ -41,9 +42,9 @@ WHERE p.id = x.twin_id AND p.screen_extras IS NULL;
 -- 2. No twin: add it under its own id.
 INSERT INTO products (id, sku, barcode, name, selling_price, cost_price, is_active, tracking_method, track_stock, reorder_level, screen_extras, updated_at)
 SELECT co.copy_id::uuid,
-       coalesce(co.sku, 'P-' || upper(left(replace(co.copy_id, '-', ''), 10))),
-       CASE WHEN co.barcode IS NOT NULL AND NOT EXISTS (SELECT 1 FROM products b WHERE lower(b.barcode) = lower(co.barcode)) THEN co.barcode END,
-       coalesce(co.name, 'Unnamed product'),
+       left(coalesce(co.sku, 'P-' || upper(left(replace(co.copy_id, '-', ''), 10))), 60),
+       CASE WHEN length(co.barcode) <= 60 AND NOT EXISTS (SELECT 1 FROM products b WHERE lower(b.barcode) = lower(co.barcode)) THEN co.barcode END,
+       left(coalesce(co.name, 'Unnamed product'), 500),
        round(coalesce(nullif(co.payload->>'salePrice', '')::numeric, 0), 2),
        round(coalesce(nullif(co.payload->>'costPrice', '')::numeric, 0), 2),
        coalesce((co.payload->>'isActive')::boolean, true),
@@ -55,7 +56,7 @@ SELECT co.copy_id::uuid,
 FROM co
 WHERE co.twin_id IS NULL
   AND co.copy_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-  AND NOT EXISTS (SELECT 1 FROM products s WHERE lower(s.sku) = lower(coalesce(co.sku, 'P-' || upper(left(replace(co.copy_id, '-', ''), 10)))))
+  AND NOT EXISTS (SELECT 1 FROM products s WHERE lower(s.sku) = lower(left(coalesce(co.sku, 'P-' || upper(left(replace(co.copy_id, '-', ''), 10))), 60)))
 ON CONFLICT DO NOTHING;
 
 \echo 'Copy-only products: given to a twin / added / left as they were'
