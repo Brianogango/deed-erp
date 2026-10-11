@@ -4,6 +4,7 @@ const mockLoadAppState = vi.fn()
 const mockSaveStoreKeys = vi.fn()
 const mockClientFindUnique = vi.fn()
 const mockProductFindMany = vi.fn()
+const mockSerialFindMany = vi.fn()
 const mockDnUpsert = vi.fn()
 const mockDnItemDeleteMany = vi.fn()
 const mockDnItemCreateMany = vi.fn()
@@ -18,6 +19,7 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     client: { findUnique: (...args: unknown[]) => mockClientFindUnique(...args) },
     product: { findMany: (...args: unknown[]) => mockProductFindMany(...args) },
+    serialNumber: { findMany: (...args: unknown[]) => mockSerialFindMany(...args) },
     $transaction: (fn: (tx: unknown) => Promise<unknown>) => mockTransaction(fn),
   },
 }))
@@ -47,6 +49,7 @@ beforeEach(() => {
   mockSaveStoreKeys.mockResolvedValue(undefined)
   mockClientFindUnique.mockResolvedValue({ id: CLIENT_ID })
   mockProductFindMany.mockResolvedValue([{ id: PRODUCT_ID }])
+  mockSerialFindMany.mockResolvedValue([{ id: SERIAL_ID }])
   mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       deliveryNote: { upsert: mockDnUpsert },
@@ -137,6 +140,15 @@ describe('mirrorDeliveryToPrisma', () => {
     await mirrorDeliveryToPrisma(baseDelivery)
     expect(mockDnItemCreateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: [expect.objectContaining({ productId: null })],
+    }))
+  })
+
+  it('keeps a serial the serials table lacks on the line, without the link (it used to fail the whole note)', async () => {
+    mockSerialFindMany.mockResolvedValue([])
+    const result = await mirrorDeliveryToPrisma(baseDelivery)
+    expect(result.mirrored).toBe(true)
+    expect(mockDnItemCreateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({ serialNumberId: null, serialIds: [SERIAL_ID] })],
     }))
   })
 

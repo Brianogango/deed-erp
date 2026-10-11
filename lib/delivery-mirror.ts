@@ -23,7 +23,7 @@ function fingerprint(v: unknown) {
  * same table on production — see the migration file for context) rather
  * than a derived id, so this mirror and that backfill agree on identity.
  */
-function mapDeliveryFields(d: Record<string, any>, validProductIds: Set<string>) {
+function mapDeliveryFields(d: Record<string, any>, validProductIds: Set<string>, validSerialIds: Set<string>) {
   const blobId = String(d?.id ?? '').trim()
   const saleOrderId = UUID_RE.test(String(d.saleOrderId || '')) ? String(d.saleOrderId) : null
   const clientId = UUID_RE.test(String(d.customerId || '')) ? String(d.customerId) : null
@@ -56,7 +56,9 @@ function mapDeliveryFields(d: Record<string, any>, validProductIds: Set<string>)
       qtyDone: Math.max(0, Number(l?.qtyDone) || 0),
       qtyReturned: Math.max(0, Number(l?.qtyReturned) || 0),
       serialIds: Array.isArray(l?.serialIds) ? l.serialIds.map((s: unknown) => String(s)) : [],
-      serialNumberId: Array.isArray(l?.serialIds) && UUID_RE.test(String(l.serialIds[0] || ''))
+      // A serial the serials table lacks would fail the whole note; the
+      // line keeps it in serialIds without the link.
+      serialNumberId: Array.isArray(l?.serialIds) && validSerialIds.has(String(l.serialIds[0] || ''))
         ? String(l.serialIds[0])
         : null,
       sourceLocation: l?.sourceLocation ? String(l.sourceLocation).slice(0, 40) : null,
@@ -105,11 +107,20 @@ export async function mirrorDeliveriesToPrisma(deliveries: unknown[]): Promise<v
     const validProducts = allProductIds.length
       ? new Set((await prisma.product.findMany({ where: { id: { in: allProductIds } }, select: { id: true } })).map(p => p.id))
       : new Set<string>()
+    const allSerialIds = [...new Set(
+      withClient.flatMap(c => {
+        const lines: any[] = Array.isArray(c.d.lines) ? c.d.lines : []
+        return lines.map(l => String(Array.isArray(l?.serialIds) ? l.serialIds[0] || '' : '')).filter(id => UUID_RE.test(id))
+      }),
+    )]
+    const validSerials = allSerialIds.length
+      ? new Set((await prisma.serialNumber.findMany({ where: { id: { in: allSerialIds } }, select: { id: true } })).map(s => s.id))
+      : new Set<string>()
 
     type Mapped = ReturnType<typeof mapDeliveryFields>
     const changed: { blobId: string; mapped: Mapped; fp: string }[] = []
     for (const c of withClient) {
-      const mapped = mapDeliveryFields(c.d, validProducts)
+      const mapped = mapDeliveryFields(c.d, validProducts, validSerials)
       const fp = fingerprint(mapped)
       if (hashes[c.blobId] === fp) continue
       changed.push({ blobId: c.blobId, mapped, fp })
@@ -186,6 +197,10 @@ export async function mirrorDeliveryToPrisma(delivery: unknown): Promise<{ mirro
     const validProductIds = productIds.length
       ? new Set((await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true } })).map(p => p.id))
       : new Set<string>()
+    const serialIdsWanted = [...new Set(lines.map(l => String(Array.isArray(l?.serialIds) ? l.serialIds[0] || '' : '')).filter(id => UUID_RE.test(id)))]
+    const validSerialIds = serialIdsWanted.length
+      ? new Set((await prisma.serialNumber.findMany({ where: { id: { in: serialIdsWanted } }, select: { id: true } })).map(s => s.id))
+      : new Set<string>()
 
     const mapped = {
       dnNumber: String(d.ref || blobId).slice(0, 30),
@@ -214,7 +229,7 @@ export async function mirrorDeliveryToPrisma(delivery: unknown): Promise<{ mirro
         qtyDone: Math.max(0, Number(l?.qtyDone) || 0),
         qtyReturned: Math.max(0, Number(l?.qtyReturned) || 0),
         serialIds: Array.isArray(l?.serialIds) ? l.serialIds.map((s: unknown) => String(s)) : [],
-        serialNumberId: Array.isArray(l?.serialIds) && UUID_RE.test(String(l.serialIds[0] || ''))
+        serialNumberId: Array.isArray(l?.serialIds) && validSerialIds.has(String(l.serialIds[0] || ''))
           ? String(l.serialIds[0])
           : null,
         sourceLocation: l?.sourceLocation ? String(l.sourceLocation).slice(0, 40) : null,
