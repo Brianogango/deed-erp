@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { publishNotificationEvent } from './service'
 import { defaultNotificationPolicy } from './registry'
 import { configuredPhoneChannels } from './channel-availability'
+import { isOverdueInvoiceEmailPaused } from './outbound-pause'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
 import { loadAppState } from '@/lib/server-store'
 import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
@@ -917,7 +918,8 @@ async function scanDirectorBrief() {
   const input: DirectorBriefInput = {
     billsOverdue: billRows.filter(b => b.dueDate < today),
     billsDueSoon: billRows.filter(b => b.dueDate >= today),
-    invoicesOverdue: receivables
+    // Paused until receipts are reconciled — some may already be paid.
+    invoicesOverdue: isOverdueInvoiceEmailPaused() ? [] : receivables
       .map(i => ({ ref: i.invoiceNumber, customer: i.client?.name, balance: money(i.totalAmount) - money(i.amountPaid), dueDate: dateOnly(i.dueDate!) }))
       .filter(i => i.balance > 0.01),
     leavePending: leave.map(l => ({

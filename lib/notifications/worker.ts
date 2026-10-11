@@ -13,7 +13,7 @@ import {
   severityAllowed,
 } from './preferences'
 import { sendProviderDelivery } from './providers'
-import { isPausedOutboundChannel } from './outbound-pause'
+import { isBlockedEventChannel, isPausedOutboundChannel } from './outbound-pause'
 import { resolveSmsProvider } from './sms-provider'
 import { isSmsPhoneOptedOut, recordOutboundSms } from './sms-conversations'
 import { publishNotificationEvent } from './service'
@@ -359,6 +359,18 @@ async function dispatchPendingNotificationDeliveries(limit = 100) {
           status: 'suppressed',
           failedAt: null,
           lastError: `paused_${delivery.channel}_by_operator`,
+        },
+      })
+      continue
+    }
+
+    if (isBlockedEventChannel(delivery.event.eventType, delivery.channel)) {
+      await prisma.notificationDelivery.update({
+        where: { id: delivery.id },
+        data: {
+          status: 'suppressed',
+          failedAt: null,
+          lastError: `blocked_${delivery.channel}_for_event`,
         },
       })
       continue

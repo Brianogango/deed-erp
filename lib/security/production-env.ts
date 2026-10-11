@@ -134,6 +134,7 @@ const PRODUCTION_ENV_CATALOG: readonly EnvFieldSpec[] = [
   { key: 'NOTIFICATIONS_PAUSE_EMAIL_SMS', category: 'Notifications', kind: 'value', description: 'Pause worker email and SMS together (used when a channel has no switch of its own). Default true.' },
   { key: 'NOTIFICATIONS_PAUSE_EMAIL', category: 'Notifications', kind: 'value', description: 'Pause worker email. Set false to send notification emails. Falls back to NOTIFICATIONS_PAUSE_EMAIL_SMS.' },
   { key: 'NOTIFICATIONS_PAUSE_SMS', category: 'Notifications', kind: 'value', description: 'Pause worker SMS. Keep true until a reliable SMS provider is set up. Falls back to NOTIFICATIONS_PAUSE_EMAIL_SMS.' },
+  { key: 'NOTIFICATIONS_PAUSE_OVERDUE_INVOICES', category: 'Notifications', kind: 'value', description: 'Keep overdue customer invoices out of email (director brief) until receipts are reconciled. Defaults to true; set false to resume.' },
   { key: 'SENDGRID_WEBHOOK_PUBLIC_KEY', category: 'Notifications', kind: 'value', description: 'SendGrid event webhook public key.' },
   { key: 'NOTIFICATION_WEBHOOK_SECRET', category: 'Notifications', kind: 'secret', generate: true, description: 'Shared-secret fallback for notification webhooks.' },
   { key: 'GOOGLE_CLIENT_ID', category: 'Integrations', kind: 'value', description: 'Google OAuth client id.' },
