@@ -1,6 +1,7 @@
 import './globals.css'
 import '@/components/modules/odoo-record-designs.css'
 import '@/components/erp/mobile-operational.css'
+import '@/components/erp/repair-workflow-header.css'
 import '@/components/erp/mobile-chrome.css'
 import '@/components/erp/overlay-stacking.css'
 import '@/components/erp/inventory-stock-row-alignment.css'
