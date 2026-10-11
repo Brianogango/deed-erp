@@ -1,0 +1,65 @@
+/* Scoped Contacts corrections based on real desktop screenshots. */
+@media (min-width: 768px) {
+  /* Let store-credit caption remain on one line, and align numeric header/values. */
+  .contacts-workspace .contacts-directory-card .table-head > [role="columnheader"]:nth-child(5) {
+    justify-content: flex-end;
+    text-align: right;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+  .contacts-workspace .contacts-directory-card .table-row > [role="gridcell"]:nth-child(5) {
+    justify-content: flex-end;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  /* More balanced contact profile rather than an oversized empty modal canvas. */
+  .contacts-profile {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .contacts-profile__hero {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+  }
+  .contacts-profile__actions { align-self: center; }
+  .contacts-profile__metrics { gap: 12px; }
+  .contacts-profile__metrics .contacts-metric {
+    min-height: 92px;
+    border: 1px solid #d7e2ee;
+    background: #f8fafc;
+    padding: 15px;
+    border-radius: 10px;
+  }
+  .contacts-overview-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .contacts-overview-grid > .contacts-panel {
+    border: 1px solid #dbe4ef;
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .contacts-overview-grid .contacts-info-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .contacts-overview-grid .contacts-recent-row {
+    grid-template-columns: minmax(75px, .7fr) minmax(110px, 1.3fr) minmax(75px, .8fr) 100px minmax(110px, 1fr);
+  }
+  .contacts-overview-grid .contacts-recent-row > :last-child { text-align: right; font-variant-numeric: tabular-nums; }
+}
+@media (min-width: 768px) and (max-width: 1100px) {
+  .contacts-profile__metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .contacts-overview-grid { grid-template-columns: minmax(0,1fr); }
+}
+/* Standalone responsive improvements without modifying modal components. */
+@media (max-width: 767px) {
+  .contacts-profile__metrics { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+  .contacts-profile__metrics .contacts-metric { min-width: 0; padding: 12px; }
+  .contacts-overview-grid { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .contacts-overview-grid .contacts-info-list { grid-template-columns: minmax(0,1fr); }
+}
