@@ -1,0 +1,93 @@
+/* Deed Horizon table-only visual layer.
+ * This file intentionally does not style forms, navigation, buttons or dialogs.
+ * Keep alignment scoped to the existing table shell and desktop/tablet grid.
+ */
+@media (min-width: 768px) {
+  .table-scroll.responsive-table {
+    --horizon-table-divider: #dce5ef;
+    --horizon-table-header: #eef3fa;
+    --horizon-table-ink: #0f172a;
+    border: 1px solid var(--horizon-table-divider);
+    border-radius: 12px;
+    background: #fff;
+    overflow-x: auto;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+  .table-scroll.responsive-table .table-head {
+    background: var(--horizon-table-header);
+    min-height: 44px;
+    border-bottom: 1px solid #cbd8e8;
+    color: #344358;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .015em;
+    line-height: 1.35;
+  }
+  .table-scroll.responsive-table .table-head > [role="columnheader"],
+  .table-scroll.responsive-table .table-row > [role="gridcell"] {
+    box-sizing: border-box;
+    min-width: 0;
+    padding-inline: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-align: start;
+    vertical-align: middle;
+  }
+  .table-scroll.responsive-table .table-head > [role="columnheader"] {
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .table-scroll.responsive-table .table-row {
+    min-height: 48px;
+    background: #fff;
+    border-bottom: 1px solid #e8eef5;
+    color: var(--horizon-table-ink);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .table-scroll.responsive-table .table-row:nth-of-type(even) {
+    background: #fafcff;
+  }
+  .table-scroll.responsive-table .table-row:hover {
+    background: #f1f7fc;
+  }
+  .table-scroll.responsive-table .table-row > [role="gridcell"] {
+    min-height: 48px;
+    overflow-wrap: anywhere;
+  }
+  /* Align financial figures by their decimal end; retain column header alignment. */
+  .table-scroll.responsive-table .table-row > [role="gridcell"][style*="right"] {
+    justify-content: flex-end;
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+  }
+  .table-scroll.responsive-table .table-row > .data-table-actions {
+    justify-content: flex-end;
+    white-space: nowrap;
+  }
+  .table-scroll.responsive-table .data-table-summary-row {
+    background: #eef4fb !important;
+    border-top: 1px solid #cbd8e8;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .table-scroll.responsive-table .table-row:focus-visible {
+    outline: 2px solid #0097d9;
+    outline-offset: -2px;
+  }
+}
+@media (max-width: 767px) {
+  /* Preserve existing mobile card-stack behavior; don't force desktop grids. */
+  .erp-table-page,
+  .erp-table-page-surface,
+  .table-scroll.responsive-table {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .table-scroll.responsive-table .table-row { transition: none; }
+}
