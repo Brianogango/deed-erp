@@ -1,0 +1,112 @@
+/* Repair detail: independent regions for identity/actions and the job trail.
+   Scope stays within the repair detail. No changes to workflow behavior. */
+.repair-detail .repair-detail__header {
+  min-width: 0;
+}
+.repair-detail .repair-detail__header-row {
+  box-sizing: border-box;
+  align-items: center !important;
+  min-width: 0;
+}
+.repair-detail .repair-detail__identity,
+.repair-detail .repair-detail__identity-content {
+  min-width: 0;
+}
+.repair-detail .repair-detail__actions {
+  position: static !important;
+  inset: auto !important;
+  min-width: 0;
+  z-index: auto;
+}
+.repair-detail .repair-detail__action-controls {
+  position: static !important;
+  min-width: 0;
+  align-items: center !important;
+}
+.repair-detail .repair-detail__more-action {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 1;
+}
+.repair-detail .repair-detail__job-trail {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 12px 20px 0;
+}
+.repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+.repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > span {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] a {
+  max-width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > a:last-child {
+  margin-left: 0;
+  flex: 0 1 auto;
+}
+@media (max-width: 1023px) {
+  .repair-detail .repair-detail__header-row {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+  .repair-detail .repair-detail__actions {
+    width: 100%;
+    justify-self: stretch;
+  }
+  .repair-detail .repair-detail__job-trail {
+    padding: 10px 12px 0;
+  }
+  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] {
+    align-items: stretch;
+    gap: 8px;
+  }
+  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > span {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > span > a {
+    flex: 1 1 auto;
+  }
+  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > a:last-child {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 767px) {
+  .repair-detail .repair-detail__actions {
+    padding-top: 10px !important;
+  }
+  .repair-detail .repair-detail__action-controls {
+    display: flex !important;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px !important;
+    margin: 0;
+  }
+  .repair-detail .repair-detail__primary-action {
+    flex: 1 1 180px;
+  }
+  .repair-detail .repair-detail__more-action {
+    flex: 0 0 auto;
+    align-self: stretch;
+  }
+  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] {
+    flex-direction: column;
+  }
+  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > span > span[aria-hidden="true"] {
+    display: none;
+  }
+}
