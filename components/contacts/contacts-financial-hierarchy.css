@@ -1,0 +1,118 @@
+/* Contacts screenshot corrections: presentation only, except semantic banking row grouping. */
+.contacts-workspace > .mod-header {
+  box-sizing: border-box;
+  min-height: 76px;
+  align-items: center;
+  border-bottom: 1px solid #dbe4ef;
+}
+.contacts-workspace > .mod-header .section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.contacts-workspace .contacts-financial-layout {
+  align-items: start;
+  row-gap: 16px;
+  column-gap: 16px;
+}
+.contacts-workspace .contacts-financial-layout > .contacts-panel {
+  padding: 18px 20px;
+  border: 1px solid #d9e4ee;
+  background: #fff;
+  border-radius: 10px;
+}
+.contacts-workspace .contacts-financial-layout > .contacts-panel > h4 {
+  margin-bottom: 14px;
+}
+.contacts-workspace .contacts-banking-details {
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  gap: 0;
+  margin: 0;
+}
+.contacts-workspace .contacts-banking-details > div {
+  display: grid;
+  grid-template-columns: minmax(100px, .85fr) minmax(0,1.15fr);
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #edf1f6;
+}
+.contacts-workspace .contacts-banking-details > div:last-child { border-bottom: none; }
+.contacts-workspace .contacts-banking-details dt {
+  color: #55657a;
+  font-size: 12px;
+  font-weight: 500;
+}
+.contacts-workspace .contacts-banking-details dd {
+  min-width: 0;
+  margin: 0;
+  color: #17243a;
+  font-size: 12.5px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.contacts-workspace .contacts-credit-summary {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px;
+}
+.contacts-workspace .contacts-credit-summary > div {
+  min-width: 0;
+  padding: 12px;
+  background: #f5f8fc;
+  border: 1px solid #e0e8f1;
+  border-radius: 8px;
+}
+.contacts-workspace .contacts-credit-summary > div > span,
+.contacts-workspace .contacts-credit-summary > div > strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.contacts-workspace .contacts-credit-summary > div > strong {
+  margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.contacts-workspace .contacts-panel--invoices .contacts-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.contacts-workspace .contacts-panel--invoices .contacts-compact-table {
+  width: 100%;
+  min-width: 660px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #fff;
+}
+.contacts-workspace .contacts-panel--invoices .contacts-compact-table :is(th,td) {
+  box-sizing: border-box;
+  padding: 13px 12px;
+  vertical-align: middle;
+  text-align: left;
+  border-bottom: 1px solid #e3eaf2;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.contacts-workspace .contacts-panel--invoices .contacts-compact-table th {
+  background: #eef3f9;
+  color: #52627a;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.contacts-workspace .contacts-panel--invoices .contacts-compact-table :is(th,td):nth-child(3),
+.contacts-workspace .contacts-panel--invoices .contacts-compact-table :is(th,td):nth-child(4),
+.contacts-workspace .contacts-panel--invoices .contacts-compact-table :is(th,td):nth-child(5) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.contacts-workspace .contacts-panel--invoices .contacts-compact-table :is(th,td):last-child { text-align: center; }
+.contacts-workspace .contacts-panel--invoices .contacts-compact-table tbody tr:hover { background: #f7fbff; }
+@media (max-width: 767px) {
+  .contacts-workspace .contacts-financial-layout { grid-template-columns: minmax(0,1fr); }
+  .contacts-workspace .contacts-financial-layout > .contacts-panel { padding: 14px; }
+  .contacts-workspace .contacts-credit-summary { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  .contacts-workspace .contacts-banking-details > div { grid-template-columns: minmax(88px,.8fr) minmax(0,1.2fr); }
+}

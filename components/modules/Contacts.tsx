@@ -797,12 +797,12 @@ function ContactsInner() {
 
                 <section className="contacts-panel contacts-panel--banking">
                   <h4>Banking details</h4>
-                  <dl className="contacts-definition-list">
-                    <dt>Bank</dt><dd>{vc.bankName || '—'}</dd>
-                    <dt>Account</dt><dd className="font-mono">{vc.bankAccount || '—'}</dd>
-                    <dt>Branch</dt><dd>{vc.bankBranch || '—'}</dd>
-                    {vc.vendorRating && <><dt>Vendor rating</dt><dd>{vc.vendorRating} / 5</dd></>}
-                    {vc.isCustomer && <><dt>Loyalty points</dt><dd>{vc.loyaltyPoints || 0}</dd></>}
+                  <dl className="contacts-banking-details">
+                    <div><dt>Bank</dt><dd>{vc.bankName || '—'}</dd></div>
+                    <div><dt>Account</dt><dd className="font-mono">{vc.bankAccount || '—'}</dd></div>
+                    <div><dt>Branch</dt><dd>{vc.bankBranch || '—'}</dd></div>
+                    {Boolean(vc.vendorRating) && <div><dt>Vendor rating</dt><dd>{vc.vendorRating} / 5</dd></div>}
+                    {vc.isCustomer && <div><dt>Loyalty points</dt><dd>{vc.loyaltyPoints ?? 0}</dd></div>}
                   </dl>
                 </section>
 
