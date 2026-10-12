@@ -275,13 +275,14 @@ export default function DataTable<T>({
   const filteredRows = useMemo(() => {
     let result = rows
     if (clientSearch && search.trim()) {
-      const needle = search.trim().toLowerCase()
-      result = result.filter(row =>
-        eligibleColumns.some(col => {
-          const raw = getColumnValue(col, row, 'search')
-          return String(raw ?? '').toLowerCase().includes(needle)
-        })
-      )
+      // Every word must appear somewhere in the row ("dell wanjiku" finds
+      // Wanjiku's Dell), across all columns — including ones hidden on
+      // smaller screens.
+      const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+      result = result.filter(row => {
+        const text = columns.map(col => String(getColumnValue(col, row, 'search') ?? '')).join(' ').toLowerCase()
+        return words.every(word => text.includes(word))
+      })
     }
     if (filterRules.length > 0) {
       result = result.filter(row => applyFilterRules(row, columns, filterRules))
@@ -299,7 +300,7 @@ export default function DataTable<T>({
       }
     }
     return result
-  }, [rows, search, filterRules, eligibleColumns, columns, clientSearch, sort])
+  }, [rows, search, filterRules, columns, clientSearch, sort])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   useEffect(() => {

@@ -236,6 +236,20 @@ function OutsourceContent() {
 
   const activeJob = activeJobId ? outsourceJobs.find(j => j.id === activeJobId) ?? null : null
 
+  // Vendors tab search: the vendor's own details plus the devices and
+  // customers of the jobs sent to them; every word must match.
+  const [vendorListSearch, setVendorListSearch] = useState('')
+  const vendorSearchWords = vendorListSearch.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const listedVendors = vendorSearchWords.length === 0 ? outsourceVendors : outsourceVendors.filter(vendor => {
+    const jobsText = outsourceJobs.filter(j => j.vendorId === vendor.id).map(j => {
+      const linked = j.repairOrderId ? repairs.find(x => x.id === j.repairOrderId) : null
+      return [j.ref, j.deviceDescription, j.serial, linked?.customerName, linked?.productName].filter(Boolean).join(' ')
+    }).join(' ')
+    const text = [vendor.name, vendor.phone, vendor.email, vendor.address, vendor.notes, ...(vendor.specializations ?? []), jobsText]
+      .filter(Boolean).join(' ').toLowerCase()
+    return vendorSearchWords.every(word => text.includes(word))
+  })
+
   const selectedVendor = selectedVendorId ? outsourceVendors.find(v => v.id === selectedVendorId) ?? null : null
   const vendorJobs = selectedVendor ? outsourceJobs.filter(j => j.vendorId === selectedVendor.id) : []
   const vendorPaymentHistory = selectedVendor ? outsourcePayments.filter(p => p.vendorId === selectedVendor.id) : []
@@ -424,7 +438,10 @@ function OutsourceContent() {
       },
       searchValue: job => {
         const linked = job.repairOrderId ? repairs.find(x => x.id === job.repairOrderId) : null
-        return [job.deviceDescription, job.serial, linked?.ref, linked?.customerName, linked?.customerPhone, job.repairOrderId, job.ref].filter(Boolean).join(' ')
+        return [
+          job.ref, job.deviceDescription, job.serial, job.vendorName, job.issueDescription, job.serviceType, job.sentByName, job.notes, job.returnNotes,
+          linked?.ref, linked?.customerName, linked?.customerPhone, linked?.productName, linked?.serialNumber, job.repairOrderId,
+        ].filter(Boolean).join(' ')
       },
       exportValue: job => job.deviceDescription,
     },
@@ -638,7 +655,7 @@ function OutsourceContent() {
             emptyMessage="No outsource jobs match the filter."
             searchValue={jobSearch}
             onSearchChange={setJobSearch}
-            searchPlaceholder="Search OUT ref, device, customer or repair…"
+            searchPlaceholder="Search customer name, laptop, serial, phone, vendor or ref…"
             clientSearch
             page={jobPage}
             onPageChange={setJobPage}
@@ -722,11 +739,17 @@ function OutsourceContent() {
         {/* ── Vendors tab ── */}
         {tab === 'vendors' && !selectedVendor && (
           <>
-            {isAdmin && (
-              <div className="flex justify-end px-4 py-2.5 border-b border-[var(--border-lt)]">
-                <button type="button" className="btn-secondary text-[11px]" onClick={openAddVendor}>+ Add Vendor</button>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[var(--border-lt)]">
+              <input
+                type="search"
+                className="form-input text-[12px] flex-1 min-w-[200px] max-w-md"
+                placeholder="Search vendor, phone, service, or a laptop / customer they handled…"
+                value={vendorListSearch}
+                onChange={e => setVendorListSearch(e.target.value)}
+                aria-label="Search vendors"
+              />
+              {isAdmin && <button type="button" className="btn-secondary text-[11px] ml-auto" onClick={openAddVendor}>+ Add Vendor</button>}
+            </div>
             {outsourceVendors.length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">
                 <Fa icon={faBuilding} className="text-3xl mb-2" aria-hidden="true" />
@@ -734,7 +757,10 @@ function OutsourceContent() {
               </div>
             ) : (
               <div className="outsource-vendor-list divide-y" style={{ borderColor: 'var(--bg-surface)' }}>
-                {outsourceVendors.map(vendor => {
+                {listedVendors.length === 0 && (
+                  <div className="py-10 text-center text-t3 text-sm">No vendor matches “{vendorListSearch}”.</div>
+                )}
+                {listedVendors.map(vendor => {
                   const billed = vendorBilled(vendor.id)
                   const paid   = vendorPaid(vendor.id)
                   const { bal, color } = fmtBalance(billed, paid)
