@@ -904,6 +904,11 @@ model Product {
   specs            Json        @default("{}")
   costPrice        Decimal     @default(0) @map("cost_price") @db.Decimal(14, 2)
   sellingPrice     Decimal     @default(0) @map("selling_price") @db.Decimal(14, 2)
+  /// Unit cost on the most recent validated goods receipt (pricing and
+  /// replacement value only — the books use the average/FIFO cost).
+  latestCost       Decimal?    @map("latest_cost") @db.Decimal(14, 2)
+  latestCostAt     DateTime?   @map("latest_cost_at")
+  latestCostRef    String?     @map("latest_cost_ref") @db.VarChar(40)
   wholesalePrice   Decimal?    @map("wholesale_price") @db.Decimal(14, 2)
   kilimallPrice    Decimal?    @map("kilimall_price") @db.Decimal(14, 2)
   taxRateId        String?     @map("tax_rate_id") @db.Uuid

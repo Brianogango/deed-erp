@@ -30,6 +30,10 @@ export async function GET() {
       const averageCost = Number(v?.averageCost ?? 0)
       const totalValue = Number(v?.totalValue ?? 0)
       const listCost = Math.max(0, Number(p.costPrice) || 0)
+      // What restocking would cost today: on hand × latest purchase cost
+      // (the average where the product has no receipt yet). Not the books.
+      const latestCost = Math.max(0, Number(p.latestCost) || 0)
+      const replacementUnit = latestCost > 0 ? latestCost : (averageCost || listCost)
       return {
         productId: p.id,
         sku: p.sku || '',
@@ -41,6 +45,10 @@ export async function GET() {
         totalValue,
         listCost,
         impliedListValue: Math.round(onHand * listCost * 100) / 100,
+        latestCost,
+        latestCostDate: String(p.latestCostDate || ''),
+        latestCostRef: String(p.latestCostRef || ''),
+        replacementValue: Math.round(onHand * replacementUnit * 100) / 100,
       }
     })
     .filter(r => r.onHand > 0 || r.valuationQty > 0 || r.totalValue > 0)
@@ -52,10 +60,11 @@ export async function GET() {
       acc.valuationQty += r.valuationQty
       acc.totalValue += r.totalValue
       acc.impliedListValue += r.impliedListValue
+      acc.replacementValue += r.replacementValue
       acc.driftLines += Math.abs(r.qtyDrift) > 0 ? 1 : 0
       return acc
     },
-    { onHand: 0, valuationQty: 0, totalValue: 0, impliedListValue: 0, driftLines: 0 },
+    { onHand: 0, valuationQty: 0, totalValue: 0, impliedListValue: 0, replacementValue: 0, driftLines: 0 },
   )
 
   return NextResponse.json({
@@ -64,6 +73,7 @@ export async function GET() {
       ...totals,
       totalValue: Math.round(totals.totalValue * 100) / 100,
       impliedListValue: Math.round(totals.impliedListValue * 100) / 100,
+      replacementValue: Math.round(totals.replacementValue * 100) / 100,
     },
     rows,
   })

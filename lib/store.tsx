@@ -1004,6 +1004,10 @@ export interface Account {
 export interface Product {
   id: string; name: string; sku: string; barcode: string
   category: CategoryId; salePrice: number; costPrice: number; taxRate: number
+  /** Unit cost on the most recent goods receipt — pricing and replacement value only (costPrice is the average the books use). */
+  latestCost?: number
+  latestCostDate?: string
+  latestCostRef?: string
   /** Optional channel prices — used by WHOLESALE / KILIMALL pricelists. */
   wholesalePrice?: number
   kilimallPrice?: number

@@ -1,5 +1,5 @@
 'use client'
-import React, { useMemo, useState, useRef, useEffect, Suspense } from 'react'
+import React, { useCallback, useMemo, useState, useRef, useEffect, Suspense } from 'react'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import {
   useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
@@ -39,6 +39,7 @@ import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/ser
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
 import { getCategoryMarkupPct, quoteSalePriceFromCost, autoSalePriceFromCost, suggestWholesalePriceFromCost } from '@/lib/sale-price-calculator'
+import { reviewSalePrice } from '@/lib/pricing/latest-cost-review'
 import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import dynamic from 'next/dynamic'
@@ -259,8 +260,8 @@ function InventoryContent() {
   const [tab, setTab] = useState<MainTab>('product_catalog')
   const [reportTab, setReportTab] = useState<ReportTab>('stock_on_hand')
   const [valuationReport, setValuationReport] = useState<{
-    totals?: { onHand: number; valuationQty: number; totalValue: number; impliedListValue: number; driftLines: number }
-    rows?: Array<{ productId: string; sku: string; name: string; onHand: number; valuationQty: number; qtyDrift: number; averageCost: number; totalValue: number; listCost: number; impliedListValue: number }>
+    totals?: { onHand: number; valuationQty: number; totalValue: number; impliedListValue: number; replacementValue?: number; driftLines: number }
+    rows?: Array<{ productId: string; sku: string; name: string; onHand: number; valuationQty: number; qtyDrift: number; averageCost: number; totalValue: number; listCost: number; impliedListValue: number; latestCost?: number; latestCostDate?: string; latestCostRef?: string; replacementValue?: number }>
     error?: string
     loading?: boolean
   } | null>(null)
@@ -307,6 +308,7 @@ function InventoryContent() {
   const patchInventoryUi = useUrlUiPatch()
   const [catalogSearch, setCatalogSearchValue] = useUrlUiState('catalogQ', '')
   const [catalogCatFilter, setCatalogCatFilterValue] = useUrlUiState('category', 'All')
+  const [priceReviewOnly, setPriceReviewOnly] = useState(false)
   const [catalogPageValue, setCatalogPageValue] = useUrlUiState('page', '1')
   const catalogPage = Math.max(1, Number.parseInt(catalogPageValue, 10) || 1)
   const setCatalogSearch = (value: string) =>
@@ -740,7 +742,18 @@ function InventoryContent() {
     unit: product.unit,
   }, serials, bulkStock, product.id)
 
-  const catalogProducts = useMemo(() => {
+  // Selling price vs what the stock now costs to buy (latest receipt cost).
+  const priceReviewOf = useCallback((product: Product) => reviewSalePrice({
+    salePrice: product.salePrice,
+    costPrice: product.costPrice,
+    latestCost: product.latestCost,
+    category: product.category,
+    pricingCategoryId: (product as any).pricingCategoryId,
+    productType: (product as any).productType,
+  }, { policy: systemSettings.pricingMarginPolicy, legacyMarkupMap: systemSettings.invCategorySaleMarkupPct }),
+  [systemSettings.pricingMarginPolicy, systemSettings.invCategorySaleMarkupPct])
+
+  const catalogBase = useMemo(() => {
     const q = catalogSearch.trim().toLowerCase()
     return products
       .filter(product => isListedInProductCatalog(
@@ -760,6 +773,22 @@ function InventoryContent() {
       .filter(product => !q || product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q) || product.barcode?.toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [products, serials, bulkStock, catalogSearch, catalogCatFilter])
+
+  // Same products the catalog lists (in stock, current search and category).
+  const priceReviewCount = useMemo(() => catalogBase.filter(product => priceReviewOf(product).needsReview).length, [catalogBase, priceReviewOf])
+  const catalogProducts = useMemo(
+    () => (priceReviewOnly ? catalogBase.filter(product => priceReviewOf(product).needsReview) : catalogBase),
+    [catalogBase, priceReviewOnly, priceReviewOf],
+  )
+
+  const acceptSuggestedPrice = (product: Product) => {
+    const review = priceReviewOf(product)
+    if (review.suggested == null) return
+    const basis = review.basis === 'latest'
+      ? `latest cost ${fmtKes(review.basisCost)}${product.latestCostRef ? ` (${product.latestCostRef})` : ''}`
+      : `cost ${fmtKes(review.basisCost)}`
+    updateProductPrice(product.id, review.suggested, Number(product.costPrice) || 0, `Price review: suggested from ${basis}`, new Date().toISOString().slice(0, 10))
+  }
 
   const openPriceUpdate = (product: Product) => {
     const markupSuggested = autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, product.category, product.costPrice, {
@@ -2369,13 +2398,40 @@ function InventoryContent() {
                   exportValue: product => catalogQty(product),
                 },
                 {
-                  key: 'cost', label: 'Cost', priority: 2, width: '110px', align: 'right',
-                  render: product => <span className="text-xs font-mono text-text-3 tabular-nums">{fmtKes(product.costPrice)}</span>,
+                  key: 'cost', label: 'Avg cost', priority: 2, width: '110px', align: 'right',
+                  render: product => <span className="text-xs font-mono text-text-3 tabular-nums" title="Average cost of the stock on hand — what the accounts use">{fmtKes(product.costPrice)}</span>,
                   exportValue: product => product.costPrice,
                 },
                 {
-                  key: 'salePrice', label: 'Sale price', priority: 1, width: '110px', align: 'right',
-                  render: product => <span className="text-xs font-mono font-extrabold text-emerald-700 tabular-nums">{fmtKes(product.salePrice)}</span>,
+                  key: 'latestCost', label: 'Latest cost', priority: 2, width: '110px', align: 'right',
+                  render: product => Number(product.latestCost) > 0 ? (
+                    <span
+                      className={`text-xs font-mono tabular-nums ${Number(product.latestCost) > Number(product.costPrice) ? 'text-amber-700 font-bold' : 'text-text-3'}`}
+                      title={`Last purchase cost${product.latestCostRef ? ` · ${product.latestCostRef}` : ''}${product.latestCostDate ? ` · ${fmtDate(product.latestCostDate)}` : ''}`}
+                    >
+                      {fmtKes(product.latestCost)}
+                    </span>
+                  ) : <span className="text-xs text-text-3">—</span>,
+                  exportValue: product => product.latestCost ?? '',
+                },
+                {
+                  key: 'salePrice', label: 'Sale price', priority: 1, width: '130px', align: 'right',
+                  render: product => {
+                    const review = priceReviewOf(product)
+                    return (
+                      <span className="inline-flex items-center gap-1.5 justify-end">
+                        {review.needsReview && (
+                          <span
+                            className="text-[9px] font-bold uppercase rounded px-1 py-0.5 bg-amber-100 text-amber-800"
+                            title={`${review.reason}${review.suggested != null ? ` — suggested ${fmtKes(review.suggested)}` : ''}`}
+                          >
+                            Review
+                          </span>
+                        )}
+                        <span className="text-xs font-mono font-extrabold text-emerald-700 tabular-nums">{fmtKes(product.salePrice)}</span>
+                      </span>
+                    )
+                  },
                   exportValue: product => product.salePrice,
                 },
                 {
@@ -2455,6 +2511,13 @@ function InventoryContent() {
                           onClick: () => patchInventoryUi({ catalogQ: null, category: null, page: null }),
                         },
                         {
+                          id: 'review',
+                          label: priceReviewOnly ? 'need price review — showing only these (click to show all)' : 'need price review',
+                          value: priceReviewCount,
+                          tone: priceReviewCount > 0 ? 'warning' : 'default',
+                          onClick: () => setPriceReviewOnly(v => !v),
+                        },
+                        {
                           id: 'pending',
                           label: 'pending price updates',
                           value: pendingPriceUpdates,
@@ -2486,7 +2549,9 @@ function InventoryContent() {
                     onClearFilters={() => patchInventoryUi({ catalogQ: null, category: null, page: null })}
                     hideColumnFilters
                     emptyMessage={
-                      catalogSearch || catalogCatFilter !== 'All'
+                      priceReviewOnly
+                        ? 'No in-stock product needs a price review'
+                        : catalogSearch || catalogCatFilter !== 'All'
                         ? 'No in-stock products match these filters'
                         : 'No in-stock products in the catalog'
                     }
@@ -2506,6 +2571,20 @@ function InventoryContent() {
                     ]}
                     rowActions={product => (
                       <div className="flex justify-end gap-1">
+                        {(() => {
+                          const review = priceReviewOf(product)
+                          if (!review.needsReview || review.suggested == null || !canUpdatePrice) return null
+                          return (
+                            <button
+                              type="button"
+                              className="btn-secondary text-[10px] py-1 px-2"
+                              onClick={() => acceptSuggestedPrice(product)}
+                              title={`${review.reason}. Set the sale price to ${fmtKes(review.suggested)} (margin on the ${review.basis === 'latest' ? 'latest' : 'average'} cost ${fmtKes(review.basisCost)})`}
+                            >
+                              Use {fmtKes(review.suggested)}
+                            </button>
+                          )
+                        })()}
                         <button
                           type="button"
                           className="btn-primary text-[10px] py-1 px-2"
@@ -2534,22 +2613,30 @@ function InventoryContent() {
             {priceProduct && (
               <Modal title="Update Sale Price" subtitle={priceProduct.name} onClose={() => setPriceProduct(null)} width={520}>
                 <div className="flex flex-col gap-4">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <div className="p-3 bg-surface border border-border-lt rounded-xl">
                       <p className="text-[10px] uppercase font-bold text-text-3">Current Sale Price</p>
                       <p className="text-sm font-extrabold text-text-1 mt-1">{fmtKes(priceProduct.salePrice)}</p>
                     </div>
-                    <div className="p-3 bg-surface border border-border-lt rounded-xl">
-                      <p className="text-[10px] uppercase font-bold text-text-3">Cost (read-only)</p>
+                    <div className="p-3 bg-surface border border-border-lt rounded-xl" title="Average cost of the stock on hand — what the accounts use">
+                      <p className="text-[10px] uppercase font-bold text-text-3">Average cost</p>
                       <p className="text-sm font-extrabold text-text-1 mt-1">{fmtKes(priceProduct.costPrice)}</p>
+                    </div>
+                    <div className="p-3 bg-surface border border-border-lt rounded-xl" title="Cost on the most recent goods receipt — what restocking costs now">
+                      <p className="text-[10px] uppercase font-bold text-text-3">Latest cost</p>
+                      <p className="text-sm font-extrabold text-text-1 mt-1">{Number(priceProduct.latestCost) > 0 ? fmtKes(priceProduct.latestCost) : '—'}</p>
+                      {priceProduct.latestCostRef && (
+                        <p className="text-[10px] text-text-3 mt-0.5">{priceProduct.latestCostRef}{priceProduct.latestCostDate ? ` · ${fmtDate(priceProduct.latestCostDate)}` : ''}</p>
+                      )}
                     </div>
                   </div>
                   <Field label="New Sale Price" required>
                     <Input type="number" value={priceForm.salePrice} onChange={v => setPriceForm(f => ({ ...f, salePrice: v }))} placeholder="0" />
                   </Field>
                   {priceProduct.productKind !== 'service' && priceProduct.category !== 'Services' && (() => {
+                    // Suggestions follow what restocking costs now (latest cost), else the average.
                     const quote = quoteSalePriceFromCost({
-                      costPrice: priceProduct.costPrice,
+                      costPrice: Number(priceProduct.latestCost) > 0 ? priceProduct.latestCost : priceProduct.costPrice,
                       erpCategory: priceProduct.category,
                       pricingCategoryId: (priceProduct as any).pricingCategoryId,
                       productType: (priceProduct as any).productType,
@@ -2591,11 +2678,16 @@ function InventoryContent() {
                   <Field label="Effective Date" required>
                     <Input type="date" value={priceForm.effectiveDate} onChange={v => setPriceForm(f => ({ ...f, effectiveDate: v }))} />
                   </Field>
-                  {Number(priceForm.salePrice) < Number(priceProduct.costPrice) && Number(priceProduct.costPrice) > 0 && (
-                    <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-800">
-                      New sale price is below cost. Confirm this is intentional in the reason.
-                    </div>
-                  )}
+                  {(() => {
+                    const floor = Math.max(Number(priceProduct.costPrice) || 0, Number(priceProduct.latestCost) || 0)
+                    if (!(floor > 0) || !(Number(priceForm.salePrice) < floor)) return null
+                    const which = Number(priceProduct.latestCost) >= Number(priceProduct.costPrice) && Number(priceProduct.latestCost) > 0 ? 'the latest purchase cost' : 'the average cost'
+                    return (
+                      <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-800">
+                        New sale price is below {which} ({fmtKes(floor)}). Confirm this is intentional in the reason.
+                      </div>
+                    )
+                  })()}
                   <div className="flex justify-end gap-3">
                     <button className="btn-secondary px-6" onClick={() => setPriceProduct(null)}>Cancel</button>
                     <button className="btn-primary px-8" onClick={submitPriceUpdate}>Save Sale Price</button>
@@ -3846,6 +3938,23 @@ function InventoryContent() {
                 <p className="text-xs text-red-700">{valuationReport.error}</p>
               )}
               {valuationReport?.totals && (
+                <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                  <div className="border border-[var(--color-border)] p-2">
+                    <div className="text-[var(--color-text-muted)]">Book value (actual cost — used in the accounts)</div>
+                    <div className="tabular-nums font-semibold text-sm">{fmtKes(valuationReport.totals.totalValue)}</div>
+                  </div>
+                  <div className="border border-[var(--color-border)] p-2">
+                    <div className="text-[var(--color-text-muted)]">Replacement value (on hand × latest purchase cost)</div>
+                    <div className="tabular-nums font-semibold text-sm">{fmtKes(valuationReport.totals.replacementValue ?? 0)}</div>
+                  </div>
+                  <div className="border border-[var(--color-border)] p-2">
+                    <div className="text-[var(--color-text-muted)]">Difference (for decisions only — not booked)</div>
+                    <div className={`tabular-nums font-semibold text-sm ${(valuationReport.totals.replacementValue ?? 0) - valuationReport.totals.totalValue >= 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      {fmtKes((valuationReport.totals.replacementValue ?? 0) - valuationReport.totals.totalValue)}
+                    </div>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                   <div className="border border-[var(--color-border)] p-2">
                     <div className="text-[var(--color-text-muted)]">On hand (blob)</div>
@@ -3864,6 +3973,7 @@ function InventoryContent() {
                     <div className="tabular-nums font-medium">{valuationReport.totals.driftLines}</div>
                   </div>
                 </div>
+                </>
               )}
               <div className="overflow-x-auto border border-[var(--color-border)]">
                 <table className="w-full text-xs">
@@ -3874,7 +3984,9 @@ function InventoryContent() {
                       <th className="px-2 py-1.5 font-medium text-right">Val qty</th>
                       <th className="px-2 py-1.5 font-medium text-right">Drift</th>
                       <th className="px-2 py-1.5 font-medium text-right">Avg cost</th>
-                      <th className="px-2 py-1.5 font-medium text-right">Value</th>
+                      <th className="px-2 py-1.5 font-medium text-right">Book value</th>
+                      <th className="px-2 py-1.5 font-medium text-right">Latest cost</th>
+                      <th className="px-2 py-1.5 font-medium text-right">Replacement value</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3889,11 +4001,15 @@ function InventoryContent() {
                         <td className={`px-2 py-1.5 text-right tabular-nums ${row.qtyDrift !== 0 ? 'text-amber-700' : ''}`}>{row.qtyDrift}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{fmtKes(row.averageCost)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{fmtKes(row.totalValue)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums" title={row.latestCostRef ? `${row.latestCostRef}${row.latestCostDate ? ` · ${fmtDate(row.latestCostDate)}` : ''}` : 'No receipt yet — average cost used'}>
+                          {row.latestCost ? fmtKes(row.latestCost) : '—'}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{fmtKes(row.replacementValue ?? 0)}</td>
                       </tr>
                     ))}
                     {(!valuationReport?.rows || valuationReport.rows.length === 0) && !valuationReport?.loading && (
                       <tr>
-                        <td colSpan={6} className="px-2 py-6 text-center text-[var(--color-text-muted)]">
+                        <td colSpan={8} className="px-2 py-6 text-center text-[var(--color-text-muted)]">
                           Click Refresh to load valuation.
                         </td>
                       </tr>

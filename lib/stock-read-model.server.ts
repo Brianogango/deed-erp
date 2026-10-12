@@ -127,16 +127,23 @@ export async function loadScreenReceipts(screenCopy: unknown): Promise<Row[]> {
 const PRODUCT_SELECT = {
   id: true, name: true, sku: true, barcode: true, sellingPrice: true, costPrice: true,
   isActive: true, trackingMethod: true, reorderLevel: true, screenExtras: true,
+  latestCost: true, latestCostAt: true, latestCostRef: true,
 } as const
 
 /**
  * A product as the screens use it: the catalog details from their columns
  * (the product routes write those), everything else as the screens saved it.
  */
-function toScreenProduct(p: { id: string; name: string; sku: string; barcode: string | null; sellingPrice: unknown; costPrice: unknown; isActive: boolean; trackingMethod: string; reorderLevel: number | null; screenExtras: unknown }): Row {
-  const extras = asObject(p.screenExtras)
+function toScreenProduct(p: {
+  id: string; name: string; sku: string; barcode: string | null; sellingPrice: unknown; costPrice: unknown
+  isActive: boolean; trackingMethod: string; reorderLevel: number | null; screenExtras: unknown
+  latestCost?: unknown; latestCostAt?: Date | null; latestCostRef?: string | null
+}): Row {
+  const { latestCost: _l, latestCostDate: _d, latestCostRef: _r, ...extras } = asObject(p.screenExtras)
   return {
     ...extras,
+    // From the most recent goods receipt: pricing and replacement value only.
+    ...(p.latestCost != null ? { latestCost: Number(p.latestCost), latestCostDate: p.latestCostAt?.toISOString() ?? '', latestCostRef: p.latestCostRef ?? '' } : {}),
     id: p.id,
     name: p.name,
     sku: p.sku,

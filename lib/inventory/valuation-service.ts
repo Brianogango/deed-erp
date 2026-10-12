@@ -587,16 +587,31 @@ export async function processStockReceipt(params: {
     reference: params.reference,
   })
 
-  // Keep product master cost (and margin-policy list) aligned with new average.
+  // The product's cost follows the new average. The selling price is no
+  // longer recalculated here: a receipt typed wrong (750 @ 5 for 5 @ 750)
+  // used to reprice the product silently. Price changes now go through the
+  // price review list, which suggests a price from the latest cost.
   try {
     const { syncProductListFromCost } = await import('@/lib/pricing/sync-product-list-from-cost.server')
     await syncProductListFromCost({
       productId: params.productId,
       costPrice: applied.averageCost,
-      recalcSale: true,
+      recalcSale: false,
     })
   } catch {
     /* non-fatal — valuation already committed */
+  }
+  // What this purchase actually cost (not the standard cost): used for
+  // replacement value and price suggestions, never for the books.
+  if (receiptCost > 0) {
+    try {
+      await prisma.product.update({
+        where: { id: params.productId },
+        data: { latestCost: receiptCost, latestCostAt: new Date(), latestCostRef: params.reference ? String(params.reference).slice(0, 40) : null },
+      })
+    } catch (err) {
+      console.error('[valuation] latest cost not saved:', err)
+    }
   }
 
   return {
