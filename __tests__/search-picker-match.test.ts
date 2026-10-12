@@ -33,3 +33,17 @@ describe('searchPickerExactMatch', () => {
     expect(searchPickerExactMatch([stand, other], 'Generic')).toBeNull()
   })
 })
+
+describe('searchPickerMatches — jobs', () => {
+  const repair = { id: 'r1', ref: 'REP/2026/0412', customerName: 'Mike Otieno', customerPhone: '0712345678', productName: 'HP EliteBook 840 G5', serialNumber: '5CG1234' }
+  it('finds a repair by customer name, laptop model, serial or phone', () => {
+    expect(searchPickerMatches(repair, 'mi')).toBe(true)
+    expect(searchPickerMatches(repair, 'elitebook')).toBe(true)
+    expect(searchPickerMatches(repair, '5cg1234')).toBe(true)
+    expect(searchPickerMatches(repair, '0712')).toBe(true)
+  })
+  it('matches every word anywhere, in any order', () => {
+    expect(searchPickerMatches(repair, 'hp mike')).toBe(true)
+    expect(searchPickerMatches(repair, 'dell mike')).toBe(false)
+  })
+})

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 import { useOverlayDismiss } from '@/lib/overlay-dismiss'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
-import { searchPickerExactMatch, searchPickerMatches } from '@/lib/search-picker-match'
+import { searchPickerExactMatch, searchPickerItemText, searchPickerMatches } from '@/lib/search-picker-match'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -1460,6 +1460,8 @@ export function SearchPicker<T extends { id: string }>({
   labelClassName,
   inputClassName,
   onQueryChange,
+  searchText,
+  emptyText = 'No matches',
 }: {
   label: string
   placeholder: string
@@ -1475,6 +1477,9 @@ export function SearchPicker<T extends { id: string }>({
   labelClassName?: string
   inputClassName?: string
   onQueryChange?: (query: string) => void
+  /** Extra text an item can be found by (on top of name, ref, customer, device, serial …). */
+  searchText?: (item: T) => string
+  emptyText?: string
 }) {
   const [query, setQuery] = useState(selectedLabel ?? '')
   const [open, setOpen] = useState(false)
@@ -1499,8 +1504,8 @@ export function SearchPicker<T extends { id: string }>({
   }, [selectedLabel, open])
 
   const filtered = useMemo(
-    () => items.filter(item => searchPickerMatches(item, query)),
-    [items, query],
+    () => items.filter(item => searchPickerMatches(item, query, searchText ? `${searchPickerItemText(item)} ${searchText(item)}` : undefined)),
+    [items, query, searchText],
   )
 
   const commitItem = useCallback((item: T) => {
@@ -1666,7 +1671,7 @@ export function SearchPicker<T extends { id: string }>({
             </div>
           )}
           {filtered.length === 0 && (
-            <div className="p-3 text-xs text-text-3">No matching products</div>
+            <div className="p-3 text-xs text-text-3">{emptyText}</div>
           )}
           {filtered.map((item, index) => (
             <div

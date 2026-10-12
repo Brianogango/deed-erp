@@ -1019,8 +1019,10 @@ function OutsourceContent() {
                 label="Link to Repair Job (Optional)"
                 labelClassName="mb-1.5 block text-[13px] font-semibold text-slate-700"
                 inputClassName="h-11 text-sm"
-                placeholder="Search open repairs by REP, device, customer or serial…"
+                placeholder="Search by customer name, laptop model, serial, phone or REP…"
                 items={pickableRepairs}
+                searchText={r => [r.issueDescription, r.customerEmail].filter(Boolean).join(' ')}
+                emptyText="No open repair matches — check the name or laptop model"
                 selectedLabel={jobForm.repairOrderId ? repairSearch : undefined}
                 formatSelected={r => `${r.ref} · ${r.productName} (${r.customerName})`}
                 onSelect={r => selectRepair(r.id)}
