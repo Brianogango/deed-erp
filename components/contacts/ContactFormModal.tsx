@@ -96,7 +96,7 @@ export default function ContactFormModal({
   } = useCrmStore()
   // Credit limit and payment terms are granted by Finance (credit applications).
   const canSetCreditTerms = ['director', 'finance_officer'].includes(normalizeClientRole(users.find(u => u.id === currentUserId)?.role))
-  const creditTermsHint = 'Set by Finance through a credit application (Contacts → Credit)'
+  const creditTermsHint = 'Set by Finance through a credit account application (Contacts → Credit)'
   const [form, setForm] = useState<ContactFormValues>(() => ({
     ...initial,
     // Editing keeps the record's value (legacy rows fall back to the house default);

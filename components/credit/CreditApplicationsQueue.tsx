@@ -59,7 +59,7 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
       setRows(body?.applications ?? [])
     } catch (err) {
       setRows([])
-      showToast(`Could not load credit applications: ${err instanceof Error ? err.message : 'error'}`, 'error')
+      showToast(`Could not load credit account applications: ${err instanceof Error ? err.message : 'error'}`, 'error')
     }
   }, [filter, showToast])
 
@@ -86,7 +86,7 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
     <div className="p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-sm font-extrabold text-text-1">Credit applications</h3>
+          <h3 className="text-sm font-extrabold text-text-1">Credit account applications</h3>
           <p className="mt-1 max-w-3xl text-xs text-text-3">
             Corporate customers applying for credit terms. Finance checks the documents and the client, approves up to KES 100,000 and recommends larger limits to a director.
           </p>
@@ -144,7 +144,7 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
       ) : rows === null ? (
         <p className="mt-4 text-xs text-text-3">Loading…</p>
       ) : rows.length === 0 ? (
-        <p className="mt-4 text-xs text-text-3">No credit applications here. Start one from the customer's page (Contacts → customer → Credit).</p>
+        <p className="mt-4 text-xs text-text-3">No credit account applications here. Start one from the customer's page (Contacts → customer → Credit).</p>
       ) : (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-xs">
@@ -177,7 +177,7 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
       )}
 
       {openApp && (
-        <Modal title={`${openApp.ref} · ${openApp.client?.name ?? ''}`} subtitle="Credit application" width={980} variant="enterprise" onClose={() => { setOpenApp(null); void load() }}>
+        <Modal title={`${openApp.ref} · ${openApp.client?.name ?? ''}`} subtitle="Credit account application" width={980} variant="enterprise" onClose={() => { setOpenApp(null); void load() }}>
           <CreditFacilityPanel clientId={openApp.clientId} initialApplicationId={openApp.id} clientName={openApp.client?.name} role={role} userId={userId} showToast={showToast} />
         </Modal>
       )}

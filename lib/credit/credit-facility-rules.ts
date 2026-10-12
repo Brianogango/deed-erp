@@ -63,7 +63,7 @@ export type DocumentRule = { kind: DocumentKind; label: string; required: boolea
 
 /** The checklist from the credit application form, plus the two signed forms. */
 export const DOCUMENT_RULES: DocumentRule[] = [
-  { kind: 'application_form', label: 'Signed credit application form', required: true, expires: false, hint: 'Signed and stamped by the authorised signatories' },
+  { kind: 'application_form', label: 'Signed credit account application form', required: true, expires: false, hint: 'Signed and stamped by the authorised signatories' },
   { kind: 'payment_policy_acceptance', label: 'Signed payment policy acceptance form', required: true, expires: false },
   { kind: 'audited_financials', label: 'Latest audited financial statements', required: true, expires: false, hint: 'Balance sheet, income and cash flow statements, last two years' },
   { kind: 'bank_statements', label: 'Bank statements — last three months', required: true, expires: false },

@@ -111,7 +111,7 @@ export async function toScreen(app: AppRow, opts: { withChecks?: boolean } = {})
 
 export async function loadApplication(id: string): Promise<AppRow> {
   const app = await prisma.creditFacilityApplication.findUnique({ where: { id }, include: { documents: true } })
-  if (!app) throw new CreditFacilityError('Credit application not found', 404)
+  if (!app) throw new CreditFacilityError('Credit account application not found', 404)
   return app
 }
 
@@ -139,7 +139,7 @@ export async function createApplication(actor: Actor, input: { clientId: string;
   const client = await prisma.client.findUnique({ where: { id: input.clientId }, select: { id: true, name: true } })
   if (!client) throw new CreditFacilityError('Customer not found', 404)
   const open = await prisma.creditFacilityApplication.findFirst({ where: { clientId: client.id, status: { in: OPEN_STATUSES } }, select: { ref: true } })
-  if (open) throw new CreditFacilityError(`${client.name} already has an open credit application (${open.ref})`, 409)
+  if (open) throw new CreditFacilityError(`${client.name} already has an open credit account application (${open.ref})`, 409)
   const year = new Date().getFullYear()
   for (let attempt = 0; attempt < 5; attempt++) {
     const last = await prisma.creditFacilityApplication.findFirst({ where: { ref: { startsWith: `CA/${year}/` } }, orderBy: { ref: 'desc' }, select: { ref: true } })
@@ -258,7 +258,7 @@ async function notifyCreditAction(app: AppRow, action: CreditAction, actor: Acto
   const actionUrl = `/contacts?id=${app.clientId}&contactTab=credit`
   const base = { entityType: 'credit_application', entityId: app.id, actorUserId: actor.id || null, actionUrl }
   if (action === 'submit') {
-    await publishNotificationEvent({ ...base, eventType: 'credit.application.submitted', roles: ['finance_officer'], title: `Credit application to review — ${who}`, body: `${app.ref}: KES ${Number(app.requestedLimit).toLocaleString('en-KE')} on ${app.requestedTermsDays} days requested.`, idempotencyKey: `credit-submitted:${app.id}:${app.updatedAt.getTime()}` })
+    await publishNotificationEvent({ ...base, eventType: 'credit.application.submitted', roles: ['finance_officer'], title: `Credit account application to review — ${who}`, body: `${app.ref}: KES ${Number(app.requestedLimit).toLocaleString('en-KE')} on ${app.requestedTermsDays} days requested.`, idempotencyKey: `credit-submitted:${app.id}:${app.updatedAt.getTime()}` })
   } else if (action === 'recommend') {
     await publishNotificationEvent({ ...base, eventType: 'credit.application.recommended', roles: ['director'], title: `Credit approval needed — ${who}`, body: `${app.ref}: Finance recommends KES ${Number(app.recommendedLimit).toLocaleString('en-KE')} on ${app.recommendedTermsDays} days.`, idempotencyKey: `credit-recommended:${app.id}:${app.updatedAt.getTime()}` })
   } else if (['approve', 'decline', 'request_info'].includes(action) && app.requestedById) {
@@ -378,20 +378,20 @@ export async function issuePortalLink(actor: Actor, id: string, opts: { email?: 
     const { sendEmail } = await import('@/lib/integrations/email')
     const { readFile } = await import('fs/promises')
     const forms = await Promise.all([
-      ['Deed Technologies Credit Application Form.pdf', 'deed-credit-application-form.pdf'],
+      ['Deed Technologies Credit Account Application Form.pdf', 'deed-credit-application-form.pdf'],
       ['Deed Technologies Payment Policy Acceptance Form.pdf', 'deed-payment-policy-acceptance-form.pdf'],
     ].map(async ([filename, file]) => ({ filename, content: await readFile(path.join(process.cwd(), 'public', 'credit-forms', file)).catch(() => null), contentType: 'application/pdf' })))
     const result = await sendEmail({
       to,
       replyTo: 'finance@deed.co.ke',
-      subject: `Deed Technologies credit application — ${client?.name ?? ''}`.trim(),
+      subject: `Deed Technologies credit account application — ${client?.name ?? ''}`.trim(),
       html: `<p>Dear ${client?.name ?? 'Partner'},</p>
-<p>Thank you for choosing Deed Technologies. To apply for credit terms, please complete the credit application and upload the required documents using this secure link:</p>
+<p>Thank you for choosing Deed Technologies. To apply for credit terms, please complete the credit account application and upload the required documents using this secure link:</p>
 <p><a href="${url}">${url}</a></p>
 <p>The link is valid until ${expires.toISOString().slice(0, 10)}. The signed application form and payment policy acceptance form are attached — please print, sign, stamp and upload them with the other documents.</p>
 <p>All information is treated confidentially and used solely for internal purposes. For queries, contact finance@deed.co.ke.</p>
 <p>Deed Technologies</p>`,
-      text: `Complete your Deed Technologies credit application here: ${url} (valid until ${expires.toISOString().slice(0, 10)}).`,
+      text: `Complete your Deed Technologies credit account application here: ${url} (valid until ${expires.toISOString().slice(0, 10)}).`,
       attachments: forms.filter(f => f.content).map(f => ({ filename: f.filename, content: f.content as Buffer, contentType: f.contentType })),
     })
     if (!result.success) throw new CreditFacilityError(`The link was not emailed: ${result.error ?? 'email failed'}`, 502)

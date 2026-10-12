@@ -165,7 +165,7 @@ export default function CreditApplicationPortal() {
       <main className="flex h-[100dvh] overflow-y-auto items-center justify-center bg-slate-50 p-6">
         <div className={`${card} max-w-md text-center`}>
           <img src="/deed-logo.png" alt="Deed Technologies" className="mx-auto mb-4 h-10" />
-          <h1 className="text-lg font-bold text-slate-900">Credit application</h1>
+          <h1 className="text-lg font-bold text-slate-900">Credit account application</h1>
           <p className="mt-2 text-sm text-slate-600">{error}</p>
           <p className="mt-4 text-sm text-slate-600">Contact <a className="font-semibold text-[#1B2762] underline" href="mailto:finance@deed.co.ke">finance@deed.co.ke</a></p>
         </div>
@@ -183,7 +183,7 @@ export default function CreditApplicationPortal() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <img src="/deed-logo.png" alt="Deed Technologies" className="h-10 w-auto self-start" />
             <div className="sm:text-right">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Credit application</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Credit account application</p>
               <p className="text-lg font-bold text-[#1B2762]">{app.ref}</p>
             </div>
           </div>

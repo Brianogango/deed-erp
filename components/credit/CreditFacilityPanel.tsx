@@ -136,7 +136,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
       setSelectedId(prev => prev && list.some(a => a.id === prev) ? prev : list.find(a => a.id === initialApplicationId)?.id ?? list[0]?.id ?? null)
     } catch (err) {
       setApps([])
-      showToast(`Could not load credit applications: ${err instanceof Error ? err.message : 'error'}`, 'error')
+      showToast(`Could not load credit account applications: ${err instanceof Error ? err.message : 'error'}`, 'error')
     }
   }, [clientId, showToast, initialApplicationId])
 
@@ -181,7 +181,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
     }
   }
 
-  const start = () => run('Credit application started', async () => {
+  const start = () => run('Credit account application started', async () => {
     const body = await call('/api/credit-applications', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clientId, requestedLimit: Number(newLimit) || 0, requestedTermsDays: Number(newTerms) || STANDARD_TERMS_DAYS }),
@@ -293,14 +293,14 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
       })
   }, [detail, r, userId])
 
-  if (apps === null) return <p className="p-4 text-xs text-text-3">Loading credit applications…</p>
+  if (apps === null) return <p className="p-4 text-xs text-text-3">Loading credit account applications…</p>
 
   const standing = apps.find(a => a.status === 'approved' || a.status === 'suspended')
   const hasOpen = apps.some(a => !DECIDED_STATUSES.includes(a.status))
 
   const startSection = !hasOpen && (
         <section className={sectionCls}>
-          <h4 className="text-sm font-extrabold text-text-1">{standing ? 'Apply for a new limit' : 'Start a credit application'}</h4>
+          <h4 className="text-sm font-extrabold text-text-1">{standing ? 'Apply for a new limit' : 'Start a credit account application'}</h4>
           <p className="mt-1 text-xs text-text-3">
             Corporate customers pay on receipt until credit is approved. Credit is offered after at least {MIN_PAID_TRANSACTIONS} paid
             transactions (payment policy); Finance approves up to {fmtKes(FINANCE_APPROVAL_LIMIT)}, a director above that.
@@ -312,7 +312,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
           </div>
           <p className="mt-3 text-[11px] text-text-3">
             Blank forms to send the client:{' '}
-            <a className="contacts-inline-link" href="/credit-forms/deed-credit-application-form.pdf" target="_blank" rel="noreferrer">credit application form</a>{' · '}
+            <a className="contacts-inline-link" href="/credit-forms/deed-credit-application-form.pdf" target="_blank" rel="noreferrer">credit account application form</a>{' · '}
             <a className="contacts-inline-link" href="/credit-forms/deed-payment-policy-acceptance-form.pdf" target="_blank" rel="noreferrer">payment policy acceptance form</a>
           </p>
         </section>
@@ -453,7 +453,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
           {/* Application form */}
           <section className={sectionCls}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-sm font-extrabold text-text-1">Credit application form</h4>
+              <h4 className="text-sm font-extrabold text-text-1">Credit account application form</h4>
               {editableForm && (
                 <div className="flex gap-2">
                   <button type="button" className="btn-secondary text-[11px]" onClick={prefill}>Fill from contact</button>
@@ -461,7 +461,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
                 </div>
               )}
             </div>
-            <p className="mt-1 text-xs text-text-3">As on the Deed Technologies Credit Application Form. Type it in from the client's copy.</p>
+            <p className="mt-1 text-xs text-text-3">As on the Deed Technologies Credit Account Application Form. Type it in from the client's copy.</p>
             <details className="mt-3" open={editableForm}>
               <summary className="cursor-pointer text-xs font-bold text-text-2">Business details</summary>
               <div className="mt-2 grid gap-3 sm:grid-cols-2">

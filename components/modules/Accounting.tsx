@@ -157,7 +157,7 @@ const FINANCE_SECTION_TABS: Record<FinanceSection, Array<{ id: MainTab; label: s
   money_in: [
     { id: 'invoices', label: 'Customer invoices' },
     { id: 'credits', label: 'Customer credits' },
-    { id: 'credit_applications', label: 'Credit applications' },
+    { id: 'credit_applications', label: 'Credit account applications' },
     { id: 'refunds', label: 'Refunds' },
     { id: 'commissions', label: 'Sales commissions' },
   ],
@@ -917,7 +917,7 @@ function AccountingContent() {
       subtitle: `${vendorBills.length} records · ${fmtKes(outstandingAP)} outstanding`,
     },
     credits: { title: 'Customer credits', subtitle: 'Credit balances and applications' },
-    credit_applications: { title: 'Credit applications', subtitle: 'Corporate credit terms: documents, credit check and approval' },
+    credit_applications: { title: 'Credit account applications', subtitle: 'Corporate credit terms: documents, credit check and approval' },
     commissions: { title: 'Salespeople', subtitle: 'Commission statements and payment status' },
     agent_commissions: { title: 'Agent commissions', subtitle: 'Deed Express agents: commissions earned and payouts' },
     refunds: { title: 'Refunds', subtitle: 'Approved customer refund payments' },
