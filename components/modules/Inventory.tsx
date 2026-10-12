@@ -2415,7 +2415,7 @@ function InventoryContent() {
                   exportValue: product => product.latestCost ?? '',
                 },
                 {
-                  key: 'salePrice', label: 'Sale price', priority: 1, width: '130px', align: 'right',
+                  key: 'salePrice', label: 'Sale price', priority: 1, width: '170px', align: 'right',
                   render: product => {
                     const review = priceReviewOf(product)
                     return (
@@ -2536,6 +2536,7 @@ function InventoryContent() {
                 >
                   <DataTable
                     tableId="inventory-catalog"
+                    rowActionsWidth={250}
                     columns={catalogColumns}
                     rows={catalogProducts}
                     rowKey={p => p.id}

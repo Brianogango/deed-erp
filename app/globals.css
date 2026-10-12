@@ -17069,7 +17069,9 @@ button.repair-metric:hover {
 }
 
 .repair-directory-table .data-table-cell-sticky-right {
-  box-shadow: -8px 0 14px rgba(255, 255, 255, 0.9);
+  /* A thin edge, not a white glow: the glow showed as white boxes on
+     striped and hovered rows. */
+  box-shadow: -1px 0 0 #e8eef5;
 }
 
 .repair-directory-table .badge,

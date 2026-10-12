@@ -390,7 +390,7 @@ function ContactsInner() {
 
   const contactColumns: ColumnDef<Contact>[] = [
     {
-      key: 'name', label: 'Contact', priority: 1, width: '1.65fr',
+      key: 'name', label: 'Contact', priority: 1, width: 'minmax(13rem, 1.65fr)',
       render: c => {
         const company = getCompany(c.companyId)
         const secondary = c.type === 'company'

@@ -594,6 +594,9 @@ export default function InventoryProductsPanel({
       >
         <DataTable
           tableId="inventory-products"
+          // Room for Serials, print, + Variant, Edit and Archive side by side —
+          // at the 120px default they spilled over the Reorder column.
+          rowActionsWidth={300}
           columns={columns}
           rows={rows}
           rowKey={r => r.id}

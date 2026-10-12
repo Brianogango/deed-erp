@@ -1000,34 +1000,40 @@ export function Table({
 
 
   const grid = useMemo(() => {
+    // Every column keeps a floor so none can be squeezed to nothing (the
+    // Horizon table padding left "Product" one letter wide). Floors are kept
+    // small so columns still share the card; only when the floors themselves
+    // do not fit does the table scroll sideways.
+    const FLOOR_PX = 80
+    const FLOOR_FLEX_PX = 96
+    const MAX_DECLARED_FLOOR = '14rem'
     return cols
       .filter((col, index) => !visibleColumnKeys || visibleColumnKeys.includes(columnKey(col, index)))
       .map((col) => {
         const originalIndex = cols.indexOf(col)
         const stored = colWidths[originalIndex]
+        const declaredFloor = col.minWidth ? `${col.minWidth}px` : null
         if (
           Number.isFinite(stored)
           && stored >= MIN_PERSISTED_COL_WIDTH
           && stored <= MAX_PERSISTED_COL_WIDTH
         ) {
-          // Cap persisted widths so they can shrink inside the card (no h-scroll).
           const px = Math.max(stored, col.minWidth ?? MIN_PERSISTED_COL_WIDTH)
-          return `minmax(0, ${px}px)`
+          return `minmax(${declaredFloor ?? `${Math.min(px, FLOOR_PX)}px`}, ${px}px)`
         }
-        const width = col.width ?? 'minmax(0, 1fr)'
-        // Fixed px → shrinkable max so dense tables fit without sideways scroll.
+        const width = col.width ?? '1fr'
         if (/^\d+px$/.test(width)) {
-          const px = Number.parseInt(width, 10)
-          return `minmax(0, ${Number.isFinite(px) ? px : 96}px)`
+          const px = Number.parseInt(width, 10) || 96
+          return `minmax(${declaredFloor ?? `${Math.min(px, FLOOR_PX)}px`}, ${px}px)`
         }
-        if (/^\d+fr$/.test(width)) {
-          return `minmax(0, ${width})`
+        if (/^[\d.]+fr$/.test(width)) {
+          return `minmax(${declaredFloor ?? `${FLOOR_FLEX_PX}px`}, ${width})`
         }
-        // Prefer zero-floor minmax so columns share space instead of overflowing.
         if (width.startsWith('minmax(')) {
+          // Keep the column's own minimum (capped), or a modest floor when it was 0.
           return width
-            .replace(/minmax\(\s*[\d.]+rem\s*,/g, 'minmax(0,')
-            .replace(/minmax\(\s*[\d.]+px\s*,/g, 'minmax(0,')
+            .replace(/minmax\(\s*0(px|rem)?\s*,/, `minmax(${declaredFloor ?? `${FLOOR_PX}px`},`)
+            .replace(/minmax\(\s*([\d.]+)rem\s*,/, (_m, rem) => `minmax(min(${rem}rem, ${MAX_DECLARED_FLOOR}),`)
         }
         return width
       })
