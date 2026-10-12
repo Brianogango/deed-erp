@@ -90,6 +90,11 @@
   .table-scroll.responsive-table .table-head > [role="columnheader"][style*="right"] {
     justify-content: flex-end;
   }
+  /* On a right-aligned heading the sort mark goes before the label, so the
+     label's last letter lines up with the figures' last digit below it. */
+  .table-scroll.responsive-table .table-head > [role="columnheader"][style*="right"].sort-col::after {
+    order: -1;
+  }
   /* Buttons wrap onto a second line inside the column instead of growing
      the cell leftwards over the neighbouring columns. */
   .table-scroll.responsive-table .table-row > .data-table-actions {

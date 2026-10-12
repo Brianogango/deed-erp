@@ -901,6 +901,8 @@ export function Table({
     width?: string
     minWidth?: number
     sticky?: 'left' | 'right'
+    /** Header follows its column's cells (figures right-aligned → heading too). */
+    align?: 'left' | 'center' | 'right'
     sortable?: boolean
     sortDirection?: 'asc' | 'desc' | null
     onSortClick?: () => void
@@ -1233,6 +1235,9 @@ export function Table({
               }
               tabIndex={c.sortable ? 0 : undefined}
               className={`relative pr-3 ${stickyClass} ${sortClass}`.trim()}
+              style={c.align && c.align !== 'left'
+                ? { textAlign: c.align, justifyContent: c.align === 'right' ? 'flex-end' : 'center' }
+                : undefined}
               onClick={c.sortable && c.onSortClick ? (event) => {
                 // Don't trigger sort when starting a column resize.
                 if ((event.target as HTMLElement).closest('button')) return

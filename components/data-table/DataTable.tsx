@@ -511,6 +511,7 @@ export default function DataTable<T>({
                     : c.width,
                   minWidth: c.key.toLowerCase().includes('status') ? Math.max(140, c.minWidth ?? 0) : c.minWidth,
                   sticky: c.key.toLowerCase().includes('status') ? ('right' as const) : undefined,
+                  align: c.align,
                   sortable: isColumnSortable(c),
                   sortDirection: sort?.key === c.key ? sort.direction : null,
                   onSortClick: isColumnSortable(c)
@@ -521,7 +522,7 @@ export default function DataTable<T>({
                       }
                     : undefined,
                 })),
-                ...(rowActions ? [{ label: 'Actions', width: `${rowActionsWidth}px`, minWidth: rowActionsWidth, sticky: 'right' as const }] : []),
+                ...(rowActions ? [{ label: 'Actions', width: `${rowActionsWidth}px`, minWidth: rowActionsWidth, sticky: 'right' as const, align: 'right' as const }] : []),
               ]}
               isLoading={isLoading}
               error={error}
