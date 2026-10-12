@@ -14,6 +14,8 @@ export interface ColumnDef<T> {
   priority: ColumnPriority
   /** Grid track width, passed straight through to the existing Table()'s `cols[].width`. */
   width?: string
+  /** Smallest width in px the column may shrink to (e.g. amounts). */
+  minWidth?: number
   align?: 'left' | 'right' | 'center'
   /**
    * When true (default), the column header is clickable for client-side sort.

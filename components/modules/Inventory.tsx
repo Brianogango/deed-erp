@@ -2398,12 +2398,12 @@ function InventoryContent() {
                   exportValue: product => catalogQty(product),
                 },
                 {
-                  key: 'cost', label: 'Avg cost', priority: 2, width: '110px', align: 'right',
+                  key: 'cost', label: 'Avg cost', priority: 2, width: '110px', minWidth: 88, align: 'right',
                   render: product => <span className="text-xs font-mono text-text-3 tabular-nums" title="Average cost of the stock on hand — what the accounts use">{fmtKes(product.costPrice)}</span>,
                   exportValue: product => product.costPrice,
                 },
                 {
-                  key: 'latestCost', label: 'Latest cost', priority: 2, width: '110px', align: 'right',
+                  key: 'latestCost', label: 'Latest cost', priority: 2, width: '110px', minWidth: 88, align: 'right',
                   render: product => Number(product.latestCost) > 0 ? (
                     <span
                       className={`text-xs font-mono tabular-nums ${Number(product.latestCost) > Number(product.costPrice) ? 'text-amber-700 font-bold' : 'text-text-3'}`}
@@ -2415,18 +2415,18 @@ function InventoryContent() {
                   exportValue: product => product.latestCost ?? '',
                 },
                 {
-                  key: 'salePrice', label: 'Sale price', priority: 1, width: '150px', align: 'right',
+                  key: 'salePrice', label: 'Sale price', priority: 1, width: '124px', minWidth: 112, align: 'right',
                   render: product => {
                     const review = priceReviewOf(product)
                     return (
                       <span className="inline-flex items-center gap-1.5 justify-end">
                         {review.needsReview && (
                           <span
-                            className="text-[9px] font-bold uppercase rounded px-1 py-0.5 bg-amber-100 text-amber-800"
-                            title={`${review.reason}${review.suggested != null ? ` — suggested ${fmtKes(review.suggested)}` : ''}`}
-                          >
-                            Review
-                          </span>
+                            className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
+                            role="img"
+                            aria-label="Needs price review"
+                            title={`Needs price review: ${review.reason}${review.suggested != null ? ` — suggested ${fmtKes(review.suggested)}` : ''}`}
+                          />
                         )}
                         <span className="text-xs font-mono font-extrabold text-emerald-700 tabular-nums">{fmtKes(product.salePrice)}</span>
                       </span>

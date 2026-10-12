@@ -509,7 +509,7 @@ export default function DataTable<T>({
                   width: c.key.toLowerCase().includes('status')
                     ? (c.width?.endsWith('px') && Number.parseInt(c.width, 10) > 140 ? c.width : '140px')
                     : c.width,
-                  minWidth: c.key.toLowerCase().includes('status') ? 140 : undefined,
+                  minWidth: c.key.toLowerCase().includes('status') ? Math.max(140, c.minWidth ?? 0) : c.minWidth,
                   sticky: c.key.toLowerCase().includes('status') ? ('right' as const) : undefined,
                   sortable: isColumnSortable(c),
                   sortDirection: sort?.key === c.key ? sort.direction : null,
