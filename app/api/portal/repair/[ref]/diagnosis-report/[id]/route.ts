@@ -3,6 +3,7 @@ import path from 'path'
 import { readFile } from 'fs/promises'
 import { loadAppState } from '@/lib/server-store'
 import type { RepairOrder } from '@/lib/repair-types'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 type DiagnosisReportMeta = {
   id: string
@@ -42,7 +43,7 @@ async function loadReports(ref: string): Promise<DiagnosisReportMeta[]> {
  * base64 field on the repair record for reports uploaded before reports
  * were externalized.
  */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ ref: string; id: string }> }) {
+async function handleGET(_req: NextRequest, { params }: { params: Promise<{ ref: string; id: string }> }) {
   const resolvedParams = await params
   try {
     const reports = await loadReports(resolvedParams.ref)
@@ -87,3 +88,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ref
     return NextResponse.json({ error: 'Failed to load diagnosis report' }, { status: 500 })
   }
 }
+
+export const GET = guardPortalRoute('docs', 600, handleGET)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyQuoteToken } from '@/lib/quote-token'
 import { normalizeQuoteForClient } from '@/lib/quote-normalization'
 import { findPortalDocument } from '@/lib/portal-document-lookup'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic'
  * Public endpoint — customers view their quote (CRM Quote or Sales module
  * SaleOrder — see lib/portal-document-lookup.ts) via a signed link.
  */
-export async function GET(
+async function handleGET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -33,3 +34,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to load quote' }, { status: 500 })
   }
 }
+
+export const GET = guardPortalRoute('quote-view', 300, handleGET)

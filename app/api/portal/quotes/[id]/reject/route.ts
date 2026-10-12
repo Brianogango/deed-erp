@@ -7,6 +7,7 @@ import {
   QUOTE_ACCEPTABLE_STATUSES,
   SALE_ORDER_ACCEPTABLE_STATUSES,
 } from '@/lib/portal-document-lookup'
+import { cleanPortalText, guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 /**
  * POST /api/portal/quotes/[id]/reject?token=<signed-token>
@@ -15,7 +16,7 @@ import {
  * document type — a customer who wanted to decline had no online way to
  * say so, only Accept existed.
  */
-export async function POST(
+async function handlePOST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -29,7 +30,7 @@ export async function POST(
     }
 
     const body = await request.json().catch(() => ({} as { reason?: string }))
-    const reason = typeof body?.reason === 'string' ? body.reason.trim().slice(0, 500) : ''
+    const reason = cleanPortalText(body?.reason, 500, true)
 
     const found = await findPortalDocument(quoteId)
     if (!found) {
@@ -81,3 +82,5 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to decline quote' }, { status: 500 })
   }
 }
+
+export const POST = guardPortalRoute('quote-decision', 20, handlePOST)

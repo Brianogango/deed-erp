@@ -8,14 +8,10 @@ import {
   getMessagesStored,
   markMessagesReadStored,
 } from '@/lib/portal-repair-messages'
+import { cleanPortalText, clientIp, guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
-function clientIp(req: NextRequest) {
-  return req.headers.get('x-forwarded-for')?.split(',')[0].trim()
-    ?? req.headers.get('x-real-ip')
-    ?? 'unknown'
-}
 
-export async function GET(
+async function handleGET(
   req: NextRequest,
   { params }: { params: Promise<{ ref: string }> }
 ) {
@@ -29,7 +25,7 @@ export async function GET(
   return NextResponse.json({ messages: await getMessagesStored(ref) })
 }
 
-export async function POST(
+async function handlePOST(
   req: NextRequest,
   { params }: { params: Promise<{ ref: string }> }
 ) {
@@ -50,7 +46,7 @@ export async function POST(
   }
 
   const body = await req.json().catch(() => ({})) as { sender?: 'customer' | 'staff'; senderName?: string; text?: string }
-  const text = String(body.text ?? '').trim()
+  const text = cleanPortalText(body.text, MAX_MESSAGE_LENGTH + 1, true)
   if (!text) {
     return NextResponse.json({ error: 'Message text is required.' }, { status: 400 })
   }
@@ -60,7 +56,7 @@ export async function POST(
 
   // Only authenticated staff can post as 'staff' — unauthenticated callers are customers
   let sender: 'customer' | 'staff' = 'customer'
-  let senderName = (body.senderName ?? '').trim().slice(0, 120) || 'Customer'
+  let senderName = cleanPortalText(body.senderName, 120) || 'Customer'
 
   if (body.sender === 'staff') {
     const session = await getServerSession()
@@ -80,3 +76,6 @@ export async function POST(
   })
   return NextResponse.json({ message }, { status: 201 })
 }
+
+export const GET = guardPortalRoute('messages-read', 1500, handleGET)
+export const POST = guardPortalRoute('messages-send', 60, handlePOST)

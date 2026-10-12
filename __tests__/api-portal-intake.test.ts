@@ -88,7 +88,7 @@ describe('POST /api/portal/intake — rate limiting', () => {
   it('includes error message on 429', async () => {
     mockCheckRateLimit.mockResolvedValue(rlExceeded())
     const body = await (await POST(makeReq(validBody))).json()
-    expect(body.error).toContain('Too many submissions')
+    expect(body.error).toMatch(/Too many (submissions|requests)/)
   })
 
   it('passes IP from x-forwarded-for to checkRateLimit', async () => {
@@ -251,5 +251,30 @@ describe('POST /api/portal/intake — success', () => {
     expect(saved[0].ref).toBe('REP/0001')
     expect(saved[1].ref).toBe('REP/0000')
     expect(mockGetNextRepairRef).toHaveBeenCalledWith(['REP/0000'])
+  })
+})
+
+describe('POST /api/portal/intake — junk and bots', () => {
+  it('refuses a submission that filled the hidden trap field', async () => {
+    const res = await POST(makeReq({ ...validBody, companyFax: '123' }))
+    expect(res.status).toBe(400)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('refuses a phone number that is not a phone number', async () => {
+    expect((await POST(makeReq({ ...validBody, customerPhone: 'call me maybe' }))).status).toBe(422)
+    expect((await POST(makeReq({ ...validBody, customerPhone: '12' }))).status).toBe(422)
+  })
+
+  it('refuses a malformed email but accepts none', async () => {
+    expect((await POST(makeReq({ ...validBody, customerEmail: 'not-an-email' }))).status).toBe(422)
+    expect((await POST(makeReq({ ...validBody, customerEmail: '' }))).status).toBe(201)
+  })
+
+  it('stores names and descriptions as plain text', async () => {
+    await POST(makeReq({ ...validBody, customerName: 'Alice <img src=x onerror=alert(1)>', issueDescription: 'Line 1\nLine 2\u0007' }))
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_repairs_v2)
+    expect(saved[0].customerName).toBe('Alice img src=x onerror=alert(1)')
+    expect(saved[0].issueDescription).toBe('Line 1\nLine 2')
   })
 })

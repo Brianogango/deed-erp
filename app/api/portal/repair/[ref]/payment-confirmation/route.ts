@@ -5,6 +5,7 @@ import { saveStoreKeys, loadAppState, loadAppStateForWrite, withAppStateKeyLock 
 import { checkRateLimit } from '@/lib/rate-limit'
 import { phoneMatches, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 import { findRepairByPortalRef } from '@/lib/repair-ref'
+import { cleanPortalText, clientIp, guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 function parseAmount(text: string): number | null {
   const patterns = [
@@ -46,9 +47,9 @@ function paymentProofKey(ref: string) {
   return `repair_payment_proof_${ref.toUpperCase().replace(/\//g, '_')}`
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ ref: string }> }) {
+async function handlePOST(req: NextRequest, { params }: { params: Promise<{ ref: string }> }) {
   const resolvedParams = await params
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
+  const ip = clientIp(req)
   const rl = await checkRateLimit(`portal-payment:${ip}`, 12, 3600)
   if (!rl.success) return NextResponse.json({ error: 'Too many payment confirmation attempts. Please wait before trying again.' }, { status: 429 })
 
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ref
   if (!repair) return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
 
   const form = await req.formData()
-  const confirmationText = String(form.get('confirmationText') ?? '').normalize('NFKC').trim().slice(0, 5_000)
+  const confirmationText = cleanPortalText(form.get('confirmationText'), 5_000, true)
   const screenshot = form.get('screenshot')
   if (!confirmationText && !(screenshot instanceof File && screenshot.size > 0)) {
     return NextResponse.json({ error: 'Paste the M-PESA confirmation message or upload a screenshot.' }, { status: 400 })
@@ -135,3 +136,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ref
   const updated = await lookupRepair(ref)
   return NextResponse.json({ repair: updated, status: 'pending_review', amountMatches, parsedAmount, invoiceTotal, receiptNumber: mpesaCode ?? undefined }, { status: 200 })
 }
+
+export const POST = guardPortalRoute('payment', 30, handlePOST)

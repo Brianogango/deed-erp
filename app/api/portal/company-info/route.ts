@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { loadAppState } from '@/lib/server-store'
 import { DEFAULT_COMPANY_SETTINGS } from '@/lib/store'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/portal/company-info
  * Public — returns display-only company contact info for the customer portal.
  */
-export async function GET() {
+async function handleGET() {
   try {
     const state = await loadAppState(['deed_companySettings'])
     const saved = state['deed_companySettings'] as Record<string, unknown> | undefined
@@ -36,3 +37,5 @@ export async function GET() {
     })
   }
 }
+
+export const GET = guardPortalRoute('company-info', 600, handleGET)

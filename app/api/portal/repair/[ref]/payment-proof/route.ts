@@ -3,6 +3,7 @@ import { loadAppState } from '@/lib/server-store'
 import { getServerSession } from '@/lib/auth/server'
 import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 import { findRepairByPortalRef } from '@/lib/repair-ref'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,7 @@ function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } 
  * Screenshots are stored under their own app-state key so the repairs blob
  * stays small; legacy repairs with an inline data URL are still supported.
  */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ ref: string }> }) {
+async function handleGET(_req: NextRequest, { params }: { params: Promise<{ ref: string }> }) {
   const resolvedParams = await params
   try {
     const ref = decodeURIComponent(resolvedParams.ref)
@@ -75,3 +76,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ref
     return NextResponse.json({ error: 'Failed to load payment proof.' }, { status: 500 })
   }
 }
+
+export const GET = guardPortalRoute('docs', 600, handleGET)

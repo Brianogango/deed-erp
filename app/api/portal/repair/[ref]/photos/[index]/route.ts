@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { loadAppState } from '@/lib/server-store'
 import type { RepairOrder } from '@/lib/repair-types'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 type RepairPhoto = { url?: string; name?: string; date?: string; uploaded_at?: string }
 
@@ -58,7 +59,7 @@ async function loadPhotos(ref: string): Promise<RepairPhoto[]> {
   return Array.isArray(repair?.issuePhotos) ? repair.issuePhotos as RepairPhoto[] : []
 }
 
-export async function GET(
+async function handleGET(
   req: NextRequest,
   { params }: { params: Promise<{ ref: string; index: string }> }
 ) {
@@ -102,3 +103,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to load photo' }, { status: 500 })
   }
 }
+
+export const GET = guardPortalRoute('photos', 1500, handleGET)

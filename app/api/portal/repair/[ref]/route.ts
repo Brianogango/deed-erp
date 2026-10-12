@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { lookupRepair } from '@/lib/portal-repair-server'
 import { maskPhone } from '@/lib/portal-verify'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -40,7 +41,7 @@ function maskEmail(email: string | null | undefined): string {
   return `${head}${'*'.repeat(Math.max(2, at - head.length))}${raw.slice(at)}`
 }
 
-export async function GET(
+async function handleGET(
   _req: NextRequest,
   { params }: { params: Promise<{ ref: string }> }
 ) {
@@ -57,3 +58,5 @@ export async function GET(
 
   return NextResponse.json({ repair: stripInlinePhotoPayloads(repair) }, { status: 200 })
 }
+
+export const GET = guardPortalRoute('repair-view', 600, handleGET)

@@ -8,6 +8,7 @@ import {
   QUOTE_ACCEPTABLE_STATUSES,
   SALE_ORDER_ACCEPTABLE_STATUSES,
 } from '@/lib/portal-document-lookup'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 /**
  * POST /api/portal/quotes/[id]/accept?token=<signed-token>
@@ -15,7 +16,7 @@ import {
  * for both a CRM Quote and a Sales module SaleOrder (see
  * lib/portal-document-lookup.ts).
  */
-export async function POST(
+async function handlePOST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -93,3 +94,5 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to accept quote' }, { status: 500 })
   }
 }
+
+export const POST = guardPortalRoute('quote-decision', 20, handlePOST)

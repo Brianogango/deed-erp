@@ -30,6 +30,8 @@ export default function NewRepairPortalPage() {
     repairPath: '',
     deviceType: '',
     liabilityWaiverAccepted: false,
+    // Left empty by people; spam bots fill every field (the server refuses those).
+    companyFax: '',
   })
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<{ ref: string; trackingUrl: string } | null>(null)
@@ -106,6 +108,9 @@ export default function NewRepairPortalPage() {
         </div>
 
         <form onSubmit={submit} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+          <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+            <label>Company fax<input type="text" tabIndex={-1} autoComplete="off" value={form.companyFax} onChange={e => update('companyFax', e.target.value)} /></label>
+          </div>
           {error && (
             <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-700 text-sm font-bold flex items-center gap-3">
               <Fa icon={faInfoCircle} /> {error}

@@ -7,6 +7,7 @@ import { getServerSession } from '@/lib/auth/server'
 import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 import { findRepairByPortalRef } from '@/lib/repair-ref'
 import { repairQuoteDocument } from '@/lib/portal/repair-quote-document'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic'
  * The repair quote as a PDF, like the invoice and receipt downloads. Same
  * gate: a staff session or the phone number registered on the repair.
  */
-export async function GET(
+async function handleGET(
   req: NextRequest,
   { params }: { params: Promise<{ ref: string }> }
 ) {
@@ -89,3 +90,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to generate quote PDF.' }, { status: 500 })
   }
 }
+
+export const GET = guardPortalRoute('docs', 600, handleGET)

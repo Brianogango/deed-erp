@@ -7,18 +7,19 @@ import type { RepairOrder } from '@/lib/store'
 import { buildRepairLinkMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
 import { DIRECT_REPAIR_WAIVER_TEXT, normalizeRepairPath } from '@/lib/repair-path'
 import { normalizeDeviceTier } from '@/lib/diagnosis-fee'
+import { cleanPortalText, clientIp, guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
 
-function clean(value: unknown, max = 2_000): string {
-  return String(value ?? '').normalize('NFKC').trim().slice(0, max)
-}
+// Plain text only: no HTML brackets or control characters (line breaks kept
+// in the issue description), capped in length.
+const clean = (value: unknown, max = 2_000, multiline = false): string => cleanPortalText(value, max, multiline)
 
 // Official ticket numbers are minted server-side so they stay unique and unguessable.
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   // Rate limit: 5 submissions per IP per hour
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
+  const ip = clientIp(req)
   const rl = await checkRateLimit(`portal-intake:${ip}`, 5, 3600)
   if (!rl.success) {
     return NextResponse.json(
@@ -34,10 +35,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 })
   }
 
+  // Hidden trap field: people never see it, spam bots fill it in.
+  if (clean(body.companyFax, 200)) return NextResponse.json({ error: 'Unable to submit repair request.' }, { status: 400 })
+
   const customerName = clean(body.customerName, 200)
   const customerPhone = clean(body.customerPhone, 50)
   const productName = clean(body.productName, 240)
-  const issueDescription = clean(body.issueDescription, 10_000)
+  const issueDescription = clean(body.issueDescription, 10_000, true)
   const repairPath = normalizeRepairPath(body.repairPath)
   const liabilityWaiverAccepted = body.liabilityWaiverAccepted === true
   // Device tier is staff-picked (not customer portal). Portal leaves fee pending for Diagnosis First.
@@ -45,6 +49,13 @@ export async function POST(req: NextRequest) {
 
   if (!customerName) return NextResponse.json({ error: 'Customer name is required.' }, { status: 422 })
   if (!customerPhone) return NextResponse.json({ error: 'Customer phone is required.' }, { status: 422 })
+  if (!/^[0-9+()\-\s]{7,30}$/.test(customerPhone) || customerPhone.replace(/\D/g, '').length < 9 || customerPhone.replace(/\D/g, '').length > 15) {
+    return NextResponse.json({ error: 'Enter a valid phone number.' }, { status: 422 })
+  }
+  const customerEmailRaw = clean(body.customerEmail, 254)
+  if (customerEmailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(customerEmailRaw)) {
+    return NextResponse.json({ error: 'Enter a valid email address, or leave it empty.' }, { status: 422 })
+  }
   if (!productName) return NextResponse.json({ error: 'Device/product name is required.' }, { status: 422 })
   if (!issueDescription) return NextResponse.json({ error: 'Issue description is required.' }, { status: 422 })
   if (repairPath === 'direct_repair' && !liabilityWaiverAccepted) {
@@ -75,7 +86,7 @@ export async function POST(req: NextRequest) {
     customerId: '',
     customerName,
     customerPhone,
-    customerEmail: clean(body.customerEmail, 254) || undefined,
+    customerEmail: customerEmailRaw || undefined,
     productId: '',
     productName,
     serialNumber: clean(body.serialNumber, 160),
@@ -83,7 +94,7 @@ export async function POST(req: NextRequest) {
     priority: ['low', 'normal', 'high', 'urgent'].includes(clean(body.priority)) ? clean(body.priority) as RepairOrder['priority'] : 'normal',
     intakeChannel: 'website',
     intakeDate: now,
-    intakeNotes: clean(body.intakeNotes, 5_000),
+    intakeNotes: clean(body.intakeNotes, 5_000, true),
     issueDescription,
     accessories,
     repairPath,
@@ -138,3 +149,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ repair, trackingUrl: relativeTrackingUrl, linkDelivery }, { status: 201 })
 }
+
+export const POST = guardPortalRoute('intake', 20, handlePOST)

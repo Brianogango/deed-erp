@@ -12,6 +12,7 @@ import { isUUID } from '@/lib/utils'
 import { findRepairByPortalRef } from '@/lib/repair-ref'
 import { invoiceReachedLedger, reissueAfterClientDecision, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
 import { publishNotificationEvent } from '@/lib/notifications/service'
+import { cleanPortalText, clientIp, guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 type ItemDecision = { lineId: string; decision: 'approved' | 'declined' | 'deferred' }
 
@@ -19,12 +20,12 @@ function lineKey(line: any, index: number) {
   return String(line?.id ?? index)
 }
 
-export async function POST(
+async function handlePOST(
   req: NextRequest,
   { params }: { params: Promise<{ ref: string }> }
 ) {
   const resolvedParams = await params
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
+  const ip = clientIp(req)
   const rl = await checkRateLimit(`portal-approve:${ip}`, 10, 3600)
   if (!rl.success) {
     return NextResponse.json(
@@ -73,9 +74,9 @@ export async function POST(
 
   const decisionMap = new Map<string, 'approved' | 'declined' | 'deferred'>()
   if (Array.isArray(body.itemDecisions) && body.itemDecisions.length > 0) {
-    for (const d of body.itemDecisions) {
+    for (const d of body.itemDecisions.slice(0, 500)) {
       if (!d?.lineId || !['approved', 'declined', 'deferred'].includes(d.decision)) continue
-      decisionMap.set(String(d.lineId), d.decision)
+      decisionMap.set(String(d.lineId).slice(0, 200), d.decision)
     }
   } else if (typeof body.approved === 'boolean') {
     originalLines.forEach((line: any, i: number) => decisionMap.set(lineKey(line, i), body.approved ? 'approved' : 'declined'))
@@ -94,7 +95,7 @@ export async function POST(
   const approvedTax = roundMoney(approvedSubtotal * taxRate)
   const approvedTotal = roundMoney(approvedSubtotal + approvedTax)
   const partiallyApproved = approved && approvedLines.length < originalLines.length
-  const reason = body.reason?.trim() || undefined
+  const reason = cleanPortalText(body.reason, 1_000, true) || undefined
   const decision = { approved, reason, date, itemDecisions: linesWithDecisions.map((line: any, i: number) => ({ lineId: lineKey(line, i), decision: line.decision })), approvedTotal }
 
   approvalDecisions.set(ref.toUpperCase(), decision)
@@ -368,3 +369,5 @@ export async function POST(
     } : {}),
   }, { status: 200 })
 }
+
+export const POST = guardPortalRoute('approve', 30, handlePOST)

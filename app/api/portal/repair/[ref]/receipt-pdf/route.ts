@@ -7,10 +7,11 @@ import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
 import { getServerSession } from '@/lib/auth/server'
 import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 import { findRepairByPortalRef } from '@/lib/repair-ref'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(
+async function handleGET(
   _req: NextRequest,
   { params }: { params: Promise<{ ref: string }> }
 ) {
@@ -113,3 +114,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to generate receipt PDF.' }, { status: 500 })
   }
 }
+
+export const GET = guardPortalRoute('docs', 600, handleGET)

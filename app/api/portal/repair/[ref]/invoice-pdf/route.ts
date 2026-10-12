@@ -8,6 +8,7 @@ import { customerFacingNotes } from '@/lib/customer-facing-notes'
 import { getServerSession } from '@/lib/auth/server'
 import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 import { findRepairByPortalRef } from '@/lib/repair-ref'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic'
  * Public — generates and streams the invoice PDF for a completed repair.
  * Only available once the repair has a linked invoice.
  */
-export async function GET(
+async function handleGET(
   _req: NextRequest,
   { params }: { params: Promise<{ ref: string }> }
 ) {
@@ -130,3 +131,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to generate invoice PDF.' }, { status: 500 })
   }
 }
+
+export const GET = guardPortalRoute('docs', 600, handleGET)

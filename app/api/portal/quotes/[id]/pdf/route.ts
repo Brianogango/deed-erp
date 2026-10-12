@@ -6,6 +6,7 @@ import { normalizeQuoteForClient } from '@/lib/quote-normalization'
 import { findPortalDocument } from '@/lib/portal-document-lookup'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
 import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
+import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/portal/quotes/[id]/pdf?token=<signed-token>
  * Public — generates and streams a PDF of the customer's quote.
  */
-export async function GET(
+async function handleGET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -102,3 +103,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 })
   }
 }
+
+export const GET = guardPortalRoute('docs', 600, handleGET)
