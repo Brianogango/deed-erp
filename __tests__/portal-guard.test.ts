@@ -12,14 +12,14 @@ describe('guardPortalRoute', () => {
   beforeEach(() => resetPortalFailures())
 
   it('blocks an address that keeps asking for repairs that do not exist', async () => {
-    const route = guardPortalRoute('t-view', 1000, async () => new Response(null, { status: 404 }))
+    const route = guardPortalRoute('t-view', 1000, async (_req: NextRequest, _ctx: object) => new Response(null, { status: 404 }))
     for (let i = 0; i < FAILURE_LIMIT; i++) expect((await route(req(`/api/portal/repair/REP-${i}`, '41.1.1.1'), {})).status).toBe(404)
     expect((await route(req('/api/portal/repair/REP-X', '41.1.1.1'), {})).status).toBe(429)
     expect((await route(req('/api/portal/repair/REP-X', '41.1.1.2'), {})).status).toBe(404)
   })
 
   it('counts wrong phone numbers, not plain page views', async () => {
-    const route = guardPortalRoute('t-docs', 1000, async () => new Response(null, { status: 403 }))
+    const route = guardPortalRoute('t-docs', 1000, async (_req: NextRequest, _ctx: object) => new Response(null, { status: 403 }))
     // Opening a document without a phone is not a guess.
     for (let i = 0; i < FAILURE_LIMIT + 2; i++) expect((await route(req('/api/portal/repair/REP-1/invoice-pdf', '41.2.2.2'), {})).status).toBe(403)
     for (let i = 0; i < FAILURE_LIMIT; i++) expect((await route(req(`/api/portal/repair/REP-1/invoice-pdf?phone=07000000${i}`, '41.2.2.3'), {})).status).toBe(403)
@@ -27,7 +27,7 @@ describe('guardPortalRoute', () => {
   })
 
   it('locks phone tries on one repair however many addresses guess', async () => {
-    const route = guardPortalRoute('t-approve', 1000, async () => new Response(null, { status: 403 }))
+    const route = guardPortalRoute('t-approve', 1000, async (_req: NextRequest, _ctx: object) => new Response(null, { status: 403 }))
     for (let i = 0; i < RECORD_FAILURE_LIMIT; i++) await route(req('/api/portal/repair/REP-7/approve', `41.3.${i}.1`, 'POST'), {})
     expect((await route(req('/api/portal/repair/REP-7/approve', '41.3.200.1', 'POST'), {})).status).toBe(429)
     // Another repair is unaffected.

@@ -74,8 +74,11 @@ const triesPhone = (req: NextRequest) => req.method !== 'GET' || new URL(req.url
  * hour for this kind of request. A 404 (no such repair / quote) or a 403
  * after a phone was tried counts as a failed guess.
  */
-export function guardPortalRoute<C>(bucket: string, limit: number, handler: (req: NextRequest, ctx: C) => Promise<Response> | Response) {
-  return async (req: NextRequest, ctx?: C): Promise<Response> => {
+// The wrapped route keeps its handler's exact signature: Next.js checks that a
+// route with [params] takes them as a required second argument.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function guardPortalRoute<H extends (req: NextRequest, ...rest: any[]) => Promise<Response> | Response>(bucket: string, limit: number, handler: H): H {
+  const guarded = async (req: NextRequest, ...rest: unknown[]): Promise<Response> => {
     const ip = clientIp(req)
     const record = recordKey(req)
     const phoneTry = triesPhone(req)
@@ -83,7 +86,7 @@ export function guardPortalRoute<C>(bucket: string, limit: number, handler: (req
     if (until) return tooManyRequests(until)
     const rl = await checkRateLimit(`portal-${bucket}:${ip}`, limit, 3600)
     if (!rl.success) return tooManyRequests(rl.resetAt)
-    const res = await handler(req, ctx as C)
+    const res = await handler(req, ...rest)
     if (res.status === 404) recordFailure(`ip:${ip}`, FAILURE_LIMIT)
     else if (res.status === 403 && phoneTry) {
       recordFailure(`ip:${ip}`, FAILURE_LIMIT)
@@ -91,6 +94,7 @@ export function guardPortalRoute<C>(bucket: string, limit: number, handler: (req
     }
     return res
   }
+  return guarded as unknown as H
 }
 
 /**
