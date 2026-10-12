@@ -28,7 +28,8 @@ export async function GET(
     const repairs = (state['deed_repairs_v2'] ?? []) as any[]
     const invoices = (state['deed_invoices'] ?? []) as any[]
     const savedSettings = state['deed_companySettings'] as Record<string, unknown> | undefined
-    const savedBankAccounts = (state['deed_bankAccounts'] ?? DEFAULT_BANK_ACCOUNTS) as any[]
+    const storedBanks = state['deed_bankAccounts']
+    const savedBankAccounts = (Array.isArray(storedBanks) && storedBanks.length ? storedBanks : DEFAULT_BANK_ACCOUNTS) as any[]
 
     const co = { ...DEFAULT_COMPANY_SETTINGS, ...(savedSettings ?? {}) }
     const logo = await loadLogoForPdfServer(typeof co.logoUrl === 'string' ? co.logoUrl : null)
@@ -52,7 +53,7 @@ export async function GET(
 
     const invoice = findRepairLinkedInvoice(invoices, repair)
     if (!invoice) {
-      return NextResponse.json({ error: 'No invoice found for this repair.' }, { status: 404 })
+      return NextResponse.json({ error: 'The invoice for this repair is not ready yet. The quote above shows the amount to pay — or ask us to send the invoice.' }, { status: 404 })
     }
 
     const lines = (invoice.lines ?? []) as any[]

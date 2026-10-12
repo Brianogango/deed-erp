@@ -1,5 +1,6 @@
 'use client'
 
+import PortalPdfButton from '@/components/portal/PortalPdfButton'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import type { PortalRepair } from '@/lib/portal-repairs'
@@ -75,8 +76,10 @@ const STEP_ORDER    = STEPS.map(s => s.key)
 const TERMINAL_PASS = ['ready','invoiced','verified_released','delivered','collected','closed']
 const TERMINAL_FAIL = ['declined','unrepairable','returned','cancelled']
 
-function fmtKes(n: number) {
-  return 'KES ' + n.toLocaleString('en-KE', { minimumFractionDigits: 2 })
+function fmtKes(n: number | null | undefined) {
+  // A line saved without an amount crashed the whole customer page.
+  const value = Number(n)
+  return 'KES ' + (Number.isFinite(value) ? value : 0).toLocaleString('en-KE', { minimumFractionDigits: 2 })
 }
 function fmtDate(s?: string) {
   if (!s) return '—'
@@ -595,13 +598,9 @@ export default function RepairPortalPage() {
                     style={{ width: '100%', marginBottom: 10, background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none' }}
                   />
                 )}
-                <a
-                  href={`/api/portal/repair/${encodeURIComponent(ref)}/quote-pdf?phone=${encodeURIComponent(verifyPhone.trim())}`}
-                  download
-                  style={{ display: 'block', textAlign: 'center', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}
-                >
+                <PortalPdfButton repairRef={ref} kind="quote-pdf" phone={verifyPhone} filename={`quote-${String(ref).replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`} style={{ display: 'block', textAlign: 'center', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>
                   Download Quote PDF
-                </a>
+                </PortalPdfButton>
               </div>
             </div>
           </Card>
@@ -620,36 +619,28 @@ export default function RepairPortalPage() {
                     <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Receipt No.</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{repair.paymentReceiptNumber ?? 'Confirmed'}</p></div>
                     <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount Paid</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{fmtKes(amountPaid > 0 ? amountPaid : invoiceOrQuoteTotal)}</p></div>
                   </div>
-                  <a
-                    href={`/api/portal/repair/${encodeURIComponent(ref)}/receipt-pdf?phone=${encodeURIComponent(verifyPhone.trim())}`}
-                    download
-                    style={{
+                  <PortalPdfButton repairRef={ref} kind="receipt-pdf" phone={verifyPhone} filename={`receipt-${String(ref).replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`} style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                       width: '100%', padding: '13px 0', borderRadius: 12, border: 'none',
                       background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff',
                       fontWeight: 800, fontSize: 14, textDecoration: 'none', marginBottom: 8,
-                    }}
-                  >
+                    }}>
                     Download Receipt PDF
-                  </a>
-                  <a
-                    href={`/api/portal/repair/${encodeURIComponent(ref)}/invoice-pdf?phone=${encodeURIComponent(verifyPhone.trim())}`}
-                    download
-                    style={{
+                  </PortalPdfButton>
+                  <PortalPdfButton repairRef={ref} kind="invoice-pdf" phone={verifyPhone} filename={`invoice-${String(ref).replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`} style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                       width: '100%', padding: '13px 0', borderRadius: 12, border: 'none',
                       background: 'linear-gradient(135deg, #10B981, #059669)',
                       color: '#fff', fontWeight: 800, fontSize: 14, textDecoration: 'none',
                       cursor: 'pointer', boxSizing: 'border-box',
-                    }}
-                  >
+                    }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                       <polyline points="7 10 12 15 17 10"/>
                       <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
                     Download Invoice PDF
-                  </a>
+                  </PortalPdfButton>
                 </div>
               ) : repair.paymentStatus === 'pending_review' ? (
                 <div style={{ padding: 14, borderRadius: 12, background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.28)', color: '#FCD34D', fontSize: 13, lineHeight: 1.6 }}>
@@ -669,7 +660,7 @@ export default function RepairPortalPage() {
                       <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Account</p><p style={{ color: '#67E8F9', fontFamily: 'monospace', fontWeight: 900 }}>{company.mpesaAccount || repair.ref}</p></div>
                       <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount Due</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 900 }}>{fmtKes(amountDue)}</p></div>
                     </div>
-                    <a href={`/api/portal/repair/${encodeURIComponent(ref)}/invoice-pdf?phone=${encodeURIComponent(verifyPhone.trim())}`} download style={{ display: 'block', marginTop: 12, textAlign: 'center', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>Download Invoice Before Paying</a>
+                    <PortalPdfButton repairRef={ref} kind="invoice-pdf" phone={verifyPhone} filename={`invoice-${String(ref).replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`} style={{ display: 'block', marginTop: 12, textAlign: 'center', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>Download Invoice Before Paying</PortalPdfButton>
                   </div>
                   <textarea value={paymentText} onChange={e => setPaymentText(e.target.value)} placeholder="Paste M-PESA confirmation message here…" rows={4} style={{ width: '100%', background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'vertical', outline: 'none', marginBottom: 10 }} />
                   <input type="file" accept="image/*" onChange={e => setPaymentFile(e.target.files?.[0] ?? null)} style={{ width: '100%', color: '#9CA3AF', fontSize: 12, marginBottom: 10 }} />

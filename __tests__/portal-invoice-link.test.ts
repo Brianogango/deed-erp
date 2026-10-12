@@ -44,4 +44,17 @@ describe('findRepairLinkedInvoice', () => {
       linkedInvoiceRef: '  ',
     })).toBeUndefined()
   })
+
+  it('finds an invoice that names the repair or its sale order', () => {
+    const list = [
+      { id: 'other', ref: 'INV/2026/0001', status: 'posted', type: 'customer_invoice' },
+      { id: 'draft', ref: 'INV/2026/0010', status: 'draft', type: 'customer_invoice', repairId: 'r1' },
+      { id: 'old', ref: 'INV/2026/0011', status: 'posted', type: 'customer_invoice', saleOrderId: 'so1', date: '2026-10-01' },
+      { id: 'new', ref: 'INV/2026/0012', status: 'posted', type: 'customer_invoice', saleOrderId: 'so1', date: '2026-10-05' },
+      { id: 'void', ref: 'INV/2026/0013', status: 'cancelled', type: 'customer_invoice', repairId: 'r1', date: '2026-10-09' },
+    ]
+    expect(findRepairLinkedInvoice(list, { id: 'r1', saleOrderId: 'so1' })?.id).toBe('new')
+    expect(findRepairLinkedInvoice(list, { id: 'r1', saleOrderId: 'so1', previousInvoiceIds: ['new'] })?.id).toBe('old')
+    expect(findRepairLinkedInvoice(list, { id: 'r9' })).toBeUndefined()
+  })
 })

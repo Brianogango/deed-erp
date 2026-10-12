@@ -25,7 +25,7 @@ export async function GET(
     const state = await loadAppState(['deed_repairs_v2', 'deed_companySettings', 'deed_bankAccounts', 'deed_systemSettings'])
     const repairs = (state.deed_repairs_v2 ?? []) as any[]
     const co = { ...DEFAULT_COMPANY_SETTINGS, ...((state.deed_companySettings as Record<string, unknown> | undefined) ?? {}) }
-    const banks = (state.deed_bankAccounts ?? DEFAULT_BANK_ACCOUNTS) as any[]
+    const banks = (Array.isArray(state.deed_bankAccounts) && state.deed_bankAccounts.length ? state.deed_bankAccounts : DEFAULT_BANK_ACCOUNTS) as any[]
 
     const repair = findRepairByPortalRef(repairs, ref)
     if (!repair) return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })

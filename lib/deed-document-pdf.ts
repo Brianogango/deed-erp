@@ -334,8 +334,12 @@ function defaultPaymentLines(input: DeedPdfInput, company: DeedPdfCompany, banks
 export function buildDeedDocumentPdf(
   input: DeedPdfInput,
   company: DeedPdfCompany,
-  bankAccounts: DeedPdfBank[] = [],
+  bankAccountsInput: DeedPdfBank[] = [],
 ): jsPDF {
+  // A saved bank list that is missing or not a list (an empty settings
+  // value) crashed every PDF at "banks.find" — the customer portal's invoice
+  // download returned nothing.
+  const bankAccounts: DeedPdfBank[] = Array.isArray(bankAccountsInput) ? bankAccountsInput.filter(Boolean) : []
   const doc = new jsPDF({ unit: 'pt', format: normalizePaperFormat(company.printPaperFormat) })
   const selectedFont = pdfFont(company.printFont)
   const originalSetFont = doc.setFont.bind(doc)

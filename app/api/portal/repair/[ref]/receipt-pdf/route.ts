@@ -21,7 +21,7 @@ export async function GET(
     const repairs = (state.deed_repairs_v2 ?? []) as any[]
     const invoices = (state.deed_invoices ?? []) as any[]
     const co = { ...DEFAULT_COMPANY_SETTINGS, ...((state.deed_companySettings as Record<string, unknown> | undefined) ?? {}) }
-    const banks = (state.deed_bankAccounts ?? DEFAULT_BANK_ACCOUNTS) as any[]
+    const banks = (Array.isArray(state.deed_bankAccounts) && state.deed_bankAccounts.length ? state.deed_bankAccounts : DEFAULT_BANK_ACCOUNTS) as any[]
     const logo = await loadLogoForPdfServer(typeof co.logoUrl === 'string' ? co.logoUrl : null)
 
     const repair = findRepairByPortalRef(repairs, ref)

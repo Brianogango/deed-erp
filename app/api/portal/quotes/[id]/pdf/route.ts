@@ -36,7 +36,7 @@ export async function GET(
     const saved    = state['deed_companySettings'] as Record<string, unknown> | undefined
     const co       = { ...DEFAULT_COMPANY_SETTINGS, ...(saved ?? {}) }
     const lines    = normalized.lines as Array<Record<string, unknown>>
-    const banks    = ((state['deed_bankAccounts'] ?? []) as any[]).filter(a => a.active)
+    const banks    = (Array.isArray(state['deed_bankAccounts']) ? state['deed_bankAccounts'] as any[] : []).filter(a => a?.active)
     const logo     = await loadLogoForPdfServer(typeof co.logoUrl === 'string' ? co.logoUrl : null)
 
     const doc = buildDeedDocumentPdf(
