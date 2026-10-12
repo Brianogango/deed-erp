@@ -49,6 +49,10 @@
     word-break: normal;
     hyphens: manual;
   }
+  .table-scroll.responsive-table .table-head,
+  .table-scroll.responsive-table .table-row {
+    column-gap: 10px;
+  }
   .table-scroll.responsive-table .table-row {
     min-height: 48px;
     background: #fff;
@@ -86,11 +90,16 @@
   .table-scroll.responsive-table .table-head > [role="columnheader"][style*="right"] {
     justify-content: flex-end;
   }
+  /* Buttons wrap onto a second line inside the column instead of growing
+     the cell leftwards over the neighbouring columns. */
   .table-scroll.responsive-table .table-row > .data-table-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    white-space: nowrap;
+    min-width: 0;
+  }
+  .table-scroll.responsive-table .table-row > .data-table-actions > * {
+    max-width: 100%;
   }
   .table-scroll.responsive-table .data-table-summary-row {
     background: #eef4fb !important;

@@ -594,9 +594,9 @@ export default function InventoryProductsPanel({
       >
         <DataTable
           tableId="inventory-products"
-          // Room for Serials, print, + Variant, Edit and Archive side by side —
-          // at the 120px default they spilled over the Reorder column.
-          rowActionsWidth={300}
+          // Up to five buttons wrap onto two lines inside this width — at the
+          // 120px default they spilled over the Reorder column.
+          rowActionsWidth={180}
           columns={columns}
           rows={rows}
           rowKey={r => r.id}
@@ -662,7 +662,7 @@ export default function InventoryProductsPanel({
             const serialCount = productSerialCount(row.product.id)
             const showSerials = productOffersOnHandSerials(row.product, { hasExistingSerials: serialCount > 0 })
             return (
-              <div className="flex justify-end gap-1.5">
+              <div className="flex flex-wrap justify-end gap-1.5">
                 {showSerials && (
                   <button
                     type="button"

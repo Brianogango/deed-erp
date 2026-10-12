@@ -1002,11 +1002,12 @@ export function Table({
   const grid = useMemo(() => {
     // Every column keeps a floor so none can be squeezed to nothing (the
     // Horizon table padding left "Product" one letter wide). Floors are kept
-    // small so columns still share the card; only when the floors themselves
+    // small (64px for short columns) so columns still share the card; only
+    // when the floors themselves
     // do not fit does the table scroll sideways.
-    const FLOOR_PX = 80
-    const FLOOR_FLEX_PX = 96
-    const MAX_DECLARED_FLOOR = '14rem'
+    const FLOOR_PX = 64
+    const FLOOR_FLEX_PX = 88
+    const MAX_DECLARED_FLOOR = '13rem'
     return cols
       .filter((col, index) => !visibleColumnKeys || visibleColumnKeys.includes(columnKey(col, index)))
       .map((col) => {

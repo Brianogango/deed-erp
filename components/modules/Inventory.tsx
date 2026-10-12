@@ -2415,7 +2415,7 @@ function InventoryContent() {
                   exportValue: product => product.latestCost ?? '',
                 },
                 {
-                  key: 'salePrice', label: 'Sale price', priority: 1, width: '170px', align: 'right',
+                  key: 'salePrice', label: 'Sale price', priority: 1, width: '150px', align: 'right',
                   render: product => {
                     const review = priceReviewOf(product)
                     return (
@@ -2536,7 +2536,7 @@ function InventoryContent() {
                 >
                   <DataTable
                     tableId="inventory-catalog"
-                    rowActionsWidth={250}
+                    rowActionsWidth={190}
                     columns={catalogColumns}
                     rows={catalogProducts}
                     rowKey={p => p.id}
@@ -2571,7 +2571,7 @@ function InventoryContent() {
                       { id: 'price-import', label: 'Import prices', onSelect: () => priceImportRef.current?.click(), disabled: !canUpdatePrice },
                     ]}
                     rowActions={product => (
-                      <div className="flex justify-end gap-1">
+                      <div className="flex flex-wrap justify-end gap-1">
                         {(() => {
                           const review = priceReviewOf(product)
                           if (!review.needsReview || review.suggested == null || !canUpdatePrice) return null
