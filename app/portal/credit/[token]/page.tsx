@@ -162,7 +162,7 @@ export default function CreditApplicationPortal() {
 
   if (error) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+      <main className="flex h-[100dvh] overflow-y-auto items-center justify-center bg-slate-50 p-6">
         <div className={`${card} max-w-md text-center`}>
           <img src="/deed-logo.png" alt="Deed Technologies" className="mx-auto mb-4 h-10" />
           <h1 className="text-lg font-bold text-slate-900">Credit application</h1>
@@ -172,12 +172,12 @@ export default function CreditApplicationPortal() {
       </main>
     )
   }
-  if (!app) return <main className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">Loading your application…</main>
+  if (!app) return <main className="flex h-[100dvh] overflow-y-auto items-center justify-center bg-slate-50 text-sm text-slate-500">Loading your application…</main>
 
   const locked = !app.editable
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
+    <main className="h-[100dvh] overflow-y-auto bg-slate-50 px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-3xl space-y-5">
         <header className={card}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

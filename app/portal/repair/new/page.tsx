@@ -64,7 +64,7 @@ export default function NewRepairPortalPage() {
 
   if (result) {
     return (
-      <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-500">
+      <main className="h-[100dvh] overflow-y-auto bg-slate-50 flex items-center justify-center p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-500">
         <div className="w-full max-w-xl bg-white rounded-[2.5rem] p-8 sm:p-12 shadow-2xl shadow-slate-200/50 border border-slate-100 text-center">
           <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-8 shadow-xl shadow-emerald-100/50">
             <Fa icon={faCheckCircle} className="text-4xl" />
@@ -91,7 +91,7 @@ export default function NewRepairPortalPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 font-sans selection:bg-blue-100">
+    <main className="h-[100dvh] overflow-y-auto bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 font-sans selection:bg-blue-100">
       <div className="max-w-4xl mx-auto">
         {/* Branding Header */}
         <div className="text-center mb-12 animate-in slide-in-from-top-4 duration-700">

@@ -34,7 +34,7 @@ export default function TrackRepairPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-16"
+      className="h-[100dvh] overflow-y-auto flex flex-col items-center justify-center px-4 py-16"
       style={{ background: 'linear-gradient(135deg, #090b12 0%, #0d1020 50%, #131728 100%)' }}
     >
       {/* Card */}

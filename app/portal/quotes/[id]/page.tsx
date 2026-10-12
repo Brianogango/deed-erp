@@ -131,7 +131,7 @@ function CustomerQuotePortalContent() {
 
   if (error || !quote) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#090b12] to-[#1a1d2e] flex items-center justify-center p-6">
+      <div className="h-[100dvh] overflow-y-auto bg-gradient-to-br from-[#090b12] to-[#1a1d2e] flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-[#0c0e14] border border-red-500/30 rounded-lg p-8 text-center">
           <div className="text-red-500 text-5xl mb-4">⚠️</div>
           <h1 className="text-xl font-bold text-white mb-2">Quote Not Found</h1>
@@ -151,7 +151,7 @@ function CustomerQuotePortalContent() {
   const isRespondable = quote.status === 'sent' && !isExpired && !isDecided
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#090b12] to-[#1a1d2e] py-12 px-6">
+    <div className="h-[100dvh] overflow-y-auto bg-gradient-to-br from-[#090b12] to-[#1a1d2e] py-12 px-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="bg-[#0c0e14] border border-white/10 rounded-lg p-8 mb-6">

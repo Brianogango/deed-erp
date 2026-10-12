@@ -179,7 +179,7 @@ export default function RepairTrackDetail() {
   )
 
   if (error || !repair) return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#090b12' }}>
+    <div className="h-[100dvh] overflow-y-auto flex items-center justify-center px-4" style={{ background: '#090b12' }}>
       <div className="max-w-sm w-full text-center rounded-2xl p-8" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(240,68,56,0.3)' }}>
         <div style={{ fontSize: 40, marginBottom: 16 }}>⚠️</div>
         <h2 className="font-bold text-white mb-2">Not Found</h2>
@@ -201,7 +201,7 @@ export default function RepairTrackDetail() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, #090b12 0%, #0d1020 100%)' }}>
+    <div className="h-[100dvh] overflow-y-auto" style={{ background: 'linear-gradient(180deg, #090b12 0%, #0d1020 100%)' }}>
       <div className="max-w-3xl mx-auto px-4 py-10 flex flex-col gap-5">
 
         {/* ── Header bar ──────────────────────────────────────────────── */}
