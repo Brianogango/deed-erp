@@ -1521,13 +1521,16 @@ function PurchaseContent() {
                                     productId: p.id,
                                     productName: p.name,
                                     description: p.name,
-                                    unitPrice: String(p.costPrice || p.salePrice || 0),
+                                    // Purchases are priced at cost. With no cost on file the
+                                    // field stays empty for the buyer to fill — never the
+                                    // selling price.
+                                    unitPrice: Number(p.costPrice) > 0 ? String(p.costPrice) : '',
                                     taxRate: String(p.taxRate ?? 0),
                                   } : x))}
                                   renderItem={p => (
                                     <div>
                                       <p className="font-medium text-xs text-t1">{p.name}</p>
-                                      <p className="text-[10px] text-t3">{p.sku ?? ''} · {fmtKes(p.costPrice || p.salePrice || 0)}</p>
+                                      <p className="text-[10px] text-t3">{p.sku ?? ''} · {Number(p.costPrice) > 0 ? `Cost ${fmtKes(p.costPrice)}` : 'No cost on file'}</p>
                                     </div>
                                   )}
                                 />
