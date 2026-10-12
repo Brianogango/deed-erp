@@ -18,7 +18,7 @@ import { robotoFlex, openSans, dmMono } from './fonts'
 
 export const metadata: Metadata = {
   title: 'Deed ERP',
-  description: 'Deed Digital Solutions — Enterprise Resource Planning',
+  description: 'Deed Technologies — Enterprise Resource Planning',
   manifest: '/manifest.json',
   applicationName: 'Deed ERP',
   appleWebApp: {
