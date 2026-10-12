@@ -35,6 +35,11 @@ describe('the next step', () => {
     expect(buildJobTrail({ kind: 'repair', id: 'r1' }, data()).next).toMatchObject({ label: 'Record payment on INV/0042', tone: 'action' })
   })
 
+  it('does not ask for payment on a cancelled invoice', () => {
+    const d = data({ invoices: [{ id: 'i1', ref: 'INV/0042', type: 'customer_invoice', status: 'cancelled', total: 6960, amountPaid: 6000, saleOrderId: 'so1', repairId: 'r1' }] })
+    expect(buildJobTrail({ kind: 'repair', id: 'r1' }, d).next?.label ?? '').not.toMatch(/Record payment/)
+  })
+
   it('waits on the client while the quote is out', () => {
     const d = data({ repairs: [{ id: 'r1', ref: 'REP/0101', status: 'awaiting_approval', saleOrderId: 'so1' }] })
     expect(buildJobTrail({ kind: 'repair', id: 'r1' }, d).next).toMatchObject({ tone: 'waiting' })

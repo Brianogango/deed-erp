@@ -32,4 +32,13 @@ describe('telling someone their save was refused', () => {
     expect(message).toContain('serials')
     expect(message).not.toContain('products')
   })
+
+  it('says nothing for lists written by their own routes (the journal was already posted)', () => {
+    expect(deniedSaveMessage(['deed_journalEntries'])).toBeNull()
+    expect(deniedSaveMessage(['deed_invoices', 'deed_auditLogs'])).toBeNull()
+  })
+
+  it('still warns for stock lists that are saved through the general save', () => {
+    expect(deniedSaveMessage(['deed_journalEntries', 'deed_stockMoves'])).toContain('stock moves')
+  })
 })

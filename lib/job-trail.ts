@@ -131,7 +131,8 @@ function nextStep(ctx: {
       ? { label: 'Create the invoice', href: repairHref, tone: 'action' }
       : { label: 'Create the invoice', href: ctx.orderHref, tone: 'action' }
   }
-  const unpaid = invoices.find(i => i.status !== 'draft' && Number(i.amountPaid ?? 0) < Number(i.total ?? 0) - 0.5)
+  // Cancelled invoices are owed nothing (payments on them became store credit).
+  const unpaid = invoices.find(i => i.status !== 'draft' && i.status !== 'cancelled' && Number(i.amountPaid ?? 0) < Number(i.total ?? 0) - 0.5)
   if (unpaid) return { label: `Record payment on ${unpaid.ref ?? 'the invoice'}`, href: ctx.invoiceHref(unpaid.id), tone: 'action' }
   const openDn = deliveries.find(d => d.status !== 'done')
   if (openDn) return { label: `Validate delivery ${openDn.ref}`, href: ctx.orderHref, tone: 'action' }

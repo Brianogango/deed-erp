@@ -269,7 +269,10 @@ export default function InvoiceDetail() {
     filter: listFilter,
     scroll: listScroll,
   })
-  const balance = Math.max(0, invoice.total - invoice.amountPaid)
+  // A cancelled invoice is owed nothing: anything paid on it became the
+  // customer's store credit. It used to show the unpaid part as "Balance due".
+  const isCancelledDoc = String(invoice.status) === 'cancelled'
+  const balance = isCancelledDoc ? 0 : Math.max(0, invoice.total - invoice.amountPaid)
   const pct = invoice.total > 0 ? Math.min(100, (invoice.amountPaid / invoice.total) * 100) : 0
   // Odoo semantics: document state + separately computed payment status.
   const docState = invoiceDocState(invoice.status)
@@ -803,7 +806,9 @@ export default function InvoiceDetail() {
             <p className="invoice-detail__summary-context">
               {balance > 0
                 ? `Due ${fmtDate(invoice.dueDate)}${dueDaysLabel ? ` · ${dueDaysLabel}` : ''}`
-                : `Paid in full · ${fmtKes(invoice.amountPaid)} received`}
+                : isCancelledDoc
+                  ? `Cancelled · nothing owed${invoice.amountPaid > 0 ? ` · ${fmtKes(invoice.amountPaid)} paid moved to store credit` : ''}`
+                  : `Paid in full · ${fmtKes(invoice.amountPaid)} received`}
             </p>
           </div>
 

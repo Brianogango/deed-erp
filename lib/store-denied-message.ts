@@ -32,8 +32,31 @@ const BACKGROUND_KEYS = new Set([
   'deed_openingStockPosted',
 ])
 
+/**
+ * Lists whose records are written by their own server routes. The general
+ * save of these lists is ignored by the server for everyone (they read from
+ * their tables), so a refusal there loses nothing: after a cancellation the
+ * journal was already posted, yet "Not saved … journal entries" appeared.
+ * Stock, products, receipts, reservations and repairs are still saved
+ * through the general save and are not in this list.
+ */
+const ROUTE_WRITTEN_KEYS = new Set([
+  'deed_journalEntries',
+  'deed_invoices',
+  'deed_saleOrders',
+  'deed_quotes',
+  'deed_accounts',
+  'deed_contacts',
+  'deed_purchaseOrders',
+  'deed_deposits',
+  'deed_deposits_v1',
+  'deed_holdovers',
+  'deed_auditLogs',
+  'deed_oppActivities',
+])
+
 function isBackgroundStoreKey(key: string): boolean {
-  return BACKGROUND_KEYS.has(key)
+  return BACKGROUND_KEYS.has(key) || ROUTE_WRITTEN_KEYS.has(key)
 }
 
 /** A message only for refusals the person would notice as lost work. */
