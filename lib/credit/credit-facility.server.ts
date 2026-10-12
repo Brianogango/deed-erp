@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { getObject, putObject } from '@/lib/infra/object-store'
 import { validateFileContent } from '@/lib/file-validation'
+import { sanitizeClientForm } from './credit-form-fields'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import {
@@ -450,11 +451,13 @@ export async function portalSaveForm(token: string, input: { form?: unknown; req
   const app = await applicationForToken(token)
   if (!CLIENT_EDITABLE.has(app.status)) throw new CreditFacilityError('This application has been submitted and can no longer be changed', 409)
   if (!input.form || typeof input.form !== 'object' || Array.isArray(input.form)) throw new CreditFacilityError('Nothing to save')
-  const json = JSON.stringify(input.form)
-  if (json.length > 100_000) throw new CreditFacilityError('The form is too large')
-  const data: Prisma.CreditFacilityApplicationUpdateInput = { form: JSON.parse(json) as Prisma.InputJsonValue }
-  if (input.requestedLimit != null && Number(input.requestedLimit) > 0) data.requestedLimit = Math.min(1e11, Number(input.requestedLimit))
-  if (input.requestedTermsDays != null && Number(input.requestedTermsDays) > 0) data.requestedTermsDays = Math.min(365, Math.trunc(Number(input.requestedTermsDays)))
+  if (JSON.stringify(input.form).length > 100_000) throw new CreditFacilityError('The form is too large')
+  // Only the form's own fields, as plain text; anything staff added to the
+  // stored form (fields the client's page does not have) is kept as it was.
+  const stored = app.form && typeof app.form === 'object' && !Array.isArray(app.form) ? app.form as Record<string, unknown> : {}
+  const data: Prisma.CreditFacilityApplicationUpdateInput = { form: { ...stored, ...sanitizeClientForm(input.form) } as Prisma.InputJsonValue }
+  if (input.requestedLimit != null && Number.isFinite(Number(input.requestedLimit)) && Number(input.requestedLimit) > 0) data.requestedLimit = Math.min(1e11, Math.round(Number(input.requestedLimit)))
+  if (input.requestedTermsDays != null && Number.isFinite(Number(input.requestedTermsDays)) && Number(input.requestedTermsDays) > 0) data.requestedTermsDays = Math.min(365, Math.trunc(Number(input.requestedTermsDays)))
   return prisma.creditFacilityApplication.update({ where: { id: app.id }, data, include: { documents: true } })
 }
 

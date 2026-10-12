@@ -9,7 +9,7 @@ type Params = { params: Promise<{ token: string }> }
 export async function GET(req: NextRequest, { params }: Params) {
   const { token } = await params
   return portalHandler(req, 'read', 300, async () =>
-    NextResponse.json({ application: await toPortalView(await applicationForToken(token)) }, { headers: noStore }))
+    NextResponse.json({ application: await toPortalView(await applicationForToken(token)) }, { headers: noStore }), token)
 }
 
 /** PUT { form, requestedLimit, requestedTermsDays } — save the form. */
@@ -18,5 +18,5 @@ export async function PUT(req: NextRequest, { params }: Params) {
   return portalHandler(req, 'save', 200, async () => {
     const body = await req.json().catch(() => ({}))
     return NextResponse.json({ application: await toPortalView(await portalSaveForm(token, body ?? {})) }, { headers: noStore })
-  })
+  }, token)
 }

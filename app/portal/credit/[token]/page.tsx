@@ -28,8 +28,8 @@ function Field({ def, value, disabled, onChange }: { def: FieldDef; value: unkno
     <label className={def.type === 'textarea' ? 'sm:col-span-2' : ''}>
       <span className={label}>{def.label}</span>
       {def.type === 'textarea'
-        ? <textarea className={input} rows={3} value={v} disabled={disabled} onChange={e => onChange(e.target.value)} />
-        : <input className={input} type={def.type ?? 'text'} value={v} disabled={disabled} onChange={e => onChange(e.target.value)} />}
+        ? <textarea className={input} rows={3} value={v} maxLength={2000} disabled={disabled} onChange={e => onChange(e.target.value)} />
+        : <input className={input} type={def.type ?? 'text'} value={v} maxLength={300} autoComplete="off" disabled={disabled} onChange={e => onChange(e.target.value)} />}
     </label>
   )
 }

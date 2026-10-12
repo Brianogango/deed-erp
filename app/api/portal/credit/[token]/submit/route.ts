@@ -8,5 +8,5 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   return portalHandler(req, 'submit', 20, async () =>
-    NextResponse.json({ application: await toPortalView(await portalSubmit(token)) }, { headers: noStore }))
+    NextResponse.json({ application: await toPortalView(await portalSubmit(token)) }, { headers: noStore }), token)
 }

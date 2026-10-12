@@ -8,5 +8,5 @@ export const dynamic = 'force-dynamic'
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ token: string; docId: string }> }) {
   const { token, docId } = await params
   return portalHandler(req, 'save', 200, async () =>
-    NextResponse.json({ application: await toPortalView(await portalRemoveDocument(token, docId)) }, { headers: noStore }))
+    NextResponse.json({ application: await toPortalView(await portalRemoveDocument(token, docId)) }, { headers: noStore }), token)
 }
