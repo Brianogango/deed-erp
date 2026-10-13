@@ -1082,6 +1082,9 @@ export interface SerialNumber {
   specs?: string           // freetext specs e.g. "8GB RAM, 512GB SSD, Intel i5-12th Gen"
   /** Unit selling price after reconfiguration; POS uses this over catalog list price. */
   salePriceOverride?: number
+  /** Customer machine registered on a screen (buyback, exchange, donation-in, rma …) and by whom. */
+  intakeSource?: string
+  intakeByName?: string
 }
 
 // Refurbishment job — unit received with issues, needs work before going to sales floor
@@ -21473,6 +21476,10 @@ const storeCtx: AppState = {
         receivedDate: now(),
         soldDate: now(),
         barcode: buildInventoryBarcodeForProduct(productId, serial),
+        // Which screen registered it and who: a trade-in left unsaved is
+        // then found (My work → trade-in machines with no trade-in).
+        intakeSource: opts?.source ?? 'trade-in',
+        intakeByName: currentUser()?.name,
       }
       setSerials(p => [...p, newSerial])
       sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })

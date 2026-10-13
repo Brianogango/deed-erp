@@ -10,6 +10,7 @@
  */
 
 import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
+import { findOrphanTradeInSerials } from '@/lib/tradein/orphan-intake'
 
 type WorkItem = { id: string; title: string; subtitle: string; href: string; ageDays: number }
 type WorkQueue = {
@@ -38,6 +39,9 @@ export type MyWorkInput = {
   serials: Any[]
   purchaseOrders: Any[]
   products?: Any[]
+  clientExchanges?: Any[]
+  donations?: Any[]
+  returnOrders?: Any[]
   invoiceHref: (id: string) => string
 }
 
@@ -152,6 +156,14 @@ export function buildMyWork(input: MyWorkInput): WorkQueue[] {
       && Number(i.total ?? 0) - Number(i.amountPaid ?? 0) > 1)
     out.push(queue('overdue-invoices', 'Overdue invoices to collect', 'Past due date with a balance', '/finance?tab=invoices',
       overdue.map(i => ({ id: i.id, title: i.ref, subtitle: `${i.partnerName ?? ''} · ${kes(Number(i.total) - Number(i.amountPaid ?? 0))} due`, href: input.invoiceHref(i.id), ageDays: ageDays(i.dueDate, now) })), 'urgent'))
+  }
+  if (is('admin_officer', 'finance_officer', 'inventory_officer')) {
+    const orphans = findOrphanTradeInSerials({
+      serials: input.serials, buyBacks: input.buyBacks, clientExchanges: input.clientExchanges,
+      donations: input.donations, returnOrders: input.returnOrders, now,
+    })
+    out.push(queue('trade-in-orphans', 'Trade-in machines with no trade-in', 'Serial registered on a trade-in screen, but the trade-in was never saved — create it (After-Sales → Trade-in) choosing this serial', '/aftersales?tab=trade',
+      orphans.map(s => ({ id: s.id, title: s.serial, subtitle: `${s.productName ?? ''}${s.intakeByName ? ` · registered by ${s.intakeByName}` : ''}`, href: '/aftersales?tab=trade', ageDays: ageDays(s.receivedDate, now) })), 'urgent'))
   }
   if (is('finance_officer')) {
     const tradeIns = input.buyBacks.filter(b => b.status === 'draft')

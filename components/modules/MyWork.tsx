@@ -27,8 +27,11 @@ export default function MyWork() {
     serials: app.serials ?? [],
     purchaseOrders: app.purchaseOrders ?? [],
     products: app.products ?? [],
+    clientExchanges: app.clientExchanges ?? [],
+    donations: app.donations ?? [],
+    returnOrders: app.returnOrders ?? [],
     invoiceHref: id => financeInvoicePath(id),
-  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders, app.products])
+  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders, app.products, app.clientExchanges, app.donations, app.returnOrders])
 
   const total = queues.reduce((s, q) => s + q.count, 0)
   const firstName = String(user?.name ?? '').split(/\s+/)[0]

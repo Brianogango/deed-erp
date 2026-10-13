@@ -9,6 +9,7 @@ import {
   LocationId, LOCATIONS, fmtKes, fmtDate,
 } from '@/lib/store'
 import { parseReturnSerialTokens } from '@/lib/tradein-serial-intake'
+import { clearFormDraft, loadFormDraft, saveFormDraft } from '@/lib/form-draft'
 import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
@@ -275,8 +276,34 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
     originalSORef ? saleOrders.find(s => s.ref.toLowerCase() === originalSORef.toLowerCase()) : undefined,
     [originalSORef, saleOrders])
 
-  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setDestination(''); setNotes(''); setLines([]) }
+  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setDestination(''); setNotes(''); setLines([]); clearFormDraft('buyback', currentUserId) }
   function resetBulk() { setBulkRows([]); if (bulkFileRef.current) bulkFileRef.current.value = '' }
+
+  // A half-filled buy-back survives leaving the page: its machine's serial is
+  // registered the moment it is entered, so losing the form strands it.
+  type BuyBackDraft = { customerId: string; customerName: string; originalSORef: string; destination: LocationId | ''; notes: string; lines: BBLine[] }
+  const draftRestored = useRef(false)
+  useEffect(() => {
+    if (draftRestored.current || !currentUserId) return
+    draftRestored.current = true
+    const d = loadFormDraft<BuyBackDraft>('buyback', currentUserId)
+    if (!d || (!d.customerId && !(d.lines ?? []).length)) return
+    setCustomerId(d.customerId ?? ''); setCustomerName(d.customerName ?? ''); setOriginalSORef(d.originalSORef ?? '')
+    setDestination(d.destination ?? ''); setNotes(d.notes ?? ''); setLines(Array.isArray(d.lines) ? d.lines : [])
+    setShowNew(true)
+    showToast('Your unfinished buy-back was kept — finish it or cancel it', 'info')
+  }, [currentUserId, showToast])
+  useEffect(() => {
+    if (!showNew || !currentUserId) return
+    if (!customerId && !lines.length && !notes) return
+    saveFormDraft('buyback', currentUserId, { customerId, customerName, originalSORef, destination, notes, lines } satisfies BuyBackDraft)
+  }, [showNew, currentUserId, customerId, customerName, originalSORef, destination, notes, lines])
+
+  function cancelNew() {
+    const registered = lines.reduce((n, l) => n + l.serialIds.length, 0)
+    if (registered > 0 && !window.confirm(`Discard this buy-back? The ${registered} machine serial(s) you entered stay registered as "with customer" until a trade-in is saved for them.`)) return
+    setShowNew(false); reset()
+  }
 
   function addLine() {
     setLines(l => [...l, { productId: '', productName: '', qty: '', condition: '', unitPrice: '', serialIds: [], notes: '' }])
@@ -573,10 +600,10 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
         <Modal
           title="New Buy-Back"
           width={720}
-          onClose={() => { setShowNew(false); reset() }}
+          onClose={cancelNew}
           footer={(
             <>
-              <button className="btn-secondary text-xs" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
+              <button className="btn-secondary text-xs" onClick={cancelNew}>Cancel</button>
               <button className="btn-primary text-xs" onClick={submit}>Create Buy-Back</button>
             </>
           )}
@@ -1287,7 +1314,33 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
   ]
 
 
-  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setNotes(''); setReturnLines([]); setNewLines([]) }
+  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setNotes(''); setReturnLines([]); setNewLines([]); clearFormDraft('exchange', currentUserId) }
+
+  // A half-filled exchange survives leaving the page (its returned machine's
+  // serial is registered the moment it is entered).
+  type ExchangeDraft = { customerId: string; customerName: string; originalSORef: string; notes: string; returnLines: ELine[]; newLines: ELine[] }
+  const draftRestored = useRef(false)
+  useEffect(() => {
+    if (draftRestored.current || !currentUserId) return
+    draftRestored.current = true
+    const d = loadFormDraft<ExchangeDraft>('exchange', currentUserId)
+    if (!d || (!d.customerId && !(d.returnLines ?? []).length && !(d.newLines ?? []).length)) return
+    setCustomerId(d.customerId ?? ''); setCustomerName(d.customerName ?? ''); setOriginalSORef(d.originalSORef ?? ''); setNotes(d.notes ?? '')
+    setReturnLines(Array.isArray(d.returnLines) ? d.returnLines : []); setNewLines(Array.isArray(d.newLines) ? d.newLines : [])
+    setShowNew(true)
+    showToast('Your unfinished exchange was kept — finish it or cancel it', 'info')
+  }, [currentUserId, showToast])
+  useEffect(() => {
+    if (!showNew || !currentUserId) return
+    if (!customerId && !returnLines.length && !newLines.length && !notes) return
+    saveFormDraft('exchange', currentUserId, { customerId, customerName, originalSORef, notes, returnLines, newLines } satisfies ExchangeDraft)
+  }, [showNew, currentUserId, customerId, customerName, originalSORef, notes, returnLines, newLines])
+
+  function cancelNew() {
+    const registered = returnLines.reduce((n, l) => n + l.serialIds.length, 0)
+    if (registered > 0 && !window.confirm(`Discard this exchange? The ${registered} returned machine serial(s) you entered stay registered as "with customer" until a trade-in is saved for them.`)) return
+    setShowNew(false); reset()
+  }
   function resetBulk() { setBulkRows([]); if (bulkFileRef.current) bulkFileRef.current.value = '' }
 
   function submit() {
@@ -1543,7 +1596,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
       )}
 
       {showNew && (
-        <Modal title="New Client Exchange" subtitle="Record the customer device, assessment and agreed exchange value" variant="workspace" onClose={() => { setShowNew(false); reset() }}>
+        <Modal title="New Client Exchange" subtitle="Record the customer device, assessment and agreed exchange value" variant="workspace" onClose={cancelNew}>
           <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 2 }}>
             <RowGrid>
               <Field label="Customer *">
@@ -1604,7 +1657,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
             )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-[11px]" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
+            <button className="btn-secondary text-[11px]" onClick={cancelNew}>Cancel</button>
             <button className="btn-primary text-[11px]" onClick={submit}>Create Exchange</button>
           </div>
         </Modal>

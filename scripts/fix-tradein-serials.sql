@@ -55,7 +55,10 @@ SELECT kind, ref, done_on, customer, serial_number, sold_on, sale_ref FROM fix_t
   UPDATE serial_numbers s
   SET status = t.new_status,
       location = t.new_location,
-      screen_extras = CASE WHEN s.screen_extras IS NULL THEN NULL ELSE s.screen_extras - 'soldDate' - 'saleOrderId' END,
+      -- Screens read the status from the saved details, not the column.
+      screen_extras = (coalesce(s.screen_extras, '{}'::jsonb) - 'soldDate' - 'saleOrderId')
+                      || jsonb_build_object('status', CASE t.new_status WHEN 'in_stock' THEN 'available' ELSE t.new_status END,
+                                            'location', t.new_location),
       updated_at = now()
   FROM fix_target t
   WHERE s.id = t.sn_id AND NOT t.sold_after;
