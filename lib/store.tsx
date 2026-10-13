@@ -21642,6 +21642,8 @@ const storeCtx: AppState = {
     deleteBuyBack: (id) => {
       const bb = buyBacks.find(b => b.id === id)
       setBuyBacks(p => p.filter(b => b.id !== id))
+      // Deleting used to leave no trace; the whole record goes to the audit log.
+      if (bb) addAuditLog('buyback_delete', bb.ref, `Deleted buy-back ${bb.ref} for ${bb.customerName} (${bb.status}): ${bb.lines.map(l => `${l.qty}× ${l.productName} @ ${l.unitPrice}`).join('; ')} — ${JSON.stringify(bb).slice(0, 1500)}`)
       if (bb?.repairId) {
         setRepairs(p => p.map(r => r.id === bb.repairId && r.retainedBuyBackId === id
           ? {
