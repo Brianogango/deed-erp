@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { resolveEmailProvider, getEmailConfigStatus, generateRfqEmail, pickMailbox } from '@/lib/integrations/email'
+import { resolveEmailProvider, getEmailConfigStatus, generateRfqEmail, pickMailbox, staffDisplayName } from '@/lib/integrations/email'
 
 describe('resolveEmailProvider', () => {
   const prevProvider = process.env.EMAIL_PROVIDER
@@ -155,5 +155,18 @@ describe('generateRfqEmail', () => {
     expect(mail.html).toContain('Acme Supplies')
     expect(mail.html).toContain('Laptop')
     expect(mail.text).toContain('2,320')
+  })
+})
+
+describe('staffDisplayName (leave emails show the person, sent from the HR mailbox)', () => {
+  it('names the person and the department mailbox', () => {
+    expect(staffDisplayName('Jane Wanjiku', 'hr')).toBe('Jane Wanjiku (via Deed HR)')
+  })
+  it('strips characters that could forge another address or header', () => {
+    expect(staffDisplayName('Jane "x" <ceo@evil.com>\r\nBcc: a@b.c', 'hr')).toBe('Jane x ceo@evil.com Bcc: a@b.c (via Deed HR)')
+  })
+  it('falls back to the plain mailbox when there is no name', () => {
+    expect(staffDisplayName('  ', 'hr')).toBeUndefined()
+    expect(staffDisplayName(undefined, 'hr')).toBeUndefined()
   })
 })

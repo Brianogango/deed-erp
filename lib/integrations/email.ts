@@ -37,6 +37,14 @@ export interface EmailMessage {
   }>
   /** Which mailbox to send through. Defaults to the global SMTP_USER/EMAIL_FROM. */
   mailbox?: MailboxProfile
+  /**
+   * Send as a staff member (e.g. the leave applicant): From shows their name and
+   * company work email, while the ERP still signs in as the mailbox above —
+   * so no staff password is ever needed. If the mail server refuses that
+   * From, it falls back to "Jane Wanjiku (via Deed HR)" <hr@…>.
+   */
+  senderName?: string
+  senderEmail?: string
 }
 
 interface MailboxConfig {
@@ -441,6 +449,31 @@ async function getSmtpTransporter(profile: MailboxProfile, mailbox: MailboxConfi
   return transporter
 }
 
+const PROFILE_LABEL: Record<MailboxProfile, string> = { default: 'Deed ERP', hr: 'Deed HR', sales: 'Deed Sales', accounts: 'Deed Accounts' }
+
+const domainOf = (address: string) => address.trim().toLowerCase().split('@')[1] || ''
+/** Set when the mail server refused a staff From, so later emails go straight to the fallback. */
+let staffFromRefusedUntil = 0
+
+/**
+ * The From to try first: the person's own work email, but only on the
+ * company's own domain (never an outside address), and not while the server
+ * is known to refuse it. EMAIL_SEND_AS_STAFF=false keeps names only.
+ */
+export function staffFromAddress(senderEmail: string | undefined, mailbox: Pick<MailboxConfig, 'user' | 'from'>, now = Date.now()): string | undefined {
+  const email = (senderEmail || '').trim().toLowerCase()
+  if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email)) return undefined
+  if (process.env.EMAIL_SEND_AS_STAFF === 'false' || now < staffFromRefusedUntil) return undefined
+  const ownDomain = domainOf(mailbox.from) || domainOf(mailbox.user)
+  return ownDomain && domainOf(email) === ownDomain ? email : undefined
+}
+
+/** "Jane Wanjiku (via Deed HR)" — the person's name on the department mailbox's address. */
+export function staffDisplayName(senderName: string | undefined, profile: MailboxProfile): string | undefined {
+  const name = (senderName || '').replace(/["<>\\]/g, '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
+  return name ? `${name} (via ${PROFILE_LABEL[profile]})` : undefined
+}
+
 /**
  * SMTP Implementation (Nodemailer)
  * Uses a bounded connection pool, TLS certificate verification and explicit
@@ -472,67 +505,88 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
     || requestedFrom.toLowerCase() === mailboxFrom.toLowerCase()
   const from = fromAllowed && requestedFrom ? requestedFrom : mailboxFrom
   const replyTo = (message.replyTo || mailbox.replyTo || mailbox.from).trim() || from
+  const displayName = staffDisplayName(message.senderName, profile)
+  const staffEmail = staffFromAddress(message.senderEmail, mailbox)
+  const plainName = (displayName || '').replace(/ \(via [^)]*\)$/, '') || staffEmail || ''
+  const fallbackFrom = displayName ? { name: displayName, address: from } : from
+  // First choice: the person's own work email; the signed-in mailbox is the
+  // Sender (and the envelope MAIL FROM), so their password is never needed.
+  const attempts: Array<{ from: string | { name: string; address: string }; sender?: string }> = staffEmail
+    ? [{ from: { name: plainName, address: staffEmail }, sender: mailbox.user.trim() }, { from: fallbackFrom }]
+    : [{ from: fallbackFrom }]
 
-  try {
-    const transporter = await getSmtpTransporter(profile, mailbox)
-    const result = await transporter.sendMail({
-      from,
-      to: message.to,
-      cc: message.cc,
-      bcc: message.bcc,
-      replyTo,
-      subject: message.subject,
-      html: message.html,
-      text: message.text,
-      attachments: message.attachments,
-    })
-    const accepted = (result.accepted || []) as string[]
-    const rejected = (result.rejected || []) as string[]
-    if (accepted.length === 0 && rejected.length > 0) {
-      const reason = (result as { response?: string }).response || 'all recipients rejected'
-      console.error('[email] SMTP rejected all recipients', { profile, to: message.to, from, replyTo, authUser: mailbox.user, rejected, reason })
-      return { success: false, error: `Mail server rejected the recipient(s): ${reason}` }
-    }
-    if (rejected.length > 0) {
-      console.warn('[email] SMTP partial delivery', { profile, accepted, rejected, from, replyTo })
-    } else {
-      console.log('[email] SMTP sent', { profile, to: message.to, from, replyTo, authUser: mailbox.user, messageId: result.messageId })
-    }
-    return {
-      success: true,
-      messageId: result.messageId,
-    }
-  } catch (error: any) {
-    const responseCode = error?.responseCode
-    const response = String(error?.response || error?.message || '')
-    const authFailed = error?.code === 'EAUTH' || responseCode === 535 || /authentication|login/i.test(response)
-    const senderRejected = /sender|from address|not owned|not allowed|relay/i.test(response)
-    const tlsFailed = /certificate|self signed|unable to verify|tls/i.test(response)
-    const timedOut = error?.code === 'ETIMEDOUT' || /timeout/i.test(response)
-    const friendly = authFailed
-      ? `SMTP login failed for ${mailbox.user}. Create that mailbox in cPanel (or set ${String(profile).toUpperCase()}_SMTP_USER/PASS) so From/Reply-To can be ${from}.`
-      : tlsFailed
-        ? `SMTP TLS validation failed for ${process.env.SMTP_HOST}. Fix the mail-server certificate/hostname; do not disable verification permanently.`
-      : timedOut
-        ? `SMTP connection to ${process.env.SMTP_HOST} timed out. Check firewall, port, DNS and mail-server availability.`
-      : responseCode === 550 && senderRejected
-        ? `Mail server rejected the sender address (${from}). Authenticate as ${from} or create it as an alias.`
-        : responseCode === 550
-          ? 'Mail server rejected the recipient (550 No Such User Here). Please ensure the mailbox exists.'
-          : (error?.message || 'Unknown SMTP error')
-    console.error('[email] SMTP send failed', {
-      profile,
-      to: message.to,
-      from,
-      replyTo,
-      authUser: mailbox.user,
-      code: error?.code,
-      responseCode,
-      message: error?.message,
-    })
-    return {
-      success: false,
-      error: friendly,
+  for (let attempt = 0; ; attempt += 1) {
+    const { from: tryFrom, sender } = attempts[attempt]
+    try {
+      const transporter = await getSmtpTransporter(profile, mailbox)
+      const result = await transporter.sendMail({
+        from: tryFrom,
+        ...(sender ? { sender } : {}),
+        to: message.to,
+        cc: message.cc,
+        bcc: message.bcc,
+        replyTo,
+        subject: message.subject,
+        html: message.html,
+        text: message.text,
+        attachments: message.attachments,
+      })
+      const accepted = (result.accepted || []) as string[]
+      const rejected = (result.rejected || []) as string[]
+      if (accepted.length === 0 && rejected.length > 0) {
+        const reason = (result as { response?: string }).response || 'all recipients rejected'
+        console.error('[email] SMTP rejected all recipients', { profile, to: message.to, from: tryFrom, replyTo, authUser: mailbox.user, rejected, reason })
+        return { success: false, error: `Mail server rejected the recipient(s): ${reason}` }
+      }
+      if (rejected.length > 0) {
+        console.warn('[email] SMTP partial delivery', { profile, accepted, rejected, from: tryFrom, replyTo })
+      } else {
+        console.log('[email] SMTP sent', { profile, to: message.to, from: tryFrom, replyTo, authUser: mailbox.user, messageId: result.messageId })
+      }
+      return {
+        success: true,
+        messageId: result.messageId,
+      }
+    } catch (error: any) {
+      const responseCode = error?.responseCode
+      const response = String(error?.response || error?.message || '')
+      const authFailed = error?.code === 'EAUTH' || responseCode === 535 || /authentication|login/i.test(response)
+      const senderRejected = /sender|from address|not owned|not allowed|relay/i.test(response)
+      const tlsFailed = /certificate|self signed|unable to verify|tls/i.test(response)
+      const timedOut = error?.code === 'ETIMEDOUT' || /timeout/i.test(response)
+      const recipientProblem = error?.command === 'RCPT TO' || /recipient|no such user|mailbox unavailable|user unknown/i.test(response)
+      if (sender && attempt + 1 < attempts.length && Number(responseCode) >= 500 && !authFailed && !recipientProblem) {
+        // The server refused the staff From: send via the mailbox's own address
+        // now, and for the next 6 hours, instead of failing.
+        console.warn('[email] mail server refused staff From; using the department address', { profile, from: tryFrom, authUser: mailbox.user, responseCode, response: response.slice(0, 200) })
+        staffFromRefusedUntil = Date.now() + 6 * 60 * 60 * 1000
+        continue
+      }
+      const friendly = authFailed
+        ? `SMTP login failed for ${mailbox.user}. Create that mailbox in cPanel (or set ${String(profile).toUpperCase()}_SMTP_USER/PASS) so From/Reply-To can be ${from}.`
+        : tlsFailed
+          ? `SMTP TLS validation failed for ${process.env.SMTP_HOST}. Fix the mail-server certificate/hostname; do not disable verification permanently.`
+        : timedOut
+          ? `SMTP connection to ${process.env.SMTP_HOST} timed out. Check firewall, port, DNS and mail-server availability.`
+        : responseCode === 550 && senderRejected
+          ? `Mail server rejected the sender address (${from}). Authenticate as ${from} or create it as an alias.`
+          : responseCode === 550
+            ? 'Mail server rejected the recipient (550 No Such User Here). Please ensure the mailbox exists.'
+            : (error?.message || 'Unknown SMTP error')
+      console.error('[email] SMTP send failed', {
+        profile,
+        to: message.to,
+        from: tryFrom,
+        replyTo,
+        authUser: mailbox.user,
+        code: error?.code,
+        responseCode,
+        message: error?.message,
+      })
+      return {
+        success: false,
+        error: friendly,
+      }
     }
   }
 }

@@ -61,6 +61,10 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
       mailbox: mailboxForEvent(input.eventType),
       // e.g. a leave request: replies go straight to the employee's work email.
       ...(typeof metadata.emailReplyTo === 'string' && metadata.emailReplyTo.includes('@') ? { replyTo: metadata.emailReplyTo } : {}),
+      // …and the inbox shows who it is from.
+      ...(typeof metadata.emailSenderName === 'string' && metadata.emailSenderName.trim() ? { senderName: metadata.emailSenderName } : {}),
+      // From their own work email when the mail server allows it (see sendEmail).
+      ...(typeof metadata.emailSenderEmail === 'string' && metadata.emailSenderEmail.includes('@') ? { senderEmail: metadata.emailSenderEmail } : {}),
       subject,
       html,
       text: String(metadata.emailText || text),

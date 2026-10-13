@@ -68,11 +68,30 @@ function employeeExternal(employee: EmployeeRecipient): Array<{ name: string; em
   }] : []
 }
 
-/** The work email of the person who acted (e.g. the approver), for Reply-To. */
-async function actorEmail(actorUserId?: string | null): Promise<string | undefined> {
-  if (!actorUserId) return undefined
-  const user = await prisma.user.findUnique({ where: { id: actorUserId }, select: { email: true, employee: { select: { workEmail: true } } } })
-  return (user?.employee?.workEmail || user?.email || '').trim().toLowerCase() || undefined
+const fullName = (person?: { firstName?: string | null; lastName?: string | null } | null) =>
+  [person?.firstName, person?.lastName].filter(Boolean).join(' ').trim()
+
+/**
+ * The email comes from this person's work email (the ERP signs in as the HR
+ * mailbox, so no staff password is used) and Reply goes back to them. If the
+ * mail server refuses, it shows "Jane Wanjiku (via Deed HR)" instead.
+ */
+function fromPerson(email?: string, name?: string): Record<string, string> {
+  return {
+    ...(email ? { emailReplyTo: email, emailSenderEmail: email } : {}),
+    ...(name ? { emailSenderName: name } : {}),
+  }
+}
+
+/** The person who acted (e.g. the approver): work email for Reply-To, and their name. */
+async function actorSender(actorUserId?: string | null): Promise<Record<string, string>> {
+  if (!actorUserId) return {}
+  const user = await prisma.user.findUnique({
+    where: { id: actorUserId },
+    select: { username: true, email: true, employee: { select: { workEmail: true, firstName: true, lastName: true } } },
+  })
+  const email = (user?.employee?.workEmail || user?.email || '').trim().toLowerCase() || undefined
+  return fromPerson(email, fullName(user?.employee) || user?.username || undefined)
 }
 
 function leaveBody(row: LeaveRow) {
@@ -87,6 +106,7 @@ function leaveBody(row: LeaveRow) {
 export async function publishLeaveApplied(row: LeaveRow, actorUserId?: string | null) {
   const employee = await employeeRecipient(row.employeeId)
   const applicantEmail = employeeEmail(employee)
+  const applicantName = fullName(employee) || row.employeeName || undefined
   // The applicant gets a receipt at their work email…
   await publishNotificationEvent({
     eventType: 'hr.leave.submitted',
@@ -94,7 +114,7 @@ export async function publishLeaveApplied(row: LeaveRow, actorUserId?: string | 
     entityId: row.id,
     actorUserId,
     userIds: [employee?.user?.id],
-    externalRecipients: applicantEmail ? [{ name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '), email: applicantEmail, channels: ['email'] }] : [],
+    externalRecipients: applicantEmail ? [{ name: fullName(employee), email: applicantEmail, channels: ['email'] }] : [],
     title: `Leave application received — ${row.reference || row.id}`,
     body: `${leaveBody(row)}\nIt is waiting for approval; you will be emailed the decision.`,
     actionUrl: '/hr?tab=self_service',
@@ -114,7 +134,7 @@ export async function publishLeaveApplied(row: LeaveRow, actorUserId?: string | 
       employeeId: row.employeeId,
       employeeName: row.employeeName,
       days: Number(row.daysRequested || 0),
-      ...(applicantEmail ? { emailReplyTo: applicantEmail } : {}),
+      ...fromPerson(applicantEmail, applicantName),
     },
     idempotencyKey: `hr-leave-applied:${row.id}`,
   })
@@ -152,7 +172,7 @@ export async function publishLeaveDecision(
     userIds: [employee?.user?.id],
     externalRecipients: employeeExternal(employee),
     title: `Leave ${row.reference || row.id} ${verb}`,
-    metadata: await actorEmail(actorUserId).then(email => (email ? { emailReplyTo: email } : {})),
+    metadata: await actorSender(actorUserId),
     body: `${leaveBody(row)}\nDecision: ${verb}${row.reviewedByName ? ` by ${row.reviewedByName}` : ''}`,
     actionUrl: '/hr?tab=self_service',
     idempotencyKey: `hr-leave-${decision}:${row.id}`,
@@ -174,6 +194,7 @@ export async function publishLeaveCancelled(row: LeaveRow, actorUserId?: string 
 }
 
 export async function publishSalaryAdvanceApplied(row: SalaryAdvanceRow, actorUserId?: string | null) {
+  const employee = await employeeRecipient(row.employeeId)
   return publishNotificationEvent({
     eventType: 'hr.salary_advance.approval_required',
     entityType: 'salary_advance',
@@ -182,7 +203,11 @@ export async function publishSalaryAdvanceApplied(row: SalaryAdvanceRow, actorUs
     title: `Salary advance approval required — ${row.reference || row.id}`,
     body: `${row.employeeName || 'Employee'} requested KES ${Math.round(Number(row.amount || 0)).toLocaleString('en-KE')}.`,
     actionUrl: '/hr?tab=salary_advances',
-    metadata: { employeeId: row.employeeId, amount: Number(row.amount || 0) },
+    metadata: {
+      employeeId: row.employeeId,
+      amount: Number(row.amount || 0),
+      ...fromPerson(employeeEmail(employee), fullName(employee) || row.employeeName || undefined),
+    },
     idempotencyKey: `hr-salary-advance-applied:${row.id}`,
   })
 }
@@ -202,6 +227,7 @@ export async function publishSalaryAdvanceDecision(
     userIds: [employee?.user?.id],
     externalRecipients: employeeExternal(employee),
     title: `Salary advance ${row.reference || row.id} ${decision}`,
+    metadata: await actorSender(actorUserId),
     body: `Your salary advance of KES ${Math.round(Number(row.amount || 0)).toLocaleString('en-KE')} was ${decision}.${row.decisionNote ? ` Note: ${row.decisionNote}` : ''}`,
     actionUrl: '/hr?tab=self_service',
     idempotencyKey: `hr-salary-advance-${decision}:${row.id}`,
