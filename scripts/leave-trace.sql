@@ -43,7 +43,7 @@ WHERE ev.entity_type = 'leave_request' AND ev.entity_id = :'leave_id'
 ORDER BY ev.event_type, to_user, d.channel;
 
 \echo ''
-\echo '4. Who SHOULD get the approval email (active directors / admin officers) and why one may not'
+\echo '4. Who SHOULD get the approval email (active directors) and why one may not'
 SELECT u.username, u.role, coalesce(nullif(e.work_email, ''), u.email) AS emailed_at,
        CASE
          WHEN u.id = (SELECT submitted_by_user_id FROM leave_requests WHERE id = :'leave_id') THEN 'SKIPPED: applied it themself'
@@ -57,7 +57,7 @@ SELECT u.username, u.role, coalesce(nullif(e.work_email, ''), u.email) AS emaile
 FROM users u
 LEFT JOIN employees e ON e.id = u.employee_id
 LEFT JOIN notification_preferences p ON p.user_id = u.id AND p.event_type IN ('*', 'hr.leave.approval_required')
-WHERE u.is_active AND u.role::text IN ('director', 'admin_officer')
+WHERE u.is_active AND u.role::text = 'director'
 ORDER BY u.role, u.username;
 
 \echo ''

@@ -96,7 +96,7 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'finance.month_end_action': POLICY(['in_app'], 'attention', { recipientRoles: ['finance_officer'] }),
 
   // ── HR ──────────────────────────────────────────────────────────────────
-  'hr.leave.approval_required': POLICY(['in_app', 'push', 'email', 'sms'], 'attention', { recipientRoles: ['director', 'admin_officer'], requiresAcknowledgement: true, escalationMinutes: 240, mandatoryChannels: ['sms'] }),
+  'hr.leave.approval_required': POLICY(['in_app', 'push', 'email', 'sms'], 'attention', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 240, mandatoryChannels: ['sms'] }),
   'hr.leave.submitted': POLICY(['in_app', 'email'], 'info'),
   'hr.leave.approved': POLICY(['in_app', 'email', 'sms'], 'success'),
   'hr.leave.rejected': POLICY(['in_app', 'email', 'sms'], 'warning'),

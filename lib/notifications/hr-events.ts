@@ -185,7 +185,7 @@ export async function publishLeaveCancelled(row: LeaveRow, actorUserId?: string 
     entityType: 'leave_request',
     entityId: row.id,
     actorUserId,
-    roles: ['director', 'admin_officer'],
+    roles: ['director'],
     title: `Leave cancelled — ${row.reference || row.id}`,
     body: leaveBody(row),
     actionUrl: '/hr?tab=leave',
