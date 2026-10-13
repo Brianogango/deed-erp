@@ -27,7 +27,9 @@ for set in $(ls -1d "$ROOT"/*/ 2>/dev/null | sort); do
   # Buy-backs and exchanges live as one row per record (erp_state_records)
   # and, in older backups, as one list (app_state). Print each hit with a
   # little text around it.
-  rows=$(sudo -u postgres pg_restore --data-only -t erp_state_records -t app_state -f - "$dump" 2>/tmp/find-in-backups.err \
+  # Read as the current user (root): backups are root-only files (umask 077),
+  # and turning a dump into text needs no database connection.
+  rows=$(pg_restore --data-only -t erp_state_records -t app_state -f - "$dump" 2>/tmp/find-in-backups.err \
     | grep -i -E 'deed_buyBacks|deed_clientExchanges')
   if [ -s /tmp/find-in-backups.err ] && [ -z "$rows" ]; then
     echo "  $(basename "$set") ($stamp UTC): COULD NOT READ — $(head -c 200 /tmp/find-in-backups.err)"
