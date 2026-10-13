@@ -128,8 +128,13 @@ export async function publishLeaveApplied(row: LeaveRow, actorUserId?: string | 
     actorUserId,
     title: `Leave approval required — ${row.reference || row.id}`,
     body: leaveBody(row),
-    actionUrl: '/hr?tab=leave',
+    // Opens this request's Approve / Decline window (after login).
+    actionUrl: `/hr?tab=leave&leave=${encodeURIComponent(row.id)}`,
     metadata: {
+      emailActions: [
+        { label: 'Approve', url: `/hr?tab=leave&leave=${encodeURIComponent(row.id)}`, tone: 'success' },
+        { label: 'Decline', url: `/hr?tab=leave&leave=${encodeURIComponent(row.id)}`, tone: 'danger' },
+      ],
       leaveType: row.leaveType,
       employeeId: row.employeeId,
       employeeName: row.employeeName,

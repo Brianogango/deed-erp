@@ -17,17 +17,44 @@ function mailboxForEvent(eventType: string): MailboxProfile {
   return 'default'
 }
 
-function genericHtml(title: string, body: string, actionUrl?: string | null) {
+/** Links in emails must be absolute: "/hr?tab=leave" is not clickable in a mail app. */
+export function absoluteAppUrl(url: string | null | undefined): string | null {
+  const value = String(url || '').trim()
+  if (!value) return null
+  if (/^https?:\/\//i.test(value)) return value
+  const base = String(process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://erp.deed.co.ke').replace(/\/+$/, '')
+  return `${base}${value.startsWith('/') ? '' : '/'}${value}`
+}
+
+export type EmailAction = { label: string; url: string; tone?: 'primary' | 'success' | 'danger' }
+
+const BUTTON_COLORS: Record<NonNullable<EmailAction['tone']>, string> = { primary: '#00AEEF', success: '#15803D', danger: '#B91C1C' }
+
+/** A table-cell button: Outlook ignores padding/background on a bare link. */
+function emailButton(action: EmailAction) {
+  const href = absoluteAppUrl(action.url)
+  if (!href) return ''
+  const color = BUTTON_COLORS[action.tone || 'primary']
+  return `<td style="padding:0 10px 10px 0"><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td bgcolor="${color}" style="background:${color};border-radius:8px"><a href="${escapeHtml(href)}" target="_blank" style="display:inline-block;padding:12px 20px;font-family:Segoe UI,Arial,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px">${escapeHtml(action.label)}</a></td></tr></table></td>`
+}
+
+export function genericHtml(title: string, body: string, actionUrl?: string | null, actions?: EmailAction[]) {
   const brand = process.env.PDF_COMPANY_NAME || 'Deed Technologies'
+  const buttons = (actions?.length ? actions : actionUrl ? [{ label: 'Open in Deed ERP', url: actionUrl }] : [])
+    .map(emailButton).filter(Boolean).join('')
+  // One line per line: mail apps drop "white-space: pre-wrap".
+  const bodyHtml = escapeHtml(body).split(/\r?\n/).join('<br>')
   return `<!doctype html><html><body style="margin:0;background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a">
-    <div style="max-width:640px;margin:24px auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
-      <div style="background:#1B2762;color:#fff;padding:22px 26px"><strong style="font-size:20px">${escapeHtml(brand)}</strong></div>
-      <div style="padding:26px">
-        <h2 style="margin:0 0 12px;font-size:20px">${escapeHtml(title)}</h2>
-        <p style="white-space:pre-wrap;line-height:1.6">${escapeHtml(body)}</p>
-        ${actionUrl ? `<p style="margin-top:20px"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:#00AEEF;color:#fff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:700">Open in Deed ERP</a></p>` : ''}
-      </div>
-    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fafc"><tr><td align="center" style="padding:24px 12px">
+    <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;width:100%;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px">
+      <tr><td bgcolor="#1B2762" style="background:#1B2762;color:#ffffff;padding:20px 26px;border-radius:12px 12px 0 0"><strong style="font-size:20px">${escapeHtml(brand)}</strong></td></tr>
+      <tr><td style="padding:26px">
+        <h2 style="margin:0 0 14px;font-size:20px">${escapeHtml(title)}</h2>
+        <p style="margin:0 0 20px;font-size:14px;line-height:1.7">${bodyHtml}</p>
+        ${buttons ? `<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>${buttons}</tr></table>` : ''}
+      </td></tr>
+    </table>
+    </td></tr></table>
   </body></html>`
 }
 
@@ -55,7 +82,11 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
 
   if (input.channel === 'email') {
     if (!input.destination) return { success: false, provider: 'email', error: 'Missing email destination', errorCode: 'missing_destination' }
-    const html = String(metadata.emailHtml || genericHtml(input.title, input.body, input.actionUrl))
+    const actions = Array.isArray(metadata.emailActions)
+      ? (metadata.emailActions as unknown[]).filter((a): a is EmailAction =>
+          !!a && typeof (a as EmailAction).label === 'string' && typeof (a as EmailAction).url === 'string')
+      : undefined
+    const html = String(metadata.emailHtml || genericHtml(input.title, input.body, input.actionUrl, actions))
     const result = await sendEmail({
       to: input.destination,
       mailbox: mailboxForEvent(input.eventType),
@@ -67,7 +98,7 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
       ...(typeof metadata.emailSenderEmail === 'string' && metadata.emailSenderEmail.includes('@') ? { senderEmail: metadata.emailSenderEmail } : {}),
       subject,
       html,
-      text: String(metadata.emailText || text),
+      text: [String(metadata.emailText || text), absoluteAppUrl(input.actionUrl)].filter(Boolean).join('\n\n'),
     })
     return {
       success: result.success,

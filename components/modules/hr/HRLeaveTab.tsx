@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useApp, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Field, Input, Modal, PanelHeader, Select, Textarea } from '@/components/ui'
@@ -92,6 +92,30 @@ export default function HRLeaveTab() {
     }
     return false
   }
+
+  // A leave email's Approve / Decline button links here (?leave=<id>): once the
+  // request is loaded, open its decision window. Login and permissions apply.
+  const [linkedLeaveId, setLinkedLeaveId] = useUrlUiState('leave', '')
+  const handledLinkRef = useRef('')
+  useEffect(() => {
+    if (!linkedLeaveId || handledLinkRef.current === linkedLeaveId) return
+    const req = leaveRequests.find(r => r.id === linkedLeaveId)
+    if (!req) return
+    handledLinkRef.current = linkedLeaveId
+    setLinkedLeaveId('')
+    if (req.status !== 'pending_hr') {
+      showToast(`${req.ref} is already ${req.status.replace(/_/g, ' ')}.`, 'info')
+      return
+    }
+    if (!canDecideLeaveFor(req)) {
+      showToast(`You can't decide ${req.ref}.`, 'error')
+      return
+    }
+    setDecideId(req.id)
+    setDecideNote('')
+    setDecideError('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedLeaveId, leaveRequests])
 
   // ── Local state ──
   const [leaveSearch, setLeaveSearchValue] = useUrlUiState('leaveQ', '')
