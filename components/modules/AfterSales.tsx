@@ -25,7 +25,7 @@ const WARRANTY_STATUS_META: Record<Warranty['status'], { bg: string; color: stri
   active:   { bg: 'var(--success-bg)', color: 'var(--success-text)', label: 'Active' },
   expiring: { bg: '#FEF9C3', color: '#854D0E', label: 'Expiring Soon' },
   expired:  { bg: 'var(--danger-bg)', color: '#991B1B', label: 'Expired' },
-  cancelled: { bg: '#F1F5F9', color: '#475569', label: 'Cancelled (traded in)' },
+  cancelled: { bg: '#F1F5F9', color: '#475569', label: 'Cancelled' },
 }
 
 const RMA_STATUS_META: Record<ReturnOrder['status'], { bg: string; color: string; label: string; step: number }> = {
@@ -63,11 +63,12 @@ function AfterSalesContent() {
     invoices, posOrders,
     returnOrders, buyBacks, donations, clientExchanges,
     createReturnOrder, approveReturn, receiveReturn, processReturn, rejectReturn,
-    releaseSerialToStock,
+    releaseSerialToStock, cancelWarranty,
     showToast,
   } = useAfterSalesStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
+  const canCancelWarranty = ['director', 'admin_officer', 'technical_lead', 'finance_officer'].includes(String(currentUser?.role ?? ''))
   const isAdmin     = currentUser?.role === 'director'
   const isFinance   = currentUser?.role === 'finance_officer'
   const isInventory = currentUser?.role === 'inventory_officer' || currentUser?.role === 'admin_officer'
@@ -128,6 +129,8 @@ function AfterSalesContent() {
   const [processNotes, setProcessNotes]       = useState('')
 
   // Reject modal
+  const [cancelWarrantyReason, setCancelWarrantyReason] = useState('')
+  const [showCancelWarranty, setShowCancelWarranty] = useState(false)
   const [showReject, setShowReject]       = useState(false)
   const [rejectTarget, setRejectTarget]   = useState<ReturnOrder | null>(null)
   const [rejectReason, setRejectReason]   = useState('')
@@ -319,7 +322,46 @@ function AfterSalesContent() {
           <span style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 700 }}>
             {meta.label}
           </span>
+          {w.status !== 'cancelled' && canCancelWarranty && (
+            <button type="button" className="btn-secondary text-[11px]" onClick={() => { setCancelWarrantyReason(''); setShowCancelWarranty(true) }}>
+              Cancel warranty
+            </button>
+          )}
         </div>
+
+        {w.status === 'cancelled' && (
+          <div className="card p-3 text-[12px]" style={{ background: '#F8FAFC', borderColor: '#CBD5E1' }}>
+            <p className="font-semibold text-t1">Warranty cancelled{w.cancelledAt ? ` on ${fmtDate(w.cancelledAt)}` : ''}</p>
+            <p className="text-t3 mt-0.5">{w.cancelledReason || 'No reason recorded'}{w.cancelledByRef ? ` · ${w.cancelledByRef}` : ''}</p>
+          </div>
+        )}
+
+        {showCancelWarranty && (
+          <div className="card p-4 space-y-2" role="dialog" aria-label={`Cancel ${w.ref}`}>
+            <p className="text-[12px] font-semibold text-t1">Cancel {w.ref} for {w.customerName}?</p>
+            <p className="text-[11px] text-t3">The customer will no longer be covered on {w.serialNumber}. Use this when they no longer own the machine (returned for good, refunded, replaced).</p>
+            <textarea
+              className="form-input w-full text-[12px]"
+              rows={2}
+              maxLength={300}
+              placeholder="Reason (required) — e.g. Returned on RMA/0001 and refunded"
+              value={cancelWarrantyReason}
+              onChange={e => setCancelWarrantyReason(e.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary text-[11px]" onClick={() => setShowCancelWarranty(false)}>Keep warranty</button>
+              <button
+                type="button"
+                className="btn-primary text-[11px]"
+                style={{ background: 'var(--danger)' }}
+                disabled={!cancelWarrantyReason.trim()}
+                onClick={() => { cancelWarranty(w.id, cancelWarrantyReason); setShowCancelWarranty(false) }}
+              >
+                Cancel warranty
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="aftersales-detail__facts grid grid-cols-2 gap-3">
           <div className="card p-4 space-y-3">
@@ -338,15 +380,15 @@ function AfterSalesContent() {
             <div className="space-y-2 text-[12px]">
               <div className="flex justify-between"><span className="text-t3">Start Date</span><span>{fmtDate(w.startDate)}</span></div>
               <div className="flex justify-between"><span className="text-t3">End Date</span><span className={days < 0 ? 'text-red-600 font-semibold' : days <= 30 ? 'text-yellow-700 font-semibold' : ''}>{fmtDate(w.endDate)}</span></div>
-              <div className="flex justify-between">
+              {w.status !== 'cancelled' && <div className="flex justify-between">
                 <span className="text-t3">Days Remaining</span>
                 <span style={{ fontWeight: 700, color: days < 0 ? 'var(--danger)' : days <= 30 ? 'var(--warning-text)' : 'var(--success)' }}>
                   {days < 0 ? `${Math.abs(days)} days overdue` : `${days} days`}
                 </span>
-              </div>
+              </div>}
             </div>
             {/* Progress bar */}
-            {(() => {
+            {w.status !== 'cancelled' && (() => {
               const total = (new Date(w.endDate).getTime() - new Date(w.startDate).getTime()) / 86400000
               const used  = (Date.now() - new Date(w.startDate).getTime()) / 86400000
               const pct   = Math.max(0, Math.min(100, Math.round((used / total) * 100)))
@@ -778,7 +820,7 @@ function AfterSalesContent() {
                     { value: 'active', label: 'Active' },
                     { value: 'expiring', label: 'Expiring soon' },
                     { value: 'expired', label: 'Expired' },
-                    { value: 'cancelled', label: 'Cancelled (traded in)' },
+                    { value: 'cancelled', label: 'Cancelled' },
                   ],
                   onChange: setWFilter,
                 },

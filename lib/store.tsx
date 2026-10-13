@@ -4004,6 +4004,8 @@ interface AppState {
   receiveReturn: (id: string) => void
   processReturn: (id: string, resolution: RMAResolution, refundAmount?: number, processNotes?: string, refundPaymentMethod?: RefundPaymentMethod) => void
   rejectReturn: (id: string, reason: string) => void
+  /** Ends a warranty by hand (e.g. the customer returned the machine for good). Managers only. */
+  cancelWarranty: (id: string, reason: string) => void
 
   // Buy-backs
   buyBacks: BuyBack[]
@@ -4478,6 +4480,7 @@ type AfterSalesStoreState = Pick<AppState,
   | 'receiveReturn'
   | 'registerCustomerReturnSerial'
   | 'rejectReturn'
+  | 'cancelWarranty'
   | 'releaseSerialToStock'
   | 'showToast'
   | 'stockBuyBack'
@@ -7580,6 +7583,7 @@ function StoreProvider({
     receiveReturn: (...args: Parameters<AppState['receiveReturn']>) => storeCtxRef.current!.receiveReturn(...args),
     registerCustomerReturnSerial: (...args: Parameters<AppState['registerCustomerReturnSerial']>) => storeCtxRef.current!.registerCustomerReturnSerial(...args),
     rejectReturn: (...args: Parameters<AppState['rejectReturn']>) => storeCtxRef.current!.rejectReturn(...args),
+    cancelWarranty: (...args: Parameters<AppState['cancelWarranty']>) => storeCtxRef.current!.cancelWarranty(...args),
     releaseSerialToStock: (...args: Parameters<AppState['releaseSerialToStock']>) => storeCtxRef.current!.releaseSerialToStock(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     stockBuyBack: (...args: Parameters<AppState['stockBuyBack']>) => storeCtxRef.current!.stockBuyBack(...args),
@@ -21407,6 +21411,23 @@ const storeCtx: AppState = {
         : resolution === 'replacement' ? 'Replacement issued'
         : resolution === 'credit_note' ? `Credit note ${creditNoteRef} issued` : 'Repair initiated'
       showToast(`Return processed — ${label}`)
+    },
+
+    cancelWarranty: (id, reason) => {
+      const user = currentUser(); if (!user) return
+      if (!['director', 'admin_officer', 'technical_lead', 'finance_officer'].includes(user.role)) {
+        showToast('Only a manager or Finance can cancel a warranty', 'error'); return
+      }
+      const why = reason.trim()
+      if (!why) { showToast('Give a reason for cancelling the warranty', 'error'); return }
+      const w = warranties.find(x => x.id === id)
+      if (!w) return
+      if (w.status === 'cancelled') { showToast(`${w.ref} is already cancelled`, 'info'); return }
+      setWarranties(p => p.map(x => x.id === id
+        ? { ...x, status: 'cancelled' as const, cancelledAt: now(), cancelledReason: `${why} (by ${user.name})` }
+        : x))
+      addAuditLog('warranty_cancel', w.ref, `Cancelled ${w.ref} for ${w.customerName} (${w.serialNumber}) — ${why}`)
+      showToast(`${w.ref} cancelled`)
     },
 
     rejectReturn: (id, reason) => {
