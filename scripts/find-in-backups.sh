@@ -24,6 +24,11 @@ for set in $(ls -1d "$ROOT"/*/ 2>/dev/null | sort); do
   [ -f "$dump" ] || continue
   stamp=$(date -u -r "$dump" +%Y-%m-%d\ %H:%M)
   [[ "${stamp:0:10}" < "$SINCE" ]] && continue
+  if [ ! -s "$dump" ]; then
+    echo "  $(basename "$set") ($stamp UTC): EMPTY backup (0 bytes — that backup run failed; nothing to search)"
+    continue
+  fi
+  echo "  … reading $(basename "$set") ($(du -h "$dump" | cut -f1)) — large backups take a minute" >&2
   # Buy-backs and exchanges live as one row per record (erp_state_records)
   # and, in older backups, as one list (app_state). Print each hit with a
   # little text around it.
