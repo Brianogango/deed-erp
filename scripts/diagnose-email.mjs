@@ -83,6 +83,14 @@ const salesSmtpUser = value('SALES_SMTP_USER')
 const accountsSmtpUser = value('ACCOUNTS_SMTP_USER')
 
 const issues = []
+// The ERP loads .env with variable expansion: an unescaped "$" cuts the value
+// short (abc$123 becomes "abc"), so a correct password still fails to log in.
+for (const [key, raw] of Object.entries(merged)) {
+  if (!/(PASS|SECRET|TOKEN|KEY)$/.test(key) || typeof raw !== 'string') continue
+  if (/(^|[^\\])\$/.test(raw)) {
+    issues.push(`${key} contains an unescaped "$" — the ERP reads it cut short. Write each $ as \\$ in .env, then: pm2 restart deed-erp --update-env`)
+  }
+}
 if (provider === 'smtp') {
   if (!present('SMTP_HOST')) issues.push('SMTP_HOST missing')
   if (!present('SMTP_USER')) issues.push('SMTP_USER missing')
