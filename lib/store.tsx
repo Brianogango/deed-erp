@@ -12,7 +12,7 @@ import {
 export { isPosBankPayment }
 import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosSessionRef, nextPosTicketRef } from '@/lib/pos-orders-merge'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
-import { allocateDocNumber } from '@/lib/doc-numbers'
+import { allocateDocNumber, allocateDocNumberSync } from '@/lib/doc-numbers'
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
@@ -2076,8 +2076,13 @@ export interface Warranty {
   productId: string; productName: string; serialId: string; serialNumber: string
   deliveryId: string; saleOrderRef: string
   startDate: string; endDate: string
-  status: 'active' | 'expiring' | 'expired'
+  /** "cancelled": the customer no longer owns the machine (traded in / exchanged). */
+  status: 'active' | 'expiring' | 'expired' | 'cancelled'
   months: number
+  cancelledAt?: string
+  cancelledReason?: string
+  /** Buy-back or exchange that ended it (BBK/… / EXC/…). */
+  cancelledByRef?: string
 }
 
 // ── Kilimall ──────────────────────────────────────────────────────────────────
@@ -6884,6 +6889,50 @@ function StoreProvider({
   }
 
   /** Intake a retained repair device into warehouse via free buy-back or donation-in. */
+  // Buy-back / exchange numbers come from the server sequence (BBK/2026/0001),
+  // like delivery notes. They used to be counted in each browser, so every
+  // buy-back ended up as BBK/0001. The record is saved at once under a
+  // temporary number that cannot clash (BBK/2026/L…); the server number then
+  // replaces it on the record, its repair and its stock moves.
+  const tradeInRef = (prefix: 'BBK' | 'EXC'): string => {
+    const provisional = allocateDocNumberSync(prefix)
+    queueMicrotask(() => {
+      void storeCtxRef.current?.allocateDocRef(prefix).then(finalRef => {
+        if (!finalRef || finalRef === provisional || finalRef.includes('/L')) return
+        const swap = (text?: string) => (text && text.includes(provisional) ? text.split(provisional).join(finalRef) : text)
+        if (prefix === 'BBK') setBuyBacks(p => p.map(b => (b.ref === provisional ? { ...b, ref: finalRef } : b)))
+        else setClientExchanges(p => p.map(e => (e.ref === provisional ? { ...e, ref: finalRef } : e)))
+        setRepairs(p => (p.some(r => r.retainedBuyBackRef === provisional || (r.notes ?? '').includes(provisional))
+          ? p.map(r => (r.retainedBuyBackRef === provisional || (r.notes ?? '').includes(provisional)
+            ? { ...r, retainedBuyBackRef: r.retainedBuyBackRef === provisional ? finalRef : r.retainedBuyBackRef, notes: swap(r.notes) }
+            : r))
+          : p))
+        setWarranties(p => (p.some(w => w.cancelledByRef === provisional)
+          ? p.map(w => (w.cancelledByRef === provisional ? { ...w, cancelledByRef: finalRef, cancelledReason: swap(w.cancelledReason) } : w))
+          : p))
+        setStockMoves(p => (p.some(m => m.documentRef === provisional)
+          ? p.map(m => (m.documentRef === provisional ? { ...m, documentRef: finalRef, reason: swap(m.reason) ?? m.reason } : m))
+          : p))
+      }).catch(() => { /* the temporary number stays; it is unique */ })
+    })
+    return provisional
+  }
+
+  // A machine the customer sold back to us (buy-back) or handed in on an
+  // exchange is no longer theirs: its warranty ends there. Only warranties
+  // already on file are touched (a later resale gets its own new warranty).
+  const cancelWarrantiesForTradeIn = (serialIds: string[], docRef: string, reason: string) => {
+    const ids = new Set(serialIds.filter(Boolean))
+    if (!ids.size) return
+    const at = now()
+    const ending = warranties.filter(w => ids.has(w.serialId) && w.status !== 'cancelled')
+    if (!ending.length) return
+    setWarranties(p => p.map(w => (ids.has(w.serialId) && w.status !== 'cancelled'
+      ? { ...w, status: 'cancelled' as const, cancelledAt: at, cancelledReason: reason, cancelledByRef: docRef }
+      : w)))
+    addAuditLog('warranty_cancel', docRef, `Cancelled ${ending.map(w => w.ref).join(', ')} — ${reason}`)
+  }
+
   const convertRetainedDeviceIntoInventory = (args: {
     repair: RepairOrder
     mode: 'buyback' | 'donation'
@@ -6984,7 +7033,7 @@ function StoreProvider({
 
     const bb: BuyBack = {
       id: uid(),
-      ref: seq('BBK', 'bbk'),
+      ref: tradeInRef('BBK'),
       customerId: repair.customerId,
       customerName: repair.customerName,
       repairId: repair.id,
@@ -7028,6 +7077,7 @@ function StoreProvider({
     }
     setProducts(p => p.map(x => x.id === product.id ? { ...x, stockQty: x.stockQty + 1 } : x))
     addMove(product.id, product.name, 1, 'in', `Buy-back ${bb.ref} (retained repair ${repair.ref})`, bb.ref, 'customer', 'warehouse', serialLabels)
+      cancelWarrantiesForTradeIn(serialIds, bb.ref, `Bought back from ${repair.customerName} (${bb.ref}, retained repair ${repair.ref})`)
     return { ok: true, mode: 'buyback', id: bb.id, ref: bb.ref }
   }
 
@@ -19326,7 +19376,7 @@ const storeCtx: AppState = {
 
       const bb: BuyBack = {
         id: uid(),
-        ref: seq('BBK', 'bbk'),
+        ref: tradeInRef('BBK'),
         customerId: repair.customerId,
         customerName: repair.customerName,
         repairId: repair.id,
@@ -19381,7 +19431,7 @@ const storeCtx: AppState = {
         excludeUserId: user.id,
       })
 
-      showToast(`${repair.ref} → trade-in ${bb.ref} (draft). Approve, then pay or add as credit in Trade-in.`, 'success')
+      showToast(`${repair.ref} → trade-in draft created. Approve, then pay or add as credit in Trade-in.`, 'success')
       return { ok: true, message: noteLine, buyBackId: bb.id, buyBackRef: bb.ref }
     },
 
@@ -21419,13 +21469,13 @@ const storeCtx: AppState = {
       const bbLines: BuyBackLine[] = lines.map(l => ({ ...l, id: uid() }))
       const total = bbLines.reduce((s, l) => s + l.unitPrice * l.qty, 0)
       const bb: BuyBack = {
-        id: uid(), ref: seq('BBK', 'bbk'),
+        id: uid(), ref: tradeInRef('BBK'),
         customerId, customerName, originalSOId, originalSORef,
         status: 'draft', date: now(),
         lines: bbLines, total, destinationLocation: destination, notes,
       }
       setBuyBacks(p => [bb, ...p])
-      showToast(`Buy-back ${bb.ref} created`)
+      showToast(`Buy-back created for ${customerName}`)
       return bb
     },
 
@@ -21564,6 +21614,7 @@ const storeCtx: AppState = {
       })
       setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'stocked', stockedDate: now(), stockedByName: user.name } : b))
       addAuditLog('buyback_stock', bb.ref, `Stocked buy-back ${bb.ref} for ${bb.customerName}`)
+      cancelWarrantiesForTradeIn(bb.lines.flatMap(l => l.serialIds), bb.ref, `Bought back from ${bb.customerName} (${bb.ref})`)
       showToast(`${bb.ref} stocked — inventory updated`)
     },
 
@@ -21696,14 +21747,14 @@ const storeCtx: AppState = {
       const returnTotal = rLines.reduce((s, l) => s + l.unitPrice * l.qty, 0)
       const newTotal    = nLines.reduce((s, l) => s + l.unitPrice * l.qty, 0)
       const exc: ClientExchange = {
-        id: uid(), ref: seq('EXC', 'exc'),
+        id: uid(), ref: tradeInRef('EXC'),
         customerId, customerName, originalSOId, originalSORef,
         status: 'draft', date: now(),
         returnLines: rLines, newLines: nLines,
         returnTotal, newTotal, priceDiff: newTotal - returnTotal, notes,
       }
       setClientExchanges(p => [exc, ...p])
-      showToast(`Exchange ${exc.ref} created`)
+      showToast(`Exchange created for ${customerName}`)
       return exc
     },
 
@@ -21771,6 +21822,7 @@ const storeCtx: AppState = {
 
       setClientExchanges(p => p.map(e => e.id === id ? { ...e, status: 'completed', completedDate: now(), completedByName: user.name } : e))
       addAuditLog('exchange_complete', exc.ref, `Completed exchange ${exc.ref} for ${exc.customerName} — returns to ${LOCATIONS[returnLocation].name}`)
+      cancelWarrantiesForTradeIn(exc.returnLines.flatMap(l => l.serialIds), exc.ref, `Handed back by ${exc.customerName} on exchange ${exc.ref}`)
       showToast(`Exchange ${exc.ref} completed — returned items moved to ${LOCATIONS[returnLocation].name}`)
     },
 

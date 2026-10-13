@@ -17,6 +17,8 @@ type DocKind =
   | 'payment_receipt'
   | 'pos'
   | 'delivery_job'
+  | 'buyback'
+  | 'exchange'
 
 const PREFIX_TO_KIND: Record<string, DocKind> = {
   QUO: 'quotation',
@@ -31,6 +33,8 @@ const PREFIX_TO_KIND: Record<string, DocKind> = {
   RCT: 'payment_receipt',
   POS: 'pos',
   DJB: 'delivery_job',
+  BBK: 'buyback',
+  EXC: 'exchange',
 }
 
 export function prefixToKind(prefix: string): DocKind | undefined {

@@ -31,6 +31,9 @@ export type DocKind =
   | 'pos'
   /** Delivery jobs (DJB/NNNN) — yearless like POS; jobs are blob-backed, so the atomic counter row is the uniqueness mechanism. */
   | 'delivery_job'
+  /** Trade-in buy-backs (BBK/YYYY/NNNN) and client exchanges (EXC/YYYY/NNNN). */
+  | 'buyback'
+  | 'exchange'
 
 // Quotations exist both as CRM quotes and as quotation-state sale orders;
 // they share the QUO prefix and therefore one sequence.
@@ -49,6 +52,8 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   reconfiguration: 'RCF',
   pos: 'POS',
   delivery_job: 'DJB',
+  buyback: 'BBK',
+  exchange: 'EXC',
 }
 
 const PREFIX = DOC_PREFIX
@@ -186,6 +191,10 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
         return maxLegacySeqFromAppStateBlob('deed_posOrders', prefix)
       case 'delivery_job':
         return maxLegacySeqFromAppStateBlob('deed_deliveryJobs', prefix)
+      case 'buyback':
+        return maxRefFromAppStateBlob('deed_buyBacks', i => String(i.ref ?? ''), prefix, year)
+      case 'exchange':
+        return maxRefFromAppStateBlob('deed_clientExchanges', i => String(i.ref ?? ''), prefix, year)
       default:
         return 0
     }

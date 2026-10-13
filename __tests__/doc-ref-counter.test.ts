@@ -24,6 +24,8 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   reconfiguration: 'RCF',
   pos: 'POS',
   delivery_job: 'DJB',
+  buyback: 'BBK',
+  exchange: 'EXC',
 }
 
 beforeEach(() => {
@@ -51,6 +53,8 @@ describe('prefixToKind()', () => {
     expect(prefixToKind('SO')).toBe('sale_order')
     expect(prefixToKind('INV')).toBe('invoice')
     expect(prefixToKind('POS')).toBe('pos')
+    expect(prefixToKind('BBK')).toBe('buyback')
+    expect(prefixToKind('EXC')).toBe('exchange')
   })
 })
 

@@ -50,3 +50,17 @@ describe('repair warranty resolution', () => {
     expect(findOpenRepairWithSerial(repairs, 'other1')).toBeUndefined()
   })
 })
+
+describe('cancelled warranties (machine traded in / exchanged)', () => {
+  it('a cancelled warranty never covers a repair, even within its dates', () => {
+    const result = resolveRepairWarranty([{ ...active, status: 'cancelled' }], active.serialNumber, { now: new Date('2026-09-13T12:00:00Z') })
+    expect(result.covered).toBe(false)
+  })
+  it("the new owner's warranty still covers when the old one is cancelled", () => {
+    const old = { ...active, id: 'w-old', status: 'cancelled' }
+    const fresh = { ...active, id: 'w-new', startDate: '2026-06-01', endDate: '2027-05-31' }
+    const result = resolveRepairWarranty([old, fresh], active.serialNumber, { now: new Date('2026-09-13T12:00:00Z') })
+    expect(result.covered).toBe(true)
+    expect(result.warranty?.id).toBe('w-new')
+  })
+})

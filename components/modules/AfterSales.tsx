@@ -25,6 +25,7 @@ const WARRANTY_STATUS_META: Record<Warranty['status'], { bg: string; color: stri
   active:   { bg: 'var(--success-bg)', color: 'var(--success-text)', label: 'Active' },
   expiring: { bg: '#FEF9C3', color: '#854D0E', label: 'Expiring Soon' },
   expired:  { bg: 'var(--danger-bg)', color: '#991B1B', label: 'Expired' },
+  cancelled: { bg: '#F1F5F9', color: '#475569', label: 'Cancelled (traded in)' },
 }
 
 const RMA_STATUS_META: Record<ReturnOrder['status'], { bg: string; color: string; label: string; step: number }> = {
@@ -89,7 +90,7 @@ function AfterSalesContent() {
   // ── Warranty state ──────────────────────────────────────────────────────────
   const [wFilterValue, setWFilterValue] = useUrlUiState('warrantyStatus', 'all')
   const wFilter: Warranty['status'] | 'all' =
-    ['active', 'expiring', 'expired'].includes(wFilterValue) ? wFilterValue as Warranty['status'] : 'all'
+    ['active', 'expiring', 'expired', 'cancelled'].includes(wFilterValue) ? wFilterValue as Warranty['status'] : 'all'
   const setWFilter = (value: Warranty['status'] | 'all') =>
     setWFilterValue(value, { queryPatch: { warrantyPage: null } })
   const [wSearch, setWSearchValue] = useUrlUiState('warrantyQ', '')
@@ -136,7 +137,8 @@ function AfterSalesContent() {
     const now = Date.now()
     return warranties.map(w => {
       const daysLeft = Math.ceil((new Date(w.endDate).getTime() - now) / 86400000)
-      const status: Warranty['status'] = daysLeft < 0 ? 'expired' : daysLeft <= 30 ? 'expiring' : 'active'
+      // A cancelled warranty (machine traded in / exchanged) stays cancelled.
+      const status: Warranty['status'] = w.status === 'cancelled' ? 'cancelled' : daysLeft < 0 ? 'expired' : daysLeft <= 30 ? 'expiring' : 'active'
       return { ...w, status, daysLeft }
     })
   }, [warranties])
@@ -776,6 +778,7 @@ function AfterSalesContent() {
                     { value: 'active', label: 'Active' },
                     { value: 'expiring', label: 'Expiring soon' },
                     { value: 'expired', label: 'Expired' },
+                    { value: 'cancelled', label: 'Cancelled (traded in)' },
                   ],
                   onChange: setWFilter,
                 },
