@@ -40,7 +40,7 @@ WHERE e.key = 'deed_clientExchanges' AND e.payload->>'status' = 'completed';
 CREATE TEMP TABLE fix_target ON COMMIT DROP AS
 SELECT f.*, s.id AS sn_id, s.serial_number, s.status::text AS old_status, s.location AS old_location,
        s.screen_extras->>'saleOrderId' AS sale_ref, s.screen_extras->>'soldDate' AS sold_on,
-       coalesce(left(s.screen_extras->>'soldDate', 10) > f.done_on, false) AS sold_after
+       coalesce(left(s.screen_extras->>'soldDate', 10) >= f.done_on, false) AS sold_after
 FROM fix_line f JOIN serial_numbers s ON s.id::text = f.serial_id
 WHERE s.removed_at IS NULL AND (s.status::text = 'sold' OR s.location = 'customer');
 

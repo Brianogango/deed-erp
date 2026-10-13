@@ -45,16 +45,19 @@ WHERE NOT t.done
 ORDER BY t.date, t.ref;
 
 \echo ''
-\echo '2. Finished trade-ins whose machine is STILL sold (should be in stock) — send this section'
+\echo '2. Finished trade-ins whose machine is STILL sold with no sale on/after the trade-in date (should be in stock) — send this section'
 SELECT t.kind, t.ref, t.date, t.customer, t.product, s.serial_number, s.status::text AS serial_status, s.location, s.updated_at::timestamp(0) AS serial_changed
 FROM ti_line t LEFT JOIN serial_numbers s ON s.id::text = t.serial_id
 WHERE t.done AND (s.id IS NULL OR s.status::text = 'sold' OR s.location = 'customer')
+  -- sold again on or after the trade-in: a real sale, not a fault
+  AND NOT coalesce(left(s.screen_extras->>'soldDate', 10) >= t.date, false)
 ORDER BY t.date, t.ref;
 
 \echo ''
 \echo '3. Totals'
 SELECT t.kind, count(*) FILTER (WHERE NOT t.done) AS waiting_for_last_step,
        count(*) FILTER (WHERE t.done AND s.status::text NOT IN ('sold') AND s.location <> 'customer') AS in_stock_ok,
-       count(*) FILTER (WHERE t.done AND (s.id IS NULL OR s.status::text = 'sold' OR s.location = 'customer')) AS finished_but_still_sold
+       count(*) FILTER (WHERE t.done AND (s.status::text = 'sold' OR s.location = 'customer') AND coalesce(left(s.screen_extras->>'soldDate', 10) >= t.date, false)) AS sold_again_after,
+       count(*) FILTER (WHERE t.done AND (s.id IS NULL OR s.status::text = 'sold' OR s.location = 'customer') AND NOT coalesce(left(s.screen_extras->>'soldDate', 10) >= t.date, false)) AS finished_but_still_sold
 FROM ti_line t LEFT JOIN serial_numbers s ON s.id::text = t.serial_id
 GROUP BY t.kind;

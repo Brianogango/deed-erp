@@ -86,18 +86,18 @@ WHERE e.key NOT IN ('deed_serials', 'deed_auditLogs')
 
 \echo ''
 \echo '1. Everything that names each machine, oldest first ("after" = after the trade-in)'
-SELECT serial_number, CASE WHEN left(happened, 10) > traded_in_on THEN 'AFTER' ELSE 'before' END AS when_, happened, source, record, status, party
+SELECT serial_number, CASE WHEN left(happened, 10) > traded_in_on THEN 'AFTER' WHEN left(happened, 10) = traded_in_on THEN 'same day' ELSE 'before' END AS when_, happened, source, record, status, party
 FROM rs_hit ORDER BY serial_number, happened;
 
 \echo ''
 \echo '2. Verdict per machine: sold again after the trade-in?'
 SELECT r.serial_number, r.ref, r.traded_in_on,
-       count(h.*) FILTER (WHERE left(h.happened, 10) > r.traded_in_on
+       count(h.*) FILTER (WHERE left(h.happened, 10) >= r.traded_in_on
                             AND (h.source LIKE 'invoice%' OR h.source = 'delivery note' OR h.source = 'sale order'
                                  OR h.source LIKE 'stock move out%' OR h.source LIKE 'stock move sale%'
                                  OR h.source LIKE 'screen record deed_deliveries%' OR h.source LIKE 'screen record deed_pos%'
                                  OR h.source LIKE 'screen record deed_invoices%' OR h.source LIKE 'screen record deed_saleOrders%')) AS sale_records_after_trade_in,
-       CASE WHEN count(h.*) FILTER (WHERE left(h.happened, 10) > r.traded_in_on
+       CASE WHEN count(h.*) FILTER (WHERE left(h.happened, 10) >= r.traded_in_on
                             AND (h.source LIKE 'invoice%' OR h.source = 'delivery note' OR h.source = 'sale order'
                                  OR h.source LIKE 'stock move out%' OR h.source LIKE 'stock move sale%'
                                  OR h.source LIKE 'screen record deed_deliveries%' OR h.source LIKE 'screen record deed_pos%'
