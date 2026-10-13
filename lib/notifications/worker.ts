@@ -60,8 +60,9 @@ function normalizePhoneE164(raw?: string | null): string | null {
   return /^\+[1-9]\d{7,14}$/.test(e164) ? e164 : null
 }
 
-function channelDestination(channel: NotificationChannel, user: { email: string; phone: string | null }) {
-  if (channel === 'email') return user.email
+function channelDestination(channel: NotificationChannel, user: { email: string; phone: string | null; employee?: { workEmail: string | null } | null }) {
+  // Staff are emailed at their company mailbox when HR has recorded one.
+  if (channel === 'email') return (user.employee?.workEmail || user.email || '').trim().toLowerCase() || null
   if (channel === 'whatsapp' || channel === 'sms') return normalizePhoneE164(user.phone)
   return null
 }
@@ -103,7 +104,7 @@ async function createDelivery(input: {
 async function routeUserRecipient(event: any, recipient: any, channels: NotificationChannel[]) {
   const user = await prisma.user.findUnique({
     where: { id: recipient.userId },
-    select: { id: true, email: true, phone: true, isActive: true },
+    select: { id: true, email: true, phone: true, isActive: true, employee: { select: { workEmail: true } } },
   })
   if (!user?.isActive) return
 

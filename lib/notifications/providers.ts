@@ -59,6 +59,8 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
     const result = await sendEmail({
       to: input.destination,
       mailbox: mailboxForEvent(input.eventType),
+      // e.g. a leave request: replies go straight to the employee's work email.
+      ...(typeof metadata.emailReplyTo === 'string' && metadata.emailReplyTo.includes('@') ? { replyTo: metadata.emailReplyTo } : {}),
       subject,
       html,
       text: String(metadata.emailText || text),

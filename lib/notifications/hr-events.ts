@@ -2,6 +2,7 @@ import 'server-only'
 
 import prisma from '@/lib/prisma'
 import { publishNotificationEvent } from './service'
+import type { NotificationChannel } from './types'
 
 type LeaveRow = {
   id: string
@@ -42,10 +43,36 @@ async function employeeRecipient(employeeId: string) {
       firstName: true,
       lastName: true,
       email: true,
+      workEmail: true,
       phone: true,
       user: { select: { id: true, email: true, phone: true } },
     },
   })
+}
+
+type EmployeeRecipient = Awaited<ReturnType<typeof employeeRecipient>>
+
+/** Company mailbox first (HR sets it on the employee), then the login email, then the personal one. */
+function employeeEmail(employee: EmployeeRecipient): string | undefined {
+  return (employee?.workEmail || employee?.user?.email || employee?.email || '').trim().toLowerCase() || undefined
+}
+
+function employeeExternal(employee: EmployeeRecipient): Array<{ name: string; email?: string; phone?: string; channels: NotificationChannel[] }> {
+  const email = employeeEmail(employee)
+  const phone = employee?.phone || employee?.user?.phone
+  return email || phone ? [{
+    name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '),
+    email,
+    phone: phone || undefined,
+    channels: ['email', 'sms'],
+  }] : []
+}
+
+/** The work email of the person who acted (e.g. the approver), for Reply-To. */
+async function actorEmail(actorUserId?: string | null): Promise<string | undefined> {
+  if (!actorUserId) return undefined
+  const user = await prisma.user.findUnique({ where: { id: actorUserId }, select: { email: true, employee: { select: { workEmail: true } } } })
+  return (user?.employee?.workEmail || user?.email || '').trim().toLowerCase() || undefined
 }
 
 function leaveBody(row: LeaveRow) {
@@ -58,6 +85,22 @@ function leaveBody(row: LeaveRow) {
 }
 
 export async function publishLeaveApplied(row: LeaveRow, actorUserId?: string | null) {
+  const employee = await employeeRecipient(row.employeeId)
+  const applicantEmail = employeeEmail(employee)
+  // The applicant gets a receipt at their work email…
+  await publishNotificationEvent({
+    eventType: 'hr.leave.submitted',
+    entityType: 'leave_request',
+    entityId: row.id,
+    actorUserId,
+    userIds: [employee?.user?.id],
+    externalRecipients: applicantEmail ? [{ name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '), email: applicantEmail, channels: ['email'] }] : [],
+    title: `Leave application received — ${row.reference || row.id}`,
+    body: `${leaveBody(row)}\nIt is waiting for approval; you will be emailed the decision.`,
+    actionUrl: '/hr?tab=self_service',
+    idempotencyKey: `hr-leave-submitted:${row.id}`,
+  }).catch(err => console.error('[hr-events] leave receipt failed:', err))
+  // …and approvers can reply to the applicant directly.
   return publishNotificationEvent({
     eventType: 'hr.leave.approval_required',
     entityType: 'leave_request',
@@ -71,6 +114,7 @@ export async function publishLeaveApplied(row: LeaveRow, actorUserId?: string | 
       employeeId: row.employeeId,
       employeeName: row.employeeName,
       days: Number(row.daysRequested || 0),
+      ...(applicantEmail ? { emailReplyTo: applicantEmail } : {}),
     },
     idempotencyKey: `hr-leave-applied:${row.id}`,
   })
@@ -84,12 +128,7 @@ export async function publishLeaveBooked(row: LeaveRow, actorUserId?: string | n
     entityId: row.id,
     actorUserId,
     userIds: [employee?.user?.id],
-    externalRecipients: employee?.email || employee?.user?.email || employee?.phone || employee?.user?.phone ? [{
-      name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '),
-      email: employee?.email || employee?.user?.email,
-      phone: employee?.phone || employee?.user?.phone,
-      channels: ['email', 'sms'],
-    }] : [],
+    externalRecipients: employeeExternal(employee),
     title: `Leave booked — ${row.reference || row.id}`,
     body: leaveBody(row),
     actionUrl: '/hr?tab=self_service',
@@ -111,13 +150,9 @@ export async function publishLeaveDecision(
     entityId: row.id,
     actorUserId,
     userIds: [employee?.user?.id],
-    externalRecipients: employee?.email || employee?.user?.email || employee?.phone || employee?.user?.phone ? [{
-      name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '),
-      email: employee?.email || employee?.user?.email,
-      phone: employee?.phone || employee?.user?.phone,
-      channels: ['email', 'sms'],
-    }] : [],
+    externalRecipients: employeeExternal(employee),
     title: `Leave ${row.reference || row.id} ${verb}`,
+    metadata: await actorEmail(actorUserId).then(email => (email ? { emailReplyTo: email } : {})),
     body: `${leaveBody(row)}\nDecision: ${verb}${row.reviewedByName ? ` by ${row.reviewedByName}` : ''}`,
     actionUrl: '/hr?tab=self_service',
     idempotencyKey: `hr-leave-${decision}:${row.id}`,
@@ -165,12 +200,7 @@ export async function publishSalaryAdvanceDecision(
     entityId: row.id,
     actorUserId,
     userIds: [employee?.user?.id],
-    externalRecipients: employee?.email || employee?.user?.email || employee?.phone || employee?.user?.phone ? [{
-      name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '),
-      email: employee?.email || employee?.user?.email,
-      phone: employee?.phone || employee?.user?.phone,
-      channels: ['email', 'sms'],
-    }] : [],
+    externalRecipients: employeeExternal(employee),
     title: `Salary advance ${row.reference || row.id} ${decision}`,
     body: `Your salary advance of KES ${Math.round(Number(row.amount || 0)).toLocaleString('en-KE')} was ${decision}.${row.decisionNote ? ` Note: ${row.decisionNote}` : ''}`,
     actionUrl: '/hr?tab=self_service',
@@ -186,12 +216,7 @@ export async function publishSalaryAdvanceDisbursed(row: SalaryAdvanceRow, actor
     entityId: row.id,
     actorUserId,
     userIds: [employee?.user?.id],
-    externalRecipients: employee?.email || employee?.user?.email || employee?.phone || employee?.user?.phone ? [{
-      name: [employee?.firstName, employee?.lastName].filter(Boolean).join(' '),
-      email: employee?.email || employee?.user?.email,
-      phone: employee?.phone || employee?.user?.phone,
-      channels: ['email', 'sms'],
-    }] : [],
+    externalRecipients: employeeExternal(employee),
     title: `Salary advance disbursed — ${row.reference || row.id}`,
     body: `KES ${Math.round(Number(row.amount || 0)).toLocaleString('en-KE')} has been disbursed.${row.paidDate ? ` Date: ${date(row.paidDate)}.` : ''}`,
     actionUrl: '/hr?tab=self_service',
