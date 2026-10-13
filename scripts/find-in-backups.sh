@@ -27,17 +27,25 @@ for set in $(ls -1d "$ROOT"/*/ 2>/dev/null | sort); do
   # Buy-backs and exchanges live as one row per record (erp_state_records)
   # and, in older backups, as one list (app_state). Print each hit with a
   # little text around it.
-  hits=$(sudo -u postgres pg_restore --data-only -t erp_state_records -t app_state -f - "$dump" 2>/dev/null \
-    | grep -i -E 'deed_buyBacks|deed_clientExchanges' \
-    | grep -i -o -E ".{0,700}${TERM_}.{0,700}" | head -20)
+  rows=$(sudo -u postgres pg_restore --data-only -t erp_state_records -t app_state -f - "$dump" 2>/tmp/find-in-backups.err \
+    | grep -i -E 'deed_buyBacks|deed_clientExchanges')
+  if [ -s /tmp/find-in-backups.err ] && [ -z "$rows" ]; then
+    echo "  $(basename "$set") ($stamp UTC): COULD NOT READ — $(head -c 200 /tmp/find-in-backups.err)"
+    continue
+  fi
+  # How many buy-backs this backup holds (proves it was read: "0" with no error means none on file).
+  n_bbk=$(printf '%s\n' "$rows" | grep -o -E 'BBK/[0-9A-Z/]+' | sort -u | wc -l)
+  hits=$(printf '%s\n' "$rows" | grep -i -o -E ".{0,700}${TERM_}.{0,700}" | head -20)
   if [ -n "$hits" ]; then
     found_any=1
     echo
     echo "=================== $(basename "$set")  (taken $stamp UTC) ==================="
     echo "$hits"
   else
-    echo "  $(basename "$set") ($stamp UTC): not in buy-backs/exchanges"
+    echo "  $(basename "$set") ($stamp UTC): not in buy-backs/exchanges (read OK: $n_bbk buy-back numbers on file)"
   fi
 done
+latest=$(ls -1d "$ROOT"/*/ 2>/dev/null | sort | tail -1)
 echo
+echo "Newest backup: $(basename "$latest")"
 [ "$found_any" = 1 ] && echo "Send the first and last backup that contain it." || echo "Not found in any backup since $SINCE."

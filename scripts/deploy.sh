@@ -16,6 +16,12 @@
 #
 # Usage:  sudo bash scripts/deploy.sh
 #         sudo bash scripts/deploy.sh --rollback     (restore the previous build)
+#         sudo bash scripts/deploy.sh --no-backup    (skip the pre-deploy backup — not recommended)
+#
+# Every deploy first takes a verified database + files backup into
+# /var/backups/deed-erp (the older deploy did; this one did not, so for a
+# while the only backups were from before it). A failed backup stops the
+# deploy before anything changes.
 #
 # Migrations are deliberately NOT run here. Schema changes are applied by hand,
 # in the order the change requires, by someone who has read them.
@@ -70,6 +76,17 @@ if [[ "${1:-}" == "--rollback" ]]; then
 fi
 
 # ── Deploy ──────────────────────────────────────────────────────────────────
+if [[ "${1:-}" != "--no-backup" ]]; then
+  say "Backing up the database and files first"
+  BACKUP_CMD="/usr/local/bin/deed-erp-backup.sh"
+  [[ -x "$BACKUP_CMD" ]] || BACKUP_CMD="$APP_DIR/scripts/backup-db.sh"
+  if ! bash "$BACKUP_CMD"; then
+    die "Backup failed — nothing was deployed. Fix the backup, or re-run with --no-backup if you must deploy without one."
+  fi
+else
+  warn "Deploying WITHOUT a backup (--no-backup)"
+fi
+
 say "Fetching"
 LOCK_BEFORE=$(sha1sum package-lock.json 2>/dev/null | cut -d' ' -f1 || echo none)
 git pull --ff-only
