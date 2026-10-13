@@ -21,6 +21,8 @@ const PUBLIC_ASSET_PATHS  = new Set([
   '/deed-logo.png', '/deed-logo.svg', '/deed-logo-receipt.png', '/deed-logo-sidebar.png', '/deed-icon.svg', '/login-bg.jpg', '/sw.js', '/deed-notifications-sw.js', '/offline.html', '/manifest.json',
   // Partner integration guide — shareable without an ERP login
   '/docs/partner-api-guide.html',
+  // The blank Application for Credit form the client downloads from their link.
+  '/credit-forms/deed-credit-application-form.pdf',
 ])
 const PUBLIC_PATH_PREFIXES = [
   '/track',

@@ -8,7 +8,7 @@ import {
   ACTION_ROLES, DECIDED_STATUSES, FINANCE_APPROVAL_LIMIT, MIN_PAID_TRANSACTIONS, STANDARD_TERMS_DAYS, STATUS_LABELS,
   TRANSITIONS, type CreditAction, type CreditFacilityStatus,
 } from '@/lib/credit/credit-facility-rules'
-import { BUSINESS_FIELDS, BUSINESS_TYPES, GROUPS, PAYMENT_METHODS, STAKEHOLDERS, type FieldDef, type GroupDef } from '@/lib/credit/credit-form-fields'
+import { BUSINESS_FIELDS, BUSINESS_TYPES, DECLARATION_TEXT, GROUPS, OFFICE_USE_FIELDS, REPRESENTATIVE_FIELDS, type FieldDef, type GroupDef } from '@/lib/credit/credit-form-fields'
 
 type Toast = (msg: string, type?: 'error' | 'success' | 'info') => void
 type Json = Record<string, any>
@@ -311,9 +311,8 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
             <button type="button" className="btn-primary text-xs" disabled={busy || !(Number(newLimit) > 0)} onClick={() => void start()}>Start application</button>
           </div>
           <p className="mt-3 text-[11px] text-text-3">
-            Blank forms to send the client:{' '}
-            <a className="contacts-inline-link" href="/credit-forms/deed-credit-application-form.pdf" target="_blank" rel="noreferrer">credit account application form</a>{' · '}
-            <a className="contacts-inline-link" href="/credit-forms/deed-payment-policy-acceptance-form.pdf" target="_blank" rel="noreferrer">payment policy acceptance form</a>
+            Blank form to send the client:{' '}
+            <a className="contacts-inline-link" href="/credit-forms/deed-credit-application-form.pdf" target="_blank" rel="noreferrer">Application for Credit (2 pages)</a>
           </p>
         </section>
   )
@@ -453,7 +452,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
           {/* Application form */}
           <section className={sectionCls}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-sm font-extrabold text-text-1">Credit account application form</h4>
+              <h4 className="text-sm font-extrabold text-text-1">Application for Credit form</h4>
               {editableForm && (
                 <div className="flex gap-2">
                   <button type="button" className="btn-secondary text-[11px]" onClick={prefill}>Fill from contact</button>
@@ -461,13 +460,13 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
                 </div>
               )}
             </div>
-            <p className="mt-1 text-xs text-text-3">As on the Deed Technologies Credit Account Application Form. Type it in from the client's copy.</p>
+            <p className="mt-1 text-xs text-text-3">As on the Deed Technologies Application for Credit form (sections A–J). Type it in from the client's copy.</p>
             <details className="mt-3" open={editableForm}>
-              <summary className="cursor-pointer text-xs font-bold text-text-2">Business details</summary>
+              <summary className="cursor-pointer text-xs font-bold text-text-2">A · General details</summary>
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
                 {BUSINESS_FIELDS.map(def => <TextField key={def.key} def={def} value={form[def.key]} disabled={!editableForm} onChange={v => setField(def.key, v)} />)}
                 <label>
-                  <span className={labelCls}>Type of business</span>
+                  <span className={labelCls}>Legal status</span>
                   <select className={inputCls} value={form.businessType ?? ''} disabled={!editableForm} onChange={e => setField('businessType', e.target.value)}>
                     <option value="">—</option>
                     {BUSINESS_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -479,7 +478,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
               const rows = groupRows(g)
               return (
                 <details key={g.key} className="mt-3">
-                  <summary className="cursor-pointer text-xs font-bold text-text-2">{g.title}</summary>
+                  <summary className="cursor-pointer text-xs font-bold text-text-2">{g.letter} · {g.title}</summary>
                   {g.note && <p className="mt-1 text-[11px] text-text-3">{g.note}</p>}
                   {rows.map((row, i) => (
                     <div key={i} className="mt-2 rounded-xl border border-border-lt p-3">
@@ -496,34 +495,21 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
               )
             })}
             <details className="mt-3">
-              <summary className="cursor-pointer text-xs font-bold text-text-2">Business stakeholders</summary>
-              <p className="mt-1 text-[11px] text-text-3">Statements go to the financial controller's email unless otherwise indicated.</p>
-              {STAKEHOLDERS.map(([key, label]) => {
-                const v = (form.stakeholders?.[key] ?? {}) as Json
-                const set = (k: string, val: string) => setField('stakeholders', { ...(form.stakeholders ?? {}), [key]: { ...v, [k]: val } })
-                return (
-                  <div key={key} className="mt-2 grid gap-3 sm:grid-cols-3">
-                    <TextField def={{ key: 'name', label: `${label} — name` }} value={v.name} disabled={!editableForm} onChange={val => set('name', val)} />
-                    <TextField def={{ key: 'email', label: 'Email', type: 'email' }} value={v.email} disabled={!editableForm} onChange={val => set('email', val)} />
-                    <TextField def={{ key: 'phone', label: 'Cellphone' }} value={v.phone} disabled={!editableForm} onChange={val => set('phone', val)} />
-                  </div>
-                )
-              })}
+              <summary className="cursor-pointer text-xs font-bold text-text-2">I · Declaration</summary>
+              <p className="mt-1 text-[11px] text-text-3">{DECLARATION_TEXT}</p>
+              <label className="mt-2 flex items-center gap-1.5 text-xs">
+                <input type="checkbox" checked={Boolean(form.declarationAccepted)} disabled={!editableForm} onChange={e => setField('declarationAccepted', e.target.checked)} />
+                Agreed by the client
+              </label>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                {REPRESENTATIVE_FIELDS.map(def => <TextField key={def.key} def={def} value={form[def.key]} disabled={!editableForm} onChange={v => setField(def.key, v)} />)}
+              </div>
             </details>
             <details className="mt-3">
-              <summary className="cursor-pointer text-xs font-bold text-text-2">Payment policy acceptance</summary>
-              <p className="mt-1 text-[11px] text-text-3">Payment on receipt for initial transactions; credit evaluated after at least three successful transactions; late payments may incur fees.</p>
-              <div className="mt-2 flex flex-wrap gap-3 text-xs">
-                {PAYMENT_METHODS.map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-1.5">
-                    <input type="checkbox" checked={Boolean(form.paymentMethods?.includes?.(key))} disabled={!editableForm}
-                      onChange={e => setField('paymentMethods', e.target.checked ? [...(form.paymentMethods ?? []), key] : (form.paymentMethods ?? []).filter((m: string) => m !== key))} />
-                    {label}
-                  </label>
-                ))}
-              </div>
+              <summary className="cursor-pointer text-xs font-bold text-text-2">For office use only</summary>
+              <p className="mt-1 text-[11px] text-text-3">Limit and time period are set when the application is approved.</p>
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                <TextField def={{ key: 'policyAcceptedOn', label: 'Date of policy acceptance', type: 'date' }} value={form.policyAcceptedOn} disabled={!editableForm} onChange={v => setField('policyAcceptedOn', v)} />
+                {OFFICE_USE_FIELDS.map(def => <TextField key={def.key} def={def} value={form[def.key]} disabled={!editableForm} onChange={v => setField(def.key, v)} />)}
                 <TextField def={{ key: 'accountManager', label: 'Account manager' }} value={form.accountManager} disabled={!editableForm} onChange={v => setField('accountManager', v)} />
               </div>
             </details>

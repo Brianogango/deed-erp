@@ -1,73 +1,86 @@
 /**
- * The Deed Technologies Credit Application Form and Payment Policy Acceptance
- * Form as fields — shared by the staff screen and the client's link.
+ * The Deed Technologies "Application for Credit" form (2 pages, sections A–J)
+ * as fields — shared by the staff screen and the client's link.
+ *
+ * Keys keep their earlier names where the meaning is the same (registeredName,
+ * directors, tradeReferences, banks, poSignatories…) so applications already
+ * in progress keep their answers.
  */
 
 export type FieldDef = { key: string; label: string; type?: 'text' | 'email' | 'date' | 'number' | 'textarea' }
+
+/** A · General details */
 export const BUSINESS_FIELDS: FieldDef[] = [
-  { key: 'registeredName', label: 'Registered business name' },
-  { key: 'tradingName', label: 'Trading name' },
-  { key: 'physicalAddress', label: 'Physical address' },
-  { key: 'postalAddress', label: 'Postal address (incl. postal code)' },
-  { key: 'city', label: 'City' },
-  { key: 'telephone', label: 'Telephone number' },
-  { key: 'cellphone', label: 'Cellphone number' },
-  { key: 'email', label: 'Email address', type: 'email' },
-  { key: 'website', label: 'Website' },
-  { key: 'incorporationDate', label: 'Date of incorporation', type: 'date' },
-  { key: 'incorporationNumber', label: 'Certificate of incorporation no.' },
-  { key: 'vatNumber', label: 'VAT number' },
-  { key: 'taxPin', label: 'Tax PIN' },
-  { key: 'natureOfBusiness', label: 'Nature of business', type: 'textarea' },
-  { key: 'employees', label: 'Total number of employees', type: 'number' },
+  { key: 'registeredName', label: 'Name of organization' },
+  { key: 'physicalAddress', label: 'Address' },
+  { key: 'telephone', label: 'Telephone' },
+  { key: 'email', label: 'Email', type: 'email' },
+  { key: 'yearEstablished', label: 'Year of establishment', type: 'number' },
+  { key: 'permitNumber', label: 'City council permit no.' },
+  { key: 'permitExpiry', label: 'Permit expiry date', type: 'date' },
+  { key: 'taxPin', label: 'KRA PIN / company no.' },
 ]
+/** A · Legal status */
 export const BUSINESS_TYPES = [
-  ['public_limited', 'Public limited company'], ['private_limited', 'Private limited company'], ['sole_proprietorship', 'Sole proprietorship'],
-  ['partnership', 'Partnership'], ['society', 'Society'], ['foreign_branch', 'Registered branch of a foreign-registered company'],
+  ['llc', 'LLC'], ['company', 'Company'], ['partnership', 'Partnership'], ['proprietorship', 'Proprietorship'],
 ]
-export type GroupDef = { key: string; title: string; min: number; max: number; fields: FieldDef[]; note?: string }
+
+export type GroupDef = { key: string; letter: string; title: string; min: number; max: number; fields: FieldDef[]; note?: string }
 export const GROUPS: GroupDef[] = [
-  { key: 'directors', title: 'Owners / directors / partners / shareholders', min: 2, max: 10, fields: [
-    { key: 'fullName', label: 'Full name (as per ID / passport)' }, { key: 'citizenship', label: 'Citizenship / nationality' },
-    { key: 'idNumber', label: 'ID / passport number' }, { key: 'residentialAddress', label: 'Residential address' },
-    { key: 'email', label: 'Email', type: 'email' }, { key: 'cellphone', label: 'Cellphone' },
+  { key: 'directors', letter: 'B', title: 'Details of owner / proprietor / partners', min: 1, max: 6, fields: [
+    { key: 'fullName', label: 'Name' }, { key: 'citizenship', label: 'Nationality' },
   ] },
-  { key: 'poSignatories', title: 'Authorised purchase order signatories', min: 2, max: 4, fields: [
-    { key: 'fullName', label: 'Full name' }, { key: 'title', label: 'Designation / title' },
-  ], note: 'Purchase orders must be in writing on the company letterhead.' },
-  { key: 'banks', title: 'Bank accounts', min: 2, max: 2, fields: [
-    { key: 'bankName', label: 'Bank name' }, { key: 'branch', label: 'Branch' }, { key: 'accountNumber', label: 'Account number' },
+  { key: 'subsidiaries', letter: 'C', title: 'Names and address of subsidiary / associate companies', min: 1, max: 4, fields: [
+    { key: 'name', label: 'Name' }, { key: 'address', label: 'Address' },
+  ], note: 'If any.' },
+  { key: 'tradeReferences', letter: 'D', title: 'Companies you currently enjoy credit facilities from', min: 1, max: 4, fields: [
+    { key: 'supplierName', label: 'Name' }, { key: 'contactPerson', label: 'Contact person' }, { key: 'phone', label: 'Mobile / phone' },
+    { key: 'creditLimit', label: 'Credit limit' }, { key: 'paymentTerms', label: 'Payment terms' },
+  ], note: 'If any.' },
+  { key: 'banks', letter: 'F', title: 'Name and address of bankers with account no.', min: 1, max: 3, fields: [
+    { key: 'bankName', label: 'Bank name & branch' }, { key: 'accountNumber', label: 'Account no.' },
   ] },
-  { key: 'tradeReferences', title: 'Trade / supplier references', min: 2, max: 3, fields: [
-    { key: 'supplierName', label: 'Supplier name' }, { key: 'address', label: 'Address' }, { key: 'creditLimit', label: 'Credit limit' },
-    { key: 'paymentTerms', label: 'Payment terms' }, { key: 'contactPerson', label: 'Contact person' }, { key: 'designation', label: 'Designation' },
-    { key: 'email', label: 'Email', type: 'email' }, { key: 'phone', label: 'Telephone' },
-  ] },
-  { key: 'declarationSignatories', title: 'Customer declaration — authorised signatories', min: 2, max: 2, fields: [
-    { key: 'fullName', label: 'Full name' }, { key: 'title', label: 'Designation / title' }, { key: 'idNumber', label: 'ID / passport number' },
-  ], note: 'Signature and company stamp go on the signed form uploaded under Documents.' },
+  { key: 'chequeSignatories', letter: 'G', title: 'Authorized signatories for cheques / bills of exchange / other banking documents', min: 1, max: 4, fields: [
+    { key: 'fullName', label: 'Name' }, { key: 'title', label: 'Designation' },
+  ], note: 'Specimen signatures go on the signed form uploaded under Documents.' },
+  { key: 'poSignatories', letter: 'H', title: 'Authorized signatories for LPOs', min: 1, max: 4, fields: [
+    { key: 'fullName', label: 'Name' }, { key: 'title', label: 'Designation' },
+  ], note: 'Specimen signatures go on the signed form uploaded under Documents.' },
 ]
-export const STAKEHOLDERS = [
-  ['managingDirector', 'Managing director'], ['financialController', 'Financial controller (receives statements)'],
-  ['purchasingManager', 'Purchasing manager'], ['salesManager', 'Sales manager'],
-]
-export const PAYMENT_METHODS = [['bank_transfer', 'Bank transfer'], ['cheque', 'Cheque'], ['mobile_money', 'Mobile money']]
+/** Sections shown before "E · Details of credit requirement", and after it. */
+export const GROUPS_BEFORE_CREDIT = GROUPS.filter(g => g.letter < 'E')
+export const GROUPS_AFTER_CREDIT = GROUPS.filter(g => g.letter > 'E')
 
-
-export const PAYMENT_POLICY_TERMS = [
-  'Payment upon receipt for initial transactions.',
-  'Credit terms to be evaluated and offered after at least three successful transactions.',
-  'Any late payments may incur fees and affect our credit status with Deed Technologies.',
-  'All payments to be made via the specified methods.',
+/** I · General conditions */
+export const GENERAL_CONDITIONS = [
+  'An interest of 12% will be charged on outstanding amounts beyond the allowed credit period.',
+  'Purchases will only be delivered against local purchase orders signed by authorized personnel.',
+  'The firm/company will be totally responsible for payment of any materials supplied against LPOs duly signed by authorized personnel, unless adequate notice is given to us in writing cancelling those signatures.',
+  'All disputes arising in respect of overdue accounts shall be finally referred to the Kenyan Law Courts for settlement.',
+  'This Credit Application is to be signed by the owner of the firm. If it is signed by a person other than the owner, a copy of the authority given to the signatory by the owner(s) must be attached.',
 ]
 
-export const DECLARATION_TEXT = "By submitting this application, I/We confirm that the information provided is accurate and true. I/We also agree to comply with Deed Technologies' terms and conditions for credit facilities."
+export const DECLARATION_TEXT = 'I/We agree to the above conditions and declare that all information given in this application is true and correct.'
+
+/** I · The representative who signs the declaration (signature and stamp go on the signed form). */
+export const REPRESENTATIVE_FIELDS: FieldDef[] = [
+  { key: 'representativeName', label: 'Representative name' },
+  { key: 'representativePhone', label: 'Telephone no.' },
+]
+
+/** "For office use only" — staff fill these in; the client's link never saves them. */
+export const OFFICE_USE_FIELDS: FieldDef[] = [
+  { key: 'officeAccountNo', label: 'Account no.' },
+  { key: 'officeProducts', label: 'Product/s' },
+  { key: 'officeRemarks', label: 'Remarks', type: 'textarea' },
+  { key: 'salesManagerApproval', label: 'Sales manager (approved)' },
+  { key: 'accountsManagerApproval', label: 'Accounts manager (approved)' },
+]
 
 // ── What the client's link may save ─────────────────────────────────────────
 
 const SHORT_TEXT = 300
 const LONG_TEXT = 2000
-const STAKEHOLDER_FIELDS = ['name', 'email', 'phone']
 
 /**
  * Text as typed, minus anything that is not ordinary text: control
@@ -111,26 +124,10 @@ export function sanitizeClientForm(input: unknown): Record<string, unknown> {
       return clean
     })
   }
-  if (src.stakeholders && typeof src.stakeholders === 'object' && !Array.isArray(src.stakeholders)) {
-    const s = src.stakeholders as Record<string, unknown>
-    const clean: Record<string, Record<string, string>> = {}
-    for (const [key] of STAKEHOLDERS) {
-      const person = s[key]
-      if (!person || typeof person !== 'object' || Array.isArray(person)) continue
-      const p: Record<string, string> = {}
-      for (const f of STAKEHOLDER_FIELDS) {
-        const v = cleanText((person as Record<string, unknown>)[f], SHORT_TEXT)
-        if (v !== undefined) p[f] = v
-      }
-      clean[key] = p
-    }
-    out.stakeholders = clean
+  for (const def of REPRESENTATIVE_FIELDS) {
+    const v = cleanText(src[def.key], SHORT_TEXT)
+    if (v !== undefined) out[def.key] = v
   }
-  if (Array.isArray(src.paymentMethods)) {
-    out.paymentMethods = [...new Set(src.paymentMethods.filter(m => PAYMENT_METHODS.some(([k]) => k === m)))]
-  }
-  if (typeof src.policyAccepted === 'boolean') out.policyAccepted = src.policyAccepted
-  if (typeof src.policyAcceptedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(src.policyAcceptedOn)) out.policyAcceptedOn = src.policyAcceptedOn
   if (typeof src.declarationAccepted === 'boolean') out.declarationAccepted = src.declarationAccepted
   return out
 }

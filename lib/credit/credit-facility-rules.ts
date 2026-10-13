@@ -57,24 +57,42 @@ export type DocumentKind =
   | 'directors_ids'
   | 'business_permit'
   | 'credit_bureau_report'
+  | 'representative_id'
+  | 'signatory_authority'
+  | 'guarantee_cheque'
   | 'other'
 
-export type DocumentRule = { kind: DocumentKind; label: string; required: boolean; expires: boolean; hint?: string }
+export type DocumentRule = {
+  kind: DocumentKind
+  label: string
+  required: boolean
+  expires: boolean
+  hint?: string
+  /** Needed before approval, but handed over then — the client is not asked for it to submit. */
+  atApproval?: boolean
+  /** Shown on the client's link (other kinds stay with Finance, or are kept only for older applications). */
+  client?: boolean
+}
 
 /** The checklist from the credit application form, plus the two signed forms. */
 export const DOCUMENT_RULES: DocumentRule[] = [
-  { kind: 'application_form', label: 'Signed credit account application form', required: true, expires: false, hint: 'Signed and stamped by the authorised signatories' },
-  { kind: 'payment_policy_acceptance', label: 'Signed payment policy acceptance form', required: true, expires: false },
-  { kind: 'audited_financials', label: 'Latest audited financial statements', required: true, expires: false, hint: 'Balance sheet, income and cash flow statements, last two years' },
-  { kind: 'bank_statements', label: 'Bank statements — last three months', required: true, expires: false },
-  { kind: 'bank_reference_letter', label: 'Reference letter from bank', required: true, expires: false },
-  { kind: 'certificate_of_incorporation', label: 'Certificate of incorporation', required: true, expires: false },
-  { kind: 'tax_compliance_certificate', label: 'VAT / tax compliance certificate', required: true, expires: true, hint: 'Valid for 12 months — record the expiry date' },
-  { kind: 'kra_pin_certificate', label: 'KRA PIN certificate', required: true, expires: false },
-  { kind: 'directors_ids', label: "Directors' ID / passport copies", required: true, expires: false },
-  { kind: 'business_permit', label: 'Valid current business permit', required: true, expires: true, hint: 'Record the expiry date' },
+  // J · Documents required (Application for Credit form)
+  { kind: 'application_form', label: 'Signed & stamped application form', required: true, expires: false, client: true, hint: 'Both pages, with specimen signatures, the company stamp and the representative\'s signature' },
+  { kind: 'certificate_of_incorporation', label: 'Copy of valid company registration certificate', required: true, expires: false, client: true },
+  { kind: 'kra_pin_certificate', label: 'Copy of company KRA certificate', required: true, expires: false, client: true },
+  { kind: 'representative_id', label: 'Copy of company representative passport / identity card', required: true, expires: false, client: true },
+  { kind: 'signatory_authority', label: 'Copies of documents showing authorized signatory', required: true, expires: false, client: true, hint: 'If signed by someone other than the owner, attach the owner\'s authority' },
+  { kind: 'guarantee_cheque', label: 'Guarantee cheque, undated', required: true, expires: false, atApproval: true, hint: 'Amount decided at credit approval — Finance records it then' },
+  { kind: 'business_permit', label: 'City council business permit', required: false, expires: true, client: true, hint: 'Optional — record the expiry date' },
+  { kind: 'other', label: 'Other', required: false, expires: false, client: true },
+  // Finance's own checks, and kinds kept so older applications still show their files.
   { kind: 'credit_bureau_report', label: 'Credit bureau report', required: false, expires: false, hint: 'Obtained by Finance' },
-  { kind: 'other', label: 'Other', required: false, expires: false },
+  { kind: 'payment_policy_acceptance', label: 'Signed payment policy acceptance form (old form)', required: false, expires: false },
+  { kind: 'audited_financials', label: 'Audited financial statements (old form)', required: false, expires: false },
+  { kind: 'bank_statements', label: 'Bank statements (old form)', required: false, expires: false },
+  { kind: 'bank_reference_letter', label: 'Reference letter from bank (old form)', required: false, expires: false },
+  { kind: 'tax_compliance_certificate', label: 'VAT / tax compliance certificate (old form)', required: false, expires: true },
+  { kind: 'directors_ids', label: "Directors' ID / passport copies (old form)", required: false, expires: false },
 ]
 
 export const DOCUMENT_KINDS = new Set<string>(DOCUMENT_RULES.map(r => r.kind))

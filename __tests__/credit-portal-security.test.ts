@@ -22,29 +22,27 @@ describe('sanitizeClientForm', () => {
   })
 
   it('strips HTML brackets and control characters, and caps length', () => {
-    const out = sanitizeClientForm({ tradingName: '<script>alert(1)</script>\u0000x', natureOfBusiness: 'line 1\nline 2', city: 'a'.repeat(5000) })
-    expect(out.tradingName).toBe('scriptalert(1)/scriptx')
-    expect(out.natureOfBusiness).toBe('line 1\nline 2')
-    expect((out.city as string).length).toBe(300)
+    const out = sanitizeClientForm({ registeredName: '<script>alert(1)</script>\u0000x', physicalAddress: 'a'.repeat(5000), representativeName: 'Jane\nDoe' })
+    expect(out.registeredName).toBe('scriptalert(1)/scriptx')
+    expect((out.physicalAddress as string).length).toBe(300)
+    expect(out.representativeName).toBe('JaneDoe')
   })
 
   it('caps rows per list and drops unknown row fields', () => {
     const rows = Array.from({ length: 50 }, (_, i) => ({ fullName: `D${i}`, salary: 1 }))
     const out = sanitizeClientForm({ directors: rows })
-    expect((out.directors as unknown[]).length).toBe(10)
+    expect((out.directors as unknown[]).length).toBe(6)
     expect((out.directors as any[])[0]).toEqual({ fullName: 'D0' })
   })
 
   it('takes only listed choices and real booleans', () => {
-    const out = sanitizeClientForm({
-      businessType: 'evil', paymentMethods: ['cheque', 'crypto', 'cheque'], policyAccepted: 'yes', declarationAccepted: true,
-      stakeholders: { managingDirector: { name: 'Jane', ssn: '1' }, hacker: { name: 'x' } },
-    })
-    expect(out.businessType).toBeUndefined()
-    expect(out.paymentMethods).toEqual(['cheque'])
-    expect(out.policyAccepted).toBeUndefined()
-    expect(out.declarationAccepted).toBe(true)
-    expect(out.stakeholders).toEqual({ managingDirector: { name: 'Jane' } })
+    expect(sanitizeClientForm({ businessType: 'evil' }).businessType).toBeUndefined()
+    expect(sanitizeClientForm({ businessType: 'partnership' }).businessType).toBe('partnership')
+    expect(sanitizeClientForm({ declarationAccepted: 'yes' }).declarationAccepted).toBeUndefined()
+    expect(sanitizeClientForm({ declarationAccepted: true }).declarationAccepted).toBe(true)
+    // Office-use fields are staff-only: the client's link can never set them.
+    const out = sanitizeClientForm({ officeAccountNo: 'X1', salesManagerApproval: 'approved', officeRemarks: 'ok' })
+    expect(out).toEqual({})
   })
 })
 

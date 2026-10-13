@@ -379,8 +379,7 @@ export async function issuePortalLink(actor: Actor, id: string, opts: { email?: 
     const { sendEmail } = await import('@/lib/integrations/email')
     const { readFile } = await import('fs/promises')
     const forms = await Promise.all([
-      ['Deed Technologies Credit Account Application Form.pdf', 'deed-credit-application-form.pdf'],
-      ['Deed Technologies Payment Policy Acceptance Form.pdf', 'deed-payment-policy-acceptance-form.pdf'],
+      ['Deed Technologies - Application for Credit.pdf', 'deed-credit-application-form.pdf'],
     ].map(async ([filename, file]) => ({ filename, content: await readFile(path.join(process.cwd(), 'public', 'credit-forms', file)).catch(() => null), contentType: 'application/pdf' })))
     const result = await sendEmail({
       to,
@@ -389,7 +388,7 @@ export async function issuePortalLink(actor: Actor, id: string, opts: { email?: 
       html: `<p>Dear ${client?.name ?? 'Partner'},</p>
 <p>Thank you for choosing Deed Technologies. To apply for credit terms, please complete the credit account application and upload the required documents using this secure link:</p>
 <p><a href="${url}">${url}</a></p>
-<p>The link is valid until ${expires.toISOString().slice(0, 10)}. The signed application form and payment policy acceptance form are attached — please print, sign, stamp and upload them with the other documents.</p>
+<p>The link is valid until ${expires.toISOString().slice(0, 10)}. The application form is attached — please print it, add the specimen signatures, sign and stamp it, and upload it through the link with the documents listed on page 2.</p>
 <p>All information is treated confidentially and used solely for internal purposes. For queries, contact finance@deed.co.ke.</p>
 <p>Deed Technologies</p>`,
       text: `Complete your Deed Technologies credit account application here: ${url} (valid until ${expires.toISOString().slice(0, 10)}).`,
@@ -463,6 +462,7 @@ export async function portalSaveForm(token: string, input: { form?: unknown; req
 
 export async function portalAddDocument(token: string, file: { name: string; type: string; bytes: Buffer }, kind: string) {
   const app = await applicationForToken(token)
+  if (!DOCUMENT_RULES.some(r => r.kind === kind && r.client)) throw new CreditFacilityError('That document type is not part of this form', 400)
   if (!CLIENT_EDITABLE.has(app.status)) throw new CreditFacilityError('This application has been submitted — send further documents to finance@deed.co.ke', 409)
   if (app.documents.length >= MAX_CLIENT_DOCUMENTS) throw new CreditFacilityError('Too many files on this application — please contact finance@deed.co.ke')
   return addDocument(null, app.id, file, kind, 'client')
@@ -478,25 +478,24 @@ export async function portalRemoveDocument(token: string, docId: string) {
   return loadApplication(app.id)
 }
 
-/** What the client must provide before submitting. */
-export function portalSubmitBlockers(form: Record<string, any>, docs: Array<{ kind: string; status: string }>): string[] {
+/** What the client must provide before submitting (Application for Credit, sections A–J). */
+export function portalSubmitBlockers(
+  form: Record<string, any>,
+  docs: Array<{ kind: string; status: string }>,
+  requestedLimit?: number | null,
+): string[] {
   const out: string[] = []
   const need = (v: unknown) => typeof v === 'string' ? v.trim() !== '' : v != null && v !== ''
-  for (const [key, label] of [['registeredName', 'Registered business name'], ['physicalAddress', 'Physical address'], ['email', 'Email address'], ['taxPin', 'Tax PIN'], ['incorporationNumber', 'Certificate of incorporation number'], ['natureOfBusiness', 'Nature of business'], ['businessType', 'Type of business']] as const) {
+  for (const [key, label] of [['registeredName', 'Name of organization'], ['businessType', 'Legal status'], ['physicalAddress', 'Address'], ['telephone', 'Telephone'], ['email', 'Email'], ['taxPin', 'KRA PIN / company no.']] as const) {
     if (!need(form[key])) out.push(label)
   }
-  const directors = Array.isArray(form.directors) ? form.directors : []
-  if (!directors.some((d: any) => need(d?.fullName) && need(d?.idNumber))) out.push('At least one director (name and ID / passport number)')
-  const banks = Array.isArray(form.banks) ? form.banks : []
-  if (!banks.some((b: any) => need(b?.bankName) && need(b?.accountNumber))) out.push('At least one bank account')
-  const refs = Array.isArray(form.tradeReferences) ? form.tradeReferences : []
-  if (refs.filter((r: any) => need(r?.supplierName) && (need(r?.email) || need(r?.phone))).length < 2) out.push('Two trade / supplier references with a contact')
-  const signers = Array.isArray(form.declarationSignatories) ? form.declarationSignatories : []
-  if (!signers.some((s: any) => need(s?.fullName) && need(s?.title))) out.push('An authorised signatory for the declaration')
-  if (!form.declarationAccepted) out.push('Confirm the customer declaration')
-  if (!form.policyAccepted) out.push('Accept the payment policy')
+  const owners = Array.isArray(form.directors) ? form.directors : []
+  if (!owners.some((d: any) => need(d?.fullName))) out.push('At least one owner / proprietor / partner')
+  if (requestedLimit !== undefined && !(Number(requestedLimit) > 0)) out.push('The credit limit you are requesting')
+  if (!need(form.representativeName) || !need(form.representativePhone)) out.push("The representative's name and telephone")
+  if (!form.declarationAccepted) out.push('Agree to the general conditions and declaration')
   for (const rule of DOCUMENT_RULES) {
-    if (!rule.required) continue
+    if (!rule.required || rule.atApproval) continue
     if (!docs.some(d => d.kind === rule.kind && d.status !== 'rejected')) out.push(`Upload: ${rule.label}`)
   }
   return out
@@ -507,9 +506,9 @@ export async function portalSubmit(token: string) {
   const app = await applicationForToken(token)
   if (!CLIENT_EDITABLE.has(app.status)) throw new CreditFacilityError('This application has already been submitted', 409)
   const form = (app.form ?? {}) as Record<string, any>
-  const blockers = portalSubmitBlockers(form, app.documents)
+  const blockers = portalSubmitBlockers(form, app.documents, Number(app.requestedLimit))
   if (blockers.length) throw new CreditFacilityError(`Still needed: ${blockers.join('; ')}`, 409)
-  const signer = (Array.isArray(form.declarationSignatories) ? form.declarationSignatories : []).find((s: any) => s?.fullName)?.fullName ?? null
+  const signer = String(form.representativeName ?? '').trim() || null
   const actor = portalActor(app, signer)
   const updated = await prisma.creditFacilityApplication.update({
     where: { id: app.id },

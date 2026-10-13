@@ -28,13 +28,14 @@ describe('credit facility rules', () => {
     const missing = approvalCheck({ approvedLimit: 50_000, approvedTermsDays: 30, riskClass: 'low', documents: [], paidTransactions: 5, today })
     expect(missing.blockers).toHaveLength(DOCUMENT_RULES.filter(r => r.required).length)
 
-    const expired = allVerified.map(d => d.kind === 'tax_compliance_certificate' ? { ...d, expiresOn: '2026-01-01' } : d)
-    expect(approvalCheck({ approvedLimit: 50_000, approvedTermsDays: 30, riskClass: 'low', documents: expired, paidTransactions: 5, today }).blockers)
-      .toEqual(['VAT / tax compliance certificate: expired — a current copy is needed'])
-
-    const noExpiry = allVerified.map(d => d.kind === 'business_permit' ? { ...d, expiresOn: null } : d)
-    expect(approvalCheck({ approvedLimit: 50_000, approvedTermsDays: 30, riskClass: 'low', documents: noExpiry, paidTransactions: 5, today }).blockers)
-      .toEqual(['Valid current business permit: record its expiry date'])
+    // Section J of the Application for Credit form, plus the guarantee cheque taken at approval.
+    expect(DOCUMENT_RULES.filter(r => r.required).map(r => r.kind).sort()).toEqual([
+      'application_form', 'certificate_of_incorporation', 'guarantee_cheque', 'kra_pin_certificate', 'representative_id', 'signatory_authority',
+    ])
+    expect(approvalCheck({ approvedLimit: 50_000, approvedTermsDays: 30, riskClass: 'low', documents: allVerified.filter(d => d.kind !== 'guarantee_cheque'), paidTransactions: 5, today }).blockers)
+      .toEqual(['Guarantee cheque, undated: not verified'])
+    // Documents the old form asked for no longer hold up approval.
+    expect(approvalCheck({ approvedLimit: 50_000, approvedTermsDays: 30, riskClass: 'low', documents: allVerified, paidTransactions: 5, today }).blockers).toEqual([])
   })
 
   it('needs a limit, terms and a risk class', () => {

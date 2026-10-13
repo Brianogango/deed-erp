@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { DOCUMENT_RULES } from '@/lib/credit/credit-facility-rules'
 import {
-  BUSINESS_FIELDS, BUSINESS_TYPES, DECLARATION_TEXT, GROUPS, PAYMENT_METHODS, PAYMENT_POLICY_TERMS, STAKEHOLDERS,
+  BUSINESS_FIELDS, BUSINESS_TYPES, DECLARATION_TEXT, GENERAL_CONDITIONS, GROUPS_AFTER_CREDIT, GROUPS_BEFORE_CREDIT, REPRESENTATIVE_FIELDS,
   type FieldDef, type GroupDef,
 } from '@/lib/credit/credit-form-fields'
 
@@ -100,7 +100,7 @@ export default function CreditApplicationPortal() {
 
   const set = (key: string, v: unknown) => { setForm(f => ({ ...f, [key]: v })); setDirty(true) }
   const rows = (g: GroupDef): Json[] => {
-    const r = Array.isArray(form[g.key]) ? form[g.key] as Json[] : []
+    const r = (Array.isArray(form[g.key]) ? form[g.key] as Json[] : []).slice(0, g.max)
     return r.length >= g.min ? r : [...r, ...Array.from({ length: g.min - r.length }, () => ({}))]
   }
   const setRow = (g: GroupDef, i: number, key: string, v: string) => set(g.key, rows(g).map((row, j) => j === i ? { ...row, [key]: v } : row))
@@ -158,7 +158,11 @@ export default function CreditApplicationPortal() {
     }
   }
 
-  const required = useMemo(() => DOCUMENT_RULES.filter(r => r.kind !== 'credit_bureau_report'), [])
+  // J · Documents required, plus any older kind this application already has a file for.
+  const docRules = useMemo(
+    () => DOCUMENT_RULES.filter(r => r.client || (r.kind !== 'credit_bureau_report' && app?.documents.some(d => d.kind === r.kind))),
+    [app?.documents],
+  )
 
   if (error) {
     return (
@@ -175,6 +179,23 @@ export default function CreditApplicationPortal() {
   if (!app) return <main className="flex h-[100dvh] overflow-y-auto items-center justify-center bg-slate-50 text-sm text-slate-500">Loading your application…</main>
 
   const locked = !app.editable
+  const renderGroup = (g: GroupDef) => (
+          <section key={g.key} className={card}>
+            <h2 className="text-base font-bold text-slate-900"><span className="mr-2 text-[#1B2762]">{g.letter}</span>{g.title}</h2>
+            {g.note && <p className="mt-1 text-sm text-slate-600">{g.note}</p>}
+            {rows(g).map((row, i) => (
+              <div key={i} className="mt-4 rounded-xl border border-slate-200 p-4">
+                <p className="mb-3 text-xs font-bold text-slate-500">{i + 1}</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {g.fields.map(def => <Field key={def.key} def={def} value={row[def.key]} disabled={locked} onChange={v => setRow(g, i, def.key, v)} />)}
+                </div>
+              </div>
+            ))}
+            {!locked && rows(g).length < g.max && (
+              <button type="button" className="mt-3 text-sm font-semibold text-[#1B2762] underline" onClick={() => set(g.key, [...rows(g), {}])}>Add another</button>
+            )}
+          </section>
+        )
 
   return (
     <main className="h-[100dvh] overflow-y-auto bg-slate-50 px-4 py-8 sm:px-6">
@@ -189,8 +210,8 @@ export default function CreditApplicationPortal() {
           </div>
           <h1 className="mt-5 text-xl font-bold text-slate-900">{app.customer}</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-600">
-            Dear Deed Technologies Partner, thank you for choosing Deed Technologies. To apply for credit terms, kindly complete this form and upload
-            the required documents listed below. All shared information will be treated confidentially and used solely for internal purposes.
+            Thank you for choosing Deed Technologies. To apply for credit, complete this Application for Credit and upload the documents listed
+            at the end. All information is treated confidentially and used solely for internal purposes.
             For queries, contact <a className="font-semibold text-[#1B2762] underline" href="mailto:finance@deed.co.ke">finance@deed.co.ke</a>.
           </p>
           {locked && <p className="mt-4 rounded-lg px-3 py-2 text-sm font-semibold" style={{ background: '#E8F6EE', color: '#14532D' }}>Your application has been submitted and is with our finance team.</p>}
@@ -206,11 +227,11 @@ export default function CreditApplicationPortal() {
         )}
 
         <section className={card}>
-          <h2 className="text-base font-bold text-slate-900">Business details</h2>
+          <h2 className="text-base font-bold text-slate-900"><span className="mr-2 text-[#1B2762]">A</span>General details</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {BUSINESS_FIELDS.map(def => <Field key={def.key} def={def} value={form[def.key]} disabled={locked} onChange={v => set(def.key, v)} />)}
             <label>
-              <span className={label}>Type of business</span>
+              <span className={label}>Legal status</span>
               <select className={input} value={form.businessType ?? ''} disabled={locked} onChange={e => set('businessType', e.target.value)}>
                 <option value="">Choose one</option>
                 {BUSINESS_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -219,59 +240,44 @@ export default function CreditApplicationPortal() {
           </div>
         </section>
 
-        {GROUPS.map(g => (
-          <section key={g.key} className={card}>
-            <h2 className="text-base font-bold text-slate-900">{g.title}</h2>
-            {g.note && <p className="mt-1 text-sm text-slate-600">{g.note}</p>}
-            {rows(g).map((row, i) => (
-              <div key={i} className="mt-4 rounded-xl border border-slate-200 p-4">
-                <p className="mb-3 text-xs font-bold text-slate-500">{i + 1}</p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {g.fields.map(def => <Field key={def.key} def={def} value={row[def.key]} disabled={locked} onChange={v => setRow(g, i, def.key, v)} />)}
-                </div>
-              </div>
-            ))}
-            {!locked && rows(g).length < g.max && (
-              <button type="button" className="mt-3 text-sm font-semibold text-[#1B2762] underline" onClick={() => set(g.key, [...rows(g), {}])}>Add another</button>
-            )}
-          </section>
-        ))}
+        {GROUPS_BEFORE_CREDIT.map(renderGroup)}
 
         <section className={card}>
-          <h2 className="text-base font-bold text-slate-900">Business stakeholders</h2>
-          <p className="mt-1 text-sm text-slate-600">All statements will be sent to the financial controller's email unless otherwise indicated.</p>
-          {STAKEHOLDERS.map(([key, title]) => {
-            const v = (form.stakeholders?.[key] ?? {}) as Json
-            const put = (k: string, val: string) => set('stakeholders', { ...(form.stakeholders ?? {}), [key]: { ...v, [k]: val } })
-            return (
-              <div key={key} className="mt-4">
-                <p className="mb-2 text-sm font-semibold text-slate-800">{title}</p>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <Field def={{ key: 'name', label: 'Full name' }} value={v.name} disabled={locked} onChange={val => put('name', val)} />
-                  <Field def={{ key: 'email', label: 'Email', type: 'email' }} value={v.email} disabled={locked} onChange={val => put('email', val)} />
-                  <Field def={{ key: 'phone', label: 'Cellphone' }} value={v.phone} disabled={locked} onChange={val => put('phone', val)} />
-                </div>
-              </div>
-            )
-          })}
-        </section>
-
-        <section className={card}>
-          <h2 className="text-base font-bold text-slate-900">Credit details</h2>
+          <h2 className="text-base font-bold text-slate-900"><span className="mr-2 text-[#1B2762]">E</span>Details of credit requirement</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label><span className={label}>Requested credit limit (KES)</span>
+            <label><span className={label}>Credit limit (KES)</span>
               <input className={input} inputMode="decimal" value={limit} disabled={locked} onChange={e => { setLimit(e.target.value.replace(/[^\d.]/g, '')); setDirty(true) }} /></label>
-            <label><span className={label}>Requested credit terms (days)</span>
+            <label><span className={label}>Period (days)</span>
               <input className={input} inputMode="numeric" value={terms} disabled={locked} onChange={e => { setTerms(e.target.value.replace(/\D/g, '')); setDirty(true) }} /></label>
           </div>
-          <p className="mt-2 text-xs text-slate-500">Standard credit terms are 30 days from the invoice date unless otherwise agreed.{limit ? ` Requested: ${kes(Number(limit))}.` : ''}</p>
+          {limit && <p className="mt-2 text-xs text-slate-500">Requested: {kes(Number(limit))} for {terms || '—'} days.</p>}
+        </section>
+
+        {GROUPS_AFTER_CREDIT.map(renderGroup)}
+
+        <section className={card}>
+          <h2 className="text-base font-bold text-slate-900"><span className="mr-2 text-[#1B2762]">I</span>General conditions</h2>
+          <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-slate-700">
+            {GENERAL_CONDITIONS.map(t => <li key={t}>{t}</li>)}
+          </ol>
+          <label className="mt-4 flex items-start gap-2 text-sm text-slate-800">
+            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={Boolean(form.declarationAccepted)} disabled={locked} onChange={e => set('declarationAccepted', e.target.checked)} />
+            <span><b>Declaration.</b> {DECLARATION_TEXT}</span>
+          </label>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {REPRESENTATIVE_FIELDS.map(def => <Field key={def.key} def={def} value={form[def.key]} disabled={locked} onChange={v => set(def.key, v)} />)}
+          </div>
+          <p className="mt-2 text-xs text-slate-500">The representative signs and the company stamp goes on the printed form, uploaded below.</p>
         </section>
 
         <section className={card}>
-          <h2 className="text-base font-bold text-slate-900">Documents</h2>
-          <p className="mt-1 text-sm text-slate-600">PDF, photo, Word or Excel, up to 10 MB each. The signed forms are attached to the email you received.</p>
+          <h2 className="text-base font-bold text-slate-900"><span className="mr-2 text-[#1B2762]">J</span>Documents required</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            PDF, photo, Word or Excel, up to 10 MB each.{' '}
+            <a className="font-semibold text-[#1B2762] underline" href="/credit-forms/deed-credit-application-form.pdf" target="_blank" rel="noreferrer">Download the form to sign</a>.
+          </p>
           <div className="mt-4 divide-y divide-slate-100">
-            {required.map(rule => {
+            {docRules.map(rule => {
               const docs = app.documents.filter(d => d.kind === rule.kind)
               const ok = docs.some(d => d.status !== 'rejected')
               return (
@@ -281,7 +287,7 @@ export default function CreditApplicationPortal() {
                       <p className="text-sm font-semibold text-slate-900">{ok ? '✓ ' : ''}{rule.label}{rule.required ? '' : ' (optional)'}</p>
                       {rule.hint && <p className="text-xs text-slate-500">{rule.hint}</p>}
                     </div>
-                    {!locked && (
+                    {!locked && rule.client && (
                       <label className={`cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-semibold ${busy === rule.kind ? 'border-slate-200 text-slate-400' : 'border-[#1B2762] text-[#1B2762] hover:bg-[#1B2762]/5'}`}>
                         {busy === rule.kind ? 'Uploading…' : ok ? 'Add another' : 'Upload'}
                         <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" disabled={Boolean(busy)}
@@ -300,38 +306,6 @@ export default function CreditApplicationPortal() {
               )
             })}
           </div>
-        </section>
-
-        <section className={card}>
-          <h2 className="text-base font-bold text-slate-900">Payment policy acceptance</h2>
-          <p className="mt-1 text-sm text-slate-600">We acknowledge receipt and acceptance of Deed Technologies' Payment Policy for Corporate Clients:</p>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-700">
-            {PAYMENT_POLICY_TERMS.map(t => <li key={t}>{t}</li>)}
-          </ol>
-          <p className="mt-4 text-xs font-semibold text-slate-600">Payment method</p>
-          <div className="mt-2 flex flex-wrap gap-4 text-sm">
-            {PAYMENT_METHODS.map(([key, l]) => (
-              <label key={key} className="flex items-center gap-2">
-                <input type="checkbox" className="h-4 w-4" checked={Boolean(form.paymentMethods?.includes?.(key))} disabled={locked}
-                  onChange={e => set('paymentMethods', e.target.checked ? [...(form.paymentMethods ?? []), key] : (form.paymentMethods ?? []).filter((m: string) => m !== key))} />
-                {l}
-              </label>
-            ))}
-          </div>
-          <label className="mt-4 flex items-start gap-2 text-sm text-slate-800">
-            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={Boolean(form.policyAccepted)} disabled={locked}
-              onChange={e => { set('policyAccepted', e.target.checked); if (e.target.checked) set('policyAcceptedOn', new Date().toISOString().slice(0, 10)) }} />
-            We accept Deed Technologies' Payment Policy for Corporate Clients and commit to adhering to these terms.
-          </label>
-        </section>
-
-        <section className={card}>
-          <h2 className="text-base font-bold text-slate-900">Customer declaration</h2>
-          <label className="mt-3 flex items-start gap-2 text-sm text-slate-800">
-            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={Boolean(form.declarationAccepted)} disabled={locked} onChange={e => set('declarationAccepted', e.target.checked)} />
-            {DECLARATION_TEXT}
-          </label>
-          <p className="mt-2 text-xs text-slate-500">The signatories named above sign and stamp the application form uploaded under Documents.</p>
         </section>
 
         {!locked && (
