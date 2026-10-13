@@ -9,7 +9,8 @@ import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { findOpenRepairWithSerial, normalizeRepairSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
 import { isRepairNoCharge } from '@/lib/repair-billing-exempt'
 import { shouldDefaultCloseAfterHandover } from '@/lib/repair-handover'
-import { buildRepairInvoiceCharges, repairBillingNeedsSync } from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, repairBillingNeedsSync, repairBillsFeeOnly } from '@/lib/repair-invoice'
+import { normalizeClientRole } from '@/lib/auth/access'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import {
   DIAGNOSIS_FEE_LINE_DESCRIPTION,
@@ -1019,7 +1020,9 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
  * RepairProgressModal
  */
 export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { startRepair, markRepairComplete, createInvoiceFromRepair, invoices, quotes, saleOrders, companySettings } = useRepairStore()
+  const { startRepair, markRepairComplete, createInvoiceFromRepair, invoices, quotes, saleOrders, companySettings, users, currentUserId } = useRepairStore()
+  // Only these roles may create invoices on the server.
+  const canBillRole = ['director', 'finance_officer', 'admin_officer'].includes(normalizeClientRole(users.find(u => u.id === currentUserId)?.role))
   const [notes, setNotes] = useState('')
   const noCharge = !!(repair.billingExempt || (repair.underWarranty && repair.warrantyCoverage === 'full'))
   const billingExempt = !!repair.billingExempt
@@ -1031,8 +1034,14 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
     invoice: linkedInvoice,
     charges: buildRepairInvoiceCharges(repair, true, companySettings?.vatRate ?? 0),
   })
+  // Unrepairable / declined / stopped at diagnosis bill the diagnosis fee only.
+  // These were offered "bill the fee" on the job page, but this window only
+  // billed Ready / Invoiced jobs, so its button silently did nothing.
+  const feeOnly = repairBillsFeeOnly(repair)
+  const feeDue = feeOnly && buildRepairInvoiceCharges(repair, false, 0).length > 0
   const canBillFromQuote = !noCharge
-    && ['ready', 'invoiced'].includes(repair.status)
+    && canBillRole
+    && (['ready', 'invoiced'].includes(repair.status) || feeDue)
     && billingSync.needed
     && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
 
@@ -1057,6 +1066,12 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
       return { title: 'Mark Repair Complete', btn: 'Complete Repair',   icon: faCheckCircle,      accent: '#059669', grad: 'linear-gradient(135deg,#047857,#059669)', shadow: '0 8px 24px rgba(5,150,105,0.4)' }
     if (repair.status === 'ready' && noCharge)
       return { title: 'No Invoice Needed',    btn: 'Done',              icon: faCheckCircle,      accent: '#059669', grad: 'linear-gradient(135deg,#047857,#059669)', shadow: '0 8px 24px rgba(5,150,105,0.4)' }
+    if (canBillFromQuote && feeOnly)
+      return {
+        title: linkedInvoice ? 'Align Diagnosis Fee Invoice' : 'Bill Diagnosis Fee',
+        btn: linkedInvoice ? 'Update Draft Invoice' : 'Create Draft Invoice',
+        icon: faFileInvoiceDollar, accent: '#D97706', grad: 'linear-gradient(135deg,#B45309,#D97706)', shadow: '0 8px 24px rgba(217,119,6,0.4)',
+      }
     if (canBillFromQuote)
       return {
         title: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align Draft Invoice with Quote' : 'Create Draft Invoice',
@@ -1072,7 +1087,9 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
       ? 'This job is no-charge — prepare release / mark collected. No customer invoice.'
       : 'Full warranty — no customer invoice. Prepare release / mark collected.')
     : null
-  const billingHint = canBillFromQuote && (billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen)
+  const billingHint = canBillFromQuote && feeOnly
+    ? 'The repair did not go ahead, so the draft invoice carries the diagnosis fee only. Finance can add other charges before confirming it.'
+    : canBillFromQuote && (billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen)
     ? 'Uses the approved quote lines and creates or aligns one draft invoice. Confirmation remains in the Invoice module.'
     : null
 

@@ -25,7 +25,8 @@ import {
 import { saleOrderLinesFromBody } from '@/lib/sale-order-body-lines'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
-import { extractRepairRefFromText } from '@/lib/repair/sale-order-link'
+import { extractRepairRefFromText, findRepairForSaleOrder, isDiagnosisFeeOnlyLines, isRepairFeeOnlyBillable } from '@/lib/repair/sale-order-link'
+import { isDiagnosisFeeLine } from '@/lib/diagnosis-fee'
 import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
 import { quotationPaymentTermsDays } from '@/lib/sales/quotation-defaults'
 import { canTrimFulfillmentQty, isFulfillmentQtyTrim } from '@/lib/sales/fulfillment-trim'
@@ -186,6 +187,34 @@ async function saleOrderBlockersFor(orderId: string): Promise<string[]> {
 }
 
 /**
+ * Billing the diagnosis fee on a job the customer did not go ahead with
+ * (declined / stopped at diagnosis / unrepairable) rewrites its confirmed
+ * order from the approved quote down to the fee. Confirmed orders are frozen
+ * for everyone but directors, so for anyone else that rewrite was refused —
+ * silently — and the invoice then failed or billed the full quote. It is
+ * allowed here only when the new lines are the fee alone, the linked repair
+ * really is fee-only, and nothing has been invoiced from the order yet.
+ */
+async function isFeeOnlyRepairRewrite(existing: any, body: any): Promise<boolean> {
+  const lines = Array.isArray(body?.lines) ? body.lines : body?.items
+  if (!isDiagnosisFeeOnlyLines(lines, isDiagnosisFeeLine)) return false
+  const invoiced = await prisma.invoice.count({
+    where: { saleOrderId: existing.id, status: { notIn: ['cancelled', 'voided'] } },
+  })
+  if (invoiced > 0) return false
+  const state = await loadAppState(['deed_repairs_v2'])
+  const repairs = Array.isArray(state.deed_repairs_v2) ? (state.deed_repairs_v2 as any[]) : []
+  const repair = findRepairForSaleOrder(repairs, {
+    id: existing.id,
+    ref: existing.orderNumber,
+    orderNumber: existing.orderNumber,
+    quotationRef: existing.quotationRef,
+    notes: existing.notes,
+  })
+  return isRepairFeeOnlyBillable(repair)
+}
+
+/**
  * Returns an error response when the requested update violates the Odoo-style
  * workflow, otherwise null. `data` may be augmented with server-side stamps
  * (confirmation/sent metadata) for transitions the client did not stamp.
@@ -283,7 +312,8 @@ async function enforceSaleWorkflow(
     confirmedFreeze
     && isFulfillmentQtyTrim(existing, body)
     && canTrimFulfillmentQty(session.user.role)
-  if ((existing.locked || confirmedFreeze) && !isDirector && to !== 'quotation' && hasCommercialChange(existing, body) && !fulfillmentTrim) {
+  if ((existing.locked || confirmedFreeze) && !isDirector && to !== 'quotation' && hasCommercialChange(existing, body) && !fulfillmentTrim
+    && !(await isFeeOnlyRepairRewrite(existing, body))) {
     return NextResponse.json(
       { error: existing.locked
         ? 'This order is locked. Ask a director to unlock it before changing commercial fields.'

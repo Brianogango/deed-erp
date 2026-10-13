@@ -47,6 +47,24 @@ export function isRepairFeeOnlyBillable(
   return status === 'declined' || status === 'unrepairable'
 }
 
+/**
+ * Every line is the diagnosis fee — what the workshop sends when it rewrites a
+ * declined / stopped / unrepairable job's order down to the fee alone.
+ */
+export function isDiagnosisFeeOnlyLines(
+  lines: unknown,
+  isFeeLine: (line: { description?: string; isDiagnosisFee?: boolean }) => boolean,
+): boolean {
+  if (!Array.isArray(lines) || lines.length === 0) return false
+  return lines.every(line => {
+    const row = (line ?? {}) as { description?: unknown; productName?: unknown; isDiagnosisFee?: unknown }
+    return isFeeLine({
+      description: String(row.description ?? row.productName ?? ''),
+      isDiagnosisFee: row.isDiagnosisFee === true,
+    })
+  })
+}
+
 type SaleOrderRepairHint = {
   id?: string | null
   ref?: string | null

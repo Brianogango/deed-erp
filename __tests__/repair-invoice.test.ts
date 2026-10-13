@@ -354,3 +354,19 @@ describe('repairBillsFeeOnly', () => {
     expect(repairBillsFeeOnly({ status: 'approved' })).toBe(false)
   })
 })
+
+describe('isDiagnosisFeeOnlyLines (fee-only repair orders)', () => {
+  it('accepts an order holding only the diagnosis fee, by description or product name', async () => {
+    const { isDiagnosisFeeOnlyLines } = await import('@/lib/repair/sale-order-link')
+    const { isDiagnosisFeeLine } = await import('@/lib/diagnosis-fee')
+    expect(isDiagnosisFeeOnlyLines([{ productName: 'Diagnosis Fee' }], isDiagnosisFeeLine)).toBe(true)
+    expect(isDiagnosisFeeOnlyLines([{ description: 'Diagnosis Fee (repair not undertaken)' }], isDiagnosisFeeLine)).toBe(true)
+  })
+  it('rejects an order still holding the quote, or an empty one', async () => {
+    const { isDiagnosisFeeOnlyLines } = await import('@/lib/repair/sale-order-link')
+    const { isDiagnosisFeeLine } = await import('@/lib/diagnosis-fee')
+    expect(isDiagnosisFeeOnlyLines([{ productName: 'Diagnosis Fee' }, { productName: 'Charging port' }], isDiagnosisFeeLine)).toBe(false)
+    expect(isDiagnosisFeeOnlyLines([], isDiagnosisFeeLine)).toBe(false)
+    expect(isDiagnosisFeeOnlyLines(undefined, isDiagnosisFeeLine)).toBe(false)
+  })
+})

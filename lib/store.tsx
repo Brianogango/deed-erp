@@ -277,7 +277,7 @@ import { reportingFetch } from '@/lib/save-failure'
 import { reissueAfterClientDecision, reissueBlocker, reissueOnRevision, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
 import { countCorrectionBlocker, countCorrectionNote, partsOrderNote, purchaseOrderBlocker, requestAfterCountCheck, requestAfterPurchaseOrder, type PartsRequest } from '@/lib/repair/parts-request'
 import { executeRepairConsolidation, mergedSaleOrderFromPlan } from '@/lib/repair/consolidation-execute'
-import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
+import { findSaleOrderForRepair, findSalesQuoteForRepair, isDiagnosisFeeOnlyLines } from '@/lib/repair/sale-order-link'
 import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
 import {
   buildDefaultRepairQcItems,
@@ -17954,7 +17954,14 @@ const storeCtx: AppState = {
         }
         setSaleOrders(p => [newSo as SaleOrder, ...p])
         sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSo) })
-      } else if (linkedSaleOrder && (linkedSaleOrder.status === 'quotation' || linkedSaleOrder.status === 'quotation_sent' || (linkedSaleOrder.lines?.length ?? 0) < soLines.length)) {
+      } else if (linkedSaleOrder && (
+        linkedSaleOrder.status === 'quotation'
+        || linkedSaleOrder.status === 'quotation_sent'
+        || (linkedSaleOrder.lines?.length ?? 0) < soLines.length
+        // Fee only: an order still holding the approved quote must come down
+        // to the fee, or the server bills the full quote / refuses the invoice.
+        || (feeOnly && !isDiagnosisFeeOnlyLines(linkedSaleOrder.lines, isDiagnosisFeeLine))
+      )) {
         const confirmedAt = linkedSaleOrder.confirmedAt ?? new Date().toISOString()
         const soPatch = {
           status: 'sale' as const,
@@ -17969,12 +17976,19 @@ const storeCtx: AppState = {
           totalAmount: feeOnly ? soTotal : (repair.quote?.total ?? linkedSaleOrder.totalAmount ?? linkedSaleOrder.total),
           total: feeOnly ? soTotal : (repair.quote?.total ?? linkedSaleOrder.total),
         }
-        setSaleOrders(p => p.map(s => s.id === soId ? { ...s, ...soPatch } : s))
-        await fetch(`/api/sale-orders/${soId}`, {
+        const patchRes = await fetch(`/api/sale-orders/${soId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(soPatch),
-        }).catch(() => {})
+        }).catch(() => null)
+        if (!patchRes?.ok) {
+          // Carrying on would invoice the order as it stands on the server
+          // (for a fee-only job: the full declined / failed quote).
+          const reason = await patchRes?.json().then((b: { error?: string }) => b?.error).catch(() => undefined)
+          showToast(`Could not update ${soRefValue ?? 'the repair sales order'}${reason ? `: ${reason}` : ' — check your connection and try again'}`, 'error')
+          return null
+        }
+        setSaleOrders(p => p.map(s => s.id === soId ? { ...s, ...soPatch } : s))
       }
 
       const invoiceNotes = `Repair invoice for ${repair.ref}${

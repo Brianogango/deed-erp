@@ -25,6 +25,7 @@ const {
   },
   mockPrismaInvoice: {
     findMany: vi.fn().mockResolvedValue([]),
+    count: vi.fn().mockResolvedValue(0),
     aggregate: vi.fn().mockResolvedValue({ _sum: { totalAmount: 0, amountPaid: 0 } }),
   },
   mockPrismaClient: {
@@ -220,6 +221,56 @@ describe('sale-order workflow enforcement (server-side)', () => {
     const res = await PUT(putReq({ status: 'sale', locked: true, total: 999999, subtotal: 900000 }), params)
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/locked/i)
+  })
+
+  describe('billing the diagnosis fee on a job that did not go ahead', () => {
+    const feeLines = [{ productId: '', productName: 'Diagnosis Fee', qty: 1, unitPrice: 1000, taxRate: 0, subtotal: 1000 }]
+    const confirmedRepairOrder = { ...baseOrder, status: 'sale', notes: 'Repair order REP-QAZZ7NMC' }
+    const repairsWith = (status: string) => ({ deed_repairs_v2: [{ id: 'rep-1', ref: 'REP-QAZZ7NMC', status, saleOrderId: ORDER_ID }] })
+
+    beforeEach(() => {
+      mockGetSession.mockResolvedValue(sessionFor('technical_lead'))
+      mockPrismaSO.findUnique.mockResolvedValue(confirmedRepairOrder)
+      mockPrismaInvoice.count.mockResolvedValue(0)
+    })
+
+    it('lets a non-director bring an unrepairable job\'s confirmed order down to the fee', async () => {
+      mockLoadAppState.mockResolvedValue(repairsWith('unrepairable'))
+      const res = await PUT(putReq({ status: 'sale', lines: feeLines, subtotal: 1000, total: 1000 }), params)
+      expect(res.status).toBe(200)
+    })
+
+    it('also for a declined quote', async () => {
+      mockLoadAppState.mockResolvedValue(repairsWith('declined'))
+      const res = await PUT(putReq({ status: 'sale', lines: feeLines, subtotal: 1000, total: 1000 }), params)
+      expect(res.status).toBe(200)
+    })
+
+    it('still refuses when the repair was completed (not fee-only)', async () => {
+      mockLoadAppState.mockResolvedValue(repairsWith('ready'))
+      const res = await PUT(putReq({ status: 'sale', lines: feeLines, subtotal: 1000, total: 1000 }), params)
+      expect(res.status).toBe(409)
+      expect((await res.json()).error).toMatch(/locked/i)
+    })
+
+    it('still refuses once the order has been invoiced', async () => {
+      mockLoadAppState.mockResolvedValue(repairsWith('unrepairable'))
+      mockPrismaInvoice.count.mockResolvedValue(1)
+      const res = await PUT(putReq({ status: 'sale', lines: feeLines, subtotal: 1000, total: 1000 }), params)
+      expect(res.status).toBe(409)
+      expect((await res.json()).error).toMatch(/locked/i)
+    })
+
+    it('still refuses lines other than the fee', async () => {
+      mockLoadAppState.mockResolvedValue(repairsWith('unrepairable'))
+      const res = await PUT(putReq({
+        status: 'sale',
+        lines: [...feeLines, { productId: '', productName: 'Screen replacement', qty: 1, unitPrice: 500, taxRate: 0, subtotal: 500 }],
+        subtotal: 1500, total: 1500,
+      }), params)
+      expect(res.status).toBe(409)
+      expect((await res.json()).error).toMatch(/locked/i)
+    })
   })
 
   it('allows fulfilment progress updates on a locked order', async () => {

@@ -43,7 +43,7 @@ import {
 import { diagnosisFeeLineBadge, isDiagnosisFeeLine, resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 import { pickRepairPrimaryAction } from '@/lib/repair-handover'
 import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
-import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync } from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync, repairBillsFeeOnly } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
 
@@ -296,8 +296,19 @@ export default function RepairDetailView() {
   // was done). Offered only while a fee is actually still due.
   const declinedFeeDue = isDeclinedRepair(r)
     && buildRepairInvoiceCharges(r, false, 0).length > 0
+  // The server lets only these roles create invoices. The button used to show
+  // for everyone, so a technician / tech lead got a refusal every time —
+  // part of why billing "works at times and at times not".
+  const canBillRole = ['director', 'finance_officer', 'admin_officer'].includes(currentRole)
+  const billingDue = (['ready', 'unrepairable'].includes(r.status) || declinedFeeDue) && !noCharge
   const canInvoice = (['ready', 'invoiced', 'unrepairable'].includes(r.status) || declinedFeeDue)
     && !noCharge
+    && canBillRole
+  // Fee-only jobs (unrepairable / declined / stopped) bill the diagnosis fee, not the quote.
+  const billsFeeOnly = repairBillsFeeOnly(r)
+  const invoiceActionLabel = billsFeeOnly
+    ? (linkedInvoice ? 'Update diagnosis fee invoice' : 'Bill diagnosis fee')
+    : billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice'
     && billingSync.needed
     && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
     // Whoever stops a job at diagnosis (lead tech, assigned technician) can
@@ -354,6 +365,10 @@ export default function RepairDetailView() {
     : canStart     ? (billingExempt ? 'No-charge job — start the repair (quote & billing skipped)' : 'Start the repair')
     : canComplete  ? 'Mark repair complete to submit for QA'
     : canPerformQA ? 'Perform QC check — repair is ready for testing'
+    : billingDue && !canBillRole && !linkedInvoice
+      ? (r.status === 'ready'
+        ? 'Ready — waiting for Finance or an admin officer to invoice'
+        : 'Waiting for Finance or an admin officer to bill the diagnosis fee')
     : canInvoice && r.status === 'unrepairable'
       ? 'Device could not be repaired — bill the diagnosis fee (Finance can add other charges before confirming)'
     : canInvoice   ? (billingSync.requiresCreditNote
@@ -658,7 +673,7 @@ export default function RepairDetailView() {
               <ActionBtn onClick={() => markPartsArrived(r.id)} icon={faBoxOpen} label="Mark parts arrived" color="bg-orange-600 hover:bg-orange-700" shadow="shadow-orange-100" pulse />
             )}
             {primaryActionId === 'invoice' && (
-              <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align draft invoice' : 'Create draft invoice'} color="bg-amber-600 hover:bg-amber-700" shadow="shadow-amber-100" pulse />
+              <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={billsFeeOnly ? invoiceActionLabel : billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align draft invoice' : 'Create draft invoice'} color="bg-amber-600 hover:bg-amber-700" shadow="shadow-amber-100" pulse />
             )}
             {primaryActionId === 'prepare_release' && (
               <ActionBtn
@@ -1595,7 +1610,7 @@ export default function RepairDetailView() {
                   {primaryActionId === 'parts_arrived' && <ActionBtn onClick={() => markPartsArrived(r.id)} icon={faBoxOpen} label="Mark parts arrived" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
                   {primaryActionId === 'invoice' && (billingSync.requiresCreditNote
                     ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-800">{`${linkedInvoice?.ref ?? 'The invoice'} is posted and cannot be edited. Correct it with a credit or debit note in the Invoice module.`}</p>
-                    : <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice'} color="bg-sky-500 hover:bg-sky-600" shadow="" />)}
+                    : <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={invoiceActionLabel} color="bg-sky-500 hover:bg-sky-600" shadow="" />)}
                   {primaryActionId === 'invoice' && canBillTogether && (
                     <button
                       type="button"
@@ -1743,7 +1758,7 @@ export default function RepairDetailView() {
                       { id: 'decline', label: 'Decline quote', onClick: () => setShowDeclineModal(true), hidden: !canDeclineQuote, danger: true },
                       {
                         id: 'invoice',
-                        label: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice',
+                        label: invoiceActionLabel,
                         onClick: () => setShowProgressModal(true),
                         // A posted invoice is immutable; offering the action here
                         // only produces a server refusal.
