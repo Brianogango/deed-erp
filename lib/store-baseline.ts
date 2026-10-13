@@ -19,6 +19,11 @@ export function serverBaselineFor(key: string): string | undefined {
   return disabled.has(key) ? undefined : baseline[key]
 }
 
+/** Keys whose changed-records save the server refused: these go whole. */
+export function deltaDisabledFor(key: string): boolean {
+  return disabled.has(key)
+}
+
 /**
  * A full record replaced its slimmed row in the store (lib/store-slim.ts):
  * the server holds exactly that row, so the baseline does too — otherwise the

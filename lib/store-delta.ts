@@ -54,9 +54,33 @@ export function computeCollectionDelta(baselineRaw: string, currentRaw: string):
     if (!before.has(id) || !sameContent(before.get(id), row)) upsert.push(row)
   }
   const remove = [...before.keys()].filter(id => !seen.has(id))
-  // Small collections, or most rows changed: the full value is just as cheap.
-  if (current.length < 20 || upsert.length + remove.length > current.length / 2) return null
+  // Always the delta, however small the collection: a full value makes the
+  // server delete every record this browser did not have — including one
+  // another person created after this tab loaded (how a buy-back vanished).
   return { upsert, remove }
+}
+
+/**
+ * For a browser that does not know what the server holds (no baseline yet):
+ * every record it has, as add-or-update only — nothing is deleted, because
+ * it cannot tell a record it removed from one it never saw. Null when a row
+ * has no id or ids repeat (then only the full value can be sent).
+ */
+export function upsertOnlyDelta(currentRaw: string): CollectionDelta | null {
+  let current: unknown
+  try {
+    current = JSON.parse(currentRaw)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(current)) return null
+  const seen = new Set<string>()
+  for (const row of current) {
+    const id = idOf(row)
+    if (id === null || seen.has(id)) return null
+    seen.add(id)
+  }
+  return { upsert: current, remove: [] }
 }
 
 export function isCollectionDelta(value: unknown): value is CollectionDelta {

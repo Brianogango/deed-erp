@@ -16,7 +16,7 @@ vi.mock('@/lib/server-store', () => ({
 }))
 vi.mock('@/lib/auth/db', () => ({ sql: vi.fn(), withDbTransaction: vi.fn() }))
 
-import { applyCollectionDelta, computeCollectionDelta, isCollectionDelta } from '@/lib/store-delta'
+import { applyCollectionDelta, computeCollectionDelta, isCollectionDelta, upsertOnlyDelta } from '@/lib/store-delta'
 import { POST as STORE_POST } from '@/app/api/store/route'
 
 const row = (i: number, extra: Record<string, unknown> = {}) => ({ id: `s${i}`, serial: `SN${i}`, status: 'available', ...extra })
@@ -37,8 +37,6 @@ describe('computeCollectionDelta', () => {
   })
 
   it('falls back to the full value when a delta cannot stand in for it', () => {
-    expect(computeCollectionDelta(json(rows(5)), json(rows(6)))).toBeNull() // small
-    expect(computeCollectionDelta(json(rows(40)), json(rows(40).map(r => ({ ...r, status: 'x' }))))).toBeNull() // most changed
     expect(computeCollectionDelta(json(rows(40)), json([...rows(40), { serial: 'no-id' }]))).toBeNull()
     expect(computeCollectionDelta(json(rows(40)), json([...rows(40), row(1)]))).toBeNull() // duplicate id
     expect(computeCollectionDelta(json({ a: 1 }), json(rows(40)))).toBeNull()
@@ -116,5 +114,35 @@ describe('POST /api/store — changed-records saves', () => {
     mockLoadAppState.mockResolvedValue({ deed_serials: { broken: true } })
     const res = await post({ _delta: { deed_serials: { upsert: [row(1)], remove: [] } } })
     expect(res.status).toBe(409)
+  })
+})
+
+describe('a stale tab cannot delete records it never saw', () => {
+  it('small collections and big changes still go as a delta (never whole)', () => {
+    expect(computeCollectionDelta(json(rows(5)), json(rows(6)))).toEqual({ upsert: [row(5)], remove: [] })
+    const d = computeCollectionDelta(json(rows(40)), json(rows(40).map(r => ({ ...r, status: 'x' }))))
+    expect(d?.upsert).toHaveLength(40)
+    expect(d?.remove).toEqual([])
+  })
+
+  it("keeps a buy-back another person created after this tab loaded", () => {
+    // Server: s0..s2 plus a new draft s9 someone else just added.
+    const server = [row(9), ...rows(3)]
+    // This tab loaded s0..s2, then edited s1 and deleted s2.
+    const tabBaseline = json(rows(3))
+    const tabNow = json([row(0), row(1, { status: 'approved' })])
+    const delta = computeCollectionDelta(tabBaseline, tabNow)!
+    const saved = applyCollectionDelta(server, delta) as any[]
+    expect(saved.map(r => r.id).sort()).toEqual(['s0', 's1', 's9'])
+    expect(saved.find(r => r.id === 's1').status).toBe('approved')
+  })
+
+  it('a tab with no baseline only adds or updates', () => {
+    const d = upsertOnlyDelta(json(rows(2)))!
+    expect(d.remove).toEqual([])
+    const saved = applyCollectionDelta([row(9), ...rows(3)], d) as any[]
+    expect(saved.map(r => r.id).sort()).toEqual(['s0', 's1', 's2', 's9'])
+    expect(upsertOnlyDelta(json([{ serial: 'no-id' }]))).toBeNull()
+    expect(upsertOnlyDelta(json({ a: 1 }))).toBeNull()
   })
 })

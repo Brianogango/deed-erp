@@ -308,8 +308,8 @@ import {
   buildDeliveryChargeInvoiceLine,
 } from '@/lib/invoice-delivery-charge'
 import { safeLocalStorageSet } from '@/lib/client-store-cache'
-import { computeCollectionDelta, type CollectionDelta } from '@/lib/store-delta'
-import { forgetServerBaseline, patchServerBaseline, rememberServerBaseline, serverBaselineFor } from '@/lib/store-baseline'
+import { computeCollectionDelta, upsertOnlyDelta, type CollectionDelta } from '@/lib/store-delta'
+import { deltaDisabledFor, forgetServerBaseline, patchServerBaseline, rememberServerBaseline, serverBaselineFor } from '@/lib/store-baseline'
 import { isSlimRow, SLIM_MARK } from '@/lib/store-slim'
 import { loadFullRecord } from '@/lib/full-record'
 import { awaitRouteHydration, awaitStoreDownloads, keysChangedSinceRead, noteStoreChanges, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
@@ -5075,11 +5075,13 @@ async function flushKeysIndividually(entries: Record<string, string>) {
   const refusedKeys: string[] = []
   await Promise.all(Object.keys(entries).map(async key => {
     try {
+      const { body: oneBody, deltaKeys: oneDelta } = buildSyncBody({ [key]: entries[key] })
       const res = await fetch('/api/store', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [key]: entries[key] }),
+        body: JSON.stringify(oneBody),
       })
+      if (!res.ok && oneDelta.length) forgetServerBaseline(oneDelta)
       if (res.status === 401) {
         if (typeof window !== 'undefined') window.location.href = '/login'
         return
@@ -5110,12 +5112,18 @@ async function flushKeysIndividually(entries: Record<string, string>) {
 }
 
 // Changed-records-only saves (lib/store-delta.ts, lib/store-baseline.ts).
+// A collection is never sent whole when it can be helped: the server deletes
+// every record a whole list leaves out, so a tab that loaded before someone
+// else added a record would delete it. Known to this tab → its own adds,
+// edits and removals only; nothing known yet → add-or-update only.
 function buildSyncBody(entries: Record<string, string>): { body: Record<string, unknown>; deltaKeys: string[] } {
   const body: Record<string, unknown> = {}
   const delta: Record<string, CollectionDelta> = {}
   for (const [key, value] of Object.entries(entries)) {
     const baseline = serverBaselineFor(key)
-    const d = baseline ? computeCollectionDelta(baseline, value) : null
+    const d = baseline
+      ? computeCollectionDelta(baseline, value)
+      : (deltaDisabledFor(key) ? null : upsertOnlyDelta(value))
     if (d) delta[key] = d
     else body[key] = value
   }
@@ -5243,7 +5251,7 @@ export function debouncedServerSync(key: string, value: string) {
     window.addEventListener('beforeunload', () => {
       if (Object.keys(_pendingSync).length === 0) return
       const entries = { ..._pendingSync }
-      const body = JSON.stringify(entries)
+      const body = JSON.stringify(buildSyncBody(entries).body)
       // sendBeacon is fire-and-forget and survives page unload
       if (navigator.sendBeacon) {
         const blob = new Blob([body], { type: 'application/json' })
