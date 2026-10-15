@@ -457,13 +457,13 @@ function RepPerformanceContent() {
               exportValue: (r: RepStats) => r.conversionRate,
             },
             {
-              key: 'revenue', label: 'Revenue', priority: 1, width: '120px',
+              key: 'revenue', label: 'Revenue', align: 'right' as const, priority: 1, width: '120px',
               render: (r: RepStats) => {
                 const share = Math.round((r.revenue / maxRevenue) * 100)
                 return (
                   <div>
                     <p style={{ fontWeight: 700, color: 'var(--text-1)' }}>{fmtKes(r.revenue)}</p>
-                    <div style={{ height: 3, background: 'var(--border-lt)', borderRadius: 2, marginTop: 3, width: '80%' }}>
+                    <div style={{ height: 3, background: 'var(--border-lt)', borderRadius: 2, marginTop: 3, marginLeft: 'auto', width: '80%' }}>
                       <div style={{ height: '100%', width: `${share}%`, background: 'var(--accent-cyan)', borderRadius: 2 }} />
                     </div>
                   </div>
@@ -487,7 +487,7 @@ function RepPerformanceContent() {
               exportValue: (r: RepStats) => r.targetRevenue > 0 ? Math.round((r.revenue / r.targetRevenue) * 100) : '',
             },
             {
-              key: 'commission', label: 'Commission', priority: 1, width: '100px',
+              key: 'commission', label: 'Commission', align: 'right' as const, priority: 1, width: '100px',
               render: (r: RepStats) => <span style={{ fontWeight: 700, color: r.commission > 0 ? 'var(--warning-text)' : 'var(--text-3)' }}>{fmtKes(r.commission)}</span>,
               exportValue: (r: RepStats) => r.commission,
             },

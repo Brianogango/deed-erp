@@ -900,6 +900,8 @@ export function Table({
     header?: ReactNode
     width?: string
     minWidth?: number
+    /** Never grows past `width` (selection checkbox, row-action columns). */
+    fixed?: boolean
     sticky?: 'left' | 'right'
     /** Header follows its column's cells (figures right-aligned → heading too). */
     align?: 'left' | 'center' | 'right'
@@ -1002,14 +1004,19 @@ export function Table({
 
 
   const grid = useMemo(() => {
-    // Every column keeps a floor so none can be squeezed to nothing (the
-    // Horizon table padding left "Product" one letter wide). Floors are kept
-    // small (64px for short columns) so columns still share the card; only
-    // when the floors themselves
-    // do not fit does the table scroll sideways.
-    const FLOOR_PX = 64
+    // Column sizing policy (one place, every DataTable):
+    //  - Every column keeps a floor so none can be squeezed to nothing.
+    //  - Declared widths are *proportions*, not ceilings. A `118px` column and a
+    //    `2fr` name column both grow with the card, sharing slack in proportion
+    //    to their declared width. Capping fixed tracks at their pixel width left
+    //    one flexible column to swallow all the free space (a 1,350px Customer
+    //    column beside 100px figures).
+    //  - `fixed` columns (selection checkbox, row actions) never grow.
+    //  - Only when the floors themselves do not fit does the table scroll.
+    const FLOOR_PX = 80
     const FLOOR_FLEX_PX = 88
-    const MAX_DECLARED_FLOOR = '13rem'
+    const FR_BASIS_PX = 160 // nominal width of a bare `1fr` column
+    const MAX_DECLARED_FLOOR = '10rem'
     return cols
       .filter((col, index) => !visibleColumnKeys || visibleColumnKeys.includes(columnKey(col, index)))
       .map((col) => {
@@ -1021,22 +1028,27 @@ export function Table({
           && stored >= MIN_PERSISTED_COL_WIDTH
           && stored <= MAX_PERSISTED_COL_WIDTH
         ) {
+          // A width the user dragged is a deliberate choice: honour it exactly.
           const px = Math.max(stored, col.minWidth ?? MIN_PERSISTED_COL_WIDTH)
           return `minmax(${declaredFloor ?? `${Math.min(px, FLOOR_PX)}px`}, ${px}px)`
         }
         const width = col.width ?? '1fr'
         if (/^\d+px$/.test(width)) {
           const px = Number.parseInt(width, 10) || 96
-          return `minmax(${declaredFloor ?? `${Math.min(px, FLOOR_PX)}px`}, ${px}px)`
+          if (col.fixed) return `minmax(${declaredFloor ?? `${px}px`}, ${px}px)`
+          return `minmax(${declaredFloor ?? `${Math.min(px, FLOOR_PX)}px`}, ${px}fr)`
         }
         if (/^[\d.]+fr$/.test(width)) {
-          return `minmax(${declaredFloor ?? `${FLOOR_FLEX_PX}px`}, ${width})`
+          const weight = Math.round((Number.parseFloat(width) || 1) * FR_BASIS_PX)
+          return `minmax(${declaredFloor ?? `${FLOOR_FLEX_PX}px`}, ${weight}fr)`
         }
         if (width.startsWith('minmax(')) {
-          // Keep the column's own minimum (capped), or a modest floor when it was 0.
+          // Keep the column's own minimum (capped), or a modest floor when it was 0,
+          // and give its flexible maximum the same proportional weight as above.
           return width
             .replace(/minmax\(\s*0(px|rem)?\s*,/, `minmax(${declaredFloor ?? `${FLOOR_PX}px`},`)
             .replace(/minmax\(\s*([\d.]+)rem\s*,/, (_m, rem) => `minmax(min(${rem}rem, ${MAX_DECLARED_FLOOR}),`)
+            .replace(/,\s*([\d.]+)fr\s*\)$/, (_m, fr) => `, ${Math.round((Number.parseFloat(fr) || 1) * FR_BASIS_PX)}fr)`)
         }
         return width
       })
@@ -1336,20 +1348,20 @@ export function RecordCard({
       <div className="flex items-start justify-between gap-2.5 sm:gap-3">
         <div className="min-w-0 flex-1">
           {eyebrow && <div className="text-[10px] sm:text-[10px] font-black uppercase tracking-wider text-primary-600 mb-0.5">{eyebrow}</div>}
-          <div className="text-[15px] sm:text-sm font-black text-text-1 truncate">{title}</div>
-          {subtitle && <div className="text-[11px] sm:text-[11px] text-text-3 mt-0.5 truncate">{subtitle}</div>}
+          <div className="text-sm font-semibold text-text-1 truncate">{title}</div>
+          {subtitle && <div className="text-xs text-text-3 mt-0.5 truncate">{subtitle}</div>}
         </div>
         <div className="flex-shrink-0 text-right">
-          {amount && <div className="font-mono text-[13px] sm:text-xs font-black text-text-1">{amount}</div>}
+          {amount && <div className="text-sm font-semibold tabular-nums text-text-1">{amount}</div>}
           {status && <div className="mt-0.5 sm:mt-1 flex justify-end">{status}</div>}
         </div>
       </div>
       {meta.length > 0 && (
-        <div className="record-card-meta mt-2 sm:mt-3 grid grid-cols-2 gap-1.5 sm:gap-2">
+        <div className="record-card-meta mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-border-lt pt-2">
           {meta.map(item => (
-            <div key={item.label} className="rounded-lg sm:rounded-xl border border-border-lt bg-surface/45 px-2 py-1.5 sm:px-2.5 sm:py-2">
-              <div className="text-[9px] sm:text-[9px] font-black uppercase tracking-wider text-text-4">{item.label}</div>
-              <div className="mt-0.5 text-[11px] sm:text-[11px] font-bold text-text-2 truncate">{item.value}</div>
+            <div key={item.label} className="min-w-0">
+              <div className="text-[11px] leading-4 text-text-4">{item.label}</div>
+              <div className="text-xs font-semibold leading-4 text-text-2 truncate tabular-nums">{item.value}</div>
             </div>
           ))}
         </div>

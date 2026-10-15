@@ -352,7 +352,7 @@ export default function SalesDashboard() {
             { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: (o: SaleOrder) => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>, exportValue: (o: SaleOrder) => o.ref },
             { key: 'customer', label: 'Customer', priority: 1, width: '1.4fr', render: (o: SaleOrder) => <span className="text-xs font-medium truncate">{o.customerName}</span>, exportValue: (o: SaleOrder) => o.customerName },
             { key: 'date', label: 'Date', priority: 2, width: '1fr', render: (o: SaleOrder) => <span className="text-xs text-t3">{fmtDate(o.date)}</span>, exportValue: (o: SaleOrder) => o.date },
-            { key: 'total', label: 'Total', priority: 1, width: '110px', render: (o: SaleOrder) => <span className="text-xs font-mono font-semibold">{fmtKes(o.total)}</span>, exportValue: (o: SaleOrder) => o.total },
+            { key: 'total', label: 'Total', align: 'right' as const, priority: 1, width: '110px', render: (o: SaleOrder) => <span className="text-xs font-mono font-semibold">{fmtKes(o.total)}</span>, exportValue: (o: SaleOrder) => o.total },
             {
               key: 'status', label: 'Status', priority: 1, width: '80px',
               render: (o: SaleOrder) => (

@@ -63,7 +63,7 @@ export function CommissionRatesSettings({ showToast }: { showToast: (msg: string
         <p className="text-[11.5px] text-[var(--text-3)] py-2 m-0">Loading category rates…</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
+          <table className="erp-table">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--text-3)]">
                 <th className="py-1.5 pr-3 font-semibold">Category</th>

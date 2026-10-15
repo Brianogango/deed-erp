@@ -141,13 +141,9 @@
 
 .sales-workbench .sp-table th,
 .sales-workbench .sp-table td {
-  padding: 6px 8px !important;
-  font-size: 12px !important;
 }
 
 .sales-workbench .sp-table th {
-  font-size: 11px !important;
-  padding: 6px 8px !important;
 }
 
 .sales-workbench .sp-tab {
@@ -644,19 +640,13 @@
 
 .sp-table th {
   text-align: left;
-  padding: 7px 10px;
   background: #f9fafb;
   color: var(--sp-text-3);
-  font-weight: 650;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   border-bottom: 1px solid var(--sp-border);
   white-space: nowrap;
 }
 
 .sp-table td {
-  padding: 7px 10px;
   border-bottom: 1px solid var(--sp-border);
   color: var(--sp-text-2);
   vertical-align: top;
@@ -1294,14 +1284,9 @@
 }
 
 .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table th {
-  height: 2.25rem !important;
-  padding: 0.5rem 0.75rem !important;
 }
 
 .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td {
-  height: 3rem !important;
-  padding: 0.55rem 0.75rem !important;
-  font-size: var(--sales-body-size) !important;
 }
 
 .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table th[data-col='ref'] {

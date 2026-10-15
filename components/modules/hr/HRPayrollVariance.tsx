@@ -30,7 +30,7 @@ export function PayrollVarianceModal({ run, onClose }: { run: PayrollRun; onClos
           </div>
           {shown.length === 0 && <p className="text-xs" style={{ color: 'var(--text-3)' }}>No employee's pay changed since {v.previous.ref}.</p>}
           {shown.length > 0 && (
-            <table className="w-full text-xs">
+            <table className="erp-table">
               <thead><tr style={{ color: 'var(--text-4)', textAlign: 'left' }}><th className="py-1">Employee</th><th>Change</th><th className="text-right">Previous net</th><th className="text-right">This net</th><th className="text-right">Difference</th></tr></thead>
               <tbody>
                 {shown.map(r => (

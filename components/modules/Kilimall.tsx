@@ -206,12 +206,12 @@ function KilimallContent() {
         : o.productName,
     },
     {
-      key: 'qty', label: 'Qty', priority: 3, width: '60px',
+      key: 'qty', label: 'Qty', align: 'right' as const, priority: 3, width: '60px',
       render: o => <span className="text-[11px]">{o.qty}</span>,
       exportValue: o => o.qty,
     },
     {
-      key: 'total', label: 'Total', priority: 1, width: '100px',
+      key: 'total', label: 'Total', align: 'right' as const, priority: 1, width: '100px',
       render: o => <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>,
       exportValue: o => o.total,
     },
@@ -314,7 +314,7 @@ function KilimallContent() {
       exportValue: s => s.totalOrders,
     },
     {
-      key: 'gross', label: 'Gross', priority: 2, width: '110px',
+      key: 'gross', label: 'Gross', align: 'right' as const, priority: 2, width: '110px',
       render: s => <span className="font-mono text-[11px]">{fmtKes(s.grossAmount)}</span>,
       exportValue: s => s.grossAmount,
     },
@@ -324,7 +324,7 @@ function KilimallContent() {
       exportValue: s => s.deductions,
     },
     {
-      key: 'net', label: 'Net paid', priority: 1, width: '110px',
+      key: 'net', label: 'Net paid', align: 'right' as const, priority: 1, width: '110px',
       render: s => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--success)' }}>{fmtKes(s.netPaid)}</span>,
       exportValue: s => s.netPaid,
     },
@@ -387,7 +387,7 @@ function KilimallContent() {
       exportValue: o => o.productName,
     },
     {
-      key: 'total', label: 'Total', priority: 1, width: '100px',
+      key: 'total', label: 'Total', align: 'right' as const, priority: 1, width: '100px',
       render: o => <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>,
       exportValue: o => o.total,
     },
@@ -425,7 +425,7 @@ function KilimallContent() {
       exportValue: o => o.productName,
     },
     {
-      key: 'total', label: 'Total', priority: 1, width: '100px',
+      key: 'total', label: 'Total', align: 'right' as const, priority: 1, width: '100px',
       render: o => <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>,
       exportValue: o => o.total,
     },
@@ -1103,9 +1103,9 @@ function KilimallContent() {
                   tableId="kilimall-report-ops"
                   columns={[
                     { key: 'status', label: 'Status', priority: 1, width: '120px', render: (r: StatusRow) => <span className="capitalize text-[11px] font-medium">{r.status}</span>, exportValue: (r: StatusRow) => r.status },
-                    { key: 'count', label: 'Count', priority: 1, width: '80px', render: (r: StatusRow) => <span className="text-[11px]">{r.count}</span>, exportValue: (r: StatusRow) => r.count },
-                    { key: 'total', label: 'Total value', priority: 1, width: '110px', render: (r: StatusRow) => <span className="font-mono text-[11px]">{fmtKes(r.total)}</span>, exportValue: (r: StatusRow) => r.total },
-                    { key: 'pct', label: '% of orders', priority: 2, width: '110px', render: (r: StatusRow) => <span className="text-[11px] text-t3">{r.pct}%</span>, exportValue: (r: StatusRow) => r.pct },
+                    { key: 'count', label: 'Count', align: 'right' as const, priority: 1, width: '80px', render: (r: StatusRow) => <span className="text-[11px]">{r.count}</span>, exportValue: (r: StatusRow) => r.count },
+                    { key: 'total', label: 'Total value', align: 'right' as const, priority: 1, width: '110px', render: (r: StatusRow) => <span className="font-mono text-[11px]">{fmtKes(r.total)}</span>, exportValue: (r: StatusRow) => r.total },
+                    { key: 'pct', label: '% of orders', align: 'right' as const, priority: 2, width: '110px', render: (r: StatusRow) => <span className="text-[11px] text-t3">{r.pct}%</span>, exportValue: (r: StatusRow) => r.pct },
                   ] as ColumnDef<StatusRow>[]}
                   rows={statusRows}
                   rowKey={r => r.status}
@@ -1125,9 +1125,9 @@ function KilimallContent() {
                 columns={[
                   { key: 'ref', label: 'Ref', priority: 1, width: '90px', render: (s: KilimallSettlement) => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{s.ref}</span>, exportValue: (s: KilimallSettlement) => s.ref },
                   { key: 'period', label: 'Period', priority: 1, width: '160px', render: (s: KilimallSettlement) => <span className="text-[11px]">{s.weekPeriod}</span>, exportValue: (s: KilimallSettlement) => s.weekPeriod },
-                  { key: 'gross', label: 'Gross', priority: 1, width: '110px', render: (s: KilimallSettlement) => <span className="font-mono text-[11px]">{fmtKes(s.grossAmount)}</span>, exportValue: (s: KilimallSettlement) => s.grossAmount },
+                  { key: 'gross', label: 'Gross', align: 'right' as const, priority: 1, width: '110px', render: (s: KilimallSettlement) => <span className="font-mono text-[11px]">{fmtKes(s.grossAmount)}</span>, exportValue: (s: KilimallSettlement) => s.grossAmount },
                   { key: 'deductions', label: 'Deductions', priority: 2, width: '90px', render: (s: KilimallSettlement) => <span className="font-mono text-[11px]" style={{ color: 'var(--danger)' }}>−{fmtKes(s.deductions)}</span>, exportValue: (s: KilimallSettlement) => s.deductions },
-                  { key: 'net', label: 'Net paid', priority: 1, width: '110px', render: (s: KilimallSettlement) => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--success)' }}>{fmtKes(s.netPaid)}</span>, exportValue: (s: KilimallSettlement) => s.netPaid },
+                  { key: 'net', label: 'Net paid', align: 'right' as const, priority: 1, width: '110px', render: (s: KilimallSettlement) => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--success)' }}>{fmtKes(s.netPaid)}</span>, exportValue: (s: KilimallSettlement) => s.netPaid },
                   { key: 'status', label: 'Status', priority: 2, width: '100px', render: (s: KilimallSettlement) => <span className="text-[10px] capitalize">{s.status}</span>, exportValue: (s: KilimallSettlement) => s.status },
                 ] as ColumnDef<KilimallSettlement>[]}
                 rows={kilimallSettlements}

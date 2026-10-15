@@ -111,7 +111,7 @@ export default function Loans() {
                 {l.status === 'active' && <button className="btn-secondary text-[12px] px-3 min-h-9" onClick={() => { setRepayFor(l); setRp(r => ({ ...r, bankAccountId: l.bankAccountId ?? '' })) }}>Record repayment</button>}
               </div>
               {l.repayments.length > 0 && (
-                <table className="w-full text-[11px] mt-3">
+                <table className="erp-table mt-3">
                   <thead><tr className="text-left opacity-60"><th>Date</th><th>Ref</th><th className="text-right">Principal</th><th className="text-right">Interest</th></tr></thead>
                   <tbody>{l.repayments.map(r => (
                     <tr key={r.id}><td>{fmtDate(r.date)}</td><td>{r.ref}</td><td className="text-right">{fmtKes(r.principal)}</td><td className="text-right">{fmtKes(r.interest)}</td></tr>

@@ -151,7 +151,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
           <div className="card overflow-hidden">
             <PanelHeader title="Active Pipeline" count={clientOpps.filter(o => !(['closed_won', 'closed_lost'] as string[]).includes(o.stage)).length} />
             <div className="dt-scroll">
-              <table data-no-responsive className="w-full text-left border-collapse">
+              <table data-no-responsive className="erp-table">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                     <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)]">Ref</th>
@@ -182,7 +182,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
           <div className="card overflow-hidden">
             <PanelHeader title="Recent Sales History" count={clientOrders.length} />
             <div className="dt-scroll">
-              <table data-no-responsive className="w-full text-left border-collapse">
+              <table data-no-responsive className="erp-table">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                     <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)]">Ref</th>

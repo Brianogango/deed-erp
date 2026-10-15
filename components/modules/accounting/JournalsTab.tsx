@@ -88,7 +88,7 @@ export default function JournalsTab() {
       exportValue: e => e.source,
     },
     {
-      key: 'total', label: 'Total', priority: 1, width: '100px',
+      key: 'total', label: 'Total', align: 'right' as const, priority: 1, width: '100px',
       render: e => <span className="font-mono text-[11px]">{fmtKes(e.totalDebit)}</span>,
       exportValue: e => e.totalDebit,
     },
