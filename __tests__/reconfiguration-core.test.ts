@@ -351,3 +351,21 @@ describe('stock planners', () => {
     expect(isSellableLocation('quarantine')).toBe(false)
   })
 })
+
+describe('defaultPriceAfterBench (price left blank on a bench job)', () => {
+  it('keeps the unit\'s price and adds what the job added to its cost — no cut after an upgrade', async () => {
+    const { defaultPriceAfterBench } = await import('@/lib/reconfiguration/costing')
+    // KES 45,000 unit costing 30,000 gets 2,500 of RAM: 47,500, not 32,500 × 1.25 = 40,625.
+    expect(defaultPriceAfterBench({ sellingPriceBefore: 45_000, costBefore: 30_000, costAfter: 32_500 }))
+      .toEqual({ price: 47_500, method: 'fixed_diff' })
+  })
+  it('never goes below cost', async () => {
+    const { defaultPriceAfterBench } = await import('@/lib/reconfiguration/costing')
+    expect(defaultPriceAfterBench({ sellingPriceBefore: 10_000, costBefore: 30_000, costAfter: 32_500 }).price).toBe(32_500)
+  })
+  it('a unit with no price yet gets cost + 25%', async () => {
+    const { defaultPriceAfterBench } = await import('@/lib/reconfiguration/costing')
+    expect(defaultPriceAfterBench({ sellingPriceBefore: 0, costBefore: 30_000, costAfter: 32_000 }))
+      .toEqual({ price: 40_000, method: 'cost_plus' })
+  })
+})

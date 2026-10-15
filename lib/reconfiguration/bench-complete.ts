@@ -17,6 +17,7 @@ import {
   calculateMargin,
   calculateRecommendedSellingPrice,
   calculateReconfigCost,
+  defaultPriceAfterBench,
   reconfigCompletionEventKey,
   reconfigValuationEventKey,
 } from '@/lib/reconfiguration/costing'
@@ -577,17 +578,16 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
     otherCost: params.otherCost || 0,
   })
 
-  const price = calculateRecommendedSellingPrice({
-    method: params.finalSellingPrice != null ? 'manual' : 'cost_plus',
-    costAfter: cost.costAfter,
+  const fallback = defaultPriceAfterBench({
     sellingPriceBefore: device.sellingPriceBefore,
-    markupPct: 25,
-    manualPrice: params.finalSellingPrice ?? undefined,
+    costBefore: device.costBefore,
+    costAfter: cost.costAfter,
   })
-  const selling =
-    params.finalSellingPrice != null && params.finalSellingPrice >= 0
-      ? dec(params.finalSellingPrice)
-      : price.recommended
+  const manual = params.finalSellingPrice != null && params.finalSellingPrice >= 0
+  const price = manual
+    ? calculateRecommendedSellingPrice({ method: 'manual', costAfter: cost.costAfter, manualPrice: params.finalSellingPrice ?? undefined })
+    : { recommended: fallback.price, method: fallback.method }
+  const selling = manual ? dec(params.finalSellingPrice) : price.recommended
   const margin = calculateMargin({ sellingPrice: selling, costAfter: cost.costAfter })
   const completionKey = reconfigCompletionEventKey(wo.id)
   const valKey = reconfigValuationEventKey(ref)
@@ -654,7 +654,7 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
       priceDifference: round2(selling - dec(device.sellingPriceBefore)),
       grossMargin: margin.grossMargin,
       grossMarginPct: margin.grossMarginPct,
-      priceMethod: params.finalSellingPrice != null ? 'manual' : 'cost_plus',
+      priceMethod: manual ? 'manual' : fallback.method,
       completionEventKey: completionKey,
       valuationEventKey: valKey,
       updatedById: params.userId || null,

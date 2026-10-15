@@ -197,7 +197,9 @@ export async function getDeviceConfiguration(serialId: string) {
     configSource,
     installed: installedViews,
     costBefore: cost ? dec(cost.currentCost) : dec((prismaSerial as any)?.product?.costPrice || product?.costPrice),
-    sellingPriceBefore: dec((prismaSerial as any)?.product?.sellingPrice || product?.salePrice || product?.sellingPrice),
+    // This unit's own price first (an earlier reconfiguration or a manual
+    // override sets it); the catalog price only when the unit has none.
+    sellingPriceBefore: dec(Number(blob?.salePriceOverride) > 0 ? blob?.salePriceOverride : ((prismaSerial as any)?.product?.sellingPrice || product?.salePrice || product?.sellingPrice)),
     activeWorkOrder: activeWo,
     blobSerialId: blob?.id || null,
   }

@@ -51,6 +51,28 @@ export function calculateReconfigCost(params: {
   }
 }
 
+/**
+ * The unit's price after a bench job when the technician leaves it blank:
+ * the price it had, moved by what the job changed in its cost (parts in,
+ * parts out, labour), and never below cost. A unit with no price yet gets
+ * cost + markup. Pricing it at cost + 25% regardless used to cut the price
+ * of a well-priced unit after an upgrade.
+ */
+export function defaultPriceAfterBench(params: {
+  sellingPriceBefore?: number | null
+  costBefore: number
+  costAfter: number
+  markupPct?: number
+}): { price: number; method: 'fixed_diff' | 'cost_plus' } {
+  const before = Number(params.sellingPriceBefore) || 0
+  const costAfter = Number(params.costAfter) || 0
+  if (before <= 0) {
+    return { price: round2(costAfter * (1 + (Number(params.markupPct ?? 25) || 0) / 100)), method: 'cost_plus' }
+  }
+  const moved = round2(before + (costAfter - (Number(params.costBefore) || 0)))
+  return { price: Math.max(moved, round2(costAfter)), method: 'fixed_diff' }
+}
+
 export function calculateRecommendedSellingPrice(params: {
   method: PriceMethod
   costAfter: number

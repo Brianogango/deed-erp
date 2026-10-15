@@ -57,4 +57,13 @@ describe('serial copy → serial_numbers', () => {
     await mirrorKnownDomain('deed_serials', JSON.stringify(listed), null)
     expect(mockPrisma.serialNumber.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['id9'] } }, data: { removedAt: expect.any(Date) } })
   })
+
+  it('never marks a serial added in the last two minutes as removed (the list was read before it existed)', async () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({ ...tableRow, id: `id${i}`, serialNumber: `S${i}`, createdAt: new Date('2026-01-01') }))
+    many[9] = { ...many[9], createdAt: new Date() } // received by someone else a moment ago
+    mockPrisma.serialNumber.findMany.mockResolvedValue(many)
+    const listed = many.slice(0, 9).map(r => ({ ...copyRow, id: r.id, serial: r.serialNumber }))
+    await mirrorKnownDomain('deed_serials', JSON.stringify(listed), null)
+    expect(mockPrisma.serialNumber.updateMany).not.toHaveBeenCalled()
+  })
 })

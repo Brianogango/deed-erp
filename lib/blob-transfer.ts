@@ -114,12 +114,14 @@ const sameJson = (a: unknown, b: unknown) => stableJson(a) === stableJson(b)
  * Only serials that differ from their row are written: every serial save
  * used to rewrite all of them, two queries per serial.
  */
+const RECENT_SERIAL_MS = 2 * 60 * 1000
+
 async function transferSerials(rows: unknown[]): Promise<{ upserted: number; skipped: number; error?: string }> {
   let upserted = 0
   let skipped = 0
   const errors: string[] = []
   const existing = await prisma.serialNumber.findMany({
-    select: { id: true, serialNumber: true, productId: true, inventoryBarcode: true, status: true, location: true, notes: true, screenExtras: true, removedAt: true },
+    select: { id: true, serialNumber: true, productId: true, inventoryBarcode: true, status: true, location: true, notes: true, screenExtras: true, removedAt: true, createdAt: true },
   })
   const bySerial = new Map(existing.map(s => [s.serialNumber, s]))
   const byId = new Map(existing.map(s => [s.id, s]))
@@ -157,8 +159,13 @@ async function transferSerials(rows: unknown[]): Promise<{ upserted: number; ski
   // Serials gone from the list are marked removed, not deleted: invoices,
   // deliveries and repairs point at their row. A list much shorter than the
   // table is a partial save, not removals, and is left alone.
+  // The list was read moments before this save (e.g. a bench job reads the
+  // serials, changes one, saves them all). A serial someone else added in
+  // between is missing from it without having been removed — never mark a
+  // serial created in the last two minutes as removed by absence.
+  const recent = Date.now() - RECENT_SERIAL_MS
   const active = existing.filter(s => s.removedAt === null)
-  const gone = active.filter(s => !listed.has(s.serialNumber))
+  const gone = active.filter(s => !listed.has(s.serialNumber) && !(s.createdAt && s.createdAt.getTime() > recent))
   if (gone.length && listed.size >= active.length * 0.9) {
     await prisma.serialNumber.updateMany({ where: { id: { in: gone.map(s => s.id) } }, data: { removedAt: new Date() } })
   }

@@ -735,7 +735,7 @@ export default function Reconfiguration() {
                 value={price}
                 onChange={e => setPrice(e.target.value)}
                 min={0}
-                placeholder="Leave blank to keep the recommended price"
+                placeholder="Blank = current price + cost of parts added (never below cost)"
               />
             </label>
           )}
