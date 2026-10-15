@@ -301,7 +301,7 @@
 
   .repair-detail__summary span,
   .repair-detail__summary small {
-    font-size: 9px !important;
+    font-size: var(--fs-micro) !important;
   }
 
   .repair-detail__summary strong {
@@ -332,7 +332,7 @@
     flex: 0 0 auto;
     padding: 6px 10px !important;
     border-radius: 7px !important;
-    font-size: 10px !important;
+    font-size: var(--fs-micro) !important;
   }
 
   .repair-detail__body {

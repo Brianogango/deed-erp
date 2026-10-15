@@ -1342,18 +1342,19 @@ export function RecordCard({
           onClick()
         }
       } : undefined}
-      className={`record-card w-full rounded-xl sm:rounded-2xl border bg-card p-2.5 sm:p-3.5 text-left shadow-card transition-[background-color,border-color,box-shadow,transform] ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
+      className={`record-card w-full min-w-0 max-w-full rounded-xl sm:rounded-2xl border bg-card p-2.5 sm:p-3.5 text-left shadow-card transition-[background-color,border-color,box-shadow,transform] ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
       style={{ borderColor: 'var(--border-lt)', borderLeft: `4px solid ${accent}` }}
     >
       <div className="flex items-start justify-between gap-2.5 sm:gap-3">
         <div className="min-w-0 flex-1">
           {eyebrow && <div className="text-[10px] sm:text-[10px] font-black uppercase tracking-wider text-primary-600 mb-0.5">{eyebrow}</div>}
-          <div className="text-sm font-semibold text-text-1 truncate">{title}</div>
-          {subtitle && <div className="text-xs text-text-3 mt-0.5 truncate">{subtitle}</div>}
+          {/* Names identify the record: wrap to two lines rather than cutting at one. */}
+          <div className="text-sm font-semibold text-text-1 line-clamp-2 [overflow-wrap:anywhere]" title={typeof title === 'string' ? title : undefined}>{title}</div>
+          {subtitle && <div className="text-xs text-text-3 mt-0.5 truncate" title={typeof subtitle === 'string' ? subtitle : undefined}>{subtitle}</div>}
         </div>
-        <div className="flex-shrink-0 text-right">
-          {amount && <div className="text-sm font-semibold tabular-nums text-text-1">{amount}</div>}
-          {status && <div className="mt-0.5 sm:mt-1 flex justify-end">{status}</div>}
+        <div className="min-w-0 max-w-[55%] flex-shrink-0 text-right">
+          {amount && <div className="text-sm font-semibold tabular-nums text-text-1 [overflow-wrap:anywhere]">{amount}</div>}
+          {status && <div className="mt-0.5 sm:mt-1 flex flex-wrap justify-end gap-1">{status}</div>}
         </div>
       </div>
       {meta.length > 0 && (
@@ -1361,7 +1362,7 @@ export function RecordCard({
           {meta.map(item => (
             <div key={item.label} className="min-w-0">
               <div className="text-[11px] leading-4 text-text-4">{item.label}</div>
-              <div className="text-xs font-semibold leading-4 text-text-2 truncate tabular-nums">{item.value}</div>
+              <div className="text-xs font-semibold leading-4 text-text-2 truncate tabular-nums" title={typeof item.value === 'string' ? item.value : undefined}>{item.value}</div>
             </div>
           ))}
         </div>
@@ -1422,19 +1423,20 @@ export function StatCard({
     <div
       onClick={onClick}
       className={`
-        stat-card card p-3 sm:p-5 min-h-[92px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-[background-color,border-color,box-shadow,transform] duration-200
+        stat-card card min-w-0 p-3 sm:p-5 min-h-[92px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-[background-color,border-color,box-shadow] duration-200
         ${compact ? 'stat-card--compact' : ''}
-        ${onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5' : ''}
+        ${onClick ? 'cursor-pointer hover:shadow-lg' : ''}
       `}
       style={{ borderLeft: `4px solid ${color}` }}
     >
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[11px] sm:text-[10px] font-bold uppercase tracking-wider text-text-3">
+        <span className="min-w-0 text-[11px] font-bold uppercase tracking-wider text-text-3 [overflow-wrap:anywhere]">
           {label}
         </span>
-        {icon && <span className="text-base sm:text-sm" style={{ color }}>{icon}</span>}
+        {icon && <span className="ml-2 flex-shrink-0 text-base sm:text-sm" style={{ color }}>{icon}</span>}
       </div>
-      <div className="text-xl sm:text-xl font-extrabold text-text-1 leading-tight">{value}</div>
+      {/* Figures are never truncated: a long amount wraps instead of being cut off. */}
+      <div className="min-w-0 text-xl sm:text-xl font-extrabold text-text-1 leading-tight tabular-nums [overflow-wrap:anywhere]">{value}</div>
       {sub && <div className="text-[11px] sm:text-[10px] text-text-4">{sub}</div>}
     </div>
   )

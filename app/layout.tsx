@@ -39,7 +39,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#20164d',
+  // Matches the colour at the very top of the screen (the topbar), per colour scheme.
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0B1220' },
+  ],
 }
 
 const htmlClassName = `${robotoFlex.variable} ${openSans.variable} ${dmMono.variable}`
