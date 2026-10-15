@@ -274,8 +274,7 @@ function NotificationsPanel({
   return (
     <div
       ref={panelRef}
-      style={{ animation: 'dropdownIn 0.18s ease both' }}
-      className="
+      className="ui-enter ui-enter-dropdown 
         fixed top-[60px] right-4 z-[9050]
         w-[min(400px,calc(100vw-32px))] max-h-[calc(100vh-80px)]
         bg-[var(--bg-card)] border border-[var(--border)]

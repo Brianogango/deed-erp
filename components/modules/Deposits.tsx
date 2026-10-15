@@ -148,8 +148,8 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
     <div className="deposit-modal-overlay fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="deposit-modal deposit-modal--new relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
-        style={{ maxHeight: 'calc(100dvh - 32px)', animation: 'modalIn 0.22s cubic-bezier(0.16,1,0.3,1) both' }}
+        className="ui-enter ui-enter-modal deposit-modal deposit-modal--new relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
+        style={{ maxHeight: 'calc(100dvh - 32px)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -351,7 +351,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
   return (
     <div className="deposit-modal-overlay fixed inset-0 z-[9050] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="deposit-modal deposit-modal--payment relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.16,1,0.3,1) both' }} onClick={e => e.stopPropagation()}>
+      <div className="ui-enter ui-enter-confirm deposit-modal deposit-modal--payment relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
             <h3 className="text-[13px] font-black text-[var(--text-1)]">Record Payment</h3>

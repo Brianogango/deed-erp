@@ -200,8 +200,8 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
 
   return (
     <div className="holdover-modal-overlay fixed inset-0 z-[9100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div style={{ animation: 'modalIn 0.2s ease both' }}
-        className="holdover-modal holdover-modal--issue bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+      <div
+        className="ui-enter ui-enter-modal holdover-modal holdover-modal--issue bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
 
         {/* Header */}
         <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-shrink-0">
@@ -444,8 +444,8 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
 
   return (
     <div className="holdover-modal-overlay fixed inset-0 z-[9200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div style={{ animation: 'confirmIn 0.2s cubic-bezier(0.16,1,0.3,1) both' }}
-        className="holdover-modal holdover-modal--return bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl">
+      <div
+        className="ui-enter ui-enter-confirm holdover-modal holdover-modal--return bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl">
 
         <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between">
           <p className="text-sm font-bold text-[var(--text-1)]">Record Device Return</p>
@@ -600,8 +600,8 @@ function HoldoverDetail({ holdover, onClose, onExtend, onReturn }: { holdover: H
 
   return (
     <div className="holdover-modal-overlay fixed inset-0 z-[9100] flex items-end sm:items-center justify-center p-4 bg-black/55 backdrop-blur-sm">
-      <div style={{ animation: 'modalIn 0.2s ease both' }}
-        className="holdover-modal holdover-modal--detail bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div
+        className="ui-enter ui-enter-modal holdover-modal holdover-modal--detail bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh]">
 
         <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">

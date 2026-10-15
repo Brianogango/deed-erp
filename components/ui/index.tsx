@@ -330,7 +330,7 @@ export function Toast({
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto overflow-hidden"
+      className="ui-enter ui-enter-toast fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto overflow-hidden"
       style={{
         background: cfg.bg,
         borderRadius: 18,
@@ -338,7 +338,6 @@ export function Toast({
         minWidth: 290,
         maxWidth: 440,
         boxShadow: `0 24px 56px -8px ${cfg.shadow}, 0 0 0 1px rgba(255,255,255,0.18), 0 8px 24px rgba(0,0,0,0.22)`,
-        animation: 'toastIn 0.32s cubic-bezier(0.34,1.4,0.64,1) both',
       }}
     >
       <div
@@ -396,11 +395,10 @@ export function Modal({
   return (
     <Portal targetId={workspace ? 'module-workspace-root' : undefined}>
     <div
-      className={`${workspace ? 'absolute h-full' : 'fixed h-dvh'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
+      className={`${workspace ? 'absolute h-full' : 'ui-enter ui-enter-backdrop fixed h-dvh'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
       style={{
         background: workspace ? 'var(--bg-app)' : enterprise ? 'rgba(15,23,42,0.48)' : 'rgba(0,0,0,0.55)',
         backdropFilter: workspace ? 'none' : enterprise ? 'blur(3px)' : 'blur(8px)',
-        animation: 'backdropIn 0.2s ease both',
       }}
       role="dialog"
       aria-modal="true"
@@ -410,7 +408,7 @@ export function Modal({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className={`flex w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell h-full max-h-none rounded-none' : `my-auto rounded-[14px] sm:rounded-2xl ${enterprise ? 'max-h-[calc(100dvh-48px)]' : 'max-h-[calc(100dvh-20px)] sm:max-h-[92vh]'}`}`}
+        className={`flex w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell h-full max-h-none rounded-none' : `ui-enter ui-enter-modal my-auto rounded-[14px] sm:rounded-2xl ${enterprise ? 'max-h-[calc(100dvh-48px)]' : 'max-h-[calc(100dvh-20px)] sm:max-h-[92vh]'}`}`}
         style={{
           maxWidth: workspace ? 'none' : width,
           background: workspace ? 'var(--bg-app)' : enterprise ? '#FFFFFF' : 'var(--bg-card)',
@@ -418,7 +416,6 @@ export function Modal({
           boxShadow: workspace ? 'none' : enterprise
             ? '0 24px 64px -20px rgba(15,23,42,0.38), 0 8px 24px -12px rgba(15,23,42,0.22)'
             : `0 32px 72px -12px rgba(0,0,0,0.5), 0 0 0 1px ${accent}12, 0 16px 40px -8px ${accent}22`,
-          animation: workspace ? 'none' : 'modalIn 0.22s cubic-bezier(0.34,1.4,0.64,1) both',
         } as React.CSSProperties}
         onClick={e => e.stopPropagation()}
       >
@@ -527,8 +524,7 @@ export function SlidePanel({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={`flex h-full w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell max-w-none bg-[var(--bg-app)]' : 'sm:w-[min(95vw,720px)] max-w-5xl bg-card border-l border-border shadow-2xl'}`}
-        style={{ animation: workspace ? 'none' : 'slideInRight 0.28s cubic-bezier(0.25,0.46,0.45,0.94) both' }}
+        className={`flex h-full w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell max-w-none bg-[var(--bg-app)]' : 'ui-enter ui-enter-drawer sm:w-[min(95vw,720px)] max-w-5xl bg-card border-l border-border shadow-2xl'}`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -652,8 +648,7 @@ export function Confirm({
       <div
         ref={confirmRef}
         tabIndex={-1}
-        className="w-full max-w-[380px] rounded-xl sm:rounded-2xl p-4 sm:p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
-        style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }}
+        className="ui-enter ui-enter-confirm w-full max-w-[380px] rounded-xl sm:rounded-2xl p-4 sm:p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {title && <p id={titleId} className="text-sm sm:text-xs font-black uppercase tracking-widest text-text-3">{title}</p>}
@@ -1652,9 +1647,8 @@ export function SearchPicker<T extends { id: string }>({
           {open && menuPosition && (filtered.length > 0 || query.trim().length > 0 || Boolean(onCreateNew && query.length > 0)) && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-[9900] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"
+          className="ui-enter ui-enter-dropdown fixed z-[9900] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"
           style={{
-            animation: 'dropdownIn 0.18s ease both',
             left: menuPosition.left,
             top: menuPosition.top,
             width: menuPosition.width,

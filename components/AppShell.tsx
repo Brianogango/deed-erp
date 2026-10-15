@@ -39,7 +39,7 @@ const WARN_BEFORE_MS = 2 * 60 * 1000
 function OfflineBanner() {
   return (
     <div
-      className="fixed top-0 inset-x-0 z-[100] flex items-center justify-center gap-2.5 px-4 py-2 text-[11px] font-semibold shadow-md"
+      className="fixed top-0 inset-x-0 z-[100] flex items-center justify-center gap-2.5 px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top,0px))] text-[11px] font-semibold shadow-md"
       style={{ background: 'var(--warning-text)', color: 'var(--warning-bg)', animation: 'slideDown 0.2s ease-out' }}
     >
       <span
@@ -701,7 +701,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)]">
+    <div className="app-shell-root flex h-screen h-dvh w-full overflow-hidden bg-[var(--bg-page)]">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-2 focus:z-[9500] focus:rounded-lg focus:bg-[var(--bg-card)] focus:px-3 focus:py-2 focus:text-xs focus:font-bold focus:text-[var(--text-1)]"
@@ -729,7 +729,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       <Sidebar />
 
       {/* Main Content Area */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="app-main-col flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Topbar */}
         <Topbar />
 

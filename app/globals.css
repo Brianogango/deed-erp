@@ -92,6 +92,12 @@
     --table-pad-x: 12px;
     --table-col-gap: 12px;
     --table-head-fs: max(11px, var(--fs-label));
+    /* Master module header — one geometry for every ModuleHeader (tablet and up) */
+    --mod-header-pad-y: 14px;
+    --mod-header-pad-x: 24px;
+    --mod-header-min-h: 72px;
+    --mod-title-fs: 1.375rem;
+    --mod-title-fs-sm: 1.125rem;
     /* Spacing scale — use consistently across module chrome */
     --space-1: 4px;
     --space-2: 8px;
@@ -9073,75 +9079,15 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   }
 }
 
-@keyframes modalIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes confirmIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes backdropIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateY(16px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 @keyframes toastProgress {
   from { width: 100%; }
   to { width: 0%; }
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 @keyframes slideUp {
   from {
     opacity: 0;
     transform: translateY(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes dropdownIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
   }
   to {
     opacity: 1;
@@ -31483,4 +31429,118 @@ button, [role="button"], [role="tab"] {
     padding: 0 !important;
     max-width: 100%;
   }
+}
+
+/* ── Enter transitions for overlays (toast, modal, drawer, confirm, picker menu) ──
+   Replaces inline keyframes that restarted from zero on interruption and used an
+   overshooting curve. Transitions retarget from the current value; @starting-style
+   supplies the entry state without JS (browsers without it simply appear). Each
+   surface keeps its own travel path; none bounces. Reduced motion shortens these to 1ms. */
+.ui-enter { transition-property: opacity, transform; transition-timing-function: var(--ease-out); }
+.ui-enter-backdrop { transition-property: opacity; transition-duration: 200ms; }
+.ui-enter-toast    { transition-duration: 250ms; }
+.ui-enter-modal    { transition-duration: 200ms; }
+.ui-enter-drawer   { transition-duration: 300ms; transition-timing-function: var(--ease-drawer); }
+.ui-enter-confirm  { transition-duration: 180ms; }
+.ui-enter-dropdown { transition-duration: 150ms; transform-origin: top; }
+
+@starting-style {
+  .ui-enter-backdrop { opacity: 0; }
+  .ui-enter-toast    { opacity: 0; transform: translateY(16px) scale(0.96); }
+  .ui-enter-modal    { opacity: 0; transform: scale(0.96); }
+  .ui-enter-drawer   { opacity: 0; transform: translateX(24px); }
+  .ui-enter-confirm  { opacity: 0; transform: scale(0.96); }
+  .ui-enter-dropdown { opacity: 0; transform: translateY(-4px); }
+}
+
+/* ── Master module header ─────────────────────────────────────────────────────
+   Every module renders the same markup (header.mod-header > .mod-header__identity >
+   h1.erp-module-title + p.erp-module-subtitle) but ~65 module rules had diverged: title
+   14–30px, vertical padding 6–32px, height 54–108px, weight 650–780. One definition now.
+   Specificity is raised by repetition so it outranks module rules (several use !important).
+   Finance keeps its own top padding: its header reserves a row for the breadcrumb. */
+@media (min-width: 768px) {
+  header.mod-header.mod-header.mod-header.mod-header {
+    min-height: var(--mod-header-min-h) !important;
+    padding-block: var(--mod-header-pad-y) !important;
+    padding-inline: var(--mod-header-pad-x) !important;
+  }
+  .finance-workspace > header.mod-header.mod-header.mod-header.mod-header {
+    padding-top: 2rem !important;
+  }
+  header.mod-header.mod-header.mod-header .erp-module-title.erp-module-title {
+    font-size: var(--mod-title-fs) !important;
+    font-weight: 750 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.02em !important; /* large type tightens (apple-design §15) */
+    color: var(--navy) !important;       /* brand navy; was ink, navy, blue and teal-navy by module */
+  }
+  [data-theme='dark'] header.mod-header.mod-header.mod-header .erp-module-title.erp-module-title {
+    color: var(--text-1) !important;
+  }
+  header.mod-header.mod-header.mod-header .erp-module-subtitle.erp-module-subtitle,
+  header.mod-header.mod-header.mod-header .mod-header-subtitle.mod-header-subtitle {
+    font-size: var(--fs-table) !important;
+    font-weight: 500 !important;
+    line-height: 1.35 !important;
+    color: var(--text-3) !important;
+  }
+}
+@media (max-width: 767px) {
+  header.mod-header.mod-header.mod-header .erp-module-title.erp-module-title {
+    font-size: var(--mod-title-fs-sm) !important;
+    font-weight: 750 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.01em !important;
+    color: var(--navy) !important;
+  }
+  [data-theme='dark'] header.mod-header.mod-header.mod-header .erp-module-title.erp-module-title {
+    color: var(--text-1) !important;
+  }
+}
+
+/* ── Safe areas (viewport-fit=cover) ───────────────────────────────────────────
+   The page now paints under the notch / Dynamic Island / home indicator, so chrome
+   anchored to an edge pads itself away from it. env() is 0 on devices without a
+   cutout, so nothing changes there. Verified with CDP-emulated insets
+   (top 47, bottom 34, landscape left/right 47). */
+.safe-top    { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Landscape: keep the whole app out of the side cutouts. */
+.app-shell-root {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Status-bar strip: a spacer above the top bar, in the bar's own colour, so the bar
+   keeps its fixed height (several module rules pin it with !important) and the
+   notch area reads as part of it. Zero height without a cutout. */
+.app-main-col::before {
+  content: "";
+  display: block;
+  flex: none;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--topbar-bg);
+}
+
+/* Phones: the last item in a scrolling page clears the home indicator. */
+@media (max-width: 767px) {
+  main#main-content { padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* Off-canvas sidebar and its bottom user card clear the cutout / home indicator. */
+.sidebar-shell {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Transient surfaces anchored to the bottom edge. */
+.ui-enter-toast { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+.fixed.bottom-4.right-4.z-\[9700\] { bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+
+/* Centered dialogs keep their breathing room *inside* the safe area. */
+.ui-enter-backdrop {
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
 }
