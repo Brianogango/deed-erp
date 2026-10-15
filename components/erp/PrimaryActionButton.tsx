@@ -30,7 +30,8 @@ export function PrimaryActionButton({
   /** When true, short-label screens hide the text and rely on aria-label/icon. */
   hideLabelOnMobile?: boolean
 }) {
-  const labelClass = hideLabelOnMobile ? 'hidden sm:inline' : undefined
+  // A label may only be hidden when an icon stands in for it — otherwise the button is a blank square.
+  const labelClass = hideLabelOnMobile && icon ? 'hidden sm:inline' : undefined
   const resolvedAria = ariaLabel ?? (typeof children === 'string' ? children : undefined)
   return (
     <button
