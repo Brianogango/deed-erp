@@ -156,6 +156,7 @@ import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
 import { isNonStockSaleLine, isDeliveryNoteLine } from '@/lib/sales/non-stock-line'
 import { sumUnappliedDownPayments } from '@/lib/sales/down-payment'
 import { financeInvoicePath } from '@/lib/finance-invoice'
+import { moneyInputValue } from '@/lib/intl-cache'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -2393,7 +2394,7 @@ function SalesContent() {
                                 label: 'Issue credit note…',
                                 icon: faFileInvoiceDollar,
                                 onClick: () => {
-                                  setCreditNoteAmount(String(activeOrder.total))
+                                  setCreditNoteAmount(moneyInputValue(activeOrder.total))
                                   setCreditNoteReason('')
                                   setShowCreditNoteModal(true)
                                 },

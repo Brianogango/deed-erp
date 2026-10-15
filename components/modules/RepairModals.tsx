@@ -20,6 +20,7 @@ import {
 } from '@/lib/diagnosis-fee'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
+import { moneyInputValue } from '@/lib/intl-cache'
 import {
   faUserGear,
   faStethoscope,
@@ -589,7 +590,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
         type: 'service' as const,
         description: DIAGNOSIS_FEE_LINE_DESCRIPTION,
         qty: '1',
-        unitPrice: String(feeResolved.amount),
+        unitPrice: moneyInputValue(feeResolved.amount),
         isDiagnosisFee: true,
       },
       ...without,
@@ -865,7 +866,7 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
                   <span className={`text-xs font-bold flex-1 transition-colors ${item.passed ? 'text-emerald-700' : 'text-[var(--text-2)]'}`}>
                     {item.description}
                   </span>
-                  {item.passed && <Fa icon={faCheckCircle} className="text-emerald-500" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }} />}
+                  {item.passed && <Fa icon={faCheckCircle} className="text-emerald-500" />}
                 </label>
                 {!item.passed && (
                   <input

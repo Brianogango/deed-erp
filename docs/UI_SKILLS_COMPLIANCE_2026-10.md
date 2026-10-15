@@ -120,13 +120,13 @@ The complete non-CSS diff is `className` strings, `title` attributes, the viewpo
 conditional on whether a button label gets a responsive class, and one Tailwind config flag. Nothing under `lib/`,
 `app/api/`, `prisma/`, `middleware.ts`, stores, handlers, validations, calculations or numbering is touched.
 
-## 8. Not done — needs a separate decision
+## 8. Follow-up items from this report — now done
 
-| Item | Why it was left |
+| Item | Outcome |
 |---|---|
-| Float artefacts such as `0.30000000000000004` reaching the UI | Number formatting belongs to the data layer; the UI only shows what it is given |
-| Toast and modal keyframes → transitions | Requires mount/exit state in components |
-| Unifying module headers (title size/subtitle/icon differ per module) | Needs a design decision per module; large refactor |
-| `viewport-fit=cover` and safe-area handling | Needs verification on hardware |
-| Populated-data states of module-specific screens | No database in this environment; verified empty states, shared components and harnesses only |
-| Stale `.cursor/skills` copies | Not used by Claude Code; no change made |
+| Float artefacts (`0.30000000000000004`) | `fmtKes` and the table/dashboard formatters already round, so display paths were safe. The leak was **pre-filled inputs** (`String(balance)` etc.). New `moneyInputValue()` (`lib/intl-cache.ts`, 4 tests) rounds to cents and is used at the three pre-fill sites: Record receipt/payment, Issue credit note, repair diagnosis fee. Values are unchanged except for sub-cent noise |
+| Toast / modal keyframes | Toast, `Modal`, drawer, `Confirm`, the picker menu, Deposits/Holdovers dialogs and the top-bar dropdown now enter by CSS **transition + `@starting-style`** (no overshoot curve, 150–300ms, `transform: none` at rest — which also removes the containing-block trap documented in `RepairModals.tsx`). The Ctrl+K palette and the checklist tick no longer animate at all (keyboard / high-frequency). Six dead keyframes deleted. Measured in a browser: start opacity 0 / scale .96, ease out, rest at `none` |
+| Module header styles | Measured on 25 modules: title 14–30px, weight 650–780, padding 6–32px, height 54–108px, four title colours. One token-driven master header (22px / 750 / 14×24px padding / brand navy / 13px subtitle) for tablet and up, plus a 18px title on phones. Finance keeps its breadcrumb row. Verified identical on every module that rendered |
+| Notch and safe areas | `viewport-fit=cover` + `interactive-widget=resizes-content`; `h-screen` → `h-dvh` shell; status-bar strip above the top bar (the top bar keeps its pinned height); landscape side insets; sidebar, toast, banner, dialogs, assistant panel padded. **Verified with CDP-emulated insets** (portrait 47/34, landscape 47/47/21), which exposed that padding the top bar directly crushed its controls — fixed before shipping. Still worth one look on a real phone |
+
+Remaining, genuinely out of scope: populated-data states of module-specific screens (no database here); the Sales list's own in-page header (`sales-proto-page-header`) is a different component from `ModuleHeader` and was not changed.

@@ -363,9 +363,9 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[9800] flex items-start justify-center overflow-y-auto px-4 py-4 sm:pt-[10vh]" style={{ animation: 'backdropIn 0.15s ease both' }} {...overlayDismiss}>
+    <div className="fixed inset-0 z-[9800] flex items-start justify-center overflow-y-auto px-4 py-4 sm:pt-[10vh]" {...overlayDismiss}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="global-search-title" aria-describedby="global-search-description" tabIndex={-1} className="relative w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden flex flex-col" style={{ maxHeight: '75vh', animation: 'modalIn 0.2s cubic-bezier(0.34,1.2,0.64,1) both' }} onClick={e => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="global-search-title" aria-describedby="global-search-description" tabIndex={-1} className="relative w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden flex flex-col" style={{ maxHeight: '75vh' }} onClick={e => e.stopPropagation()}>
         <h2 id="global-search-title" className="sr-only">Search and navigate</h2>
         <p id="global-search-description" className="sr-only">Search records, run commands, or jump to an ERP module.</p>
 
