@@ -208,7 +208,7 @@ export default function POFormView() {
     const hasBillableQty = activePO.lines.some(line => billableQtyForLine(line) > 0)
     const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-    const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+    const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
     const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)

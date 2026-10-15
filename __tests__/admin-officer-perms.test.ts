@@ -40,15 +40,13 @@ describe('hybrid finance seals', () => {
     }).ok).toBe(true)
   })
 
-  it('blocks admin officer from paying vendor bills', () => {
-    const result = canPostOrPayCustomerInvoice({
+  it('lets admin officer register vendor bill payments', () => {
+    expect(canPostOrPayCustomerInvoice({
       role: 'admin_officer',
       invoiceType: 'vendor_bill',
       invoiceTotal: 1_000,
       action: 'pay',
-    })
-    expect(result.ok).toBe(false)
-    expect(result.reason).toMatch(/pay vendor bills/)
+    }).ok).toBe(true)
   })
 
   it('lets admin officer cancel/reset invoices and apply customer credit', () => {

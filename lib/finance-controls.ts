@@ -48,10 +48,6 @@ export function canPostOrPayCustomerInvoice(args: {
   if (isFullFinanceRole(role)) return { ok: true }
 
   if (role === 'admin_officer') {
-    const action = args.action ?? 'post'
-    if (args.invoiceType === 'vendor_bill' && action === 'pay') {
-      return { ok: false, reason: 'Only Finance or Director can pay vendor bills' }
-    }
     if (args.invoiceType === 'customer_invoice' || args.invoiceType === 'vendor_bill') {
       return { ok: true }
     }
