@@ -54,7 +54,7 @@ function OutsourceContent() {
     users, currentUserId, repairs, bankAccounts,
     outsourceVendors, outsourceJobs, outsourcePayments, invoices,
     addOutsourceVendor, updateOutsourceVendor,
-    addOutsourceJob, returnOutsourceJob, recordOutsourcePayment,
+    addOutsourceJob, returnOutsourceJob, recordOutsourcePayment, createOutsourceJobBill,
     setModule, showToast,
   } = useFinanceStore()
 
@@ -212,15 +212,29 @@ function OutsourceContent() {
 
   // ── Derived data ─────────────────────────────────────────────────────────
 
+  // Billed = the vendor's outsource bills in Finance (a job's final cost when
+  // it has no bill yet); paid = what Finance recorded on those bills, plus
+  // older payments that were recorded in Outsource only.
+  function vendorJobBill(job: { billId?: string }) {
+    return job.billId ? invoices.find(i => i.id === job.billId && i.status !== 'cancelled') : undefined
+  }
   function vendorBilled(vendorId: string) {
     return outsourceJobs
-      .filter(j => j.vendorId === vendorId && j.finalCost != null)
-      .reduce((s, j) => s + (j.finalCost ?? 0), 0)
+      .filter(j => j.vendorId === vendorId)
+      .reduce((s, j) => s + (vendorJobBill(j)?.total ?? (j.finalCost ?? 0)), 0)
   }
   function vendorPaid(vendorId: string) {
-    return outsourcePayments
-      .filter(p => p.vendorId === vendorId)
+    const onBills = outsourceJobs
+      .filter(j => j.vendorId === vendorId)
+      .reduce((s, j) => s + (vendorJobBill(j)?.amountPaid ?? 0), 0)
+    const outsourceOnly = outsourcePayments
+      .filter(p => p.vendorId === vendorId && !p.postedToAccounts)
       .reduce((s, p) => s + p.amount, 0)
+    return onBills + outsourceOnly
+  }
+  /** Returned jobs with a cost but no bill: owed, but Finance cannot pay them until a bill exists. */
+  function jobsNeedingBill(vendorId?: string) {
+    return outsourceJobs.filter(j => (!vendorId || j.vendorId === vendorId) && (j.finalCost ?? 0) > 0 && !vendorJobBill(j))
   }
 
   const filteredJobs = outsourceJobs
@@ -385,7 +399,7 @@ function OutsourceContent() {
     setPayReference('')
   }
 
-  function submitPayment() {
+  async function submitPayment() {
     if (!payVendorId) return
     const amt = Number(payAmount)
     if (!amt || amt <= 0) { showToast('Enter a valid amount', 'error'); return }
@@ -396,11 +410,11 @@ function OutsourceContent() {
     const paid   = vendorPaid(payVendorId)
     const bal    = billed - paid
     if (amt > bal) { showToast(`Amount exceeds outstanding balance of ${fmtKes(bal)}`, 'error'); return }
-    recordOutsourcePayment({ 
+    const recorded = await recordOutsourcePayment({
       vendorId: payVendorId, vendorName: vendor.name, amount: amt, date: payDate, notes: payNotes.trim() || undefined,
       method: payMethod, bankAccountId: payBankAccountId, reference: payReference
     })
-    setPayVendorId(null)
+    if (recorded) setPayVendorId(null)
   }
 
   // ── UI ───────────────────────────────────────────────────────────────────
@@ -487,7 +501,7 @@ function OutsourceContent() {
     },
     {
       key: 'by', label: 'By', priority: 3, width: '90px',
-      render: job => job.sentByName.split(' ')[0],
+      render: job => (job.sentByName ?? '').split(' ')[0] || '—',
       exportValue: job => job.sentByName,
     },
     {
@@ -946,6 +960,14 @@ function OutsourceContent() {
                                   </button>
                                 ) : null
                               })()}
+                              {(job.finalCost ?? 0) > 0 && !vendorJobBill(job) && job.status !== 'sent' && (
+                                <button
+                                  onClick={() => createOutsourceJobBill(job.id)}
+                                  title="This cost is owed but has no bill, so Finance cannot pay it yet"
+                                  style={{ fontSize: 10, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid #FDE68A', background: 'var(--warning-bg)', color: 'var(--warning-text)', cursor: 'pointer', display: 'block' }}>
+                                  Create bill
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -971,6 +993,11 @@ function OutsourceContent() {
                               <p className="text-[11px] text-t3">{fmtDate(pmt.date)}</p>
                               {pmt.notes && <p className="text-[11px] text-t2 italic mt-0.5">{pmt.notes}</p>}
                               <p className="text-[10px] text-t3 mt-0.5">by {pmt.paidByName}</p>
+                              <p className="text-[10px] mt-0.5" style={{ color: pmt.postedToAccounts ? 'var(--success)' : 'var(--warning-text)' }}>
+                                {pmt.postedToAccounts
+                                  ? `Paid through Finance${pmt.billRefs?.length ? ` · ${pmt.billRefs.join(', ')}` : ''}`
+                                  : 'Recorded in Outsource only — not in the cash book or on the bill'}
+                              </p>
                             </div>
                             <p className="font-bold text-sm" style={{ color: 'var(--success)' }}>{fmtKes(pmt.amount)}</p>
                           </div>
@@ -1348,6 +1375,10 @@ function OutsourceContent() {
         const billed = vendorBilled(payVendorId)
         const paid   = vendorPaid(payVendorId)
         const bal    = billed - paid
+        const vendorBills = outsourceJobs.filter(j => j.vendorId === payVendorId).map(vendorJobBill).filter((b): b is NonNullable<typeof b> => Boolean(b))
+        const draftBills = vendorBills.filter(b => b.status === 'draft' && b.total > b.amountPaid)
+        const payableNow = vendorBills.filter(b => b.status !== 'draft').reduce((sum, b) => sum + Math.max(0, b.total - b.amountPaid), 0)
+        const unbilled = jobsNeedingBill(payVendorId)
         return (
           <div className="modal-overlay" onClick={() => setPayVendorId(null)}>
             <div className="modal-box w-full max-w-sm" onClick={e => e.stopPropagation()}>
@@ -1371,7 +1402,17 @@ function OutsourceContent() {
                   <span className="font-bold text-t1">Outstanding Balance</span>
                   <span className="font-bold text-red-700">{fmtKes(bal)}</span>
                 </div>
+                <div className="flex justify-between text-[11px] mt-1">
+                  <span className="text-t2">Can be paid now (confirmed bills)</span><span className="font-semibold">{fmtKes(payableNow)}</span>
+                </div>
               </div>
+              {(draftBills.length > 0 || unbilled.length > 0) && (
+                <p className="text-[11px] mb-3 rounded-lg px-3 py-2" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
+                  Payments go through Finance against the vendor's bills.
+                  {draftBills.length > 0 && <> {draftBills.map(b => b.ref).join(', ')} {draftBills.length === 1 ? 'is a draft' : 'are drafts'} — Finance confirms {draftBills.length === 1 ? 'it' : 'them'} before payment.</>}
+                  {unbilled.length > 0 && <> {unbilled.map(j => j.ref).join(', ')} {unbilled.length === 1 ? 'has' : 'have'} no bill yet — use “Create bill” on the job.</>}
+                </p>
+              )}
 
               <div className="space-y-3">
                 <div>

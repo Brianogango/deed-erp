@@ -18,6 +18,8 @@ const VALID_KINDS = new Set<DocKind>([
   'delivery_job',
   'buyback',
   'exchange',
+  'outsource',
+  'outsource_payment',
 ])
 
 export async function POST(request: NextRequest) {

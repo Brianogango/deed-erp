@@ -3183,6 +3183,12 @@ interface OutsourcePayment {
   paidByUserId: string
   paidByName: string
   createdAt: string
+  /**
+   * Paid against the vendor's bills through Finance (cash/bank posted, bills
+   * marked paid). Older payments lack this: they were recorded here only.
+   */
+  postedToAccounts?: boolean
+  billRefs?: string[]
 }
 
 // ── Expenses ─────────────────────────────────────────────────────────────────
@@ -3599,7 +3605,9 @@ interface AppState {
   updateOutsourceVendor: (id: string, p: Partial<OutsourceVendor>) => void
   addOutsourceJob: (j: Omit<OutsourceJob, 'id' | 'ref' | 'createdAt' | 'sentByUserId' | 'sentByName' | 'status'>) => OutsourceJob
   returnOutsourceJob: (id: string, p: { returnedDate: string; isResolved: boolean; returnNotes?: string; finalCost?: number; repairNextStep?: 'keep' | 'in_repair' | 'unrepairable' }) => void
-  recordOutsourcePayment: (p: Omit<OutsourcePayment, 'id' | 'ref' | 'createdAt' | 'paidByUserId' | 'paidByName'>) => OutsourcePayment
+  recordOutsourcePayment: (p: Omit<OutsourcePayment, 'id' | 'ref' | 'createdAt' | 'paidByUserId' | 'paidByName' | 'postedToAccounts' | 'billRefs'>) => Promise<OutsourcePayment | null>
+  /** Create the draft vendor bill for a returned job that has a cost but no bill yet. */
+  createOutsourceJobBill: (jobId: string) => void
 
   // Outbound Release Checkpoint
   outboundReleases: OutboundRelease[]
@@ -3763,7 +3771,8 @@ interface AppState {
   postInvoice: (id: string, forcedRef?: string) => void | Promise<void>
   /** Finance dispute flag — Odoo "Blocked" payment status. */
   setInvoicePaymentBlocked: (id: string, blocked: boolean) => void
-  registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void | Promise<void>
+  /** Resolves true once the server has recorded the payment; false when it was refused (the reason is shown). */
+  registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => Promise<boolean>
   /** Reverse a payment registered by mistake; the invoice owes the money again. */
   reverseInvoicePayment: (invoiceId: string, paymentId: string, reason: string) => Promise<boolean>
   resetInvoiceToDraft: (id: string) => void
@@ -4340,6 +4349,7 @@ type FinanceStoreState = Pick<AppState,
   | 'matchStatementLine'
   | 'postInvoice'
   | 'recordOutsourcePayment'
+  | 'createOutsourceJobBill'
   | 'registerPayment'
   | 'reverseInvoicePayment'
   | 'setInvoicePaymentBlocked'
@@ -6908,6 +6918,75 @@ function StoreProvider({
   // buy-back ended up as BBK/0001. The record is saved at once under a
   // temporary number that cannot clash (BBK/2026/L…); the server number then
   // replaces it on the record, its repair and its stock moves.
+  /** An outsource job number: unique at once, the server's OUT/NNNN as soon as it answers. */
+  const outsourceRef = (): string => {
+    const provisional = allocateDocNumberSync('OUT')
+    queueMicrotask(() => {
+      void storeCtxRef.current?.allocateDocRef('OUT').then(finalRef => {
+        if (!finalRef || finalRef === provisional || finalRef.includes('/L')) return
+        const swap = (text?: string) => (text && text.includes(provisional) ? text.split(provisional).join(finalRef) : text)
+        setOutsourceJobs(p => p.map(j => (j.ref === provisional ? { ...j, ref: finalRef } : j)))
+        setRepairs(p => (p.some(r => JSON.stringify(r.statusHistory ?? []).includes(provisional) || (r.notes ?? '').includes(provisional))
+          ? p.map(r => ({
+            ...r,
+            notes: swap(r.notes),
+            statusHistory: r.statusHistory?.map(h => ({ ...h, note: swap(h.note) ?? h.note })),
+          }))
+          : p))
+      }).catch(() => { /* the temporary number stays; it is unique */ })
+    })
+    return provisional
+  }
+
+  /** The outsource vendor's contact (Contacts / accounts), matched by name. */
+  const outsourceVendorContactId = (vendorId: string, vendorName: string) =>
+    contacts.find(c => c.isVendor && c.name.trim().toLowerCase() === vendorName.trim().toLowerCase())?.id ?? vendorId
+
+  /** Bills raised for this vendor's outsource jobs (cancelled ones left out). */
+  const outsourceVendorBills = (vendorId: string) => {
+    const ids = new Set(outsourceJobsRef.current.filter(j => j.vendorId === vendorId && j.billId).map(j => j.billId!))
+    return invRef.current.filter(i => ids.has(i.id) && i.status !== 'cancelled')
+  }
+
+  /**
+   * Draft vendor bill for an outsource job. It carries the draft placeholder
+   * like every other bill, so Finance's posting gives it the official BILL
+   * number (it used to take a number from this browser's own counter, which
+   * posting kept — duplicates across browsers).
+   */
+  const createOutsourceBill = (job: OutsourceJob, cost: number): string => {
+    const line: InvoiceLine = {
+      id: uid(),
+      description: `Outsource Service: ${OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType} — ${job.deviceDescription}`,
+      qty: 1,
+      unitPrice: cost,
+      taxRate: 0,
+      subtotal: cost,
+    }
+    const vendorContactId = outsourceVendorContactId(job.vendorId, job.vendorName)
+    const bill: Invoice = {
+      id: uid(),
+      ref: draftInvoiceRef('vendor_bill'),
+      type: 'vendor_bill',
+      status: 'draft',
+      partnerId: vendorContactId,
+      partnerName: job.vendorName,
+      date: now(),
+      dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === vendorContactId), systemSettings.purDefaultPaymentTermsDays ?? 30)),
+      lines: [line],
+      subtotal: cost,
+      taxTotal: 0,
+      total: cost,
+      amountPaid: 0,
+      notes: `Outsource job ${job.ref} — ${job.deviceDescription}`,
+    }
+    invRef.current = [bill, ...invRef.current]
+    setInvoices(prev => [bill, ...prev])
+    void saveInvoiceToServer(bill, msg => showToast(msg, 'error'))
+    showToast(`Draft vendor bill created for ${job.vendorName} — Finance confirms it before payment`, 'success')
+    return bill.id
+  }
+
   const tradeInRef = (prefix: 'BBK' | 'EXC'): string => {
     const provisional = allocateDocNumberSync(prefix)
     queueMicrotask(() => {
@@ -7493,6 +7572,7 @@ function StoreProvider({
     matchStatementLine: (...args: Parameters<AppState['matchStatementLine']>) => storeCtxRef.current!.matchStatementLine(...args),
     postInvoice: (...args: Parameters<AppState['postInvoice']>) => storeCtxRef.current!.postInvoice(...args),
     recordOutsourcePayment: (...args: Parameters<AppState['recordOutsourcePayment']>) => storeCtxRef.current!.recordOutsourcePayment(...args),
+    createOutsourceJobBill: (...args: Parameters<AppState['createOutsourceJobBill']>) => storeCtxRef.current!.createOutsourceJobBill(...args),
     registerPayment: (...args: Parameters<AppState['registerPayment']>) => storeCtxRef.current!.registerPayment(...args),
     reverseInvoicePayment: (...args: Parameters<AppState['reverseInvoicePayment']>) => storeCtxRef.current!.reverseInvoicePayment(...args),
     setInvoicePaymentBlocked: (...args: Parameters<AppState['setInvoicePaymentBlocked']>) => storeCtxRef.current!.setInvoicePaymentBlocked(...args),
@@ -8651,6 +8731,17 @@ const storeCtx: AppState = {
 
     outsourceVendors, outsourceJobs, outsourcePayments,
 
+    createOutsourceJobBill: (jobId) => {
+      const job = outsourceJobsRef.current.find(j => j.id === jobId)
+      if (!job) return
+      if (job.billId && invRef.current.some(i => i.id === job.billId && i.status !== 'cancelled')) {
+        showToast(`${job.ref} already has a bill`, 'info'); return
+      }
+      if (!(Number(job.finalCost) > 0)) { showToast(`${job.ref} has no final cost to bill`, 'error'); return }
+      const billId = createOutsourceBill(job, Number(job.finalCost))
+      setOutsourceJobs(prev => prev.map(j => j.id === jobId ? { ...j, billId } : j))
+    },
+
     addOutsourceVendor: (v) => {
       const vendor: OutsourceVendor = { ...v, id: uid(), createdAt: now() }
       setOutsourceVendors(prev => [...prev, vendor])
@@ -8703,14 +8794,12 @@ const storeCtx: AppState = {
           return null
         }
       }
-      const nextOutNum = outsourceJobsRef.current.reduce((max, x) => {
-        const n = parseInt(x.ref.replace(/^OUT\//, ''), 10)
-        return isNaN(n) ? max : Math.max(max, n)
-      }, 0) + 1
       const job: OutsourceJob = {
         ...j,
         id: uid(),
-        ref: `OUT/${String(nextOutNum).padStart(4, '0')}`,
+        // Server counter (OUT/NNNN), swapped in when it answers. Counting
+        // the jobs this screen had loaded gave two people the same number.
+        ref: outsourceRef(),
         sentByUserId: user.id,
         sentByName: user.name,
         previousRepairStatus: linkedRepair?.status,
@@ -8746,39 +8835,10 @@ const storeCtx: AppState = {
       const job = outsourceJobsRef.current.find(j => j.id === id)
       if (!job) return
 
-      let billId: string | undefined
-
-      if (p.isResolved && p.finalCost && p.finalCost > 0) {
-        const billRef = seq('BILL', 'inv')
-        const billLine: InvoiceLine = {
-          id: uid(),
-          description: `Outsource Service: ${OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType} — ${job.deviceDescription}`,
-          qty: 1,
-          unitPrice: p.finalCost,
-          taxRate: 0,
-          subtotal: p.finalCost,
-        }
-        const bill: Invoice = {
-          id: uid(),
-          ref: billRef,
-          type: 'vendor_bill',
-          status: 'draft',
-          partnerId: job.vendorId,
-          partnerName: job.vendorName,
-          date: now(),
-          dueDate: addDays(now(), contactPaymentTermsDays(contacts.find(c => c.id === job.vendorId), systemSettings.purDefaultPaymentTermsDays ?? 30)),
-          lines: [billLine],
-          subtotal: p.finalCost,
-          taxTotal: 0,
-          total: p.finalCost,
-          amountPaid: 0,
-          notes: `Outsource job ${job.ref} — ${job.deviceDescription}`,
-        }
-        billId = bill.id
-        setInvoices(prev => [bill, ...prev])
-        void saveInvoiceToServer(bill, msg => showToast(msg, 'error'))
-        showToast(`Vendor bill ${billRef} created for ${job.vendorName}`, 'success')
-      }
+      // A vendor that charged gets a bill whether or not the device came
+      // back fixed (it used to be billed only when fixed, so a charge for an
+      // unfixed device counted as owed in Outsource with no bill anywhere).
+      const billId = p.finalCost && p.finalCost > 0 ? createOutsourceBill(job, p.finalCost) : undefined
 
       setOutsourceJobs(prev => prev.map(j =>
         j.id === id
@@ -9516,23 +9576,53 @@ const storeCtx: AppState = {
       showToast(`${existing.ref} linked to serial ${serial.serial}`, 'success')
     },
 
-    recordOutsourcePayment: (p) => {
+    recordOutsourcePayment: async (p) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
-      const nextPayNum = outsourcePaymentsRef.current.reduce((max, x) => {
-        const n = parseInt(x.ref.replace(/^OPAY\//, ''), 10)
-        return isNaN(n) ? max : Math.max(max, n)
-      }, 0) + 1
+      if (!canManageFinance(user)) { showToast('Only Finance or Admin Officer can pay vendors', 'error'); return null }
+      // Pay the vendor's own bills, oldest first, through Finance's payment
+      // step: cash/bank is posted and each bill shows as paid. Payments
+      // recorded only here used to leave the bills unpaid in Finance (so they
+      // could be paid twice) and never reached the cash book.
+      const open = outsourceVendorBills(p.vendorId)
+        .filter(b => invoiceDocState(b.status) === 'posted' && b.total - b.amountPaid > 0.5)
+        .sort((x, y) => String(x.date).localeCompare(String(y.date)))
+      const payable = open.reduce((sum, b) => sum + (b.total - b.amountPaid), 0)
+      if (p.amount > payable + 0.5) {
+        const drafts = outsourceVendorBills(p.vendorId).filter(b => invoiceDocState(b.status) === 'draft')
+        showToast(drafts.length
+          ? `Only ${fmtKes(payable)} can be paid now — ${drafts.map(b => b.ref).join(', ')} still ${drafts.length === 1 ? 'needs' : 'need'} Finance to confirm (post) ${drafts.length === 1 ? 'it' : 'them'} first`
+          : `Amount exceeds the ${fmtKes(payable)} owed on posted bills`, 'error')
+        return null
+      }
+      let remaining = p.amount
+      const paidRefs: string[] = []
+      for (const bill of open) {
+        if (remaining <= 0.5) break
+        const amt = Math.min(remaining, bill.total - bill.amountPaid)
+        // Only what the server recorded counts (registerPayment shows the reason when it refuses).
+        const ok = await storeCtxRef.current!.registerPayment(bill.id, amt, p.method, p.bankAccountId, p.reference, p.date)
+        if (!ok) break
+        paidRefs.push(bill.ref)
+        remaining -= amt
+      }
+      const paid = Math.round((p.amount - remaining) * 100) / 100
+      if (paid <= 0) return null
       const payment: OutsourcePayment = {
         ...p,
+        amount: paid,
         id: uid(),
-        ref: `OPAY/${String(nextPayNum).padStart(4, '0')}`,
+        ref: await storeCtxRef.current!.allocateDocRef('OPAY'),
         paidByUserId: user.id,
         paidByName: user.name,
         createdAt: now(),
+        postedToAccounts: true,
+        billRefs: paidRefs,
       }
       setOutsourcePayments(prev => [payment, ...prev])
-      showToast(`Payment ${payment.ref} recorded`, 'success')
+      showToast(remaining > 0.5
+        ? `Paid ${fmtKes(paid)} of ${fmtKes(p.amount)} (${paidRefs.join(', ')}) — the rest was not paid`
+        : `Payment ${payment.ref} recorded against ${paidRefs.join(', ')}`, remaining > 0.5 ? 'error' : 'success')
       return payment
     },
 
@@ -14307,26 +14397,26 @@ const storeCtx: AppState = {
     registerPayment: async (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
       const actor = currentUser()
       if (!canManageFinance(actor)) {
-        showToast('Only Finance or Admin Officer can register payments', 'error'); return
+        showToast('Only Finance or Admin Officer can register payments', 'error'); return false
       }
       const inv = invRef.current.find(i => i.id === invoiceId)
-      if (!inv) return
+      if (!inv) return false
       // Use the shared document-state projection (not a raw === 'posted' check):
       // a posted invoice hydrated from Prisma carries status 'approved'/'invoiced',
       // which the header badge and "Register payment" button already treat as
       // Posted. A raw equality here rejected those, so the button appeared but the
       // payment failed with "Only posted invoices can receive payments".
       if (invoiceDocState(inv.status) !== 'posted') {
-        showToast('Only posted invoices can receive payments', 'error'); return
+        showToast('Only posted invoices can receive payments', 'error'); return false
       }
-      if (inv.paymentBlocked) { showToast('Payments are blocked on this invoice — release the block first', 'error'); return }
+      if (inv.paymentBlocked) { showToast('Payments are blocked on this invoice — release the block first', 'error'); return false }
       const sodThreshold = systemSettings.accAdminOfficerInvoiceLimitKes ?? DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
       const gate = canPostOrPayCustomerInvoice({
         role: actor?.role,
         invoiceType: inv.type,
         action: 'pay',
       })
-      if (!gate.ok) { showToast(gate.reason || 'Cannot register payment', 'error'); return }
+      if (!gate.ok) { showToast(gate.reason || 'Cannot register payment', 'error'); return false }
       const sod = canPayOwnPostedInvoice({
         role: actor?.role,
         actorUserId: actor?.id,
@@ -14334,14 +14424,14 @@ const storeCtx: AppState = {
         invoiceTotal: inv.total,
         sodThresholdKes: sodThreshold,
       })
-      if (!sod.ok) { showToast(sod.reason || 'Segregation of duties blocked this payment', 'error'); return }
+      if (!sod.ok) { showToast(sod.reason || 'Segregation of duties blocked this payment', 'error'); return false }
       const balance = inv.total - inv.amountPaid
-      if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
+      if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return false }
       const capped = Math.min(amount, balance)
       const paymentId = crypto.randomUUID()
       const journal = buildInvoicePaymentJournal(inv, capped, method, bankAccountId, paymentDate, paymentId)
       if (journalEntries.some(j => j.ref === journal.ref)) {
-        showToast('This payment journal was already posted', 'info'); return
+        showToast('This payment journal was already posted', 'info'); return false
       }
       const prevInvoice = inv
       const newPayment: InvoicePayment = {
@@ -14385,10 +14475,11 @@ const storeCtx: AppState = {
         setInvoices(p => p.map(i => i.id === invoiceId ? prevInvoice : i))
         setJournalEntries(p => p.filter(j => j.ref !== journal.ref))
         showToast(err?.message || 'Payment could not be registered', 'error')
-        return
+        return false
       }
       addAuditLog('register_payment', invoiceId, `Registered payment of KES ${capped} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
+      return true
     },
     reverseInvoicePayment: async (invoiceId, paymentId, reason) => {
       const actor = currentUser()

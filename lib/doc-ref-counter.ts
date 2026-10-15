@@ -34,6 +34,9 @@ export type DocKind =
   /** Trade-in buy-backs (BBK/YYYY/NNNN) and client exchanges (EXC/YYYY/NNNN). */
   | 'buyback'
   | 'exchange'
+  /** Outsource jobs (OUT/NNNN) and vendor payments (OPAY/NNNN) — yearless, as they always were. */
+  | 'outsource'
+  | 'outsource_payment'
 
 // Quotations exist both as CRM quotes and as quotation-state sale orders;
 // they share the QUO prefix and therefore one sequence.
@@ -54,6 +57,8 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   delivery_job: 'DJB',
   buyback: 'BBK',
   exchange: 'EXC',
+  outsource: 'OUT',
+  outsource_payment: 'OPAY',
 }
 
 const PREFIX = DOC_PREFIX
@@ -93,6 +98,25 @@ async function maxLegacySeqFromAppStateBlob(key: string, prefix: string): Promis
   } catch {
     return 0
   }
+}
+
+/**
+ * Highest PREFIX/NNNN among a collection's records. Collections are kept one
+ * row per record (erp_state_records) now; the older single copy (app_state)
+ * is read too, so numbering continues from whichever holds the higher one.
+ */
+async function maxYearlessSeq(key: string, prefix: string): Promise<number> {
+  let fromRecords = 0
+  try {
+    const re = `^${prefix}/[0-9]+$`
+    const { rows } = await sql`
+      SELECT COALESCE(MAX((substring(payload->>'ref' from '[0-9]+$'))::int), 0) AS max_num
+      FROM erp_state_records WHERE key = ${key} AND payload->>'ref' ~ ${re}`
+    fromRecords = Number(rows?.[0]?.max_num ?? 0)
+  } catch {
+    fromRecords = 0
+  }
+  return Math.max(fromRecords, await maxLegacySeqFromAppStateBlob(key, prefix))
 }
 
 /** Scan an app_state JSON array blob for the highest PREFIX/YYYY/NNNN ref. */
@@ -195,6 +219,10 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
         return maxRefFromAppStateBlob('deed_buyBacks', i => String(i.ref ?? ''), prefix, year)
       case 'exchange':
         return maxRefFromAppStateBlob('deed_clientExchanges', i => String(i.ref ?? ''), prefix, year)
+      case 'outsource':
+        return maxYearlessSeq('deed_outsourceJobs', prefix)
+      case 'outsource_payment':
+        return maxYearlessSeq('deed_outsourcePayments', prefix)
       default:
         return 0
     }
@@ -212,7 +240,7 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   await ensureCounterTable()
   const now = new Date().toISOString()
   const year = new Date().getFullYear()
-  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : `${PREFIX[kind]}_${year}`
+  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : kind === 'outsource' ? 'out_seq' : kind === 'outsource_payment' ? 'opay_seq' : `${PREFIX[kind]}_${year}`
 
   // Fast path: counter row exists — atomic increment.
   const updated = await sql`
@@ -241,5 +269,6 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   if (kind === 'client') return `CLT-${String(nextValue).padStart(5, '0')}`
   if (kind === 'pos') return `POS/${String(nextValue).padStart(4, '0')}`
   if (kind === 'delivery_job') return `DJB/${String(nextValue).padStart(4, '0')}`
+  if (kind === 'outsource' || kind === 'outsource_payment') return `${PREFIX[kind]}/${String(nextValue).padStart(4, '0')}`
   return `${PREFIX[kind]}/${year}/${String(nextValue).padStart(4, '0')}`
 }
