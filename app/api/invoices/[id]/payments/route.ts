@@ -11,8 +11,8 @@ import {
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
 import { invoiceDocState } from '@/lib/odoo-sales-flow'
-import { labelForRole, cashAccountRoleForBankId } from '@/lib/accounting/coa-roles'
-import { isUuid } from '@/lib/legacy-compat'
+import { labelForRole } from '@/lib/accounting/coa-roles'
+import { BankAccountRefError, cashLabelForBankAccount } from '@/lib/accounting/bank-cash-account.server'
 import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
@@ -161,19 +161,15 @@ export async function POST(
         : labelForRole('cash_mobile')
     // A credit application is never re-pointed at a bank GL, whatever the
     // caller sent as bankAccountId.
-    if (!isCreditApplication && bankAccountId && isUuid(bankAccountId)) {
-      const bank = await prisma.bankAccount.findUnique({ where: { id: bankAccountId } })
-      if (!bank || !bank.isActive) {
-        return NextResponse.json({ error: 'Invalid or inactive bank account' }, { status: 400 })
+    if (!isCreditApplication && bankAccountId) {
+      try {
+        cashAccountLabel = await cashLabelForBankAccount(prisma, bankAccountId)
+      } catch (err) {
+        if (err instanceof BankAccountRefError) {
+          return NextResponse.json({ error: err.message }, { status: err.status })
+        }
+        throw err
       }
-      const gl = await prisma.accountCode.findUnique({ where: { id: bank.glAccountId } })
-      if (!gl || !gl.isActive) {
-        return NextResponse.json({ error: 'Bank account is not mapped to an active GL account' }, { status: 409 })
-      }
-      cashAccountLabel = `${gl.code} - ${gl.name}`
-    } else if (!isCreditApplication && bankAccountId) {
-      // Blob cashbook id ('ncba', 'im', …) — resolve via the role map.
-      cashAccountLabel = labelForRole(cashAccountRoleForBankId(bankAccountId))
     }
 
     const { recordPaymentWithAllocations } = await import('@/lib/accounting/payment-allocations')
