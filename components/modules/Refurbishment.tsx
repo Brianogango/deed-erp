@@ -866,7 +866,7 @@ function RefurbishmentContent() {
                 exportValue: (j: RefurbishmentJob) => j.assignedTechnicianName || '',
               },
               {
-                key: 'partsCost', label: 'Parts cost', priority: 2, width: '130px',
+                key: 'partsCost', label: 'Parts cost', align: 'right' as const, priority: 2, width: '130px',
                 render: (j: RefurbishmentJob) => {
                   const partTotal = j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0)
                   return <span className="text-xs font-medium text-t2">{partTotal > 0 ? fmtKes(partTotal) : '—'}</span>

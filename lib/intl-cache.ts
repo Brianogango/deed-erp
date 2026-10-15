@@ -51,6 +51,18 @@ export const formatKeInteger = (n: number) => numberFormatter('en-KE').format(n)
 /** Two decimals with en-KE grouping: 1,234.50. */
 export const formatKe2dp = (n: number) => numberFormatter('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
+/**
+ * Plain editable string for a money amount, for pre-filling an input: rounded to
+ * cents so binary floating-point noise (0.1 + 0.2 → 0.30000000000000004) never
+ * reaches the field. No grouping, no trailing zeros: 1234.5, 1000, 0.3.
+ */
+export function moneyInputValue(n: number | string | null | undefined): string {
+  const v = typeof n === 'string' ? Number(n.replace(/,/g, '')) : Number(n ?? 0)
+  if (!Number.isFinite(v)) return '0'
+  const cents = Math.round((v + Math.sign(v) * Number.EPSILON * Math.abs(v)) * 100) / 100
+  return String(cents === 0 ? 0 : cents) // normalises -0
+}
+
 // ── Shared cache behind toLocale*String ─────────────────────────────────────
 // 250+ call sites format with `x.toLocaleString(locale, options)`. Rather than
 // rewrite each, the browser's methods are wrapped once at start-up to reuse a

@@ -3002,7 +3002,7 @@ function InventoryContent() {
                 exportValue: move => move.type === 'out' ? 'Sale / Usage' : 'Return',
               },
               {
-                key: 'qty', label: 'Qty', priority: 1, width: '80px',
+                key: 'qty', label: 'Qty', align: 'right' as const, priority: 1, width: '80px',
                 render: move => <span className="text-xs font-bold text-red-600">{move.qty}</span>,
                 exportValue: move => move.qty,
               },
@@ -3670,7 +3670,7 @@ function InventoryContent() {
                     exportValue: move => move.type,
                   },
                   {
-                    key: 'qty', label: 'Qty', priority: 1, width: '60px',
+                    key: 'qty', label: 'Qty', align: 'right' as const, priority: 1, width: '60px',
                     render: move => <span className="text-xs font-bold text-text-1">{move.qty}</span>,
                     exportValue: move => move.qty,
                   },
@@ -3977,7 +3977,7 @@ function InventoryContent() {
                 </>
               )}
               <div className="overflow-x-auto border border-[var(--color-border)]">
-                <table className="w-full text-xs">
+                <table className="erp-table">
                   <thead className="bg-[var(--color-surface-muted)] text-left">
                     <tr>
                       <th className="px-2 py-1.5 font-medium">Product</th>

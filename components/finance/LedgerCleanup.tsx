@@ -82,7 +82,7 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
       {data && count > 0 && !canApply && <p className="mt-3 text-xs text-amber-800">A director can apply the correction.</p>}
       {data && data.deposits.length > 0 && (
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-left text-[11px]">
+          <table className="erp-table">
             <thead className="text-text-3"><tr><th className="py-1 pr-3">Duplicate entry</th><th className="py-1 pr-3">Date</th><th className="py-1 pr-3 text-right">Amount</th><th className="py-1">Kept</th></tr></thead>
             <tbody>
               {data.deposits.map(d => (
@@ -122,7 +122,7 @@ export default function LedgerCleanup({ showToast, canApply }: { showToast: (msg
       {data && data.tillMissing.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <p className="mb-1 text-xs font-bold text-text-2">{data.tillMissing.length} till sale{data.tillMissing.length === 1 ? '' : 's'} with no invoice (rebuilt from the ticket)</p>
-          <table className="w-full text-left text-[11px]">
+          <table className="erp-table">
             <thead className="text-text-3"><tr><th className="py-1 pr-3">Ticket</th><th className="py-1 pr-3">Date</th><th className="py-1 pr-3">Customer</th><th className="py-1 pr-3">Cashier</th><th className="py-1 pr-3 text-right">Total</th><th className="py-1">In ledger</th></tr></thead>
             <tbody>
               {data.tillMissing.map(t => (

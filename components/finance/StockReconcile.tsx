@@ -70,7 +70,7 @@ export default function StockReconcile({ showToast, canApply }: { showToast: (ms
       {!!rows?.length && !canApply && <p className="mt-3 text-xs text-amber-800">A director can apply the correction.</p>}
       {!!rows?.length && (
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-left text-[11px]">
+          <table className="erp-table">
             <thead className="text-text-3">
               <tr><th className="py-1 pr-3">Item</th><th className="py-1 pr-3 text-right">Screens</th><th className="py-1 pr-3 text-right">Database</th><th className="py-1 pr-3 text-right">Set to</th><th className="py-1 text-right">Value removed</th></tr>
             </thead>

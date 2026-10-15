@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { Table } from '@/components/ui'
 import { exportToExcel, exportToPDF, type ExportRow } from '@/lib/export-utils'
 import { useTableBreakpoint } from '@/lib/data-table/use-breakpoint'
+import { columnFloor, fitColumnsToWidth } from '@/lib/data-table/fit'
 import { useTablePreferences } from '@/lib/data-table/use-table-preferences'
 import { getColumnSortValue, getColumnValue, isColumnSortable, type ColumnDef, type ColumnPriority, type SavedView } from '@/lib/data-table/types'
 import { compareSortValues, nextSortState, type TableSortState } from '@/lib/data-table/sort'
@@ -194,6 +195,20 @@ export default function DataTable<T>({
 }: DataTableProps<T>) {
   const tableRootRef = useRef<HTMLDivElement | null>(null)
   const breakpoint = useTableBreakpoint(tableRootRef)
+  const [containerWidth, setContainerWidth] = useState(0)
+  useEffect(() => {
+    const node = tableRootRef.current
+    if (!node || typeof ResizeObserver === 'undefined') return
+    const sync = () => setContainerWidth(previous => {
+      const next = Math.round(node.getBoundingClientRect().width)
+      // Ignore sub-12px jitter (scrollbar appearing) so columns do not flicker.
+      return Math.abs(next - previous) < 12 ? previous : next
+    })
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
   const { prefs, hydrated: prefsHydrated, setVisibleColumnKeys, setSort: persistSort, saveView, deleteView } = useTablePreferences(tableId)
 
   const [internalSearch, setInternalSearch] = useState('')
@@ -252,15 +267,25 @@ export default function DataTable<T>({
   const eligibleKeys = useMemo(() => new Set(pickableColumns.map(c => c.key)), [pickableColumns])
 
   const visibleColumns = useMemo(() => {
-    if (!prefs.visibleColumnKeys) {
-      if (!defaultVisibleColumnKeys?.length) return eligibleColumns
-      const defaults = new Set(defaultVisibleColumnKeys)
-      return pickableColumns.filter(column => column.priority === 1 || defaults.has(column.key))
+    // Explicit user picks always win, across every breakpoint.
+    if (prefs.visibleColumnKeys) {
+      const selected = new Set(prefs.visibleColumnKeys)
+      return pickableColumns.filter(c => c.priority === 1 || selected.has(c.key))
     }
-    const selected = new Set(prefs.visibleColumnKeys)
-    // Honour explicit user picks across breakpoints; always keep priority-1 columns.
-    return pickableColumns.filter(c => c.priority === 1 || selected.has(c.key))
-  }, [defaultVisibleColumnKeys, eligibleColumns, pickableColumns, prefs.visibleColumnKeys])
+    let candidates = eligibleColumns
+    if (defaultVisibleColumnKeys?.length) {
+      const defaults = new Set(defaultVisibleColumnKeys)
+      // Saved defaults still honour the breakpoint: a priority-3 column is
+      // desktop-only even when it is in the default set.
+      const cap = breakpoint === 'mobile' ? 1 : PRIORITY_CAP[breakpoint]
+      candidates = pickableColumns.filter(column => column.priority === 1 || (defaults.has(column.key) && column.priority <= cap))
+    }
+    // Progressive disclosure: never show more default columns than the card can
+    // hold without clipping — least important columns yield first.
+    if (breakpoint === 'mobile' || containerWidth <= 0) return candidates
+    const extras = (selectable ? 36 : 0) + (rowActions ? rowActionsWidth : 0)
+    return fitColumnsToWidth(candidates, containerWidth, extras)
+  }, [breakpoint, containerWidth, defaultVisibleColumnKeys, eligibleColumns, pickableColumns, prefs.visibleColumnKeys, rowActions, rowActionsWidth, selectable])
 
   const visibleKeys = useMemo(() => new Set(visibleColumns.map(c => c.key)), [visibleColumns])
 
@@ -491,6 +516,8 @@ export default function DataTable<T>({
                 ...(selectable ? [{
                   label: 'Select',
                   width: '36px',
+                  fixed: true,
+                  align: 'center' as const,
                   header: (
                     <input
                       ref={selectPageRef}
@@ -510,7 +537,7 @@ export default function DataTable<T>({
                   width: c.key.toLowerCase().includes('status')
                     ? (c.width?.endsWith('px') && Number.parseInt(c.width, 10) > 140 ? c.width : '140px')
                     : c.width,
-                  minWidth: c.key.toLowerCase().includes('status') ? Math.max(140, c.minWidth ?? 0) : c.minWidth,
+                  minWidth: columnFloor(c),
                   sticky: c.key.toLowerCase().includes('status') ? ('right' as const) : undefined,
                   align: c.align,
                   sortable: isColumnSortable(c),
@@ -523,7 +550,7 @@ export default function DataTable<T>({
                       }
                     : undefined,
                 })),
-                ...(rowActions ? [{ label: 'Actions', width: `${rowActionsWidth}px`, minWidth: rowActionsWidth, sticky: 'right' as const, align: 'right' as const }] : []),
+                ...(rowActions ? [{ label: 'Actions', width: `${rowActionsWidth}px`, minWidth: rowActionsWidth, fixed: true, sticky: 'right' as const, align: 'right' as const }] : []),
               ]}
               isLoading={isLoading}
               error={error}
@@ -553,7 +580,7 @@ export default function DataTable<T>({
                     } : undefined}
                   >
                     {selectable && (
-                      <span role="gridcell">
+                      <span role="gridcell" className="data-table-select-cell">
                         <input
                           type="checkbox"
                           checked={selectedKeys.has(key)}
@@ -587,7 +614,7 @@ export default function DataTable<T>({
               })}
               {hasFooter && pageRows.length > 0 && (
                 <div className="table-row data-table-summary-row" role="row" aria-label="Current page totals">
-                  {selectable && <span role="gridcell" />}
+                  {selectable && <span role="gridcell" className="data-table-select-cell" />}
                   {visibleColumns.map((column, index) => (
                     <span
                       role="gridcell"

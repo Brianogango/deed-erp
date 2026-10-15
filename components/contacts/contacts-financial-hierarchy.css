@@ -88,18 +88,15 @@
 }
 .contacts-workspace .contacts-panel--invoices .contacts-compact-table :is(th,td) {
   box-sizing: border-box;
-  padding: 13px 12px;
   vertical-align: middle;
   text-align: left;
   border-bottom: 1px solid #e3eaf2;
   background: transparent;
-  font-size: 12px;
   line-height: 1.45;
 }
 .contacts-workspace .contacts-panel--invoices .contacts-compact-table th {
   background: #eef3f9;
   color: #52627a;
-  font-weight: 700;
   white-space: nowrap;
 }
 .contacts-workspace .contacts-panel--invoices .contacts-compact-table :is(th,td):nth-child(3),

@@ -308,7 +308,7 @@ export default function FinancialReportTab() {
               <p className="text-xs text-[var(--text-4)]">No posted activity in this period.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="erp-table">
                   <thead>
                     <tr className="text-left text-[var(--text-4)] border-b border-[var(--border-lt)]">
                       <th className="py-1.5 pr-4 font-semibold">Date</th>

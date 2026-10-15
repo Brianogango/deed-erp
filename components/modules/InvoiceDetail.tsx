@@ -39,6 +39,7 @@ import {
 } from '@/lib/document-payment-details'
 import { fetchMpesaStatus, sendMpesaStk, waitForMpesaStk } from '@/lib/mpesa/client'
 import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
+import { moneyInputValue } from '@/lib/intl-cache'
 
 
 export default function InvoiceDetail() {
@@ -744,7 +745,7 @@ export default function InvoiceDetail() {
             {docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance && (
               <PrimaryActionButton
                 icon={<Fa icon={faMoneyBillWave} />}
-                onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}
+                onClick={() => { setPayAmount(moneyInputValue(balance)); setShowPayModal(true) }}
                 hideLabelOnMobile={false}
               >
                 {invoice.type === 'customer_invoice' ? 'Record receipt' : 'Record payment'}

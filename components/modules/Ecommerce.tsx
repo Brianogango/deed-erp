@@ -60,12 +60,12 @@ export default function Ecommerce() {
       exportValue: p => p.category,
     },
     {
-      key: 'price', label: 'Price', priority: 1, width: '80px',
+      key: 'price', label: 'Price', align: 'right' as const, priority: 1, width: '80px',
       render: p => <span className="font-mono text-[11px]">{fmtKes(p.salePrice)}</span>,
       exportValue: p => p.salePrice,
     },
     {
-      key: 'stock', label: 'Stock', priority: 2, width: '70px',
+      key: 'stock', label: 'Stock', align: 'right' as const, priority: 2, width: '70px',
       render: p => (
         <span className="font-mono text-[11px]" style={{ color: p.stockQty === 0 ? 'var(--danger)' : p.stockQty <= p.minStock ? 'var(--warning)' : 'var(--success)' }}>
           {p.unit === 'service' ? '∞' : p.stockQty}
@@ -101,7 +101,7 @@ export default function Ecommerce() {
       exportValue: o => o.product,
     },
     {
-      key: 'total', label: 'Total', priority: 1, width: '90px',
+      key: 'total', label: 'Total', align: 'right' as const, priority: 1, width: '90px',
       render: o => <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>,
       exportValue: o => o.total,
     },

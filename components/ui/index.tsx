@@ -330,7 +330,7 @@ export function Toast({
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto overflow-hidden"
+      className="ui-enter ui-enter-toast fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto overflow-hidden"
       style={{
         background: cfg.bg,
         borderRadius: 18,
@@ -338,7 +338,6 @@ export function Toast({
         minWidth: 290,
         maxWidth: 440,
         boxShadow: `0 24px 56px -8px ${cfg.shadow}, 0 0 0 1px rgba(255,255,255,0.18), 0 8px 24px rgba(0,0,0,0.22)`,
-        animation: 'toastIn 0.32s cubic-bezier(0.34,1.4,0.64,1) both',
       }}
     >
       <div
@@ -396,11 +395,10 @@ export function Modal({
   return (
     <Portal targetId={workspace ? 'module-workspace-root' : undefined}>
     <div
-      className={`${workspace ? 'absolute h-full' : 'fixed h-dvh'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
+      className={`${workspace ? 'absolute h-full' : 'ui-enter ui-enter-backdrop fixed h-dvh'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
       style={{
         background: workspace ? 'var(--bg-app)' : enterprise ? 'rgba(15,23,42,0.48)' : 'rgba(0,0,0,0.55)',
         backdropFilter: workspace ? 'none' : enterprise ? 'blur(3px)' : 'blur(8px)',
-        animation: 'backdropIn 0.2s ease both',
       }}
       role="dialog"
       aria-modal="true"
@@ -410,7 +408,7 @@ export function Modal({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className={`flex w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell h-full max-h-none rounded-none' : `my-auto rounded-[14px] sm:rounded-2xl ${enterprise ? 'max-h-[calc(100dvh-48px)]' : 'max-h-[calc(100dvh-20px)] sm:max-h-[92vh]'}`}`}
+        className={`flex w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell h-full max-h-none rounded-none' : `ui-enter ui-enter-modal my-auto rounded-[14px] sm:rounded-2xl ${enterprise ? 'max-h-[calc(100dvh-48px)]' : 'max-h-[calc(100dvh-20px)] sm:max-h-[92vh]'}`}`}
         style={{
           maxWidth: workspace ? 'none' : width,
           background: workspace ? 'var(--bg-app)' : enterprise ? '#FFFFFF' : 'var(--bg-card)',
@@ -418,7 +416,6 @@ export function Modal({
           boxShadow: workspace ? 'none' : enterprise
             ? '0 24px 64px -20px rgba(15,23,42,0.38), 0 8px 24px -12px rgba(15,23,42,0.22)'
             : `0 32px 72px -12px rgba(0,0,0,0.5), 0 0 0 1px ${accent}12, 0 16px 40px -8px ${accent}22`,
-          animation: workspace ? 'none' : 'modalIn 0.22s cubic-bezier(0.34,1.4,0.64,1) both',
         } as React.CSSProperties}
         onClick={e => e.stopPropagation()}
       >
@@ -527,8 +524,7 @@ export function SlidePanel({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={`flex h-full w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell max-w-none bg-[var(--bg-app)]' : 'sm:w-[min(95vw,720px)] max-w-5xl bg-card border-l border-border shadow-2xl'}`}
-        style={{ animation: workspace ? 'none' : 'slideInRight 0.28s cubic-bezier(0.25,0.46,0.45,0.94) both' }}
+        className={`flex h-full w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell max-w-none bg-[var(--bg-app)]' : 'ui-enter ui-enter-drawer sm:w-[min(95vw,720px)] max-w-5xl bg-card border-l border-border shadow-2xl'}`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -652,8 +648,7 @@ export function Confirm({
       <div
         ref={confirmRef}
         tabIndex={-1}
-        className="w-full max-w-[380px] rounded-xl sm:rounded-2xl p-4 sm:p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
-        style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }}
+        className="ui-enter ui-enter-confirm w-full max-w-[380px] rounded-xl sm:rounded-2xl p-4 sm:p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {title && <p id={titleId} className="text-sm sm:text-xs font-black uppercase tracking-widest text-text-3">{title}</p>}
@@ -900,6 +895,8 @@ export function Table({
     header?: ReactNode
     width?: string
     minWidth?: number
+    /** Never grows past `width` (selection checkbox, row-action columns). */
+    fixed?: boolean
     sticky?: 'left' | 'right'
     /** Header follows its column's cells (figures right-aligned → heading too). */
     align?: 'left' | 'center' | 'right'
@@ -1002,14 +999,19 @@ export function Table({
 
 
   const grid = useMemo(() => {
-    // Every column keeps a floor so none can be squeezed to nothing (the
-    // Horizon table padding left "Product" one letter wide). Floors are kept
-    // small (64px for short columns) so columns still share the card; only
-    // when the floors themselves
-    // do not fit does the table scroll sideways.
-    const FLOOR_PX = 64
+    // Column sizing policy (one place, every DataTable):
+    //  - Every column keeps a floor so none can be squeezed to nothing.
+    //  - Declared widths are *proportions*, not ceilings. A `118px` column and a
+    //    `2fr` name column both grow with the card, sharing slack in proportion
+    //    to their declared width. Capping fixed tracks at their pixel width left
+    //    one flexible column to swallow all the free space (a 1,350px Customer
+    //    column beside 100px figures).
+    //  - `fixed` columns (selection checkbox, row actions) never grow.
+    //  - Only when the floors themselves do not fit does the table scroll.
+    const FLOOR_PX = 80
     const FLOOR_FLEX_PX = 88
-    const MAX_DECLARED_FLOOR = '13rem'
+    const FR_BASIS_PX = 160 // nominal width of a bare `1fr` column
+    const MAX_DECLARED_FLOOR = '10rem'
     return cols
       .filter((col, index) => !visibleColumnKeys || visibleColumnKeys.includes(columnKey(col, index)))
       .map((col) => {
@@ -1021,22 +1023,27 @@ export function Table({
           && stored >= MIN_PERSISTED_COL_WIDTH
           && stored <= MAX_PERSISTED_COL_WIDTH
         ) {
+          // A width the user dragged is a deliberate choice: honour it exactly.
           const px = Math.max(stored, col.minWidth ?? MIN_PERSISTED_COL_WIDTH)
           return `minmax(${declaredFloor ?? `${Math.min(px, FLOOR_PX)}px`}, ${px}px)`
         }
         const width = col.width ?? '1fr'
         if (/^\d+px$/.test(width)) {
           const px = Number.parseInt(width, 10) || 96
-          return `minmax(${declaredFloor ?? `${Math.min(px, FLOOR_PX)}px`}, ${px}px)`
+          if (col.fixed) return `minmax(${declaredFloor ?? `${px}px`}, ${px}px)`
+          return `minmax(${declaredFloor ?? `${Math.min(px, FLOOR_PX)}px`}, ${px}fr)`
         }
         if (/^[\d.]+fr$/.test(width)) {
-          return `minmax(${declaredFloor ?? `${FLOOR_FLEX_PX}px`}, ${width})`
+          const weight = Math.round((Number.parseFloat(width) || 1) * FR_BASIS_PX)
+          return `minmax(${declaredFloor ?? `${FLOOR_FLEX_PX}px`}, ${weight}fr)`
         }
         if (width.startsWith('minmax(')) {
-          // Keep the column's own minimum (capped), or a modest floor when it was 0.
+          // Keep the column's own minimum (capped), or a modest floor when it was 0,
+          // and give its flexible maximum the same proportional weight as above.
           return width
             .replace(/minmax\(\s*0(px|rem)?\s*,/, `minmax(${declaredFloor ?? `${FLOOR_PX}px`},`)
             .replace(/minmax\(\s*([\d.]+)rem\s*,/, (_m, rem) => `minmax(min(${rem}rem, ${MAX_DECLARED_FLOOR}),`)
+            .replace(/,\s*([\d.]+)fr\s*\)$/, (_m, fr) => `, ${Math.round((Number.parseFloat(fr) || 1) * FR_BASIS_PX)}fr)`)
         }
         return width
       })
@@ -1330,26 +1337,27 @@ export function RecordCard({
           onClick()
         }
       } : undefined}
-      className={`record-card w-full rounded-xl sm:rounded-2xl border bg-card p-2.5 sm:p-3.5 text-left shadow-card transition-[background-color,border-color,box-shadow,transform] ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
+      className={`record-card w-full min-w-0 max-w-full rounded-xl sm:rounded-2xl border bg-card p-2.5 sm:p-3.5 text-left shadow-card transition-[background-color,border-color,box-shadow,transform] ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
       style={{ borderColor: 'var(--border-lt)', borderLeft: `4px solid ${accent}` }}
     >
       <div className="flex items-start justify-between gap-2.5 sm:gap-3">
         <div className="min-w-0 flex-1">
           {eyebrow && <div className="text-[10px] sm:text-[10px] font-black uppercase tracking-wider text-primary-600 mb-0.5">{eyebrow}</div>}
-          <div className="text-[15px] sm:text-sm font-black text-text-1 truncate">{title}</div>
-          {subtitle && <div className="text-[11px] sm:text-[11px] text-text-3 mt-0.5 truncate">{subtitle}</div>}
+          {/* Names identify the record: wrap to two lines rather than cutting at one. */}
+          <div className="text-sm font-semibold text-text-1 line-clamp-2 [overflow-wrap:anywhere]" title={typeof title === 'string' ? title : undefined}>{title}</div>
+          {subtitle && <div className="text-xs text-text-3 mt-0.5 truncate" title={typeof subtitle === 'string' ? subtitle : undefined}>{subtitle}</div>}
         </div>
-        <div className="flex-shrink-0 text-right">
-          {amount && <div className="font-mono text-[13px] sm:text-xs font-black text-text-1">{amount}</div>}
-          {status && <div className="mt-0.5 sm:mt-1 flex justify-end">{status}</div>}
+        <div className="min-w-0 max-w-[55%] flex-shrink-0 text-right">
+          {amount && <div className="text-sm font-semibold tabular-nums text-text-1 [overflow-wrap:anywhere]">{amount}</div>}
+          {status && <div className="mt-0.5 sm:mt-1 flex flex-wrap justify-end gap-1">{status}</div>}
         </div>
       </div>
       {meta.length > 0 && (
-        <div className="record-card-meta mt-2 sm:mt-3 grid grid-cols-2 gap-1.5 sm:gap-2">
+        <div className="record-card-meta mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-border-lt pt-2">
           {meta.map(item => (
-            <div key={item.label} className="rounded-lg sm:rounded-xl border border-border-lt bg-surface/45 px-2 py-1.5 sm:px-2.5 sm:py-2">
-              <div className="text-[9px] sm:text-[9px] font-black uppercase tracking-wider text-text-4">{item.label}</div>
-              <div className="mt-0.5 text-[11px] sm:text-[11px] font-bold text-text-2 truncate">{item.value}</div>
+            <div key={item.label} className="min-w-0">
+              <div className="text-[11px] leading-4 text-text-4">{item.label}</div>
+              <div className="text-xs font-semibold leading-4 text-text-2 truncate tabular-nums" title={typeof item.value === 'string' ? item.value : undefined}>{item.value}</div>
             </div>
           ))}
         </div>
@@ -1410,19 +1418,20 @@ export function StatCard({
     <div
       onClick={onClick}
       className={`
-        stat-card card p-3 sm:p-5 min-h-[92px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-[background-color,border-color,box-shadow,transform] duration-200
+        stat-card card min-w-0 p-3 sm:p-5 min-h-[92px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-[background-color,border-color,box-shadow] duration-200
         ${compact ? 'stat-card--compact' : ''}
-        ${onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5' : ''}
+        ${onClick ? 'cursor-pointer hover:shadow-lg' : ''}
       `}
       style={{ borderLeft: `4px solid ${color}` }}
     >
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[11px] sm:text-[10px] font-bold uppercase tracking-wider text-text-3">
+        <span className="min-w-0 text-[11px] font-bold uppercase tracking-wider text-text-3 [overflow-wrap:anywhere]">
           {label}
         </span>
-        {icon && <span className="text-base sm:text-sm" style={{ color }}>{icon}</span>}
+        {icon && <span className="ml-2 flex-shrink-0 text-base sm:text-sm" style={{ color }}>{icon}</span>}
       </div>
-      <div className="text-xl sm:text-xl font-extrabold text-text-1 leading-tight">{value}</div>
+      {/* Figures are never truncated: a long amount wraps instead of being cut off. */}
+      <div className="min-w-0 text-xl sm:text-xl font-extrabold text-text-1 leading-tight tabular-nums [overflow-wrap:anywhere]">{value}</div>
       {sub && <div className="text-[11px] sm:text-[10px] text-text-4">{sub}</div>}
     </div>
   )
@@ -1638,9 +1647,8 @@ export function SearchPicker<T extends { id: string }>({
           {open && menuPosition && (filtered.length > 0 || query.trim().length > 0 || Boolean(onCreateNew && query.length > 0)) && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-[9900] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"
+          className="ui-enter ui-enter-dropdown fixed z-[9900] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"
           style={{
-            animation: 'dropdownIn 0.18s ease both',
             left: menuPosition.left,
             top: menuPosition.top,
             width: menuPosition.width,

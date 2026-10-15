@@ -71,14 +71,33 @@
     /* ── Global Typography Scale (phone → laptop/tablet → big screens) ────── */
     --fs-ui: 13px;
     --fs-table: 12px;
-    --fs-label: 10px;
+    --fs-label: 11px; /* legibility floor — nothing in the ERP renders below --fs-micro */
+    --fs-micro: 11px;
     --fs-tab: 11px;
     --motion-fast: 180ms;
     --motion-base: 220ms;
+    /* Strong custom curves — built-in CSS easings are too weak for deliberate motion */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
     --content-max: 1440px;
     --page-gutter: 16px;
     --page-gutter-lg: 32px;
+    /* ── Master table tokens — the ONE place table geometry is defined ────────
+       Consumed by .table-head/.table-row (grid tables), .data-table / .erp-table
+       (HTML tables) and every module. Do not re-declare heights, padding or
+       header type in module CSS; change these instead. */
     --table-row-height: 48px;
+    --table-head-height: 40px;
+    --table-pad-x: 12px;
+    --table-col-gap: 12px;
+    --table-head-fs: max(11px, var(--fs-label));
+    /* Master module header — one geometry for every ModuleHeader (tablet and up) */
+    --mod-header-pad-y: 14px;
+    --mod-header-pad-x: 24px;
+    --mod-header-min-h: 72px;
+    --mod-title-fs: 1.375rem;
+    --mod-title-fs-sm: 1.125rem;
     /* Spacing scale — use consistently across module chrome */
     --space-1: 4px;
     --space-2: 8px;
@@ -339,20 +358,12 @@
 }
 
 .contacts-workspace .table-head {
-  min-height: 42px;
-  padding-inline: 14px;
   background: #f8fafc;
   border-color: var(--contacts-border);
   color: #526178;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .contacts-workspace .table-row {
-  min-height: 58px;
-  padding-inline: 14px;
   border-color: #e7ecf2;
 }
 
@@ -453,7 +464,7 @@
   background: #f8fafc;
   padding: 2px 7px;
   color: #526178;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 650;
   line-height: 1;
   white-space: nowrap;
@@ -657,7 +668,7 @@
 
 .contacts-metric small {
   color: #7b8798;
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .contacts-profile__tabs {
@@ -833,7 +844,7 @@
 
 .contacts-credit-summary span {
   color: var(--contacts-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .contacts-credit-summary strong {
@@ -857,17 +868,12 @@
 }
 
 .contacts-compact-table th {
-  padding: 8px 10px;
   border-bottom: 1px solid var(--contacts-border);
   color: #64748b;
-  font-size: 10px;
-  font-weight: 700;
   text-align: left;
-  text-transform: uppercase;
 }
 
 .contacts-compact-table td {
-  padding: 9px 10px;
   border-bottom: 1px solid #e9edf2;
   color: #344054;
 }
@@ -987,7 +993,7 @@
 .contacts-type-switch button small {
   margin-top: 3px;
   color: #8490a2;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 500;
 }
 
@@ -1063,7 +1069,7 @@
 .contacts-form-inline-heading span {
   margin-top: 2px;
   color: #8a96a8;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 500;
 }
 
@@ -1117,7 +1123,7 @@
 .contacts-relationship-options small {
   margin-top: 2px;
   color: #64748b;
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .contacts-form-optional {
@@ -1164,7 +1170,7 @@
   margin-top: 3px;
   overflow: hidden;
   color: #718096;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1175,7 +1181,7 @@
   flex: 0 0 auto;
   align-items: center;
   color: #7b8798;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 650;
 }
 
@@ -1221,7 +1227,7 @@
 
 .contacts-form-more__heading strong {
   color: #34445d;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: 0.02em;
 }
@@ -1229,7 +1235,7 @@
 .contacts-form-more__heading span {
   margin-top: 2px;
   color: #8a96a8;
-  font-size: 9px;
+  font-size: var(--fs-micro);
 }
 
 .contacts-form-optional__grid {
@@ -1688,7 +1694,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   top: 0.8rem;
   left: 1.5rem;
   color: var(--finance-text-3);
-  font-size: 0.5rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: 0.08em;
   line-height: 1.2;
@@ -1824,59 +1830,17 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   box-shadow: none;
 }
 
-.finance-workspace .table-head {
-  min-height: 2.5rem;
-  padding-inline: 0.9rem;
-  background: var(--finance-soft);
-  color: var(--finance-text-3);
-  font-size: 0.5625rem;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.finance-workspace .table-row {
-  min-height: 3.625rem;
-  padding-inline: 0.9rem;
-  border-bottom: 1px solid var(--finance-border);
-  background: var(--finance-surface);
-}
-
-.finance-workspace .table-row:hover {
-  background: var(--finance-soft);
-}
-
-.finance-workspace .table-row > [role='gridcell'] {
-  padding-block: 0.75rem;
-  min-width: 0;
-  color: var(--finance-text-2);
-}
-
 .finance-workspace .data-table-cell-number,
 .finance-workspace .data-table-cell-partner,
 .finance-workspace .data-table-cell-total,
 .finance-workspace .data-table-cell-balance {
-  color: var(--finance-text);
+  color: var(--text-1);
   font-weight: 650;
 }
 
 .finance-workspace .badge {
   border-radius: 999px;
   box-shadow: none;
-}
-
-.finance-content-card--invoices .data-table-cell-paid,
-.finance-content-card--bills .data-table-cell-paid,
-.finance-content-card--invoices .table-head > :nth-child(7),
-.finance-content-card--bills .table-head > :nth-child(7) {
-  display: none;
-}
-
-.finance-content-card--invoices .table-head,
-.finance-content-card--invoices .table-row,
-.finance-content-card--bills .table-head,
-.finance-content-card--bills .table-row {
-  grid-template-columns: 36px 110px minmax(0, 2fr) 96px 96px 100px 100px 140px !important;
 }
 
 /* Cashbook and reconciliation */
@@ -2147,16 +2111,11 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 }
 
 .finance-invoice-detail .invoice-detail__table th {
-  height: 2.25rem;
-  padding: 0.55rem 0.75rem;
   background: var(--finance-soft);
   color: var(--finance-text-3);
-  font-size: 0.5625rem;
 }
 
 .finance-invoice-detail .invoice-detail__table td {
-  min-height: 3.125rem;
-  padding: 0.75rem;
   vertical-align: middle;
 }
 
@@ -2206,88 +2165,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   .finance-workspace .finance-content-card {
     margin-inline: 1.25rem;
-  }
-
-  .finance-content-card--invoices .responsive-table .table-head,
-  .finance-content-card--bills .responsive-table .table-head {
-    display: none;
-  }
-
-  .finance-content-card--invoices .responsive-table .table-row,
-  .finance-content-card--bills .responsive-table .table-row {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) auto !important;
-    gap: 0.3rem 1rem;
-    min-height: 6.25rem;
-    margin: 0.625rem 0.75rem;
-    padding: 0.75rem;
-    border: 1px solid var(--finance-border);
-    border-radius: var(--finance-radius);
-  }
-
-  .finance-content-card--invoices .responsive-table .table-row > [role='gridcell'],
-  .finance-content-card--bills .responsive-table .table-row > [role='gridcell'] {
-    display: flex;
-    align-items: center;
-    min-height: 0;
-    padding: 0;
-  }
-
-  .finance-content-card--invoices .responsive-table .table-row > [role='gridcell']:first-child,
-  .finance-content-card--bills .responsive-table .table-row > [role='gridcell']:first-child,
-  .finance-content-card--invoices .responsive-table .data-table-cell-paid,
-  .finance-content-card--bills .responsive-table .data-table-cell-paid {
-    display: none;
-  }
-
-  .finance-content-card--invoices .data-table-cell-number,
-  .finance-content-card--bills .data-table-cell-number {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .finance-content-card--invoices .data-table-cell-status,
-  .finance-content-card--bills .data-table-cell-status {
-    grid-column: 2;
-    grid-row: 1;
-    justify-content: flex-end;
-  }
-
-  .finance-content-card--invoices .data-table-cell-partner,
-  .finance-content-card--bills .data-table-cell-partner {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    font-size: 0.8125rem;
-  }
-
-  .finance-content-card--invoices .data-table-cell-date,
-  .finance-content-card--bills .data-table-cell-date,
-  .finance-content-card--invoices .data-table-cell-due,
-  .finance-content-card--bills .data-table-cell-due,
-  .finance-content-card--invoices .data-table-cell-total,
-  .finance-content-card--bills .data-table-cell-total,
-  .finance-content-card--invoices .data-table-cell-balance,
-  .finance-content-card--bills .data-table-cell-balance {
-    grid-row: 3;
-    font-size: 0.6875rem;
-  }
-
-  .finance-content-card--invoices .data-table-cell-date,
-  .finance-content-card--bills .data-table-cell-date,
-  .finance-content-card--invoices .data-table-cell-due,
-  .finance-content-card--bills .data-table-cell-due {
-    display: none !important;
-  }
-
-  .finance-content-card--invoices .data-table-cell-total,
-  .finance-content-card--bills .data-table-cell-total {
-    grid-column: 1;
-  }
-
-  .finance-content-card--invoices .data-table-cell-balance,
-  .finance-content-card--bills .data-table-cell-balance {
-    grid-column: 2;
-    justify-content: flex-end;
   }
 
   .finance-recon-entry-form {
@@ -2645,7 +2522,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     border-color: var(--border-lt);
     min-width: 0;
     transition-duration: var(--motion-base);
-    transition-timing-function: ease-out;
+    transition-timing-function: var(--ease-out);
   }
 
   .form-input,
@@ -2654,7 +2531,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     border-color: var(--border);
     color: var(--text-1);
     font-size: var(--fs-ui);
-    transition: border-color var(--motion-fast) ease-out, box-shadow var(--motion-fast) ease-out, background-color var(--motion-fast) ease-out;
+    transition: border-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
   }
 
   .form-input::placeholder {
@@ -2676,7 +2553,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     font-size: var(--fs-ui);
     white-space: nowrap;
     transition-duration: var(--motion-fast);
-    transition-timing-function: ease-out;
+    transition-timing-function: var(--ease-out);
     transition-property: background-color, border-color, color, box-shadow, transform;
   }
 
@@ -2745,7 +2622,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .btn-secondary:active,
   .btn-danger:active,
   .btn-destructive:active {
-    transform: translateY(0.5px);
+    transform: scale(0.97); /* press feedback on pointer-down (apple-design §1, emil-design-eng) */
   }
 
   /* One clear primary emphasis per action group */
@@ -2790,7 +2667,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .badge-xs {
     min-height: 22px;
     padding: 0.2rem 0.5rem;
-    font-size: max(10px, var(--fs-label));
+    font-size: max(11px, var(--fs-label));
   }
 
   .badge-green,
@@ -2874,16 +2751,21 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   /* ── Grid-based table header ─────────────────────────────────────────────── */
   .table-head {
-    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 font-bold flex-shrink-0;
+    @apply sticky top-0 z-[1] grid items-center flex-shrink-0;
     display: grid !important;
+    column-gap: var(--table-col-gap);
+    padding-inline: var(--table-pad-x);
+    padding-block: 0;
+    min-height: var(--table-head-height);
     color: var(--text-3);
     background: var(--table-head-bg);
-    border-bottom: 1px solid var(--border-lt);
-    box-shadow: 0 1px 0 var(--border-lt);
-    letter-spacing: normal;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.3;
     min-width: 100%;
     width: 100%;
-    font-size: var(--fs-label);
+    font-size: var(--table-head-fs);
   }
 
   .table-head > *,
@@ -2965,7 +2847,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   .table-head .sort-col::after {
     content: '↕';
-    font-size: 9px;
+    font-size: var(--fs-micro);
     opacity: 0.35;
   }
 
@@ -2974,8 +2856,12 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   /* ── Grid-based table rows ───────────────────────────────────────────────── */
   .table-row {
-    @apply grid items-center gap-3 px-4 py-3 transition-colors duration-100;
+    @apply grid items-center transition-colors duration-100;
     display: grid !important;
+    column-gap: var(--table-col-gap);
+    padding-inline: var(--table-pad-x);
+    padding-block: 0;
+    line-height: 1.4;
     border-bottom: 1px solid var(--border-lt);
     color: var(--text-2);
     background: var(--bg-card);
@@ -3033,7 +2919,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   body[data-table-density='compact'] .table-head {
     padding-top: 0.55rem;
     padding-bottom: 0.55rem;
-    font-size: 10px;
+    font-size: var(--fs-micro);
   }
 
   body[data-table-density='compact'] .data-table tbody tr,
@@ -3061,7 +2947,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .table-row.row-selected {
     background: rgba(37, 99, 235, 0.05);
     border-left: 3px solid var(--primary); /* impeccable-disable side-tab */
-    padding-left: calc(1rem - 3px);
+    padding-left: calc(var(--table-pad-x) - 3px);
   }
 
   .table-row.row-editing {
@@ -3072,13 +2958,13 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .table-row.row-danger {
     background: rgba(239, 68, 68, 0.04);
     border-left: 3px solid var(--danger); /* impeccable-disable side-tab */
-    padding-left: calc(1rem - 3px);
+    padding-left: calc(var(--table-pad-x) - 3px);
   }
 
   .table-row.row-warning {
     background: rgba(245, 158, 11, 0.04);
     border-left: 3px solid var(--warning); /* impeccable-disable side-tab */
-    padding-left: calc(1rem - 3px);
+    padding-left: calc(var(--table-pad-x) - 3px);
   }
 
   .table-row.row-muted {
@@ -3120,16 +3006,19 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   }
 
   .data-table thead tr {
-    background: var(--bg-surface);
-    border-bottom: 2px solid var(--border-lt);
+    background: var(--table-head-bg);
+    border-bottom: 1px solid var(--border);
   }
 
   .data-table th {
-    @apply px-4 py-3 text-left font-bold whitespace-nowrap;
+    @apply text-left whitespace-nowrap;
+    height: var(--table-head-height);
+    padding: 0 var(--table-pad-x);
     color: var(--text-3);
     background: var(--table-head-bg);
-    letter-spacing: normal;
-    font-size: var(--fs-label);
+    font-weight: 600;
+    letter-spacing: 0;
+    font-size: var(--table-head-fs);
   }
 
   .data-table th.th-right { @apply text-right; }
@@ -3173,12 +3062,12 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .data-table tbody tr.row-total {
     font-weight: 700;
     color: var(--text-1);
-    border-top: 2px solid var(--border-lt);
-    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    background: var(--table-head-bg);
   }
 
   .data-table td {
-    @apply px-4 py-3;
+    padding: 6px var(--table-pad-x);
     color: inherit;
     vertical-align: middle;
     overflow-wrap: anywhere;
@@ -3420,7 +3309,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
     .mod-page [class*="text-[9px]"],
     .modal-box [class*="text-[9px]"] {
-      font-size: var(--fs-label) !important;
+      font-size: var(--fs-micro) !important;
       line-height: 1.35 !important;
     }
 
@@ -3565,7 +3454,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     border-color: var(--border);
     background: var(--bg-card);
     font-size: var(--fs-label);
-    transition: background-color var(--motion-fast) ease-out, border-color var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
+    transition: background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
   }
 
   .page-btn:hover,
@@ -3629,7 +3518,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     white-space: nowrap;
     font-size: var(--fs-tab);
     transition-duration: var(--motion-fast);
-    transition-timing-function: ease-out;
+    transition-timing-function: var(--ease-out);
     transition-property: background-color, border-color, color, box-shadow;
   }
 
@@ -3890,13 +3779,13 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     border-radius: 999px;
     background: var(--primary);
     color: #fff;
-    font-size: 0.65rem;
+    font-size: var(--fs-micro);
     font-weight: 700;
     line-height: 1;
   }
 
   .dt-toolbar-caret {
-    font-size: 0.65rem;
+    font-size: var(--fs-micro);
     color: var(--text-4);
   }
 
@@ -4705,7 +4594,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    font-size: 0.65rem;
+    font-size: var(--fs-micro);
     font-weight: 700;
     background: var(--bg-muted);
     color: var(--text-3);
@@ -4729,13 +4618,14 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     min-height: var(--table-row-height);
   }
 
+  /* Header type is owned by --table-head-* (set on .table-head / th); cells inherit. */
   .table-head > *,
   .data-table thead th {
     white-space: nowrap;
     text-transform: none;
-    letter-spacing: normal;
-    font-weight: 550;
-    font-size: var(--fs-table);
+    letter-spacing: inherit;
+    font-weight: inherit;
+    font-size: inherit;
     color: var(--text-3);
   }
 
@@ -5046,7 +4936,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .dashboard-stat-card:hover {
     border-color: color-mix(in srgb, var(--primary) 28%, var(--border-lt));
     box-shadow: 0 7px 18px rgba(22, 34, 82, 0.07);
-    transform: translateY(-1px);
   }
 
   .dashboard-stat-layout {
@@ -5103,7 +4992,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     margin-top: 0.28rem;
     overflow: hidden;
     color: var(--text-4);
-    font-size: 0.65rem;
+    font-size: var(--fs-micro);
     font-weight: 500;
     line-height: 1.3;
     -webkit-box-orient: vertical;
@@ -5166,7 +5055,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     border-radius: 0.42rem;
     background: color-mix(in srgb, var(--primary) 7%, var(--bg-card));
     color: var(--primary);
-    font-size: 0.5rem;
+    font-size: var(--fs-micro);
     font-weight: 850;
   }
 
@@ -5309,7 +5198,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .dashboard-quick-action:hover {
     border-color: color-mix(in srgb, var(--primary) 28%, var(--border-lt));
     background: color-mix(in srgb, var(--primary) 3%, var(--bg-card));
-    transform: translateY(-1px);
   }
 
   .dashboard-quick-icon {
@@ -5368,7 +5256,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    font-size: 0.68rem;
+    font-size: var(--fs-micro);
   }
 
   @media (max-width: 1199px) {
@@ -5524,7 +5412,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     }
 
     .dashboard-stat-sub {
-      font-size: 0.63rem;
+      font-size: var(--fs-micro);
       -webkit-line-clamp: 2;
       line-clamp: 2;
     }
@@ -5928,7 +5816,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .pos-scan-help {
     grid-column: 1 / -1;
     color: var(--text-4);
-    font-size: 0.64rem;
+    font-size: var(--fs-micro);
     line-height: 1.35;
   }
 
@@ -5987,7 +5875,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .pos-product-card:hover {
     border-color: color-mix(in srgb, var(--primary) 42%, var(--border-lt));
     box-shadow: 0 6px 16px rgba(22, 34, 82, 0.07);
-    transform: translateY(-1px);
   }
 
   .pos-product-card:focus-visible {
@@ -6040,7 +5927,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     overflow: hidden;
     color: var(--success-text);
     font-family: var(--font-mono), ui-monospace, monospace;
-    font-size: 0.59rem;
+    font-size: var(--fs-micro);
     font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -6063,7 +5950,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     margin-top: auto;
     padding-top: 0.42rem;
     color: var(--text-4);
-    font-size: 0.59rem;
+    font-size: var(--fs-micro);
     line-height: 1.2;
   }
 
@@ -6127,7 +6014,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .pos-checkout-header p {
     margin-top: 0.18rem;
     color: var(--text-4);
-    font-size: 0.65rem;
+    font-size: var(--fs-micro);
   }
 
   .pos-checkout-back {
@@ -6137,7 +6024,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .pos-clear-cart {
     min-height: 2rem;
     color: var(--danger-text);
-    font-size: 0.68rem;
+    font-size: var(--fs-micro);
     font-weight: 700;
   }
 
@@ -6225,7 +6112,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     overflow: hidden;
     color: var(--primary);
     font-family: var(--font-mono), ui-monospace, monospace;
-    font-size: 0.59rem;
+    font-size: var(--fs-micro);
     font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -6237,7 +6124,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     gap: 0.2rem;
     margin-top: 0.25rem;
     color: var(--text-4);
-    font-size: 0.58rem;
+    font-size: var(--fs-micro);
   }
 
   .pos-price-edit input {
@@ -6247,7 +6134,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     outline: 0;
     background: transparent;
     color: var(--navy);
-    font-size: 0.68rem;
+    font-size: var(--fs-micro);
     font-weight: 750;
   }
 
@@ -6257,7 +6144,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   .pos-price-edit button {
     color: var(--primary);
-    font-size: 0.58rem;
+    font-size: var(--fs-micro);
     font-weight: 700;
   }
 
@@ -6295,7 +6182,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   .pos-qty-control button {
     color: var(--navy);
-    font-size: 0.58rem;
+    font-size: var(--fs-micro);
   }
 
   .pos-qty-control button:hover {
@@ -6306,7 +6193,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     border-right: 1px solid var(--border);
     border-left: 1px solid var(--border);
     color: var(--text-1);
-    font-size: 0.68rem;
+    font-size: var(--fs-micro);
     font-weight: 750;
   }
 
@@ -6333,12 +6220,12 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .pos-customer-section > h3,
   .pos-payment-section > h3 {
     color: var(--text-2);
-    font-size: 0.68rem;
+    font-size: var(--fs-micro);
     font-weight: 800;
   }
 
   .pos-customer-section label {
-    font-size: 0.62rem !important;
+    font-size: var(--fs-micro) !important;
   }
 
   .pos-customer-section input,
@@ -6392,7 +6279,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     display: block;
     margin-top: 0.15rem;
     color: var(--text-4);
-    font-size: 0.59rem;
+    font-size: var(--fs-micro);
     line-height: 1.3;
   }
 
@@ -6410,7 +6297,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     align-items: center;
     gap: 0.45rem;
     color: var(--text-2);
-    font-size: 0.66rem;
+    font-size: var(--fs-micro);
     font-weight: 750;
     text-align: left;
   }
@@ -6431,7 +6318,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     border-radius: 0.24rem;
     background: var(--bg-card);
     color: #fff;
-    font-size: 0.66rem;
+    font-size: var(--fs-micro);
     font-weight: 900;
   }
 
@@ -6451,7 +6338,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   .pos-client-credit-apply > label {
     color: var(--text-3);
-    font-size: 0.59rem !important;
+    font-size: var(--fs-micro) !important;
     font-weight: 700;
   }
 
@@ -6481,7 +6368,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     border-left: 1px solid var(--border-lt);
     padding-inline: 0.6rem;
     color: var(--primary);
-    font-size: 0.62rem;
+    font-size: var(--fs-micro);
     font-weight: 800;
   }
 
@@ -6491,7 +6378,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     justify-content: space-between;
     gap: 0.5rem;
     color: var(--text-4);
-    font-size: 0.59rem;
+    font-size: var(--fs-micro);
   }
 
   .pos-client-credit-apply > p strong {
@@ -6511,7 +6398,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     align-items: center;
     gap: 0.5rem;
     color: var(--text-2);
-    font-size: 0.68rem;
+    font-size: var(--fs-micro);
     font-weight: 700;
     text-align: left;
   }
@@ -6552,7 +6439,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     justify-content: center;
     gap: 0.35rem;
     border-radius: 0.42rem !important;
-    font-size: 0.65rem;
+    font-size: var(--fs-micro);
     text-transform: none;
     transition: background-color var(--motion-fast), border-color var(--motion-fast);
   }
@@ -6615,7 +6502,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   .pos-opening-cash {
     color: var(--text-4);
-    font-size: 0.62rem;
+    font-size: var(--fs-micro);
     text-align: right;
   }
 
@@ -6691,7 +6578,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     border-radius: 0.4rem;
     padding: 0.35rem 0.55rem;
     color: var(--navy);
-    font-size: 0.64rem;
+    font-size: var(--fs-micro);
     font-weight: 700;
   }
 
@@ -6819,7 +6706,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
     .pos-terminal-meta {
       max-width: calc(100vw - 7.5rem);
-      font-size: 0.68rem;
+      font-size: var(--fs-micro);
     }
 
     .pos-terminal-actions {
@@ -6902,7 +6789,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     }
 
     .pos-product-card.is-mobile-page-active {
-      animation: posMobileProductIn 240ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+      animation: posMobileProductIn 240ms var(--ease-out) both;
     }
 
     .pos-product-card.is-mobile-page-active:nth-child(2n) {
@@ -6973,7 +6860,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
       align-items: flex-start;
       flex-direction: column;
       gap: 0.18rem;
-      font-size: 0.61rem;
+      font-size: var(--fs-micro);
     }
 
     .pos-serial-label {
@@ -6997,7 +6884,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
       background: var(--navy);
       color: #fff;
       box-shadow: 0 10px 30px rgba(6, 27, 79, 0.2);
-      animation: posMobileCartRise 220ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+      animation: posMobileCartRise 220ms var(--ease-out) both;
     }
 
     .pos-mobile-cart-bar:disabled {
@@ -7031,7 +6918,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
       border: 0;
       border-radius: 0;
       box-shadow: none;
-      animation: posMobileCheckoutIn 240ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+      animation: posMobileCheckoutIn 240ms var(--ease-out) both;
     }
 
     .pos-checkout-header {
@@ -7094,7 +6981,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
     .pos-cart-serial,
     .pos-price-edit {
-      font-size: 0.64rem;
+      font-size: var(--fs-micro);
     }
 
     .pos-cart-line-actions {
@@ -7137,7 +7024,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     }
 
     .pos-customer-section label {
-      font-size: 0.68rem !important;
+      font-size: var(--fs-micro) !important;
     }
 
     .pos-customer-section input,
@@ -7160,7 +7047,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     }
 
     .pos-client-credit-panel.is-active .pos-client-credit-apply {
-      animation: posMobileCreditReveal 180ms ease-out both;
+      animation: posMobileCreditReveal 180ms var(--ease-out) both;
     }
 
     .pos-vat-toggle {
@@ -7549,7 +7436,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .dt-wrap > table th,
   .dt-scroll > table th {
     color: var(--text-3);
-    font-size: 0.625rem;
+    font-size: var(--fs-micro);
     font-weight: 700;
     letter-spacing: normal;
     white-space: nowrap;
@@ -7704,11 +7591,11 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .view-enter {
     min-width: 0;
     max-width: 100%;
-    animation: viewEnter 0.18s ease-out both;
+    animation: viewEnter 0.18s var(--ease-out) both;
   }
 
   .slide-up {
-    animation: slideUp 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation: slideUp 0.22s var(--ease-out) both;
   }
 }
 
@@ -7898,7 +7785,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   border-left: 1px solid var(--border);
   background: var(--bg-card);
   box-shadow: -18px 0 55px rgba(15, 23, 42, 0.18);
-  animation: acctPanelIn 240ms cubic-bezier(.2,.75,.25,1) both;
+  animation: acctPanelIn 240ms var(--ease-out) both;
 }
 
 .acct-backdrop {
@@ -7907,7 +7794,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   z-index: 9140;
   background: rgba(15, 23, 42, 0.34);
   backdrop-filter: blur(3px);
-  animation: acctBackdropIn 180ms ease-out both;
+  animation: acctBackdropIn 180ms var(--ease-out) both;
 }
 
 .acct-panel-header {
@@ -8321,7 +8208,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 .acct-notification-note {
   margin-top: 12px;
   color: var(--text-4);
-  font-size: .66rem;
+  font-size: var(--fs-micro);
   line-height: 1.45;
 }
 
@@ -8468,7 +8355,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     min-height: 26px;
     margin-top: 8px;
     padding: 3px 10px;
-    font-size: .65rem;
+    font-size: var(--fs-micro);
   }
 
   .acct-profile-note {
@@ -8484,7 +8371,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .acct-remove-btn {
     min-height: 38px;
     padding: 7px 10px;
-    font-size: .68rem;
+    font-size: var(--fs-micro);
   }
 
   .acct-section-heading {
@@ -8508,7 +8395,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   }
 
   .acct-channel-detail {
-    font-size: .64rem;
+    font-size: var(--fs-micro);
   }
 
   .acct-panel-footer {
@@ -8616,7 +8503,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   margin-bottom: 0.375rem;
   padding: 0.35rem 1.25rem;
   cursor: pointer;
-  transition: background-color var(--motion-fast) ease-out;
+  transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .sidebar-group-toggle:hover {
@@ -8638,18 +8525,18 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   padding-inline: 4px;
   background: rgba(31, 160, 208, 0.14);
   color: var(--sidebar-group-label);
-  font-size: 8px;
+  font-size: var(--fs-micro);
   font-weight: 900;
 }
 
 .sidebar-group-chevron {
   color: var(--sidebar-group-label);
-  transition: transform var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
+  transition: transform var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
 
 .sidebar-nav-item {
   color: var(--sidebar-text);
-  transition: background-color var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
 
 .sidebar-nav-item:hover:not(.active) {
@@ -8675,7 +8562,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   color: rgba(255, 255, 255, 0.60);
   font-size: 12px;
   line-height: 1;
-  transition: color var(--motion-fast) ease-out, background-color var(--motion-fast) ease-out;
+  transition: color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
 }
 
 .sidebar-pin-btn:hover {
@@ -8687,7 +8574,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--sidebar-border);
   color: rgba(255, 255, 255, 0.50);
-  transition: background-color var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
 
 .sidebar-collapse-btn:hover {
@@ -8767,7 +8654,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.045);
   color: rgba(255, 255, 255, 0.78);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   transition:
     background-color 140ms ease,
     border-color 140ms ease,
@@ -8825,7 +8712,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 }
 
 .sidebar-group-label {
-  font-size: 9px !important;
+  font-size: var(--fs-micro) !important;
   letter-spacing: 0.13em !important;
   font-weight: 800 !important;
 }
@@ -8961,7 +8848,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   border-radius: 999px;
   background: linear-gradient(135deg, #0678e8, #00aeef);
   color: #fff;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 850;
   box-shadow: 0 4px 12px rgba(0,174,239,.18);
 }
@@ -8984,14 +8871,14 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .sidebar-user-name {
   color: #fff;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 750;
 }
 
 .sidebar-user-role {
   margin-top: 1px;
   color: rgba(255,255,255,.50);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 550;
 }
 
@@ -9192,75 +9079,15 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   }
 }
 
-@keyframes modalIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes confirmIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes backdropIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateY(16px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 @keyframes toastProgress {
   from { width: 100%; }
   to { width: 0%; }
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 @keyframes slideUp {
   from {
     opacity: 0;
     transform: translateY(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes dropdownIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
   }
   to {
     opacity: 1;
@@ -9463,7 +9290,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: background-color 140ms ease-out, transform 120ms ease-out;
+  transition: background-color 140ms var(--ease-out), transform 120ms var(--ease-out);
 }
 
 @media (min-width: 768px) {
@@ -9522,7 +9349,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .inventory-pilot-stat-label {
   order: 1;
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -9573,7 +9400,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 }
 
 .inventory-pilot .erp-ops-summary-label {
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -9601,7 +9428,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 .inventory-pilot .dt-wrap > table thead th,
 .inventory-pilot .dt-scroll > table thead th {
   background: color-mix(in srgb, var(--navy) 6%, var(--table-head-bg));
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   letter-spacing: 0.045em;
   text-transform: uppercase;
   color: var(--navy);
@@ -9687,7 +9514,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 /* ═══════════════════════════════════════════════════════════════════════════
    Invoice detail — /finance/invoices/[id]
    Mockup layout: KPI strip · line card · info grid · Notes/Payments/Activity
-   Emil: transform/opacity only, press scale 0.97, ease-out < 300ms
+   Emil: transform/opacity only, press scale 0.97, var(--ease-out) < 300ms
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .invoice-detail {
@@ -9828,7 +9655,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .invoice-detail__kpi-label {
   margin: 0;
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -9940,7 +9767,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .invoice-detail__label {
   margin: 0 0 0.2rem;
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -9992,11 +9819,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .invoice-detail__table th {
   text-align: left;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-4);
   background: color-mix(in srgb, var(--navy) 4%, var(--bg-surface));
   border-bottom: 1px solid var(--border-lt);
@@ -10035,7 +9857,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 }
 
 .invoice-detail__table td {
-  padding: 0.7rem 0.65rem;
   border-bottom: 1px solid color-mix(in srgb, var(--border-lt) 85%, transparent);
   color: var(--text-2);
   vertical-align: top;
@@ -10208,7 +10029,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   margin-left: auto;
   padding: 0.15rem 0.5rem;
   border-radius: 0.35rem;
-  font-size: 0.62rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -10619,10 +10440,10 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 .sales-pilot .mod-header .btn-primary,
 .sales-pilot .mod-header .btn-secondary {
   transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out,
-    transform 120ms ease-out;
+    background-color 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    color 140ms var(--ease-out),
+    transform 120ms var(--ease-out);
 }
 
 .sales-pilot .mod-header .btn-primary {
@@ -10674,7 +10495,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   background: transparent;
   border: 0;
   box-shadow: none;
-  transition: background-color 120ms ease-out, color 120ms ease-out;
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
 }
 
 .sales-pilot .mod-tab:hover {
@@ -10726,7 +10547,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   background: var(--bg-card);
   text-align: left;
   cursor: pointer;
-  transition: background-color 140ms ease-out, border-color 140ms ease-out, transform 120ms ease-out;
+  transition: background-color 140ms var(--ease-out), border-color 140ms var(--ease-out), transform 120ms var(--ease-out);
 }
 
 .sales-pilot-stat:hover {
@@ -10771,7 +10592,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .sales-pilot-stat-label {
   order: 1;
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -10806,7 +10627,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 .sales-pilot .dt-wrap > table thead th,
 .sales-pilot .dt-scroll > table thead th {
   background: color-mix(in srgb, var(--navy) 5%, var(--table-head-bg));
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   letter-spacing: 0.045em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -10823,7 +10644,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   overflow: hidden;
   border: 1px solid var(--border-lt);
   box-shadow: none;
-  transition: border-color 140ms ease-out, background-color 140ms ease-out, transform 120ms ease-out;
+  transition: border-color 140ms var(--ease-out), background-color 140ms var(--ease-out), transform 120ms var(--ease-out);
 }
 
 .sales-pilot .sales-kanban-card::before {
@@ -10910,7 +10731,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 }
 
 .sales-pilot-picking-summary span {
-  font-size: 0.62rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -11778,7 +11599,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
 .sales-doc-field label {
   display: block;
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 600;
   color: var(--sd-text-3);
   margin-bottom: 0.2rem;
@@ -11857,7 +11678,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   background: #f9fafb;
   color: var(--sd-text-3);
   font-weight: 650;
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border-bottom: 1px solid var(--sd-border);
@@ -11941,7 +11762,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   gap: 0.35rem;
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 650;
   line-height: 1.3;
   border: 1px solid transparent;
@@ -12132,7 +11953,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .sales-pilot.sales-doc .sales-doc-shell .dt-wrap > table thead th,
 .sales-pilot.sales-doc .sales-doc-shell .dt-scroll > table thead th {
   background: #f9fafb;
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--sd-text-3);
@@ -12227,19 +12048,14 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .reconfig-table thead th {
   background: color-mix(in srgb, var(--navy) 6%, var(--table-head-bg, var(--bg-surface)));
   color: var(--navy);
-  font-size: 0.68rem;
-  font-weight: 750;
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
   text-align: left;
-  padding: 0.7rem 0.85rem;
   white-space: nowrap;
 }
 
 .reconfig-table-row {
   cursor: pointer;
   border-top: 1px solid var(--border-lt);
-  transition: background-color 140ms ease-out;
+  transition: background-color 140ms var(--ease-out);
 }
 
 .reconfig-table-row:hover {
@@ -12247,7 +12063,6 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .reconfig-table td {
-  padding: 0.75rem 0.85rem;
   vertical-align: middle;
   color: var(--text-2);
 }
@@ -12412,7 +12227,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .reconfig-spec strong {
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   color: var(--navy);
 }
@@ -12531,7 +12346,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   font-weight: 650;
   text-align: center;
   cursor: pointer;
-  transition: background-color 140ms ease-out, color 140ms ease-out, box-shadow 140ms ease-out;
+  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
 }
 
 .reconfig-seg-item input {
@@ -12826,7 +12641,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   transform: translateY(-50%);
   color: var(--text-4);
   pointer-events: none;
-  transition: transform 140ms ease-out;
+  transition: transform 140ms var(--ease-out);
 }
 
 .reconfig-pick-chevron.is-open {
@@ -13022,7 +12837,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .sales-pilot.sales-doc .sales-page-eyebrow {
   margin-bottom: 0.35rem;
   color: var(--sp-text-3);
-  font-size: 0.5625rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: 0.08em;
   line-height: 1.2;
@@ -13190,21 +13005,13 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .sales-pilot.sales-doc .sp-list-table th {
-  height: 2.5rem;
-  padding: 0.65rem 0.9rem !important;
   background: #f9fafb;
   color: var(--sp-text-3);
-  font-size: 0.5625rem !important;
-  font-weight: 750;
-  letter-spacing: 0.06em;
 }
 
 .sales-pilot.sales-doc .sp-list-table td {
-  height: 3.625rem;
-  padding: 0.75rem 0.9rem !important;
   vertical-align: middle;
   color: var(--sp-text-2);
-  font-size: 0.75rem !important;
 }
 
 .sales-pilot.sales-doc .sp-list-table tbody tr:hover td {
@@ -13226,7 +13033,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .sales-pilot.sales-doc .sp-pill {
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  font-size: 0.625rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   line-height: 1.35;
 }
@@ -13262,7 +13069,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .sales-pilot.sales-doc .sp-field label {
   margin-bottom: 0.3rem;
   color: var(--sp-text-3);
-  font-size: 0.5625rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -13314,20 +13121,12 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .sales-pilot.sales-doc .sp-line-table th {
-  height: 2.25rem;
-  padding: 0.55rem 0.75rem !important;
   background: #f9fafb;
   color: var(--sp-text-3);
-  font-size: 0.5625rem !important;
-  font-weight: 750;
-  letter-spacing: 0.05em;
 }
 
 .sales-pilot.sales-doc .sp-line-table td {
-  min-height: 3.125rem;
-  padding: 0.75rem !important;
   vertical-align: middle;
-  font-size: 0.75rem !important;
 }
 
 .sales-pilot.sales-doc .sp-line-table td[data-col='product'],
@@ -13821,7 +13620,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   padding: 0.15rem 0.5rem;
   align-items: center;
   border-radius: 999px;
-  font-size: 0.625rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   line-height: 1;
 }
@@ -13936,8 +13735,6 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .finance-invoice-detail .invoice-detail__table td {
-  min-height: 0;
-  padding: 0.65rem 0.75rem;
 }
 
 .finance-invoice-detail .invoice-detail__totals {
@@ -14299,16 +14096,12 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .finance-workspace--accounts .finance-subview .table-head {
-  min-height: 2.25rem;
   background: var(--finance-soft);
   color: var(--finance-text-3);
-  font-size: var(--accounts-label-size);
 }
 
 .finance-workspace--accounts .finance-subview .table-row {
-  min-height: 3rem;
   background: var(--finance-surface);
-  font-size: var(--accounts-body-size);
 }
 
 .finance-workspace--accounts .finance-subview .table-row:hover {
@@ -14319,7 +14112,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .finance-workspace--accounts .finance-subview .chip {
   border-radius: 999px;
   box-shadow: none;
-  font-size: 0.625rem !important;
+  font-size: var(--fs-micro) !important;
   font-weight: 700;
 }
 
@@ -14483,7 +14276,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
 .finance-document-editor__intro p:first-child {
   color: var(--primary) !important;
-  font-size: 0.625rem !important;
+  font-size: var(--fs-micro) !important;
 }
 
 .finance-document-editor > .flex.flex-col.gap-6 {
@@ -14903,7 +14696,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .settings-sidebar__nav > div > p {
   padding: 1rem .75rem .4rem;
   color: #475569;
-  font-size: .625rem;
+  font-size: var(--fs-micro);
   letter-spacing: .065em;
 }
 
@@ -14965,7 +14758,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
 .settings-section-card > div:first-child p {
   color: var(--deed-navy) !important;
-  font-size: .68rem !important;
+  font-size: var(--fs-micro) !important;
   letter-spacing: .055em !important;
 }
 
@@ -15034,7 +14827,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .settings-health__item small {
   margin-top: .12rem;
   color: var(--deed-muted);
-  font-size: .625rem;
+  font-size: var(--fs-micro);
 }
 
 .settings-health__item--button {
@@ -15085,14 +14878,14 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
 .settings-user-card__identity small {
   color: var(--deed-muted);
-  font-size: .65rem;
+  font-size: var(--fs-micro);
 }
 
 .settings-user-card__role {
   padding: .2rem .45rem;
   border: 1px solid;
   border-radius: .35rem;
-  font-size: .625rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
 }
 
@@ -15102,7 +14895,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   gap: .4rem;
   padding: .7rem .9rem;
   color: var(--deed-muted);
-  font-size: .66rem;
+  font-size: var(--fs-micro);
 }
 
 .settings-user-card__state span {
@@ -15128,7 +14921,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
 .settings-user-card dt {
   color: var(--deed-muted);
-  font-size: .625rem;
+  font-size: var(--fs-micro);
 }
 
 .settings-user-card dd {
@@ -15171,7 +14964,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
 .settings-save-bar span {
   color: var(--deed-muted);
-  font-size: .68rem;
+  font-size: var(--fs-micro);
 }
 
 .settings-save-bar button {
@@ -15335,7 +15128,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 :where(.holdover-card-header, .deposit-card-header, .holdover-return-queue > header, .deposit-collections > header, .kpi-coaching > header, .kilimall-queue > header) p {
   margin: .1rem 0 0;
   color: var(--deed-muted);
-  font-size: .625rem;
+  font-size: var(--fs-micro);
 }
 
 :where(.holdover-return-queue > header, .deposit-collections > header) > span {
@@ -15346,7 +15139,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   border-radius: 50%;
   background: var(--deed-accent-soft);
   color: var(--deed-accent-strong);
-  font-size: .65rem;
+  font-size: var(--fs-micro);
   font-weight: 800;
 }
 
@@ -15409,7 +15202,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .deposit-collections__list article > p,
 .deposit-collections__list article > small {
   color: var(--deed-muted);
-  font-size: .625rem;
+  font-size: var(--fs-micro);
 }
 
 .holdover-return-queue__list article > p,
@@ -15427,7 +15220,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   border: 0;
   background: transparent;
   color: var(--deed-accent-strong);
-  font-size: .64rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
 }
 
@@ -15594,7 +15387,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   border-radius: 50%;
   background: #e8f2fb;
   color: var(--deed-navy);
-  font-size: .68rem;
+  font-size: var(--fs-micro);
   font-weight: 800;
 }
 
@@ -15610,7 +15403,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
 .kpi-coaching > div > button small {
   color: var(--deed-muted);
-  font-size: .625rem;
+  font-size: var(--fs-micro);
 }
 
 .kpi-coaching > div > button b {
@@ -15682,7 +15475,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   justify-content: space-between;
   margin: 0 0 .45rem;
   color: var(--deed-navy);
-  font-size: .68rem;
+  font-size: var(--fs-micro);
 }
 
 .kilimall-queue h3 span {
@@ -15693,7 +15486,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   border-radius: 50%;
   background: var(--deed-warning-soft);
   color: var(--deed-warning);
-  font-size: .6rem;
+  font-size: var(--fs-micro);
 }
 
 .kilimall-queue section > button {
@@ -15721,18 +15514,18 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 
 .kilimall-queue section > button strong {
   color: var(--deed-navy);
-  font-size: .68rem;
+  font-size: var(--fs-micro);
 }
 
 .kilimall-queue section > button small,
 .kilimall-queue section > p {
   color: var(--deed-muted);
-  font-size: .61rem;
+  font-size: var(--fs-micro);
 }
 
 .kilimall-queue section > button b {
   color: var(--deed-accent-strong);
-  font-size: .62rem;
+  font-size: var(--fs-micro);
   white-space: nowrap;
 }
 
@@ -15951,7 +15744,7 @@ body:has(.settings-workspace) [role='dialog'] > div {
   }
 
   :where(.holdover-kpi, .deposit-kpi, .kpi-summary-card, .kilimall-kpi) > span {
-    font-size: .65rem;
+    font-size: var(--fs-micro);
   }
 
   :where(.holdover-kpi, .deposit-kpi, .kpi-summary-card, .kilimall-kpi) > strong {
@@ -16133,7 +15926,7 @@ body:has(.settings-workspace) [role='dialog'] > div {
   }
 
   .kpi-my-targets > div:nth-child(2) p {
-    font-size: .68rem !important;
+    font-size: var(--fs-micro) !important;
   }
 
   .kpi-my-targets > div:nth-child(3) {
@@ -16976,7 +16769,7 @@ button.repair-metric:hover {
   display: block;
   margin-top: 1px;
   color: #b45309 !important;
-  font-size: 10px !important;
+  font-size: var(--fs-micro) !important;
   font-weight: 700 !important;
 }
 
@@ -17041,20 +16834,12 @@ button.repair-metric:hover {
 }
 
 .repair-directory-table .table-head {
-  min-height: 42px;
-  padding-inline: 12px;
   border-color: var(--repair-border);
   background: var(--repair-soft);
   color: #526178;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .repair-directory-table .table-row {
-  min-height: 62px;
-  padding-inline: 12px;
   border-color: #e7ecf2;
   border-left-width: 2px !important;
   background: #fff;
@@ -17204,7 +16989,7 @@ button.repair-metric:hover {
 
 .repair-refurb__metrics span {
   color: var(--repair-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 650;
 }
 
@@ -17360,7 +17145,7 @@ button.repair-metric:hover {
 .repair-refurb-card__top {
   color: #075b8c;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 750;
 }
 
@@ -17379,7 +17164,7 @@ button.repair-metric:hover {
   overflow: hidden;
   color: var(--repair-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -17396,7 +17181,7 @@ button.repair-metric:hover {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
   gap: 7px;
-  font-size: 9px;
+  font-size: var(--fs-micro);
 }
 
 .repair-refurb-card dt {
@@ -17414,7 +17199,7 @@ button.repair-metric:hover {
 .repair-refurb-card__footer {
   margin-top: 9px;
   color: var(--repair-muted);
-  font-size: 9px;
+  font-size: var(--fs-micro);
 }
 
 .repair-refurb-card__footer span {
@@ -17432,7 +17217,7 @@ button.repair-metric:hover {
   border-radius: 6px;
   padding: 7px 8px;
   color: #087da4;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   text-align: center;
 }
@@ -17447,7 +17232,7 @@ button.repair-metric:hover {
   background: #fff;
   padding: 9px 16px;
   color: var(--repair-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 /* Repair record */
@@ -17543,7 +17328,7 @@ button.repair-metric:hover {
 
 .repair-detail__desktop-progress .repair-status-stepper__step p {
   justify-content: center;
-  font-size: 9px !important;
+  font-size: var(--fs-micro) !important;
   letter-spacing: 0.035em !important;
 }
 
@@ -17582,7 +17367,7 @@ button.repair-metric:hover {
 .repair-detail__summary span,
 .repair-detail__summary small {
   color: var(--repair-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .repair-detail__summary strong {
@@ -17681,7 +17466,7 @@ button.repair-metric:hover {
 
 .repair-section-header p {
   color: var(--repair-muted) !important;
-  font-size: 10px !important;
+  font-size: var(--fs-micro) !important;
   font-weight: 500 !important;
 }
 
@@ -17695,7 +17480,7 @@ button.repair-metric:hover {
 
 .repair-info-field > span {
   color: var(--repair-muted) !important;
-  font-size: 10px !important;
+  font-size: var(--fs-micro) !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
@@ -17828,7 +17613,7 @@ button.repair-metric:hover {
   justify-content: center;
   border: 1px solid #c5d0dc;
   border-radius: 50%;
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .repair-intake__steps a:first-child b {
@@ -18107,7 +17892,7 @@ button.repair-metric:hover {
   }
 
   .repair-metric span:not(.repair-metric__indicator) {
-    font-size: 10px;
+    font-size: var(--fs-micro);
   }
 
   .repair-metric strong {
@@ -19084,7 +18869,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-metric > span {
   color: #526178;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.055em;
   text-transform: uppercase;
@@ -19103,7 +18888,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-metric > small {
   color: var(--crm-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .crm-metric--attention > strong {
@@ -19129,7 +18914,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-owner-select > span {
   color: #526178;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -19206,7 +18991,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .crm-kanban-column__header p {
   margin-top: 2px;
   color: var(--crm-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .crm-kanban-column__header > span {
@@ -19218,7 +19003,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: 5px;
   background: var(--crm-soft);
   color: #526178;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 750;
 }
 
@@ -19266,7 +19051,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   overflow: hidden;
   color: #087da4;
   font-family: var(--font-dm-mono), ui-monospace, monospace;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -19275,7 +19060,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .crm-opportunity-card__meta > em {
   flex: 0 0 auto;
   color: #526178;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-style: normal;
   font-weight: 700;
 }
@@ -19291,7 +19076,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .crm-opportunity-card > p {
   overflow: hidden;
   color: var(--crm-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -19311,7 +19096,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   align-items: center;
   gap: 5px;
   color: var(--crm-muted);
-  font-size: 9px;
+  font-size: var(--fs-micro);
 }
 
 .crm-owner-avatar {
@@ -19322,7 +19107,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: 50%;
   background: #eaf3f9;
   color: var(--crm-navy);
-  font-size: 8px;
+  font-size: var(--fs-micro);
   font-weight: 750;
 }
 
@@ -19335,7 +19120,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-top: 1px solid #f3d7a4;
   padding-top: 6px;
   color: var(--crm-warning);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 700;
 }
 
@@ -19413,7 +19198,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   align-items: center;
   gap: 8px;
   color: var(--crm-text);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-align: left;
 }
 
@@ -19483,7 +19268,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .crm-opportunity-detail__eyebrow > span {
   color: #526178;
   font-family: var(--font-dm-mono), ui-monospace, monospace;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
 }
 
@@ -19556,7 +19341,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .crm-customer-summary__grid span,
 .crm-requirement-copy > span {
   color: #526178;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.055em;
   text-transform: uppercase;
@@ -19594,7 +19379,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-next-action small {
   color: #8a5a19;
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .crm-next-action.is-empty {
@@ -19641,7 +19426,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-detail-card > header button {
   color: #087da4;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
 }
 
@@ -19730,13 +19515,13 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .crm-activity-item small {
   margin-top: 2px;
   color: var(--crm-muted);
-  font-size: 9px;
+  font-size: var(--fs-micro);
 }
 
 .crm-activity-item p {
   margin-top: 4px;
   color: #526178;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   line-height: 1.45;
 }
 
@@ -19775,7 +19560,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border: 1px solid var(--crm-border-strong);
   border-radius: 50%;
   background: #fff;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
 }
 
@@ -19823,13 +19608,13 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-quotation-panel__list strong {
   color: #087da4;
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .crm-quotation-panel__list small {
   margin-top: 3px;
   color: var(--crm-muted);
-  font-size: 9px;
+  font-size: var(--fs-micro);
 }
 
 .crm-quotation-panel__list b {
@@ -19865,7 +19650,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-submodule-header p {
   color: var(--crm-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .crm-directory-card {
@@ -19892,20 +19677,12 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .crm-directory-card .table-head {
-  min-height: 42px;
-  padding-inline: 12px;
   border-color: var(--crm-border);
   background: var(--crm-soft);
   color: #526178;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .crm-directory-card .table-row {
-  min-height: 58px;
-  padding-inline: 12px;
   border-color: #e7ecf2;
 }
 
@@ -19934,7 +19711,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-lead-card__header span {
   color: #087da4;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -19962,7 +19739,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   background: var(--crm-soft);
   padding: 4px 7px;
   color: #526178;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-style: normal;
   font-weight: 700;
   text-transform: capitalize;
@@ -19984,13 +19761,13 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-lead-card__facts dt {
   color: var(--crm-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
 }
 
 .crm-lead-card__facts dd {
   overflow: hidden;
   color: #344054;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -20156,7 +19933,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .crm-workspace > .mod-header .mod-header-subtitle {
     display: block !important;
     max-width: 100%;
-    font-size: 10px;
+    font-size: var(--fs-micro);
   }
 
   .crm-workspace > .mod-header .section-actions {
@@ -20222,7 +19999,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
   .crm-metric > span,
   .crm-metric > small {
-    font-size: 9px;
+    font-size: var(--fs-micro);
   }
 
   .crm-pipeline-toolbar {
@@ -20266,7 +20043,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
     background: #fff;
     padding: 7px 9px;
     color: #526178;
-    font-size: 10px;
+    font-size: var(--fs-micro);
     font-weight: 650;
   }
 
@@ -21126,7 +20903,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .purchase-summary__label,
 .operations-summary .inventory-pilot-stat-label {
   color: var(--erp-muted);
-  font-size: 0.625rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   line-height: 1.2;
   letter-spacing: 0.075em;
@@ -21150,7 +20927,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .purchase-summary__hint,
 .operations-summary__hint {
   color: #8a93a3;
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
   line-height: 1.35;
 }
 
@@ -21200,22 +20977,13 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .purchase-directory .table-head {
-  min-height: 2.5rem;
-  padding-inline: 0.9rem;
   background: var(--erp-soft);
   color: var(--erp-muted);
-  font-size: 0.56rem;
-  font-weight: 760;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
 }
 
 .purchase-directory .table-row {
-  min-height: 3.65rem;
-  padding-inline: 0.9rem;
   border-bottom-color: var(--erp-line);
   background: #fff;
-  font-size: 0.72rem;
 }
 
 .purchase-directory .table-row:hover {
@@ -21296,7 +21064,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .purchase-order-detail__edit-hint {
   color: var(--erp-muted);
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
 }
 
 .purchase-order-detail__actions {
@@ -21339,7 +21107,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .purchase-order-summary__item > span {
   color: var(--erp-muted);
-  font-size: 0.61rem;
+  font-size: var(--fs-micro);
   font-weight: 740;
   letter-spacing: 0.065em;
   text-transform: uppercase;
@@ -21439,7 +21207,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   min-height: 2.45rem;
   background: var(--erp-soft);
   color: var(--erp-muted);
-  font-size: 0.55rem;
+  font-size: var(--fs-micro);
   font-weight: 760;
   letter-spacing: 0.06em;
 }
@@ -21472,7 +21240,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .purchase-order-match__row strong {
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   white-space: nowrap;
 }
 
@@ -21699,7 +21467,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   min-height: 2.25rem;
   padding: 0.4rem 0.62rem;
   border-radius: 0.5rem;
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
 }
 
 .operations-attention {
@@ -21739,7 +21507,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   display: block;
   margin-top: 0.1rem;
   color: var(--erp-muted);
-  font-size: 0.6rem;
+  font-size: var(--fs-micro);
 }
 
 .operations-attention__heading > strong {
@@ -21767,7 +21535,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-bottom: 1px solid var(--erp-line);
   background: #fff;
   color: var(--erp-muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   text-align: left;
 }
 
@@ -22057,7 +21825,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .purchase-order-lines .table-row > :nth-child(7),
   .purchase-order-lines .table-row > :nth-child(8) {
     color: var(--erp-muted);
-    font-size: 0.65rem;
+    font-size: var(--fs-micro);
   }
 
   .operations-warehouse .inventory-pilot-search {
@@ -22415,7 +22183,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .tradein-summary__item > span {
   align-self: end;
   color: var(--flow-muted);
-  font-size: 0.62rem;
+  font-size: var(--fs-micro);
   font-weight: 720;
   letter-spacing: 0.055em;
   line-height: 1.2;
@@ -22443,7 +22211,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .tradein-summary__item > small {
   min-width: 0;
   color: var(--flow-muted);
-  font-size: 0.66rem;
+  font-size: var(--fs-micro);
   line-height: 1.3;
 }
 
@@ -22492,24 +22260,16 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .reconfig-page .reconfig-table th {
-  height: 2.45rem;
-  padding: 0.55rem 0.7rem;
   border-bottom: 1px solid var(--flow-border);
   background: #f8fafc;
   color: #526178;
-  font-size: 0.58rem;
-  font-weight: 750;
-  letter-spacing: 0.06em;
   text-align: left;
-  text-transform: uppercase;
 }
 
 .reconfig-page .reconfig-table td {
   min-width: 0;
-  padding: 0.7rem;
   border-bottom: 1px solid #e8edf2;
   color: #26354e;
-  font-size: 0.72rem;
   vertical-align: middle;
   overflow-wrap: anywhere;
 }
@@ -22545,7 +22305,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .reconfig-table-device small {
   color: var(--flow-muted);
-  font-size: 0.64rem;
+  font-size: var(--fs-micro);
 }
 
 .reconfig-next-action {
@@ -22558,7 +22318,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: 0.45rem;
   background: #f3fafc;
   color: var(--flow-ink);
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
   font-weight: 680;
   white-space: nowrap;
 }
@@ -22631,20 +22391,12 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .outsource-directory .table-head,
 .aftersales-directory .table-head {
-  min-height: 2.45rem;
-  padding-inline: 0.8rem;
   background: #f8fafc;
   color: #526178;
-  font-size: 0.58rem;
-  font-weight: 750;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .outsource-directory .table-row,
 .aftersales-directory .table-row {
-  min-height: 3.55rem;
-  padding-inline: 0.8rem;
   border-color: #e8edf2;
   background: #fff;
 }
@@ -22677,7 +22429,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .outsource-attention__header span,
 .aftersales-care-queue__header span {
   color: var(--flow-cyan);
-  font-size: 0.58rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -22712,7 +22464,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .outsource-attention__group > p {
   margin: 0 0 0.45rem;
   color: var(--flow-muted);
-  font-size: 0.58rem;
+  font-size: var(--fs-micro);
   font-weight: 720;
   letter-spacing: 0.055em;
   text-transform: uppercase;
@@ -22747,7 +22499,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .outsource-attention__group > button > span,
 .aftersales-care-queue__items > button > span {
   color: var(--flow-cyan);
-  font-size: 0.61rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
 }
 
@@ -22766,7 +22518,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   grid-column: 1 / -1;
   min-width: 0;
   color: var(--flow-muted);
-  font-size: 0.61rem;
+  font-size: var(--fs-micro);
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
@@ -22776,7 +22528,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   display: block;
   padding: 0.8rem 0.6rem;
   color: var(--flow-muted);
-  font-size: 0.67rem;
+  font-size: var(--fs-micro);
 }
 
 .outsource-job-card {
@@ -22965,7 +22717,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .tradein-workspace > .mod-header .mod-header-subtitle {
   display: block !important;
   color: var(--flow-muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
 }
 
 .tradein-workspace > .mod-tabs {
@@ -23008,16 +22760,11 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .tradein-workspace .table-head {
-  min-height: 2.4rem;
   background: #f8fafc;
   color: #526178;
-  font-size: 0.58rem;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .tradein-workspace .table-row {
-  min-height: 3.5rem;
   border-color: #e8edf2;
 }
 
@@ -23255,7 +23002,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
     margin-bottom: 0.14rem;
     color: var(--flow-muted);
     content: attr(data-label);
-    font-size: 0.53rem;
+    font-size: var(--fs-micro);
     font-weight: 720;
     letter-spacing: 0.055em;
     text-transform: uppercase;
@@ -24987,22 +24734,14 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .hr-workspace .table-head,
 .delivery-workspace .table-head,
 .expenses-workspace .table-head {
-  min-height: 2.65rem;
-  padding-inline: 1rem;
   border-color: var(--work-border);
   background: #f8fafc;
   color: #526079;
-  font-size: .625rem;
-  font-weight: 750;
-  letter-spacing: .055em;
-  text-transform: uppercase;
 }
 
 .hr-workspace .table-row,
 .delivery-workspace .table-row,
 .expenses-workspace .table-row {
-  min-height: 3.7rem;
-  padding-inline: 1rem;
   border-color: #e8ecf1;
   background: #fff;
 }
@@ -25081,7 +24820,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   display: block;
   overflow: hidden;
   color: var(--work-muted);
-  font-size: .625rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: .045em;
   text-overflow: ellipsis;
@@ -25117,7 +24856,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   overflow: hidden;
   max-width: 100%;
   color: var(--work-muted);
-  font-size: .675rem;
+  font-size: var(--fs-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -25202,7 +24941,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border: 0;
   background: transparent;
   color: var(--work-accent);
-  font-size: .65rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
 }
 
@@ -25246,7 +24985,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   overflow: hidden;
   margin-top: .15rem;
   color: var(--work-muted);
-  font-size: .625rem;
+  font-size: var(--fs-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -25256,7 +24995,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .expenses-queue-item em {
   flex: 0 0 auto;
   color: var(--work-muted);
-  font-size: .625rem;
+  font-size: var(--fs-micro);
   font-style: normal;
   font-weight: 650;
 }
@@ -25266,7 +25005,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .expenses-queue-empty {
   padding: .75rem 0 .25rem;
   color: var(--work-muted);
-  font-size: .67rem;
+  font-size: var(--fs-micro);
   line-height: 1.45;
 }
 
@@ -25363,7 +25102,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .delivery-filter > span {
   color: var(--work-muted);
-  font-size: .625rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -25417,7 +25156,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .delivery-dispatch-rail > header small,
 .expenses-approval-rail > header small {
   color: var(--work-accent);
-  font-size: .58rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: .07em;
   text-transform: uppercase;
@@ -25442,7 +25181,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: 999px;
   background: var(--work-accent-soft);
   color: var(--work-navy);
-  font-size: .68rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
 }
 
@@ -25463,7 +25202,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .delivery-queue-failed p {
   color: var(--work-danger);
-  font-size: .68rem;
+  font-size: var(--fs-micro);
 }
 
 .delivery-section-heading {
@@ -25750,7 +25489,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .hr-kpi-card small,
   .delivery-kpi-card small,
   .expenses-kpi-card small {
-    font-size: .56rem;
+    font-size: var(--fs-micro);
     letter-spacing: .03em;
   }
 
@@ -25762,7 +25501,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
   .delivery-kpi-card span,
   .expenses-kpi-card span {
-    font-size: .59rem;
+    font-size: var(--fs-micro);
   }
 
   .hr-directory-toolbar {
@@ -26213,7 +25952,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .hr-workspace .hr-metric-card p:first-child {
   color: var(--work-muted) !important;
-  font-size: .6rem !important;
+  font-size: var(--fs-micro) !important;
   letter-spacing: .055em !important;
 }
 
@@ -26316,7 +26055,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .hr-workspace .hr-training-card select {
   min-height: 2rem;
-  font-size: .68rem;
+  font-size: var(--fs-micro);
 }
 
 .hr-workspace .hr-performance-list {
@@ -27808,7 +27547,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='amount']::before {
     display: block !important;
     color: var(--sp-text-3);
-    font-size: 0.625rem;
+    font-size: var(--fs-micro);
     font-weight: 750;
     line-height: 1.2;
     letter-spacing: 0.05em;
@@ -28171,8 +27910,9 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .accounting-dashboard__enter {
-  animation: accountingDashIn 520ms cubic-bezier(.22, .78, .28, 1) both;
-  animation-delay: var(--dash-delay, 0ms);
+  /* Visited many times a day: 220ms, and the per-panel delay (up to 450ms in markup) is compressed to a 30–70ms stagger. */
+  animation: accountingDashIn 220ms var(--ease-out) both;
+  animation-delay: calc(var(--dash-delay, 0ms) * 0.15);
 }
 
 @keyframes accountingDashIn {
@@ -28207,7 +27947,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   display: block;
   margin-bottom: 0.18rem;
   color: var(--dash-cyan);
-  font-size: 0.55rem;
+  font-size: var(--fs-micro);
   font-weight: 800;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -28224,7 +27964,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .accounting-dashboard__identity p {
   margin-top: 0.25rem;
   color: var(--dash-muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   line-height: 1.45;
 }
 
@@ -28242,7 +27982,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__filters label > span {
   color: var(--dash-muted);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -28255,7 +27995,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: 0.5rem;
   background: var(--dash-surface);
   color: var(--dash-text);
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
   font-weight: 650;
 }
 
@@ -28277,7 +28017,6 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .accounting-dashboard__filters button:hover {
-  transform: translateY(-1px);
   background: #132d5e;
 }
 
@@ -28291,7 +28030,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   background: #fef2f2;
   padding: 0.7rem 0.8rem;
   color: #991b1b;
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
 }
 
 .accounting-dashboard__error span {
@@ -28305,7 +28044,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: 0.4rem;
   background: #fff;
   padding-inline: 0.65rem;
-  font-size: 0.62rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
 }
 
@@ -28333,7 +28072,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__loading span {
   max-width: 29rem;
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
 }
 
 .accounting-dashboard__kpis {
@@ -28368,7 +28107,6 @@ body:has(.crm-workspace) [role="dialog"] > div {
   z-index: 1;
   background: var(--dash-soft);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-  transform: translateY(-2px);
 }
 
 .accounting-dashboard__kpi-icon {
@@ -28400,7 +28138,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .accounting-dashboard__kpi-copy > span {
   overflow: hidden;
   color: var(--dash-muted);
-  font-size: 0.56rem;
+  font-size: var(--fs-micro);
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -28422,7 +28160,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   align-items: center;
   gap: 0.15rem;
   color: var(--dash-muted);
-  font-size: 0.5rem;
+  font-size: var(--fs-micro);
   font-weight: 650;
   white-space: nowrap;
 }
@@ -28478,7 +28216,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .accounting-dashboard__bank-head h3,
 .accounting-dashboard__ageing-head h3 {
   color: var(--dash-navy);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 780;
   line-height: 1.25;
 }
@@ -28488,7 +28226,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .accounting-dashboard__ageing-head p {
   margin-top: 0.15rem;
   color: var(--dash-muted);
-  font-size: 0.53rem;
+  font-size: var(--fs-micro);
   line-height: 1.35;
 }
 
@@ -28505,7 +28243,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   gap: 0.75rem;
   margin-top: 0.25rem;
   color: var(--dash-muted);
-  font-size: 0.5rem;
+  font-size: var(--fs-micro);
   font-weight: 650;
 }
 
@@ -28545,7 +28283,6 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .accounting-dashboard__ageing:hover {
   border-color: #bfdbfe;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
-  transform: translateY(-1px);
 }
 
 .accounting-dashboard__ageing-head > span {
@@ -28558,7 +28295,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: 999px;
   background: #eff6ff;
   color: var(--dash-blue);
-  font-size: 0.48rem;
+  font-size: var(--fs-micro);
   font-weight: 800;
 }
 
@@ -28592,7 +28329,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__ageing-grid span {
   color: var(--dash-muted);
-  font-size: 0.48rem;
+  font-size: var(--fs-micro);
   font-weight: 650;
 }
 
@@ -28600,7 +28337,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   margin-top: 0.12rem;
   overflow: hidden;
   color: var(--dash-text);
-  font-size: 0.62rem;
+  font-size: var(--fs-micro);
   font-weight: 780;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
@@ -28610,7 +28347,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .accounting-dashboard__ageing-grid small {
   margin-top: 0.04rem;
   color: var(--dash-muted);
-  font-size: 0.47rem;
+  font-size: var(--fs-micro);
 }
 
 .accounting-dashboard__bank-wrap {
@@ -28625,7 +28362,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .accounting-dashboard__bank-head button,
 .accounting-dashboard__panel-link {
   color: var(--dash-blue);
-  font-size: 0.54rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   white-space: nowrap;
 }
@@ -28649,26 +28386,19 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-collapse: collapse;
   table-layout: auto;
   color: var(--dash-text);
-  font-size: 0.55rem;
 }
 
 .accounting-dashboard__table th {
   border-top: 1px solid var(--dash-border);
   border-bottom: 1px solid var(--dash-border);
   background: var(--dash-soft);
-  padding: 0.42rem 0.65rem;
   color: var(--dash-muted);
-  font-size: 0.48rem;
-  font-weight: 760;
-  letter-spacing: 0.025em;
   text-align: left;
-  text-transform: none;
   white-space: nowrap;
 }
 
 .accounting-dashboard__table td {
   border-bottom: 1px solid color-mix(in srgb, var(--dash-border) 70%, transparent);
-  padding: 0.48rem 0.65rem;
   vertical-align: middle;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -28687,7 +28417,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   display: block;
   margin-top: 0.08rem;
   color: var(--dash-muted);
-  font-size: 0.47rem;
+  font-size: 11px;
 }
 
 .accounting-dashboard__table .is-ref {
@@ -28700,8 +28430,8 @@ body:has(.crm-workspace) [role="dialog"] > div {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.5rem;
-  font-weight: 720;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -28735,7 +28465,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   background: var(--dash-soft);
   padding: 0.2rem 0.45rem;
   color: var(--dash-muted);
-  font-size: 0.48rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   white-space: normal;
 }
@@ -28752,7 +28482,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   gap: 0.45rem;
   min-height: 1.9rem;
   border-bottom: 1px solid color-mix(in srgb, var(--dash-border) 70%, transparent);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
 }
 
 .accounting-dashboard__budget-row:last-child {
@@ -28766,14 +28496,14 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__budget-row > strong {
   color: var(--dash-muted);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
 .accounting-dashboard__budget-row > small {
   color: var(--dash-muted);
-  font-size: 0.48rem;
+  font-size: var(--fs-micro);
   text-align: right;
 }
 
@@ -28791,7 +28521,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   height: 100%;
   border-radius: inherit;
   background: var(--dash-green);
-  transition: width 650ms cubic-bezier(.22,.78,.28,1);
+  transition: width 300ms var(--ease-out);
 }
 
 .accounting-dashboard__tax-grid {
@@ -28820,14 +28550,14 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .accounting-dashboard__statement span {
   min-width: 0;
   color: var(--dash-muted);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
 }
 
 .accounting-dashboard__metric-list strong,
 .accounting-dashboard__statement strong {
   flex: 0 0 auto;
   color: var(--dash-text);
-  font-size: 0.54rem;
+  font-size: var(--fs-micro);
   font-weight: 760;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -28861,11 +28591,11 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__filing-list span {
   color: var(--dash-muted);
-  font-size: 0.5rem;
+  font-size: var(--fs-micro);
 }
 
 .accounting-dashboard__filing-list strong {
-  font-size: 0.51rem;
+  font-size: var(--fs-micro);
   font-weight: 760;
   font-variant-numeric: tabular-nums;
 }
@@ -28882,7 +28612,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__statement > div.is-section span {
   color: var(--dash-navy);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
   font-weight: 800;
 }
 
@@ -28946,14 +28676,14 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: 0.3rem;
   background: var(--dash-soft);
   color: var(--dash-muted);
-  font-size: 0.46rem;
+  font-size: var(--fs-micro);
   font-weight: 800;
 }
 
 .accounting-dashboard__partner-name {
   overflow: hidden;
   color: var(--dash-text);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
   font-weight: 670;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -28961,13 +28691,13 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__partner-table strong {
   color: var(--dash-navy);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
 }
 
 .accounting-dashboard__partner-table small {
   color: var(--dash-muted);
-  font-size: 0.48rem;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -28993,7 +28723,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__check-progress span {
   color: var(--dash-muted);
-  font-size: 0.5rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
 }
 
@@ -29019,13 +28749,13 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__checklist button span {
   color: var(--dash-text);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
   font-weight: 630;
 }
 
 .accounting-dashboard__checklist button strong {
   color: var(--dash-muted);
-  font-size: 0.48rem;
+  font-size: var(--fs-micro);
   font-weight: 740;
 }
 
@@ -29047,7 +28777,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: 50%;
   background: #f1f5f9;
   color: #64748b;
-  font-size: 0.5rem;
+  font-size: var(--fs-micro);
   font-weight: 850;
 }
 
@@ -29101,20 +28831,20 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .accounting-dashboard__alerts button > span:nth-child(2) {
   color: var(--dash-text);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
   font-weight: 650;
 }
 
 .accounting-dashboard__alerts strong {
   color: var(--dash-muted);
-  font-size: 0.5rem;
+  font-size: var(--fs-micro);
   font-weight: 720;
   font-variant-numeric: tabular-nums;
 }
 
 .accounting-dashboard__alerts small {
   color: var(--dash-blue);
-  font-size: 0.48rem;
+  font-size: var(--fs-micro);
   font-weight: 760;
 }
 
@@ -29130,7 +28860,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   background: var(--dash-surface);
   padding: 0.55rem 0.75rem;
   color: var(--dash-muted);
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
 }
 
 .accounting-dashboard__foot > div {
@@ -29270,7 +29000,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   }
 
   .accounting-dashboard__identity p {
-    font-size: 0.68rem;
+    font-size: var(--fs-micro);
   }
 
   .accounting-dashboard__filters {
@@ -29315,7 +29045,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   }
 
   .accounting-dashboard__kpi-copy > span {
-    font-size: 0.58rem;
+    font-size: var(--fs-micro);
   }
 
   .accounting-dashboard__kpi-copy > strong {
@@ -29325,7 +29055,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .accounting-dashboard__kpi-copy > small {
     overflow: hidden;
     max-width: 100%;
-    font-size: 0.49rem;
+    font-size: var(--fs-micro);
     text-overflow: ellipsis;
   }
 
@@ -29360,7 +29090,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   }
 
   .accounting-dashboard__ageing-grid strong {
-    font-size: 0.58rem;
+    font-size: var(--fs-micro);
   }
 
   .accounting-dashboard__bank-head {
@@ -29369,11 +29099,9 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
   .accounting-dashboard__table {
     min-width: 36rem;
-    font-size: 0.62rem;
   }
 
   .accounting-dashboard__table th {
-    font-size: 0.54rem;
   }
 
   .accounting-dashboard__table td {
@@ -29466,7 +29194,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   background: #fffbeb;
   padding: 0.15rem 0.4rem;
   color: #a16207;
-  font-size: 0.48rem;
+  font-size: var(--fs-micro);
   font-weight: 760;
   white-space: nowrap;
 }
@@ -29482,7 +29210,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .accounting-dashboard__panel-head p,
   .accounting-dashboard__bank-head p,
   .accounting-dashboard__ageing-head p {
-    font-size: 0.64rem;
+    font-size: var(--fs-micro);
   }
 
   .accounting-dashboard__legend,
@@ -29506,19 +29234,17 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .accounting-dashboard__alerts strong,
   .accounting-dashboard__alerts small,
   .accounting-dashboard__foot {
-    font-size: 0.64rem;
+    font-size: var(--fs-micro);
   }
 
   .accounting-dashboard__ageing-grid strong {
-    font-size: 0.68rem;
+    font-size: var(--fs-micro);
   }
 
   .accounting-dashboard__table {
-    font-size: 0.7rem;
   }
 
   .accounting-dashboard__table th {
-    font-size: 0.61rem;
   }
 
   .accounting-dashboard__table td small,
@@ -29526,7 +29252,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .accounting-dashboard__due,
   .accounting-dashboard__muted-pill,
   .accounting-dashboard__shared-gl {
-    font-size: 0.61rem;
+    font-size: 11px;
   }
 }
 
@@ -29693,7 +29419,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-bottom: 1px solid var(--border-lt);
   background: var(--bg-surface);
   color: var(--text-3);
-  font-size: 0.62rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: .025em;
 }
@@ -29738,7 +29464,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .crm-opportunity-list__opportunity strong {
   color: var(--primary-dark);
-  font-size: 0.67rem;
+  font-size: var(--fs-micro);
   font-weight: 800;
   line-height: 1.2;
 }
@@ -29757,7 +29483,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   min-width: 0;
   overflow: hidden;
   color: var(--text-3);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -29861,7 +29587,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
     align-items: center;
     gap: 0.35rem 0.5rem;
     color: var(--text-3);
-    font-size: 0.67rem;
+    font-size: var(--fs-micro);
     line-height: 1.4;
   }
 
@@ -29912,7 +29638,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .outsource-attention__job > .outsource-attention__ref {
   grid-row: 1;
   color: var(--flow-cyan);
-  font-size: 0.61rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   line-height: 1.25;
 }
@@ -29928,7 +29654,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .outsource-attention__job > .outsource-attention__vendor {
   grid-row: 3;
   color: var(--flow-muted);
-  font-size: 0.61rem;
+  font-size: var(--fs-micro);
   line-height: 1.3;
 }
 
@@ -29945,7 +29671,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   min-width: 0;
   max-width: 100%;
   color: var(--flow-ink);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   line-height: 1.3;
   white-space: normal;
@@ -29957,7 +29683,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   justify-self: end;
   align-self: center;
   color: var(--flow-cyan);
-  font-size: 0.61rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   line-height: 1.25;
   white-space: nowrap;
@@ -29974,11 +29700,11 @@ body:has(.crm-workspace) [role="dialog"] > div {
   }
 
   .outsource-attention__balance > .outsource-attention__vendor-name {
-    font-size: 0.66rem;
+    font-size: var(--fs-micro);
   }
 
   .outsource-attention__balance > .outsource-attention__amount {
-    font-size: 0.6rem;
+    font-size: var(--fs-micro);
   }
 }
 
@@ -30017,7 +29743,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   padding: 0.2rem 0.55rem;
   background: rgba(248, 250, 252, 0.9);
   color: #94a3b8;
-  font-size: 0.62rem;
+  font-size: var(--fs-micro);
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -30164,7 +29890,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: inherit;
   background: linear-gradient(90deg, #102a56 0%, #0066cc 52%, #00aeef 100%);
   box-shadow: 0 0 10px rgba(0,174,239,0.24);
-  transition: width 240ms cubic-bezier(.2,.75,.25,1);
+  transition: width 240ms var(--ease-out);
 }
 
 .otp-field__hint {
@@ -30173,7 +29899,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   gap: 0.42rem;
   margin-top: 0.55rem;
   color: #94a3b8;
-  font-size: 0.65rem;
+  font-size: var(--fs-micro);
   line-height: 1.35;
 }
 
@@ -30196,7 +29922,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .otp-field--complete:not(.otp-field--verifying) .otp-field__frame {
-  animation: otpCompleteGlow 420ms ease-out both;
+  animation: otpCompleteGlow 420ms var(--ease-out) both;
 }
 
 .otp-field__scan {
@@ -30540,7 +30266,6 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td {
     min-width: 0 !important;
     max-width: none !important;
-    padding-inline: clamp(0.35rem, 0.65vw, 0.7rem) !important;
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -30783,14 +30508,13 @@ body:has(.crm-workspace) [role="dialog"] > div {
   padding: 0.38rem 0.7rem;
   background: color-mix(in srgb, var(--primary) 7%, var(--bg-card));
   color: var(--primary);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   transition: background-color var(--motion-fast), transform var(--motion-fast);
 }
 
 .dashboard-week-chips button:hover {
   background: color-mix(in srgb, var(--primary) 13%, var(--bg-card));
-  transform: translateY(-1px);
 }
 
 .dashboard-executive-main .dashboard-kpi-grid {
@@ -30827,7 +30551,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .dashboard-period-strip span {
   color: var(--text-4);
-  font-size: 0.63rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -30859,7 +30583,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .dashboard-performance-item > strong {
   color: var(--text-2);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 750;
 }
 
@@ -30923,9 +30647,11 @@ body:has(.crm-workspace) [role="dialog"] > div {
   height: 1.25rem;
 }
 
-.dia-floating-launcher:hover {
+@media (hover: hover) and (pointer: fine) {
+  .dia-floating-launcher:hover {
   box-shadow: 0 10px 24px rgba(0, 90, 168, 0.36);
   transform: translateY(-2px) scale(1.03);
+}
 }
 
 .dia-floating-launcher:focus-visible {
@@ -31008,10 +30734,10 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .app-topbar-clock:hover { background: var(--bg-muted); }
 .app-topbar-clock__dot { width: .35rem; height: .35rem; border-radius: 50%; background: var(--text-4); }
 .app-topbar-clock span:nth-child(2) { display: grid; min-width: 6.8rem; text-align: left; }
-.app-topbar-clock small { color: var(--text-3); font-size: .58rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.app-topbar-clock small { color: var(--text-3); font-size: var(--fs-micro); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .app-topbar-clock strong { color: var(--text-1); font-family: var(--font-mono), ui-monospace, monospace; font-size: .82rem; line-height: 1.15; }
 .app-topbar-clock__mic { display: grid; width: 1.8rem; height: 1.8rem; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--primary) 9%, var(--bg-card)); color: var(--primary); }
-.app-topbar-role { max-width: 8rem; overflow: hidden; border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border-lt)); border-radius: 999px; padding: .25rem .65rem; background: color-mix(in srgb, var(--primary) 8%, var(--bg-card)); color: var(--primary); font-size: .65rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.app-topbar-role { max-width: 8rem; overflow: hidden; border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border-lt)); border-radius: 999px; padding: .25rem .65rem; background: color-mix(in srgb, var(--primary) 8%, var(--bg-card)); color: var(--primary); font-size: var(--fs-micro); font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .app-topbar-currency { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid var(--border-lt); border-radius: .7rem; padding: .45rem .65rem; background: var(--bg-card); color: var(--text-2); font-size: .7rem; font-weight: 800; }
 
 /* Contacts reference: tabs and repeatable related-person editor. */
@@ -31019,7 +30745,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .contacts-details-tabs__nav { display: flex; gap: .35rem; overflow-x: auto; border: 1px solid var(--border-lt); border-radius: .9rem; padding: .3rem; background: var(--bg-surface); }
 .contacts-details-tabs__nav button { display: inline-flex; min-height: 2.35rem; align-items: center; gap: .45rem; border-radius: .65rem; padding: .45rem 1rem; color: var(--text-3); font-size: .78rem; font-weight: 750; white-space: nowrap; }
 .contacts-details-tabs__nav button:hover, .contacts-details-tabs__nav button.is-active { background: var(--bg-card); color: var(--primary); box-shadow: var(--shadow-xs); }
-.contacts-details-tabs__nav button span { display: grid; min-width: 1.25rem; height: 1.25rem; place-items: center; border-radius: 999px; background: color-mix(in srgb, var(--primary) 11%, transparent); font-size: .62rem; }
+.contacts-details-tabs__nav button span { display: grid; min-width: 1.25rem; height: 1.25rem; place-items: center; border-radius: 999px; background: color-mix(in srgb, var(--primary) 11%, transparent); font-size: var(--fs-micro); }
 .contacts-details-tabs__panel { margin-top: .75rem; border: 1px solid var(--border-lt); border-radius: 1.25rem; padding: clamp(1rem, 2.2vw, 1.75rem); background: color-mix(in srgb, var(--bg-surface) 72%, var(--bg-card)); }
 .contacts-persons-editor { display: grid; gap: 1rem; }
 .contacts-persons-editor > header { display: grid; gap: .2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-lt); }
@@ -31065,7 +30791,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .custody-product-picker__list input { width: 1rem; height: 1rem; accent-color: var(--primary); }
 .custody-product-picker__list span { display: grid; min-width: 0; }
 .custody-product-picker__list strong { overflow: hidden; color: var(--text-1); font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
-.custody-product-picker__list small, .custody-product-picker__list p { color: var(--text-4); font-size: .64rem; }
+.custody-product-picker__list small, .custody-product-picker__list p { color: var(--text-4); font-size: var(--fs-micro); }
 .custody-product-picker__list p { margin: 0; padding: 1rem; text-align: center; }
 .custody-transfer-row {
   display: grid;
@@ -31079,11 +30805,11 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 .custody-transfer-row > div:first-child { display: grid; gap: .2rem; }
 .custody-transfer-row > div:first-child strong { color: var(--text-1); font-size: .72rem; }
-.custody-transfer-row > div:first-child small { color: var(--text-4); font-size: .64rem; }
+.custody-transfer-row > div:first-child small { color: var(--text-4); font-size: var(--fs-micro); }
 .custody-transfer-row > button { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: .5rem; color: var(--danger); font-size: 1.1rem; }
 .custody-transfer-row > button:hover { background: var(--danger-bg); }
 .custody-transfer-serials { display: flex; max-height: 7rem; flex-wrap: wrap; gap: .35rem; overflow-y: auto; }
-.custody-transfer-serials label { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid var(--border-lt); border-radius: 999px; padding: .3rem .5rem; background: var(--bg-card); font-size: .65rem; cursor: pointer; }
+.custody-transfer-serials label { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid var(--border-lt); border-radius: 999px; padding: .3rem .5rem; background: var(--bg-card); font-size: var(--fs-micro); cursor: pointer; }
 .custody-transfer-serials label:has(input:checked) { border-color: var(--primary); color: var(--primary); }
 .custody-transfer-serials input { accent-color: var(--primary); }
 @media (max-width: 639px) {
@@ -31158,7 +30884,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-radius: .35rem;
   padding: .16rem .36rem;
   color: #a8c6e4;
-  font-size: .55rem;
+  font-size: var(--fs-micro);
   line-height: 1;
 }
 .sidebar-nav-scroll { scrollbar-width: thin; scrollbar-color: rgba(143,176,208,.45) transparent; }
@@ -31168,7 +30894,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 .sidebar-group-label {
   color: #7fb2df !important;
-  font-size: .57rem !important;
+  font-size: var(--fs-micro) !important;
   letter-spacing: .14em !important;
 }
 .sidebar-group-count,
@@ -31496,7 +31222,7 @@ body :is(.dt-toolbar, .table-row, .data-table-actions, .compact-actions, .sectio
   border-left: 4px solid var(--primary);
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
-  animation: notificationPopupIn 220ms ease-out;
+  animation: notificationPopupIn 220ms var(--ease-out);
 }
 .notification-popup--urgent { border-left-color: var(--danger); }
 .notification-popup__icon {
@@ -31553,4 +31279,268 @@ body :is(.dt-toolbar, .table-row, .data-table-actions, .compact-actions, .sectio
 }
 @media (prefers-reduced-motion: reduce) {
   .notification-popup { animation: none; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ERP BASELINE — legibility, touch, motion restraint, accessibility
+   One place for platform-level rules (mobile-native, animation-performance,
+   apple-design §14). Presentation only; no component logic depends on these.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Legibility floor: Tailwind arbitrary sizes below 11px render at --fs-micro.
+   (Declared after the utilities so equal specificity resolves here.) */
+:is([class*="text-[8px]"], [class*="text-[8.5px]"], [class*="text-[9px]"], [class*="text-[9.5px]"],
+    [class*="text-[10px]"], [class*="text-[10.5px]"]) {
+  font-size: var(--fs-micro);
+}
+kbd { font-size: var(--fs-micro); }
+
+/* Controls: no double-tap-zoom delay, no accidental text selection from a long press. */
+button, a, [role="button"], [role="tab"], summary, label, select, input[type="checkbox"], input[type="radio"] {
+  touch-action: manipulation;
+}
+button, [role="button"], [role="tab"] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* iOS Safari zooms the page when an input under 16px takes focus. Fix the
+   cause (type size) on touch devices instead of disabling zoom. */
+@media (pointer: coarse), (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important; /* outranks the mobile `text-[11px]` utility overrides — iOS zoom is a functional bug */
+  }
+}
+
+/* Touch targets: 44px minimum on touch devices for the shell's own controls. */
+@media (pointer: coarse), (max-width: 767px) {
+  .app-topbar-account,
+  .app-topbar button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Small precise controls keep their look but get a larger hit area. */
+.sidebar-pin-btn { position: relative; }
+.sidebar-pin-btn::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
+/* `transition: all` animates whatever changes next, including layout. Tailwind's
+   transition-all is narrowed to paint/composite properties (+ width, which the
+   progress bars rely on). */
+.transition-all {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke,
+    opacity, box-shadow, transform, filter, width;
+}
+
+/* Translucency is a preference, not a given. */
+@media (prefers-reduced-transparency: reduce) {
+  *, *::before, *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* Higher-contrast preference: stronger separators and secondary text. */
+@media (prefers-contrast: more) {
+  :root {
+    --border: #64748B;
+    --border-lt: #94A3B8;
+    --text-3: #334155;
+    --text-4: #475569;
+  }
+  [data-theme='dark'] {
+    --border: #94A3B8;
+    --border-lt: #64748B;
+    --text-3: #CBD5E1;
+    --text-4: #94A3B8;
+  }
+}
+
+/* ── Mobile shell fixes found in rendered-screen review ─────────────────────── */
+
+/* A closed off-canvas sidebar must not cast its shadow onto the page. */
+.sidebar-shell[aria-hidden='true'] {
+  box-shadow: none;
+}
+
+/* Sales list header: the compact "+" action is a 44px square beside the title, not a
+   cell stretched to the header's height (a leaked 104×58 desktop rule won on width). */
+@media (max-width: 767px) {
+  .sales-pilot.sales-doc .sales-workbench .sales-list-page-header > .sales-proto-actions:not(.sales-proto-actions--dock) {
+    align-self: center;
+  }
+  /* .sales-workbench is repeated on purpose: odoo-record-designs.css loads later with an equal-specificity `width:auto !important`. */
+  .sales-pilot.sales-doc .sales-workbench.sales-workbench .sales-list-page-header > .sales-proto-actions:not(.sales-proto-actions--dock) .sp-btn-primary {
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    height: 2.75rem !important;
+    min-height: 2.75rem !important;
+    max-height: 2.75rem !important; /* a global `body :is(.btn…) { height:auto !important }` outranks height */
+    align-self: center;
+  }
+}
+
+/* ── DataTable toolbar: compact layout, but not stretched in wide containers ───
+   The compact (stacked) toolbar is chosen for any container under 768px, which
+   includes ~750px cards on desktop. Once the toolbar itself has room, search and
+   actions share one row instead of two half-width buttons. */
+.dt-toolbar { container-type: inline-size; }
+@container (min-width: 480px) {
+  .dt-toolbar-row-mobile { flex-direction: row; align-items: center; }
+  .dt-toolbar-row-mobile .dt-toolbar-search { flex: 1 1 auto; width: auto; min-width: 0; }
+  .dt-toolbar-mobile-actions,
+  .dt-toolbar-mobile-actions.is-single { display: flex; width: auto; flex: 0 0 auto; }
+  .dt-toolbar-btn-grow { width: auto; }
+}
+
+/* Touch devices: full-width row buttons and card links meet the 44px target. */
+@media (pointer: coarse), (max-width: 767px) {
+  button.w-full,
+  .dashboard-card-link {
+    min-height: 44px;
+  }
+}
+
+/* Inline validation: an invalid control shows it, not only the message below it. */
+.form-input[aria-invalid='true'],
+.form-select[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+.form-input[aria-invalid='true']:focus,
+.form-select[aria-invalid='true']:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+/* Sales list on phones: the table wrapper carried desktop margins/padding (20px/16px) and
+   overflowed its 374px panel by ~19px, leaving the empty state flush against the edge. */
+@media (max-width: 767px) {
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view] .sp-panel .sp-table-wrap:has(.sp-list-table) {
+    margin-inline: 0 !important;
+    padding: 0 !important;
+    max-width: 100%;
+  }
+}
+
+/* ── Enter transitions for overlays (toast, modal, drawer, confirm, picker menu) ──
+   Replaces inline keyframes that restarted from zero on interruption and used an
+   overshooting curve. Transitions retarget from the current value; @starting-style
+   supplies the entry state without JS (browsers without it simply appear). Each
+   surface keeps its own travel path; none bounces. Reduced motion shortens these to 1ms. */
+.ui-enter { transition-property: opacity, transform; transition-timing-function: var(--ease-out); }
+.ui-enter-backdrop { transition-property: opacity; transition-duration: 200ms; }
+.ui-enter-toast    { transition-duration: 250ms; }
+.ui-enter-modal    { transition-duration: 200ms; }
+.ui-enter-drawer   { transition-duration: 300ms; transition-timing-function: var(--ease-drawer); }
+.ui-enter-confirm  { transition-duration: 180ms; }
+.ui-enter-dropdown { transition-duration: 150ms; transform-origin: top; }
+
+@starting-style {
+  .ui-enter-backdrop { opacity: 0; }
+  .ui-enter-toast    { opacity: 0; transform: translateY(16px) scale(0.96); }
+  .ui-enter-modal    { opacity: 0; transform: scale(0.96); }
+  .ui-enter-drawer   { opacity: 0; transform: translateX(24px); }
+  .ui-enter-confirm  { opacity: 0; transform: scale(0.96); }
+  .ui-enter-dropdown { opacity: 0; transform: translateY(-4px); }
+}
+
+/* ── Master module header ─────────────────────────────────────────────────────
+   Every module renders the same markup (header.mod-header > .mod-header__identity >
+   h1.erp-module-title + p.erp-module-subtitle) but ~65 module rules had diverged: title
+   14–30px, vertical padding 6–32px, height 54–108px, weight 650–780. One definition now.
+   Specificity is raised by repetition so it outranks module rules (several use !important).
+   Finance keeps its own top padding: its header reserves a row for the breadcrumb. */
+@media (min-width: 768px) {
+  header.mod-header.mod-header.mod-header.mod-header {
+    min-height: var(--mod-header-min-h) !important;
+    padding-block: var(--mod-header-pad-y) !important;
+    padding-inline: var(--mod-header-pad-x) !important;
+  }
+  .finance-workspace > header.mod-header.mod-header.mod-header.mod-header {
+    padding-top: 2rem !important;
+  }
+  header.mod-header.mod-header.mod-header .erp-module-title.erp-module-title {
+    font-size: var(--mod-title-fs) !important;
+    font-weight: 750 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.02em !important; /* large type tightens (apple-design §15) */
+    color: var(--navy) !important;       /* brand navy; was ink, navy, blue and teal-navy by module */
+  }
+  [data-theme='dark'] header.mod-header.mod-header.mod-header .erp-module-title.erp-module-title {
+    color: var(--text-1) !important;
+  }
+  header.mod-header.mod-header.mod-header .erp-module-subtitle.erp-module-subtitle,
+  header.mod-header.mod-header.mod-header .mod-header-subtitle.mod-header-subtitle {
+    font-size: var(--fs-table) !important;
+    font-weight: 500 !important;
+    line-height: 1.35 !important;
+    color: var(--text-3) !important;
+  }
+}
+@media (max-width: 767px) {
+  header.mod-header.mod-header.mod-header .erp-module-title.erp-module-title {
+    font-size: var(--mod-title-fs-sm) !important;
+    font-weight: 750 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.01em !important;
+    color: var(--navy) !important;
+  }
+  [data-theme='dark'] header.mod-header.mod-header.mod-header .erp-module-title.erp-module-title {
+    color: var(--text-1) !important;
+  }
+}
+
+/* ── Safe areas (viewport-fit=cover) ───────────────────────────────────────────
+   The page now paints under the notch / Dynamic Island / home indicator, so chrome
+   anchored to an edge pads itself away from it. env() is 0 on devices without a
+   cutout, so nothing changes there. Verified with CDP-emulated insets
+   (top 47, bottom 34, landscape left/right 47). */
+.safe-top    { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Landscape: keep the whole app out of the side cutouts. */
+.app-shell-root {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Status-bar strip: a spacer above the top bar, in the bar's own colour, so the bar
+   keeps its fixed height (several module rules pin it with !important) and the
+   notch area reads as part of it. Zero height without a cutout. */
+.app-main-col::before {
+  content: "";
+  display: block;
+  flex: none;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--topbar-bg);
+}
+
+/* Phones: the last item in a scrolling page clears the home indicator. */
+@media (max-width: 767px) {
+  main#main-content { padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* Off-canvas sidebar and its bottom user card clear the cutout / home indicator. */
+.sidebar-shell {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Transient surfaces anchored to the bottom edge. */
+.ui-enter-toast { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+.fixed.bottom-4.right-4.z-\[9700\] { bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+
+/* Centered dialogs keep their breathing room *inside* the safe area. */
+.ui-enter-backdrop {
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
 }

@@ -744,7 +744,7 @@ export default function SecuritySettingsDashboard({
           </div>
           <div className="px-3.5 py-3">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[355px] text-left">
+              <table className="erp-table min-w-[355px]">
                 <thead>
                   <tr className="text-[7.5px] font-bold text-[#718096]">
                     <th className="pb-2">User</th>

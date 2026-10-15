@@ -224,7 +224,7 @@ main#main-content:has(.finance-invoice-detail) {
   min-height: 22px !important;
   padding: 3px 9px !important;
   border-radius: 6px !important;
-  font-size: 10px !important;
+  font-size: var(--fs-micro) !important;
   font-weight: 900 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.02em !important;
@@ -384,7 +384,7 @@ main#main-content:has(.finance-invoice-detail) {
 
 .sales-pilot.sales-doc .sales-doc-smart-button span {
   color: var(--odoo-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -489,7 +489,7 @@ main#main-content:has(.finance-invoice-detail) {
 
 .finance-invoice-detail .invoice-detail__smart-button span {
   color: var(--odoo-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -537,7 +537,7 @@ main#main-content:has(.finance-invoice-detail) {
 .finance-invoice-detail .invoice-detail__summary-progress-copy span {
   margin: 0 !important;
   color: var(--odoo-muted) !important;
-  font-size: 10px !important;
+  font-size: var(--fs-micro) !important;
   font-weight: 900 !important;
   letter-spacing: 0.06em !important;
   text-transform: uppercase !important;
@@ -771,24 +771,15 @@ main#main-content:has(.finance-invoice-detail) {
 
 .sales-pilot.sales-doc .sp-table thead th,
 .finance-invoice-detail .invoice-detail__table thead th {
-  height: 42px !important;
-  padding: 10px 14px !important;
   border-bottom: 1px solid var(--odoo-border) !important;
   background: #f8fafc !important;
   color: #53647a !important;
-  font-size: 10px !important;
-  font-weight: 900 !important;
-  letter-spacing: 0.06em !important;
-  text-transform: uppercase !important;
 }
 
 .sales-pilot.sales-doc .sp-table tbody td,
 .finance-invoice-detail .invoice-detail__table tbody td {
-  min-height: 48px !important;
-  padding: 12px 14px !important;
   border-bottom: 1px solid var(--odoo-border) !important;
   color: var(--odoo-ink) !important;
-  font-size: 12px !important;
   vertical-align: middle;
 }
 
@@ -876,7 +867,7 @@ main#main-content:has(.finance-invoice-detail) {
 
 .sales-pilot.sales-doc .sp-delivery-rail-title {
   color: var(--odoo-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 900;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1184,7 +1175,7 @@ main#main-content:has(.finance-invoice-detail) {
     min-width: 118px !important;
     flex: 0 0 auto;
     padding-inline: 20px !important;
-    font-size: 10px !important;
+    font-size: var(--fs-micro) !important;
   }
 
   .sales-pilot.sales-doc .sales-doc-smart-row {
@@ -1215,7 +1206,7 @@ main#main-content:has(.finance-invoice-detail) {
   .finance-invoice-detail .invoice-detail__workflow-step {
     min-width: 112px;
     flex: 0 0 auto;
-    font-size: 10px;
+    font-size: var(--fs-micro);
   }
 
   .finance-invoice-detail .invoice-detail__smart-row {
@@ -1322,7 +1313,7 @@ main#main-content:has(.finance-invoice-detail) {
   .finance-invoice-detail .invoice-detail__table td::before {
     content: attr(data-col);
     color: var(--odoo-muted);
-    font-size: 10px;
+    font-size: var(--fs-micro);
     font-weight: 900;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -2260,15 +2251,11 @@ main#main-content:has(.finance-invoice-detail) {
 
 .sales-pilot.sales-doc .sp-table thead th,
 .finance-invoice-detail .invoice-detail__table thead th {
-  height: 40px !important;
-  padding: 9px 12px !important;
   background: #f7fafc !important;
 }
 
 .sales-pilot.sales-doc .sp-table tbody td,
 .finance-invoice-detail .invoice-detail__table tbody td {
-  min-height: 46px !important;
-  padding: 11px 12px !important;
 }
 
 .sales-pilot.sales-doc .sp-line-actions {
@@ -2392,7 +2379,7 @@ main#main-content:has(.finance-invoice-detail) {
 .sales-proforma-preview__source dt,
 .sales-proforma-preview__payment h3 {
   color: var(--doc-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 900;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -2432,7 +2419,7 @@ main#main-content:has(.finance-invoice-detail) {
 .sales-proforma-preview__lines th {
   background: var(--doc-soft);
   color: var(--doc-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
 }
 
@@ -2969,7 +2956,7 @@ main#main-content:has(.finance-invoice-detail) {
 
   .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td::before {
     color: var(--odoo-muted);
-    font-size: 10px;
+    font-size: var(--fs-micro);
     font-weight: 900;
     letter-spacing: 0.05em;
     text-transform: uppercase;

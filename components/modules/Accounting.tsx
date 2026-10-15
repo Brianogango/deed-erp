@@ -1658,7 +1658,7 @@ function AccountingContent() {
                 tableId={`finance-${tab}-list-v4`}
                 columns={([
                   {
-                    key: 'number', label: 'Number', priority: 1 as const, width: '118px',
+                    key: 'number', label: 'Number', priority: 1 as const, width: '118px', minWidth: 104,
                     render: (i: Invoice) => <span className="text-xs font-bold text-primary-600 erp-truncate" title={displayDocRef(i.ref)}>{displayDocRef(i.ref)}</span>,
                     accessor: (i: Invoice) => displayDocRef(i.ref),
                   },
@@ -1668,7 +1668,7 @@ function AccountingContent() {
                     accessor: (i: Invoice) => i.partnerName,
                   },
                   {
-                    key: 'document_date', label: tab === 'invoices' ? 'Invoice Date' : 'Bill Date', priority: 1 as const, width: '108px',
+                    key: 'document_date', label: tab === 'invoices' ? 'Invoice Date' : 'Bill Date', priority: 1 as const, width: '108px', minWidth: 88,
                     render: (i: Invoice) => <span className="text-xs text-[var(--text-3)] tabular-nums">{fmtDate(i.date)}</span>,
                     exportValue: (i: Invoice) => i.date,
                   },
@@ -1678,7 +1678,7 @@ function AccountingContent() {
                     exportValue: (i: Invoice) => i.postedAt?.slice(0, 10) || '',
                   },
                   {
-                    key: 'due', label: 'Due Date', priority: 2 as const, width: '104px',
+                    key: 'due', label: 'Due Date', priority: 3 as const, width: '104px', minWidth: 88,
                     render: (i: Invoice) => <span className="text-xs text-[var(--text-3)] tabular-nums">{fmtDate(i.dueDate)}</span>,
                     exportValue: (i: Invoice) => i.dueDate ?? '',
                   },
@@ -1716,7 +1716,7 @@ function AccountingContent() {
                     footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + invoice.taxTotal, 0))}</span>,
                   },
                   {
-                    key: 'total', label: 'Total', priority: 1 as const, width: '112px', align: 'right' as const,
+                    key: 'total', label: 'Total', priority: 1 as const, width: '112px', minWidth: 100, align: 'right' as const,
                     render: (i: Invoice) => <span className="text-xs font-bold text-[var(--text-1)] tabular-nums">{fmtKes(i.total)}</span>,
                     exportValue: (i: Invoice) => i.total,
                     footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + invoice.total, 0))}</span>,
@@ -1727,7 +1727,7 @@ function AccountingContent() {
                     exportValue: (i: Invoice) => (i.currencyCode || companySettings.currency || 'KES') + ' ' + i.total,
                   },
                   {
-                    key: 'balance', label: 'Amount Due', priority: 1 as const, width: '112px', align: 'right' as const,
+                    key: 'balance', label: 'Amount Due', priority: 1 as const, width: '112px', minWidth: 100, align: 'right' as const,
                     render: (i: Invoice) => {
                       const balance = Math.max(0, i.total - i.amountPaid)
                       return <span className={'text-xs font-bold tabular-nums ' + (balance > 0 ? 'text-red-500' : 'text-emerald-600')}>{balance > 0 ? fmtKes(balance) : 'Settled'}</span>
@@ -1736,14 +1736,14 @@ function AccountingContent() {
                     footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + Math.max(0, invoice.total - invoice.amountPaid), 0))}</span>,
                   },
                   {
-                    key: 'payment_status', label: 'Payment Status', priority: 1 as const, width: '132px',
+                    key: 'payment_status', label: 'Payment Status', priority: 1 as const, width: '150px',
                     render: (i: Invoice) => {
                       const label = financeListPaymentStatusLabel(i)
                       if (label === 'Draft') return <Badge status="pending" label={label} />
                       if (label === 'Cancelled') return <Badge status="cancelled" label={label} />
                       const paymentState = invoicePaymentStatus(i)
                       return (
-                        <span className="inline-flex items-center gap-1 flex-wrap">
+                        <span className="inline-flex items-center gap-1 flex-nowrap">
                           <Badge status={paymentState === 'paid' ? 'active' : paymentState === 'blocked' || paymentState === 'reversed' ? 'cancelled' : 'pending'} label={label} />
                           {isInvoiceOverdue(i) && <Badge status="cancelled" label="Overdue" />}
                         </span>
@@ -1769,7 +1769,6 @@ function AccountingContent() {
                   'balance',
                   'payment_status',
                 ]}
-                minTableWidth={960}
                 rows={filteredInvoices}
                 rowKey={i => i.id}
                 searchValue={invSearch}
@@ -2879,7 +2878,7 @@ function AccountingContent() {
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
                   <div className="dt-scroll">
-                    <table data-no-responsive className="w-full text-left border-collapse">
+                    <table data-no-responsive className="erp-table">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>

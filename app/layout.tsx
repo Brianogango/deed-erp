@@ -39,7 +39,15 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#20164d',
+  // Paint edge to edge; env(safe-area-inset-*) then pads chrome away from the notch / home indicator.
+  viewportFit: 'cover',
+  // The software keyboard resizes the layout viewport (Android), as it does on iOS.
+  interactiveWidget: 'resizes-content',
+  // Matches the colour at the very top of the screen (the topbar), per colour scheme.
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0B1220' },
+  ],
 }
 
 const htmlClassName = `${robotoFlex.variable} ${openSans.variable} ${dmMono.variable}`

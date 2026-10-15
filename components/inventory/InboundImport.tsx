@@ -246,7 +246,7 @@ export default function InboundImport({ onClose }: { onClose: () => void }) {
 
         {lines.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="erp-table">
               <thead className="text-t3">
                 <tr>
                   <th className="py-1.5 pr-3 font-semibold">Product</th>
