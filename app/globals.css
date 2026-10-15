@@ -31544,3 +31544,79 @@ button, [role="button"], [role="tab"] {
   padding-top: max(1rem, env(safe-area-inset-top, 0px));
   padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
 }
+
+/* ── Phone views: module header, toolbars and floating chrome ──
+   Identity gets the full row; actions wrap beneath it as a compact row. */
+@media (max-width: 639px) {
+  :not(.sales-doc) > .mod-header.mod-header.mod-header.mod-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    grid-template-columns: none !important;
+    gap: 10px !important;
+    padding: 12px 14px !important;
+  }
+  :not(.sales-doc) > .mod-header.mod-header .mod-header__identity { width: 100%; flex: 0 0 auto; }
+  :not(.sales-doc) > .mod-header.mod-header .mod-header__identity .badge { display: inline-flex; }
+  :not(.sales-doc) > .mod-header.mod-header.mod-header .section-actions.section-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    grid-template-columns: none !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+  :not(.sales-doc) > .mod-header.mod-header.mod-header .section-actions > * { flex: 1 1 auto !important; min-width: 0; width: auto; }
+  :not(.sales-doc) > .mod-header.mod-header.mod-header .section-actions > .relative { flex: 0 0 auto !important; }
+  :not(.sales-doc) > .mod-header.mod-header.mod-header .section-actions .erp-action-btn { width: auto !important; flex: 1 1 auto !important; justify-content: center; }
+
+  /* Toolbars: the search slot must not use its desktop flex-basis as a height. */
+  .erp-page-toolbar .erp-page-toolbar-search { flex: 0 0 auto; max-width: none; }
+  .erp-page-toolbar-search input[type='checkbox'],
+  .erp-page-toolbar-search input[type='radio'] { min-height: 0; height: 1rem; width: 1rem; }
+
+  .contacts-workspace .contacts-toolbar-row.contacts-toolbar-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+  }
+  .contacts-workspace .contacts-archived-toggle.contacts-archived-toggle { width: auto; }
+  .contacts-workspace .contacts-directory-card .mobile-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .contacts-workspace .contacts-directory-card .mobile-card-list > * + * { margin-top: 0; }
+}
+
+/* The assistant launcher rides above any bottom action dock. */
+@media (max-width: 767px) {
+  body:has(.sales-proto-actions--dock, [data-mobile-actions='true']) .dia-floating-launcher {
+    bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Order action dock: content-sized buttons instead of equal 89px tracks. */
+@media (max-width: 639px) {
+  .sales-pilot.sales-doc .sales-workbench.sales-workbench .sales-proto-actions--dock.sales-proto-actions--dock {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    grid-template-columns: none !important;
+    gap: 6px !important;
+    padding-inline: max(8px, env(safe-area-inset-left, 0px)) max(8px, env(safe-area-inset-right, 0px)) !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench.sales-workbench .sales-proto-actions--dock.sales-proto-actions--dock > * {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    padding-inline: 8px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sales-pilot.sales-doc .sales-workbench.sales-workbench .sales-proto-actions--dock.sales-proto-actions--dock > :is(.sp-btn-primary, .sp-btn-success) {
+    flex: 1.6 1 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench.sales-workbench .sales-proto-actions--dock.sales-proto-actions--dock > :not(.sp-btn) {
+    flex: 0 0 4.25rem !important;
+  }
+}

@@ -519,13 +519,13 @@
   }
 
   /* Mobile cards should read as records, not dashboard tiles. */
-  [class*='mobile-card'] {
+  [class*='mobile-card']:not([class*='__']):not([class*='mobile-card-list']) {
     border-radius: 10px !important;
     padding: 11px !important;
     box-shadow: none !important;
   }
 
-  [class*='mobile-card'] + [class*='mobile-card'] {
+  [class*='mobile-card']:not([class*='__']):not([class*='mobile-card-list']) + [class*='mobile-card']:not([class*='__']):not([class*='mobile-card-list']) {
     margin-top: 8px;
   }
 
