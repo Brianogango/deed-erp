@@ -118,7 +118,7 @@ export function MarginPolicySettings({
           Min / max target profit after overhead (percent of selling price). Spreadsheet source of truth.
         </p>
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
+          <table className="erp-table">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--text-4)]">
                 <th className="py-2 pr-2">Category</th>
@@ -176,7 +176,7 @@ export function MarginPolicySettings({
           Higher buy costs reduce the target profit band (approximate VLOOKUP on cost).
         </p>
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
+          <table className="erp-table">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--text-4)]">
                 <th className="py-2 pr-2">From (KES)</th>

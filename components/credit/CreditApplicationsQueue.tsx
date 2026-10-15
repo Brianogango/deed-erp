@@ -119,7 +119,7 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
         : (
           <div className="mt-4 overflow-x-auto">
             <p className="mb-2 text-xs text-text-3">Customers whose credit is due for review within 30 days. "Legacy" credit was given before applications existed — start an application to collect the documents.</p>
-            <table className="w-full min-w-[640px] text-left text-xs">
+            <table className="erp-table min-w-[640px]">
               <thead className="text-[11px] text-text-3">
                 <tr><th className="py-2 pr-3">Customer</th><th className="py-2 pr-3">Standing</th><th className="py-2 pr-3 text-right">Limit · terms</th><th className="py-2 pr-3">Review due</th><th className="py-2" /></tr>
               </thead>
@@ -147,7 +147,7 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
         <p className="mt-4 text-xs text-text-3">No credit account applications here. Start one from the customer's page (Contacts → customer → Credit).</p>
       ) : (
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-xs">
+          <table className="erp-table min-w-[640px]">
             <thead className="text-[11px] text-text-3">
               <tr>
                 <th className="py-2 pr-3">Ref</th><th className="py-2 pr-3">Customer</th><th className="py-2 pr-3">Status</th>

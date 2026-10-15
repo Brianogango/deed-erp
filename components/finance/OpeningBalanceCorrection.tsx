@@ -111,7 +111,7 @@ export default function OpeningBalanceCorrection({ showToast }: { showToast: (ms
 
       {rows && rows.length > 0 && (
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-left text-[11px]">
+          <table className="erp-table">
             <thead className="text-text-3">
               <tr>
                 <th className="py-1.5 pr-3 font-semibold">Document</th>

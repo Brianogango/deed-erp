@@ -474,7 +474,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
                 </div>
               </div>
               <div className="dt-scroll">
-              <table data-no-responsive className="w-full text-left">
+              <table data-no-responsive className="erp-table">
                 <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
                   <tr>
                     {['Product', 'Qty', 'Unit Price', 'Total'].map(h => (
@@ -681,7 +681,7 @@ function DepositsContent() {
       exportValue: dep => STATUS_CONFIG[dep.status].label,
     },
     {
-      key: 'balance', label: 'Balance', priority: 1, width: '130px',
+      key: 'balance', label: 'Balance', align: 'right' as const, priority: 1, width: '130px',
       render: dep => (
         <div>
           <p className={`text-[12px] font-mono font-black ${dep.balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(dep.balance)}</p>

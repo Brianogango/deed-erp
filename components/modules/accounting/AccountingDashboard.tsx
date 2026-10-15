@@ -497,14 +497,14 @@ export default function AccountingDashboard({ onNavigate }: Props) {
             </div>
             <div className="accounting-dashboard__table-scroll">
               <table className="accounting-dashboard__table">
-                <thead><tr><th>Bank account</th><th>Bank balance</th><th>Book balance</th><th>Variance</th><th>Status</th></tr></thead>
+                <thead><tr><th>Bank account</th><th className="is-num">Bank balance</th><th className="is-num">Book balance</th><th className="is-num">Variance</th><th>Status</th></tr></thead>
                 <tbody>
                   {data.banks.length ? data.banks.slice(0, 6).map(bank => (
                     <tr key={bank.id}>
                       <td><strong>{bank.name}</strong><small>{bank.currency}</small></td>
-                      <td>{bank.bankBalance == null ? '—' : formatKes(bank.bankBalance, true)}</td>
-                      <td>{bank.bookBalance == null ? <span className="accounting-dashboard__shared-gl">Shared GL</span> : formatKes(bank.bookBalance, true)}</td>
-                      <td className={bank.variance && Math.abs(bank.variance) > 1 ? 'is-negative' : ''}>{bank.variance == null ? '—' : formatKes(bank.variance, true)}</td>
+                      <td className="is-num">{bank.bankBalance == null ? '—' : formatKes(bank.bankBalance, true)}</td>
+                      <td className="is-num">{bank.bookBalance == null ? <span className="accounting-dashboard__shared-gl">Shared GL</span> : formatKes(bank.bookBalance, true)}</td>
+                      <td className={`is-num${bank.variance && Math.abs(bank.variance) > 1 ? ' is-negative' : ''}`}>{bank.variance == null ? '—' : formatKes(bank.variance, true)}</td>
                       <td><span className={`accounting-dashboard__status is-${bank.status}`}><i />{bank.status === 'reconciled' ? 'Reconciled' : bank.status === 'items_pending' ? 'Items pending' : 'No statement'}</span></td>
                     </tr>
                   )) : (
@@ -587,13 +587,13 @@ export default function AccountingDashboard({ onNavigate }: Props) {
             <Panel title="Payroll & Statutory Obligations" subtitle={data.payroll.runReference || 'No posted payroll run'} delay={300}>
               <div className="accounting-dashboard__table-scroll">
                 <table className="accounting-dashboard__table is-compact">
-                  <thead><tr><th>Obligation</th><th>Period</th><th>Amount</th><th>Due date</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Obligation</th><th>Period</th><th className="is-num">Amount</th><th>Due date</th><th>Status</th></tr></thead>
                   <tbody>
                     {data.payroll.obligations.length ? data.payroll.obligations.map(row => (
                       <tr key={row.id}>
                         <td><strong>{row.label}</strong></td>
                         <td>{row.period}</td>
-                        <td>{formatKes(row.amount, true)}</td>
+                        <td className="is-num">{formatKes(row.amount, true)}</td>
                         <td>{formatDate(row.dueDate)}</td>
                         <td>
                           <span className={row.status === 'settled' ? 'accounting-dashboard__status is-reconciled' : 'accounting-dashboard__due'}>
@@ -630,7 +630,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
             <Panel title="Recent Transactions / Audit Trail" subtitle="Latest posted accounting activity" className="accounting-dashboard__recent-panel" delay={420}>
               <div className="accounting-dashboard__table-scroll">
                 <table className="accounting-dashboard__table is-recent">
-                  <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Module</th><th>User</th><th>Amount</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Module</th><th>User</th><th className="is-num">Amount</th><th>Status</th></tr></thead>
                   <tbody>
                     {data.recentTransactions.length ? data.recentTransactions.map(row => (
                       <tr key={row.id}>
@@ -639,7 +639,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                         <td>{row.description}</td>
                         <td>{row.module.replaceAll('_', ' ')}</td>
                         <td>{row.user}</td>
-                        <td>{formatKes(row.amount, true)}</td>
+                        <td className="is-num">{formatKes(row.amount, true)}</td>
                         <td><span className="accounting-dashboard__status is-reconciled"><i />Posted</span></td>
                       </tr>
                     )) : <tr><td colSpan={7}><EmptyValue>No posted journals</EmptyValue></td></tr>}

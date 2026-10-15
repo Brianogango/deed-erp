@@ -120,7 +120,7 @@ export default function ConsolidatedBillingModal({
 
         {plan.ok ? (
           <div className="rounded-lg border border-[var(--border)]">
-            <table className="w-full text-[11px]">
+            <table className="erp-table">
               <tbody>
                 {plan.lines.map((line, i) => line.lineType === 'section' ? (
                   <tr key={i} className="bg-[var(--bg-surface)]">

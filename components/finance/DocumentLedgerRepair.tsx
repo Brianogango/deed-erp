@@ -146,7 +146,7 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
       {data && data.extraPayments.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <p className="mb-1 text-xs font-bold text-text-2">{copies} duplicate payment entr{copies === 1 ? 'y' : 'ies'} · {fmtKes(copyTotal)}</p>
-          <table className="w-full text-left text-[11px]">
+          <table className="erp-table">
             <thead className="text-text-3"><tr><th className="py-1 pr-3">Document</th><th className="py-1 pr-3 text-right">Recorded</th><th className="py-1 pr-3 text-right">In ledger</th><th className="py-1">Reversed</th></tr></thead>
             <tbody>
               {data.extraPayments.map(p => (
@@ -164,7 +164,7 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
       {data && data.unbooked.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <p className="mb-1 text-xs font-bold text-text-2">{data.unbooked.length} confirmed document{data.unbooked.length === 1 ? '' : 's'} with no ledger entry · {fmtKes(unbookedTotal)}</p>
-          <table className="w-full text-left text-[11px]">
+          <table className="erp-table">
             <thead className="text-text-3"><tr><th className="py-1 pr-3">Document</th><th className="py-1 pr-3">Date</th><th className="py-1 pr-3 text-right">Total</th><th className="py-1 text-right">Paid</th></tr></thead>
             <tbody>
               {data.unbooked.map(d => (
@@ -195,7 +195,7 @@ export default function DocumentLedgerRepair({ showToast, canApply }: { showToas
                   <span className="text-[11px] text-text-3">Rows without a tick box need a manual decision.</span>
                 </div>
               )}
-              <table className="w-full text-left text-[11px]">
+              <table className="erp-table">
                 <thead className="text-text-3"><tr>{canApply && <th className="py-1 pr-2" />}<th className="py-1 pr-3">Document</th><th className="py-1 pr-3 text-right">Total</th><th className="py-1 pr-3 text-right">Paid (document)</th><th className="py-1 pr-3 text-right">Paid (ledger)</th><th className="py-1">Why</th></tr></thead>
                 <tbody>
                   {data.review.map(r => (

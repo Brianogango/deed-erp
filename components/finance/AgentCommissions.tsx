@@ -316,7 +316,7 @@ export default function AgentCommissions({
       )}
 
       <div className="overflow-x-auto rounded-2xl border border-border-lt bg-card">
-        <table className="w-full text-left text-xs">
+        <table className="erp-table">
           <thead className="text-text-3">
             <tr>
               <th className="px-3 py-2 font-semibold">Agent</th>
@@ -349,7 +349,7 @@ export default function AgentCommissions({
         <div className="space-y-3 rounded-2xl border border-border-lt bg-card p-4">
           <h3 className="text-sm font-extrabold text-text-1">{agentRows.find(a => a.id === agentId)?.name}</h3>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-[11px]">
+            <table className="erp-table">
               <thead className="text-text-3">
                 <tr>
                   <th className="py-1.5 pr-2" />
@@ -440,7 +440,7 @@ export default function AgentCommissions({
           {payouts.length > 0 && (
             <div className="border-t border-border-lt pt-3">
               <h4 className="mb-1 text-xs font-extrabold text-text-1">Payout statements</h4>
-              <table className="w-full text-left text-[11px]">
+              <table className="erp-table">
                 <thead className="text-text-3">
                   <tr>
                     <th className="py-1 pr-3 font-semibold">Payout</th>

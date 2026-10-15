@@ -88,7 +88,7 @@ export function PivotView<T extends Row>({
 
   return (
     <div className={`dt-scroll ${className ?? ''}`}>
-      <table data-no-responsive className="w-full text-[11px] border-collapse">
+      <table data-no-responsive className="erp-table">
         <thead>
           <tr>
             <th className="text-left p-2 border-b border-[var(--border-lt)] text-[var(--text-3)] font-semibold sticky left-0 bg-[var(--bg-surface)]">

@@ -156,21 +156,21 @@ function BulkPreview({ rows, columns }: {
         </div>
       </div>
       <div className="dt-scroll">
-        <table data-no-responsive style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-          <thead><tr style={{ background: 'var(--bg-surface)' }}>
+        <table data-no-responsive className="erp-table">
+          <thead><tr>
             {[...columns, { key: 'status', label: 'Status' }].map(col => (
-              <th key={col.key} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }}>{col.label}</th>
+              <th key={col.key}>{col.label}</th>
             ))}
           </tr></thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid var(--bg-muted)', background: row.error ? '#FFF7F7' : 'transparent' }}>
+              <tr key={i} style={{ background: row.error ? 'var(--danger-bg)' : undefined }}>
                 {columns.map(col => (
-                  <td key={col.key} style={{ padding: '7px 10px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td key={col.key} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {col.render ? col.render(row) : row[col.key] || <span style={{ color: 'var(--text-4)' }}>—</span>}
                   </td>
                 ))}
-                <td style={{ padding: '7px 10px' }}>
+                <td>
                   {row.error
                     ? <span title={row.error} style={{ color: 'var(--danger)', fontSize: 10, fontWeight: 700, cursor: 'help' }}>✕ {row.error}</span>
                     : <span style={{ color: 'var(--success)', fontSize: 10, fontWeight: 700 }}>✓ OK</span>}
@@ -466,23 +466,23 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
           </div>
 
           <div className="dt-scroll" style={{ marginBottom: 16 }}>
-          <table data-no-responsive style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead><tr style={{ background: 'var(--bg-surface)' }}>
+          <table data-no-responsive className="erp-table">
+            <thead><tr>
               {['Product', 'Condition', 'Qty', 'Serials', 'Unit Price', 'Total'].map(h => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                <th key={h}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {bb.lines.map(l => (
-                <tr key={l.id} style={{ borderBottom: '1px solid var(--bg-muted)' }}>
-                  <td style={{ padding: '8px 10px', fontWeight: 600 }}>{l.productName}</td>
-                  <td style={{ padding: '8px 10px' }}>
+                <tr key={l.id} >
+                  <td style={{ fontWeight: 600 }}>{l.productName}</td>
+                  <td>
                     <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: l.condition === 'good' ? 'var(--success-bg)' : l.condition === 'fair' ? '#FEF9C3' : 'var(--danger-bg)', color: l.condition === 'good' ? 'var(--success-text)' : l.condition === 'fair' ? '#854D0E' : '#991B1B' }}>{l.condition}</span>
                   </td>
-                  <td style={{ padding: '8px 10px' }}>{l.qty}</td>
-                  <td style={{ padding: '8px 10px', color: 'var(--text-4)' }}>{l.serialIds.length > 0 ? `${l.serialIds.length} serial(s)` : '—'}</td>
-                  <td style={{ padding: '8px 10px' }}>{fmtKes(l.unitPrice)}</td>
-                  <td style={{ padding: '8px 10px', fontWeight: 700 }}>{fmtKes(l.unitPrice * l.qty)}</td>
+                  <td>{l.qty}</td>
+                  <td style={{ color: 'var(--text-4)' }}>{l.serialIds.length > 0 ? `${l.serialIds.length} serial(s)` : '—'}</td>
+                  <td>{fmtKes(l.unitPrice)}</td>
+                  <td style={{ fontWeight: 700 }}>{fmtKes(l.unitPrice * l.qty)}</td>
                 </tr>
               ))}
             </tbody>
@@ -980,18 +980,18 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
           </div>
 
           <div className="dt-scroll" style={{ marginBottom: 16 }}>
-          <table data-no-responsive style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead><tr style={{ background: 'var(--bg-surface)' }}>
+          <table data-no-responsive className="erp-table">
+            <thead><tr>
               {['Product', 'Qty', 'Serials'].map(h => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                <th key={h}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {don.lines.map(l => (
-                <tr key={l.id} style={{ borderBottom: '1px solid var(--bg-muted)' }}>
-                  <td style={{ padding: '8px 10px', fontWeight: 600 }}>{l.productName}</td>
-                  <td style={{ padding: '8px 10px' }}>{l.qty}</td>
-                  <td style={{ padding: '8px 10px', color: 'var(--text-4)', fontSize: 10 }}>{l.serialIds.length > 0 ? `${l.serialIds.length} serial(s)` : '—'}</td>
+                <tr key={l.id} >
+                  <td style={{ fontWeight: 600 }}>{l.productName}</td>
+                  <td>{l.qty}</td>
+                  <td style={{ color: 'var(--text-4)', fontSize: 10 }}>{l.serialIds.length > 0 ? `${l.serialIds.length} serial(s)` : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -1073,29 +1073,29 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
                   </div>
                 </div>
                 <div className="dt-scroll">
-                  <table data-no-responsive style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <table data-no-responsive className="erp-table">
                     <thead>
-                      <tr style={{ background: 'var(--bg-surface)' }}>
+                      <tr>
                         {['Type', 'Party', 'Location', 'Product', 'Qty', 'Serials', 'Notes', 'Status'].map(h => (
-                          <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+                          <th key={h}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {bulkRows.map((row, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid var(--bg-muted)', background: row.error ? '#FFF7F7' : 'transparent' }}>
-                          <td style={{ padding: '7px 10px' }}>
+                        <tr key={i} style={{ background: row.error ? 'var(--danger-bg)' : undefined }}>
+                          <td>
                             <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: row.type === 'in' ? 'var(--primary-light)' : '#FEF9C3', color: row.type === 'in' ? 'var(--info-text)' : '#854D0E' }}>
                               {row.type === 'in' ? 'In' : 'Out'}
                             </span>
                           </td>
-                          <td style={{ padding: '7px 10px', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.party || <span style={{ color: 'var(--text-4)' }}>—</span>}</td>
-                          <td style={{ padding: '7px 10px', color: 'var(--text-4)' }}>{LOCATIONS[row.location]?.name ?? row.location}</td>
-                          <td style={{ padding: '7px 10px', fontWeight: row.productId ? 600 : 400, color: row.productId ? 'var(--text-1)' : 'var(--danger)' }}>{row.productName || '—'}</td>
-                          <td style={{ padding: '7px 10px' }}>{row.qty}</td>
-                          <td style={{ padding: '7px 10px', color: 'var(--text-4)' }}>{row.serialIds.length ? `${row.serialIds.length}` : '—'}</td>
-                          <td style={{ padding: '7px 10px', color: 'var(--text-4)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
-                          <td style={{ padding: '7px 10px' }}>
+                          <td style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.party || <span style={{ color: 'var(--text-4)' }}>—</span>}</td>
+                          <td style={{ color: 'var(--text-4)' }}>{LOCATIONS[row.location]?.name ?? row.location}</td>
+                          <td style={{ fontWeight: row.productId ? 600 : 400, color: row.productId ? 'var(--text-1)' : 'var(--danger)' }}>{row.productName || '—'}</td>
+                          <td>{row.qty}</td>
+                          <td style={{ color: 'var(--text-4)' }}>{row.serialIds.length ? `${row.serialIds.length}` : '—'}</td>
+                          <td style={{ color: 'var(--text-4)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
+                          <td>
                             {row.error
                               ? <span title={row.error} style={{ color: 'var(--danger)', fontSize: 10, fontWeight: 700, cursor: 'help' }}>✕ {row.error}</span>
                               : <span style={{ color: 'var(--success)', fontSize: 10, fontWeight: 700 }}>✓ OK</span>}

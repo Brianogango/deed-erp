@@ -859,7 +859,7 @@ export default function NotificationOperationsPanel({
               </div>
 
               <div className="hidden overflow-x-auto lg:block">
-                <table className="w-full min-w-[840px] border-collapse text-left">
+                <table className="erp-table min-w-[840px]">
                   <thead className="bg-slate-50/80">
                     <tr>
                       {['Event', 'Module', 'Recipient', 'Channel', 'Status', 'Scheduled / Sent', 'Actions'].map(label => (
@@ -1199,7 +1199,7 @@ export default function NotificationOperationsPanel({
               </div>
 
               <div className="hidden overflow-x-auto lg:block">
-                <table className="w-full min-w-[860px] border-collapse text-left">
+                <table className="erp-table min-w-[860px]">
                   <thead className="bg-slate-50/80">
                     <tr>
                       {['Rule Name', 'Trigger / Event', 'Channel(s)', 'Recipients', 'Escalation', 'Status'].map(label => (
@@ -1322,7 +1322,7 @@ export default function NotificationOperationsPanel({
             ) : (
               <>
                 <div className="hidden overflow-x-auto lg:block">
-                  <table className="w-full min-w-[760px] border-collapse text-left">
+                  <table className="erp-table min-w-[760px]">
                     <thead className="bg-slate-50/80">
                       <tr>
                         {['Event', 'Channel', 'Status', 'Error', 'Updated', 'Actions'].map(label => (

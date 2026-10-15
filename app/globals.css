@@ -78,7 +78,15 @@
     --content-max: 1440px;
     --page-gutter: 16px;
     --page-gutter-lg: 32px;
+    /* ── Master table tokens — the ONE place table geometry is defined ────────
+       Consumed by .table-head/.table-row (grid tables), .data-table / .erp-table
+       (HTML tables) and every module. Do not re-declare heights, padding or
+       header type in module CSS; change these instead. */
     --table-row-height: 48px;
+    --table-head-height: 40px;
+    --table-pad-x: 12px;
+    --table-col-gap: 12px;
+    --table-head-fs: max(11px, var(--fs-label));
     /* Spacing scale — use consistently across module chrome */
     --space-1: 4px;
     --space-2: 8px;
@@ -339,20 +347,12 @@
 }
 
 .contacts-workspace .table-head {
-  min-height: 42px;
-  padding-inline: 14px;
   background: #f8fafc;
   border-color: var(--contacts-border);
   color: #526178;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .contacts-workspace .table-row {
-  min-height: 58px;
-  padding-inline: 14px;
   border-color: #e7ecf2;
 }
 
@@ -857,17 +857,12 @@
 }
 
 .contacts-compact-table th {
-  padding: 8px 10px;
   border-bottom: 1px solid var(--contacts-border);
   color: #64748b;
-  font-size: 10px;
-  font-weight: 700;
   text-align: left;
-  text-transform: uppercase;
 }
 
 .contacts-compact-table td {
-  padding: 9px 10px;
   border-bottom: 1px solid #e9edf2;
   color: #344054;
 }
@@ -1824,59 +1819,17 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   box-shadow: none;
 }
 
-.finance-workspace .table-head {
-  min-height: 2.5rem;
-  padding-inline: 0.9rem;
-  background: var(--finance-soft);
-  color: var(--finance-text-3);
-  font-size: 0.5625rem;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.finance-workspace .table-row {
-  min-height: 3.625rem;
-  padding-inline: 0.9rem;
-  border-bottom: 1px solid var(--finance-border);
-  background: var(--finance-surface);
-}
-
-.finance-workspace .table-row:hover {
-  background: var(--finance-soft);
-}
-
-.finance-workspace .table-row > [role='gridcell'] {
-  padding-block: 0.75rem;
-  min-width: 0;
-  color: var(--finance-text-2);
-}
-
 .finance-workspace .data-table-cell-number,
 .finance-workspace .data-table-cell-partner,
 .finance-workspace .data-table-cell-total,
 .finance-workspace .data-table-cell-balance {
-  color: var(--finance-text);
+  color: var(--text-1);
   font-weight: 650;
 }
 
 .finance-workspace .badge {
   border-radius: 999px;
   box-shadow: none;
-}
-
-.finance-content-card--invoices .data-table-cell-paid,
-.finance-content-card--bills .data-table-cell-paid,
-.finance-content-card--invoices .table-head > :nth-child(7),
-.finance-content-card--bills .table-head > :nth-child(7) {
-  display: none;
-}
-
-.finance-content-card--invoices .table-head,
-.finance-content-card--invoices .table-row,
-.finance-content-card--bills .table-head,
-.finance-content-card--bills .table-row {
-  grid-template-columns: 36px 110px minmax(0, 2fr) 96px 96px 100px 100px 140px !important;
 }
 
 /* Cashbook and reconciliation */
@@ -2147,16 +2100,11 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 }
 
 .finance-invoice-detail .invoice-detail__table th {
-  height: 2.25rem;
-  padding: 0.55rem 0.75rem;
   background: var(--finance-soft);
   color: var(--finance-text-3);
-  font-size: 0.5625rem;
 }
 
 .finance-invoice-detail .invoice-detail__table td {
-  min-height: 3.125rem;
-  padding: 0.75rem;
   vertical-align: middle;
 }
 
@@ -2206,88 +2154,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   .finance-workspace .finance-content-card {
     margin-inline: 1.25rem;
-  }
-
-  .finance-content-card--invoices .responsive-table .table-head,
-  .finance-content-card--bills .responsive-table .table-head {
-    display: none;
-  }
-
-  .finance-content-card--invoices .responsive-table .table-row,
-  .finance-content-card--bills .responsive-table .table-row {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) auto !important;
-    gap: 0.3rem 1rem;
-    min-height: 6.25rem;
-    margin: 0.625rem 0.75rem;
-    padding: 0.75rem;
-    border: 1px solid var(--finance-border);
-    border-radius: var(--finance-radius);
-  }
-
-  .finance-content-card--invoices .responsive-table .table-row > [role='gridcell'],
-  .finance-content-card--bills .responsive-table .table-row > [role='gridcell'] {
-    display: flex;
-    align-items: center;
-    min-height: 0;
-    padding: 0;
-  }
-
-  .finance-content-card--invoices .responsive-table .table-row > [role='gridcell']:first-child,
-  .finance-content-card--bills .responsive-table .table-row > [role='gridcell']:first-child,
-  .finance-content-card--invoices .responsive-table .data-table-cell-paid,
-  .finance-content-card--bills .responsive-table .data-table-cell-paid {
-    display: none;
-  }
-
-  .finance-content-card--invoices .data-table-cell-number,
-  .finance-content-card--bills .data-table-cell-number {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .finance-content-card--invoices .data-table-cell-status,
-  .finance-content-card--bills .data-table-cell-status {
-    grid-column: 2;
-    grid-row: 1;
-    justify-content: flex-end;
-  }
-
-  .finance-content-card--invoices .data-table-cell-partner,
-  .finance-content-card--bills .data-table-cell-partner {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    font-size: 0.8125rem;
-  }
-
-  .finance-content-card--invoices .data-table-cell-date,
-  .finance-content-card--bills .data-table-cell-date,
-  .finance-content-card--invoices .data-table-cell-due,
-  .finance-content-card--bills .data-table-cell-due,
-  .finance-content-card--invoices .data-table-cell-total,
-  .finance-content-card--bills .data-table-cell-total,
-  .finance-content-card--invoices .data-table-cell-balance,
-  .finance-content-card--bills .data-table-cell-balance {
-    grid-row: 3;
-    font-size: 0.6875rem;
-  }
-
-  .finance-content-card--invoices .data-table-cell-date,
-  .finance-content-card--bills .data-table-cell-date,
-  .finance-content-card--invoices .data-table-cell-due,
-  .finance-content-card--bills .data-table-cell-due {
-    display: none !important;
-  }
-
-  .finance-content-card--invoices .data-table-cell-total,
-  .finance-content-card--bills .data-table-cell-total {
-    grid-column: 1;
-  }
-
-  .finance-content-card--invoices .data-table-cell-balance,
-  .finance-content-card--bills .data-table-cell-balance {
-    grid-column: 2;
-    justify-content: flex-end;
   }
 
   .finance-recon-entry-form {
@@ -2874,16 +2740,21 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   /* ── Grid-based table header ─────────────────────────────────────────────── */
   .table-head {
-    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 font-bold flex-shrink-0;
+    @apply sticky top-0 z-[1] grid items-center flex-shrink-0;
     display: grid !important;
+    column-gap: var(--table-col-gap);
+    padding-inline: var(--table-pad-x);
+    padding-block: 0;
+    min-height: var(--table-head-height);
     color: var(--text-3);
     background: var(--table-head-bg);
-    border-bottom: 1px solid var(--border-lt);
-    box-shadow: 0 1px 0 var(--border-lt);
-    letter-spacing: normal;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.3;
     min-width: 100%;
     width: 100%;
-    font-size: var(--fs-label);
+    font-size: var(--table-head-fs);
   }
 
   .table-head > *,
@@ -2974,8 +2845,12 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   /* ── Grid-based table rows ───────────────────────────────────────────────── */
   .table-row {
-    @apply grid items-center gap-3 px-4 py-3 transition-colors duration-100;
+    @apply grid items-center transition-colors duration-100;
     display: grid !important;
+    column-gap: var(--table-col-gap);
+    padding-inline: var(--table-pad-x);
+    padding-block: 0;
+    line-height: 1.4;
     border-bottom: 1px solid var(--border-lt);
     color: var(--text-2);
     background: var(--bg-card);
@@ -3061,7 +2936,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .table-row.row-selected {
     background: rgba(37, 99, 235, 0.05);
     border-left: 3px solid var(--primary); /* impeccable-disable side-tab */
-    padding-left: calc(1rem - 3px);
+    padding-left: calc(var(--table-pad-x) - 3px);
   }
 
   .table-row.row-editing {
@@ -3072,13 +2947,13 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .table-row.row-danger {
     background: rgba(239, 68, 68, 0.04);
     border-left: 3px solid var(--danger); /* impeccable-disable side-tab */
-    padding-left: calc(1rem - 3px);
+    padding-left: calc(var(--table-pad-x) - 3px);
   }
 
   .table-row.row-warning {
     background: rgba(245, 158, 11, 0.04);
     border-left: 3px solid var(--warning); /* impeccable-disable side-tab */
-    padding-left: calc(1rem - 3px);
+    padding-left: calc(var(--table-pad-x) - 3px);
   }
 
   .table-row.row-muted {
@@ -3120,16 +2995,19 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   }
 
   .data-table thead tr {
-    background: var(--bg-surface);
-    border-bottom: 2px solid var(--border-lt);
+    background: var(--table-head-bg);
+    border-bottom: 1px solid var(--border);
   }
 
   .data-table th {
-    @apply px-4 py-3 text-left font-bold whitespace-nowrap;
+    @apply text-left whitespace-nowrap;
+    height: var(--table-head-height);
+    padding: 0 var(--table-pad-x);
     color: var(--text-3);
     background: var(--table-head-bg);
-    letter-spacing: normal;
-    font-size: var(--fs-label);
+    font-weight: 600;
+    letter-spacing: 0;
+    font-size: var(--table-head-fs);
   }
 
   .data-table th.th-right { @apply text-right; }
@@ -3173,12 +3051,12 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
   .data-table tbody tr.row-total {
     font-weight: 700;
     color: var(--text-1);
-    border-top: 2px solid var(--border-lt);
-    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    background: var(--table-head-bg);
   }
 
   .data-table td {
-    @apply px-4 py-3;
+    padding: 6px var(--table-pad-x);
     color: inherit;
     vertical-align: middle;
     overflow-wrap: anywhere;
@@ -4729,13 +4607,14 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     min-height: var(--table-row-height);
   }
 
+  /* Header type is owned by --table-head-* (set on .table-head / th); cells inherit. */
   .table-head > *,
   .data-table thead th {
     white-space: nowrap;
     text-transform: none;
-    letter-spacing: normal;
-    font-weight: 550;
-    font-size: var(--fs-table);
+    letter-spacing: inherit;
+    font-weight: inherit;
+    font-size: inherit;
     color: var(--text-3);
   }
 
@@ -9992,11 +9871,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .invoice-detail__table th {
   text-align: left;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-4);
   background: color-mix(in srgb, var(--navy) 4%, var(--bg-surface));
   border-bottom: 1px solid var(--border-lt);
@@ -10035,7 +9909,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 }
 
 .invoice-detail__table td {
-  padding: 0.7rem 0.65rem;
   border-bottom: 1px solid color-mix(in srgb, var(--border-lt) 85%, transparent);
   color: var(--text-2);
   vertical-align: top;
@@ -12227,12 +12100,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .reconfig-table thead th {
   background: color-mix(in srgb, var(--navy) 6%, var(--table-head-bg, var(--bg-surface)));
   color: var(--navy);
-  font-size: 0.68rem;
-  font-weight: 750;
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
   text-align: left;
-  padding: 0.7rem 0.85rem;
   white-space: nowrap;
 }
 
@@ -12247,7 +12115,6 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .reconfig-table td {
-  padding: 0.75rem 0.85rem;
   vertical-align: middle;
   color: var(--text-2);
 }
@@ -13190,21 +13057,13 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .sales-pilot.sales-doc .sp-list-table th {
-  height: 2.5rem;
-  padding: 0.65rem 0.9rem !important;
   background: #f9fafb;
   color: var(--sp-text-3);
-  font-size: 0.5625rem !important;
-  font-weight: 750;
-  letter-spacing: 0.06em;
 }
 
 .sales-pilot.sales-doc .sp-list-table td {
-  height: 3.625rem;
-  padding: 0.75rem 0.9rem !important;
   vertical-align: middle;
   color: var(--sp-text-2);
-  font-size: 0.75rem !important;
 }
 
 .sales-pilot.sales-doc .sp-list-table tbody tr:hover td {
@@ -13314,20 +13173,12 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .sales-pilot.sales-doc .sp-line-table th {
-  height: 2.25rem;
-  padding: 0.55rem 0.75rem !important;
   background: #f9fafb;
   color: var(--sp-text-3);
-  font-size: 0.5625rem !important;
-  font-weight: 750;
-  letter-spacing: 0.05em;
 }
 
 .sales-pilot.sales-doc .sp-line-table td {
-  min-height: 3.125rem;
-  padding: 0.75rem !important;
   vertical-align: middle;
-  font-size: 0.75rem !important;
 }
 
 .sales-pilot.sales-doc .sp-line-table td[data-col='product'],
@@ -13936,8 +13787,6 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .finance-invoice-detail .invoice-detail__table td {
-  min-height: 0;
-  padding: 0.65rem 0.75rem;
 }
 
 .finance-invoice-detail .invoice-detail__totals {
@@ -14299,16 +14148,12 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .finance-workspace--accounts .finance-subview .table-head {
-  min-height: 2.25rem;
   background: var(--finance-soft);
   color: var(--finance-text-3);
-  font-size: var(--accounts-label-size);
 }
 
 .finance-workspace--accounts .finance-subview .table-row {
-  min-height: 3rem;
   background: var(--finance-surface);
-  font-size: var(--accounts-body-size);
 }
 
 .finance-workspace--accounts .finance-subview .table-row:hover {
@@ -17041,20 +16886,12 @@ button.repair-metric:hover {
 }
 
 .repair-directory-table .table-head {
-  min-height: 42px;
-  padding-inline: 12px;
   border-color: var(--repair-border);
   background: var(--repair-soft);
   color: #526178;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .repair-directory-table .table-row {
-  min-height: 62px;
-  padding-inline: 12px;
   border-color: #e7ecf2;
   border-left-width: 2px !important;
   background: #fff;
@@ -19892,20 +19729,12 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .crm-directory-card .table-head {
-  min-height: 42px;
-  padding-inline: 12px;
   border-color: var(--crm-border);
   background: var(--crm-soft);
   color: #526178;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .crm-directory-card .table-row {
-  min-height: 58px;
-  padding-inline: 12px;
   border-color: #e7ecf2;
 }
 
@@ -21200,22 +21029,13 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .purchase-directory .table-head {
-  min-height: 2.5rem;
-  padding-inline: 0.9rem;
   background: var(--erp-soft);
   color: var(--erp-muted);
-  font-size: 0.56rem;
-  font-weight: 760;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
 }
 
 .purchase-directory .table-row {
-  min-height: 3.65rem;
-  padding-inline: 0.9rem;
   border-bottom-color: var(--erp-line);
   background: #fff;
-  font-size: 0.72rem;
 }
 
 .purchase-directory .table-row:hover {
@@ -22492,24 +22312,16 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .reconfig-page .reconfig-table th {
-  height: 2.45rem;
-  padding: 0.55rem 0.7rem;
   border-bottom: 1px solid var(--flow-border);
   background: #f8fafc;
   color: #526178;
-  font-size: 0.58rem;
-  font-weight: 750;
-  letter-spacing: 0.06em;
   text-align: left;
-  text-transform: uppercase;
 }
 
 .reconfig-page .reconfig-table td {
   min-width: 0;
-  padding: 0.7rem;
   border-bottom: 1px solid #e8edf2;
   color: #26354e;
-  font-size: 0.72rem;
   vertical-align: middle;
   overflow-wrap: anywhere;
 }
@@ -22631,20 +22443,12 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
 .outsource-directory .table-head,
 .aftersales-directory .table-head {
-  min-height: 2.45rem;
-  padding-inline: 0.8rem;
   background: #f8fafc;
   color: #526178;
-  font-size: 0.58rem;
-  font-weight: 750;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .outsource-directory .table-row,
 .aftersales-directory .table-row {
-  min-height: 3.55rem;
-  padding-inline: 0.8rem;
   border-color: #e8edf2;
   background: #fff;
 }
@@ -23008,16 +22812,11 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .tradein-workspace .table-head {
-  min-height: 2.4rem;
   background: #f8fafc;
   color: #526178;
-  font-size: 0.58rem;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .tradein-workspace .table-row {
-  min-height: 3.5rem;
   border-color: #e8edf2;
 }
 
@@ -24987,22 +24786,14 @@ body:has(.crm-workspace) [role="dialog"] > div {
 .hr-workspace .table-head,
 .delivery-workspace .table-head,
 .expenses-workspace .table-head {
-  min-height: 2.65rem;
-  padding-inline: 1rem;
   border-color: var(--work-border);
   background: #f8fafc;
   color: #526079;
-  font-size: .625rem;
-  font-weight: 750;
-  letter-spacing: .055em;
-  text-transform: uppercase;
 }
 
 .hr-workspace .table-row,
 .delivery-workspace .table-row,
 .expenses-workspace .table-row {
-  min-height: 3.7rem;
-  padding-inline: 1rem;
   border-color: #e8ecf1;
   background: #fff;
 }
@@ -28649,26 +28440,19 @@ body:has(.crm-workspace) [role="dialog"] > div {
   border-collapse: collapse;
   table-layout: auto;
   color: var(--dash-text);
-  font-size: 0.55rem;
 }
 
 .accounting-dashboard__table th {
   border-top: 1px solid var(--dash-border);
   border-bottom: 1px solid var(--dash-border);
   background: var(--dash-soft);
-  padding: 0.42rem 0.65rem;
   color: var(--dash-muted);
-  font-size: 0.48rem;
-  font-weight: 760;
-  letter-spacing: 0.025em;
   text-align: left;
-  text-transform: none;
   white-space: nowrap;
 }
 
 .accounting-dashboard__table td {
   border-bottom: 1px solid color-mix(in srgb, var(--dash-border) 70%, transparent);
-  padding: 0.48rem 0.65rem;
   vertical-align: middle;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -28687,7 +28471,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   display: block;
   margin-top: 0.08rem;
   color: var(--dash-muted);
-  font-size: 0.47rem;
+  font-size: 11px;
 }
 
 .accounting-dashboard__table .is-ref {
@@ -28700,8 +28484,8 @@ body:has(.crm-workspace) [role="dialog"] > div {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.5rem;
-  font-weight: 720;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -29369,11 +29153,9 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
   .accounting-dashboard__table {
     min-width: 36rem;
-    font-size: 0.62rem;
   }
 
   .accounting-dashboard__table th {
-    font-size: 0.54rem;
   }
 
   .accounting-dashboard__table td {
@@ -29514,11 +29296,9 @@ body:has(.crm-workspace) [role="dialog"] > div {
   }
 
   .accounting-dashboard__table {
-    font-size: 0.7rem;
   }
 
   .accounting-dashboard__table th {
-    font-size: 0.61rem;
   }
 
   .accounting-dashboard__table td small,
@@ -29526,7 +29306,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .accounting-dashboard__due,
   .accounting-dashboard__muted-pill,
   .accounting-dashboard__shared-gl {
-    font-size: 0.61rem;
+    font-size: 11px;
   }
 }
 
@@ -30540,7 +30320,6 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td {
     min-width: 0 !important;
     max-width: none !important;
-    padding-inline: clamp(0.35rem, 0.65vw, 0.7rem) !important;
     overflow: hidden;
     text-overflow: ellipsis;
   }

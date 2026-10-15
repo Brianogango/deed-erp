@@ -122,7 +122,7 @@ export function MarginCalculatorTool({
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
+              <table className="erp-table">
                 <thead>
                   <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--text-4)]">
                     <th className="py-1.5 pr-2"> </th>

@@ -3725,7 +3725,7 @@ function SalesContent() {
           <Modal title={`Compare ${a.ref} → ${b.ref}`} onClose={() => setCompareVersions(null)} width={640}>
             <div className="flex flex-col gap-3">
               <div className="overflow-x-auto sales-version-compare-wrap">
-                <table className="w-full text-xs sales-version-compare-table">
+                <table className="erp-table sales-version-compare-table">
                   <thead>
                     <tr className="text-[10px] uppercase tracking-wider text-[var(--text-4)] text-left">
                       <th className="pb-2">Product</th>

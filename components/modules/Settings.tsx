@@ -768,7 +768,7 @@ export default function Settings() {
                   { key: 'bank', label: 'Bank', priority: 2, width: '1.3fr', render: a => <span className="text-[11px] text-gray-500">{a.bankName}</span>, exportValue: a => a.bankName },
                   { key: 'accountNo', label: 'Account no', priority: 2, width: '1.1fr', render: a => <span className="font-mono text-[11px] text-gray-500">{a.accountNo}</span>, exportValue: a => a.accountNo },
                   { key: 'currency', label: 'Currency', priority: 3, width: '0.5fr', render: a => <span className="text-[11px] text-gray-500">{a.currency}</span>, exportValue: a => a.currency },
-                  { key: 'balance', label: 'Opening bal', priority: 1, width: '1fr', render: a => <span className="font-mono text-[12px] font-semibold text-gray-900">{fmtKes(a.openingBalance)}</span>, exportValue: a => a.openingBalance },
+                  { key: 'balance', label: 'Opening bal', align: 'right' as const, priority: 1, width: '1fr', render: a => <span className="font-mono text-[12px] font-semibold text-gray-900">{fmtKes(a.openingBalance)}</span>, exportValue: a => a.openingBalance },
                   { key: 'status', label: 'Status', priority: 1, width: '0.6fr', render: a => <Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} />, accessor: a => a.active ? 'Active' : 'Inactive', exportValue: a => a.active ? 'Active' : 'Inactive' },
                 ] as ColumnDef<typeof bankAccounts[number]>[]}
                 rows={bankAccounts}
@@ -1304,11 +1304,11 @@ export default function Settings() {
                   columns={[
                     { key: 'date', label: 'Date', priority: 1, width: '1fr', render: s => <span className="font-semibold text-t1">{fmtDate(s.date)}</span>, exportValue: s => s.date },
                     { key: 'orders', label: 'Orders', priority: 1, width: '0.7fr', render: s => <span className="text-gray-500">{s.count}</span>, exportValue: s => s.count },
-                    { key: 'cash', label: 'Cash (KES)', priority: 2, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.cash)}</span>, exportValue: s => s.cash },
-                    { key: 'mpesa', label: 'M-Pesa (KES)', priority: 2, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.mpesa)}</span>, exportValue: s => s.mpesa },
-                    { key: 'bank', label: 'Bank (KES)', priority: 3, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.bank)}</span>, exportValue: s => s.bank },
-                    { key: 'credit', label: 'Client credit', priority: 3, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.credit)}</span>, exportValue: s => s.credit },
-                    { key: 'total', label: 'Total revenue', priority: 1, width: '1.2fr', render: s => <span className="font-mono font-bold text-emerald-600">{fmtKes(s.total)}</span>, exportValue: s => s.total },
+                    { key: 'cash', label: 'Cash (KES)', align: 'right' as const, priority: 2, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.cash)}</span>, exportValue: s => s.cash },
+                    { key: 'mpesa', label: 'M-Pesa (KES)', align: 'right' as const, priority: 2, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.mpesa)}</span>, exportValue: s => s.mpesa },
+                    { key: 'bank', label: 'Bank (KES)', align: 'right' as const, priority: 3, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.bank)}</span>, exportValue: s => s.bank },
+                    { key: 'credit', label: 'Client credit', align: 'right' as const, priority: 3, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.credit)}</span>, exportValue: s => s.credit },
+                    { key: 'total', label: 'Total revenue', align: 'right' as const, priority: 1, width: '1.2fr', render: s => <span className="font-mono font-bold text-emerald-600">{fmtKes(s.total)}</span>, exportValue: s => s.total },
                   ] as ColumnDef<typeof posDailySummary[number]>[]}
                   rows={posDailySummary}
                   rowKey={s => s.date}

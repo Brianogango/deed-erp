@@ -1502,7 +1502,7 @@ export default function RepairDetailView() {
                     </p>
                   ) : (
                   <div className="dt-scroll">
-                    <table data-no-responsive className="w-full text-left">
+                    <table data-no-responsive className="erp-table">
                       <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
                         <tr>
                           {['Part / Component','Qty','Unit Price','Total'].map(h => (

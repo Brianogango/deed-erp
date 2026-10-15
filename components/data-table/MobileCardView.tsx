@@ -50,8 +50,19 @@ export default function MobileCardView<T>({
     )
   }
 
+  // Default record layout (bespoke `renderCard` wins when supplied):
+  //   title    → first priority-1 column (reference / name)
+  //   status   → first status column, top-right
+  //   amount   → first right-aligned (money) column, top-right
+  //   subtitle → first remaining left-aligned column (counterparty / description)
+  //   meta     → everything else at priority 1, as flat label/value pairs
   const priority1 = columns.filter(c => c.priority === 1)
-  const [titleCol, ...restCols] = priority1
+  const [titleCol, ...others] = priority1
+  const isStatus = (c: ColumnDef<T>) => c.key.toLowerCase().includes('status')
+  const statusCol = others.find(isStatus)
+  const amountCol = others.find(c => c.align === 'right' && c !== statusCol)
+  const subtitleCol = others.find(c => c !== statusCol && c !== amountCol && c.align !== 'right')
+  const metaCols = others.filter(c => c !== statusCol && c !== amountCol && c !== subtitleCol)
 
   return (
     <div className="flex flex-col gap-2.5 p-3 sm:p-4">
@@ -63,7 +74,10 @@ export default function MobileCardView<T>({
           <RecordCard
             key={rowKey(row)}
             title={titleCol ? titleCol.render(row) : rowKey(row)}
-            meta={restCols.map(c => ({ label: c.label, value: c.render(row) }))}
+            subtitle={subtitleCol ? subtitleCol.render(row) : undefined}
+            amount={amountCol ? amountCol.render(row) : undefined}
+            status={statusCol ? statusCol.render(row) : undefined}
+            meta={metaCols.map(c => ({ label: c.label, value: c.render(row) }))}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
             actions={rowActions ? rowActions(row) : undefined}
             accent={cardAccent ? cardAccent(row) : undefined}

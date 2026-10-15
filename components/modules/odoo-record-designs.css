@@ -771,24 +771,15 @@ main#main-content:has(.finance-invoice-detail) {
 
 .sales-pilot.sales-doc .sp-table thead th,
 .finance-invoice-detail .invoice-detail__table thead th {
-  height: 42px !important;
-  padding: 10px 14px !important;
   border-bottom: 1px solid var(--odoo-border) !important;
   background: #f8fafc !important;
   color: #53647a !important;
-  font-size: 10px !important;
-  font-weight: 900 !important;
-  letter-spacing: 0.06em !important;
-  text-transform: uppercase !important;
 }
 
 .sales-pilot.sales-doc .sp-table tbody td,
 .finance-invoice-detail .invoice-detail__table tbody td {
-  min-height: 48px !important;
-  padding: 12px 14px !important;
   border-bottom: 1px solid var(--odoo-border) !important;
   color: var(--odoo-ink) !important;
-  font-size: 12px !important;
   vertical-align: middle;
 }
 
@@ -2260,15 +2251,11 @@ main#main-content:has(.finance-invoice-detail) {
 
 .sales-pilot.sales-doc .sp-table thead th,
 .finance-invoice-detail .invoice-detail__table thead th {
-  height: 40px !important;
-  padding: 9px 12px !important;
   background: #f7fafc !important;
 }
 
 .sales-pilot.sales-doc .sp-table tbody td,
 .finance-invoice-detail .invoice-detail__table tbody td {
-  min-height: 46px !important;
-  padding: 11px 12px !important;
 }
 
 .sales-pilot.sales-doc .sp-line-actions {

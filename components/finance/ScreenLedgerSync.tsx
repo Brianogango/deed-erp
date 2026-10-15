@@ -78,7 +78,7 @@ export default function ScreenLedgerSync({ showToast, canApply }: { showToast: (
       {gaps && gaps.missing.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <p className="mb-1 text-[11px] font-bold text-text-2">Documents</p>
-          <table className="w-full text-left text-[11px]">
+          <table className="erp-table">
             <thead className="text-text-3">
               <tr>
                 <th className="py-1.5 pr-3 font-semibold">Document</th>
@@ -105,7 +105,7 @@ export default function ScreenLedgerSync({ showToast, canApply }: { showToast: (
       {gaps && gaps.payments.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <p className="mb-1 text-[11px] font-bold text-text-2">Payments</p>
-          <table className="w-full text-left text-[11px]">
+          <table className="erp-table">
             <thead className="text-text-3">
               <tr>
                 <th className="py-1.5 pr-3 font-semibold">Document</th>

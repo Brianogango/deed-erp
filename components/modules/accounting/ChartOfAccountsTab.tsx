@@ -295,7 +295,7 @@ export default function ChartOfAccountsTab() {
       exportValue: a => a.type === 'revenue' ? 'Income' : a.type,
     },
     {
-      key: 'balance', label: 'Balance', priority: 1, width: '120px',
+      key: 'balance', label: 'Balance', align: 'right' as const, priority: 1, width: '120px',
       render: a => {
         if (a.dynamicKey === 'net_profit' && currentYearNetProfit == null) {
           return (
