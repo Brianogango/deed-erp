@@ -6918,6 +6918,18 @@ function StoreProvider({
   // buy-back ended up as BBK/0001. The record is saved at once under a
   // temporary number that cannot clash (BBK/2026/L…); the server number then
   // replaces it on the record, its repair and its stock moves.
+  /** A rider weekly-pay number: unique at once, the server's RWP/NNNN as soon as it answers. */
+  const riderPayRef = (): string => {
+    const provisional = allocateDocNumberSync('RWP')
+    queueMicrotask(() => {
+      void storeCtxRef.current?.allocateDocRef('RWP').then(finalRef => {
+        if (!finalRef || finalRef === provisional || finalRef.includes('/L')) return
+        setRiderWeeklyPays(p => p.map(w => (w.ref === provisional ? { ...w, ref: finalRef } : w)))
+      }).catch(() => { /* the temporary number stays; it is unique */ })
+    })
+    return provisional
+  }
+
   /** An outsource job number: unique at once, the server's OUT/NNNN as soon as it answers. */
   const outsourceRef = (): string => {
     const provisional = allocateDocNumberSync('OUT')
@@ -20243,6 +20255,13 @@ const storeCtx: AppState = {
       setDeliveryJobs(prev => prev.map(j => j.id === id ? { ...j, ...p } : j))
     },
     deleteDeliveryJob: (id) => {
+      const job = deliveryJobs.find(j => j.id === id)
+      // A trip in a rider's weekly pay (or delivered and payable) is part of
+      // what the rider is owed: deleting it would leave the pay pointing at
+      // nothing. Cancel or fail it instead.
+      const inPay = riderWeeklyPays.find(p => (p.jobIds ?? []).includes(id))
+      if (inPay) { showToast(`${job?.ref ?? 'This job'} is in rider pay ${inPay.ref} — it cannot be deleted`, 'error'); return }
+      if (job?.status === 'delivered') { showToast(`${job.ref} was delivered — mark it failed or cancelled instead of deleting it`, 'error'); return }
       setDeliveryJobs(prev => prev.filter(j => j.id !== id))
       showToast('Delivery job deleted')
     },
@@ -20304,7 +20323,14 @@ const storeCtx: AppState = {
         storeCtxRef.current!.assignRiderToJob(job.id, opts.riderId, riderFee)
       }
 
-      if (addCharge) {
+      // A posted invoice cannot take another line (the server refuses: posted
+      // invoices are immutable), so its delivery charge is billed on a new
+      // draft invoice for the same customer. Writing the line onto the posted
+      // invoice used to show on screen, be refused by the server, and — when
+      // the status read exactly 'posted' — still book the charge to the
+      // ledger, so accounts and the invoice disagreed.
+      const invoicePosted = invoiceDocState(inv.status) === 'posted'
+      if (addCharge && !invoicePosted) {
         const vatRate = Number(companySettings.vatRate) || 0
         const chargeLine = buildDeliveryChargeInvoiceLine({
           id: uid(),
@@ -20312,10 +20338,6 @@ const storeCtx: AppState = {
           taxRate: vatRate,
         })
         const { lines, subtotal, taxTotal, total } = appendDeliveryChargeToInvoice(inv, chargeLine)
-        const deltaTax = Math.round(deliveryFee * vatRate / 100)
-        const deltaTotal = deliveryFee + deltaTax
-
-        // Always write the delivery line onto the invoice (including posted docs).
         setInvoices(prev => {
           const next = prev.map(i => i.id !== inv.id ? i : {
             ...i,
@@ -20337,41 +20359,27 @@ const storeCtx: AppState = {
           }
           return next
         })
-
-        // Keep GL in sync for already-posted invoices (original JRN/ref stays; add DEL adj).
-        if (inv.status === 'posted' && deltaTotal > 0) {
-          const chartAccounts = accountRef.current.map(a => ({ code: a.code, name: a.name }))
-          const saleLabel = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, chartAccounts)
-          const adjLines = [
-            accountLine('1800 - Accounts Receivable', `AR delivery: ${inv.partnerName}`, deltaTotal, 0),
-            accountLine(saleLabel, `Delivery charge: ${inv.ref}`, 0, deliveryFee),
-            ...(deltaTax > 0
-              ? [accountLine('3301 - Output VAT Payable', `VAT delivery on ${inv.ref}`, 0, deltaTax)]
-              : []),
-          ]
-          const adj: JournalEntry = {
-            id: uid(),
-            ref: `JRN/DEL/${inv.ref}`,
-            date: now(),
-            source: 'invoice',
-            description: `Delivery charge on ${inv.ref} — ${inv.partnerName}`,
-            status: 'posted',
-            invoiceId: inv.id,
-            lines: adjLines,
-            totalDebit: deltaTotal,
-            totalCredit: deltaTotal,
-          }
-          setJournalEntries(p => (p.some(j => j.ref === adj.ref) ? p : [adj, ...p]))
-          // The invoice is already posted, so the PUT cannot post this
-          // adjustment — only the blob mirror ever carried it.
-          postSystemJournal('invoice_adjustment', adj, message => showToast(message, 'error'))
-          addAuditLog('post_invoice', inv.ref, `Delivery charge ${deltaTotal} posted to journal ${adj.ref}`)
-        }
       } else {
         storeCtxRef.current!.updateInvoice(inv.id, {
           deliveryAddress: address,
           deliveryJobId: job.id,
         })
+        if (addCharge) {
+          const vatRate = Number(companySettings.vatRate) || 0
+          const chargeInvoice = storeCtxRef.current!.createManualInvoice(
+            'customer_invoice',
+            inv.partnerId,
+            inv.partnerName,
+            inv.dueDate || addDays(now(), 7),
+            [{ desc: `Delivery charge — ${inv.ref} (${job.ref})`, qty: '1', price: String(deliveryFee), tax: String(vatRate) }],
+            vatRate,
+            `Delivery charge for ${inv.ref}, delivery job ${job.ref}. ${inv.ref} was already posted, so the charge is billed here.`,
+          )
+          if (chargeInvoice) {
+            storeCtxRef.current!.updateDeliveryJob(job.id, { notes: `${job.notes ?? ''}\nDelivery charge billed on ${chargeInvoice.ref} (draft — Finance confirms it)`.trim() })
+            showToast(`${inv.ref} is already posted — delivery charge put on a new draft invoice for Finance to confirm`, 'info')
+          }
+        }
       }
 
       addAuditLog('schedule_invoice_delivery', inv.ref, `Created ${job.ref} (rider fee ${riderFee}${deliveryFee > 0 ? `, customer charge ${deliveryFee}` : ''})`)
@@ -20440,7 +20448,10 @@ const storeCtx: AppState = {
       const start = new Date(weekStart)
       const end   = new Date(start); end.setDate(end.getDate() + 6)
       const weekEnd = end.toISOString().slice(0, 10)
+      // A trip already counted in another weekly pay is never counted again.
+      const alreadyPaid = new Set(riderWeeklyPays.flatMap(p => p.jobIds ?? []))
       const weekJobs = deliveryJobs.filter(j =>
+        !alreadyPaid.has(j.id) &&
         j.riderId === riderId &&
         j.status === 'delivered' &&
         j.deliveredAt &&
@@ -20453,7 +20464,7 @@ const storeCtx: AppState = {
       if (existing) { showToast('Weekly pay already generated for this period', 'info'); return null }
       const total = weekJobs.reduce((s, j) => s + j.riderFee, 0)
       const pay: RiderWeeklyPay = {
-        id: uid(), ref: seq('RWP', 'rwp'), riderId, riderName: rider.name,
+        id: uid(), ref: riderPayRef(), riderId, riderName: rider.name,
         weekStart, weekEnd, jobIds: weekJobs.map(j => j.id),
         deliveryCount: weekJobs.length, ratePerDelivery: rider.ratePerDelivery,
         totalAmount: total, status: 'pending', notes: '', createdAt: new Date().toISOString(),
@@ -20467,24 +20478,29 @@ const storeCtx: AppState = {
       const pay = riderWeeklyPays.find(p => p.id === id)
       if (!pay) return
 
-      // Create accounting vendor_bill for this rider payment
-      const billRef = seq('BILL', 'inv')
+      // The rider's bill is a draft like every other bill: Finance confirms it
+      // (official BILL number, journal) and pays it. It used to take a number
+      // from this browser's own counter and claim to be posted.
+      const riderContactId = contacts.find(c => c.name.trim().toLowerCase() === pay.riderName.trim().toLowerCase())?.id ?? pay.riderId
       const bill: Invoice = {
-        id: uid(), ref: billRef, type: 'vendor_bill', status: 'posted',
-        partnerId: pay.riderId, partnerName: pay.riderName,
+        id: uid(), ref: draftInvoiceRef('vendor_bill'), type: 'vendor_bill', status: 'draft',
+        partnerId: riderContactId, partnerName: pay.riderName,
         date: now(), dueDate: now(),
         lines: [{
           id: uid(),
-          description: `Rider delivery fees — week of ${pay.weekStart} (${pay.deliveryCount} deliveries × KES ${pay.ratePerDelivery.toLocaleString()})`,
-          qty: pay.deliveryCount,
-          unitPrice: pay.ratePerDelivery,
+          // One line for the week's actual fees: trips can carry their own fee,
+          // so count × standard rate need not equal the total.
+          description: `Rider delivery fees — week of ${pay.weekStart} (${pay.deliveryCount} deliver${pay.deliveryCount === 1 ? 'y' : 'ies'})`,
+          qty: 1,
+          unitPrice: pay.totalAmount,
           taxRate: 0,
           subtotal: pay.totalAmount,
         }],
         subtotal: pay.totalAmount, taxTotal: 0, total: pay.totalAmount,
         amountPaid: 0,
-        notes: `Auto-generated from weekly pay ${pay.ref} · Confirmed by ${user?.name ?? 'staff'}`,
+        notes: `From rider weekly pay ${pay.ref} · raised by ${user?.name ?? 'staff'}`,
       }
+      invRef.current = [bill, ...invRef.current]
       setInvoices(p => [bill, ...p])
       void saveInvoiceToServer(bill, msg => showToast(msg, 'error'))
       addAuditLog('create_bill', bill.ref, `Rider bill ${pay.ref} confirmed — vendor bill ${bill.ref} created`)
@@ -20494,7 +20510,7 @@ const storeCtx: AppState = {
           ? { ...p, status: 'paid', paidDate: now(), paidByUserId: user?.id, paidByName: user?.name, invoiceId: bill.id, invoiceRef: bill.ref }
           : p
       ))
-      showToast(`Bill ${bill.ref} raised in accounting — mark paid when settled`)
+      showToast(`Draft bill raised for ${pay.riderName} — Finance confirms and pays it`)
     },
 
     // ── Delivery & Fulfillment ───────────────────────────────────────────────

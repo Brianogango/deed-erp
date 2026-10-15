@@ -28,6 +28,7 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   exchange: 'EXC',
   outsource: 'OUT',
   outsource_payment: 'OPAY',
+  rider_pay: 'RWP',
 }
 
 beforeEach(() => {
@@ -59,6 +60,7 @@ describe('prefixToKind()', () => {
     expect(prefixToKind('EXC')).toBe('exchange')
     expect(prefixToKind('OUT')).toBe('outsource')
     expect(prefixToKind('OPAY')).toBe('outsource_payment')
+    expect(prefixToKind('RWP')).toBe('rider_pay')
   })
 })
 

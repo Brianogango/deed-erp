@@ -37,6 +37,8 @@ export type DocKind =
   /** Outsource jobs (OUT/NNNN) and vendor payments (OPAY/NNNN) — yearless, as they always were. */
   | 'outsource'
   | 'outsource_payment'
+  /** Rider weekly pay (RWP/NNNN), yearless. */
+  | 'rider_pay'
 
 // Quotations exist both as CRM quotes and as quotation-state sale orders;
 // they share the QUO prefix and therefore one sequence.
@@ -59,6 +61,7 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   exchange: 'EXC',
   outsource: 'OUT',
   outsource_payment: 'OPAY',
+  rider_pay: 'RWP',
 }
 
 const PREFIX = DOC_PREFIX
@@ -223,6 +226,8 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
         return maxYearlessSeq('deed_outsourceJobs', prefix)
       case 'outsource_payment':
         return maxYearlessSeq('deed_outsourcePayments', prefix)
+      case 'rider_pay':
+        return maxYearlessSeq('deed_riderWeeklyPays', prefix)
       default:
         return 0
     }
@@ -240,7 +245,7 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   await ensureCounterTable()
   const now = new Date().toISOString()
   const year = new Date().getFullYear()
-  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : kind === 'outsource' ? 'out_seq' : kind === 'outsource_payment' ? 'opay_seq' : `${PREFIX[kind]}_${year}`
+  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : kind === 'outsource' ? 'out_seq' : kind === 'outsource_payment' ? 'opay_seq' : kind === 'rider_pay' ? 'rwp_seq' : `${PREFIX[kind]}_${year}`
 
   // Fast path: counter row exists — atomic increment.
   const updated = await sql`
@@ -269,6 +274,6 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   if (kind === 'client') return `CLT-${String(nextValue).padStart(5, '0')}`
   if (kind === 'pos') return `POS/${String(nextValue).padStart(4, '0')}`
   if (kind === 'delivery_job') return `DJB/${String(nextValue).padStart(4, '0')}`
-  if (kind === 'outsource' || kind === 'outsource_payment') return `${PREFIX[kind]}/${String(nextValue).padStart(4, '0')}`
+  if (kind === 'outsource' || kind === 'outsource_payment' || kind === 'rider_pay') return `${PREFIX[kind]}/${String(nextValue).padStart(4, '0')}`
   return `${PREFIX[kind]}/${year}/${String(nextValue).padStart(4, '0')}`
 }

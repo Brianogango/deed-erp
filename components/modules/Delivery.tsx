@@ -146,7 +146,7 @@ function PrintPaySlip({ pay, companySettings, onDone }: { pay: RiderWeeklyPay, c
         <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Period</p>
           <p className="text-sm font-medium">{fmtDate(pay.weekStart)} – {fmtDate(pay.weekEnd)}</p>
-          <p className="text-sm mt-1">Status: <span className="font-bold uppercase">{pay.status}</span></p>
+          <p className="text-sm mt-1">Status: <span className="font-bold uppercase">{pay.status === 'paid' ? `Bill raised${pay.invoiceRef ? ` (${pay.invoiceRef})` : ''}` : 'Pending'}</span></p>
         </div>
       </div>
 
@@ -1214,7 +1214,7 @@ function WeeklyPayTab() {
               </div>
               {existingPay ? (
                 <span className={`badge ${existingPay.status === 'paid' ? 'badge-green' : 'badge-amber'}`}>
-                  {existingPay.status === 'paid' ? '✓ Paid' : 'Pending Payment'}
+                  {existingPay.status === 'paid' ? `✓ Bill raised${existingPay.invoiceRef ? ` · ${existingPay.invoiceRef}` : ''}` : 'Pending — raise the bill'}
                 </span>
               ) : null}
             </div>
@@ -1254,8 +1254,8 @@ function WeeklyPayTab() {
               {existingPay && existingPay.status === 'pending' && canManagePay && (
                 <button className="btn-primary text-xs py-1"
                   style={{ background: 'linear-gradient(135deg, var(--success), var(--success))' }}
-                  onClick={() => setPendingConfirm({ msg: `Confirm payment of ${fmtKes(existingPay.totalAmount)} to ${existingPay.riderName}? An accounting vendor bill will be created automatically.`, action: () => markWeeklyPayPaid(existingPay.id) })}>
-                  Confirm Payment — {fmtKes(existingPay.totalAmount)}
+                  onClick={() => setPendingConfirm({ msg: `Raise a bill of ${fmtKes(existingPay.totalAmount)} for ${existingPay.riderName}? It goes to Finance as a draft — Finance confirms it and pays the rider.`, action: () => markWeeklyPayPaid(existingPay.id) })}>
+                  Raise bill — {fmtKes(existingPay.totalAmount)}
                 </button>
               )}
             </div>
@@ -1304,7 +1304,7 @@ function WeeklyPayTab() {
             key: 'status', label: 'Status', priority: 1, width: '80px',
             render: pay => (
               <span className={`badge ${pay.status === 'paid' ? 'badge-green' : 'badge-amber'}`}>
-                {pay.status === 'paid' ? 'Paid' : 'Pending'}
+                {pay.status === 'paid' ? 'Bill raised' : 'Pending'}
               </span>
             ),
             accessor: pay => pay.status,
