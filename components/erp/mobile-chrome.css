@@ -50,7 +50,7 @@
      into two or three rows and consuming the whole phone viewport. */
   .mod-tabs,
   .module-tabs,
-  [class*='sub-tabs'] {
+  [class*='sub-tabs']:not([class*='__']) {
     display: flex !important;
     flex-wrap: nowrap !important;
     gap: 2px !important;
@@ -64,13 +64,13 @@
 
   .mod-tabs::-webkit-scrollbar,
   .module-tabs::-webkit-scrollbar,
-  [class*='sub-tabs']::-webkit-scrollbar {
+  [class*='sub-tabs']:not([class*='__'])::-webkit-scrollbar {
     display: none;
   }
 
   .mod-tabs > *,
   .module-tabs > *,
-  [class*='sub-tabs'] > * {
+  [class*='sub-tabs']:not([class*='__']) > * {
     flex: 0 0 auto !important;
     min-height: 36px !important;
     padding: 7px 10px !important;
@@ -79,8 +79,8 @@
 
   /* Section headings should not become miniature dashboard cards. */
   .panel-header,
-  [class*='panel-header'],
-  [class*='section-header'] {
+  [class*='panel-header']:not([class*='__']),
+  [class*='section-header']:not([class*='__']) {
     min-height: 44px;
     padding: 8px 11px !important;
     gap: 8px !important;
@@ -88,10 +88,10 @@
 
   .panel-header h2,
   .panel-header h3,
-  [class*='panel-header'] h2,
-  [class*='panel-header'] h3,
-  [class*='section-header'] h2,
-  [class*='section-header'] h3 {
+  [class*='panel-header']:not([class*='__']) h2,
+  [class*='panel-header']:not([class*='__']) h3,
+  [class*='section-header']:not([class*='__']) h2,
+  [class*='section-header']:not([class*='__']) h3 {
     font-size: 12px !important;
     line-height: 1.25 !important;
   }
@@ -99,9 +99,9 @@
   /* Summary/stat areas: two columns max; never 4–6 tiny tiles on phone. */
   :is(
     [class*='summary-grid'],
-    [class*='stats-grid'],
-    [class*='metric-grid'],
-    [class*='kpi-grid'],
+    [class*='stats-grid']:not([class*='__']),
+    [class*='metric-grid']:not([class*='__']),
+    [class*='kpi-grid']:not([class*='__']),
     [class*='metrics']
   ) {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -110,9 +110,9 @@
 
   :is(
     [class*='summary-grid'],
-    [class*='stats-grid'],
-    [class*='metric-grid'],
-    [class*='kpi-grid'],
+    [class*='stats-grid']:not([class*='__']),
+    [class*='metric-grid']:not([class*='__']),
+    [class*='kpi-grid']:not([class*='__']),
     [class*='metrics']
   ) > * {
     min-width: 0;
@@ -160,9 +160,9 @@
 
   :is(
     [class*='summary-grid'],
-    [class*='stats-grid'],
-    [class*='metric-grid'],
-    [class*='kpi-grid'],
+    [class*='stats-grid']:not([class*='__']),
+    [class*='metric-grid']:not([class*='__']),
+    [class*='kpi-grid']:not([class*='__']),
     [class*='metrics']
   ) {
     grid-template-columns: minmax(0, 1fr) !important;
