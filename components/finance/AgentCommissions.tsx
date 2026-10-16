@@ -41,10 +41,13 @@ export default function AgentCommissions({
   showToast,
   contacts,
   moneyAccounts,
+  limited = false,
 }: {
   showToast: Toast
   contacts: ContactLike[]
   moneyAccounts: MoneyAccount[]
+  /** Admin Officer view: add and see commission bills only — no payouts, settings, new agents or cancelling. */
+  limited?: boolean
 }) {
   const [data, setData] = useState<Overview | null>(null)
   const [busy, setBusy] = useState(false)
@@ -245,12 +248,12 @@ export default function AgentCommissions({
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-primary text-[11px]" disabled={busy} onClick={() => { setShowBill(v => !v); setBill(b => ({ ...b, agentId: b.agentId || agentId })) }}>Add commission bill</button>
-          <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => setShowAdd(v => !v)}>Add agent</button>
+          {!limited && <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => setShowAdd(v => !v)}>Add agent</button>}
           <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => void load()}>{busy ? 'Loading…' : 'Refresh'}</button>
         </div>
       </div>
 
-      {settings && (
+      {settings && !limited && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border-lt bg-card p-3 text-xs">
           <label className="flex items-center gap-2 font-semibold text-text-1">
             <input
@@ -389,7 +392,7 @@ export default function AgentCommissions({
                           <span className="block font-sans text-text-3">
                             Bill {r.id}{r.description ? ` · ${r.description}` : ''}
                             {r.attachment && <> · <a className="text-primary-600 underline" href={`/api/agents/commissions?file=${encodeURIComponent(r.id)}`} target="_blank" rel="noreferrer">{r.attachment.name}</a></>}
-                            {r.status === 'due' && <> · <button type="button" className="text-red-700 underline" disabled={busy} onClick={() => void cancelBill(r)}>Cancel bill</button></>}
+                            {!limited && r.status === 'due' && <> · <button type="button" className="text-red-700 underline" disabled={busy} onClick={() => void cancelBill(r)}>Cancel bill</button></>}
                           </span>
                         )}
                       </td>
@@ -408,7 +411,7 @@ export default function AgentCommissions({
             </table>
           </div>
 
-          {lines.some(r => r.status === 'due') && (
+          {!limited && lines.some(r => r.status === 'due') && (
             <div className="grid gap-2 border-t border-border-lt pt-3 sm:grid-cols-5">
               <select className="form-input text-xs" aria-label="Payment method" value={method} onChange={e => setMethod(e.target.value as AgentPayout['method'])}>
                 <option value="mpesa">M-Pesa</option>

@@ -683,6 +683,8 @@ function AccountingContent() {
   const canViewJournals = !!currentUser && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const canManageFinance = !!currentUser && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const canManageFullFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  // The Admin Officer adds agent commission bills (no payouts, settings or cancelling).
+  const canAddAgentCommission = canManageFullFinance || currentUser?.role === 'admin_officer'
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
   // Operating-expense accounts (6xxx) a bill line can be booked to.
@@ -1556,7 +1558,7 @@ function AccountingContent() {
           {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && (
             <div className="px-3 pb-2">
               <TabBar
-                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => t.id !== 'agent_commissions' || canManageFullFinance)}
+                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => t.id !== 'agent_commissions' || canAddAgentCommission)}
                 active={tab}
                 onChange={id => setTab(id as MainTab)}
                 className="border-0 bg-transparent px-0 py-0"
@@ -1853,8 +1855,9 @@ function AccountingContent() {
             <div className="finance-subview finance-subview--credit-applications"><CreditApplicationsQueue role={currentUser?.role} userId={currentUserId} showToast={showToast} /></div>
           ) : tab === 'agent_commissions' ? (
             <div className="finance-subview finance-subview--agent-commissions">
-              {canManageFullFinance ? (
+              {canAddAgentCommission ? (
                 <AgentCommissions
+                  limited={!canManageFullFinance}
                   showToast={showToast}
                   contacts={contacts}
                   moneyAccounts={accounts
@@ -1862,7 +1865,7 @@ function AccountingContent() {
                     .map(a => ({ code: a.code, name: a.name }))}
                 />
               ) : (
-                <p className="p-6 text-xs text-text-3">Agent commissions are handled by the Director and Finance Officer.</p>
+                <p className="p-6 text-xs text-text-3">Agent commissions are handled by the Director, Finance Officer and Admin Officer.</p>
               )}
             </div>
           ) : tab === 'commissions' ? (
