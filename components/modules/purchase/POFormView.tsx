@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
-import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { downloadPoPdf, downloadRfqPdf } from '@/lib/purchase-pdf'
 import Chatter from '@/components/erp/Chatter'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
@@ -859,8 +859,8 @@ export default function POFormView() {
                     <div className="flex justify-between text-xs"><span className="text-t3">Paid</span><span className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(linkedBill.amountPaid)}</span></div>
                     <div className="flex justify-between text-xs font-semibold">
                       <span className="text-t1">Outstanding</span>
-                      <span className="font-mono" style={{ color: linkedBill.total - linkedBill.amountPaid > 0 ? 'var(--danger)' : 'var(--success)' }}>
-                        {fmtKes(linkedBill.total - linkedBill.amountPaid)}
+                      <span className="font-mono" style={{ color: invoiceResidual(linkedBill) > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                        {fmtKes(invoiceResidual(linkedBill))}
                       </span>
                     </div>
                     <StatusBadge

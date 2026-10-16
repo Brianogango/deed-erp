@@ -7252,7 +7252,7 @@ function StoreProvider({
 
   const getVendorOutstanding = (vendorId: string) =>
     invRef.current.filter(i => i.type === 'vendor_bill' && i.partnerId === vendorId)
-      .reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
+      .reduce((sum, inv) => sum + invoiceResidual(inv), 0)
 
   const addMove = (productId: string, productName: string, qty: number, type: StockMove['type'], reason: string, docRef: string, fromLoc?: LocationId, toLoc?: LocationId, serNums: string[] = []) => {
     const actor = currentUser()

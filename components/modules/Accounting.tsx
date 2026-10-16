@@ -1731,11 +1731,11 @@ function AccountingContent() {
                   {
                     key: 'balance', label: 'Amount Due', priority: 1 as const, width: '112px', minWidth: 100, align: 'right' as const,
                     render: (i: Invoice) => {
-                      const balance = Math.max(0, i.total - i.amountPaid)
+                      const balance = invoiceResidual(i)
                       return <span className={'text-xs font-bold tabular-nums ' + (balance > 0 ? 'text-red-500' : 'text-emerald-600')}>{balance > 0 ? fmtKes(balance) : 'Settled'}</span>
                     },
-                    exportValue: (i: Invoice) => Math.max(0, i.total - i.amountPaid),
-                    footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + Math.max(0, invoice.total - invoice.amountPaid), 0))}</span>,
+                    exportValue: (i: Invoice) => invoiceResidual(i),
+                    footer: (pageRows: Invoice[]) => <span className="text-xs font-bold tabular-nums">{fmtKes(pageRows.reduce((sum, invoice) => sum + invoiceResidual(invoice), 0))}</span>,
                   },
                   {
                     key: 'payment_status', label: 'Payment Status', priority: 1 as const, width: '150px',
@@ -1786,9 +1786,9 @@ function AccountingContent() {
                 emptyMessage={tab === 'invoices' ? 'No invoices found' : 'No bills found'}
                 onRowClick={i => openInvoiceRecord(i.id)}
                 rowLabel={i => `${displayDocRef(i.ref)} ${i.partnerName}`}
-                cardAccent={i => Math.max(0, i.total - i.amountPaid) > 0 ? 'var(--danger)' : 'var(--success)'}
+                cardAccent={i => invoiceResidual(i) > 0 ? 'var(--danger)' : 'var(--success)'}
                 renderCard={i => {
-                  const balance = Math.max(0, i.total - i.amountPaid)
+                  const balance = invoiceResidual(i)
                   const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
                   const badge = invoiceBadge(i)
                   return (
@@ -1810,7 +1810,7 @@ function AccountingContent() {
                 }}
                 bulkActions={({ rows, clear }) => {
                   const payable = rows.filter(b => invoiceDocState(b.status) === 'posted' && b.total > b.amountPaid)
-                  const totalOutstanding = payable.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
+                  const totalOutstanding = payable.reduce((s, b) => s + invoiceResidual(b), 0)
                   const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
                   return (
                     <div className="flex items-center gap-2 flex-wrap">
@@ -2667,7 +2667,7 @@ function AccountingContent() {
         {/* ── BULK PAYMENT MODAL ── */}
         {showBulkPayModal && (() => {
           const selItems = filteredInvoices.filter(b => selectedInvIds.has(b.id))
-          const totalOutstanding = selItems.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
+          const totalOutstanding = selItems.reduce((s, b) => s + invoiceResidual(b), 0)
           const activeBanks = bankAccounts.filter(a => a.active)
           const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
           const bulkPartnerLabel = tab === 'invoices' ? 'Customer' : 'Vendor'
@@ -2684,7 +2684,7 @@ function AccountingContent() {
                       <div key={b.id} className="px-3 py-2 grid grid-cols-3 gap-2 items-center">
                         <span className="text-xs font-bold text-primary-600 font-mono">{b.ref}</span>
                         <span className="text-xs text-[var(--text-2)] truncate">{b.partnerName}</span>
-                        <span className="text-xs font-bold text-red-500 text-right font-mono">{fmtKes(Math.max(0, b.total - b.amountPaid))}</span>
+                        <span className="text-xs font-bold text-red-500 text-right font-mono">{fmtKes(invoiceResidual(b))}</span>
                       </div>
                     ))}
                   </div>
@@ -2734,7 +2734,7 @@ function AccountingContent() {
                         return
                       }
                       selItems.forEach(b => {
-                        const bal = Math.max(0, b.total - b.amountPaid)
+                        const bal = invoiceResidual(b)
                         if (bal > 0) registerPayment(b.id, bal, payMethod, payBankAccountId || undefined, payReference, payDate)
                       })
                       setShowBulkPayModal(false)
