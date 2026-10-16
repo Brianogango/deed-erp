@@ -1,4 +1,5 @@
 'use client'
+import { KilimallSerialCheck } from '@/components/modules/kilimall/SerialCheck'
 import { Suspense, useState, useRef, useEffect } from 'react'
 import {
   useCommerceStore, KilimallOrder, KilimallOrderStatus, KilimallSettlement,
@@ -44,6 +45,7 @@ function KilimallContent() {
     updateKilimallSettlement, reconcileKilimallSettlement, matchKilimallSettlementLine,
     products, serials, setModule, showToast, currentUserId, users,
   } = useCommerceStore()
+  const canCheckSerials = ['director', 'inventory_officer', 'kilimall_officer'].includes(String(users.find(u => u.id === currentUserId)?.role))
 
   // Lands directly on the operational order queue — module analytics moved to
   // the central dashboard; the KPI strip and Reports tab cover the summaries.
@@ -467,7 +469,7 @@ function KilimallContent() {
   // ─────────────────────────────────────────────────────────────────────────────
   // Handlers
   // ─────────────────────────────────────────────────────────────────────────────
-  const handleCreateOrder = () => {
+  const handleCreateOrder = async () => {
     const qty = Number(newOrder.qty)
     const unitPrice = Number(newOrder.unitPrice)
     const missing = [
@@ -485,7 +487,7 @@ function KilimallContent() {
       showToast('Quantity and unit price must be greater than zero', 'error')
       return
     }
-    const created = createKilimallOrder({
+    const created = await createKilimallOrder({
       kilimallRef: newOrder.kilimallRef.trim(),
       orderDate: newOrder.orderDate,
       customerName: newOrder.customerName.trim() || undefined,
@@ -555,7 +557,7 @@ function KilimallContent() {
     reader.readAsBinaryString(file)
   }
 
-  const handleCreateSettlement = () => {
+  const handleCreateSettlement = async () => {
     const missing = [
       !settlForm.weekPeriod.trim() && 'Week period',
       !settlForm.paymentMethod && 'Payment method',
@@ -582,7 +584,7 @@ function KilimallContent() {
         amount: Number(line.amount),
         status: 'unmatched' as const,
       }))
-    const created = createKilimallSettlement({
+    const created = await createKilimallSettlement({
       weekPeriod: settlForm.weekPeriod.trim(),
       weekStart: settlForm.weekStart,
       weekEnd: settlForm.weekEnd,
@@ -707,6 +709,8 @@ function KilimallContent() {
           DISPATCH
       ════════════════════════════════════════════════════════════════════════ */}
       {tab === 'dispatch' && (
+        <>
+        {canCheckSerials && <KilimallSerialCheck showToast={showToast} />}
         <div className={`kilimall-dispatch-grid ${dispatchOrder ? 'has-selection' : ''} grid grid-cols-2 gap-4`}>
           {/* Pending dispatch queue */}
           <div className="card overflow-hidden">
@@ -881,6 +885,7 @@ function KilimallContent() {
             />
           </div>
         </div>
+        </>
       )}
 
       {/* ════════════════════════════════════════════════════════════════════════

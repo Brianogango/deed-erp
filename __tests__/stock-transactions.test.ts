@@ -82,7 +82,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { applyDeliveryStockMutation, applyReceiptStockMutation, applyPosStockMutation, applyVendorReturnStockMutation, reserveStockForSaleOrder, reverseReceiptStockMutation } from '@/lib/inventory/stock-transactions'
+import { reconcileKilimallDispatchSerials, applyDeliveryStockMutation, applyReceiptStockMutation, applyPosStockMutation, applyVendorReturnStockMutation, reserveStockForSaleOrder, reverseReceiptStockMutation } from '@/lib/inventory/stock-transactions'
 
 const PRODUCT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const PRISMA_PRODUCT_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -847,5 +847,43 @@ describe('applyPosStockMutation()', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({ ok: true }))
+  })
+})
+
+
+describe('reconcileKilimallDispatchSerials()', () => {
+  const state = () => ({
+    deed_kilimallDispatches: [
+      { id: 'd1', ref: 'KD/0001', status: 'dispatched', orderRef: 'KO/0001', productId: PRODUCT_ID, productName: 'Phone', serialId: 's1', serialNumber: 'SN-1', dispatchDate: '2026-09-28' },
+      { id: 'd2', ref: 'KD/0002', status: 'dispatched', orderRef: 'KO/0002', productId: PRODUCT_ID, productName: 'Phone', serialId: 's2', serialNumber: 'SN-2' },
+      { id: 'd3', ref: 'KD/0003', status: 'dispatched', orderRef: 'KO/0003', productId: PRODUCT_ID, productName: 'Phone', serialId: 'gone', serialNumber: 'SN-9' },
+    ],
+    deed_serials: [
+      { id: 's1', productId: PRODUCT_ID, serial: 'SN-1', status: 'available', location: 'warehouse' },
+      { id: 's2', productId: PRODUCT_ID, serial: 'SN-2', status: 'sold', location: 'customer' },
+    ],
+    deed_products: [{ id: PRODUCT_ID, name: 'Phone', stockQty: 3, requiresSerial: true, trackingMethod: 'serial' }],
+    deed_stockMoves: [],
+  })
+
+  it('lists dispatched serials that are not sold without changing anything', async () => {
+    mockLoadAppState.mockResolvedValue(state())
+    const result = await reconcileKilimallDispatchSerials({ apply: false })
+    expect(result).toEqual(expect.objectContaining({ ok: true, applied: 0 }))
+    if (!result.ok) throw new Error('unreachable')
+    expect(result.items.map(i => [i.serialNumber, i.action])).toEqual([['SN-1', 'mark_sold'], ['SN-9', 'serial_missing']])
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('marks them sold, takes the unit out of stock and writes a move when applied', async () => {
+    mockLoadAppState.mockResolvedValue(state())
+    const result = await reconcileKilimallDispatchSerials({ apply: true, userId: 'u1' })
+    expect(result).toEqual(expect.objectContaining({ ok: true, applied: 1 }))
+    const payload = mockSaveStoreKeys.mock.calls[0][0]
+    expect(JSON.parse(payload.deed_serials).find((x: { id: string }) => x.id === 's1')).toEqual(expect.objectContaining({ status: 'sold', location: 'customer', soldDate: '2026-09-28' }))
+    expect(JSON.parse(payload.deed_products)[0].stockQty).toBe(2)
+    const moves = JSON.parse(payload.deed_stockMoves)
+    expect(moves).toHaveLength(1)
+    expect(moves[0].reason).toContain('Kilimall KO/0001')
   })
 })

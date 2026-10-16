@@ -29,6 +29,9 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   outsource: 'OUT',
   outsource_payment: 'OPAY',
   rider_pay: 'RWP',
+  kilimall_order: 'KO',
+  kilimall_dispatch: 'KD',
+  kilimall_settlement: 'KS',
 }
 
 beforeEach(() => {
@@ -61,6 +64,9 @@ describe('prefixToKind()', () => {
     expect(prefixToKind('OUT')).toBe('outsource')
     expect(prefixToKind('OPAY')).toBe('outsource_payment')
     expect(prefixToKind('RWP')).toBe('rider_pay')
+    expect(prefixToKind('KO')).toBe('kilimall_order')
+    expect(prefixToKind('KD')).toBe('kilimall_dispatch')
+    expect(prefixToKind('KS')).toBe('kilimall_settlement')
   })
 })
 
@@ -121,6 +127,16 @@ describe('getNextDocNumber()', () => {
 
     const num = await getNextDocNumber('purchase_order')
     expect(num).toBe(`PO/${YEAR}/0003`)
+  })
+
+  it('numbers Kilimall dispatches yearless (KD/NNNN) from one server counter', async () => {
+    mockSql
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ rows: [{ current_value: 6 }] })
+
+    const num = await getNextDocNumber('kilimall_dispatch')
+    expect(num).toBe('KD/0006')
+    expect(JSON.stringify(mockSql.mock.calls[1])).toContain('kd_seq')
   })
 
   it('keeps the legacy global POS/NNNN format for till tickets', async () => {

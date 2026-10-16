@@ -21,6 +21,9 @@ const VALID_KINDS = new Set<DocKind>([
   'outsource',
   'outsource_payment',
   'rider_pay',
+  'kilimall_order',
+  'kilimall_dispatch',
+  'kilimall_settlement',
 ])
 
 export async function POST(request: NextRequest) {
