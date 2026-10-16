@@ -745,7 +745,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
           aria-busy={showRouteSkeleton || undefined}
         >
-          <div id="module-workspace-root" className="pointer-events-none absolute inset-0 z-[80]" />
+          <div id="module-workspace-root" className="pointer-events-none absolute inset-0 z-[2000]" />
           <div className="min-w-0">
             <ModuleRenderBoundary pathname={pathname || '/'}>
               {showRouteSkeleton ? <ModuleSkeleton label="Loading" /> : children}

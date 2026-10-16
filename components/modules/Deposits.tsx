@@ -4,7 +4,7 @@
 import { Suspense, useState, useMemo } from 'react'
 import { useFinanceStore, fmtKes } from '@/lib/store'
 import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
-import { Confirm, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
+import { Confirm, ModuleSkeleton, useMounted, ModuleHeader, Portal } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa, faBoxOpen, faCreditCard, faMoneyBillWave, faPlus } from '@/components/icons'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -145,166 +145,168 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
   }
 
   return (
-    <div className="deposit-modal-overlay fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="ui-enter ui-enter-modal deposit-modal deposit-modal--new relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
-        style={{ maxHeight: 'calc(100dvh - 32px)' }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] bg-gradient-to-r from-blue-600 to-indigo-600 shrink-0">
-          <div>
-            <h2 className="text-sm font-black text-white uppercase tracking-wider">New Deposit / Layby</h2>
-            <p className="text-[10px] text-blue-200 mt-0.5">Credits 3100 Customer Deposits — not a Sales down-payment invoice</p>
+    <Portal>
+      <div className="deposit-modal-overlay fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div
+          className="ui-enter ui-enter-modal deposit-modal deposit-modal--new relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
+          style={{ maxHeight: 'calc(100dvh - 32px)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] bg-gradient-to-r from-blue-600 to-indigo-600 shrink-0">
+            <div>
+              <h2 className="text-sm font-black text-white uppercase tracking-wider">New Deposit / Layby</h2>
+              <p className="text-[10px] text-blue-200 mt-0.5">Credits 3100 Customer Deposits — not a Sales down-payment invoice</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg transition-all">×</button>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg transition-all">×</button>
-        </div>
 
-        {/* Step indicator */}
-        <div className="flex px-5 pt-4 pb-3 gap-2 shrink-0">
-          {['Customer & Items', 'Initial Payment'].map((label, i) => (
-            <div key={i} className="flex items-center gap-2 flex-1">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black transition-all ${step > i + 1 ? 'bg-emerald-500 text-white' : step === i + 1 ? 'bg-blue-600 text-white' : 'bg-[var(--bg-surface)] text-[var(--text-4)] border border-[var(--border)]'}`}>
-                {step > i + 1 ? '✓' : i + 1}
+          {/* Step indicator */}
+          <div className="flex px-5 pt-4 pb-3 gap-2 shrink-0">
+            {['Customer & Items', 'Initial Payment'].map((label, i) => (
+              <div key={i} className="flex items-center gap-2 flex-1">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black transition-all ${step > i + 1 ? 'bg-emerald-500 text-white' : step === i + 1 ? 'bg-blue-600 text-white' : 'bg-[var(--bg-surface)] text-[var(--text-4)] border border-[var(--border)]'}`}>
+                  {step > i + 1 ? '✓' : i + 1}
+                </div>
+                <span className={`text-[11px] font-bold truncate ${step === i + 1 ? 'text-[var(--text-1)]' : 'text-[var(--text-4)]'}`}>{label}</span>
+                {i < 1 && <div className="flex-1 h-px bg-[var(--border)]" />}
               </div>
-              <span className={`text-[11px] font-bold truncate ${step === i + 1 ? 'text-[var(--text-1)]' : 'text-[var(--text-4)]'}`}>{label}</span>
-              {i < 1 && <div className="flex-1 h-px bg-[var(--border)]" />}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        <div className="deposit-modal__body flex-1 overflow-y-auto custom-scrollbar px-5 py-3 space-y-4">
-          {step === 1 && (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Customer *</label>
-                  <select aria-label="Customer" value={customerId} onChange={e => setCustomerId(e.target.value)} className="form-input w-full text-xs">
-                    <option value="">— Select customer —</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name} · {c.phone}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Pickup By (optional)</label>
-                  <input type="date" aria-label="Pickup by date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="form-input w-full text-xs" />
-                </div>
-              </div>
-
-              {/* Items */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Items *</label>
-                  <button onClick={addItem} className="text-[10px] font-black text-blue-600 hover:text-blue-700 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 transition-all">+ Add Item</button>
-                </div>
-                {items.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed border-[var(--border)] gap-2">
-                    <span className="text-2xl" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faBoxOpen} /></span>
-                    <p className="text-[11px] text-[var(--text-4)]">No items yet — add products to reserve</p>
+          <div className="deposit-modal__body flex-1 overflow-y-auto custom-scrollbar px-5 py-3 space-y-4">
+            {step === 1 && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Customer *</label>
+                    <select aria-label="Customer" value={customerId} onChange={e => setCustomerId(e.target.value)} className="form-input w-full text-xs">
+                      <option value="">— Select customer —</option>
+                      {customers.map(c => <option key={c.id} value={c.id}>{c.name} · {c.phone}</option>)}
+                    </select>
                   </div>
-                )}
-                <div className="space-y-2">
-                  {items.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] items-end">
-                      <div className="col-span-5">
-                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Product</p>
-                        <select aria-label={`Product for item ${idx + 1}`} value={item.productId} onChange={e => updateItem(idx, 'productId', e.target.value)} className="form-input text-xs w-full">
-                          <option value="">— Select —</option>
-                          {(products || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Qty</p>
-                        <input type="number" aria-label={`Quantity for item ${idx + 1}`} min={1} value={item.qty} onChange={e => updateItem(idx, 'qty', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(1, e.currentTarget.valueAsNumber) : '')} className="form-input text-xs w-full text-center" />
-                      </div>
-                      <div className="col-span-3">
-                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Unit Price</p>
-                        <input type="number" aria-label={`Unit price for item ${idx + 1}`} value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(0, e.currentTarget.valueAsNumber) : '')} className="form-input text-xs w-full text-right" />
-                      </div>
-                      <div className="col-span-2 flex items-center justify-between">
-                        <span className="text-[11px] font-black text-[var(--text-1)] font-mono">{fmtKes(item.total)}</span>
-                        <button type="button" aria-label={`Remove item ${idx + 1}`} onClick={() => removeItem(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-600 hover:bg-red-50 transition-colors text-lg">×</button>
-                      </div>
+                  <div>
+                    <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Pickup By (optional)</label>
+                    <input type="date" aria-label="Pickup by date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="form-input w-full text-xs" />
+                  </div>
+                </div>
+
+                {/* Items */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Items *</label>
+                    <button onClick={addItem} className="text-[10px] font-black text-blue-600 hover:text-blue-700 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 transition-all">+ Add Item</button>
+                  </div>
+                  {items.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed border-[var(--border)] gap-2">
+                      <span className="text-2xl" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faBoxOpen} /></span>
+                      <p className="text-[11px] text-[var(--text-4)]">No items yet — add products to reserve</p>
                     </div>
-                  ))}
-                </div>
-                {items.length > 0 && (
-                  <div className="flex justify-end mt-2 pr-1">
-                    <span className="text-[11px] font-black text-[var(--text-2)]">Total: <span className="text-blue-600 font-mono">{fmtKes(totalValue)}</span></span>
+                  )}
+                  <div className="space-y-2">
+                    {items.map((item, idx) => (
+                      <div key={idx} className="grid grid-cols-12 gap-2 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] items-end">
+                        <div className="col-span-5">
+                          <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Product</p>
+                          <select aria-label={`Product for item ${idx + 1}`} value={item.productId} onChange={e => updateItem(idx, 'productId', e.target.value)} className="form-input text-xs w-full">
+                            <option value="">— Select —</option>
+                            {(products || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Qty</p>
+                          <input type="number" aria-label={`Quantity for item ${idx + 1}`} min={1} value={item.qty} onChange={e => updateItem(idx, 'qty', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(1, e.currentTarget.valueAsNumber) : '')} className="form-input text-xs w-full text-center" />
+                        </div>
+                        <div className="col-span-3">
+                          <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Unit Price</p>
+                          <input type="number" aria-label={`Unit price for item ${idx + 1}`} value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(0, e.currentTarget.valueAsNumber) : '')} className="form-input text-xs w-full text-right" />
+                        </div>
+                        <div className="col-span-2 flex items-center justify-between">
+                          <span className="text-[11px] font-black text-[var(--text-1)] font-mono">{fmtKes(item.total)}</span>
+                          <button type="button" aria-label={`Remove item ${idx + 1}`} onClick={() => removeItem(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-600 hover:bg-red-50 transition-colors text-lg">×</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Notes (optional)</label>
-                <textarea aria-label="Deposit notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="form-input w-full text-xs resize-none" placeholder="Any special instructions..." />
-              </div>
-            </>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-4">
-              {/* Summary */}
-              <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Layby Total</span>
+                  {items.length > 0 && (
+                    <div className="flex justify-end mt-2 pr-1">
+                      <span className="text-[11px] font-black text-[var(--text-2)]">Total: <span className="text-blue-600 font-mono">{fmtKes(totalValue)}</span></span>
+                    </div>
+                  )}
                 </div>
-                <p className="text-2xl font-black text-slate-900">{fmtKes(totalValue)}</p>
-                <p className="text-[11px] text-blue-700 mt-1">{customer?.name} · {items.length} item{items.length !== 1 ? 's' : ''}</p>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Deposit Amount (KSh) *</label>
-                  <input
-                    type="number" aria-label="Deposit amount" value={initialPayment} onChange={e => setInitialPayment(e.target.value)}
-                    placeholder="0" className="form-input w-full text-xs font-mono text-right"
-                  />
-                  {deposit > 0 && <p className="text-[10px] text-emerald-600 mt-1 font-bold">Balance: {fmtKes(totalValue - deposit)}</p>}
+                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Notes (optional)</label>
+                  <textarea aria-label="Deposit notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="form-input w-full text-xs resize-none" placeholder="Any special instructions..." />
+                </div>
+              </>
+            )}
+
+            {step === 2 && (
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Layby Total</span>
+                  </div>
+                  <p className="text-2xl font-black text-slate-900">{fmtKes(totalValue)}</p>
+                  <p className="text-[11px] text-blue-700 mt-1">{customer?.name} · {items.length} item{items.length !== 1 ? 's' : ''}</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Deposit Amount (KSh) *</label>
+                    <input
+                      type="number" aria-label="Deposit amount" value={initialPayment} onChange={e => setInitialPayment(e.target.value)}
+                      placeholder="0" className="form-input w-full text-xs font-mono text-right"
+                    />
+                    {deposit > 0 && <p className="text-[10px] text-emerald-600 mt-1 font-bold">Balance: {fmtKes(totalValue - deposit)}</p>}
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Method *</label>
+                    <select aria-label="Payment method" value={payMethod} onChange={e => setPayMethod(e.target.value as any)} className="form-input w-full text-xs">
+                      <option value="" disabled>Select payment method…</option>
+                      {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Method *</label>
-                  <select aria-label="Payment method" value={payMethod} onChange={e => setPayMethod(e.target.value as any)} className="form-input w-full text-xs">
-                    <option value="" disabled>Select payment method…</option>
-                    {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
+                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Reference (optional)</label>
+                  <input type="text" aria-label="Payment reference" value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="M-Pesa code, receipt no..." className="form-input w-full text-xs" />
                 </div>
               </div>
-              <div>
-                <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Reference (optional)</label>
-                <input type="text" aria-label="Payment reference" value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="M-Pesa code, receipt no..." className="form-input w-full text-xs" />
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Footer */}
-        <div className="deposit-modal__footer px-5 py-3.5 border-t border-[var(--border)] bg-[var(--bg-surface)]/50 flex gap-2 justify-between shrink-0">
-          {step === 2
-            ? <button onClick={() => setStep(1)} className="btn-outline min-w-[100px] text-xs">← Back</button>
-            : <button onClick={onClose} className="btn-outline min-w-[100px] text-xs">Cancel</button>
-          }
-          {step === 1 ? (
-            <button
-              disabled={!customerId || items.length === 0 || items.some(i => !i.productId)}
-              onClick={goToPayment}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 disabled:pointer-events-none shadow-lg shadow-blue-200"
-            >
-              Next →
-            </button>
-          ) : (
-            <button
-              disabled={!deposit || deposit <= 0 || saving}
-              onClick={handleSave}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 disabled:pointer-events-none shadow-lg"
-              style={{ background: 'var(--primary)', boxShadow: '0 8px 24px color-mix(in srgb, var(--primary) 35%, transparent)' }}
-            >
-              {saving ? '...' : '✓ Create Deposit'}
-            </button>
-          )}
+          {/* Footer */}
+          <div className="deposit-modal__footer px-5 py-3.5 border-t border-[var(--border)] bg-[var(--bg-surface)]/50 flex gap-2 justify-between shrink-0">
+            {step === 2
+              ? <button onClick={() => setStep(1)} className="btn-outline min-w-[100px] text-xs">← Back</button>
+              : <button onClick={onClose} className="btn-outline min-w-[100px] text-xs">Cancel</button>
+            }
+            {step === 1 ? (
+              <button
+                disabled={!customerId || items.length === 0 || items.some(i => !i.productId)}
+                onClick={goToPayment}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 disabled:pointer-events-none shadow-lg shadow-blue-200"
+              >
+                Next →
+              </button>
+            ) : (
+              <button
+                disabled={!deposit || deposit <= 0 || saving}
+                onClick={handleSave}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 disabled:pointer-events-none shadow-lg"
+                style={{ background: 'var(--primary)', boxShadow: '0 8px 24px color-mix(in srgb, var(--primary) 35%, transparent)' }}
+              >
+                {saving ? '...' : '✓ Create Deposit'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </Portal>
   )
 }
 
@@ -349,52 +351,54 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
   }
 
   return (
-    <div className="deposit-modal-overlay fixed inset-0 z-[9050] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="ui-enter ui-enter-confirm deposit-modal deposit-modal--payment relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <div>
-            <h3 className="text-[13px] font-black text-[var(--text-1)]">Record Payment</h3>
-            <p className="text-[10px] text-[var(--text-4)] mt-0.5">{deposit.ref} · Balance: {fmtKes(deposit.balance)}</p>
-          </div>
-          <button onClick={onClose} className="text-[var(--text-4)] hover:text-[var(--text-1)] text-xl transition-colors">×</button>
-        </div>
-        <div className="deposit-modal__body p-5 space-y-3">
-          <div>
-            <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Amount (KSh) *</label>
-            <input type="number" aria-label="Payment amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Max ${fmtKes(maxAmount)}`} min="0.01" step="0.01" max={maxAmount} className="form-input w-full text-xs font-mono text-right" />
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Method *</label>
-            <select aria-label="Payment method" value={method} onChange={e => setMethod(e.target.value as any)} className="form-input w-full text-xs">
-              <option value="" disabled>Select method…</option>
-              {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Reference</label>
-            <input type="text" aria-label="Payment reference" value={ref} onChange={e => setRef(e.target.value)} placeholder="M-Pesa code / receipt..." className="form-input w-full text-xs" />
-          </div>
-          {paying > 0 && (
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-              <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">After this payment</p>
-              <p className="text-[13px] font-black text-emerald-800 mt-1">Balance: {fmtKes(newBalance)}</p>
-              {newBalance <= 0 && <p className="text-[10px] text-emerald-600 font-bold mt-0.5">✓ Fully paid — ready for collection</p>}
+    <Portal>
+      <div className="deposit-modal-overlay fixed inset-0 z-[9050] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div className="ui-enter ui-enter-confirm deposit-modal deposit-modal--payment relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+            <div>
+              <h3 className="text-[13px] font-black text-[var(--text-1)]">Record Payment</h3>
+              <p className="text-[10px] text-[var(--text-4)] mt-0.5">{deposit.ref} · Balance: {fmtKes(deposit.balance)}</p>
             </div>
-          )}
-        </div>
-        <div className="deposit-modal__footer px-5 py-3 border-t border-[var(--border)] flex gap-2">
-          <button onClick={onClose} className="btn-outline flex-1 text-xs">Cancel</button>
-          <button
-            disabled={!paying || saving}
-            onClick={handleSave}
-            className="flex-1 py-2.5 rounded-xl text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200"
-          >
-            {saving ? '...' : 'Record Payment'}
-          </button>
+            <button onClick={onClose} className="text-[var(--text-4)] hover:text-[var(--text-1)] text-xl transition-colors">×</button>
+          </div>
+          <div className="deposit-modal__body p-5 space-y-3">
+            <div>
+              <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Amount (KSh) *</label>
+              <input type="number" aria-label="Payment amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Max ${fmtKes(maxAmount)}`} min="0.01" step="0.01" max={maxAmount} className="form-input w-full text-xs font-mono text-right" />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Method *</label>
+              <select aria-label="Payment method" value={method} onChange={e => setMethod(e.target.value as any)} className="form-input w-full text-xs">
+                <option value="" disabled>Select method…</option>
+                {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Reference</label>
+              <input type="text" aria-label="Payment reference" value={ref} onChange={e => setRef(e.target.value)} placeholder="M-Pesa code / receipt..." className="form-input w-full text-xs" />
+            </div>
+            {paying > 0 && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">After this payment</p>
+                <p className="text-[13px] font-black text-emerald-800 mt-1">Balance: {fmtKes(newBalance)}</p>
+                {newBalance <= 0 && <p className="text-[10px] text-emerald-600 font-bold mt-0.5">✓ Fully paid — ready for collection</p>}
+              </div>
+            )}
+          </div>
+          <div className="deposit-modal__footer px-5 py-3 border-t border-[var(--border)] flex gap-2">
+            <button onClick={onClose} className="btn-outline flex-1 text-xs">Cancel</button>
+            <button
+              disabled={!paying || saving}
+              onClick={handleSave}
+              className="flex-1 py-2.5 rounded-xl text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200"
+            >
+              {saving ? '...' : 'Record Payment'}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Portal>
   )
 }
 
