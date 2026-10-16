@@ -1,5 +1,6 @@
 'use client'
 
+import { Portal } from '@/components/ui'
 import { useEffect, useMemo, useState } from 'react'
 import type { CompanySettings } from '@/lib/store'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
@@ -222,101 +223,103 @@ export function DocumentLayoutConfigurator({ company, updateCompany, showToast }
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="document-layout-title">
-          <div className="flex max-h-[94vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-              <div>
-                <h2 id="document-layout-title" className="text-[16px] font-bold text-gray-900">Configure Document Layout</h2>
-                <p className="mt-0.5 text-[11px] text-gray-500">Preview changes before applying them to every printed business document.</p>
-              </div>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Discard and close" className="flex h-8 w-8 items-center justify-center rounded-lg text-xl text-gray-500 hover:bg-gray-100">×</button>
-            </div>
-
-            <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto lg:grid-cols-[390px_1fr]">
-              <div className="space-y-5 border-r border-gray-200 p-5">
-                <fieldset>
-                  <legend className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">Layout</legend>
-                  <div className="grid grid-cols-3 gap-2">
-                    {DOCUMENT_LAYOUT_OPTIONS.map(option => (
-                      <button key={option.id} type="button" onClick={() => patch('printTemplate', option.id)} className={`rounded-lg border-2 p-2 text-left transition ${draft.printTemplate === option.id ? 'border-[#1B2762] bg-[#1B2762]/5' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <LayoutThumbnail layout={option.id} primary={draft.printPrimaryColor} secondary={draft.printSecondaryColor} />
-                        <span className="mt-1.5 block text-center text-[10px] font-semibold text-gray-700">{option.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </fieldset>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="text-[11px] font-semibold text-gray-700">Font
-                    <select value={draft.printFont} onChange={event => patch('printFont', event.target.value as DocumentFontId)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px]">
-                      {DOCUMENT_FONT_OPTIONS.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-                    </select>
-                  </label>
-                  <label className="text-[11px] font-semibold text-gray-700">Background
-                    <select value={draft.printBackground} onChange={event => patch('printBackground', event.target.value as DocumentBackgroundId)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px]">
-                      <option value="blank">Blank</option>
-                      <option value="demo_logo">Company logo watermark</option>
-                    </select>
-                  </label>
+        <Portal>
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="document-layout-title">
+            <div className="flex max-h-[94vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                <div>
+                  <h2 id="document-layout-title" className="text-[16px] font-bold text-gray-900">Configure Document Layout</h2>
+                  <p className="mt-0.5 text-[11px] text-gray-500">Preview changes before applying them to every printed business document.</p>
                 </div>
+                <button type="button" onClick={() => setOpen(false)} aria-label="Discard and close" className="flex h-8 w-8 items-center justify-center rounded-lg text-xl text-gray-500 hover:bg-gray-100">×</button>
+              </div>
 
-                <label className="block text-[11px] font-semibold text-gray-700">Company logo
-                  <div className="mt-1 flex items-center gap-3 rounded-lg border border-gray-200 p-2">
-                    <div className="flex h-12 w-20 items-center justify-center overflow-hidden rounded bg-gray-50">
-                      {draft.logoUrl ? <img src={draft.logoUrl} alt="Company logo" className="max-h-11 max-w-[76px] object-contain" /> : <span className="text-[9px] text-gray-400">No logo</span>}
+              <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto lg:grid-cols-[390px_1fr]">
+                <div className="space-y-5 border-r border-gray-200 p-5">
+                  <fieldset>
+                    <legend className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">Layout</legend>
+                    <div className="grid grid-cols-3 gap-2">
+                      {DOCUMENT_LAYOUT_OPTIONS.map(option => (
+                        <button key={option.id} type="button" onClick={() => patch('printTemplate', option.id)} className={`rounded-lg border-2 p-2 text-left transition ${draft.printTemplate === option.id ? 'border-[#1B2762] bg-[#1B2762]/5' : 'border-gray-200 hover:border-gray-300'}`}>
+                          <LayoutThumbnail layout={option.id} primary={draft.printPrimaryColor} secondary={draft.printSecondaryColor} />
+                          <span className="mt-1.5 block text-center text-[10px] font-semibold text-gray-700">{option.label}</span>
+                        </button>
+                      ))}
                     </div>
-                    <label className="cursor-pointer rounded-lg border border-gray-200 px-3 py-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
-                      Upload logo
-                      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={event => { void uploadLogo(event.target.files?.[0]); event.target.value = '' }} />
-                    </label>
-                    {draft.logoUrl && <button type="button" onClick={() => patch('logoUrl', '')} className="text-[11px] font-semibold text-red-600">Remove</button>}
-                  </div>
-                </label>
+                  </fieldset>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="text-[11px] font-semibold text-gray-700">Primary colour
-                    <span className="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 p-1.5">
-                      <input type="color" value={draft.printPrimaryColor} onChange={event => patch('printPrimaryColor', event.target.value.toUpperCase())} className="h-8 w-10 cursor-pointer border-0 bg-transparent" />
-                      <input value={draft.printPrimaryColor} onChange={event => patch('printPrimaryColor', event.target.value)} className="min-w-0 flex-1 text-[11px] outline-none" aria-label="Primary colour hex" />
-                    </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="text-[11px] font-semibold text-gray-700">Font
+                      <select value={draft.printFont} onChange={event => patch('printFont', event.target.value as DocumentFontId)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px]">
+                        {DOCUMENT_FONT_OPTIONS.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-[11px] font-semibold text-gray-700">Background
+                      <select value={draft.printBackground} onChange={event => patch('printBackground', event.target.value as DocumentBackgroundId)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px]">
+                        <option value="blank">Blank</option>
+                        <option value="demo_logo">Company logo watermark</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label className="block text-[11px] font-semibold text-gray-700">Company logo
+                    <div className="mt-1 flex items-center gap-3 rounded-lg border border-gray-200 p-2">
+                      <div className="flex h-12 w-20 items-center justify-center overflow-hidden rounded bg-gray-50">
+                        {draft.logoUrl ? <img src={draft.logoUrl} alt="Company logo" className="max-h-11 max-w-[76px] object-contain" /> : <span className="text-[9px] text-gray-400">No logo</span>}
+                      </div>
+                      <label className="cursor-pointer rounded-lg border border-gray-200 px-3 py-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+                        Upload logo
+                        <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={event => { void uploadLogo(event.target.files?.[0]); event.target.value = '' }} />
+                      </label>
+                      {draft.logoUrl && <button type="button" onClick={() => patch('logoUrl', '')} className="text-[11px] font-semibold text-red-600">Remove</button>}
+                    </div>
                   </label>
-                  <label className="text-[11px] font-semibold text-gray-700">Secondary colour
-                    <span className="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 p-1.5">
-                      <input type="color" value={draft.printSecondaryColor} onChange={event => patch('printSecondaryColor', event.target.value.toUpperCase())} className="h-8 w-10 cursor-pointer border-0 bg-transparent" />
-                      <input value={draft.printSecondaryColor} onChange={event => patch('printSecondaryColor', event.target.value)} className="min-w-0 flex-1 text-[11px] outline-none" aria-label="Secondary colour hex" />
-                    </span>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="text-[11px] font-semibold text-gray-700">Primary colour
+                      <span className="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 p-1.5">
+                        <input type="color" value={draft.printPrimaryColor} onChange={event => patch('printPrimaryColor', event.target.value.toUpperCase())} className="h-8 w-10 cursor-pointer border-0 bg-transparent" />
+                        <input value={draft.printPrimaryColor} onChange={event => patch('printPrimaryColor', event.target.value)} className="min-w-0 flex-1 text-[11px] outline-none" aria-label="Primary colour hex" />
+                      </span>
+                    </label>
+                    <label className="text-[11px] font-semibold text-gray-700">Secondary colour
+                      <span className="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 p-1.5">
+                        <input type="color" value={draft.printSecondaryColor} onChange={event => patch('printSecondaryColor', event.target.value.toUpperCase())} className="h-8 w-10 cursor-pointer border-0 bg-transparent" />
+                        <input value={draft.printSecondaryColor} onChange={event => patch('printSecondaryColor', event.target.value)} className="min-w-0 flex-1 text-[11px] outline-none" aria-label="Secondary colour hex" />
+                      </span>
+                    </label>
+                  </div>
+
+                  <label className="block text-[11px] font-semibold text-gray-700">Company address
+                    <textarea value={draft.address} onChange={event => patch('address', event.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-[12px] outline-none focus:border-[#1B2762]" />
+                  </label>
+                  <label className="block text-[11px] font-semibold text-gray-700">Tagline
+                    <input value={draft.printTagline} onChange={event => patch('printTagline', event.target.value)} placeholder="Optional company tagline" className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-[12px] outline-none focus:border-[#1B2762]" />
+                  </label>
+                  <label className="block text-[11px] font-semibold text-gray-700">Footer
+                    <textarea value={draft.invoiceFooter} onChange={event => patch('invoiceFooter', event.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-[12px] outline-none focus:border-[#1B2762]" />
+                  </label>
+                  <label className="block text-[11px] font-semibold text-gray-700">Paper format
+                    <select value={draft.printPaperFormat} onChange={event => patch('printPaperFormat', event.target.value as DocumentPaperFormat)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px]">
+                      <option value="a4">European A4</option>
+                      <option value="letter">US Letter</option>
+                    </select>
                   </label>
                 </div>
 
-                <label className="block text-[11px] font-semibold text-gray-700">Company address
-                  <textarea value={draft.address} onChange={event => patch('address', event.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-[12px] outline-none focus:border-[#1B2762]" />
-                </label>
-                <label className="block text-[11px] font-semibold text-gray-700">Tagline
-                  <input value={draft.printTagline} onChange={event => patch('printTagline', event.target.value)} placeholder="Optional company tagline" className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-[12px] outline-none focus:border-[#1B2762]" />
-                </label>
-                <label className="block text-[11px] font-semibold text-gray-700">Footer
-                  <textarea value={draft.invoiceFooter} onChange={event => patch('invoiceFooter', event.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-[12px] outline-none focus:border-[#1B2762]" />
-                </label>
-                <label className="block text-[11px] font-semibold text-gray-700">Paper format
-                  <select value={draft.printPaperFormat} onChange={event => patch('printPaperFormat', event.target.value as DocumentPaperFormat)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px]">
-                    <option value="a4">European A4</option>
-                    <option value="letter">US Letter</option>
-                  </select>
-                </label>
+                <div className="min-h-[680px] p-5">
+                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">PDF preview</div>
+                  <DocumentPreview draft={draft} company={company} />
+                </div>
               </div>
 
-              <div className="min-h-[680px] p-5">
-                <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">PDF preview</div>
-                <DocumentPreview draft={draft} company={company} />
+              <div className="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3">
+                <button type="button" onClick={() => setOpen(false)} className="btn-secondary">Discard</button>
+                <button type="button" onClick={save} className="btn-primary">Continue</button>
               </div>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3">
-              <button type="button" onClick={() => setOpen(false)} className="btn-secondary">Discard</button>
-              <button type="button" onClick={save} className="btn-primary">Continue</button>
             </div>
           </div>
-        </div>
+        </Portal>
       )}
     </>
   )

@@ -1,5 +1,6 @@
 'use client'
 
+import { Portal } from '@/components/ui'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useFinanceStore, fmtDate, fmtKes } from '@/lib/store'
 import { loanOutstanding, interestPaid, principalRepaid, type Loan } from '@/lib/loans/loans'
@@ -125,54 +126,58 @@ export default function Loans() {
       )}
 
       {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Record a loan">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 space-y-3 max-h-[90vh] overflow-auto">
-            <h2 className="font-black">Record a loan</h2>
-            <div><label className={label}>Lender *</label><input className={input} value={nl.lender} onChange={e => setNl(f => ({ ...f, lender: e.target.value }))} placeholder="e.g. NCBA Bank" /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className={label}>Amount received (KSh) *</label><input type="number" className={input} value={nl.principal} onChange={e => setNl(f => ({ ...f, principal: e.target.value }))} /></div>
-              <div><label className={label}>Date received *</label><input type="date" className={input} value={nl.startDate} onChange={e => setNl(f => ({ ...f, startDate: e.target.value }))} /></div>
-              <div><label className={label}>Interest rate % p.a.</label><input type="number" className={input} value={nl.interestRate} onChange={e => setNl(f => ({ ...f, interestRate: e.target.value }))} /></div>
-              <div><label className={label}>Term (months)</label><input type="number" className={input} value={nl.termMonths} onChange={e => setNl(f => ({ ...f, termMonths: e.target.value }))} /></div>
-            </div>
-            <div><label className={label}>Paid into</label>
-              <select className={input} value={nl.bankAccountId} onChange={e => setNl(f => ({ ...f, bankAccountId: e.target.value }))}>
-                <option value="">Select bank / cash account</option>
-                {banks.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select></div>
-            <div><label className={label}>Notes</label><input className={input} value={nl.notes} onChange={e => setNl(f => ({ ...f, notes: e.target.value }))} /></div>
-            <label className="flex items-start gap-2 text-[11px]"><input type="checkbox" checked={nl.drawdownBooked} onChange={e => setNl(f => ({ ...f, drawdownBooked: e.target.checked }))} />
-              <span>The money was already booked in the books (existing loan). Record it here without posting the receipt again.</span></label>
-            <div className="flex justify-end gap-2 pt-1">
-              <button className="btn-secondary text-[12px] px-3 min-h-9" onClick={() => setShowNew(false)} disabled={busy}>Cancel</button>
-              <button className="btn-primary text-[12px] px-4 min-h-9" onClick={createLoan} disabled={busy}>{busy ? 'Saving…' : 'Save loan'}</button>
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Record a loan">
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 space-y-3 max-h-[90vh] overflow-auto">
+              <h2 className="font-black">Record a loan</h2>
+              <div><label className={label}>Lender *</label><input className={input} value={nl.lender} onChange={e => setNl(f => ({ ...f, lender: e.target.value }))} placeholder="e.g. NCBA Bank" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={label}>Amount received (KSh) *</label><input type="number" className={input} value={nl.principal} onChange={e => setNl(f => ({ ...f, principal: e.target.value }))} /></div>
+                <div><label className={label}>Date received *</label><input type="date" className={input} value={nl.startDate} onChange={e => setNl(f => ({ ...f, startDate: e.target.value }))} /></div>
+                <div><label className={label}>Interest rate % p.a.</label><input type="number" className={input} value={nl.interestRate} onChange={e => setNl(f => ({ ...f, interestRate: e.target.value }))} /></div>
+                <div><label className={label}>Term (months)</label><input type="number" className={input} value={nl.termMonths} onChange={e => setNl(f => ({ ...f, termMonths: e.target.value }))} /></div>
+              </div>
+              <div><label className={label}>Paid into</label>
+                <select className={input} value={nl.bankAccountId} onChange={e => setNl(f => ({ ...f, bankAccountId: e.target.value }))}>
+                  <option value="">Select bank / cash account</option>
+                  {banks.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select></div>
+              <div><label className={label}>Notes</label><input className={input} value={nl.notes} onChange={e => setNl(f => ({ ...f, notes: e.target.value }))} /></div>
+              <label className="flex items-start gap-2 text-[11px]"><input type="checkbox" checked={nl.drawdownBooked} onChange={e => setNl(f => ({ ...f, drawdownBooked: e.target.checked }))} />
+                <span>The money was already booked in the books (existing loan). Record it here without posting the receipt again.</span></label>
+              <div className="flex justify-end gap-2 pt-1">
+                <button className="btn-secondary text-[12px] px-3 min-h-9" onClick={() => setShowNew(false)} disabled={busy}>Cancel</button>
+                <button className="btn-primary text-[12px] px-4 min-h-9" onClick={createLoan} disabled={busy}>{busy ? 'Saving…' : 'Save loan'}</button>
+              </div>
             </div>
           </div>
-        </div>
+        </Portal>
       )}
 
       {repayFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Record repayment">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 space-y-3">
-            <h2 className="font-black">Repayment — {repayFor.ref} · {repayFor.lender}</h2>
-            <p className="text-[11px] opacity-70">Still owed: {fmtKes(loanOutstanding(repayFor))}. Split the instalment from the bank statement into principal and interest.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className={label}>Date *</label><input type="date" className={input} value={rp.date} onChange={e => setRp(f => ({ ...f, date: e.target.value }))} /></div>
-              <div><label className={label}>Paid from</label>
-                <select className={input} value={rp.bankAccountId} onChange={e => setRp(f => ({ ...f, bankAccountId: e.target.value }))}>
-                  <option value="">Select account</option>
-                  {banks.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select></div>
-              <div><label className={label}>Principal (KSh)</label><input type="number" className={input} value={rp.principal} onChange={e => setRp(f => ({ ...f, principal: e.target.value }))} /></div>
-              <div><label className={label}>Interest (KSh)</label><input type="number" className={input} value={rp.interest} onChange={e => setRp(f => ({ ...f, interest: e.target.value }))} /></div>
-            </div>
-            <p className="text-[11px] font-semibold">Total leaving the bank: {fmtKes((Number(rp.principal) || 0) + (Number(rp.interest) || 0))}</p>
-            <div className="flex justify-end gap-2">
-              <button className="btn-secondary text-[12px] px-3 min-h-9" onClick={() => setRepayFor(null)} disabled={busy}>Cancel</button>
-              <button className="btn-primary text-[12px] px-4 min-h-9" onClick={repay} disabled={busy}>{busy ? 'Posting…' : 'Post repayment'}</button>
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Record repayment">
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 space-y-3">
+              <h2 className="font-black">Repayment — {repayFor.ref} · {repayFor.lender}</h2>
+              <p className="text-[11px] opacity-70">Still owed: {fmtKes(loanOutstanding(repayFor))}. Split the instalment from the bank statement into principal and interest.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={label}>Date *</label><input type="date" className={input} value={rp.date} onChange={e => setRp(f => ({ ...f, date: e.target.value }))} /></div>
+                <div><label className={label}>Paid from</label>
+                  <select className={input} value={rp.bankAccountId} onChange={e => setRp(f => ({ ...f, bankAccountId: e.target.value }))}>
+                    <option value="">Select account</option>
+                    {banks.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select></div>
+                <div><label className={label}>Principal (KSh)</label><input type="number" className={input} value={rp.principal} onChange={e => setRp(f => ({ ...f, principal: e.target.value }))} /></div>
+                <div><label className={label}>Interest (KSh)</label><input type="number" className={input} value={rp.interest} onChange={e => setRp(f => ({ ...f, interest: e.target.value }))} /></div>
+              </div>
+              <p className="text-[11px] font-semibold">Total leaving the bank: {fmtKes((Number(rp.principal) || 0) + (Number(rp.interest) || 0))}</p>
+              <div className="flex justify-end gap-2">
+                <button className="btn-secondary text-[12px] px-3 min-h-9" onClick={() => setRepayFor(null)} disabled={busy}>Cancel</button>
+                <button className="btn-primary text-[12px] px-4 min-h-9" onClick={repay} disabled={busy}>{busy ? 'Posting…' : 'Post repayment'}</button>
+              </div>
             </div>
           </div>
-        </div>
+        </Portal>
       )}
     </div>
   )

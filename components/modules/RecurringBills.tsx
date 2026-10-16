@@ -1,5 +1,6 @@
 'use client'
 
+import { Portal } from '@/components/ui'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useFinanceStore, fmtDate, fmtKes } from '@/lib/store'
 import { contactPaymentTermsDays } from '@/lib/due-date'
@@ -157,47 +158,49 @@ export default function RecurringBills() {
       )}
 
       {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="New recurring bill">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 space-y-3 max-h-[90vh] overflow-auto">
-            <h2 className="font-black">New recurring bill</h2>
-            <div><label className={label}>Vendor *</label>
-              <select className={input} value={form.vendorId} onChange={e => setForm(f => ({ ...f, vendorId: e.target.value }))}>
-                <option value="">Select vendor</option>
-                {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-            </div>
-            <div><label className={label}>Title *</label><input className={input} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Office rent" /></div>
-            <div className="grid grid-cols-3 gap-3">
-              <div><label className={label}>Frequency</label>
-                <select className={input} value={form.frequency} onChange={e => setForm(f => ({ ...f, frequency: e.target.value as Frequency }))}>
-                  <option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option>
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="New recurring bill">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-5 space-y-3 max-h-[90vh] overflow-auto">
+              <h2 className="font-black">New recurring bill</h2>
+              <div><label className={label}>Vendor *</label>
+                <select className={input} value={form.vendorId} onChange={e => setForm(f => ({ ...f, vendorId: e.target.value }))}>
+                  <option value="">Select vendor</option>
+                  {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
               </div>
-              <div><label className={label}>Day of month</label><input type="number" className={input} value={form.dayOfMonth} onChange={e => setForm(f => ({ ...f, dayOfMonth: e.target.value }))} /></div>
-              <div><label className={label}>VAT %</label><input type="number" className={input} value={form.vatRate} onChange={e => setForm(f => ({ ...f, vatRate: e.target.value }))} /></div>
-              <div><label className={label}>Start date *</label><input type="date" className={input} value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} /></div>
-              <div><label className={label}>End date</label><input type="date" className={input} value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} /></div>
-            </div>
-            <div className="space-y-2">
-              <p className={label}>Lines (leave amount blank if it changes every period, e.g. electricity)</p>
-              {lines.map((l, i) => (
-                <div key={i} className="grid grid-cols-[1fr_1fr_90px] gap-2">
-                  <input className={input} placeholder="Description" value={l.description} onChange={e => setLines(ls => ls.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} />
-                  <select className={input} value={l.accountCode} onChange={e => setLines(ls => ls.map((x, j) => j === i ? { ...x, accountCode: e.target.value } : x))}>
-                    <option value="">Default expense</option>
-                    {expenseAccounts.map((a: { code: string; name: string }) => <option key={a.code} value={a.code}>{a.code} — {a.name}</option>)}
+              <div><label className={label}>Title *</label><input className={input} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Office rent" /></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className={label}>Frequency</label>
+                  <select className={input} value={form.frequency} onChange={e => setForm(f => ({ ...f, frequency: e.target.value as Frequency }))}>
+                    <option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option>
                   </select>
-                  <input type="number" className={input} placeholder="Amount" value={l.amount} onChange={e => setLines(ls => ls.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))} />
                 </div>
-              ))}
-              <button className="text-[11px] font-bold underline" onClick={() => setLines(ls => [...ls, blankLine()])}>+ Add line</button>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button className="btn-secondary text-[12px] px-4 min-h-10" onClick={() => setShowNew(false)}>Cancel</button>
-              <button className="btn-primary text-[12px] px-4 min-h-10" disabled={busy} onClick={create}>Save</button>
+                <div><label className={label}>Day of month</label><input type="number" className={input} value={form.dayOfMonth} onChange={e => setForm(f => ({ ...f, dayOfMonth: e.target.value }))} /></div>
+                <div><label className={label}>VAT %</label><input type="number" className={input} value={form.vatRate} onChange={e => setForm(f => ({ ...f, vatRate: e.target.value }))} /></div>
+                <div><label className={label}>Start date *</label><input type="date" className={input} value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} /></div>
+                <div><label className={label}>End date</label><input type="date" className={input} value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} /></div>
+              </div>
+              <div className="space-y-2">
+                <p className={label}>Lines (leave amount blank if it changes every period, e.g. electricity)</p>
+                {lines.map((l, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_90px] gap-2">
+                    <input className={input} placeholder="Description" value={l.description} onChange={e => setLines(ls => ls.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} />
+                    <select className={input} value={l.accountCode} onChange={e => setLines(ls => ls.map((x, j) => j === i ? { ...x, accountCode: e.target.value } : x))}>
+                      <option value="">Default expense</option>
+                      {expenseAccounts.map((a: { code: string; name: string }) => <option key={a.code} value={a.code}>{a.code} — {a.name}</option>)}
+                    </select>
+                    <input type="number" className={input} placeholder="Amount" value={l.amount} onChange={e => setLines(ls => ls.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))} />
+                  </div>
+                ))}
+                <button className="text-[11px] font-bold underline" onClick={() => setLines(ls => [...ls, blankLine()])}>+ Add line</button>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button className="btn-secondary text-[12px] px-4 min-h-10" onClick={() => setShowNew(false)}>Cancel</button>
+                <button className="btn-primary text-[12px] px-4 min-h-10" disabled={busy} onClick={create}>Save</button>
+              </div>
             </div>
           </div>
-        </div>
+        </Portal>
       )}
     </div>
   )

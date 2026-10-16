@@ -158,11 +158,30 @@ function useBodyScrollLock(locked: boolean) {
   }, [locked])
 }
 
-function Portal({ children, targetId }: { children: ReactNode; targetId?: string }) {
+export function Portal({ children, targetId }: { children: ReactNode; targetId?: string }) {
   const mounted = useMounted()
   if (!mounted) return null
   const target = targetId ? document.getElementById(targetId) : null
   return createPortal(children, target ?? document.body)
+}
+
+/**
+ * Workspace forms normally mount inside #module-workspace-root so the sidebar and
+ * topbar stay visible. When one is launched from a dialog that already lives on
+ * <body> (e.g. "Create contact" from inside a modal), that root sits *behind* the
+ * launching dialog, so the form is promoted to a full-screen body overlay instead.
+ * Decided once at mount so the form never jumps layers while open.
+ */
+function useWorkspaceTarget(workspace: boolean) {
+  const [nested] = useState(() =>
+    workspace
+    && typeof document !== 'undefined'
+    && document.querySelector("body > [role='dialog'][aria-modal='true']") !== null,
+  )
+  return {
+    inWorkspaceRoot: workspace && !nested,
+    targetId: workspace && !nested ? 'module-workspace-root' : undefined,
+  }
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -391,11 +410,12 @@ export function Modal({
   const overlayDismiss = useOverlayDismiss(onClose)
   const enterprise = variant === 'enterprise'
   const workspace = variant === 'workspace'
+  const wsTarget = useWorkspaceTarget(workspace)
 
   return (
-    <Portal targetId={workspace ? 'module-workspace-root' : undefined}>
+    <Portal targetId={wsTarget.targetId}>
     <div
-      className={`${workspace ? 'absolute h-full' : 'ui-enter ui-enter-backdrop fixed h-dvh'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
+      className={`${wsTarget.inWorkspaceRoot ? 'absolute h-full' : 'ui-enter ui-enter-backdrop fixed h-dvh'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
       style={{
         background: workspace ? 'var(--bg-app)' : enterprise ? 'rgba(15,23,42,0.48)' : 'rgba(0,0,0,0.55)',
         backdropFilter: workspace ? 'none' : enterprise ? 'blur(3px)' : 'blur(8px)',
@@ -512,10 +532,11 @@ export function SlidePanel({
   const panelRef = useFocusTrap<HTMLDivElement>(true, onClose)
   const overlayDismiss = useOverlayDismiss(onClose)
   const workspace = variant === 'workspace'
+  const wsTarget = useWorkspaceTarget(workspace)
   return (
-    <Portal targetId={workspace ? 'module-workspace-root' : undefined}>
+    <Portal targetId={wsTarget.targetId}>
     <div
-      className={`${workspace ? 'absolute h-full' : 'fixed h-dvh'} inset-0 z-[9000] overscroll-contain flex ${workspace ? 'justify-stretch bg-[var(--bg-app)] pointer-events-auto' : 'justify-end backdrop-blur-xs bg-black/40'}`}
+      className={`${wsTarget.inWorkspaceRoot ? 'absolute h-full' : 'fixed h-dvh'} inset-0 z-[9000] overscroll-contain flex ${workspace ? 'justify-stretch bg-[var(--bg-app)] pointer-events-auto' : 'justify-end backdrop-blur-xs bg-black/40'}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}

@@ -4,7 +4,7 @@ import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes, type JournalEntry } from '@/lib/store'
 import { downloadPdf } from '@/lib/pdf'
 import type { PdfLine } from '@/lib/pdf'
-import { Badge, Modal } from '@/components/ui'
+import { Badge, Modal, Portal } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { usePrismaAccountingReports } from '@/hooks/usePrismaAccountingReports'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
@@ -313,53 +313,55 @@ export default function JournalsTab() {
       )}
 
       {showManual && (
-        <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4" onClick={() => !saving && setShowManual(false)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div
-            className="relative w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5 shadow-xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="text-sm font-bold text-[var(--text-1)] mb-1">Manual journal entry</h3>
-            <p className="text-[11px] text-t3 mb-4">Posts directly to Prisma (source: manual). Must balance.</p>
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <label className="text-[11px] space-y-1">
-                <span className="font-semibold">Reference</span>
-                <input className="form-input w-full text-[11px]" value={manualRef} onChange={e => setManualRef(e.target.value)} placeholder="JRN/ADJ/001" />
+        <Portal>
+          <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4" onClick={() => !saving && setShowManual(false)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div
+              className="relative w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5 shadow-xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-bold text-[var(--text-1)] mb-1">Manual journal entry</h3>
+              <p className="text-[11px] text-t3 mb-4">Posts directly to Prisma (source: manual). Must balance.</p>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <label className="text-[11px] space-y-1">
+                  <span className="font-semibold">Reference</span>
+                  <input className="form-input w-full text-[11px]" value={manualRef} onChange={e => setManualRef(e.target.value)} placeholder="JRN/ADJ/001" />
+                </label>
+                <label className="text-[11px] space-y-1">
+                  <span className="font-semibold">Date *</span>
+                  <input type="date" className="form-input w-full text-[11px]" value={manualDate} onChange={e => setManualDate(e.target.value)} />
+                </label>
+              </div>
+              <label className="text-[11px] space-y-1 block mb-3">
+                <span className="font-semibold">Description</span>
+                <input className="form-input w-full text-[11px]" value={manualDesc} onChange={e => setManualDesc(e.target.value)} placeholder="Month-end adjustment" />
               </label>
-              <label className="text-[11px] space-y-1">
-                <span className="font-semibold">Date *</span>
-                <input type="date" className="form-input w-full text-[11px]" value={manualDate} onChange={e => setManualDate(e.target.value)} />
-              </label>
-            </div>
-            <label className="text-[11px] space-y-1 block mb-3">
-              <span className="font-semibold">Description</span>
-              <input className="form-input w-full text-[11px]" value={manualDesc} onChange={e => setManualDesc(e.target.value)} placeholder="Month-end adjustment" />
-            </label>
-            <div className="space-y-2 mb-3">
-              {manualLines.map((line, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2">
-                  <input className="form-input text-[11px] col-span-4" placeholder="Account (e.g. 1800 - AR)" value={line.account}
-                    onChange={e => setManualLines(prev => prev.map((l, i) => i === idx ? { ...l, account: e.target.value } : l))} />
-                  <input className="form-input text-[11px] col-span-4" placeholder="Line description" value={line.description}
-                    onChange={e => setManualLines(prev => prev.map((l, i) => i === idx ? { ...l, description: e.target.value } : l))} />
-                  <input className="form-input text-[11px] col-span-2" type="number" placeholder="Debit" value={line.debit}
-                    onChange={e => setManualLines(prev => prev.map((l, i) => i === idx ? { ...l, debit: e.target.value } : l))} />
-                  <input className="form-input text-[11px] col-span-2" type="number" placeholder="Credit" value={line.credit}
-                    onChange={e => setManualLines(prev => prev.map((l, i) => i === idx ? { ...l, credit: e.target.value } : l))} />
-                </div>
-              ))}
-            </div>
-            <button type="button" className="btn-secondary text-[11px] mb-4" onClick={() => setManualLines(prev => [...prev, emptyLine()])}>
-              Add line
-            </button>
-            <div className="flex justify-end gap-2">
-              <button type="button" className="btn-secondary text-[11px]" disabled={saving} onClick={() => setShowManual(false)}>Cancel</button>
-              <button type="button" className="btn-primary text-[11px]" disabled={saving} onClick={() => void submitManualJournal()}>
-                {saving ? 'Posting…' : 'Post journal'}
+              <div className="space-y-2 mb-3">
+                {manualLines.map((line, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2">
+                    <input className="form-input text-[11px] col-span-4" placeholder="Account (e.g. 1800 - AR)" value={line.account}
+                      onChange={e => setManualLines(prev => prev.map((l, i) => i === idx ? { ...l, account: e.target.value } : l))} />
+                    <input className="form-input text-[11px] col-span-4" placeholder="Line description" value={line.description}
+                      onChange={e => setManualLines(prev => prev.map((l, i) => i === idx ? { ...l, description: e.target.value } : l))} />
+                    <input className="form-input text-[11px] col-span-2" type="number" placeholder="Debit" value={line.debit}
+                      onChange={e => setManualLines(prev => prev.map((l, i) => i === idx ? { ...l, debit: e.target.value } : l))} />
+                    <input className="form-input text-[11px] col-span-2" type="number" placeholder="Credit" value={line.credit}
+                      onChange={e => setManualLines(prev => prev.map((l, i) => i === idx ? { ...l, credit: e.target.value } : l))} />
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="btn-secondary text-[11px] mb-4" onClick={() => setManualLines(prev => [...prev, emptyLine()])}>
+                Add line
               </button>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn-secondary text-[11px]" disabled={saving} onClick={() => setShowManual(false)}>Cancel</button>
+                <button type="button" className="btn-primary text-[11px]" disabled={saving} onClick={() => void submitManualJournal()}>
+                  {saving ? 'Posting…' : 'Post journal'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </Portal>
       )}
     </>
   )
