@@ -5,6 +5,51 @@ import type { SerialCountReport } from '@/lib/inventory/serial-count-compare'
 
 const csvCell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
 
+
+type Hold = { serial: string; productName: string; status: string; orderRef: string; orderStatus: string; reason: string }
+
+/** Serials held for an order that was cancelled, set back to a quotation, or no longer exists. */
+function StaleHolds() {
+  const [items, setItems] = useState<Hold[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const call = async (apply: boolean) => {
+    setBusy(true); setMsg('')
+    try {
+      const res = await fetch('/api/inventory/stale-serial-holds', apply
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apply: true }) }
+        : undefined)
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { setMsg(data?.error || 'Could not check the held serials'); return }
+      if (apply) { setMsg(`${data.released} serial(s) released back to available stock`); setItems(null) } else setItems(data.items ?? [])
+    } catch { setMsg('Could not check the held serials') } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="card p-4 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-bold">Serials held for orders that no longer need them</p>
+          <p className="text-[11px] text-t3">Held (assigned or reserved) for a sales order that is cancelled, back to a quotation, or gone.</p>
+        </div>
+        <button className="btn-outline text-[12px]" onClick={() => void call(false)} disabled={busy}>{busy && items === null ? 'Checking…' : 'Check held serials'}</button>
+      </div>
+      {msg && <p className="mt-2 text-[12px]">{msg}</p>}
+      {items !== null && (items.length === 0
+        ? <p className="mt-2 text-[12px]" style={{ color: 'var(--success)' }}>No stale holds.</p>
+        : (
+          <div className="mt-3">
+            <ul className="text-[11px] mb-3 space-y-1">
+              {items.map(i => <li key={i.serial + i.orderRef}><span className="font-mono">{i.serial}</span> · {i.productName} · {i.orderRef} · {i.reason}</li>)}
+            </ul>
+            <button className="btn-primary text-[12px]" onClick={() => void call(true)} disabled={busy}>{busy ? 'Releasing…' : `Release ${items.length} serial${items.length === 1 ? '' : 's'}`}</button>
+          </div>
+        ))}
+    </div>
+  )
+}
+
 /** Inventory → Serial count check: paste or upload the serials counted on the shelf. */
 export default function SerialCountCheck() {
   const [text, setText] = useState('')
@@ -66,6 +111,7 @@ export default function SerialCountCheck() {
         Paste the serial numbers you counted (one per line, or a column copied from a sheet), or upload a text/CSV file.
         The system compares them with its serial register and lists the unsold serials that were not counted. Nothing is changed.
       </p>
+      <StaleHolds />
       <div className="card p-4 mb-4">
         <textarea className="form-input w-full font-mono text-[12px]" rows={8} value={text} onChange={e => setText(e.target.value)} placeholder={'5CG2151FN4\n5CG2151FMM\n…'} />
         <div className="mt-3 flex flex-wrap items-center gap-3">

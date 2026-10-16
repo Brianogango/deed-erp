@@ -82,7 +82,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { reconcileKilimallDispatchSerials, applyDeliveryStockMutation, applyReceiptStockMutation, applyPosStockMutation, applyVendorReturnStockMutation, reserveStockForSaleOrder, reverseReceiptStockMutation } from '@/lib/inventory/stock-transactions'
+import { releaseStaleSerialHolds, reconcileKilimallDispatchSerials, applyDeliveryStockMutation, applyReceiptStockMutation, applyPosStockMutation, applyVendorReturnStockMutation, reserveStockForSaleOrder, reverseReceiptStockMutation } from '@/lib/inventory/stock-transactions'
 
 const PRODUCT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const PRISMA_PRODUCT_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -885,5 +885,45 @@ describe('reconcileKilimallDispatchSerials()', () => {
     const moves = JSON.parse(payload.deed_stockMoves)
     expect(moves).toHaveLength(1)
     expect(moves[0].reason).toContain('Kilimall KO/0001')
+  })
+})
+
+
+describe('releaseStaleSerialHolds()', () => {
+  const state = () => ({
+    deed_serials: [
+      { id: 's1', productId: PRODUCT_ID, serial: 'A1', status: 'assigned', saleOrderId: 'so-cancelled' },
+      { id: 's2', productId: PRODUCT_ID, serial: 'A2', status: 'reserved', saleOrderId: 'so-live' },
+      { id: 's3', productId: PRODUCT_ID, serial: 'A3', status: 'assigned', saleOrderId: 'so-gone' },
+      { id: 's4', productId: PRODUCT_ID, serial: 'A4', status: 'assigned', saleOrderId: 'so-quote' },
+      { id: 's5', productId: PRODUCT_ID, serial: 'A5', status: 'sold', saleOrderId: 'so-cancelled' },
+    ],
+    deed_saleOrders: [
+      { id: 'so-cancelled', ref: 'SO/2026/0112', status: 'cancelled' },
+      { id: 'so-live', ref: 'SO/2026/0111', status: 'sale' },
+      { id: 'so-quote', ref: 'QUO/2026/0320', status: 'quotation' },
+    ],
+    deed_products: [{ id: PRODUCT_ID, name: 'Phone' }],
+  })
+
+  it('lists serials held for cancelled, quotation or missing orders, and leaves live holds and sold units alone', async () => {
+    mockLoadAppState.mockResolvedValue(state())
+    const r = await releaseStaleSerialHolds({ apply: false })
+    expect(r).toEqual(expect.objectContaining({ ok: true, released: 0 }))
+    if (!r.ok) throw new Error('unreachable')
+    expect(r.items.map(i => i.serial).sort()).toEqual(['A1', 'A3', 'A4'])
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('frees them and clears the order link when applied', async () => {
+    mockLoadAppState.mockResolvedValue(state())
+    const r = await releaseStaleSerialHolds({ apply: true })
+    expect(r).toEqual(expect.objectContaining({ ok: true, released: 3 }))
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_serials)
+    const by = (id: string) => saved.find((x: { id: string }) => x.id === id)
+    expect(by('s1')).toMatchObject({ status: 'available' })
+    expect(by('s1').saleOrderId).toBeUndefined()
+    expect(by('s2')).toMatchObject({ status: 'reserved', saleOrderId: 'so-live' })
+    expect(by('s5')).toMatchObject({ status: 'sold' })
   })
 })

@@ -11,6 +11,7 @@ import type { LocationId } from '@/lib/store'
 import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mirror'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
 import { isOnHandSerialStatus } from '@/lib/inventory/serial-status'
+import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { isNonStockProduct } from '@/lib/sales/non-stock-line'
 import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
@@ -1110,6 +1111,62 @@ export async function reconcileKilimallDispatchSerials(params: {
       deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
     })
     return { ok: true as const, items, applied: newMoves.length }
+  })
+}
+
+export interface StaleSerialHold {
+  serial: string
+  productName: string
+  status: string
+  orderRef: string
+  orderStatus: string
+  reason: string
+}
+
+/**
+ * Serials still held (assigned/reserved) for a sales order that no longer needs them: the order
+ * is cancelled, was set back to a quotation, or no longer exists. Cancelling or resetting an
+ * order used to free only the serials listed on its order lines, not the ones claimed when its
+ * delivery was prepared, so those stayed held for ever. Dry run by default.
+ */
+export async function releaseStaleSerialHolds(params: {
+  apply: boolean
+}): Promise<{ ok: true; items: StaleSerialHold[]; released: number } | { ok: false; error: string }> {
+  return withAppStateKeyLock('deed_serials', async () => {
+    const state = await loadAppState(['deed_serials', 'deed_saleOrders', 'deed_products'])
+    const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+    const orders = Array.isArray(state.deed_saleOrders) ? (state.deed_saleOrders as Array<Record<string, any>>) : []
+    const products = Array.isArray(state.deed_products) ? (state.deed_products as Array<Record<string, any>>) : []
+    const orderById = new Map(orders.map(o => [String(o.id), o]))
+    const productName = new Map(products.map(p => [String(p.id), String(p.name ?? '')]))
+    const dead = new Set(['cancelled', 'quotation', 'quotation_sent'])
+
+    const items: StaleSerialHold[] = []
+    let released = 0
+    for (const serial of serials) {
+      const status = String(serial.status || '').toLowerCase()
+      if (!['assigned', 'reserved'].includes(status) || !serial.saleOrderId) continue
+      const order = orderById.get(String(serial.saleOrderId))
+      const orderStatus = order ? normalizeSaleStatus(order.status) : 'missing'
+      if (order && !dead.has(orderStatus)) continue
+      items.push({
+        serial: String(serial.serial || ''),
+        productName: productName.get(String(serial.productId)) || '',
+        status,
+        orderRef: String(order?.ref ?? order?.orderNumber ?? serial.saleOrderId),
+        orderStatus,
+        reason: order ? `Held for an order that is ${orderStatus.replace('_', ' ')}` : 'Held for an order that no longer exists',
+      })
+      if (params.apply) {
+        serial.status = 'available'
+        serial.saleOrderId = undefined
+        released += 1
+      }
+    }
+    if (params.apply && released > 0) {
+      await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
+    }
+    return { ok: true as const, items, released }
   })
 }
 

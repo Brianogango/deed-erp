@@ -14073,11 +14073,16 @@ const storeCtx: AppState = {
       setStockReservations(prev => prev.map(r =>
         r.referenceId === id && r.status === 'reserved' ? { ...r, status: 'cancelled' as const } : r
       ))
-      // Release SO-picked serials back to available (same as cancel) so Available stock recovers.
-      const allSerialIds = so.lines.flatMap((l: any) => l.serialIds ?? [])
-      if (allSerialIds.length > 0) {
-        setSerials(p => p.map(s => allSerialIds.includes(s.id) ? { ...s, status: 'available', saleOrderId: undefined } : s))
-      }
+      // Release SO-picked serials back to available (same as cancel) so Available stock recovers:
+      // those on the order lines, on the deliveries just cancelled, and any linked to the order.
+      const allSerialIds = new Set<string>([
+        ...so.lines.flatMap((l: any) => l.serialIds ?? []),
+        ...pendingDeliveries.flatMap(d => d.lines.flatMap(l => l.serialIds ?? [])),
+      ])
+      setSerials(p => p.map(s =>
+        (allSerialIds.has(s.id) || s.saleOrderId === id) && !['sold', 'delivered'].includes(String(s.status))
+          ? { ...s, status: 'available', saleOrderId: undefined }
+          : s))
       const [normalized] = normalizeSaleOrdersForClient([
         { ...updated, ...(result.data && typeof result.data === 'object' ? result.data : {}), status: 'quotation' },
       ]) as SaleOrder[]
@@ -14110,11 +14115,19 @@ const storeCtx: AppState = {
         showToast(`Cannot cancel ${so.ref}: ${blockers.join('; ')}`, 'error')
         return
       }
-      // Release serials, pending deliveries and reservations.
-      const allSerialIds = so.lines.flatMap((l: any) => l.serialIds ?? [])
-      if (allSerialIds.length > 0) {
-        setSerials(p => p.map(s => allSerialIds.includes(s.id) ? { ...s, status: 'available' } : s))
-      }
+      // Release serials, pending deliveries and reservations. A serial claimed when the delivery was
+      // prepared sits on the delivery lines and is linked to the order (saleOrderId), not always on
+      // the order lines, so all three sources are released; sold units are never touched.
+      const allSerialIds = new Set<string>([
+        ...so.lines.flatMap((l: any) => l.serialIds ?? []),
+        ...delRef.current
+          .filter(d => d.saleOrderId === id && ['draft', 'waiting', 'ready'].includes(d.status))
+          .flatMap(d => d.lines.flatMap(l => l.serialIds ?? [])),
+      ])
+      setSerials(p => p.map(s =>
+        (allSerialIds.has(s.id) || s.saleOrderId === id) && !['sold', 'delivered'].includes(String(s.status))
+          ? { ...s, status: 'available', saleOrderId: undefined }
+          : s))
       delRef.current.filter(d => d.saleOrderId === id && ['draft', 'waiting', 'ready'].includes(d.status)).forEach(d => {
         setDeliveries(prev => prev.map(x => x.id === d.id ? { ...x, status: 'cancelled' as const } : x))
         sync(`/api/deliveries/${d.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'cancelled' }) })
