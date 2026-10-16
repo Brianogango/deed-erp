@@ -1036,6 +1036,83 @@ export async function applyPosStockMutation(params: {
   return { ok: true, moves: newMoves }
 }
 
+export interface KilimallSerialRepairItem {
+  dispatchRef: string
+  orderRef: string
+  productName: string
+  serialNumber: string
+  /** Serial status found on the server, or "missing". */
+  found: string
+  location: string
+  action: 'mark_sold' | 'serial_missing'
+}
+
+/**
+ * Every dispatched Kilimall order must have its serial marked sold. Finds the
+ * dispatches whose serial is not sold (a stale browser copy of the serial register can
+ * write one back to available) and, when `apply` is true, marks them sold, takes the
+ * unit out of the product's on-hand and writes a stock move. Dry run by default.
+ */
+export async function reconcileKilimallDispatchSerials(params: {
+  apply: boolean
+  userId?: string
+}): Promise<{ ok: true; items: KilimallSerialRepairItem[]; applied: number } | { ok: false; error: string }> {
+  return withAppStateKeyLock('deed_serials', async () => {
+    const state = await loadAppState(['deed_kilimallDispatches', 'deed_serials', 'deed_products', 'deed_stockMoves'])
+    const dispatches = Array.isArray(state.deed_kilimallDispatches) ? (state.deed_kilimallDispatches as Array<Record<string, any>>) : []
+    const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+    const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+    const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+
+    const items: KilimallSerialRepairItem[] = []
+    const newMoves: BlobStockMove[] = []
+    const stockLevelDeltas = new Map<string, number>()
+
+    for (const d of dispatches) {
+      if (d.status !== 'dispatched') continue
+      const serial = serials.find(x => x.id === d.serialId)
+        || serials.find(x => x.productId === d.productId && String(x.serial || '').toLowerCase() === String(d.serialNumber || '').toLowerCase())
+      const base = {
+        dispatchRef: String(d.ref || ''),
+        orderRef: String(d.orderRef || ''),
+        productName: String(d.productName || ''),
+        serialNumber: String(d.serialNumber || ''),
+      }
+      if (!serial) { items.push({ ...base, found: 'missing', location: '-', action: 'serial_missing' }); continue }
+      if (String(serial.status || '').toLowerCase() === 'sold') continue
+      items.push({ ...base, found: String(serial.status || ''), location: String(serial.location || ''), action: 'mark_sold' })
+      if (!params.apply) continue
+
+      const wasOnHand = isOnHandSerialStatus(serial.status)
+      const fromLocation = String(serial.location || 'warehouse')
+      serial.status = 'sold'
+      serial.location = 'customer'
+      serial.soldDate = String(d.dispatchDate || d.date || nowIso())
+      if (wasOnHand) {
+        const idx = products.findIndex(p => p.id === serial.productId)
+        if (idx >= 0) products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - 1) }
+        stockLevelDeltas.set(serial.productId, (stockLevelDeltas.get(serial.productId) ?? 0) - 1)
+      }
+      newMoves.push({
+        id: randomUUID(), type: 'out', productId: serial.productId, productName: base.productName || 'Item',
+        qty: 1, reason: `Kilimall ${base.orderRef || base.dispatchRef} (serial correction)`,
+        fromLocation: fromLocation as LocationId, toLocation: 'customer' as LocationId,
+        serialNumbers: [base.serialNumber].filter(Boolean),
+        date: nowIso(), userId: params.userId ?? 'system', documentRef: base.orderRef || base.dispatchRef,
+      })
+    }
+
+    if (!params.apply || newMoves.length === 0) return { ok: true as const, items, applied: 0 }
+    await bumpPrismaOnHand(stockLevelDeltas)
+    await saveStoreKeys({
+      deed_products: JSON.stringify(products),
+      deed_serials: JSON.stringify(serials),
+      deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+    })
+    return { ok: true as const, items, applied: newMoves.length }
+  })
+}
+
 /**
  * Authoritative GRN stock in (after serial validation).
  *

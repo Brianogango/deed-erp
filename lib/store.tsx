@@ -3449,7 +3449,7 @@ interface AppState {
   kilimallOrders: KilimallOrder[]
   kilimallDispatches: KilimallDispatch[]
   kilimallSettlements: KilimallSettlement[]
-  createKilimallOrder: (p: Omit<KilimallOrder, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => KilimallOrder | null
+  createKilimallOrder: (p: Omit<KilimallOrder, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => Promise<KilimallOrder | null>
   updateKilimallOrder: (id: string, p: Partial<KilimallOrder>) => void
   confirmKilimallDispatch: (
     orderId: string,
@@ -3464,7 +3464,7 @@ interface AppState {
       dispatchNotes?: string
     },
   ) => Promise<KilimallDispatch | null>
-  createKilimallSettlement: (p: Omit<KilimallSettlement, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => KilimallSettlement | null
+  createKilimallSettlement: (p: Omit<KilimallSettlement, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => Promise<KilimallSettlement | null>
   updateKilimallSettlement: (id: string, p: Partial<KilimallSettlement>) => void
   reconcileKilimallSettlement: (settlementId: string) => void
   matchKilimallSettlementLine: (settlementId: string, lineId: string, orderId: string, note: string) => boolean
@@ -4564,6 +4564,15 @@ export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
   safeLocalStorageSet(lsKey, String(next))
   C[key] = next
   return `${prefix}/${String(next).padStart(4, '0')}`
+}
+
+/** Allocate a Kilimall order / dispatch / settlement ref from the server-side atomic counter. */
+async function fetchNextKilimallRef(kind: 'kilimall_order' | 'kilimall_dispatch' | 'kilimall_settlement'): Promise<string | null> {
+  try {
+    return await allocateDocNumber(kind)
+  } catch {
+    return null
+  }
 }
 
 /** Allocate a delivery-job ref from the server-side atomic counter. */
@@ -7964,7 +7973,7 @@ const storeCtx: AppState = {
 
     // Kilimall
     kilimallOrders, kilimallDispatches, kilimallSettlements,
-    createKilimallOrder: (p) => {
+    createKilimallOrder: async (p) => {
       const user = currentUser()
       if (!user || !['director', 'kilimall_officer', 'sales_rep'].includes(user.role)) {
         showToast('Unauthorized to create Kilimall orders', 'error')
@@ -7987,6 +7996,12 @@ const storeCtx: AppState = {
         return null
       }
 
+      const ref = await fetchNextKilimallRef('kilimall_order')
+      if (!ref) { showToast('Could not get an order number from the server. Check your connection and try again.', 'error'); return null }
+      if (kilimallOrdersRef.current.some(order => order.kilimallRef.trim().toLowerCase() === kilimallRef.toLowerCase())) {
+        showToast(`Kilimall order ${kilimallRef} already exists`, 'error')
+        return null
+      }
       const order: KilimallOrder = {
         ...p,
         kilimallRef,
@@ -7994,7 +8009,7 @@ const storeCtx: AppState = {
         unitPrice,
         total: Math.round(qty * unitPrice * 100) / 100,
         id: uid(),
-        ref: seq('KO', 'ko'),
+        ref,
         status: 'pending',
         createdDate: now(),
         createdBy: currentUserId ?? 'system',
@@ -8027,6 +8042,11 @@ const storeCtx: AppState = {
       if (isSubstitution && !opts?.fulfilledProductId) {
         showToast('Select the product being shipped for a substitution', 'error'); return null
       }
+
+      // The dispatch number comes from the server's counter (a number lost to a failed
+      // dispatch is harmless; a duplicate is not), before any stock moves.
+      const dispatchRef = await fetchNextKilimallRef('kilimall_dispatch')
+      if (!dispatchRef) { showToast('Could not get a dispatch number from the server. Check your connection and try again.', 'error'); return null }
 
       // Authoritative stock out on the server first (serial -> sold, product on-hand,
       // stock move, COGS), exactly as a till sale does. Without this the serial was only
@@ -8062,7 +8082,7 @@ const storeCtx: AppState = {
       if (stillPending && stillPending.status !== 'pending') { showToast('Order already dispatched', 'error'); return null }
 
       const dispatch: KilimallDispatch = {
-        id: uid(), ref: seq('KD', 'kd'), date: opts?.dispatchDate || now(),
+        id: uid(), ref: dispatchRef, date: opts?.dispatchDate || now(),
         orderId: order.id, orderRef: order.ref, kilimallRef: order.kilimallRef,
         productId: shipProductId, productName: shipProductName,
         orderedProductId: isSubstitution ? order.productId : undefined,
@@ -8110,7 +8130,7 @@ const storeCtx: AppState = {
       )
       return dispatch
     },
-    createKilimallSettlement: (p) => {
+    createKilimallSettlement: async (p) => {
       const user = currentUser()
       if (!user || !['director', 'finance_officer', 'kilimall_officer'].includes(user.role)) {
         showToast('Unauthorized to manage settlements', 'error')
@@ -8151,6 +8171,8 @@ const storeCtx: AppState = {
         return null
       }
 
+      const settlementRef = await fetchNextKilimallRef('kilimall_settlement')
+      if (!settlementRef) { showToast('Could not get a settlement number from the server. Check your connection and try again.', 'error'); return null }
       const settlement: KilimallSettlement = {
         ...p,
         grossAmount,
@@ -8162,7 +8184,7 @@ const storeCtx: AppState = {
           amount: Number(line.amount),
         })),
         id: uid(),
-        ref: seq('KS', 'ks'),
+        ref: settlementRef,
         status: 'draft',
         createdDate: now(),
         createdBy: currentUserId ?? 'system',
