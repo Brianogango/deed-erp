@@ -41,10 +41,13 @@ export default function AgentCommissions({
   showToast,
   contacts,
   moneyAccounts,
+  limited = false,
 }: {
   showToast: Toast
   contacts: ContactLike[]
   moneyAccounts: MoneyAccount[]
+  /** Admin Officer view: add agents, add and cancel commission bills; no payouts or payout settings. */
+  limited?: boolean
 }) {
   const [data, setData] = useState<Overview | null>(null)
   const [busy, setBusy] = useState(false)
@@ -250,7 +253,7 @@ export default function AgentCommissions({
         </div>
       </div>
 
-      {settings && (
+      {settings && !limited && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border-lt bg-card p-3 text-xs">
           <label className="flex items-center gap-2 font-semibold text-text-1">
             <input
@@ -408,7 +411,7 @@ export default function AgentCommissions({
             </table>
           </div>
 
-          {lines.some(r => r.status === 'due') && (
+          {!limited && lines.some(r => r.status === 'due') && (
             <div className="grid gap-2 border-t border-border-lt pt-3 sm:grid-cols-5">
               <select className="form-input text-xs" aria-label="Payment method" value={method} onChange={e => setMethod(e.target.value as AgentPayout['method'])}>
                 <option value="mpesa">M-Pesa</option>

@@ -6,7 +6,8 @@
  *          (Dr 6403 Agent Commissions / Cr 3314 Payable), paid with the
  *          agent's next payout.
  * GET    — ?file=AGB/0001 downloads the bill's attachment.
- * DELETE — ?id=AGB/0001 cancels an unpaid manual bill (journal reversed).
+ * DELETE — ?id=AGB/0001 cancels an unpaid manual bill (journal reversed). POST, GET and DELETE are
+ *          open to the Director, Finance Officer and Admin Officer.
  */
 import { randomUUID } from 'crypto'
 import path from 'path'
@@ -19,6 +20,8 @@ import { deleteObject, getObject, putObject } from '@/lib/infra/object-store'
 export const dynamic = 'force-dynamic'
 
 const ROLES = ['director', 'finance_officer']
+// The Admin Officer can add and cancel commission bills and open attachments; paying agents stays with Finance.
+const ADD_ROLES = [...ROLES, 'admin_officer']
 const MAX_BYTES = 10 * 1024 * 1024
 const ALLOWED_TYPES = new Set([
   'application/pdf',
@@ -35,7 +38,7 @@ const safeStem = (value: string) =>
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requireRole(ADD_ROLES)
     const id = new URL(request.url).searchParams.get('file')?.trim()
     const row = id ? await findCommission(id) : undefined
     if (!row?.attachment) return NextResponse.json({ error: 'No attachment on this commission' }, { status: 404 })
@@ -52,7 +55,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requireRole(ADD_ROLES)
     const multipart = (request.headers.get('content-type') || '').includes('multipart/form-data')
     let body: Record<string, unknown> = {}
     let file: File | null = null
@@ -110,7 +113,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requireRole(ADD_ROLES)
     const id = new URL(request.url).searchParams.get('id')?.trim()
     if (!id) return NextResponse.json({ error: 'Which commission bill?' }, { status: 422 })
     const commission = await cancelManualCommission(id, { id: actor.id, name: actor.name || actor.username })

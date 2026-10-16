@@ -13,10 +13,12 @@ import { AGENT_SETTINGS_KEY, loadAgentOverview, readAgentSettings } from '@/lib/
 export const dynamic = 'force-dynamic'
 
 const ROLES = ['director', 'finance_officer']
+// The Admin Officer can see the agent list and commissions (to add a commission bill), but not change payout settings.
+const READ_ROLES = [...ROLES, 'admin_officer']
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requireRole(READ_ROLES)
     return NextResponse.json(await loadAgentOverview())
   })
 }
