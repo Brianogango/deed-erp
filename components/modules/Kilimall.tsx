@@ -850,7 +850,7 @@ function KilimallContent() {
                   The selected serial is reserved and removed from available stock when dispatch is confirmed.
                 </div>
                 <button className="btn-primary inline-flex items-center gap-1.5" onClick={handleDispatch}
-                  disabled={availableSerials.length === 0}>
+                  disabled={availableSerials.length === 0 || dispatching}>
                   <Fa icon={faCheck} aria-hidden="true" /> Confirm Dispatch
                 </button>
                 <button className="btn-outline text-[11px]" onClick={resetDispatchForm}>
