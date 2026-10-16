@@ -62,6 +62,7 @@ vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
 vi.mock('@/lib/server-store', () => ({
   loadAppState: mockLoadAppState,
   saveStoreKeys: mockSaveStoreKeys,
+  withAppStateKeyLock: (_key: string, fn: () => Promise<unknown>) => fn(),
 }))
 vi.mock('@/lib/doc-ref-counter', () => ({ getNextDocNumber: mockGetNextDocNumber }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: mockWriteFinancialAudit }))
@@ -331,6 +332,50 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       data: expect.objectContaining({ status: 'sale' }),
     }))
     expect(mockPrisma.$transaction).toHaveBeenCalled()
+  })
+
+  it('hands back the repair\'s existing invoice instead of raising a second one', async () => {
+    mockPrisma.saleOrder.findUnique.mockResolvedValue({ ...saleOrder, status: 'sale' })
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [{ id: 'inv-live', ref: 'INV/2026/0100', status: 'draft', saleOrderId: ORDER_ID, repairId: REPAIR_ID }],
+      deed_deliveries: [],
+      deed_repairs_v2: [{ id: REPAIR_ID, ref: 'REP/0294', saleOrderId: ORDER_ID, status: 'ready' }],
+    })
+    mockPrisma.invoice.findMany.mockResolvedValue([{ id: 'inv-live', invoiceNumber: 'INV/2026/0100', status: 'draft', items: [], createdAt: new Date('2026-10-01') }])
+
+    const res = await POST(
+      new NextRequest('http://localhost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'regular', source: 'repair' }) }),
+      { params: Promise.resolve({ id: ORDER_ID }) },
+    )
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({ existing: true, invoice: { id: 'inv-live', ref: 'INV/2026/0100' } })
+    expect(mockPrisma.invoice.create).not.toHaveBeenCalled()
+  })
+
+  it('still invoices afresh once the earlier invoice was replaced by a reissue', async () => {
+    mockPrisma.saleOrder.findUnique.mockResolvedValue({ ...saleOrder, status: 'sale' })
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [],
+      deed_deliveries: [],
+      deed_repairs_v2: [{ id: REPAIR_ID, ref: 'REP/0294', saleOrderId: ORDER_ID, status: 'ready', previousInvoiceIds: ['inv-old'] }],
+    })
+    mockPrisma.invoice.findMany.mockResolvedValue([{ id: 'inv-old', invoiceNumber: 'INV/2026/0099', status: 'posted', items: [], createdAt: new Date('2026-09-01') }])
+    mockPrisma.repair.findUnique.mockResolvedValue({ id: REPAIR_ID })
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+      saleOrder: { findUnique: vi.fn().mockResolvedValue({ ...saleOrder, status: 'sale' }) },
+      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+      invoice: { create: mockPrisma.invoice.create },
+      repair: { update: mockPrisma.repair.update },
+    }))
+
+    const res = await POST(
+      new NextRequest('http://localhost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'regular', source: 'repair' }) }),
+      { params: Promise.resolve({ id: ORDER_ID }) },
+    )
+    expect(res.status).toBe(200)
+    expect((await res.json()).existing).toBeUndefined()
+    expect(mockPrisma.invoice.create).toHaveBeenCalled()
   })
 
   it('does not confirm a repair quotation that is still in the workshop', async () => {
