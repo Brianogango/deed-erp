@@ -771,6 +771,35 @@ describe('applyPosStockMutation()', () => {
     expect(moves[0].fromLocation).toBe('warehouse')
   })
 
+  it('takes a serial out of stock for a Kilimall dispatch and labels the move', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Phone', stockQty: 2, requiresSerial: true, trackingMethod: 'serial', unit: 'pcs' }],
+      deed_serials: [
+        { id: 's1', productId: PRODUCT_ID, serial: 'SN-1', status: 'available', location: 'warehouse' },
+        { id: 's2', productId: PRODUCT_ID, serial: 'SN-2', status: 'available', location: 'warehouse' },
+      ],
+      deed_bulkStock: [],
+      deed_stockMoves: [],
+    })
+
+    const result = await applyPosStockMutation({
+      orderRef: 'KO-0001',
+      reasonLabel: 'Kilimall',
+      lines: [{ productId: PRODUCT_ID, productName: 'Phone', qty: 1, serialId: 's1', serialNumber: 'SN-1' }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }))
+    const payload = mockSaveStoreKeys.mock.calls[0][0]
+    const serials = JSON.parse(payload.deed_serials)
+    expect(serials.find((s: { id: string }) => s.id === 's1').status).toBe('sold')
+    expect(serials.find((s: { id: string }) => s.id === 's2').status).toBe('available')
+    expect(JSON.parse(payload.deed_products)[0].stockQty).toBe(1)
+    const moves = JSON.parse(payload.deed_stockMoves)
+    expect(moves[0].reason).toBe('Kilimall KO-0001')
+    expect(moves[0].serialNumbers).toEqual(['SN-1'])
+  })
+
   it('fails when warehouse is empty even if shop has stock', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_products: [{ id: PRODUCT_ID, name: 'Adapter', stockQty: 2, requiresSerial: false, unit: 'pcs' }],
