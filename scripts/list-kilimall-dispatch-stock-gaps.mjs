@@ -64,8 +64,29 @@ try {
     row.units += 1
     perProduct.set(d.productId, row)
   }
-  console.log('\nProducts whose on-hand is too high (current stockQty -> after correction):')
-  for (const [id, r] of perProduct) console.log(`  ${r.name}: ${r.stockQty ?? '?'} -> ${Math.max(0, Number(r.stockQty ?? 0) - r.units)}  (${r.units} unit${r.units === 1 ? '' : 's'})  [${id}]`)
+  console.log('\nPer affected product (the serial register is the truth for serial-tracked items):')
+  const uuid = /^[0-9a-f-]{36}$/i
+  for (const [id, r] of perProduct) {
+    const mine = serials.filter(x => x.productId === id)
+    const count = st => mine.filter(x => String(x.status || '').toLowerCase() === st).length
+    const available = mine.filter(x => ['available', 'in_stock'].includes(String(x.status || '').toLowerCase()))
+    const atWarehouse = available.filter(x => String(x.location || '') === 'warehouse').length
+    let prismaQty = 'n/a'
+    if (uuid.test(id)) {
+      const { rows } = await pool.query('SELECT qty_on_hand FROM stock_levels WHERE product_id = $1::uuid', [id])
+      prismaQty = rows[0] ? String(rows[0].qty_on_hand) : 'no row'
+    }
+    console.log(`  ${r.name}\n    app stockQty: ${r.stockQty ?? '?'}   database qty_on_hand: ${prismaQty}   serials: available ${available.length} (${atWarehouse} at warehouse), sold ${count('sold')}, total ${mine.length}   gap units: ${r.units}   [${id}]`)
+  }
+  const stillAvailable = gaps.filter(d => ['available', 'in_stock'].includes(String(serialById.get(d.serialId)?.status || '').toLowerCase()))
+  if (stillAvailable.length) {
+    console.log('\nCHECK: these dispatches are recorded but their serial is still AVAILABLE (not sold):')
+    for (const d of stillAvailable) console.log(`  ${d.ref} order ${d.orderRef || d.orderId} serial ${d.serialNumber}`)
+  }
+  const refCount = new Map()
+  for (const d of dispatches) refCount.set(d.ref, (refCount.get(d.ref) || 0) + 1)
+  const dup = [...refCount].filter(([, n]) => n > 1)
+  if (dup.length) console.log(`\nNOTE: ${dup.length} dispatch reference(s) are used more than once: ${dup.map(([r, n]) => `${r} x${n}`).join(', ')}`)
   console.log('\nRead-only: nothing was changed.')
 } finally {
   await pool.end()
