@@ -438,6 +438,61 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
     { key: 'status', label: 'Status', priority: 1, width: '140px', render: bb => <StatusPill status={bb.status} />, accessor: bb => bb.status },
   ]
 
+  // Rendered in both the list and detail views: the Pay / Add-as-credit buttons live in detail.
+  const settleModals = (
+    <>
+        {payModal && (
+          <Modal title="Pay customer" onClose={() => setPayModal(null)}>
+            <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
+              Cash leaves the till or bank. This buy-back cannot also be added as store credit.
+            </p>
+            <Field label="Payment Method *">
+              <Select value={payMethod} onChange={setPayMethod} options={[{ value: '', label: 'Select…' }, ...PAY_OPTS]} />
+            </Field>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button className="btn-secondary text-[11px]" onClick={() => setPayModal(null)}>Cancel</button>
+              <button className="btn-primary text-[11px]" onClick={() => {
+                if (!payMethod) { showToast('Select a payment method', 'error'); return }
+                payBuyBack(payModal, payMethod as BuyBack['paymentMethod']); setPayModal(null)
+              }}>Confirm Payment</button>
+            </div>
+          </Modal>
+        )}
+
+        {creditModal && (() => {
+          const creditBb = buyBacks.find(b => b.id === creditModal)
+          return (
+            <Modal title="Add as store credit" onClose={() => { if (!crediting) setCreditModal(null) }}>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 8 }}>
+                Add <strong>{fmtKes(creditBb?.total ?? 0)}</strong> as store credit for <strong>{creditBb?.customerName}</strong>.
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
+                No cash leaves the till. They can spend it on a later invoice (and top up any balance). This buy-back cannot also be paid out.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <button className="btn-secondary text-[11px]" disabled={crediting} onClick={() => setCreditModal(null)}>Cancel</button>
+                <button
+                  className="btn-primary text-[11px]"
+                  disabled={crediting}
+                  onClick={async () => {
+                    setCrediting(true)
+                    try {
+                      await creditBuyBack(creditModal)
+                      setCreditModal(null)
+                    } finally {
+                      setCrediting(false)
+                    }
+                  }}
+                >
+                  {crediting ? 'Adding…' : 'Add as credit'}
+                </button>
+              </div>
+            </Modal>
+          )
+        })()}
+    </>
+  )
+
   if (detail) {
     const bb = detail
     const STEPS = ['draft', 'approved', 'paid', 'stocked']
@@ -532,6 +587,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
             )}
           </div>
         </div>
+        {settleModals}
       </div>
     )
   }
@@ -656,55 +712,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
         </Modal>
       )}
 
-      {payModal && (
-        <Modal title="Pay customer" onClose={() => setPayModal(null)}>
-          <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
-            Cash leaves the till or bank. This buy-back cannot also be added as store credit.
-          </p>
-          <Field label="Payment Method *">
-            <Select value={payMethod} onChange={setPayMethod} options={[{ value: '', label: 'Select…' }, ...PAY_OPTS]} />
-          </Field>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-[11px]" onClick={() => setPayModal(null)}>Cancel</button>
-            <button className="btn-primary text-[11px]" onClick={() => {
-              if (!payMethod) { showToast('Select a payment method', 'error'); return }
-              payBuyBack(payModal, payMethod as BuyBack['paymentMethod']); setPayModal(null)
-            }}>Confirm Payment</button>
-          </div>
-        </Modal>
-      )}
-
-      {creditModal && (() => {
-        const creditBb = buyBacks.find(b => b.id === creditModal)
-        return (
-          <Modal title="Add as store credit" onClose={() => { if (!crediting) setCreditModal(null) }}>
-            <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 8 }}>
-              Add <strong>{fmtKes(creditBb?.total ?? 0)}</strong> as store credit for <strong>{creditBb?.customerName}</strong>.
-            </p>
-            <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
-              No cash leaves the till. They can spend it on a later invoice (and top up any balance). This buy-back cannot also be paid out.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-              <button className="btn-secondary text-[11px]" disabled={crediting} onClick={() => setCreditModal(null)}>Cancel</button>
-              <button
-                className="btn-primary text-[11px]"
-                disabled={crediting}
-                onClick={async () => {
-                  setCrediting(true)
-                  try {
-                    await creditBuyBack(creditModal)
-                    setCreditModal(null)
-                  } finally {
-                    setCrediting(false)
-                  }
-                }}
-              >
-                {crediting ? 'Adding…' : 'Add as credit'}
-              </button>
-            </div>
-          </Modal>
-        )
-      })()}
+      {settleModals}
     </div>
   )
 }
