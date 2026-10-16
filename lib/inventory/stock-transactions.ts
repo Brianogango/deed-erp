@@ -944,6 +944,8 @@ async function applyReceiptRelational(params: {
 /** Authoritative POS sale stock out. */
 export async function applyPosStockMutation(params: {
   orderRef: string
+  /** Prefix for the stock-move reason; defaults to "POS" (Kilimall dispatches pass "Kilimall"). */
+  reasonLabel?: string
   lines: Array<{
     productId: string
     productName: string
@@ -997,7 +999,7 @@ export async function applyPosStockMutation(params: {
       stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - 1)
       newMoves.push({
         id: randomUUID(), type: 'out', productId, productName: line.productName || product?.name || 'Item',
-        qty: 1, reason: `POS ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
+        qty: 1, reason: `${params.reasonLabel || 'POS'} ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
         serialNumbers: [String(serial.serial || line.serialNumber || '')].filter(Boolean),
         date: nowIso(), userId: params.userId ?? 'system', documentRef: params.orderRef,
       })
@@ -1018,7 +1020,7 @@ export async function applyPosStockMutation(params: {
       stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - qty)
       newMoves.push({
         id: randomUUID(), type: 'out', productId, productName: line.productName || product?.name || 'Item',
-        qty, reason: `POS ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
+        qty, reason: `${params.reasonLabel || 'POS'} ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
         serialNumbers: [], date: nowIso(), userId: params.userId ?? 'system', documentRef: params.orderRef,
       })
     }

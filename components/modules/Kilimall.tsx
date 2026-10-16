@@ -95,6 +95,7 @@ function KilimallContent() {
   // ── Dispatch ──────────────────────────────────────────────────────────────────
   const [dispatchOrderId, setDispatchOrderId] = useState<string | null>(null)
   const [dispatchSerial, setDispatchSerial] = useState('')
+  const [dispatching, setDispatching] = useState(false)
   const [useSubstitution, setUseSubstitution] = useState(false)
   const [substituteProductId, setSubstituteProductId] = useState('')
   const [substitutionReason, setSubstitutionReason] = useState('')
@@ -500,7 +501,7 @@ function KilimallContent() {
     setNewOrder({ kilimallRef: '', orderDate: '', customerName: '', productId: '', productName: '', qty: '', unitPrice: '', notes: '' })
   }
 
-  const handleDispatch = () => {
+  const handleDispatch = async () => {
     if (!dispatchOrderId || !dispatchSerial) {
       showToast('Select an order and enter/select a serial number', 'error'); return
     }
@@ -513,7 +514,10 @@ function KilimallContent() {
     }
     const serial = serials.find(s => s.serial === dispatchSerial.trim() || s.id === dispatchSerial.trim())
     if (!serial) { showToast('Serial not found in inventory', 'error'); return }
-    const result = confirmKilimallDispatch(
+    if (dispatching) return
+    setDispatching(true)
+    let result: Awaited<ReturnType<typeof confirmKilimallDispatch>> = null
+    try { result = await confirmKilimallDispatch(
       dispatchOrderId,
       serial.id,
       serial.serial,
@@ -525,7 +529,7 @@ function KilimallContent() {
         trackingReference: dispatchTracking || undefined,
         dispatchNotes: dispatchNotes || undefined,
       },
-    )
+    ) } finally { setDispatching(false) }
     if (result) resetDispatchForm()
   }
 
@@ -846,7 +850,7 @@ function KilimallContent() {
                   The selected serial is reserved and removed from available stock when dispatch is confirmed.
                 </div>
                 <button className="btn-primary inline-flex items-center gap-1.5" onClick={handleDispatch}
-                  disabled={availableSerials.length === 0}>
+                  disabled={availableSerials.length === 0 || dispatching}>
                   <Fa icon={faCheck} aria-hidden="true" /> Confirm Dispatch
                 </button>
                 <button className="btn-outline text-[11px]" onClick={resetDispatchForm}>

@@ -3463,7 +3463,7 @@ interface AppState {
       trackingReference?: string
       dispatchNotes?: string
     },
-  ) => KilimallDispatch | null
+  ) => Promise<KilimallDispatch | null>
   createKilimallSettlement: (p: Omit<KilimallSettlement, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => KilimallSettlement | null
   updateKilimallSettlement: (id: string, p: Partial<KilimallSettlement>) => void
   reconcileKilimallSettlement: (settlementId: string) => void
@@ -8004,7 +8004,7 @@ const storeCtx: AppState = {
       return order
     },
     updateKilimallOrder: (id, p) => setKilimallOrders(prev => prev.map(o => o.id === id ? { ...o, ...p } : o)),
-    confirmKilimallDispatch: (orderId, serialId, serialNumber, opts) => {
+    confirmKilimallDispatch: async (orderId, serialId, serialNumber, opts) => {
       const user = currentUser()
       if (!user || !['director', 'inventory_officer', 'kilimall_officer'].includes(user.role)) {
         showToast('Unauthorized to dispatch orders', 'error'); return null;
@@ -8027,6 +8027,39 @@ const storeCtx: AppState = {
       if (isSubstitution && !opts?.fulfilledProductId) {
         showToast('Select the product being shipped for a substitution', 'error'); return null
       }
+
+      // Authoritative stock out on the server first (serial -> sold, product on-hand,
+      // stock move, COGS), exactly as a till sale does. Without this the serial was only
+      // flagged locally and the product's stock never fell.
+      try {
+        const res = await fetch('/api/inventory/apply-pos-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderRef: order.ref,
+            reasonLabel: 'Kilimall',
+            lines: [{
+              productId: shipProductId,
+              productName: shipProductName,
+              qty: 1,
+              serialId,
+              serialNumber,
+              sourceLocation: 'warehouse',
+            }],
+          }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error || 'Kilimall stock update failed', 'error')
+          return null
+        }
+      } catch {
+        showToast('Could not apply Kilimall stock on server', 'error')
+        return null
+      }
+      // A second click while the request was in flight must not dispatch twice.
+      const stillPending = kilimallOrdersRef.current.find(o => o.id === orderId)
+      if (stillPending && stillPending.status !== 'pending') { showToast('Order already dispatched', 'error'); return null }
 
       const dispatch: KilimallDispatch = {
         id: uid(), ref: seq('KD', 'kd'), date: opts?.dispatchDate || now(),
@@ -8062,7 +8095,8 @@ const storeCtx: AppState = {
               : undefined,
           }
         : o))
-      setSerials(prev => prev.map(s => s.id === serialId ? { ...s, status: 'sold', location: 'customer' } : s))
+      setSerials(prev => prev.map(s => s.id === serialId ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s))
+      setProducts(prev => prev.map(x => x.id === shipProductId ? { ...x, stockQty: Math.max(0, x.stockQty - 1) } : x))
       const toastMsg = isSubstitution
         ? `Dispatched ${order.ref} — shipped ${shipProductName} (ordered ${order.productName})`
         : `Dispatched ${order.ref} — serial ${serialNumber}`

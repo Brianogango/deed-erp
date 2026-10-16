@@ -25,6 +25,8 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null) as {
     orderRef?: string
+    /** Stock-move label for non-till callers, e.g. "Kilimall". */
+    reasonLabel?: string
     lines?: Array<{
       productId: string
       productName: string
@@ -43,6 +45,7 @@ export async function POST(request: NextRequest) {
 
   const result = await applyPosStockMutation({
     orderRef: body.orderRef,
+    reasonLabel: typeof body.reasonLabel === 'string' ? body.reasonLabel.trim().slice(0, 24) || undefined : undefined,
     lines: body.lines,
     userId: session.user.id,
   })
