@@ -15,6 +15,7 @@ const {
   mockSaveStoreKeys,
   mockWriteFinancialAudit,
   mockReserveStock,
+  mockGetNextDocNumber,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockPrismaSO: {
@@ -22,6 +23,7 @@ const {
     findMany: vi.fn().mockResolvedValue([]),
     update: vi.fn(),
     delete: vi.fn(),
+    findFirst: vi.fn().mockResolvedValue(null),
   },
   mockPrismaInvoice: {
     findMany: vi.fn().mockResolvedValue([]),
@@ -39,7 +41,9 @@ const {
   mockSaveStoreKeys: vi.fn().mockResolvedValue(undefined),
   mockWriteFinancialAudit: vi.fn().mockResolvedValue(undefined),
   mockReserveStock: vi.fn().mockResolvedValue({ ok: true, reserved: 0 }),
+  mockGetNextDocNumber: vi.fn().mockResolvedValue('QUO/2026/0999'),
 }))
+vi.mock('@/lib/doc-ref-counter', () => ({ getNextDocNumber: mockGetNextDocNumber }))
 
 vi.mock('@/lib/auth/api', () => ({
   withApiErrorHandling: async (handler: () => Promise<any>) => {
@@ -441,6 +445,48 @@ describe('sale-order workflow enforcement (server-side)', () => {
     mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', locked: true })
     const res = await PUT(putReq({ status: 'quotation', locked: false }), params)
     expect(res.status).toBe(200)
+  })
+
+  it('hands a reset order back its quotation number so it stops showing as a confirmed SO', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('finance_officer'))
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', orderNumber: 'SO/2026/0272', quotationRef: 'QUO/2026/0587', locked: true })
+    mockPrismaSO.findFirst.mockResolvedValue(null)
+    const res = await PUT(putReq({ status: 'quotation', locked: false, confirmedAt: null }), params)
+    expect(res.status).toBe(200)
+    expect(mockPrismaSO.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'quotation', orderNumber: 'QUO/2026/0587' }),
+    }))
+  })
+
+  it('issues a fresh quotation number when the old one is gone or taken', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('director'))
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', orderNumber: 'SO/2026/0273', quotationRef: 'QUO/2026/0588' })
+    mockPrismaSO.findFirst.mockResolvedValue({ id: 'someone-else' })
+    const res = await PUT(putReq({ status: 'quotation', confirmedAt: null }), params)
+    expect(res.status).toBe(200)
+    expect(mockPrismaSO.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ orderNumber: 'QUO/2026/0999' }),
+    }))
+  })
+
+  it('fixes an order an earlier reset left as a quotation that still carries an SO number', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('finance_officer'))
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'quotation', orderNumber: 'SO/2026/0272', quotationRef: 'QUO/2026/0587' })
+    mockPrismaSO.findFirst.mockResolvedValue(null)
+    const res = await PUT(putReq({ status: 'quotation', confirmedAt: null }), params)
+    expect(res.status).toBe(200)
+    expect(mockPrismaSO.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ orderNumber: 'QUO/2026/0587' }),
+    }))
+  })
+
+  it('does not renumber an ordinary draft save of a quotation', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('finance_officer'))
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'quotation', orderNumber: 'SO/2026/0272', quotationRef: 'QUO/2026/0587' })
+    mockPrismaSO.update.mockClear()
+    const res = await PUT(putReq({ status: 'quotation', notes: 'edited' }), params)
+    expect(res.status).toBe(200)
+    expect(mockPrismaSO.update.mock.calls[0]?.[0]?.data?.orderNumber).toBeUndefined()
   })
 
   it('still blocks a sales_rep from resetting a locked confirmed order', async () => {
