@@ -50,6 +50,68 @@ function StaleHolds() {
   )
 }
 
+type AuditRow = { ref: string; customer: string; total: number; date: string; invoices: string[]; deliveries: string[]; heldSerials: number }
+type Audit = {
+  checkedOrders: number
+  invoicedBeforeDelivery: Array<AuditRow & { invoiced: number; paid: number }>
+  possibleDuplicates: Array<{ customer: string; total: number; orders: AuditRow[] }>
+}
+const kes = (n: number) => `KES ${Math.round(n).toLocaleString('en-KE')}`
+
+/** Confirmed orders invoiced before any delivery was done, and orders that look entered more than once. */
+function OrderAuditCard() {
+  const [audit, setAudit] = useState<Audit | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const run = async () => {
+    setBusy(true); setMsg('')
+    try {
+      const res = await fetch('/api/sales/order-audit')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { setMsg(data?.error || 'Could not run the audit'); return }
+      setAudit(data)
+    } catch { setMsg('Could not run the audit') } finally { setBusy(false) }
+  }
+  return (
+    <div className="card p-4 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-bold">Sales order audit</p>
+          <p className="text-[11px] text-t3">Confirmed orders invoiced before any delivery was done, and orders that look entered more than once.</p>
+        </div>
+        <button className="btn-outline text-[12px]" onClick={() => void run()} disabled={busy}>{busy ? 'Checking…' : 'Run audit'}</button>
+      </div>
+      {msg && <p className="mt-2 text-[12px]">{msg}</p>}
+      {audit && (
+        <div className="mt-3 text-[12px]">
+          <p className="mb-2 text-t3">{audit.checkedOrders} confirmed order(s) checked.</p>
+          <p className="font-semibold">Invoiced, but no delivery done ({audit.invoicedBeforeDelivery.length})</p>
+          {audit.invoicedBeforeDelivery.length === 0 ? <p className="mb-3 text-t3">None.</p> : (
+            <ul className="mb-3 space-y-1 text-[11px]">
+              {audit.invoicedBeforeDelivery.map(o => (
+                <li key={o.ref}><span className="font-mono">{o.ref}</span> · {o.customer} · invoiced {kes(o.invoiced)}, paid {kes(o.paid)} · {o.invoices.join(', ')} · deliveries: {o.deliveries.join(', ') || 'none'} · {o.heldSerials} serial(s) held</li>
+              ))}
+            </ul>
+          )}
+          <p className="font-semibold">Possible duplicate orders ({audit.possibleDuplicates.length} group{audit.possibleDuplicates.length === 1 ? '' : 's'})</p>
+          {audit.possibleDuplicates.length === 0 ? <p className="text-t3">None.</p> : (
+            <ul className="space-y-2 text-[11px]">
+              {audit.possibleDuplicates.map(g => (
+                <li key={g.customer + g.total}>
+                  <b>{g.customer}</b> · {kes(g.total)} · {g.orders.length} orders
+                  <ul className="ml-4 mt-0.5">
+                    {g.orders.map(o => <li key={o.ref}><span className="font-mono">{o.ref}</span> · {o.date} · invoices: {o.invoices.join(', ') || 'none'} · deliveries: {o.deliveries.join(', ') || 'none'} · {o.heldSerials} serial(s) held</li>)}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Inventory → Serial count check: paste or upload the serials counted on the shelf. */
 export default function SerialCountCheck() {
   const [text, setText] = useState('')
@@ -111,6 +173,7 @@ export default function SerialCountCheck() {
         Paste the serial numbers you counted (one per line, or a column copied from a sheet), or upload a text/CSV file.
         The system compares them with its serial register and lists the unsold serials that were not counted. Nothing is changed.
       </p>
+      <OrderAuditCard />
       <StaleHolds />
       <div className="card p-4 mb-4">
         <textarea className="form-input w-full font-mono text-[12px]" rows={8} value={text} onChange={e => setText(e.target.value)} placeholder={'5CG2151FN4\n5CG2151FMM\n…'} />
