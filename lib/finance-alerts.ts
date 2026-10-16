@@ -22,6 +22,7 @@ type BankAccountLike = { id: string; name: string; active?: boolean; openingBala
 type CashbookEntryLike = { bankAccountId: string; debit: number; credit: number }
 
 const openBalance = (i: InvoiceLike) => invoiceResidual({
+  status: i.status,
   total: Number(i.total) || 0,
   amountPaid: Number(i.amountPaid) || 0,
 })

@@ -79,7 +79,7 @@ const contactInvoiceColumns: ColumnDef<Invoice>[] = [
   { key: 'total', label: 'Total', priority: 1, width: '90px', align: 'right', render: inv => <span className="font-mono text-[11px]">{fmtKes(inv.total)}</span>, accessor: inv => inv.total },
   { key: 'paid', label: 'Paid', priority: 2, width: '90px', align: 'right', render: inv => <span className="font-mono text-[11px]" style={{ color: 'var(--success)' }}>{fmtKes(inv.amountPaid)}</span>, accessor: inv => inv.amountPaid },
   { key: 'status', label: 'Status', priority: 1, width: '130px', render: inv => {
-    const outstanding = inv.total - inv.amountPaid
+    const outstanding = invoiceResidual(inv)
     const doc = invoiceDocState(inv.status)
     return (
       <div className="flex flex-col gap-0.5">

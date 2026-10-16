@@ -1,4 +1,5 @@
 'use client'
+import { invoiceResidual } from '@/lib/odoo-sales-flow'
 import { useMemo, useState } from 'react'
 import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
@@ -345,7 +346,7 @@ export default function PartnerLedgerTab() {
                     <div>
                       <p className="text-xs font-semibold text-t1">{selectedTransaction.documentRef}</p>
                       <p className="text-[11px] text-t3">
-                        Total {fmtKes(selectedDocument.total)} · Paid {fmtKes(selectedDocument.amountPaid)} · Balance {fmtKes(Math.max(0, selectedDocument.total - selectedDocument.amountPaid))}
+                        Total {fmtKes(selectedDocument.total)} · Paid {fmtKes(selectedDocument.amountPaid)} · Balance {fmtKes(invoiceResidual(selectedDocument))}
                       </p>
                     </div>
                     {selectedTransaction.outstanding != null && (

@@ -22,7 +22,7 @@ import {
   type CreateInvoiceMode,
 } from '@/lib/sales/down-payment'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import {
   confirmRepairLinkedQuotationForInvoice,
   ensureConfirmedSaleOrderForFulfillment,
@@ -52,7 +52,24 @@ const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
  * mutate serial availability, or post another stock movement.
  * See docs/domain/SALES_ORDER_WORKFLOW.md.
  */
+/**
+ * One invoice request per sale order at a time: two clicks (or an automatic trigger and a
+ * click) used to run side by side, each finding no invoice yet and each raising its own.
+ * The handler's own errors are carried out of the lock, so a failure is never re-run.
+ */
 export async function POST(
+  request: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const { id } = await ctx.params
+  const outcome = await withAppStateKeyLock(`create-invoice:${id}`, async () => {
+    try { return { res: await createInvoiceHandler(request, ctx) } } catch (error) { return { error } }
+  })
+  if ('error' in outcome) throw outcome.error
+  return outcome.res
+}
+
+async function createInvoiceHandler(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -132,6 +149,36 @@ export async function POST(
     const billedRepairs = consolidatedRepairs.length > 0
       ? consolidatedRepairs
       : linkedRepair ? [linkedRepair] : []
+    // A repair is billed once. When its order already carries a live invoice (one that was
+    // not credited away by a reissue), hand that one back instead of raising another.
+    if (billedRepairs.length > 0) {
+      const replaced = new Set(billedRepairs.flatMap(r => (Array.isArray(r?.previousInvoiceIds) ? r.previousInvoiceIds : []).map(String)))
+      const live = await prisma.invoice.findMany({
+        where: { saleOrderId: confirmed.id, status: { notIn: ['cancelled', 'voided'] as any } },
+        include: { items: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      const current = live.find(inv => !replaced.has(inv.id))
+      if (current) {
+        const fromStore = blobInvoices.find(inv => inv?.id === current.id)
+        const invoice = fromStore ?? {
+          id: current.id,
+          ref: current.invoiceNumber,
+          type: 'customer_invoice' as const,
+          status: String(current.status),
+          partnerId: confirmed.clientId,
+          partnerName: confirmed.client?.name ?? '',
+          date: current.createdAt.toISOString().slice(0, 10),
+          lines: mapDbInvoiceItemsToClientLines(current.items),
+          total: Number(current.totalAmount) || 0,
+          amountPaid: Number(current.amountPaid) || 0,
+          saleOrderId: confirmed.id,
+          ...(linkedRepair?.id ? { repairId: String(linkedRepair.id) } : {}),
+        }
+        return NextResponse.json({ ok: true, existing: true, invoice })
+      }
+    }
+
     const prismaRepairIds = new Set<string>()
     for (const billed of billedRepairs) {
       if (!billed?.id) continue

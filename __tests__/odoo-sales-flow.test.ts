@@ -696,3 +696,17 @@ describe('sales order invoice primary action', () => {
     })).toEqual({ kind: 'view', invoiceId: 'inv-paid', invoiceState: 'posted' })
   })
 })
+
+describe('invoiceResidual() on cancelled documents', () => {
+  it('owes nothing once cancelled or voided, even if money was paid on it first', async () => {
+    const { invoiceResidual } = await import('@/lib/odoo-sales-flow')
+    expect(invoiceResidual({ status: 'cancelled', total: 6960, amountPaid: 6000 })).toBe(0)
+    expect(invoiceResidual({ status: 'voided', total: 8700, amountPaid: 0 })).toBe(0)
+  })
+  it('still reports the balance on live documents', async () => {
+    const { invoiceResidual } = await import('@/lib/odoo-sales-flow')
+    expect(invoiceResidual({ status: 'posted', total: 7200, amountPaid: 6000 })).toBe(1200)
+    expect(invoiceResidual({ total: 100, amountPaid: 40 })).toBe(60)
+    expect(invoiceResidual({ status: 'posted', total: 100, amountPaid: 150 })).toBe(0)
+  })
+})

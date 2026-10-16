@@ -5,7 +5,7 @@ import { PanelHeader, RecordCard } from '@/components/ui'
 import { AsyncActionButton, EmptyState, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import type { Invoice } from '@/lib/store'
-import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 
 type VendorBill = Invoice
@@ -51,13 +51,13 @@ export default function PurchaseBillsTab() {
     {
       key: 'outstanding', label: 'Outstanding', priority: 1, width: '100px', align: 'right',
       render: b => {
-        const outstanding = b.total - b.amountPaid
+        const outstanding = invoiceResidual(b)
         return <span className="font-mono text-[11px]" style={{ color: outstanding <= 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtKes(outstanding)}</span>
       },
-      exportValue: b => b.total - b.amountPaid,
+      exportValue: b => invoiceResidual(b),
       footer: pageRows => (
         <span className="font-mono text-[11px] font-bold tabular-nums">
-          {fmtKes(pageRows.reduce((sum, bill) => sum + Math.max(0, bill.total - bill.amountPaid), 0))}
+          {fmtKes(pageRows.reduce((sum, bill) => sum + invoiceResidual(bill), 0))}
         </span>
       ),
     },
@@ -108,7 +108,7 @@ export default function PurchaseBillsTab() {
   }
 
   function rowActions(b: VendorBill) {
-    const outstanding = b.total - b.amountPaid
+    const outstanding = invoiceResidual(b)
     return (
       <>
         {b.status === 'draft' && canValidateBills && validateAction(b, true)}
@@ -143,14 +143,14 @@ export default function PurchaseBillsTab() {
               eyebrow={displayDocRef(b.ref)}
               title={b.partnerName}
               subtitle={`PO ${linkedPORef(b)}`}
-              amount={fmtKes(b.total - b.amountPaid)}
+              amount={fmtKes(invoiceResidual(b))}
               status={<StatusBadge status={billStatus(b)} label={billStatusLabel(b)} />}
-              accent={(b.total - b.amountPaid) > 0 ? 'var(--danger)' : 'var(--success)'}
+              accent={(invoiceResidual(b)) > 0 ? 'var(--danger)' : 'var(--success)'}
               meta={[
                 { label: 'Due', value: fmtDate(b.dueDate) },
                 { label: 'Total', value: fmtKes(b.total) },
                 { label: 'Paid', value: fmtKes(b.amountPaid) },
-                { label: 'Outstanding', value: fmtKes(b.total - b.amountPaid) },
+                { label: 'Outstanding', value: fmtKes(invoiceResidual(b)) },
               ]}
               actions={b.status === 'draft' && canValidateBills ? validateAction(b) : undefined}
             />

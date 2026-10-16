@@ -787,8 +787,13 @@ interface PaymentStatusInput {
   paymentBlocked?: boolean
 }
 
-/** Outstanding balance on an invoice. */
-export function invoiceResidual(inv: { total: number; amountPaid: number }): number {
+/**
+ * Outstanding balance on an invoice. A cancelled or voided document owes nothing, whatever
+ * was paid on it before: that money was refunded or moved, so the old total minus the old
+ * payments must never show as "due" (or be added into a customer's balance).
+ */
+export function invoiceResidual(inv: { total: number; amountPaid: number; status?: unknown }): number {
+  if (inv.status !== undefined && invoiceDocState(inv.status) === 'cancelled') return 0
   return Math.max(0, (Number(inv.total) || 0) - (Number(inv.amountPaid) || 0))
 }
 

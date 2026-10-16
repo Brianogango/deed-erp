@@ -3904,7 +3904,7 @@ interface AppState {
   scheduleDelivery: (repairId: string, method: 'pickup' | 'delivery' | 'courier', scheduledDate: string, address?: string, riderId?: string, riderName?: string) => Promise<boolean>
   deliverRepair: (repairId: string, recipientName: string, recipientPhone: string, isRep?: boolean, repRelationship?: string, repIdNumber?: string, closeAfter?: boolean) => void
   closeRepairJob: (repairId: string) => void | Promise<void>
-  createInvoiceFromRepair: (repairId: string, applyVat?: boolean) => Invoice | null
+  createInvoiceFromRepair: (repairId: string, applyVat?: boolean) => Promise<Invoice | null>
   // Bill several of one client's finished repairs on a single invoice, by
   // merging them into one sale order. See lib/repair/consolidation-plan.ts.
   consolidateRepairInvoices: (repairIds: string[]) => Promise<Invoice | null>
@@ -4565,6 +4565,9 @@ export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
   C[key] = next
   return `${prefix}/${String(next).padStart(4, '0')}`
 }
+
+/** Repairs whose invoice is being created right now (see createInvoiceFromRepair). */
+const repairInvoiceInFlight = new Map<string, Promise<Invoice | null>>()
 
 /** Allocate a Kilimall order / dispatch / settlement ref from the server-side atomic counter. */
 async function fetchNextKilimallRef(kind: 'kilimall_order' | 'kilimall_dispatch' | 'kilimall_settlement'): Promise<string | null> {
@@ -7249,7 +7252,7 @@ function StoreProvider({
 
   const getVendorOutstanding = (vendorId: string) =>
     invRef.current.filter(i => i.type === 'vendor_bill' && i.partnerId === vendorId)
-      .reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
+      .reduce((sum, inv) => sum + invoiceResidual(inv), 0)
 
   const addMove = (productId: string, productName: string, qty: number, type: StockMove['type'], reason: string, docRef: string, fromLoc?: LocationId, toLoc?: LocationId, serNums: string[] = []) => {
     const actor = currentUser()
@@ -17969,6 +17972,11 @@ const storeCtx: AppState = {
     },
     
     createInvoiceFromRepair: async (repairId, applyVat = true) => {
+      // One run per repair at a time. The automatic trigger and a button click (or two clicks)
+      // used to run side by side, each finding no invoice yet and each raising its own.
+      const running = repairInvoiceInFlight.get(repairId)
+      if (running) return running
+      const run = (async (): Promise<Invoice | null> => {
       const repair = repairsRef.current.find(r => r.id === repairId) ?? repairs.find(r => r.id === repairId)
       if (!repair) return null
       if (blockIfOutsourced(repairId, 'invoice this repair')) return null
@@ -18246,7 +18254,8 @@ const storeCtx: AppState = {
         invoice = payload.invoice as Invoice
         invRef.current = [invoice, ...invRef.current.filter(inv => inv.id !== invoice!.id)]
         setInvoices(p => [invoice!, ...p.filter(inv => inv.id !== invoice!.id)])
-        createdNew = true
+        // The server hands back the repair's existing invoice instead of raising a second one.
+        createdNew = !payload.existing
       }
 
       if (soId && invoice) {
@@ -18301,6 +18310,9 @@ const storeCtx: AppState = {
           ? `Invoice ${invoice!.ref} generated`
           : `Invoice ${invoice!.ref} linked — quote converted`)
       return invoice
+      })()
+      repairInvoiceInFlight.set(repairId, run)
+      try { return await run } finally { repairInvoiceInFlight.delete(repairId) }
     },
 
     consolidateRepairInvoices: async (repairIds) => {

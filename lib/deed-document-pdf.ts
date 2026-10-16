@@ -114,8 +114,6 @@ const BLUE: [number, number, number] = [7, 139, 212]
 const MUTED: [number, number, number] = [91, 107, 128]
 const BORDER: [number, number, number] = [205, 219, 232]
 const SOFT: [number, number, number] = [246, 250, 253]
-const AMBER: [number, number, number] = [188, 101, 0]
-const AMBER_SOFT: [number, number, number] = [255, 247, 232]
 function hexRgb(value: unknown, fallback: string): [number, number, number] {
   const color = normalizeHexColor(value, fallback)
   return [
@@ -408,14 +406,6 @@ export function buildDeedDocumentPdf(
   ]
   meta.forEach((entry, index) => drawMetaRow(doc, entry[0], entry[1], rightX, y + index * 18, 92))
   y = Math.max(partyY + 14, y + Math.max(94, meta.length * 18 + 14))
-
-  if (kind === 'proforma') {
-    doc.setFillColor(...AMBER_SOFT).setDrawColor(238, 177, 92).setLineWidth(.6)
-    doc.roundedRect(MARGIN, y, contentW(doc), 28, 4, 4, 'FD')
-    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...AMBER)
-    doc.text('!  This is a proforma invoice and not a tax invoice.', MARGIN + 12, y + 18)
-    y += 40
-  }
 
   const commercialHead = [['#', 'DESCRIPTION', 'QTY', 'UNIT', `UNIT PRICE (${currency})`, 'VAT', `AMOUNT (${currency})`]]
   const deliveryHead = [['#', 'ITEM DESCRIPTION', 'QTY', 'SERIAL / IMEI', 'SPECS', 'CONDITION']]
