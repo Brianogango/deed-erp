@@ -82,12 +82,12 @@ describe('agent commissions API', () => {
     expect(h.requireRole).toHaveBeenCalledWith(['director', 'finance_officer', 'admin_officer'])
   })
 
-  it('lets the admin officer add a commission bill but not pay, cancel or change settings', async () => {
+  it('lets the admin officer add and cancel a commission bill but not pay or change settings', async () => {
     h.requireRole.mockClear()
     await ADD_BILL(json({ agentId: 'agent-1', amount: 1500, date: '2026-10-10', saleRef: 'X1' }))
     expect(h.requireRole).toHaveBeenLastCalledWith(['director', 'finance_officer', 'admin_officer'])
     await CANCEL_BILL(new Request('http://localhost/api/agents/commissions?id=AGB/0001', { method: 'DELETE' }))
-    expect(h.requireRole).toHaveBeenLastCalledWith(['director', 'finance_officer'])
+    expect(h.requireRole).toHaveBeenLastCalledWith(['director', 'finance_officer', 'admin_officer'])
     await PAY(json({ agentId: 'agent-1', commissionIds: [], method: 'cash' }))
     expect(h.requireRole).toHaveBeenLastCalledWith(['director', 'finance_officer'])
     await PUT(json({ withholdingEnabled: true, withholdingRate: 5 }, 'PUT'))

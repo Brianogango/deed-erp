@@ -683,7 +683,7 @@ function AccountingContent() {
   const canViewJournals = !!currentUser && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const canManageFinance = !!currentUser && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const canManageFullFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
-  // The Admin Officer adds agent commission bills (no payouts, settings or cancelling).
+  // The Admin Officer adds agents and adds/cancels commission bills (no payouts or payout settings).
   const canAddAgentCommission = canManageFullFinance || currentUser?.role === 'admin_officer'
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
