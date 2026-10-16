@@ -83,6 +83,24 @@ try {
     console.log('\nCHECK: these dispatches are recorded but their serial is still AVAILABLE (not sold):')
     for (const d of stillAvailable) console.log(`  ${d.ref} order ${d.orderRef || d.orderId} serial ${d.serialNumber}`)
   }
+  // Every dispatch whose serial is not sold, whether or not a stock move exists
+  // (a stale browser copy of the serial register can write a serial back to available).
+  const unsold = dispatches
+    .filter(d => d.status === 'dispatched')
+    .filter(d => !['sold'].includes(String(serialById.get(d.serialId)?.status || '').toLowerCase()))
+  console.log(`\nAll dispatches whose serial is not marked sold: ${unsold.length}`)
+  for (const d of unsold) {
+    const sr = serialById.get(d.serialId)
+    const order = orderById.get(d.orderId)
+    const hasMove = moveRefs.has(String(order?.ref || d.orderRef || '')) || moveSerials.has(String(d.serialNumber))
+    console.log(`  ${d.ref}  order ${d.orderRef || d.orderId}  ${d.dispatchDate || d.date || ''}  serial ${d.serialNumber}  serial status: ${sr?.status ?? 'missing'}  location: ${sr?.location ?? '-'}  stock move: ${hasMove ? 'yes' : 'no'}`)
+  }
+  const recent = dispatches.slice().sort((a, b) => String(b.createdDate || b.date || '').localeCompare(String(a.createdDate || a.date || ''))).slice(0, 8)
+  console.log('\nMost recent dispatches (newest first):')
+  for (const d of recent) {
+    const sr = serialById.get(d.serialId)
+    console.log(`  ${d.ref}  order ${d.orderRef || d.orderId}  created ${d.createdDate || d.date || ''}  ${d.productName}  serial ${d.serialNumber}  serial status: ${sr?.status ?? 'missing'}`)
+  }
   const refCount = new Map()
   for (const d of dispatches) refCount.set(d.ref, (refCount.get(d.ref) || 0) + 1)
   const dup = [...refCount].filter(([, n]) => n > 1)
