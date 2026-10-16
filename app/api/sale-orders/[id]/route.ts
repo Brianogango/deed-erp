@@ -16,6 +16,7 @@ import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.serv
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
+import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 import { buildSaleOrderItemsNestedWrite } from '@/lib/sale-order-items-write'
 import {
@@ -334,6 +335,24 @@ async function enforceSaleWorkflow(
         { status: 409 },
       )
     }
+  }
+  // Set to Quotation: a quotation carries a quotation number. An SO/… number is what makes the
+  // screens (and the confirm-heal) treat the document as confirmed, so a reset order kept showing
+  // as a confirmed Sales Order (and the button seemed to do nothing). Hand back the quotation
+  // number it had, or a fresh one. Applies to an explicit reset (confirmedAt cleared), including
+  // orders an earlier reset left behind with an SO number.
+  if (to === 'quotation' && body.status !== undefined && body.confirmedAt === null
+    && (from === 'sale' || (from === 'quotation' && canReverseConfirmedSale(session.user.role)))
+    && /^SO[/\\-]/i.test(String(existing.orderNumber ?? ''))) {
+    let next = String(existing.quotationRef ?? '').trim()
+    if (next && !/^SO[/\\-]/i.test(next)) {
+      const clash = await prisma.saleOrder.findFirst({ where: { orderNumber: next, id: { not: existing.id } }, select: { id: true } })
+      if (clash) next = ''
+    } else {
+      next = ''
+    }
+    if (!next) next = await getNextDocNumber('quotation')
+    data.orderNumber = next
   }
   // Cancelled → quotation: if the SO was previously confirmed, same reverse gate.
   if (to === 'quotation' && from === 'cancelled' && existing.confirmedAt) {
