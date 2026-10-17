@@ -64,6 +64,11 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   // Bills to pay reach the directors too — they sign the payments.
   'purchase.vendor_bill_due': POLICY(['in_app', 'push'], 'warning', { recipientRoles: ['finance_officer', 'director'], cooldownHours: 24 }),
 
+  // ── Cheque register: one summary a day each, until the cheque is banked or closed ──
+  'finance.cheque.due_tomorrow': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director', 'admin_officer', 'finance_officer'] }),
+  'finance.cheque.ready_for_banking': POLICY(['in_app', 'push', 'email'], 'warning', { recipientRoles: ['director', 'admin_officer', 'finance_officer'] }),
+  'finance.cheque.given_due': POLICY(['in_app', 'push', 'email'], 'warning', { recipientRoles: ['director', 'admin_officer', 'finance_officer'] }),
+
   // ── Inventory ───────────────────────────────────────────────────────────
   'inventory.low_stock': POLICY(['in_app'], 'warning', { recipientRoles: ['inventory_officer'], cooldownHours: 72 }),
   'inventory.checkout.approval_required': POLICY(['in_app', 'push'], 'attention', { recipientRoles: ['director', 'inventory_officer', 'technical_lead'] }),

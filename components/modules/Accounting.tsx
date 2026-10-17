@@ -92,6 +92,7 @@ import GeneralLedgerTab from './accounting/GeneralLedgerTab'
 import PartnerLedgerTab from './accounting/PartnerLedgerTab'
 import CustomerCreditsTab from './accounting/CustomerCreditsTab'
 import RefundsTab from './accounting/RefundsTab'
+import Cheques from '@/components/finance/Cheques'
 import CommissionsTab from './accounting/CommissionsTab'
 import AgeingTab from './accounting/AgeingTab'
 import IntegrityDashboard from './accounting/IntegrityDashboard'
@@ -138,6 +139,7 @@ type MainTab =
   | 'cash_position'
   | 'monthly'
   | 'cashbook'
+  | 'cheques'
   | 'integrity'
   | 'cash_flow'
 
@@ -165,7 +167,10 @@ const FINANCE_SECTION_TABS: Record<FinanceSection, Array<{ id: MainTab; label: s
     { id: 'bills', label: 'Vendor bills' },
     { id: 'agent_commissions', label: 'Agent commissions' },
   ],
-  banking: [{ id: 'cashbook', label: 'Cashbook & reconciliation' }],
+  banking: [
+    { id: 'cashbook', label: 'Cashbook & reconciliation' },
+    { id: 'cheques', label: 'Cheques' },
+  ],
   accounting: [
     { id: 'journals', label: 'Accounting entries' },
     { id: 'coa', label: 'Chart of accounts' },
@@ -685,6 +690,7 @@ function AccountingContent() {
   const canManageFullFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   // The Admin Officer adds agents and adds/cancels commission bills (no payouts or payout settings).
   const canAddAgentCommission = canManageFullFinance || currentUser?.role === 'admin_officer'
+  const canSeeCheques = canAddAgentCommission
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
   // Operating-expense accounts (6xxx) a bill line can be booked to.
@@ -926,6 +932,7 @@ function AccountingContent() {
     journals: { title: 'Accounting entries', subtitle: 'Posted entries and audit-ready movements' },
     reports: { title: 'Financial reports', subtitle: 'Management, statutory and control reports' },
     cashbook: { title: 'Cashbook', subtitle: 'Daily transactions and bank reconciliation' },
+    cheques: { title: 'Cheques', subtitle: 'Cheques received and given: when each can be banked or falls due' },
     analytics: { title: 'Analytic accounting & budgets', subtitle: 'Dimensions, budgets and budget versus actual' },
     coa: { title: 'Chart of accounts', subtitle: 'Accounts, groups and liquidity ledgers' },
     gl: { title: 'General ledger', subtitle: 'Account movements and running balances' },
@@ -1558,7 +1565,7 @@ function AccountingContent() {
           {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && (
             <div className="px-3 pb-2">
               <TabBar
-                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => t.id !== 'agent_commissions' || canAddAgentCommission)}
+                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => (t.id !== 'agent_commissions' || canAddAgentCommission) && (t.id !== 'cheques' || canSeeCheques))}
                 active={tab}
                 onChange={id => setTab(id as MainTab)}
                 className="border-0 bg-transparent px-0 py-0"
@@ -1853,6 +1860,14 @@ function AccountingContent() {
             <div className="finance-subview finance-subview--credits"><CustomerCreditsTab /></div>
           ) : tab === 'credit_applications' ? (
             <div className="finance-subview finance-subview--credit-applications"><CreditApplicationsQueue role={currentUser?.role} userId={currentUserId} showToast={showToast} /></div>
+          ) : tab === 'cheques' ? (
+            <div className="finance-subview finance-subview--cheques">
+              {canSeeCheques ? (
+                <Cheques showToast={showToast} />
+              ) : (
+                <p className="p-6 text-xs text-text-3">Cheques are handled by the Director, Finance Officer and Admin Officer.</p>
+              )}
+            </div>
           ) : tab === 'agent_commissions' ? (
             <div className="finance-subview finance-subview--agent-commissions">
               {canAddAgentCommission ? (

@@ -8,6 +8,7 @@ import { isOverdueInvoiceEmailPaused } from './outbound-pause'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
 import { loadAppState } from '@/lib/server-store'
 import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
+import { buildChequeDigests, type DigestCheque } from '@/lib/cheques/cheque-rules'
 import { buildDirectorBrief, directorBriefBody, directorBriefTitle, type DirectorBriefInput } from './director-brief'
 
 const DAY = 86_400_000
@@ -487,6 +488,55 @@ async function scanPurchasing() {
     items: dueItems,
     title: n => `${n} vendor bill${n === 1 ? '' : 's'} due within 3 days`,
     actionUrl: '/accounting?tab=bills',
+  })
+  return emitted
+}
+
+/**
+ * Cheque reminders. Sent from 8am Nairobi so nobody is pinged at midnight, once
+ * a day for each of: cheques due tomorrow (day-before heads-up), received
+ * cheques whose written date has come (ready for banking) and cheques we gave
+ * that have fallen due. They repeat each morning until the cheque is
+ * deposited, cleared or closed in the register.
+ */
+async function scanCheques() {
+  const clock = nairobiClock()
+  if (clock.hour < 8) return 0
+  const open = await prisma.cheque.findMany({
+    where: { status: 'pending' },
+    select: { id: true, direction: true, status: true, chequeNumber: true, partyName: true, amount: true, chequeDate: true },
+  })
+  const cheques: DigestCheque[] = open.map(row => ({
+    id: row.id,
+    direction: row.direction === 'given' ? 'given' : 'received',
+    status: 'pending',
+    chequeNumber: row.chequeNumber,
+    partyName: row.partyName,
+    amount: Number(row.amount),
+    chequeDate: row.chequeDate.toISOString().slice(0, 10),
+  }))
+  const digests = buildChequeDigests(cheques, clock.date)
+  let emitted = 0
+  emitted += await publishDigest({
+    eventType: 'finance.cheque.due_tomorrow',
+    legacyEntityType: 'cheque',
+    items: digests.dueTomorrow,
+    title: n => `${n} cheque${n === 1 ? '' : 's'} due tomorrow`,
+    actionUrl: '/accounting?tab=cheques',
+  })
+  emitted += await publishDigest({
+    eventType: 'finance.cheque.ready_for_banking',
+    legacyEntityType: 'cheque',
+    items: digests.readyForBanking,
+    title: n => `${n} cheque${n === 1 ? '' : 's'} ready for banking`,
+    actionUrl: '/accounting?tab=cheques',
+  })
+  emitted += await publishDigest({
+    eventType: 'finance.cheque.given_due',
+    legacyEntityType: 'cheque',
+    items: digests.givenDue,
+    title: n => `${n} cheque${n === 1 ? '' : 's'} we issued ${n === 1 ? 'is' : 'are'} due`,
+    actionUrl: '/accounting?tab=cheques',
   })
   return emitted
 }
@@ -1022,6 +1072,7 @@ export async function scanOperationalNotificationEvents() {
     ['crm', scanCrm],
     ['repairs', scanRepairs],
     ['purchasing', scanPurchasing],
+    ['cheques', scanCheques],
     ['inventory', scanInventory],
     ['delivery', scanDelivery],
     ['finance', scanFinance],

@@ -31698,6 +31698,9 @@ button, [role="button"], [role="tab"] {
 }
 .inventory-view-segmented {
   display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   background: var(--bg-surface);
