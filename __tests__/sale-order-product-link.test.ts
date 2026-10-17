@@ -14,8 +14,11 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { linkLinesToProducts } from '@/lib/sales/link-line-products.server'
+import { linkLinesToProducts as linkTyped } from '@/lib/sales/link-line-products.server'
 import { mapSaleOrderItems } from '@/lib/sale-order-items-write'
+
+// Lines are loose objects from the screen; keep them untyped in the tests.
+const linkLinesToProducts = (lines: Array<Record<string, any>>) => linkTyped(lines)
 
 const A = '11111111-1111-4111-8111-111111111111'
 const B = '22222222-2222-4222-8222-222222222222'
