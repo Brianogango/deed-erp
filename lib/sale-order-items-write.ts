@@ -97,7 +97,10 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
     const money = calcSaleOrderLineMoney({ ...item, qty: demand })
     return {
       id: prev?.id,
-      productId: optionalUuid(item.productId) ?? null,
+      // A line saved again without its product (the screen sent none, or ''/a
+      // local id) keeps the product it already had. Wiping it left the line with
+      // no stock, delivery or revenue-category link — it posted to plain Sales Revenue.
+      productId: optionalUuid(item.productId) ?? (prev?.productId ? String(prev.productId) : null),
       description: item.description ?? item.productName ?? 'Item',
       qty: demand,
       qtyDelivered,
