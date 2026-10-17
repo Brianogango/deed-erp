@@ -28,6 +28,9 @@ import {
 import { canArchiveProduct, canEditSerialNumber, canPrintInventoryLabels } from '@/lib/inventory/permissions'
 import { inferTrackingMethod, isSerialTracking, productOffersOnHandSerials, type TrackingMethod } from '@/lib/inventory-identifiers'
 import SerialManageDrawer from './SerialManageDrawer'
+import InventoryViewBar from './InventoryViewBar'
+import { useInventoryView } from '@/lib/inventory/use-inventory-view'
+import { DEFAULT_VIEW_PREFS, PRODUCT_LAYOUTS, conditionOf, matchesCondition } from '@/lib/inventory/view-prefs'
 
 type ProductListRow = {
   id: string
@@ -73,6 +76,8 @@ export default function InventoryProductsPanel({
   const canArchive = canArchiveProduct(role)
 
   const [filters, setFilters] = useState<ProductFilterState>(EMPTY_PRODUCT_FILTERS)
+  const { prefs: viewPrefs, update: updateView, reset: resetView } = useInventoryView()
+  const [columnPreset, setColumnPreset] = useState<{ token: string; keys: string[] } | null>(null)
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
   const [serialProduct, setSerialProduct] = useState<Product | null>(null)
   const [labelBusy, setLabelBusy] = useState(false)
@@ -114,14 +119,14 @@ export default function InventoryProductsPanel({
   }, [products, serials, bulkStock, filters.warehouse])
 
   const filteredProducts = useMemo(
-    () => products.filter(p => productMatchesFilters({
+    () => products.filter(p => matchesCondition(p, viewPrefs.condition) && productMatchesFilters({
       product: p,
       filters,
       qty: qtyByProduct.get(p.id) || getProductQtySnapshot(p, serials, bulkStock, filters.warehouse),
       serials,
       vendorProductIds: filters.vendorId === 'all' ? undefined : vendorProductIds,
     })),
-    [products, filters, qtyByProduct, serials, vendorProductIds],
+    [products, filters, qtyByProduct, serials, vendorProductIds, viewPrefs.condition],
   )
 
   const productGroups = useMemo(() => {
@@ -430,6 +435,14 @@ export default function InventoryProductsPanel({
       exportValue: row => row.product.category,
     },
     {
+      key: 'condition',
+      label: 'Condition',
+      priority: 2,
+      width: '100px',
+      render: row => <span className="text-xs font-semibold text-text-2">{conditionOf(row.product) === 'new' ? 'New' : 'Refurb'}</span>,
+      exportValue: row => (conditionOf(row.product) === 'new' ? 'New' : 'Refurbished'),
+    },
+    {
       key: 'type',
       label: 'Type',
       priority: 2,
@@ -592,8 +605,23 @@ export default function InventoryProductsPanel({
           </CompactInfoNotice>
         }
       >
+        <InventoryViewBar
+          condition={{ value: viewPrefs.condition, onChange: v => updateView({ condition: v }) }}
+          layout={{
+            value: viewPrefs.productsLayout,
+            presets: PRODUCT_LAYOUTS,
+            onChange: preset => {
+              updateView({ productsLayout: preset.id })
+              setColumnPreset({ token: `${preset.id}:${Date.now()}`, keys: preset.columns })
+            },
+          }}
+          isCustomised={viewPrefs.condition !== DEFAULT_VIEW_PREFS.condition}
+          onReset={() => { resetView(); setColumnPreset({ token: `reset:${Date.now()}`, keys: PRODUCT_LAYOUTS[0].columns }) }}
+        />
         <DataTable
           tableId="inventory-products"
+          applyColumnKeys={columnPreset}
+          defaultVisibleColumnKeys={PRODUCT_LAYOUTS[0].columns}
           // Up to five buttons wrap onto two lines inside this width — at the
           // 120px default they spilled over the Reorder column.
           rowActionsWidth={180}

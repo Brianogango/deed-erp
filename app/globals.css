@@ -31670,3 +31670,93 @@ button, [role="button"], [role="tab"] {
     font-weight: 750 !important;
   }
 }
+
+/* Inventory display options (Catalog, Product Master, Warehouse): Show / Condition / Sort / Layout. */
+.inventory-view-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border-lt);
+  border-radius: 0.75rem;
+  background: var(--bg-card);
+  margin-bottom: 0.75rem;
+}
+.inventory-view-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.inventory-view-label {
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+.inventory-view-segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-surface);
+  padding: 2px;
+  gap: 2px;
+}
+.inventory-view-seg {
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.inventory-view-seg:hover { background: var(--bg-muted); }
+.inventory-view-seg.is-on {
+  background: var(--bg-card);
+  color: var(--navy);
+  font-weight: 800;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.inventory-view-seg:focus-visible,
+.inventory-view-reset:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.inventory-view-select {
+  min-height: 2.25rem;
+  min-width: 9rem;
+  max-width: 14rem;
+}
+.inventory-view-reset {
+  margin-left: auto;
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.inventory-view-reset:hover { text-decoration: underline; }
+
+@media (max-width: 767px), (pointer: coarse) {
+  .inventory-view-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .inventory-view-bar::-webkit-scrollbar { display: none; }
+  .inventory-view-group { flex: 0 0 auto; }
+  .inventory-view-seg { min-height: 2.75rem; padding: 0 0.875rem; font-size: 0.875rem; }
+  .inventory-view-select { min-height: 2.75rem; font-size: 1rem; }
+  .inventory-view-reset { min-height: 2.75rem; flex: 0 0 auto; }
+}
