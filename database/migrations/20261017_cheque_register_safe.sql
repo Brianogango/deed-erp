@@ -37,4 +37,14 @@ CREATE INDEX IF NOT EXISTS "cheques_status_date_idx" ON "cheques" ("status", "ch
 CREATE INDEX IF NOT EXISTS "cheques_direction_idx" ON "cheques" ("direction", "cheque_date");
 CREATE INDEX IF NOT EXISTS "cheques_number_idx" ON "cheques" ("cheque_number");
 
+-- The table must belong to the app user, or the app and the deploy backup get
+-- "permission denied" (see 20261009_new_table_owner_fix.sql).
+DO $$ DECLARE o text; BEGIN
+  SELECT tableowner INTO o FROM pg_tables WHERE schemaname = 'public' AND tablename = 'invoices';
+  IF o IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE public.%I OWNER TO %I', 'cheques', o);
+  END IF;
+END $$;
+
+SELECT tablename, tableowner FROM pg_tables WHERE tablename IN ('cheques', 'invoices');
 SELECT count(*) AS cheques FROM "cheques";
