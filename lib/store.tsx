@@ -675,6 +675,8 @@ export interface CashbookEntry {
   ref: string
   description: string
   category: string
+  /** Tooltip for the category badge — e.g. every revenue account a sale was posted to. */
+  categoryTitle?: string
   bankAccountId: string  // which bank/cash account
   debit: number          // money out
   credit: number         // money in
