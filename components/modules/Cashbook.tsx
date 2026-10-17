@@ -1,12 +1,13 @@
 'use client'
 import { useState, useMemo } from 'react'
 import {
-  useFinanceStore, fmtKes, fmtDate,
+  useFinanceStore, useInventoryStore, fmtKes, fmtDate,
   CashbookEntry, BankAccount, BankStatementLine, StatementLineCategory,
   Invoice, POSOrder, Expense, JournalEntry, Deposit,
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
 import { computeCashbookTotals } from '@/lib/finance-alerts'
+import { saleCategoryLabel } from '@/lib/accounting/cashbook-category'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { EmptyState } from '@/components/ui'
@@ -128,21 +129,27 @@ export function buildCashbookEntries(
     expenses: Expense[]
     journalEntries: JournalEntry[]
     deposits: Deposit[]
+    /** When given, sales show the revenue account(s) they were posted to instead of a fixed one. */
+    products?: Array<{ id: string; category?: string | null }>
   },
   accounts: Account[],
 ): CashbookEntry[] {
-  const { invoices, posOrders, expenses, journalEntries, deposits } = state
+  const { invoices, posOrders, expenses, journalEntries, deposits, products } = state
   const entries: CashbookEntry[] = []
+  const saleCategory = (lines: Array<{ productId?: string; subtotal: number; accountCode?: string; lineType?: 'item' | 'section' }>) =>
+    products ? saleCategoryLabel({ lines, products: products as any, accounts }) : null
 
   // 1. Customer invoice payments → Credit actual bank account used per receipt.
   invoices.filter(i => i.type === 'customer_invoice' && (i.payments?.length ?? 0) > 0).forEach(inv => {
+    const sale = saleCategory(inv.lines ?? [])
     inv.payments!.forEach(payment => {
       entries.push({
         id: `inv-pay-${inv.id}-${payment.id}`,
         date: payment.date,
         ref: payment.reference || inv.ref,
         description: `Invoice payment — ${inv.partnerName}`,
-        category: getCOACategory('customer_invoice', accounts),
+        category: sale?.label ?? getCOACategory('customer_invoice', accounts),
+        categoryTitle: sale?.title,
         bankAccountId: payment.bankAccountId || posBank((payment.method === 'mpesa' || payment.method === 'card' || payment.method === 'cash') ? payment.method : 'card'),
         debit: 0,
         credit: payment.amount,
@@ -182,7 +189,7 @@ export function buildCashbookEntries(
         date: payment.date,
         ref: payment.ref || dep.ref,
         description: `Deposit receipt — ${dep.customerName}`,
-        category: getCOACategory('deposit', accounts),
+        category: products ? 'Customer Deposits' : getCOACategory('deposit', accounts),
         bankAccountId: posBank((payment.method === 'mpesa' || payment.method === 'card' || payment.method === 'cash') ? payment.method : 'card'),
         debit: 0,
         credit: payment.amount,
@@ -195,12 +202,14 @@ export function buildCashbookEntries(
 
   // 4. POS orders → Credit per payment method
   posOrders.forEach(pos => {
+    const sale = saleCategory(pos.lines ?? [])
     entries.push({
       id: `pos-${pos.id}`,
       date: pos.date,
       ref: pos.ref,
       description: `POS Sale${pos.customerName ? ` — ${pos.customerName}` : ' — Walk-in'}`,
-      category: getCOACategory('pos', accounts),
+      category: sale?.label ?? getCOACategory('pos', accounts),
+      categoryTitle: sale?.title,
       bankAccountId: posBank(pos.payment, pos.bankAccountId),
       debit: 0,
       credit: pos.total,
@@ -280,10 +289,10 @@ const TYPE_COLORS: Record<CashbookEntry['sourceType'], { bg: string; text: strin
   payroll:          { bg: '#EDE9FE', text: '#5B21B6' },
   expense:          { bg: '#FEF9C3', text: '#713F12' },
 }
-function CatBadge({ label, sourceType }: { label: string; sourceType: CashbookEntry['sourceType'] }) {
+function CatBadge({ label, sourceType, title }: { label: string; sourceType: CashbookEntry['sourceType']; title?: string }) {
   const c = TYPE_COLORS[sourceType] ?? { bg: 'var(--bg-muted)', text: 'var(--text-4)' }
   return (
-    <span className="badge" style={{ background: c.bg, color: c.text }}>
+    <span className="badge" style={{ background: c.bg, color: c.text }} title={title ?? label}>
       {label.length > 24 ? label.slice(0, 24) + '…' : label}
     </span>
   )
@@ -966,13 +975,14 @@ function ReconRow({ label, amount, bold, indent, negative, highlight, note }: {
 // ── Main Cash Book tab component ──────────────────────────────────────────────
 export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   const appState  = useFinanceStore()
+  const { products } = useInventoryStore()
   const { bankAccounts, bankRecons, saveBankRecon, systemSettings, showToast } = appState
   const reconEnabled = systemSettings.accReconciliation !== false
 
   const allEntries = useMemo(
-    () => buildCashbookEntries(appState, accounts),
+    () => buildCashbookEntries({ ...appState, products }, accounts),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [appState.invoices, appState.posOrders, appState.expenses, appState.journalEntries, appState.deposits, accounts],
+    [appState.invoices, appState.posOrders, appState.expenses, appState.journalEntries, appState.deposits, products, accounts],
   )
 
   const availableMonths = useMemo(() => {
@@ -1171,7 +1181,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
               },
               {
                 key: 'coa', label: 'COA account', priority: 3, width: '160px',
-                render: (e: CashbookEntry & { balance: number }) => <CatBadge label={e.category} sourceType={e.sourceType} />,
+                render: (e: CashbookEntry & { balance: number }) => <CatBadge label={e.category} sourceType={e.sourceType} title={e.categoryTitle} />,
                 exportValue: (e: CashbookEntry & { balance: number }) => e.category,
               },
               {
