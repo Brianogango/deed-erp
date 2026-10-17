@@ -4342,3 +4342,31 @@ model CreditFacilityDocument {
   @@index([applicationId], map: "idx_credit_facility_documents_app")
   @@map("credit_facility_documents")
 }
+
+/// Cheques received from customers and given to suppliers (Finance → Banking → Cheques).
+model Cheque {
+  id           String   @id @default(uuid()) @db.Uuid
+  direction    String   @db.VarChar(10)
+  chequeNumber String   @map("cheque_number") @db.VarChar(40)
+  bankName     String   @default("") @map("bank_name") @db.VarChar(120)
+  partyName    String   @map("party_name") @db.VarChar(200)
+  amount       Decimal  @db.Decimal(14, 2)
+  currency     String   @default("KES") @db.VarChar(3)
+  chequeDate   DateTime @map("cheque_date") @db.Date
+  receivedDate DateTime? @map("received_date") @db.Date
+  status       String   @default("pending") @db.VarChar(12)
+  linkedType   String?  @map("linked_type") @db.VarChar(30)
+  linkedRef    String?  @map("linked_ref") @db.VarChar(80)
+  notes        String?
+  imageKey     String?  @map("image_key") @db.VarChar(300)
+  imageType    String?  @map("image_type") @db.VarChar(60)
+  history      Json     @default("[]")
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([status, chequeDate], map: "cheques_status_date_idx")
+  @@index([direction, chequeDate], map: "cheques_direction_idx")
+  @@index([chequeNumber], map: "cheques_number_idx")
+  @@map("cheques")
+}
