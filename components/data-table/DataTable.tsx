@@ -103,6 +103,11 @@ interface DataTableProps<T> {
   showColumns?: boolean
   /** Initial visible desktop/tablet columns before the user saves a preference. */
   defaultVisibleColumnKeys?: string[]
+  /**
+   * Switch the visible columns from outside (a layout preset). Applied once per
+   * new `token`; the user can still fine-tune with the column picker afterwards.
+   */
+  applyColumnKeys?: { token: string; keys: string[] } | null
   /** Optional horizontal layout floor for wide business tables. */
   minTableWidth?: number
   /** Saved column/search views — off by default; use layoutViews for table/kanban. */
@@ -169,6 +174,7 @@ export default function DataTable<T>({
   layoutViews,
   showColumns,
   defaultVisibleColumnKeys,
+  applyColumnKeys,
   minTableWidth,
   showSavedViews = false,
   overflowActions,
@@ -210,6 +216,14 @@ export default function DataTable<T>({
     return () => observer.disconnect()
   }, [])
   const { prefs, hydrated: prefsHydrated, setVisibleColumnKeys, setSort: persistSort, saveView, deleteView } = useTablePreferences(tableId)
+
+  const appliedColumnTokenRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!applyColumnKeys || !prefsHydrated) return
+    if (appliedColumnTokenRef.current === applyColumnKeys.token) return
+    appliedColumnTokenRef.current = applyColumnKeys.token
+    setVisibleColumnKeys(applyColumnKeys.keys)
+  }, [applyColumnKeys, prefsHydrated, setVisibleColumnKeys])
 
   const [internalSearch, setInternalSearch] = useState('')
   const search = searchValue !== undefined ? searchValue : internalSearch

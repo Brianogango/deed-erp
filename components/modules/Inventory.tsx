@@ -21,11 +21,26 @@ import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-l
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
-import { availableSellableQty, everStockedProductIds, isListedInProductCatalog, isLowStockSku, onHandQtyAtStockLocations } from '@/lib/business-logic'
+import { availableSellableQty, everStockedProductIds, isLowStockSku, onHandQtyAtStockLocations } from '@/lib/business-logic'
 import { isStockOutMove } from '@/lib/kpi-stock'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategory } from '@/lib/reconfiguration/unit-config'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
+import InventoryViewBar from '@/components/inventory/InventoryViewBar'
+import { useInventoryView } from '@/lib/inventory/use-inventory-view'
+import {
+  CATALOG_LAYOUTS,
+  CATALOG_SHOW_OPTIONS,
+  CATALOG_SORT_OPTIONS,
+  DEFAULT_VIEW_PREFS,
+  WAREHOUSE_SORT_OPTIONS,
+  compareCatalog,
+  matchesCatalogShow,
+  matchesCondition,
+  type CatalogShow,
+  type CatalogSort,
+  type WarehouseSort,
+} from '@/lib/inventory/view-prefs'
 import ProductPhotoFields, { uploadProductPhoto } from '@/components/inventory/ProductPhotoFields'
 import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPanel'
 import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPanel'
@@ -306,6 +321,8 @@ function InventoryContent() {
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('All')
   const patchInventoryUi = useUrlUiPatch()
+  const { prefs: viewPrefs, update: updateView, reset: resetView } = useInventoryView()
+  const [catalogColumnPreset, setCatalogColumnPreset] = useState<{ token: string; keys: string[] } | null>(null)
   const [catalogSearch, setCatalogSearchValue] = useUrlUiState('catalogQ', '')
   const [catalogCatFilter, setCatalogCatFilterValue] = useUrlUiState('category', 'All')
   const [priceReviewOnly, setPriceReviewOnly] = useState(false)
@@ -756,23 +773,34 @@ function InventoryContent() {
   const catalogBase = useMemo(() => {
     const q = catalogSearch.trim().toLowerCase()
     return products
-      .filter(product => isListedInProductCatalog(
-        {
+      .map(product => ({ product, qty: catalogQty(product) }))
+      .filter(({ product, qty }) => matchesCatalogShow(
+        product,
+        viewPrefs.catalogShow,
+        qty,
+        isStockTracked(inferTrackingMethod({
           trackingMethod: product.trackingMethod,
           category: product.category,
           requiresSerial: product.requiresSerial,
           unit: product.unit,
-          isActive: product.isActive,
-          canBeSold: product.canBeSold,
-        },
-        serials,
-        bulkStock,
-        product.id,
+        })),
       ))
-      .filter(product => catalogCatFilter === 'All' || product.category === catalogCatFilter)
-      .filter(product => !q || product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q) || product.barcode?.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [products, serials, bulkStock, catalogSearch, catalogCatFilter])
+      .filter(({ product }) => matchesCondition(product, viewPrefs.condition))
+      .filter(({ product }) => catalogCatFilter === 'All' || product.category === catalogCatFilter)
+      .filter(({ product }) => !q || product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q) || product.barcode?.toLowerCase().includes(q))
+      .map(({ product, qty }) => ({
+        product,
+        sortKey: {
+          name: product.name,
+          salePrice: Number(product.salePrice) || 0,
+          qty,
+          updatedAt: (priceHistoryByProduct.get(product.id) ?? [])[0]?.effectiveDate ?? '',
+        },
+      }))
+      .sort((a, b) => compareCatalog(viewPrefs.catalogSort)(a.sortKey, b.sortKey))
+      .map(({ product }) => product)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, serials, bulkStock, catalogSearch, catalogCatFilter, viewPrefs.catalogShow, viewPrefs.condition, viewPrefs.catalogSort, priceHistoryByProduct])
 
   // Same products the catalog lists (in stock, current search and category).
   const priceReviewCount = useMemo(() => catalogBase.filter(product => priceReviewOf(product).needsReview).length, [catalogBase, priceReviewOf])
@@ -2505,10 +2533,10 @@ function InventoryContent() {
                       items={[
                         {
                           id: 'catalog',
-                          label: 'in stock',
+                          label: viewPrefs.catalogShow === 'in_stock' ? 'in stock' : viewPrefs.catalogShow === 'out_of_stock' ? 'out of stock' : 'products',
                           value: catalogProducts.length,
                           tone: 'success',
-                          onClick: () => patchInventoryUi({ catalogQ: null, category: null, page: null }),
+                          onClick: () => { patchInventoryUi({ catalogQ: null, category: null, page: null }); resetView() },
                         },
                         {
                           id: 'review',
@@ -2528,14 +2556,38 @@ function InventoryContent() {
                   }
                   notice={
                     <CompactInfoNotice dismissible storageKey="inventory-catalog-price-notice">
-                      Catalog lists only products with warehouse stock ready to sell. Zero-stock SKUs, With Issues, Repair, and services stay in Product Master.
+                      {viewPrefs.catalogShow === 'in_stock'
+                        ? 'Catalog lists only products with warehouse stock ready to sell. Zero-stock SKUs, With Issues, Repair, and services stay in Product Master — change “Show” above to see them here.'
+                        : viewPrefs.catalogShow === 'out_of_stock'
+                          ? 'Showing sellable products with nothing ready to sell. Their Available count is 0.'
+                          : 'Showing every active product that can be sold, whether or not it is in stock.'}
                       Price changes apply only to future sales. Historical invoices and POS receipts remain unchanged.
                       {!canUpdatePrice ? ' Price editing is read-only for your role.' : ''}
                     </CompactInfoNotice>
                   }
                 >
+                  <InventoryViewBar
+                    show={{ value: viewPrefs.catalogShow, options: CATALOG_SHOW_OPTIONS, onChange: v => { updateView({ catalogShow: v as CatalogShow }); setCatalogPage(1) } }}
+                    condition={{ value: viewPrefs.condition, onChange: v => { updateView({ condition: v }); setCatalogPage(1) } }}
+                    sort={{ value: viewPrefs.catalogSort, options: CATALOG_SORT_OPTIONS, onChange: v => updateView({ catalogSort: v as CatalogSort }) }}
+                    layout={{
+                      value: viewPrefs.catalogLayout,
+                      presets: CATALOG_LAYOUTS,
+                      onChange: preset => {
+                        updateView({ catalogLayout: preset.id })
+                        setCatalogColumnPreset({ token: `${preset.id}:${Date.now()}`, keys: preset.columns })
+                      },
+                    }}
+                    isCustomised={
+                      viewPrefs.catalogShow !== DEFAULT_VIEW_PREFS.catalogShow
+                      || viewPrefs.condition !== DEFAULT_VIEW_PREFS.condition
+                      || viewPrefs.catalogSort !== DEFAULT_VIEW_PREFS.catalogSort
+                    }
+                    onReset={() => { resetView(); setCatalogColumnPreset({ token: `reset:${Date.now()}`, keys: CATALOG_LAYOUTS[CATALOG_LAYOUTS.length - 1].columns }) }}
+                  />
                   <DataTable
                     tableId="inventory-catalog"
+                    applyColumnKeys={catalogColumnPreset}
                     rowActionsWidth={190}
                     columns={catalogColumns}
                     rows={catalogProducts}
@@ -2552,9 +2604,9 @@ function InventoryContent() {
                     emptyMessage={
                       priceReviewOnly
                         ? 'No in-stock product needs a price review'
-                        : catalogSearch || catalogCatFilter !== 'All'
-                        ? 'No in-stock products match these filters'
-                        : 'No in-stock products in the catalog'
+                        : catalogSearch || catalogCatFilter !== 'All' || viewPrefs.condition !== 'all'
+                        ? 'No products match these filters'
+                        : viewPrefs.catalogShow === 'in_stock' ? 'No in-stock products in the catalog' : 'No products to show here'
                     }
                     emptyAction={
                       canEditStock && !catalogSearch && catalogCatFilter === 'All' ? (
