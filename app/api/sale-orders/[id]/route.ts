@@ -19,6 +19,7 @@ import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 import { buildSaleOrderItemsNestedWrite } from '@/lib/sale-order-items-write'
+import { linkLinesToProducts } from '@/lib/sales/link-line-products.server'
 import {
   hasCommercialChange,
   normalizeOptionalProducts,
@@ -130,7 +131,7 @@ async function buildSaleOrderUpdateData(body: any, existing: any) {
   const itemsChanging = Array.isArray(rawItems)
   if (itemsChanging) {
     // Upsert by stable line id — avoid deleteMany+create UUID churn (Phase 5).
-    const nested = buildSaleOrderItemsNestedWrite(rawItems, existingItems)
+    const nested = buildSaleOrderItemsNestedWrite(await linkLinesToProducts(rawItems), existingItems)
     data.items = Object.fromEntries(
       Object.entries(nested).filter(([, v]) => v !== undefined),
     )

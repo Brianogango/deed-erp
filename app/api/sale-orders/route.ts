@@ -14,6 +14,7 @@ import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 import { calcSaleOrderLineMoney, calcSaleOrderTotals } from '@/lib/sales/line-calc'
 import { quotationPaymentTermsDays } from '@/lib/sales/quotation-defaults'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
+import { linkLinesToProducts } from '@/lib/sales/link-line-products.server'
 import { normalizeOptionalProducts } from '@/lib/sales/sale-order-commercial-change'
 import { mergeScreenExtras, SALE_ORDER_EXTRA_KEYS } from '@/lib/screen-extras'
 
@@ -150,7 +151,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const rawItems: any[] = (Array.isArray(body.lines) ? body.lines : body.items) ?? []
+    let rawItems: any[] = (Array.isArray(body.lines) ? body.lines : body.items) ?? []
     const lineError = validateSaleOrderLines(rawItems)
     if (lineError) {
       return NextResponse.json({ error: lineError }, { status: 400 })
@@ -183,6 +184,7 @@ export async function POST(request: Request) {
     // from the client) — mirrors lib/finance-invoice.ts's invoice totals.
     const totals = calcSaleOrderTotals(rawItems, { headerDiscount: body.discountAmount })
 
+    rawItems = await linkLinesToProducts(rawItems)
     const productIds = [...new Set(
       rawItems
         .map((item: any) => optionalUuid(item.productId))
