@@ -148,17 +148,18 @@ export function buildMyWork(input: MyWorkInput): WorkQueue[] {
     const openDeals = new Map((input.opportunities ?? [])
       .filter(o => !['closed_won', 'closed_lost'].includes(String(o.stage)) && mine(o.ownerId ?? o.assignedToId))
       .map(o => [o.id, o]))
+    const when = (a: Any) => String(a.scheduledDate ?? a.scheduledAt ?? '').slice(0, 10)
     const due = (input.opportunityActivities ?? []).filter(a =>
       openDeals.has(a.opportunityId)
       && a.status === 'scheduled'
-      && a.scheduledDate && String(a.scheduledDate).slice(0, 10) <= today)
+      && when(a) && when(a) <= today)
     out.push(queue('crm-activities', 'Deal follow-ups due', 'Calls, meetings and tasks scheduled for today or earlier', '/crm',
       due.map(a => ({
         id: a.id,
         title: openDeals.get(a.opportunityId)?.name ?? 'Deal',
-        subtitle: `${a.subject ?? a.type} · ${String(a.scheduledDate).slice(0, 10)}`,
+        subtitle: `${a.subject ?? a.type} · ${when(a)}`,
         href: `/crm?crmTab=pipeline&id=${encodeURIComponent(a.opportunityId)}`,
-        ageDays: ageDays(a.scheduledDate, now),
+        ageDays: ageDays(when(a), now),
       })), 'urgent'))
 
     // An open deal with nothing scheduled drifts: nobody knows the next step.

@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { notifyStoreKeysChanged } from '@/lib/server-store'
 import { activityExtras, toScreenActivity } from '@/lib/opportunity-activity-read-model.server'
+import { filterStoreValueForRole } from '@/lib/auth/authorization'
 
 /** Open tabs re-read activities from the table (the deed_oppActivities copy is frozen). */
 const broadcastOppActivities = () => notifyStoreKeysChanged(['deed_oppActivities'])
@@ -22,11 +23,12 @@ function mapActivityToDb(body: any) {
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const activities = await prisma.opportunityActivity.findMany({
       orderBy: { createdAt: 'desc' },
+      include: { opportunity: { select: { assignedToId: true, createdById: true } } },
     })
-    return NextResponse.json(activities.map(toScreenActivity))
+    return NextResponse.json(filterStoreValueForRole(session.user, 'deed_oppActivities', activities.map(toScreenActivity)))
   })
 }
 

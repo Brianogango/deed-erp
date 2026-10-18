@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '@/lib/store'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import { buildMyWork } from '@/lib/my-work'
+import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 
 /**
  * Everything waiting for the signed-in person, across modules. Start the day
@@ -16,14 +17,21 @@ export default function MyWork() {
   // Leads live in their own table, not the app store: fetch the ones this
   // person may see (the server scopes a rep to their own and unassigned).
   const crmRole = ['director', 'admin_officer', 'sales_rep'].includes(String(user?.role ?? ''))
-  const [leads, setLeads] = useState<any[]>([])
+  const [crm, setCrm] = useState<{ leads: any[]; deals: any[]; activities: any[] }>({ leads: [], deals: [], activities: [] })
   useEffect(() => {
     if (!crmRole) return
     let live = true
-    fetch('/api/leads')
-      .then(res => (res.ok ? res.json() : []))
-      .then(rows => { if (live) setLeads(Array.isArray(rows) ? rows : []) })
-      .catch(() => { /* the CRM queues just stay empty */ })
+    const get = (url: string) => fetch(url).then(res => (res.ok ? res.json() : [])).catch(() => [])
+    // Each route returns only what this person may see.
+    void Promise.all([get('/api/leads'), get('/api/opportunities'), get('/api/opportunity-activities')])
+      .then(([leads, deals, activities]) => {
+        if (!live) return
+        setCrm({
+          leads: Array.isArray(leads) ? leads : [],
+          deals: normalizeOpportunitiesForClient(Array.isArray(deals) ? deals : []),
+          activities: Array.isArray(activities) ? activities : [],
+        })
+      })
     return () => { live = false }
   }, [crmRole])
   const queues = useMemo(() => buildMyWork({
@@ -43,11 +51,11 @@ export default function MyWork() {
     clientExchanges: app.clientExchanges ?? [],
     donations: app.donations ?? [],
     returnOrders: app.returnOrders ?? [],
-    leads,
-    opportunities: app.opportunities ?? [],
-    opportunityActivities: app.opportunityActivities ?? [],
+    leads: crm.leads,
+    opportunities: crm.deals,
+    opportunityActivities: crm.activities,
     invoiceHref: id => financeInvoicePath(id),
-  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders, app.products, app.clientExchanges, app.donations, app.returnOrders, leads, app.opportunities, app.opportunityActivities])
+  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders, app.products, app.clientExchanges, app.donations, app.returnOrders, crm])
 
   const total = queues.reduce((s, q) => s + q.count, 0)
   const firstName = String(user?.name ?? '').split(/\s+/)[0]

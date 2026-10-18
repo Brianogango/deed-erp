@@ -74,7 +74,7 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   // Sale orders, quotes and deliveries feed the job trail (deferred below).
   '/repairs': ['deed_repairs_v2', 'deed_contacts', 'deed_products', 'deed_invoices', 'deed_serials', 'deed_refurbishmentJobs', 'deed_warranties', 'deed_outboundReleases', 'deed_outsourceJobs', 'deed_outsourceVendors', 'deed_saleOrders', 'deed_quotes', 'deed_deliveries'],
   // My work: every queue the person can act on (lib/my-work.ts).
-  '/my-work': ['deed_repairs_v2', 'deed_saleOrders', 'deed_invoices', 'deed_deliveries', 'deed_buyBacks', 'deed_stockAdjustments', 'deed_serials', 'deed_purchaseOrders', 'deed_opportunities', 'deed_oppActivities'],
+  '/my-work': ['deed_repairs_v2', 'deed_saleOrders', 'deed_invoices', 'deed_deliveries', 'deed_buyBacks', 'deed_stockAdjustments', 'deed_serials', 'deed_purchaseOrders'],
   // A customer's Sales & service tab: history, devices, what is waiting on
   // them. Deferred so the contact list itself opens as fast as before.
   '/contacts': ['deed_contacts', 'deed_customerCredits', 'deed_saleOrders', 'deed_invoices', 'deed_repairs_v2', 'deed_posOrders', 'deed_serials'],
