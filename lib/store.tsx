@@ -6944,6 +6944,23 @@ function StoreProvider({
     return provisional
   }
 
+  /**
+   * An expense claim number: unique at once, the server's EXP/NNNN as soon as
+   * it answers. It used to come from this browser's own counter, so two
+   * browsers issued the same EXP number; the second claim's journal was then
+   * taken as already posted and skipped, and the claim could never be paid.
+   */
+  const expenseRef = (): string => {
+    const provisional = allocateDocNumberSync('EXP')
+    queueMicrotask(() => {
+      void storeCtxRef.current?.allocateDocRef('EXP').then(finalRef => {
+        if (!finalRef || finalRef === provisional || finalRef.includes('/L')) return
+        setExpenses(p => p.map(e => (e.ref === provisional ? { ...e, ref: finalRef } : e)))
+      }).catch(() => { /* the temporary number stays; it is unique */ })
+    })
+    return provisional
+  }
+
   /** An outsource job number: unique at once, the server's OUT/NNNN as soon as it answers. */
   const outsourceRef = (): string => {
     const provisional = allocateDocNumberSync('OUT')
@@ -8515,7 +8532,7 @@ const storeCtx: AppState = {
       const expense: Expense = {
         ...eMeta,
         id: uid(),
-        ref: seq('EXP', 'exp'),
+        ref: expenseRef(),
         submittedByUserId: user.id,
         submittedByName: user.name,
         submittedDate: now(),
@@ -8534,7 +8551,13 @@ const storeCtx: AppState = {
             fileType: expense.receiptFileType,
             fileSize: expense.receiptFileSize,
           }),
-        }).catch(() => { /* non-blocking — receipt upload failure is silent */ })
+        }).then(res => {
+          if (!res.ok) throw new Error(String(res.status))
+        }).catch(() => {
+          // It used to fail silently, leaving a claim that says it has a
+          // receipt the server never stored. Open the claim and attach it again.
+          showToast('The receipt did not upload — open the claim and attach it again', 'error')
+        })
       }
       setExpenses(prev => [expense, ...prev])
       // Notify finance / director approvers (not the submitter)
@@ -8543,13 +8566,14 @@ const storeCtx: AppState = {
         recipients: userIdsWithRoles(users, ['director', 'finance_officer'], user.id),
         type: 'expense',
         title: `Expense claim from ${expense.submittedByName}`,
-        body: `${expense.ref} — ${expense.description} · KES ${expense.amount.toLocaleString()}`,
+        // The number is still provisional here; the server's EXP number replaces it a moment later.
+        body: `${expense.description} · KES ${expense.amount.toLocaleString()}`,
         module: 'expenses',
         icon: '💰',
         entityKey: `expense:${expense.id}:submitted`,
         excludeUserId: user.id,
       })
-      showToast(`Expense ${expense.ref} submitted`, 'success')
+      showToast('Expense claim submitted', 'success')
       return expense
     },
 
@@ -8562,6 +8586,13 @@ const storeCtx: AppState = {
       const expense = expenses.find(e => e.id === id)
       if (!expense) return
       if (expense.status === 'reimbursed' || expense.status === 'paid') { showToast('Paid expenses cannot be reviewed again', 'error'); return }
+      // The server refused the approval journal (closed period, …): put the
+      // claim back as it was. It used to stay "approved" with a journal only
+      // this browser had, so the books never showed the expense.
+      const undoApproval = (journalRef: string) => {
+        setExpenses(prev => prev.map(e => e.id === id ? expense : e))
+        setJournalEntries(prev => prev.filter(j => j.ref !== journalRef))
+      }
 
       const chain = expense.approvalChain
       if (chain?.length) {
@@ -8609,9 +8640,13 @@ const storeCtx: AppState = {
           }).then(async res => {
             if (!res.ok) {
               const payload = await res.json().catch(() => null) as { error?: string } | null
-              showToast(payload?.error || 'Expense journal posting failed', 'error')
+              undoApproval(journal.ref)
+              showToast(`${payload?.error || 'Expense journal posting failed'} — the approval was undone`, 'error')
             }
-          }).catch(() => showToast('Expense journal posting failed', 'error'))
+          }).catch(() => {
+            undoApproval(journal.ref)
+            showToast('Expense journal posting failed — the approval was undone', 'error')
+          })
         }
         if (expense?.submittedByUserId) {
           const pending = nextChain.find(s => s.status === 'pending')
@@ -8665,9 +8700,13 @@ const storeCtx: AppState = {
         }).then(async res => {
           if (!res.ok) {
             const payload = await res.json().catch(() => null) as { error?: string } | null
-            showToast(payload?.error || 'Expense journal posting failed', 'error')
+            undoApproval(journal.ref)
+            showToast(`${payload?.error || 'Expense journal posting failed'} — the approval was undone`, 'error')
           }
-        }).catch(() => showToast('Expense journal posting failed', 'error'))
+        }).catch(() => {
+          undoApproval(journal.ref)
+          showToast('Expense journal posting failed — the approval was undone', 'error')
+        })
       }
       if (expense?.submittedByUserId) {
         notifyUsers({

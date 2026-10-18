@@ -84,8 +84,19 @@ export async function POST(
   if (!body.dataUrl) {
     return NextResponse.json({ error: 'dataUrl is required' }, { status: 400 })
   }
+  if (!parseDataUrl(body.dataUrl)) {
+    return NextResponse.json({ error: 'The receipt must be an image or PDF file' }, { status: 415 })
+  }
   try {
-    await saveStoreKeys({ [receiptKey(resolvedParams.expenseId)]: body.dataUrl })
+    // A receipt is proof for an expense someone approved or paid against, so
+    // once stored it is never replaced: anyone signed in used to be able to
+    // overwrite any claim's receipt. Only a missing one can be attached again.
+    const key = receiptKey(resolvedParams.expenseId)
+    const existing = (await loadAppState([key]))[key]
+    if (typeof existing === 'string' && existing) {
+      return NextResponse.json({ error: 'This expense already has a receipt' }, { status: 409 })
+    }
+    await saveStoreKeys({ [key]: body.dataUrl })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Failed to save receipt' }, { status: 500 })
@@ -94,7 +105,7 @@ export async function POST(
 
 /**
  * DELETE /api/expense-receipts/[expenseId]
- * Removes the receipt for an expense.
+ * Removes the receipt for an expense. Finance and Directors only.
  */
 export async function DELETE(
   _req: NextRequest,
@@ -104,6 +115,9 @@ export async function DELETE(
   const session = await getServerSession()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!['director', 'finance_officer'].includes(String(session.user.role))) {
+    return NextResponse.json({ error: 'Only Finance or a Director can remove a receipt' }, { status: 403 })
   }
   try {
     await saveStoreKeys({ [receiptKey(resolvedParams.expenseId)]: '' })
