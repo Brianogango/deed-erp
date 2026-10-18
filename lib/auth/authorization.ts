@@ -205,6 +205,8 @@ export const CONTENT_FILTERED_STORE_KEYS = new Set([
   'deed_saleOrders',
   'deed_repairs_v2',
   'deed_opportunities',
+  // Call notes and CRM emails on deals: a rep receives only their own deals'.
+  'deed_oppActivities',
 ])
 
 type StoreRow = { [k: string]: unknown }
@@ -265,6 +267,7 @@ export const hasFullStoreContentAccess = (
       || role === 'inventory_officer'
   }
   if (key === 'deed_opportunities') return role !== 'sales_rep'
+  if (key === 'deed_oppActivities') return role !== 'sales_rep'
   return true
 }
 
@@ -303,6 +306,14 @@ export function filterStoreValueForRole(
     return (value as StoreRow[]).filter(opp => {
       if (!user?.id) return false
       return opp.ownerId === user.id || opp.assignedToId === user.id
+    })
+  }
+  if (key === 'deed_oppActivities') {
+    if (role !== 'sales_rep') return value
+    return (value as StoreRow[]).filter(a => {
+      if (!user?.id) return false
+      return a.createdById === user.id || a.createdBy === user.id
+        || a.dealAssignedToId === user.id || a.dealCreatedById === user.id
     })
   }
   return value

@@ -9,6 +9,7 @@ import LeadsPanel from '@/components/crm/LeadsPanel'
 import EmailReviewPanel from '@/components/crm/EmailReviewPanel'
 import DuplicateContactsPanel from '@/components/crm/DuplicateContactsPanel'
 import CrmEmailComposer from '@/components/crm/CrmEmailComposer'
+import CrmReportPanel from '@/components/crm/CrmReportPanel'
 import { PivotView } from '@/components/erp/PivotView'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import {
@@ -31,7 +32,7 @@ const ACTIVITY_ICONS: Record<string, IconProp> = {
   task: faCircleCheck,
 }
 
-type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla' | 'leads' | 'email_review' | 'dup_contacts'
+type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla' | 'leads' | 'email_review' | 'dup_contacts' | 'reports'
 type View = 'kanban' | 'list' | 'detail'
 
 const CRM_RECORD_QUERY = { crmTab: 'pipeline' }
@@ -830,6 +831,7 @@ function CRMContent() {
           { id: 'activities', label: 'Activities' },
           { id: 'contracts', label: 'Contracts' },
           { id: 'sla', label: 'SLA tracker' },
+          { id: 'reports', label: 'Reports' },
         ]}
         active={tab}
         onChange={id => {
@@ -1198,6 +1200,17 @@ function CRMContent() {
               }
             }}
           />
+        </div>
+      </div>
+    )
+  }
+
+  if (tab === 'reports') {
+    return (
+      <div className="mod-page crm-workspace">
+        {moduleHeader}
+        <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
+          <CrmReportPanel users={users.map(u => ({ id: u.id, name: u.name }))} />
         </div>
       </div>
     )

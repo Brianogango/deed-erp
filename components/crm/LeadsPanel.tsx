@@ -8,6 +8,7 @@ import { Modal, Field, Input, Select } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import LeadFollowUp, { followUpState } from '@/components/crm/LeadFollowUp'
 import CrmEmailComposer from '@/components/crm/CrmEmailComposer'
+import LeadImportModal from '@/components/crm/LeadImportModal'
 import type { LeadActivity } from '@/lib/crm/lead-activity'
 
 type LeadAttachment = {
@@ -57,6 +58,7 @@ const SOURCE_OPTIONS = [
   { value: 'cold_call', label: 'Cold call' },
   { value: 'walk_in', label: 'Walk-in' },
   { value: 'partner', label: 'Partner' },
+  { value: 'trade_show', label: 'Expo / trade show' },
   { value: 'inbound_email', label: 'Sales inbox' },
 ]
 
@@ -164,6 +166,7 @@ export default function LeadsPanel({
 
   const [emailing, setEmailing] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [edit, setEdit] = useState({ name: '', companyName: '', email: '', phone: '' })
   const replaceLead = useCallback((next: LeadRow) => {
     setLeads(prev => prev.map(l => (l.id === next.id ? { ...l, ...next } : l)))
@@ -409,6 +412,7 @@ export default function LeadsPanel({
     <div className="crm-leads-panel flex flex-col gap-4">
       <div className="crm-submodule-actions">
         <PrimaryActionButton onClick={() => setShowForm(true)}>+ New lead</PrimaryActionButton>
+        <button type="button" className="btn-outline text-[11px] py-1.5 px-3" onClick={() => setImporting(true)}>Import from spreadsheet</button>
       </div>
 
       <div className="card overflow-hidden crm-directory-card">
@@ -670,6 +674,16 @@ export default function LeadsPanel({
         </Modal>
         )
       })()}
+
+      {importing && (
+        <LeadImportModal
+          canAssign={canAssign}
+          salesReps={salesReps}
+          onDone={() => void load({ soft: true })}
+          onClose={() => setImporting(false)}
+          showToast={showToast}
+        />
+      )}
 
       {detail && emailing && (
         <CrmEmailComposer
