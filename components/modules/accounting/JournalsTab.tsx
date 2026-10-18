@@ -240,10 +240,8 @@ export default function JournalsTab() {
         onRowClick={e => setViewJournal(e)}
         rowActions={e => (
           <div className="flex gap-1">
-            <button className="text-[9px] px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
-              onClick={() => setViewJournal(e)}>View</button>
             <button className="text-[9px] px-2 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border)] text-t2 cursor-pointer"
-              onClick={() => downloadPdf(`${e.ref.replaceAll('/', '-')}.pdf`, buildJournalPdf(e))}>PDF</button>
+              onClick={ev => { ev.stopPropagation(); downloadPdf(`${e.ref.replaceAll('/', '-')}.pdf`, buildJournalPdf(e)) }}>PDF</button>
           </div>
         )}
         exportTitle="Journal Entries"

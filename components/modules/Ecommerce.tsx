@@ -149,11 +149,6 @@ export default function Ecommerce() {
               rowKey={p => p.id}
               searchPlaceholder="Search products…"
               emptyMessage="No products listed"
-              rowActions={() => (
-                <button style={{ background: 'var(--info-bg)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '3px 10px' }}>
-                  View
-                </button>
-              )}
               exportTitle="Store Products"
               exportFilename="ecommerce-products"
             />

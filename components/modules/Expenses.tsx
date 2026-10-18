@@ -1051,18 +1051,17 @@ function ExpenseTable({
   onReimburse?: (e: Expense) => void
   onView?: (e: Expense) => void
 }) {
-  const rowActions = (exp: Expense) => (
+  // The row (or card) opens the claim; only Review / Pay need a button.
+  const hasAction = (exp: Expense) => Boolean((onReview && exp.status === 'submitted') || (onReimburse && exp.status === 'approved'))
+  const rowActions = (exp: Expense) => !hasAction(exp) ? null : (
     <div className="expenses-row-actions flex items-center gap-2">
       {onReview && exp.status === 'submitted' && (
-        <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => onReview(exp)}>Review</button>
+        <button className="btn-primary text-[10px] py-1.5 px-3" onClick={e => { e.stopPropagation(); onReview(exp) }}>Review</button>
       )}
       {onReimburse && exp.status === 'approved' && (
-        <button className="btn-primary text-[10px] py-1.5 px-3 bg-cyan-600 hover:bg-cyan-700" onClick={() => onReimburse(exp)}>
+        <button className="btn-primary text-[10px] py-1.5 px-3 bg-cyan-600 hover:bg-cyan-700" onClick={e => { e.stopPropagation(); onReimburse(exp) }}>
           {isReimbursable(exp.paymentMethod) ? 'Reimburse' : 'Pay'}
         </button>
-      )}
-      {onView && (
-        <button className="btn-secondary text-[10px] py-1.5 px-3" onClick={() => onView(exp)}>View</button>
       )}
     </div>
   )
@@ -1170,7 +1169,8 @@ function ExpenseTable({
         { label: 'Payment', value: pmLabel(exp.paymentMethod) },
         ...(exp.receiptFileName ? [{ label: 'Receipt', value: exp.receiptFileName }] : []),
       ]}
-      actions={rowActions(exp)}
+      actions={rowActions(exp) ?? undefined}
+      onClick={onView ? () => onView(exp) : undefined}
     />
   )
 
@@ -1189,7 +1189,8 @@ function ExpenseTable({
       primaryFilters={primaryFilters}
       onClearFilters={onClearFilters}
       hideColumnFilters={Boolean(primaryFilters?.length)}
-      rowActions={rowActions}
+      rowActions={rows.some(hasAction) ? rowActions : undefined}
+      onRowClick={onView}
       renderCard={renderExpenseCard}
       exportTitle={showSubmitter ? 'Expense Reviews' : 'My Expenses'}
       exportFilename="expenses"
