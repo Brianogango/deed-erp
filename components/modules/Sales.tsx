@@ -2468,9 +2468,10 @@ function SalesContent() {
                     <dl className="sales-record-summary__facts">
                       {isQuotationStage(activeOrder.status) ? (
                         <>
+                          {/* The stage is already in the badge and the steps below. */}
                           <div>
-                            <dt>Stage</dt>
-                            <dd>{SALE_STATUS_LABELS[activeOrder.status] ?? activeOrder.status}</dd>
+                            <dt>Quote date</dt>
+                            <dd>{fmtDate(activeOrder.date) || 'Not set'}</dd>
                           </div>
                           <div>
                             <dt>Valid until</dt>
@@ -2584,7 +2585,8 @@ function SalesContent() {
                     />
                   )}
 
-                  <section className="sales-doc-smart-row sales-doc-smart-row--journey" aria-label="Sales Order journey records">
+                  {/* Delivery, invoice and payment only exist once the quote is confirmed. */}
+                  {!isQuotationStage(activeOrder.status) && <section className="sales-doc-smart-row sales-doc-smart-row--journey" aria-label="Sales Order journey records">
           <button type="button" className="sales-doc-smart-button">
             <span>Customer</span>
             <strong>{activeOrder.customerName || 'Not set'}</strong>
@@ -2601,7 +2603,7 @@ function SalesContent() {
             <span>Payment</span>
             <strong>{activeInvoices.length > 0 ? PAYMENT_STATUS_LABELS[activePaymentStatus] : 'Awaiting invoice'}</strong>
           </button>
-        </section>
+        </section>}
 
 
                       {isQuotationStage(activeOrder.status) && (approvalRequests ?? []).some(r =>

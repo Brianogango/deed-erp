@@ -31744,3 +31744,40 @@ button, [role="button"], [role="tab"] {
   margin: 0;
   vertical-align: middle;
 }
+
+/* Quotation / sales order header fields. Read-only values (customer details,
+   anything on a sent or confirmed document) read as text, not as boxes that
+   look editable; fields you can change get a padded box. */
+.mod-page.sales-pilot.sales-doc .sales-order-meta-panel--unified .sp-field input[readonly] {
+  min-height: 2rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0.35rem 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text-1) !important;
+  font-weight: 600 !important;
+  cursor: default;
+}
+
+.mod-page.sales-pilot.sales-doc .sales-order-meta-panel--unified .sp-field input:not([readonly]),
+.mod-page.sales-pilot.sales-doc .sales-order-meta-panel--unified .sp-field select,
+.mod-page.sales-pilot.sales-doc .sales-order-meta-panel--unified .sp-field textarea {
+  border: 1px solid var(--border) !important;
+  border-radius: 0.4rem !important;
+  padding: 0.4rem 0.6rem !important;
+  background: var(--bg-card) !important;
+  font-weight: 600 !important;
+}
+
+.mod-page.sales-pilot.sales-doc .sales-order-meta-panel--unified .sp-field input:not([readonly]):focus,
+.mod-page.sales-pilot.sales-doc .sales-order-meta-panel--unified .sp-field select:focus,
+.mod-page.sales-pilot.sales-doc .sales-order-meta-panel--unified .sp-field textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent) !important;
+}
+
+/* Room under the last panel so the floating assistant button never covers the total. */
+.sales-pilot.sales-doc .sales-record-view {
+  padding-bottom: 4.5rem;
+}
