@@ -229,6 +229,30 @@ async function scanCrm() {
     },
     select: { id: true, name: true, companyName: true, ownerId: true, nextFollowUpAt: true, createdAt: true },
   })
+  // Unowned-lead reminders used to go to the directors. Assigning leads is
+  // the admin officers' job: close the old ones so they are raised again for
+  // the admin officers (keys ending ':unowned').
+  const unownedIds = leads.filter(l => !l.ownerId).map(l => l.id)
+  if (unownedIds.length) {
+    const stale = await prisma.notificationEvent.findMany({
+      where: {
+        eventType: 'crm.lead.follow_up_due',
+        entityType: 'lead',
+        entityId: { in: unownedIds },
+        resolvedAt: null,
+        NOT: { idempotencyKey: { endsWith: ':unowned' } },
+      },
+      select: { id: true },
+    })
+    if (stale.length) {
+      const ids = stale.map(row => row.id)
+      const resolvedAt = new Date()
+      await prisma.$transaction([
+        prisma.notificationEvent.updateMany({ where: { id: { in: ids } }, data: { resolvedAt } }),
+        prisma.notificationRecipient.updateMany({ where: { eventId: { in: ids }, resolvedAt: null }, data: { resolvedAt } }),
+      ])
+    }
+  }
   const dueLeadIds: string[] = []
   for (const lead of leads) {
     dueLeadIds.push(lead.id)
@@ -237,14 +261,14 @@ async function scanCrm() {
       eventType: 'crm.lead.follow_up_due',
       entityType: 'lead',
       entityId: lead.id,
-      // Nobody owns it: the directors decide who does.
-      ...(lead.ownerId ? { userIds: [lead.ownerId] } : { roles: ['director'] }),
+      // Nobody owns it: the admin officers hand it to a rep.
+      ...(lead.ownerId ? { userIds: [lead.ownerId] } : { roles: ['admin_officer'] }),
       title: firstContact ? `New lead not contacted yet: ${lead.name}` : `Follow up today: ${lead.name}`,
       body: firstContact
         ? `${lead.companyName ? `${lead.companyName} · ` : ''}arrived ${dateOnly(lead.createdAt)} and has had no call, email or message logged.`
         : `${lead.companyName ? `${lead.companyName} · ` : ''}follow-up was due ${dateOnly(lead.nextFollowUpAt!)}.`,
       actionUrl: `/crm?crmTab=leads&leadId=${lead.id}`,
-      idempotencyKey: '',
+      idempotencyKey: lead.ownerId ? '' : `condition:crm.lead.follow_up_due:lead:${lead.id}:${(lead.nextFollowUpAt ?? lead.createdAt).toISOString()}:unowned`,
       stateVersion: lead.nextFollowUpAt ?? lead.createdAt,
     })) emitted++
   }
