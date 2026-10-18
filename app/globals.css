@@ -1635,7 +1635,8 @@
 }
 
 .app-topbar--finance .app-topbar-search {
-  width: min(23.75rem, 42vw);
+  /* Stops short of the centred clock pill instead of sliding underneath it. */
+  width: clamp(8rem, 18vw, 14rem);
   min-height: 2.25rem;
   margin-right: auto;
   justify-content: flex-start;
@@ -12742,7 +12743,8 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .app-topbar--sales .app-topbar-search {
-  width: min(23.75rem, 42vw);
+  /* Stops short of the centred clock pill instead of sliding underneath it. */
+  width: clamp(8rem, calc(50vw - 30.5rem), 20rem);
   min-height: 2.25rem;
   margin-right: auto;
   justify-content: flex-start;
@@ -31704,4 +31706,14 @@ button, [role="button"], [role="tab"] {
   .inventory-view-seg { min-height: 2.75rem; padding: 0 0.875rem; font-size: 0.875rem; }
   .inventory-view-select { min-height: 2.75rem; font-size: 1rem; }
   .inventory-view-reset { min-height: 2.75rem; flex: 0 0 auto; }
+}
+
+/* Selection checkboxes in tables stay checkbox-sized and centred on the row text. */
+.sp-table input[type='checkbox'],
+.erp-table input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  min-height: 0;
+  margin: 0;
+  vertical-align: middle;
 }
