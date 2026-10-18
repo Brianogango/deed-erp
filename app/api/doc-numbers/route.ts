@@ -23,6 +23,7 @@ const VALID_KINDS = new Set<DocKind>([
   'rider_pay',
   'expense',
   'opportunity',
+  'contract',
   'kilimall_order',
   'kilimall_dispatch',
   'kilimall_settlement',

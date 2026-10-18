@@ -1006,7 +1006,7 @@ export default function Settings() {
           {section === 'crm' && (
             <>
               <SectionCard title="Core">
-                <SettingRow label="Enable Leads & Opportunities" desc="Track customer enquiries through a sales pipeline"><Toggle on={ss.crmLeads} onChange={v => updateSystemSettings({ crmLeads: v })} /></SettingRow>
+                <SettingRow label="Sales inbox review" desc="Show the Email review and Duplicates tabs in CRM (Leads and Pipeline are always on)"><Toggle on={ss.crmLeads !== false} onChange={v => updateSystemSettings({ crmLeads: v })} /></SettingRow>
                 <SettingRow label="Lead Scoring" desc="Auto-score leads based on behaviour and attributes"><Toggle on={ss.crmLeadScoring} onChange={v => updateSystemSettings({ crmLeadScoring: v })} /></SettingRow>
                 <SettingRow label="Tags & Source Tracking" desc="Label leads by source — WhatsApp, walk-in, referral, etc."><Toggle on={ss.crmTags} onChange={v => updateSystemSettings({ crmTags: v })} /></SettingRow>
               </SectionCard>

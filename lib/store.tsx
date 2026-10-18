@@ -6970,6 +6970,22 @@ function StoreProvider({
     return provisional
   }
 
+  /**
+   * A customer contract number: unique at once, the server's CTR/NNNN as soon
+   * as it answers. It used to come from this browser's own counter — the one
+   * deals used too — so two browsers issued the same contract number.
+   */
+  const contractRef = (): string => {
+    const provisional = allocateDocNumberSync('CTR')
+    queueMicrotask(() => {
+      void storeCtxRef.current?.allocateDocRef('CTR').then(finalRef => {
+        if (!finalRef || finalRef === provisional || finalRef.includes('/L')) return
+        setCustomerContracts(p => p.map(c => (c.ref === provisional ? { ...c, ref: finalRef } : c)))
+      }).catch(() => { /* the temporary number stays; it is unique */ })
+    })
+    return provisional
+  }
+
   /** An outsource job number: unique at once, the server's OUT/NNNN as soon as it answers. */
   const outsourceRef = (): string => {
     const provisional = allocateDocNumberSync('OUT')
@@ -10916,11 +10932,11 @@ const storeCtx: AppState = {
       const contract: CustomerContract = {
         ...contractInput,
         id: uid(),
-        ref: seq('CTR', 'opp'),
+        ref: contractRef(),
       }
       setCustomerContracts(prev => [contract, ...prev])
-      addAuditLog('create_contract', contract.ref, `Contract for ${contract.companyName} created`)
-      showToast(`Contract ${contract.ref} created`)
+      addAuditLog('create_contract', contract.companyName, `Contract for ${contract.companyName} created`)
+      showToast('Contract created')
       return contract
     },
     updateCustomerContract: (id, patch) => {
@@ -10934,7 +10950,7 @@ const storeCtx: AppState = {
       const renewed: CustomerContract = {
         ...current,
         id: uid(),
-        ref: seq('CTR', 'opp'),
+        ref: contractRef(),
         startDate: current.endDate,
         endDate: addDays(current.endDate, 365),
         renewalDate: addDays(current.endDate, 335),
@@ -10942,8 +10958,8 @@ const storeCtx: AppState = {
       }
       setCustomerContracts(prev => prev.map(c => c.id === id ? { ...c, status: 'renewed' } : c))
       setCustomerContracts(prev => [renewed, ...prev])
-      addAuditLog('renew_contract', renewed.ref, `Renewed from ${current.ref}`)
-      showToast(`Contract renewed as ${renewed.ref}`)
+      addAuditLog('renew_contract', current.ref, `Renewed ${current.ref} for another year`)
+      showToast(`Contract ${current.ref} renewed`)
       return renewed
     },
     terminateCustomerContract: (id, reason) => {

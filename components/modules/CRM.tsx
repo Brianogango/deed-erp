@@ -817,8 +817,11 @@ function CRMContent() {
       <TabBar
         tabs={[
           { id: 'pipeline', label: 'Pipeline' },
-          ...(systemSettings?.crmLeads ? [
-            { id: 'leads' as const, label: 'Leads' },
+          // Leads are where the sales flow starts, so the tab is always there.
+          // It used to vanish whenever the Leads setting was off or missing
+          // from older saved settings.
+          { id: 'leads' as const, label: 'Leads' },
+          ...(systemSettings?.crmLeads !== false ? [
             { id: 'email_review' as const, label: 'Email review' },
             { id: 'dup_contacts' as const, label: 'Duplicates' },
           ] : []),
@@ -1166,7 +1169,7 @@ function CRMContent() {
     )
   }
 
-  if (tab === 'leads' && systemSettings?.crmLeads) {
+  if (tab === 'leads') {
     return (
       <div className="mod-page crm-workspace">
         {moduleHeader}
@@ -1199,7 +1202,7 @@ function CRMContent() {
     )
   }
 
-  if (tab === 'email_review' && systemSettings?.crmLeads) {
+  if (tab === 'email_review' && systemSettings?.crmLeads !== false) {
     return (
       <div className="mod-page crm-workspace">
         {moduleHeader}
@@ -1210,7 +1213,7 @@ function CRMContent() {
     )
   }
 
-  if (tab === 'dup_contacts' && systemSettings?.crmLeads) {
+  if (tab === 'dup_contacts' && systemSettings?.crmLeads !== false) {
     return (
       <div className="mod-page crm-workspace">
         {moduleHeader}
