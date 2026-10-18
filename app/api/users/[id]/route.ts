@@ -1,11 +1,26 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, requirePermission, withApiErrorHandling, sanitizeActor } from '@/lib/auth/api'
-import { findAuthUserById, updateAuthUser, findAuthUserByUsername, clearFailedLogin, toPublicAuthUser, deleteAuthUser, deactivateAuthUser, reactivateAuthUser } from '@/lib/auth/users-repository'
+import { listAuthUsers, findAuthUserById, updateAuthUser, findAuthUserByUsername, clearFailedLogin, toPublicAuthUser, deleteAuthUser, deactivateAuthUser, reactivateAuthUser } from '@/lib/auth/users-repository'
 import { hashPassword, passwordMatchesHistory } from '@/lib/auth/password'
 import { userUpdateSchema, validate } from '@/lib/validation'
-import { assertPermission } from '@/lib/auth/authorization'
+import { assertPermission, normalizePermissionRole } from '@/lib/auth/authorization'
+import { lastDirectorViolation, diffAccess, snapshotAccess } from '@/lib/auth/access-control'
+import { recordAccessChange } from '@/lib/auth/access-audit.server'
 import { isDirector } from '@/lib/auth/access'
 import { sendEmail } from '@/lib/integrations/email'
+
+/** Refuses a change that would leave no active Director. Only looks at the users when it could matter. */
+async function refuseIfLastDirector(
+  existing: { id: string; role: string },
+  next: { role?: string; active?: boolean; removed?: boolean },
+) {
+  if (normalizePermissionRole(existing.role) !== 'director') return
+  const leaving = next.removed === true || next.active === false || (next.role !== undefined && normalizePermissionRole(next.role) !== 'director')
+  if (!leaving) return
+  const users = (await listAuthUsers()).map(u => ({ id: u.id, role: String(u.role), active: u.active !== false }))
+  const message = lastDirectorViolation(users, existing.id, next)
+  if (message) throw Object.assign(new Error(message), { status: 409 })
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
@@ -41,6 +56,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       delete validated.active
     }
 
+    await refuseIfLastDirector(existingUser, { role: validated.role, active: validated.active })
+    const accessBefore = snapshotAccess(existingUser)
+
     // Password validation: reject reuse of current or last 5 hashes (SEC-009).
     if (validated.password) {
       const reused = await passwordMatchesHistory(
@@ -71,6 +89,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (body.unlock) {
       await clearFailedLogin(resolvedParams.id)
+    }
+
+    const accessAfter = snapshotAccess(updatedUser)
+    if (diffAccess(accessBefore, accessAfter).changed) {
+      await recordAccessChange({
+        action: 'user.access_changed',
+        actor,
+        target: { id: updatedUser.id, name: updatedUser.name, username: updatedUser.username },
+        before: accessBefore,
+        after: accessAfter,
+      })
     }
 
     // Security Alert Email
@@ -104,10 +133,21 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       throw Object.assign(new Error('You cannot delete your own account'), { status: 400 })
     }
     
+    const target = await findAuthUserById(resolvedParams.id)
+    if (target) await refuseIfLastDirector(target, { removed: true })
+    const before = target ? snapshotAccess(target) : null
+
     const deleted = await deleteAuthUser(resolvedParams.id)
     if (!deleted) {
       throw Object.assign(new Error('User not found or already deleted'), { status: 404 })
     }
+    await recordAccessChange({
+      action: 'user.deleted',
+      actor,
+      target: { id: deleted.id, name: deleted.name, username: deleted.username },
+      before: before ?? snapshotAccess(deleted),
+      after: null,
+    })
     
     return NextResponse.json({ ok: true })
   })
@@ -127,8 +167,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const action = body?.action as string | undefined
 
     if (action === 'deactivate') {
+      const target = await findAuthUserById(resolvedParams.id)
+      if (target) await refuseIfLastDirector(target, { active: false })
+      const before = target ? snapshotAccess(target) : null
       const result = await deactivateAuthUser(resolvedParams.id)
       if (!result) throw Object.assign(new Error('User not found'), { status: 404 })
+      await recordAccessChange({
+        action: 'user.deactivated',
+        actor,
+        target: { id: result.id, name: result.name, username: result.username },
+        before: before ?? snapshotAccess({ ...result, active: true }),
+        after: snapshotAccess({ ...result, active: false }),
+      })
       return NextResponse.json({
         ok: true,
         user: { id: result.id, active: false },
@@ -137,8 +187,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     if (action === 'reactivate') {
+      const current = await findAuthUserById(resolvedParams.id)
+      const before = current ? snapshotAccess(current) : null
       const result = await reactivateAuthUser(resolvedParams.id)
       if (!result) throw Object.assign(new Error('User not found'), { status: 404 })
+      await recordAccessChange({
+        action: 'user.reactivated',
+        actor,
+        target: { id: result.id, name: result.name, username: result.username },
+        before: before ?? snapshotAccess({ ...result, active: false }),
+        after: snapshotAccess({ ...result, active: true }),
+      })
       return NextResponse.json({
         ok: true,
         user: { id: result.id, active: true },
