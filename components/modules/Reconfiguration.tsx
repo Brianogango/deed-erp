@@ -9,8 +9,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ModuleHeader, TabBar } from '@/components/ui'
-import { PrimaryActionButton, StatusBadge, TablePageLayout } from '@/components/erp'
+import { ModuleHeader, TabBar, PanelHeader } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
+import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa, faArrowRight, faHardDrive, faMemory, faMicrochip } from '@/components/icons'
 import { fmtKes, useOperationsStore } from '@/lib/store'
 import {
@@ -470,6 +471,47 @@ export default function Reconfiguration() {
     )
   }
 
+  const orderColumns: ColumnDef<WorkOrderListItem>[] = [
+    { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: o => <span className="text-xs font-bold text-[var(--text-1)]">{o.ref}</span>, accessor: o => o.ref, exportValue: o => o.ref },
+    { key: 'serial', label: 'Serial', priority: 2, width: '1fr', render: o => <span className="font-mono text-[11px] text-[var(--text-2)]">{o.manufacturerSerial}</span>, accessor: o => o.manufacturerSerial, exportValue: o => o.manufacturerSerial },
+    {
+      key: 'device', label: 'Device / type', priority: 1, width: '1.5fr',
+      render: o => (
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold text-[var(--text-1)]">{o.product?.name || o.currentSnapshot?.displayName || 'Serialized device'}</p>
+          <p className="mt-0.5 text-[11px] text-[var(--text-3)]">{TRANSACTION_TYPE_LABELS[o.transactionType] || o.transactionType}</p>
+        </div>
+      ),
+      accessor: o => `${o.product?.name || o.currentSnapshot?.displayName || ''} ${o.transactionType}`,
+      exportValue: o => o.product?.name || o.currentSnapshot?.displayName || 'Serialized device',
+    },
+    { key: 'status', label: 'Status', priority: 1, width: '140px', render: o => <StatusBadge status={o.status} label={STATUS_LABELS[o.status] || o.status} />, accessor: o => STATUS_LABELS[o.status] || o.status, exportValue: o => STATUS_LABELS[o.status] || o.status },
+    {
+      key: 'config', label: 'Change', priority: 2, width: '1.2fr', sortable: false,
+      render: o => (
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-2)]">
+          {o.currentSnapshot?.totalRamGb ?? '—'}GB/{o.currentSnapshot?.primaryStorageGb ?? '—'}GB
+          <Fa icon={faArrowRight} className="text-[10px] text-[var(--text-4)]" />
+          {o.proposedSnapshot?.totalRamGb ?? '—'}GB/{o.proposedSnapshot?.primaryStorageGb ?? '—'}GB
+        </span>
+      ),
+      exportValue: o => `${o.currentSnapshot?.totalRamGb ?? '-'}GB/${o.currentSnapshot?.primaryStorageGb ?? '-'}GB -> ${o.proposedSnapshot?.totalRamGb ?? '-'}GB/${o.proposedSnapshot?.primaryStorageGb ?? '-'}GB`,
+    },
+    {
+      key: 'cost', label: 'Cost', priority: 2, width: '170px', align: 'right',
+      render: o => (
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-2)]">
+          {fmtKes(o.costBefore)}
+          <Fa icon={faArrowRight} className="text-[10px] text-[var(--text-4)]" />
+          {fmtKes(o.costAfter)}
+        </span>
+      ),
+      sortValue: o => o.costAfter,
+      exportValue: o => `${o.costBefore} -> ${o.costAfter}`,
+    },
+    { key: 'next', label: 'Next action', priority: 3, width: '1.2fr', render: o => <span className="text-[11px] text-[var(--text-3)]">{reconfigurationNextAction(o.status)}</span>, sortable: false, exportValue: o => String(reconfigurationNextAction(o.status) ?? '') },
+  ]
+
   return (
     <div className="mod-page reconfig-page">
       <ModuleHeader
@@ -537,83 +579,38 @@ export default function Reconfiguration() {
       )}
 
       {tab === 'orders' && (
-        <TablePageLayout title="Work orders">
-          <div className="reconfig-toolbar">
+        <div className="card overflow-hidden">
+          <PanelHeader title="Work orders" count={orders.length}>
             <input
-              className="form-input reconfig-toolbar-search"
+              aria-label="Search work orders"
+              className="form-input text-[11px] py-1.5"
+              style={{ width: 200 }}
               placeholder="Search ref or serial…"
               value={q}
               onChange={e => setQ(e.target.value)}
             />
-            <select className="form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <select aria-label="Filter by status" className="form-select text-[11px] py-1.5" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="">All statuses</option>
               {Object.entries(STATUS_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
-            <button type="button" className="btn-secondary" onClick={() => void loadOrders()} disabled={loading}>
+            <button type="button" className="btn-outline text-[11px] py-1.5 px-3" onClick={() => void loadOrders()} disabled={loading}>
               Refresh
             </button>
-          </div>
-          <div className="reconfig-table-wrap">
-            <table className="reconfig-table">
-              <thead>
-                <tr>
-                  <th>Ref</th>
-                  <th>Serial</th>
-                  <th>Device / type</th>
-                  <th>Status</th>
-                  <th>Change</th>
-                  <th>Cost</th>
-                  <th>Next action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map(o => (
-                  <tr
-                    key={o.id}
-                    className="reconfig-table-row"
-                    onClick={() => void loadDetail(o.id)}
-                  >
-                    <td data-label="Ref" className="reconfig-table-ref">{o.ref}</td>
-                    <td data-label="Serial" className="reconfig-table-serial">{o.manufacturerSerial}</td>
-                    <td data-label="Device / type">
-                      <span className="reconfig-table-device">
-                        <strong>{o.product?.name || o.currentSnapshot?.displayName || 'Serialized device'}</strong>
-                        <small>{TRANSACTION_TYPE_LABELS[o.transactionType] || o.transactionType}</small>
-                      </span>
-                    </td>
-                    <td data-label="Status">
-                      <StatusBadge status={o.status} label={STATUS_LABELS[o.status] || o.status} />
-                    </td>
-                    <td data-label="Config">
-                      <span className="reconfig-table-config">
-                        <span>{o.currentSnapshot?.totalRamGb ?? '—'}GB/{o.currentSnapshot?.primaryStorageGb ?? '—'}GB</span>
-                        <Fa icon={faArrowRight} className="reconfig-table-arrow" />
-                        <span>{o.proposedSnapshot?.totalRamGb ?? '—'}GB/{o.proposedSnapshot?.primaryStorageGb ?? '—'}GB</span>
-                      </span>
-                    </td>
-                    <td data-label="Cost">
-                      <span className="reconfig-table-cost">
-                        {fmtKes(o.costBefore)}
-                        <Fa icon={faArrowRight} className="reconfig-table-arrow" />
-                        {fmtKes(o.costAfter)}
-                      </span>
-                    </td>
-                    <td data-label="Next action">
-                      <span className="reconfig-next-action">{reconfigurationNextAction(o.status)}</span>
-                    </td>
-                  </tr>
-                ))}
-                {!loading && orders.length === 0 && (
-                  <tr className="reconfig-table-empty">
-                    <td colSpan={7}>No reconfiguration work orders yet.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </TablePageLayout>
+          </PanelHeader>
+          <DataTable
+            tableId="reconfiguration-orders"
+            columns={orderColumns}
+            rows={orders}
+            rowKey={o => o.id}
+            hideSearch
+            onRowClick={o => void loadDetail(o.id)}
+            emptyMessage={loading ? 'Loading work orders…' : 'No reconfiguration work orders yet.'}
+            exportTitle="Reconfiguration work orders"
+            exportFilename="reconfiguration-orders"
+          />
+        </div>
       )}
 
       {tab === 'new' && (

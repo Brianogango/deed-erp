@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fmtDate } from '@/lib/store'
 import { DataTable, type ColumnDef } from '@/components/data-table'
-import { Modal, Field, Input, Select } from '@/components/ui'
+import { Modal, Field, Input, Select, PanelHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import LeadFollowUp, { followUpState } from '@/components/crm/LeadFollowUp'
 import CrmEmailComposer from '@/components/crm/CrmEmailComposer'
@@ -410,12 +410,11 @@ export default function LeadsPanel({
 
   return (
     <div className="crm-leads-panel flex flex-col gap-4">
-      <div className="crm-submodule-actions">
-        <PrimaryActionButton onClick={() => setShowForm(true)}>+ New lead</PrimaryActionButton>
-        <button type="button" className="btn-outline text-[11px] py-1.5 px-3" onClick={() => setImporting(true)}>Import from spreadsheet</button>
-      </div>
-
       <div className="card overflow-hidden crm-directory-card">
+        <PanelHeader title="Leads">
+          <PrimaryActionButton onClick={() => setShowForm(true)}>+ New lead</PrimaryActionButton>
+          <button type="button" className="btn-outline text-[11px] py-1.5 px-3" onClick={() => setImporting(true)}>Import from spreadsheet</button>
+        </PanelHeader>
         <DataTable
           tableId="crm-leads"
           rowActionsWidth={176}

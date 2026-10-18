@@ -406,6 +406,91 @@ function CRMContent() {
   }, [slaRepairs, missedSLAs])
 
   type CompanyRow = typeof companies[number]
+  const filteredContracts = useMemo(() => {
+    const q = contractSearch.toLowerCase()
+    return customerContracts.filter(c => !q || c.ref.toLowerCase().includes(q) || c.companyName.toLowerCase().includes(q) ||
+      c.type.toLowerCase().includes(q) || c.contactPersonName.toLowerCase().includes(q))
+  }, [customerContracts, contractSearch])
+
+  const contractColumns: ColumnDef<CustomerContract>[] = [
+    {
+      key: 'ref', label: 'Contract', priority: 1, width: '1.3fr',
+      render: c => (
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-[var(--text-1)]">
+            {c.ref}
+            {c.slaTier && <span className="badge badge-blue text-[var(--fs-micro)]">SLA {c.slaTier.toUpperCase()}</span>}
+          </p>
+          <p className="mt-0.5 truncate text-[11px] text-[var(--text-3)]">{c.companyName} · {c.contactPersonName}</p>
+        </div>
+      ),
+      accessor: c => `${c.ref} ${c.companyName} ${c.contactPersonName}`,
+      exportValue: c => c.ref,
+    },
+    { key: 'type', label: 'Type', priority: 2, width: '110px', render: c => <span className="text-xs capitalize text-[var(--text-2)]">{c.type}</span>, accessor: c => c.type, exportValue: c => c.type },
+    { key: 'status', label: 'Status', priority: 1, width: '110px', render: c => <Badge status={c.status} label={c.status} size="xs" />, accessor: c => c.status, exportValue: c => c.status },
+    {
+      key: 'term', label: 'Term', priority: 3, width: '1.2fr',
+      render: c => (
+        <span className="text-[11px] text-[var(--text-3)]">{fmtDate(c.startDate)} → {fmtDate(c.endDate)} · Renews {fmtDate(c.renewalDate)}</span>
+      ),
+      sortValue: c => c.endDate,
+      exportValue: c => `${c.startDate} - ${c.endDate}`,
+    },
+    {
+      key: 'sla', label: 'SLA', priority: 4, width: '120px',
+      render: c => <span className="text-[11px] text-[var(--text-3)]">{c.responseTimeHours ?? '-'}h / {c.resolutionTimeHours ?? '-'}h</span>,
+      exportValue: c => `${c.responseTimeHours ?? '-'}h / ${c.resolutionTimeHours ?? '-'}h`,
+    },
+    {
+      key: 'value', label: 'Value', priority: 1, width: '130px', align: 'right',
+      render: c => (
+        <div className="text-right">
+          <p className="text-xs font-bold text-[var(--text-1)]">{fmtKes(c.contractValue)}</p>
+          <p className="mt-0.5 text-[11px] capitalize text-[var(--text-3)]">{c.paymentSchedule}</p>
+        </div>
+      ),
+      sortValue: c => c.contractValue,
+      exportValue: c => c.contractValue,
+    },
+    {
+      key: 'actions', label: 'Actions', priority: 1, width: '150px', align: 'right', sortable: false,
+      render: c => (
+        <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+          <button className="btn-outline text-[11px] py-1 px-2" onClick={() => renewCustomerContract(c.id)}>Renew</button>
+          <button className="btn-outline text-[11px] py-1 px-2" style={{ color: 'var(--danger)' }} onClick={() => terminateCustomerContract(c.id, 'Manual termination')}>Terminate</button>
+        </div>
+      ),
+    },
+  ]
+
+  const filteredActivities = useMemo(() => {
+    const q = activitySearch.toLowerCase()
+    return opportunityActivities.filter(a => !q || (a.subject ?? '').toLowerCase().includes(q) || a.type.toLowerCase().includes(q) ||
+      (a.createdByName ?? '').toLowerCase().includes(q))
+  }, [opportunityActivities, activitySearch])
+
+  const activityColumns: ColumnDef<(typeof opportunityActivities)[number]>[] = [
+    {
+      key: 'subject', label: 'Activity', priority: 1, width: '2fr',
+      render: a => (
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="mt-0.5 text-sm text-[var(--text-3)]" aria-hidden="true"><Fa icon={ACTIVITY_ICONS[a.type] ?? faNoteSticky} /></span>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-[var(--text-1)]">{a.subject}</p>
+            <p className="mt-0.5 truncate text-[11px] text-[var(--text-3)]">{opportunities.find(o => o.id === a.opportunityId)?.ref} · {opportunities.find(o => o.id === a.opportunityId)?.name}</p>
+          </div>
+        </div>
+      ),
+      accessor: a => `${a.subject ?? ''} ${a.type}`,
+      exportValue: a => a.subject ?? '',
+    },
+    { key: 'type', label: 'Type', priority: 2, width: '110px', render: a => <span className="text-xs capitalize text-[var(--text-2)]">{a.type}</span>, accessor: a => a.type, exportValue: a => a.type },
+    { key: 'by', label: 'By', priority: 3, width: '140px', render: a => <span className="truncate text-xs text-[var(--text-2)]">{a.createdByName ?? ''}</span>, accessor: a => a.createdByName ?? '', exportValue: a => a.createdByName ?? '' },
+    { key: 'date', label: 'Date', priority: 2, width: '110px', render: a => <span className="text-xs text-[var(--text-3)]">{fmtDate(a.createdDate ?? a.createdAt)}</span>, sortValue: a => a.createdDate ?? a.createdAt, exportValue: a => a.createdDate ?? a.createdAt ?? '' },
+    { key: 'status', label: 'Status', priority: 2, width: '110px', render: a => a.status ? <Badge status={a.status} label={a.status} size="xs" /> : null, accessor: a => a.status ?? '', exportValue: a => a.status ?? '' },
+  ]
+
   const companyColumns: ColumnDef<CompanyRow>[] = [
     {
       key: 'company', label: 'Company', priority: 1, width: '1.4fr',
@@ -1246,50 +1331,20 @@ function CRMContent() {
         <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
 
         <div className="card overflow-hidden">
-          <PanelHeader title="Customer Contracts" count={customerContracts.filter(c => {
-            const s = contractSearch.toLowerCase()
-            return !s || c.ref.toLowerCase().includes(s) || c.companyName.toLowerCase().includes(s) ||
-              c.type.toLowerCase().includes(s) || c.contactPersonName.toLowerCase().includes(s)
-          }).length}>
+          <PanelHeader title="Customer Contracts" count={filteredContracts.length}>
             <input aria-label="Search contracts" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search ref, company…" value={contractSearch} onChange={e => setContractSearch(e.target.value)} />
           </PanelHeader>
-          <div className="w-full">
-            <div className="flex flex-col divide-y divide-gray-100">
-            {customerContracts.filter(c => {
-              const s = contractSearch.toLowerCase()
-              return !s || c.ref.toLowerCase().includes(s) || c.companyName.toLowerCase().includes(s) ||
-                c.type.toLowerCase().includes(s) || c.contactPersonName.toLowerCase().includes(s)
-            }).map(contract => (
-              <div key={contract.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='var(--bg-muted)'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{contract.ref}</span>
-                      <Badge status={contract.status} label={contract.status} size="xs" />
-                      {contract.slaTier && <span className="badge badge-blue text-[9px]">SLA {contract.slaTier.toUpperCase()}</span>}
-                    </div>
-                    <div className="text-xs" style={{ color: 'var(--text-1)' }}>{contract.companyName} · {contract.contactPersonName}</div>
-                    <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-                      {contract.type} · Start: {fmtDate(contract.startDate)} · End: {fmtDate(contract.endDate)} · Renewal: {fmtDate(contract.renewalDate)}
-                    </div>
-                    <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-                      SLA Response: {contract.responseTimeHours ?? '-'}h · Resolution: {contract.resolutionTimeHours ?? '-'}h
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{fmtKes(contract.contractValue)}</div>
-                    <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>{contract.paymentSchedule}</div>
-                    <div className="mt-2 flex gap-1 justify-end">
-                      <button className="btn-outline text-[9px] py-1 px-2" onClick={() => renewCustomerContract(contract.id)}>Renew</button>
-                      <button className="btn-outline text-[9px] py-1 px-2" style={{ color: 'var(--danger)' }} onClick={() => terminateCustomerContract(contract.id, 'Manual termination')}>Terminate</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-            </div>
-          </div>
+          <DataTable
+            tableId="crm-contracts"
+            columns={contractColumns}
+            rows={filteredContracts}
+            rowKey={contract => contract.id}
+            hideSearch
+            emptyMessage="No contracts found"
+            exportTitle="Customer Contracts"
+            exportFilename="customer-contracts"
+          />
         </div>
 
         {showContractModal && (
@@ -1440,46 +1495,20 @@ function CRMContent() {
         {moduleHeader}
         <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
         <div className="card overflow-hidden">
-          <PanelHeader title="All Activities" count={opportunityActivities.filter(a => {
-            const s = activitySearch.toLowerCase()
-            return !s || (a.subject ?? '').toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
-              (a.createdByName ?? '').toLowerCase().includes(s)
-          }).length}>
+          <PanelHeader title="All Activities" count={filteredActivities.length}>
             <input aria-label="Search CRM activities" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search subject, type…" value={activitySearch} onChange={e => setActivitySearch(e.target.value)} />
           </PanelHeader>
-          <div className="w-full">
-            <div className="flex flex-col divide-y divide-gray-100">
-            {opportunityActivities.filter(a => {
-              const s = activitySearch.toLowerCase()
-              return !s || (a.subject ?? '').toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
-                (a.createdByName ?? '').toLowerCase().includes(s)
-            }).map(activity => {
-              const opp = opportunities.find(o => o.id === activity.opportunityId)
-              return (
-                <div key={activity.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='var(--bg-muted)'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
-                  <div className="flex items-start gap-3">
-                    <span style={{ fontSize: 18, color: 'var(--text-3)' }} aria-hidden="true">
-                      <Fa icon={ACTIVITY_ICONS[activity.type] ?? faNoteSticky} />
-                    </span>
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-1)' }}>
-                        {activity.subject}
-                      </div>
-                      <div className="text-[10px]" style={{ color: 'var(--text-3)' }}>
-                        {opp?.ref} · {opp?.name}
-                      </div>
-                      <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>
-                        {activity.createdByName ?? ''} · {fmtDate(activity.createdDate ?? activity.createdAt)}
-                      </div>
-                    </div>
-                    {activity.status && <Badge status={activity.status} label={activity.status} size="xs" />}
-                  </div>
-                </div>
-              )
-            })}
-            </div>
-          </div>
+          <DataTable
+            tableId="crm-activities"
+            columns={activityColumns}
+            rows={filteredActivities}
+            rowKey={activity => activity.id}
+            hideSearch
+            emptyMessage="No activities found"
+            exportTitle="CRM Activities"
+            exportFilename="crm-activities"
+          />
         </div>
         </div>
       </div>

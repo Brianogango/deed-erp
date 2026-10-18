@@ -1,7 +1,7 @@
 'use client'
 
 import { createPortal } from 'react-dom'
-import { Fa, faEllipsisVertical } from '@/components/icons'
+import { Fa, faTableCells } from '@/components/icons'
 import type { ColumnDef } from '@/lib/data-table/types'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 
@@ -47,7 +47,7 @@ export default function ColumnVisibilityMenu<T>({
         aria-label="Choose visible columns"
         title="Show or hide columns"
       >
-        <Fa icon={faEllipsisVertical} className="dt-toolbar-icon" aria-hidden="true" />
+        <Fa icon={faTableCells} className="dt-toolbar-icon" aria-hidden="true" />
       </button>
       {open && position && typeof document !== 'undefined' && createPortal(
         <div

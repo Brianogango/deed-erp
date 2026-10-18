@@ -1635,7 +1635,8 @@
 }
 
 .app-topbar--finance .app-topbar-search {
-  width: min(23.75rem, 42vw);
+  /* Stops short of the centred clock pill instead of sliding underneath it. */
+  width: clamp(8rem, 18vw, 14rem);
   min-height: 2.25rem;
   margin-right: auto;
   justify-content: flex-start;
@@ -12742,7 +12743,8 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .app-topbar--sales .app-topbar-search {
-  width: min(23.75rem, 42vw);
+  /* Stops short of the centred clock pill instead of sliding underneath it. */
+  width: clamp(8rem, calc(50vw - 30.5rem), 20rem);
   min-height: 2.25rem;
   margin-right: auto;
   justify-content: flex-start;
@@ -19625,34 +19627,6 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 /* Leads, inbox, duplicates and directory submodules */
-.crm-submodule-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.crm-submodule-header {
-  display: flex;
-  min-height: 54px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid var(--crm-border);
-  border-radius: 8px;
-  background: #fff;
-  padding: 10px 12px;
-}
-
-.crm-submodule-header h2 {
-  color: var(--crm-navy);
-  font-size: 13px;
-  font-weight: 750;
-}
-
-.crm-submodule-header p {
-  color: var(--crm-muted);
-  font-size: var(--fs-micro);
-}
-
 .crm-directory-card {
   overflow: hidden;
 }
@@ -20199,16 +20173,6 @@ body:has(.crm-workspace) [role="dialog"] > div {
     grid-template-columns: 1fr;
   }
 
-  .crm-submodule-actions {
-    width: 100%;
-  }
-
-  .crm-submodule-actions .primary-action-button {
-    width: 100%;
-    min-height: 44px;
-    justify-content: center;
-  }
-
   .crm-directory-card {
     width: 100%;
     max-width: 100%;
@@ -20237,26 +20201,6 @@ body:has(.crm-workspace) [role="dialog"] > div {
   .crm-directory-card .mobile-card-list {
     width: 100%;
     gap: 9px;
-  }
-
-  .crm-submodule-header {
-    min-height: 0;
-    align-items: stretch;
-    flex-direction: column;
-    padding: 11px;
-  }
-
-  .crm-submodule-header > div:last-child {
-    display: grid;
-    width: 100%;
-    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-    gap: 7px;
-  }
-
-  .crm-submodule-header button,
-  .crm-submodule-header select {
-    width: 100%;
-    min-height: 42px;
   }
 
   .crm-review-row,
@@ -31762,4 +31706,14 @@ button, [role="button"], [role="tab"] {
   .inventory-view-seg { min-height: 2.75rem; padding: 0 0.875rem; font-size: 0.875rem; }
   .inventory-view-select { min-height: 2.75rem; font-size: 1rem; }
   .inventory-view-reset { min-height: 2.75rem; flex: 0 0 auto; }
+}
+
+/* Selection checkboxes in tables stay checkbox-sized and centred on the row text. */
+.sp-table input[type='checkbox'],
+.erp-table input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  min-height: 0;
+  margin: 0;
+  vertical-align: middle;
 }
