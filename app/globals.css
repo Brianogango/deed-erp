@@ -31781,3 +31781,87 @@ button, [role="button"], [role="tab"] {
 .sales-pilot.sales-doc .sales-record-view {
   padding-bottom: 4.5rem;
 }
+
+/* New quotation header. */
+.mod-page.sales-pilot.sales-doc .sales-order-meta-panel--new #quote-customer {
+  min-height: 2.25rem !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0.4rem !important;
+  padding: 0.4rem 0.6rem !important;
+  font-size: 0.8rem !important;
+}
+
+.sales-order-meta-panel--new .sales-new-static {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.35rem 0;
+  color: var(--text-1);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.sales-order-meta-panel--new .sales-new-static small {
+  color: var(--text-4);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+}
+
+.sales-order-meta-panel--new .sales-new-contact {
+  display: flex;
+  min-height: 2rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 1rem;
+  padding: 0.35rem 0;
+  color: var(--text-1);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.sales-order-meta-panel--new .sales-new-contact--empty {
+  color: var(--text-4);
+  font-weight: 500;
+}
+
+/* Valid-until date with 30/60/90-day chips on the same line. */
+.sales-order-meta-panel--new .sales-valid-until {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sales-order-meta-panel--new .sales-valid-until > input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sales-order-meta-panel--new .sales-valid-until__quick {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.25rem;
+}
+
+.sales-order-meta-panel--new .sales-valid-until__quick button {
+  min-height: 1.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 0.6rem;
+  background: var(--bg-surface);
+  color: var(--text-2);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+}
+
+.sales-order-meta-panel--new .sales-valid-until__quick button:hover {
+  border-color: var(--primary);
+  color: var(--navy);
+}
+
+.sales-order-meta-panel--new .sales-new-contact em {
+  color: var(--text-4);
+  font-style: normal;
+  font-weight: 500;
+}

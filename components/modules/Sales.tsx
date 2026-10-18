@@ -4117,7 +4117,7 @@ function NewQuotationForm({
         </div>
         <div className="sp-grid-2 sales-order-meta-grid">
           <div className="sales-order-meta-column sales-order-meta-column--customer">
-            <SalesDocField label="Customer" htmlFor="quote-customer">
+            <SalesDocField label="Customer">
               <div className="relative" ref={customerRef}>
                 <div
                   id="quote-customer"
@@ -4168,53 +4168,56 @@ function NewQuotationForm({
             {fieldErrors?.customer && (
               <p role="alert" className="text-[11px] text-[var(--sp-danger)] font-semibold" style={{ marginTop: -4, marginBottom: 8 }}>{fieldErrors.customer}</p>
             )}
-            <SalesDocField label="Contact">
-              <input readOnly value={selectedCustomer?.name || '—'} />
-            </SalesDocField>
-            <SalesDocField label="Email">
-              <input readOnly value={selectedCustomer?.email || '—'} />
-            </SalesDocField>
-            <SalesDocField label="Phone">
-              <input readOnly value={selectedCustomer?.phone || selectedCustomer?.mobile || '—'} />
+            {/* The customer's details under the picker, instead of three rows of
+                dashes before anyone is chosen. */}
+            <SalesDocField label="Contact details">
+              {selectedCustomer ? (
+                <div className="sales-new-contact">
+                  {selectedCustomer.email ? <span>{selectedCustomer.email}</span> : <em>No email on file</em>}
+                  {(selectedCustomer.phone || selectedCustomer.mobile) ? <span>{selectedCustomer.phone || selectedCustomer.mobile}</span> : <em>No phone on file</em>}
+                </div>
+              ) : (
+                <p className="sales-new-contact sales-new-contact--empty">Shown once you pick a customer</p>
+              )}
             </SalesDocField>
           </div>
 
           <div className="sales-order-meta-column sales-order-meta-column--commercial">
             <SalesDocField label="Quotation date" htmlFor="quote-date">
-              <input id="quote-date" type="date" aria-label="Quotation date" value={new Date().toISOString().slice(0, 10)} readOnly />
+              <span id="quote-date" className="sales-new-static">{fmtDate(new Date().toISOString().slice(0, 10))}</span>
             </SalesDocField>
-            <SalesDocField label="Valid until" htmlFor="quote-valid-until">
-              <input
-                id="quote-valid-until"
-                type="date"
-                aria-label="Valid until"
-                value={newValidUntil || ''}
-                onChange={e => setNewValidUntil(e.target.value)}
-                aria-describedby={fieldErrors?.validUntil ? 'quote-valid-until-error' : undefined}
-                aria-invalid={fieldErrors?.validUntil ? true : undefined}
-              />
+            <SalesDocField label="Valid until">
+              <div className="sales-valid-until">
+                <input
+                  id="quote-valid-until"
+                  type="date"
+                  aria-label="Valid until"
+                  value={newValidUntil || ''}
+                  onChange={e => setNewValidUntil(e.target.value)}
+                  aria-describedby={fieldErrors?.validUntil ? 'quote-valid-until-error' : undefined}
+                  aria-invalid={fieldErrors?.validUntil ? true : undefined}
+                />
+                <div className="sales-valid-until__quick" role="group" aria-label="Valid for">
+                  {[30, 60, 90].map(days => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => {
+                        const d = new Date()
+                        d.setDate(d.getDate() + days)
+                        setNewValidUntil(d.toISOString().slice(0, 10))
+                      }}
+                    >
+                      {days}d
+                    </button>
+                  ))}
+                </div>
+              </div>
               {fieldErrors?.validUntil && (
                 <p id="quote-valid-until-error" role="alert" className="text-[11px] text-[var(--sp-danger)] font-semibold mt-1">
                   {fieldErrors.validUntil}
                 </p>
               )}
-              <div className="flex flex-wrap gap-1 mt-1">
-                {[30, 60, 90].map(days => (
-                  <button
-                    key={days}
-                    type="button"
-                    className="sp-btn"
-                    style={{ padding: '2px 8px', fontSize: 11 }}
-                    onClick={() => {
-                      const d = new Date()
-                      d.setDate(d.getDate() + days)
-                      setNewValidUntil(d.toISOString().slice(0, 10))
-                    }}
-                  >
-                    {days}d
-                  </button>
-                ))}
-              </div>
             </SalesDocField>
             <SalesDocField label="Expected delivery" htmlFor="quote-delivery-date">
               <input
@@ -4226,12 +4229,10 @@ function NewQuotationForm({
               />
             </SalesDocField>
             <SalesDocField label="Payment terms" htmlFor="quote-payment-terms">
-              <input
-                id="quote-payment-terms"
-                readOnly
-                value={quotationPaymentTermsLabel(paymentTermsDays)}
-                aria-label="Payment terms, assigned from customer"
-              />
+              <span id="quote-payment-terms" className="sales-new-static" aria-label="Payment terms, assigned from customer">
+                {quotationPaymentTermsLabel(paymentTermsDays)}
+                <small>from the customer</small>
+              </span>
             </SalesDocField>
             <SalespersonCloserField
               valueId={newSalespersonId}
