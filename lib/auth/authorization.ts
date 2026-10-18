@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { HR_MANAGER_ROLES, LEAVE_APPROVER_ROLES } from './access'
+import { ROLE_MATRIX, type PermissionAction } from './role-matrix'
 import type { ModuleId, PublicUser, UserRole } from './types'
 
 /** Old role names still accepted when read; new users are always saved under the current name. */
@@ -83,89 +83,9 @@ export const allowedOnlyAsTechnician = (user: TechCapableUser, allowedRoles: str
   !isRoleAllowed(user?.role, allowedRoles.filter(r => normalizePermissionRole(r) !== 'technician'))
   && isUserAllowed(user, allowedRoles)
 
-const roleMatrix = {
-  manageUsers:               ['director'] as UserRole[],
-  viewUsers:                 ['director', 'admin_officer'] as UserRole[],
-  manageHR:                  [...HR_MANAGER_ROLES] as UserRole[],
-  approveLeave:              [...LEAVE_APPROVER_ROLES] as UserRole[],
-  approvePayroll:            ['director', 'finance_officer'] as UserRole[],
-  // Read access to HR records (leave, HR documents, employee full profiles).
-  // Includes technical_lead so leads can review their technicians' leave.
-  viewHrRecords:             ['director', 'admin_officer', 'finance_officer', 'technical_lead'] as UserRole[],
-  // Read access to full employee compensation/PII (salary, bank, national ID).
-  viewEmployeeSensitive:     ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  manageInventoryApprovals:  ['director', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],
-  // Validate purchase receipts / GRNs — stock-affecting; keep tight.
-  // technical_lead intentionally excluded (ops oversight ≠ stock receipt authority).
-  validatePurchaseReceipt:   ['director', 'admin_officer', 'inventory_officer'] as UserRole[],
-  editSerialNumber:          ['director', 'admin_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
-  printInventoryLabels:      ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'kilimall_officer', 'finance_officer'] as UserRole[],
-  viewVendorInventoryLedger: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
-  viewPurchaseCost:          ['director', 'admin_officer', 'finance_officer', 'inventory_officer'] as UserRole[],
-  // Draft customer invoice from a confirmed sale order.
-  createCustomerInvoiceFromSO: ['director', 'finance_officer', 'admin_officer'] as UserRole[],
-  // Post journals + customer invoice payment (Admin Officer threshold enforced in actions/API).
-  postFinancial:             ['director', 'finance_officer', 'admin_officer'] as UserRole[],
-  // Bank recon / bank accounts / statement lines — Finance + Director only.
-  manageBankRecon:           ['director', 'finance_officer'] as UserRole[],
-  // Customer credit ledger (cancel of a paid invoice writes a credit note here).
-  manageCustomerCredit:      ['director', 'finance_officer', 'admin_officer'] as UserRole[],
-  // Invoice/payment cash collection writes (narrower than recordSales).
-  recordPayment:             ['director', 'finance_officer', 'admin_officer'] as UserRole[],
-  // Sale order / delivery wholesale store writes.
-  manageSaleOrders:          ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead'] as UserRole[],
-  manageDeliveries:          ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'sales_rep'] as UserRole[],
-  // Expense claims — submitters write own rows via merge; approve/reimburse is action-gated.
-  manageExpenses:            ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'inventory_officer', 'technical_lead', 'technician', 'kilimall_officer'] as UserRole[],
-  // Purchase order wholesale store writes — matches app/api/purchase-orders/[id]/route.ts's WRITE_ROLES.
-  managePurchaseOrders:      ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
-  // Return-to-Vendor: stock-deducting and generates a vendor credit note — matches canManageProcurement.
-  manageProcurement:         ['director', 'admin_officer', 'inventory_officer'] as UserRole[],
-  // Decide discount/credit approvals (Finance + Director + Admin Officer).
-  approveDiscount:           ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  // Request sales approvals (includes sales_rep so requests persist via store sync).
-  requestSalesApproval:      ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'kilimall_officer', 'technical_lead'] as UserRole[],
-  manageMasterData:          ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  // Append commercial/finance audit rows (not director-only; reading remains director).
-  appendAuditLog:            ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],
-  viewAuditLog:              ['director'] as UserRole[],
-  // Commercial document creation: invoices, standalone payments, POS orders and
-  // after-sales refunds. Every role that legitimately sells or refunds is
-  // included; purely operational roles (technician, inventory_officer,
-  // technical_lead) are excluded so they cannot fabricate financial records
-  // through the wholesale store-sync endpoint.
-  recordSales:               ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer'] as UserRole[],
-  // Repair billing: technical leads own the repair-quote lifecycle (quote →
-  // client approval → linked invoice), so they may write the invoice ledger.
-  // POS orders, standalone payments and refunds remain sales/finance-only.
-  recordRepairBilling:       ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer', 'technical_lead'] as UserRole[],
-  // Layby / deposit ledger — matches the roles granted the deposits module.
-  manageDeposits:            ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  // Office furniture / fittings register — not trading stock, not HR custody.
-  manageCompanyProperty:     ['director', 'admin_officer'] as UserRole[],
-  viewCompanyProperty:       ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  // Payroll runs and payslips — matches the payroll API role set.
-  managePayroll:             ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  // Device reconfiguration work orders
-  viewReconfiguration:       ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'sales_rep', 'technical_lead', 'technician', 'kilimall_officer'] as UserRole[],
-  createReconfiguration:     ['director', 'admin_officer', 'sales_rep', 'technical_lead', 'kilimall_officer'] as UserRole[],
-  editReconfigurationDraft:  ['director', 'admin_officer', 'sales_rep', 'technical_lead'] as UserRole[],
-  reserveReconfigurationComponents: ['director', 'inventory_officer', 'technical_lead'] as UserRole[],
-  approveReconfiguration:    ['director', 'admin_officer', 'finance_officer', 'technical_lead'] as UserRole[],
-  performReconfigRemoval:    ['director', 'technical_lead', 'technician'] as UserRole[],
-  performReconfigInstallation: ['director', 'technical_lead', 'technician'] as UserRole[],
-  completeReconfigQa:        ['director', 'technical_lead'] as UserRole[],
-  completeReconfiguration:   ['director', 'inventory_officer', 'technical_lead'] as UserRole[],
-  overrideReconfigCompatibility: ['director', 'technical_lead'] as UserRole[],
-  overrideReconfigStock:     ['director', 'inventory_officer'] as UserRole[],
-  overrideMinimumMargin:     ['director', 'finance_officer'] as UserRole[],
-  reverseReconfiguration:    ['director', 'finance_officer', 'technical_lead'] as UserRole[],
-  viewReconfigComponentCosts: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
-  viewReconfigSellingPrices: ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead', 'kilimall_officer'] as UserRole[],
-  viewReconfigAccounting:    ['director', 'finance_officer'] as UserRole[],
-} as const
+const roleMatrix = ROLE_MATRIX
 
-export type PermissionAction = keyof typeof roleMatrix
+export type { PermissionAction } from './role-matrix'
 
 // Generic app-state keys (synced wholesale via POST /api/store and PUT /api/store/[key])
 // that carry financial, HR, settings, approval, or audit data and therefore need a
@@ -201,7 +121,7 @@ const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionAction> = {
   deed_agentSettings: 'postFinancial',
 }
 
-type StoreReadUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician'>
+type StoreReadUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician'> & { permissions?: readonly string[] | null }
 
 type CollaborativeReadPolicy = {
   roles: readonly UserRole[]
@@ -254,6 +174,9 @@ export const canReadStoreKey = (
   const grants = new Set(user.modules ?? [])
   const hasModule = policy.modules.some(module => grants.has(module))
   if (!hasModule) return false
+  // On a custom role the Director chose the modules one by one, so the module
+  // grant is the decision; the base role is not asked to agree.
+  if (Array.isArray(user.permissions)) return true
   if (role && policy.roles.includes(role)) return true
   // Chosen non-tech users (e.g. Kilimall) with actsAsTechnician + repair module
   if (key === 'deed_repairs_v2' && user.actsAsTechnician) return true
@@ -318,7 +241,12 @@ export const hasFullStoreContentAccess = (
   if (!CONTENT_FILTERED_STORE_KEYS.has(key)) return true
   if (COLLABORATIVE_STORE_READ_POLICIES[key] && !canReadStoreKey(user, key)) return false
   const role = normalizePermissionRole(user?.role)
-  if (key === 'deed_invoices') return role === 'director' || role === 'finance_officer' || role === 'admin_officer'
+  if (key === 'deed_invoices') {
+    // On a custom role, holding the finance permissions that post or collect
+    // money is what earns the whole invoice ledger; otherwise the base role decides.
+    if (Array.isArray(user?.permissions) && (user.permissions.includes('postFinancial') || user.permissions.includes('recordPayment'))) return true
+    return role === 'director' || role === 'finance_officer' || role === 'admin_officer'
+  }
   if (key === 'deed_expenses') return role === 'director' || role === 'finance_officer'
   // Sales reps read the full quotes/SO book. Keep this false so their store
   // writes still merge — a stale tab with a partial cache cannot wipe the
@@ -453,13 +381,17 @@ export const CLIENT_IMMUTABLE_STORE_KEYS = new Set<string>([
   'deed_saleAgents',
 ])
 
-export const hasPermission = (user: Pick<PublicUser, 'role'> | null | undefined, action: PermissionAction) => {
+type PermissionSubject = Pick<PublicUser, 'role'> & { permissions?: readonly string[] | null }
+
+export const hasPermission = (user: PermissionSubject | null | undefined, action: PermissionAction) => {
   if (!user) return false
+  // A person on a custom role holds exactly the permissions that role lists.
+  if (Array.isArray(user.permissions)) return user.permissions.includes(action)
   const normalizedRole = normalizePermissionRole(user.role)
   return !!normalizedRole && roleMatrix[action].includes(normalizedRole)
 }
 
-export const assertPermission = (user: Pick<PublicUser, 'role'> | null | undefined, action: PermissionAction) => {
+export const assertPermission = (user: PermissionSubject | null | undefined, action: PermissionAction) => {
   if (!hasPermission(user, action)) {
     const error = new Error('Forbidden')
     ;(error as Error & { status?: number }).status = 403

@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requirePermission, withApiErrorHandling } from '@/lib/auth/api'
-import { ACCESS_AUDIT_ACTIONS } from '@/lib/auth/access-audit.server'
+import { ACCESS_AUDIT_ACTIONS, ACCESS_AUDIT_ENTITY_TYPES } from '@/lib/auth/access-audit.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const userId = url.searchParams.get('userId')
     const rows = await prisma.auditLog.findMany({
       where: {
-        entityType: 'user',
+        entityType: { in: ACCESS_AUDIT_ENTITY_TYPES },
         action: { in: ACCESS_AUDIT_ACTIONS },
         ...(userId ? { entityId: userId } : {}),
       },

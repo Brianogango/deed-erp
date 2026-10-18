@@ -3,9 +3,8 @@
  * Nothing is saved; the person checks the fields and then adds the cheque.
  */
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { requireCan, withApiErrorHandling } from '@/lib/auth/api'
 import { validateFileContent } from '@/lib/file-validation'
-import { CHEQUE_ROLES } from '@/lib/cheques/cheque-rules'
 import { readChequeImage } from '@/lib/cheques/cheque-extract.server'
 import { CHEQUE_IMAGE_MAX_BYTES, CHEQUE_IMAGE_TYPES } from '@/lib/cheques/cheque-store.server'
 
@@ -15,7 +14,7 @@ export const maxDuration = 120
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole([...CHEQUE_ROLES])
+    await requireCan('accounting.cheques.manage')
     const body = await request.json().catch(() => ({})) as { imageBase64?: unknown; mimeType?: unknown }
     const mimeType = String(body.mimeType ?? '').toLowerCase()
     const base64 = String(body.imageBase64 ?? '').replace(/^data:[^,]+,/, '').replace(/\s+/g, '')

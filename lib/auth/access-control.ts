@@ -9,6 +9,8 @@ export interface AccessSnapshot {
   modules: string[]
   active: boolean
   actsAsTechnician: boolean
+  /** Name of the custom role the person is on, '' for a built-in role. */
+  customRole: string
 }
 
 export interface AccessDiff {
@@ -18,13 +20,17 @@ export interface AccessDiff {
   modulesRemoved: string[]
   active?: { from: boolean; to: boolean }
   actsAsTechnician?: { from: boolean; to: boolean }
+  customRole?: { from: string; to: string }
 }
 
-export const snapshotAccess = (user: Partial<AccessSnapshot> | null | undefined): AccessSnapshot => ({
+export const snapshotAccess = (
+  user: (Partial<Omit<AccessSnapshot, 'customRole'>> & { accessRole?: { name?: string } | null; customRole?: string }) | null | undefined,
+): AccessSnapshot => ({
   role: String(user?.role ?? ''),
   modules: Array.isArray(user?.modules) ? [...user!.modules].map(String).sort() : [],
   active: user?.active !== false,
   actsAsTechnician: user?.actsAsTechnician === true,
+  customRole: String(user?.customRole ?? user?.accessRole?.name ?? ''),
 })
 
 export function diffAccess(before: AccessSnapshot, after: AccessSnapshot): AccessDiff {
@@ -38,7 +44,8 @@ export function diffAccess(before: AccessSnapshot, after: AccessSnapshot): Acces
   if (before.role !== after.role) diff.role = { from: before.role, to: after.role }
   if (before.active !== after.active) diff.active = { from: before.active, to: after.active }
   if (before.actsAsTechnician !== after.actsAsTechnician) diff.actsAsTechnician = { from: before.actsAsTechnician, to: after.actsAsTechnician }
-  diff.changed = Boolean(diff.role || diff.active || diff.actsAsTechnician || diff.modulesAdded.length || diff.modulesRemoved.length)
+  if (before.customRole !== after.customRole) diff.customRole = { from: before.customRole, to: after.customRole }
+  diff.changed = Boolean(diff.role || diff.active || diff.actsAsTechnician || diff.customRole || diff.modulesAdded.length || diff.modulesRemoved.length)
   return diff
 }
 
@@ -47,7 +54,13 @@ const label = (value: string) => value.replace(/_/g, ' ')
 /** One line a person can read in a history list. */
 export function describeAccessDiff(diff: AccessDiff): string {
   const parts: string[] = []
-  if (diff.role) parts.push(`role ${label(diff.role.from)} → ${label(diff.role.to)}`)
+  if (diff.customRole) {
+    parts.push(diff.customRole.to
+      ? `moved onto the custom role “${diff.customRole.to}”${diff.customRole.from ? ` (was “${diff.customRole.from}”)` : ''}`
+      : `moved off the custom role “${diff.customRole.from}”`)
+  } else if (diff.role) {
+    parts.push(`role ${label(diff.role.from)} → ${label(diff.role.to)}`)
+  }
   if (diff.active) parts.push(diff.active.to ? 'reactivated' : 'deactivated')
   if (diff.modulesAdded.length) parts.push(`gained ${diff.modulesAdded.map(label).join(', ')}`)
   if (diff.modulesRemoved.length) parts.push(`lost ${diff.modulesRemoved.map(label).join(', ')}`)

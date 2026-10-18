@@ -5,18 +5,17 @@
  */
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { CHEQUE_ROLES, CHEQUE_STATUSES, canMoveTo, validateChequeInput, type ChequeStatus } from '@/lib/cheques/cheque-rules'
+import { requireCan, withApiErrorHandling } from '@/lib/auth/api'
+import { CHEQUE_STATUSES, canMoveTo, validateChequeInput, type ChequeStatus } from '@/lib/cheques/cheque-rules'
 import { toChequeDto, type ChequeHistoryEntry } from '@/lib/cheques/cheque-store.server'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = [...CHEQUE_ROLES]
 const text = (value: unknown, max: number) => String(value ?? '').trim().slice(0, max)
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole(ROLES)
+    const user = await requireCan('accounting.cheques.manage')
     const { id } = await params
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const existing = await prisma.cheque.findUnique({ where: { id } })

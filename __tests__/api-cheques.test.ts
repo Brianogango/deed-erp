@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const h = vi.hoisted(() => ({
   rows: [] as any[],
-  requireRole: vi.fn(),
+  requireCan: vi.fn(),
   put: vi.fn(async () => ({})),
 }))
 
@@ -14,7 +14,7 @@ vi.mock('@/lib/auth/api', () => ({
       return new Response(JSON.stringify({ error: err?.message ?? 'error' }), { status, headers: { 'Content-Type': 'application/json' } })
     }
   },
-  requireRole: h.requireRole,
+  requireCan: h.requireCan,
 }))
 vi.mock('@/lib/infra/object-store', () => ({ putObject: h.put, getObject: vi.fn(async () => null) }))
 vi.mock('@/lib/prisma', () => ({
@@ -48,16 +48,16 @@ const valid = { direction: 'received', chequeNumber: '000123', bankName: 'Equity
 
 beforeEach(() => {
   h.rows.length = 0
-  h.requireRole.mockReset()
-  h.requireRole.mockResolvedValue(user)
+  h.requireCan.mockReset()
+  h.requireCan.mockResolvedValue(user)
   h.put.mockClear()
 })
 
 describe('cheque register API', () => {
   it('only lets director, admin officer and finance officer in', async () => {
-    h.requireRole.mockRejectedValueOnce(Object.assign(new Error('Forbidden — insufficient role'), { status: 403 }))
+    h.requireCan.mockRejectedValueOnce(Object.assign(new Error('Forbidden — insufficient role'), { status: 403 }))
     expect((await GET()).status).toBe(403)
-    expect(h.requireRole).toHaveBeenCalledWith(['director', 'admin_officer', 'finance_officer'])
+    expect(h.requireCan).toHaveBeenCalledWith('accounting.cheques.view')
   })
 
   it('adds a cheque and records who received it', async () => {

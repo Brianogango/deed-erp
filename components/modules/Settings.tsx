@@ -11,6 +11,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { modulesOutsideRole, roleDefaultModules } from '@/lib/auth/access-control'
 import AccessHistory from '@/components/settings/AccessHistory'
+import AccessRoles, { useAccessRoles } from '@/components/settings/AccessRoles'
 import { formatModuleLabel, formatRoleLabel, isAdmin, normalizeClientRole } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 import {
@@ -40,9 +41,11 @@ type Section =
 type UserFormState = {
   id: string; employeeId: string; username: string; name: string; role: string
   modules: string[]; active: boolean; actsAsTechnician: boolean; password: string
+  /** Custom role id; '' = one of the built-in roles above. */
+  accessRoleId: string
 }
 const blankUser: UserFormState = {
-  id: '', employeeId: '', username: '', name: '', role: '', modules: ['dashboard'], active: true, actsAsTechnician: false, password: '',
+  id: '', employeeId: '', username: '', name: '', role: '', modules: ['dashboard'], active: true, actsAsTechnician: false, password: '', accessRoleId: '',
 }
 
 const SettingLabelContext = createContext('setting')
@@ -346,7 +349,7 @@ export default function Settings() {
       showToast('Only the Director can create, edit, or update system users.', 'error')
       return
     }
-    if (!userForm.role) {
+    if (!userForm.role && !userForm.accessRoleId) {
       showToast('Please fill in: Role', 'error')
       return
     }
@@ -358,7 +361,9 @@ export default function Settings() {
       const password = userForm.id ? userForm.password : ''
       let modules = [...userForm.modules] as any
       if (userForm.actsAsTechnician && !modules.includes('repair')) modules = [...modules, 'repair']
-      const payload = { username, name, role: userForm.role as any, modules, active: userForm.active, actsAsTechnician: userForm.actsAsTechnician, ...(password ? { password } : {}) }
+      const customRole = customRoles.find(r => r.id === userForm.accessRoleId)
+      if (customRole) modules = [...customRole.modules]
+      const payload = { username, name, role: (customRole ? customRole.baseRole : userForm.role) as any, modules, active: userForm.active, actsAsTechnician: userForm.actsAsTechnician, accessRoleId: customRole ? customRole.id : null, ...(password ? { password } : {}) }
       if (!userForm.id && !selectedEmployee) {
         showToast('Select an existing active employee first.', 'error'); return
       }
@@ -368,7 +373,7 @@ export default function Settings() {
       }
       if (userForm.id) await updateUser(userForm.id, payload)
       else {
-        const user = await createUser({ employeeId: selectedEmployee!.id, role: payload.role, modules: payload.modules, active: true })
+        const user = await createUser({ employeeId: selectedEmployee!.id, role: payload.role, modules: payload.modules, active: true, ...(customRole ? { accessRoleId: customRole.id } : {}) })
         if (selectedEmployee) updateEmployee(selectedEmployee.id, { userId: user.id })
       }
       setShowUserModal(false); setUserForm(blankUser)
@@ -468,6 +473,8 @@ export default function Settings() {
     setResetStep(1)
   }
 
+  const accessRoles = useAccessRoles(canManageSystemUsers || normalizedRole === 'admin_officer')
+  const customRoles = accessRoles.data?.custom ?? []
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
   const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: formatModuleLabel(m) }))
 
@@ -852,7 +859,7 @@ export default function Settings() {
                   emptyMessage="No users"
                   rowActions={user => (
                     <div className="settings-user-row-actions flex gap-1.5 flex-wrap">
-                      <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-navy-500 border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '' }); setShowUserModal(true) }}>Edit</button>
+                      <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-navy-500 border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '', accessRoleId: u.accessRole?.id ?? '' }); setShowUserModal(true) }}>Edit</button>
                       {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                         <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                       )}
@@ -878,7 +885,7 @@ export default function Settings() {
                           <div><dt>Modules</dt><dd>{modules.length ? modules.map(m => m === 'pos' ? 'POS' : formatModuleLabel(m)).join(', ') : 'No modules assigned'}</dd></div>
                         </dl>
                         <div className="settings-user-card__actions">
-                          <button type="button" disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '' }); setShowUserModal(true) }}>Edit user</button>
+                          <button type="button" disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '', accessRoleId: u.accessRole?.id ?? '' }); setShowUserModal(true) }}>Edit user</button>
                         </div>
                       </article>
                     )
@@ -915,6 +922,7 @@ export default function Settings() {
                   ))}
                 </div>
               </div>
+              <AccessRoles roles={accessRoles.data} canManage={canManageSystemUsers} onChanged={() => { void accessRoles.reload() }} />
               {normalizedRole === 'director' && <AccessHistory />}
             </div>
           )}
@@ -1421,7 +1429,20 @@ export default function Settings() {
               </>
             )}
             <Field label="Role" required>
-              <Select value={userForm.role} onChange={v => setUserForm(p => ({ ...p, role: v }))} options={userForm.id ? roleOptions : [{ value: '', label: 'Select role…' }, ...roleOptions]} />
+              <Select
+                value={userForm.accessRoleId ? `custom:${userForm.accessRoleId}` : userForm.role}
+                onChange={v => setUserForm(p => {
+                  if (v.startsWith('custom:')) {
+                    const role = customRoles.find(r => r.id === v.slice(7))
+                    return role ? { ...p, accessRoleId: role.id, role: role.baseRole, modules: [...role.modules] } : p
+                  }
+                  return { ...p, accessRoleId: '', role: v }
+                })}
+                options={[
+                  ...(userForm.id ? [] : [{ value: '', label: 'Select role…' }]),
+                  ...roleOptions,
+                  ...customRoles.map(r => ({ value: `custom:${r.id}`, label: `${r.name} (custom)` })),
+                ]} />
             </Field>
             {userForm.id && (
               <Field label="Status">
@@ -1447,12 +1468,13 @@ export default function Settings() {
               </div>
             )}
             <div className="sm:col-span-2">
-              <Field label="Allowed Modules" required hint="Users can only enter modules enabled here.">
+              <Field label="Allowed Modules" required hint={userForm.accessRoleId ? 'This person is on a custom role, so modules and permissions follow the role. Edit the role to change them.' : 'Users can only enter modules enabled here.'}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 rounded-xl border p-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
                   {moduleOptions.map(opt => {
                     const sel = userForm.modules.includes(opt.value)
                     return (
-                      <button key={opt.value} type="button" onClick={() => toggleUserModule(opt.value)}
+                      <button key={opt.value} type="button" onClick={() => { if (!userForm.accessRoleId) toggleUserModule(opt.value) }}
+                        disabled={Boolean(userForm.accessRoleId)}
                         className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-all cursor-pointer"
                         style={{ borderColor: sel ? '#A8D4E8' : 'var(--border-lt)', background: sel ? '#E8F3FA' : '#FFF', color: sel ? 'var(--navy)' : 'var(--text-4)', fontWeight: sel ? 600 : 400 }}>
                         <span className="truncate">{opt.label}</span>

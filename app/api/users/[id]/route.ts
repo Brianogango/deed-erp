@@ -7,6 +7,8 @@ import { assertPermission, normalizePermissionRole } from '@/lib/auth/authorizat
 import { lastDirectorViolation, diffAccess, snapshotAccess } from '@/lib/auth/access-control'
 import { recordAccessChange } from '@/lib/auth/access-audit.server'
 import { isDirector } from '@/lib/auth/access'
+import { getAccessRoleMap } from '@/lib/auth/access-roles.server'
+import { USER_ROLES } from '@/lib/auth/types'
 import { sendEmail } from '@/lib/integrations/email'
 
 /** Refuses a change that would leave no active Director. Only looks at the users when it could matter. */
@@ -54,9 +56,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       delete validated.role
       delete validated.modules
       delete validated.active
+      delete validated.accessRoleId
     }
 
-    await refuseIfLastDirector(existingUser, { role: validated.role, active: validated.active })
+    // The role must be one the app knows; anything else used to be written as-is.
+    if (validated.role !== undefined && !(USER_ROLES as readonly string[]).includes(String(normalizePermissionRole(validated.role)))) {
+      throw Object.assign(new Error('Role is invalid'), { status: 400 })
+    }
+
+    // Moving someone onto a custom role changes their role to that role's base role.
+    let nextRole = validated.role
+    if (validated.accessRoleId) {
+      const customRole = (await getAccessRoleMap()).get(validated.accessRoleId)
+      if (!customRole) throw Object.assign(new Error('That role no longer exists'), { status: 400 })
+      nextRole = customRole.baseRole
+    }
+    await refuseIfLastDirector(existingUser, { role: nextRole, active: validated.active })
     const accessBefore = snapshotAccess(existingUser)
 
     // Password validation: reject reuse of current or last 5 hashes (SEC-009).

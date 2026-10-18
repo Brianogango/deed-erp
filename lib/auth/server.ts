@@ -37,6 +37,8 @@ export const getServerSession = async (): Promise<ServerSession | null> => {
     active:    true,
     createdAt: liveUser.createdAt,
     actsAsTechnician: Boolean(liveUser.actsAsTechnician),
+    ...(liveUser.permissions ? { permissions: [...liveUser.permissions] } : {}),
+    ...(liveUser.accessRole ? { accessRole: { ...liveUser.accessRole } } : {}),
   }
 
   return {
