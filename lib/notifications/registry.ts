@@ -40,6 +40,12 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'crm.opportunity.stale': POLICY(['in_app'], 'warning', { cooldownHours: 72 }),
   'crm.opportunity.close_due': POLICY(['in_app', 'push'], 'warning', { cooldownHours: 24 }),
   'sales.quote.approval_required': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 120 }),
+  /**
+   * A quotation sent to the client three days ago with no answer. Chasing the
+   * client is the admin officers' job (and the quote owner's), not the
+   * directors': no acknowledgement, no escalation.
+   */
+  'sales.quote.client_no_reply': POLICY(['in_app', 'push', 'email'], 'warning', { recipientRoles: ['admin_officer'] }),
   'sales.quote.expiring': POLICY(['in_app'], 'warning', { cooldownHours: 24 }),
   'sales.order.confirmed': POLICY(['in_app', 'push'], 'success'),
   'sales.invoice.payment': POLICY(['in_app'], 'success'),

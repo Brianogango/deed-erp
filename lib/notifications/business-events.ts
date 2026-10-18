@@ -59,7 +59,7 @@ export async function notifySaleOrderConfirmed(saleOrderId: string, actorUserId?
       idempotencyKey: `sales-order-confirmed:${order.id}`,
     })
     // A confirmed order no longer needs its quotation approval reminder.
-    await resolveEntityNotifications('quote', order.id, ['sales.quote.approval_required'], actorUserId)
+    await resolveEntityNotifications('quote', order.id, ['sales.quote.approval_required', 'sales.quote.client_no_reply'], actorUserId)
   })
 }
 

@@ -74,6 +74,27 @@ async function resolveInactive(eventType: string, entityType: string, activeIds:
   return ids.length
 }
 
+/** Close follow-up reminders sent to directors under the approval event type. */
+async function resolveScannerQuoteReminders() {
+  const open = await prisma.notificationEvent.findMany({
+    where: {
+      eventType: 'sales.quote.approval_required',
+      entityType: 'quote',
+      resolvedAt: null,
+      title: { startsWith: 'Client has not answered quotation' },
+    },
+    select: { id: true },
+  })
+  if (!open.length) return 0
+  const ids = open.map(row => row.id)
+  const resolvedAt = new Date()
+  await prisma.$transaction([
+    prisma.notificationEvent.updateMany({ where: { id: { in: ids } }, data: { resolvedAt } }),
+    prisma.notificationRecipient.updateMany({ where: { eventId: { in: ids }, resolvedAt: null }, data: { resolvedAt } }),
+  ])
+  return ids.length
+}
+
 type DigestItem = { id: string; line: string }
 
 /**
@@ -273,7 +294,7 @@ async function scanCrm() {
   for (const quote of approvalQuotes) {
     const waited = Math.max(3, Math.floor((current.getTime() - quote.updatedAt.getTime()) / DAY))
     if (await publishCondition({
-      eventType: 'sales.quote.approval_required',
+      eventType: 'sales.quote.client_no_reply',
       entityType: 'quote',
       entityId: quote.id,
       userIds: [quote.assignedToId, quote.createdById],
@@ -284,7 +305,10 @@ async function scanCrm() {
       stateVersion: quote.updatedAt,
     })) emitted++
   }
-  await resolveInactive('sales.quote.approval_required', 'quote', approvalIds)
+  await resolveInactive('sales.quote.client_no_reply', 'quote', approvalIds)
+  // These reminders used to go out as 'sales.quote.approval_required', which
+  // is addressed to the directors with email and escalation. Close those.
+  await resolveScannerQuoteReminders()
 
   const expiring = await prisma.quote.findMany({
     where: {
