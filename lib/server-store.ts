@@ -115,11 +115,26 @@ const TABLE_FED_KEYS = ['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'de
 
 export const FROZEN_STORE_KEYS = new Set(['deed_invoices', 'deed_saleOrders', 'deed_quotes', 'deed_journalEntries', 'deed_accounts', 'deed_contacts', 'deed_purchaseOrders', 'deed_deposits', 'deed_deposits_v1', 'deed_holdovers', 'deed_repairs_v2', 'deed_auditLogs', 'deed_oppActivities', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations'])
 
+/**
+ * Lists whose table read failed in this load. Their stored copy is old (it is
+ * no longer written), so it must never be served in their place: during the
+ * 18 Oct restart a failed read sent an empty sales list stamped with the
+ * current version, and browsers kept showing 0 orders afterwards.
+ */
+const overlayFailures = new WeakMap<object, Set<string>>()
+function failOverlay(state: AppStateMap, key: string) {
+  // No database configured (unit tests, file-only setups): the copy is the source.
+  if (!process.env.DATABASE_URL) return
+  const set = overlayFailures.get(state) ?? new Set<string>()
+  set.add(key)
+  overlayFailures.set(state, set)
+}
+
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
   const fromPrisma = await import('./invoice-read-model.server')
     .then(m => m.loadScreenInvoices(state.deed_invoices))
-    .catch(err => { console.error('[server-store] invoices from table failed:', err); return null })
+    .catch(err => { console.error('[server-store] invoices from table failed:', err); failOverlay(state, 'deed_invoices'); return null })
   if (fromPrisma) state.deed_invoices = fromPrisma
 }
 
@@ -129,12 +144,12 @@ async function overlayAuthoritativeSales(state: AppStateMap, keys?: string[]) {
   const m = await import('./sales-read-model.server')
   if (want('deed_saleOrders')) {
     const orders = await m.loadScreenSaleOrders(state.deed_saleOrders)
-      .catch(err => { console.error('[server-store] sale orders from table failed:', err); return null })
+      .catch(err => { console.error('[server-store] sale orders from table failed:', err); failOverlay(state, 'deed_saleOrders'); return null })
     if (orders) state.deed_saleOrders = orders
   }
   if (want('deed_quotes')) {
     const quotes = await m.loadScreenQuotes(state.deed_quotes)
-      .catch(err => { console.error('[server-store] quotes from table failed:', err); return null })
+      .catch(err => { console.error('[server-store] quotes from table failed:', err); failOverlay(state, 'deed_quotes'); return null })
     if (quotes) state.deed_quotes = quotes
   }
 }
@@ -143,7 +158,7 @@ async function overlayAuthoritativeJournals(state: AppStateMap, keys?: string[])
   if (keys && !keys.includes('deed_journalEntries')) return
   const fromPrisma = await import('./journal-read-model.server')
     .then(m => m.loadScreenJournals())
-    .catch(err => { console.error('[server-store] journals from table failed:', err); return null })
+    .catch(err => { console.error('[server-store] journals from table failed:', err); failOverlay(state, 'deed_journalEntries'); return null })
   if (fromPrisma) state.deed_journalEntries = fromPrisma
 }
 
@@ -151,7 +166,7 @@ async function overlayAuthoritativeAccounts(state: AppStateMap, keys?: string[])
   if (keys && !keys.includes('deed_accounts')) return
   const fromPrisma = await import('./account-read-model.server')
     .then(m => m.loadScreenAccounts(state.deed_accounts))
-    .catch(err => { console.error('[server-store] accounts from table failed:', err); return null })
+    .catch(err => { console.error('[server-store] accounts from table failed:', err); failOverlay(state, 'deed_accounts'); return null })
   if (fromPrisma) state.deed_accounts = fromPrisma
 }
 
@@ -159,7 +174,7 @@ async function overlayAuthoritativeContacts(state: AppStateMap, keys?: string[])
   if (keys && !keys.includes('deed_contacts')) return
   const fromPrisma = await Promise.all([import('./contact-prisma'), import('./prisma')])
     .then(([m, p]) => m.loadScreenContacts(p.default as any, state.deed_contacts))
-    .catch(err => { console.error('[server-store] contacts from table failed:', err); return null })
+    .catch(err => { console.error('[server-store] contacts from table failed:', err); failOverlay(state, 'deed_contacts'); return null })
   if (fromPrisma) state.deed_contacts = fromPrisma
 }
 
@@ -170,7 +185,7 @@ async function overlayAuthoritativePurchaseOrders(state: AppStateMap, keys?: str
     : (await loadStateWithLegacyFallback(['deed_receipts']).catch(() => ({} as AppStateMap))).deed_receipts
   const fromPrisma = await import('./purchase-order-read-model.server')
     .then(m => m.loadScreenPurchaseOrders(state.deed_purchaseOrders, receipts))
-    .catch(err => { console.error('[server-store] purchase orders from table failed:', err); return null })
+    .catch(err => { console.error('[server-store] purchase orders from table failed:', err); failOverlay(state, 'deed_purchaseOrders'); return null })
   if (fromPrisma) state.deed_purchaseOrders = fromPrisma
 }
 
@@ -249,7 +264,7 @@ async function overlayAuthoritativeDeposits(state: AppStateMap, keys?: string[])
   if (keys && !keys.includes('deed_deposits')) return
   const fromPrisma = await import('./deposit-read-model.server')
     .then(m => m.loadScreenDeposits(state.deed_deposits))
-    .catch(err => { console.error('[server-store] deposits from table failed:', err); return null })
+    .catch(err => { console.error('[server-store] deposits from table failed:', err); failOverlay(state, 'deed_deposits'); return null })
   if (fromPrisma) state.deed_deposits = fromPrisma
 }
 
@@ -257,7 +272,7 @@ async function overlayAuthoritativeHoldovers(state: AppStateMap, keys?: string[]
   if (keys && !keys.includes('deed_holdovers')) return
   const fromPrisma = await import('./holdover-read-model.server')
     .then(m => m.loadScreenHoldovers(state.deed_holdovers))
-    .catch(err => { console.error('[server-store] holdovers from table failed:', err); return null })
+    .catch(err => { console.error('[server-store] holdovers from table failed:', err); failOverlay(state, 'deed_holdovers'); return null })
   if (fromPrisma) state.deed_holdovers = fromPrisma
 }
 
@@ -265,7 +280,7 @@ async function overlayAuthoritativeActivities(state: AppStateMap, keys?: string[
   if (keys && !keys.includes('deed_oppActivities')) return
   const fromPrisma = await import('./opportunity-activity-read-model.server')
     .then(m => m.loadScreenActivities(state.deed_oppActivities))
-    .catch(err => { console.error('[server-store] activities from table failed:', err); return null })
+    .catch(err => { console.error('[server-store] activities from table failed:', err); failOverlay(state, 'deed_oppActivities'); return null })
   if (fromPrisma) state.deed_oppActivities = fromPrisma
 }
 
@@ -275,32 +290,32 @@ async function overlayStockTables(state: AppStateMap, keys?: string[]) {
   const m = await import('./stock-read-model.server')
   if (want('deed_serials')) {
     const serials = await m.loadScreenSerials(state.deed_serials)
-      .catch(err => { console.error('[server-store] serials from table failed:', err); return null })
+      .catch(err => { console.error('[server-store] serials from table failed:', err); failOverlay(state, 'deed_serials'); return null })
     if (serials) state.deed_serials = serials
   }
   if (want('deed_bulkStock')) {
     const levels = await m.loadScreenBulkStock(state.deed_bulkStock)
-      .catch(err => { console.error('[server-store] stock levels from table failed:', err); return null })
+      .catch(err => { console.error('[server-store] stock levels from table failed:', err); failOverlay(state, 'deed_bulkStock'); return null })
     if (levels) state.deed_bulkStock = levels
   }
   if (want('deed_stockMoves')) {
     const moves = await m.loadScreenStockMoves(state.deed_stockMoves)
-      .catch(err => { console.error('[server-store] stock moves from table failed:', err); return null })
+      .catch(err => { console.error('[server-store] stock moves from table failed:', err); failOverlay(state, 'deed_stockMoves'); return null })
     if (moves) state.deed_stockMoves = moves
   }
   if (want('deed_products')) {
     const products = await m.loadScreenProducts(state.deed_products)
-      .catch(err => { console.error('[server-store] products from table failed:', err); return null })
+      .catch(err => { console.error('[server-store] products from table failed:', err); failOverlay(state, 'deed_products'); return null })
     if (products) state.deed_products = products
   }
   if (want('deed_receipts')) {
     const receipts = await m.loadScreenReceipts(state.deed_receipts)
-      .catch(err => { console.error('[server-store] receipts from table failed:', err); return null })
+      .catch(err => { console.error('[server-store] receipts from table failed:', err); failOverlay(state, 'deed_receipts'); return null })
     if (receipts) state.deed_receipts = receipts
   }
   if (want('deed_stockReservations')) {
     const reservations = await m.loadScreenReservations(state.deed_stockReservations)
-      .catch(err => { console.error('[server-store] reservations from table failed:', err); return null })
+      .catch(err => { console.error('[server-store] reservations from table failed:', err); failOverlay(state, 'deed_stockReservations'); return null })
     if (reservations) state.deed_stockReservations = reservations
   }
 }
@@ -316,7 +331,7 @@ async function overlayAuthoritativeRepairs(state: AppStateMap, keys?: string[]) 
   if (keys && !keys.includes('deed_repairs_v2')) return
   const fromPrisma = await import('./repair-mirror')
     .then(m => m.loadRepairsFromPrisma())
-    .catch(() => null)
+    .catch(err => { console.error('[server-store] repairs from table failed:', err); failOverlay(state, 'deed_repairs_v2'); return null })
   if (fromPrisma) state.deed_repairs_v2 = fromPrisma
 }
 
@@ -366,6 +381,9 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     const wantedKeys = keys?.filter(Boolean)
     const state = await loadStateWithLegacyFallback(wantedKeys)
     await applyOverlays(state, wantedKeys)
+    // Leave a list out rather than serve its stale copy: the caller (and a
+    // browser) then keeps what it has and asks again.
+    for (const key of overlayFailures.get(state) ?? []) delete state[key]
     return state
   } catch (error) {
     console.error('[server-store] loadAppState error:', error)
@@ -381,6 +399,9 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
   const wantedKeys = keys?.filter(Boolean)
   const state = await loadStateWithLegacyFallback(wantedKeys)
   await applyOverlays(state, wantedKeys)
+  // A write built on a stale copy would put old data back: refuse instead.
+  const failed = [...(overlayFailures.get(state) ?? [])]
+  if (failed.length) throw new Error(`Could not read ${failed.join(', ')} from the database — nothing was saved. Try again in a moment.`)
   return state
 }
 
