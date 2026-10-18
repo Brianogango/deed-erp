@@ -8,6 +8,7 @@ import ClientDetail from '@/components/crm/ClientDetail'
 import LeadsPanel from '@/components/crm/LeadsPanel'
 import EmailReviewPanel from '@/components/crm/EmailReviewPanel'
 import DuplicateContactsPanel from '@/components/crm/DuplicateContactsPanel'
+import CrmEmailComposer from '@/components/crm/CrmEmailComposer'
 import { PivotView } from '@/components/erp/PivotView'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import {
@@ -1609,7 +1610,8 @@ function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiv
 
 function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMarkLost, onLogActivity }: any) {
   const router = useRouter()
-  const { opportunities, opportunityActivities, quotes, saleOrders, moveOpportunityStage, contacts } = useCrmStore()
+  const { opportunities, opportunityActivities, quotes, saleOrders, moveOpportunityStage, contacts, showToast } = useCrmStore()
+  const [emailing, setEmailing] = useState(false)
   const opp = opportunities.find(o => o.id === activeOppId)
   if (!opp) return null
 
@@ -1638,8 +1640,11 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
       } catch { return opp.name }
     })()
 
+  // The deal's own quotations. It used to list every order the customer
+  // had ever placed, because quotations carried no link to the deal.
+  const linkedIds = new Set(opp.saleOrderIds ?? [])
   const relatedSaleOrders = (saleOrders ?? [])
-    .filter(so => so.customerId && (so.customerId === clientId || so.customerId === opp.clientId || so.customerId === opp.companyId))
+    .filter(so => so.opportunityId === opp.id || linkedIds.has(so.id))
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
 
   const openSalesQuote = () => {
@@ -1654,6 +1659,10 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
     params.set('opportunityId', opp.id)
     router.push(`/sales?${params.toString()}`)
   }
+
+  const contactRecord = contacts?.find((c: { id: string }) => c.id === opp.contactPersonId)
+    ?? contacts?.find((c: { id: string }) => c.id === clientId)
+  const contactEmail = opp.contactEmail || (contactRecord as { email?: string } | undefined)?.email || ''
 
   const openSaleOrder = (id: string) => {
     router.push(`/sales?id=${id}`)
@@ -1672,6 +1681,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
           <p>{opp.companyName || 'Customer not set'}{opp.contactPersonName ? ` · ${opp.contactPersonName}` : ''}</p>
         </div>
         <div className="crm-opportunity-detail__actions">
+          <button type="button" className="btn-outline" onClick={() => setEmailing(true)}>Email</button>
           {!['closed_won', 'closed_lost'].includes(opp.stage) && (
             <>
               <button type="button" className="btn-primary" onClick={openSalesQuote}>Create quotation</button>
@@ -1774,6 +1784,17 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
           </article>
         </aside>
       </div>
+      {emailing && (
+        <CrmEmailComposer
+          target={{ opportunityId: opp.id }}
+          defaultTo={contactEmail}
+          defaultSubject={`${opp.name}`}
+          defaultBody={`Dear ${(opp.contactPersonName || '').trim().split(/\s+/)[0] || 'Sir/Madam'},\n\n`}
+          onSent={() => { /* the activity arrives with the next activities refresh */ }}
+          onClose={() => setEmailing(false)}
+          showToast={showToast}
+        />
+      )}
     </section>
   )
 }

@@ -25,8 +25,15 @@ const toDayString = (value: unknown): string | undefined => {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10)
 }
 
-export function normalizeOpportunityForClient(raw: any) {
-  if (!raw || typeof raw !== 'object') return raw
+export function normalizeOpportunityForClient(input: any) {
+  if (!input || typeof input !== 'object') return input
+  // The screen fields with no column (number, contact, source, won value,
+  // lost reason, linked quotations …) are kept in screenExtras.
+  const extras = input.screenExtras && typeof input.screenExtras === 'object' && !Array.isArray(input.screenExtras)
+    ? input.screenExtras
+    : {}
+  const { screenExtras: _extras, ...rest } = input
+  const raw = { ...extras, ...rest }
 
   const rawStage = String(raw.stage ?? '')
   const stage = CLIENT_STAGES.has(rawStage)
@@ -54,6 +61,7 @@ export function normalizeOpportunityForClient(raw: any) {
     probability: Number(raw.probability ?? 0) || 0,
     expectedValue: Number(raw.expectedValue ?? raw.value ?? 0) || 0,
     expectedCloseDate: raw.expectedCloseDate ?? toDayString(raw.closeDate),
+    quoteIds: Array.isArray(raw.quoteIds) ? raw.quoteIds : [],
     createdAt: raw.createdAt ?? new Date().toISOString(),
     createdDate: raw.createdDate ?? toDayString(raw.createdAt),
   }

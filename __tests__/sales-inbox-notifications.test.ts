@@ -40,7 +40,7 @@ describe('buildInboundLeadNotifyContent', () => {
     })
     expect(content.subject).toContain('Acme RFQ')
     expect(content.subject).toContain('Need 10 ThinkPads')
-    expect(content.text).toContain('Open in CRM: https://erp.example.com/crm?tab=leads')
+    expect(content.text).toContain('Open in CRM: https://erp.example.com/crm?crmTab=leads')
     expect(content.html).toContain('Open in CRM')
     expect(content.html).toContain('buyer@acme.co.ke')
   })

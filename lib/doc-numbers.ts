@@ -23,6 +23,7 @@ type DocKind =
   | 'outsource_payment'
   | 'rider_pay'
   | 'expense'
+  | 'opportunity'
   | 'kilimall_order'
   | 'kilimall_dispatch'
   | 'kilimall_settlement'
@@ -46,6 +47,7 @@ const PREFIX_TO_KIND: Record<string, DocKind> = {
   OPAY: 'outsource_payment',
   RWP: 'rider_pay',
   EXP: 'expense',
+  OPP: 'opportunity',
   KO: 'kilimall_order',
   KD: 'kilimall_dispatch',
   KS: 'kilimall_settlement',

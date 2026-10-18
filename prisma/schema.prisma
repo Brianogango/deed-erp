@@ -1384,6 +1384,8 @@ model Opportunity {
   value         Decimal   @default(0) @db.Decimal(14, 2)
   probability   Int       @default(0)
   assignedToId  String?   @map("assigned_to") @db.Uuid
+  /// Number, contact, source, won value, lost reason, linked quotations — the screen fields with no column.
+  screenExtras  Json?     @map("screen_extras")
   createdById   String    @map("created_by") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
@@ -1456,9 +1458,14 @@ model Lead {
   name          String   @db.VarChar(200)
   companyName   String?  @map("company_name") @db.VarChar(200)
   email         String?  @db.VarChar(150)
-  phone         String?  @db.VarChar(20)
+  phone         String?  @db.VarChar(40)
   source        String?  @db.VarChar(50)
   stage         String   @default("new") @db.VarChar(30)
+  /// When the owner should next contact this lead.
+  nextFollowUpAt  DateTime? @map("next_follow_up_at")
+  lastContactedAt DateTime? @map("last_contacted_at")
+  /// [{ id, type, note, at, byId, byName, nextFollowUpAt? }] — calls, emails, notes, newest first.
+  activity      Json     @default("[]")
   ownerId       String?  @map("owner_id") @db.Uuid
   opportunityId String?  @map("opportunity_id") @db.Uuid
   clientId      String?  @map("client_id") @db.Uuid
@@ -1485,6 +1492,7 @@ model Lead {
   @@index([stage], map: "idx_leads_stage")
   @@index([ownerId], map: "idx_leads_owner")
   @@index([inboundThreadId], map: "idx_leads_inbound_thread_id")
+  @@index([nextFollowUpAt], map: "idx_leads_next_follow_up")
   @@map("leads")
 }
 
@@ -1572,6 +1580,8 @@ model SaleOrder {
   // Lock Confirmed Sales (optional setting): commercial fields frozen.
   locked          Boolean       @default(false)
   customerRef     String?       @map("customer_ref") @db.VarChar(120)
+  /// The CRM deal this quotation came from (no FK: a deleted deal leaves the order alone).
+  opportunityId   String?       @map("opportunity_id") @db.Uuid
   invoiceAddress  String?       @map("invoice_address")
   deliveryAddress String?       @map("delivery_address")
   // Quotation versioning: versionNumber counts up within a lineage;
@@ -1602,6 +1612,7 @@ model SaleOrder {
   @@unique([versionGroupId, versionNumber], map: "ux_sale_orders_version")
   @@index([clientId], map: "idx_sale_orders_client")
   @@index([createdById], map: "idx_sale_orders_created_by")
+  @@index([opportunityId], map: "idx_sale_orders_opportunity")
   @@index([clientId, status], map: "idx_sale_orders_client_status")
   @@index([versionGroupId], map: "idx_sale_orders_version_group")
   @@index([status], map: "idx_sale_orders_status")

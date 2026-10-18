@@ -1,3 +1,4 @@
+import { dealQuotationRaised, dealWon } from '@/lib/crm/deal-progress.server'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
@@ -216,6 +217,7 @@ export async function POST(request: Request) {
         termsAndConditions: body.termsAndConditions ? String(body.termsAndConditions).slice(0, 20000) : null,
         optionalProducts: normalizeOptionalProducts(body.optionalProducts),
         customerRef: body.customerRef ? String(body.customerRef).slice(0, 120) : null,
+        opportunityId: optionalUuid(body.opportunityId),
         screenExtras: mergeScreenExtras(null, body, SALE_ORDER_EXTRA_KEYS) ?? undefined,
         invoiceAddress: body.invoiceAddress ?? null,
         deliveryAddress: body.deliveryAddress ?? null,
@@ -237,6 +239,10 @@ export async function POST(request: Request) {
       include: { client: true, items: true },
     })
 
+    if (order.opportunityId) {
+      if (order.status === 'sale') await dealWon(order.opportunityId, order)
+      else await dealQuotationRaised(order.opportunityId, order)
+    }
     void broadcastSaleOrders()
     return NextResponse.json(mapSaleOrderToClient(order), { status: 201 })
   })

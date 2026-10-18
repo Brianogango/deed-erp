@@ -5,6 +5,7 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { pickRoundRobinOwner, pickStickyOwnerFromPriorLeads } from '@/lib/crm/sales-inbox-leads'
 import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
 import { storedRoleNames } from '@/lib/auth/authorization'
+import { notifyLeadAssigned } from '@/lib/crm/lead-notify'
 
 const LEAD_INCLUDE = {
   owner: { select: { id: true, username: true, email: true } },
@@ -87,9 +88,12 @@ export async function POST(request: Request) {
         ownerId,
         clientId: body.clientId ?? null,
         notes: body.notes ?? null,
+        // A new lead is due for first contact the same day.
+        nextFollowUpAt: body.nextFollowUpAt ? new Date(body.nextFollowUpAt) : new Date(),
       },
       include: LEAD_INCLUDE,
     })
+    await notifyLeadAssigned(lead, session.user.id)
     return NextResponse.json(lead, { status: 201 })
   })
 }

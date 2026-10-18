@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { saveStoreKeys } from '@/lib/server-store'
 import { broadcastContacts, upsertContact } from '@/lib/contact-prisma'
 import { clip, leadCustomerDisplayName, looksLikeEnquiryTitle, splitContactName } from '@/lib/crm/lead-convert'
 import { findExistingClientForLead, findExistingContactPerson } from '@/lib/crm/lead-client-resolve'
-import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
+import { normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
+import { broadcastOpportunities, opportunityRef, OPPORTUNITY_INCLUDE } from '@/lib/opportunity-server'
+import { notifyLeadAssigned } from '@/lib/crm/lead-notify'
+import { appendLeadActivity, LEAD_ACTIVITY_TYPES, type LeadActivityType } from '@/lib/crm/lead-activity'
 
 const LEAD_INCLUDE = {
   owner: { select: { id: true, username: true, email: true } },
@@ -14,17 +16,6 @@ const LEAD_INCLUDE = {
 } as const
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'finance_officer']
-
-async function broadcastOpportunities() {
-  try {
-    const all = await prisma.opportunity.findMany({
-      include: { client: true, assignedTo: true, activities: true },
-      orderBy: { createdAt: 'desc' },
-    })
-    // Normalize so CRM owner filters see ownerId (Prisma only has assignedToId).
-    void saveStoreKeys({ deed_opportunities: JSON.stringify(normalizeOpportunitiesForClient(all)) })
-  } catch { /* best-effort SSE sync */ }
-}
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
@@ -57,12 +48,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.ownerId !== undefined) data.ownerId = body.ownerId ? body.ownerId : null
     if (body.clientId !== undefined) data.clientId = body.clientId
     if (body.notes !== undefined) data.notes = body.notes
+    if (body.nextFollowUpAt !== undefined) data.nextFollowUpAt = body.nextFollowUpAt ? new Date(body.nextFollowUpAt) : null
 
+    const before = data.ownerId !== undefined
+      ? await prisma.lead.findUnique({ where: { id: resolvedParams.id }, select: { ownerId: true } })
+      : null
     const lead = await prisma.lead.update({
       where: { id: resolvedParams.id },
       data,
       include: LEAD_INCLUDE,
     })
+    if (before && before.ownerId !== lead.ownerId) await notifyLeadAssigned(lead, session.user.id)
     return NextResponse.json(lead)
   })
 }
@@ -89,8 +85,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const body = await request.json().catch(() => ({}))
+    if (body.action === 'log') {
+      // A call, email, WhatsApp, meeting or note on the lead, and when to follow up next.
+      const type = String(body.type || '') as LeadActivityType
+      if (!LEAD_ACTIVITY_TYPES.includes(type)) {
+        return NextResponse.json({ error: 'Choose what kind of contact this was' }, { status: 400 })
+      }
+      const note = String(body.note || '').trim()
+      if (!note) return NextResponse.json({ error: 'Write what happened' }, { status: 400 })
+      const current = await prisma.lead.findUnique({ where: { id: resolvedParams.id } })
+      if (!current) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
+      const next = appendLeadActivity(current, {
+        type,
+        note,
+        byId: session.user.id,
+        byName: session.user.name || session.user.username || 'Staff',
+        nextFollowUpAt: body.nextFollowUpAt ? String(body.nextFollowUpAt) : null,
+      })
+      const lead = await prisma.lead.update({
+        where: { id: current.id },
+        data: next,
+        include: LEAD_INCLUDE,
+      })
+      return NextResponse.json(lead)
+    }
     if (body.action !== 'convert') {
-      return NextResponse.json({ error: 'Unsupported action — use { action: "convert" }' }, { status: 400 })
+      return NextResponse.json({ error: 'Unsupported action — use { action: "convert" } or { action: "log" }' }, { status: 400 })
     }
 
     const lead = await prisma.lead.findUnique({ where: { id: resolvedParams.id } })
@@ -138,6 +158,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     let contactPersonId: string | null = null
+    let contactPersonName: string | null = null
     if (body.createContact !== false && clientId) {
       const already = await findExistingContactPerson(prisma, {
         clientId,
@@ -161,6 +182,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           },
         })
         contactPersonId = contact.id
+        contactPersonName = `${firstName} ${lastName === '—' ? '' : lastName}`.trim()
       }
     }
 
@@ -177,8 +199,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         value: Number(body.expectedValue ?? 0),
         assignedToId: lead.ownerId ?? session.user.id,
         createdById: session.user.id,
+        // Who to talk to and where the deal came from travel with it.
+        screenExtras: {
+          ref: await opportunityRef(null),
+          companyName: clientName,
+          contactPersonId,
+          contactPersonName: contactPersonName ?? lead.name,
+          contactEmail: lead.email,
+          contactPhone: lead.phone,
+          leadSource: lead.source === 'inbound_email' ? 'website' : (lead.source || undefined),
+          leadId: lead.id,
+          customerNeeds: lead.emailSnippet || lead.notes || undefined,
+        },
       },
-      include: { client: true, assignedTo: true },
+      include: OPPORTUNITY_INCLUDE,
     })
 
     const updatedLead = await prisma.lead.update({
@@ -197,7 +231,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return NextResponse.json({
       lead: updatedLead,
-      opportunity,
+      opportunity: normalizeOpportunityForClient(opportunity),
       contactPersonId,
       clientId,
       clientName,

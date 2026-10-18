@@ -2,15 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
 import { canAccessRecord } from '@/lib/auth/authorization'
-import { saveStoreKeys } from '@/lib/server-store'
-import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
-
-async function broadcastOpportunities() {
-  try {
-    const all = await prisma.opportunity.findMany({ include: { client: true, assignedTo: true, activities: true }, orderBy: { createdAt: 'desc' } })
-    void saveStoreKeys({ deed_opportunities: JSON.stringify(normalizeOpportunitiesForClient(all)) })
-  } catch {}
-}
+import { normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
+import { opportunityExtras } from '@/lib/opportunity-extras'
+import { broadcastOpportunities, OPPORTUNITY_INCLUDE } from '@/lib/opportunity-server'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep']
 
@@ -67,13 +61,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json()
     const data = mapOpportunityToDb(body)
     if (session.user.role === 'sales_rep') delete data.assignedToId
+    // The number never changes after creation; the rest merge over what is stored.
+    const extras = opportunityExtras(body, existing.screenExtras)
+    const storedRef = (existing.screenExtras as { ref?: unknown } | null)?.ref
+    if (storedRef) extras.ref = storedRef
     const opp = await prisma.opportunity.update({
       where: { id: resolvedParams.id },
-      data,
-      include: { client: true, assignedTo: true },
+      data: { ...data, screenExtras: extras as object },
+      include: OPPORTUNITY_INCLUDE,
     })
     void broadcastOpportunities()
-    return NextResponse.json(opp)
+    return NextResponse.json(normalizeOpportunityForClient(opp))
   })
 }
 

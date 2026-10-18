@@ -1,10 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { fmtDate } from '@/lib/store'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Modal, Field, Input, Select } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
+import LeadFollowUp, { followUpState } from '@/components/crm/LeadFollowUp'
+import CrmEmailComposer from '@/components/crm/CrmEmailComposer'
+import type { LeadActivity } from '@/lib/crm/lead-activity'
 
 type LeadAttachment = {
   id: string
@@ -32,6 +36,9 @@ type LeadRow = {
   emailBody?: string | null
   emailReceivedAt?: string | null
   emailAttachments?: LeadAttachment[] | null
+  nextFollowUpAt?: string | null
+  lastContactedAt?: string | null
+  activity?: LeadActivity[] | null
   createdAt: string
 }
 
@@ -139,6 +146,24 @@ export default function LeadsPanel({
   }, [showToast])
 
   useEffect(() => { void load({ soft: false }) }, [load])
+
+  // Notifications link to /crm?crmTab=leads&leadId=… — open that lead once.
+  const searchParams = useSearchParams()
+  const linkedLeadId = searchParams.get('leadId')
+  const openedLinkRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!linkedLeadId || openedLinkRef.current === linkedLeadId || loading) return
+    const row = leads.find(l => l.id === linkedLeadId)
+    openedLinkRef.current = linkedLeadId
+    if (row) setDetail(row)
+    else showToast('That lead was not found — it may have been deleted', 'info')
+  }, [linkedLeadId, leads, loading, showToast])
+
+  const [emailing, setEmailing] = useState(false)
+  const replaceLead = useCallback((next: LeadRow) => {
+    setLeads(prev => prev.map(l => (l.id === next.id ? { ...l, ...next } : l)))
+    setDetail(prev => (prev && prev.id === next.id ? { ...prev, ...next } : prev))
+  }, [])
 
   async function createLead() {
     const missing = [!form.name.trim() && 'Lead name', !form.source && 'Source'].filter(Boolean)
@@ -318,6 +343,23 @@ export default function LeadsPanel({
       exportValue: row => row.stage,
     },
     {
+      key: 'followUp', label: 'Follow-up', priority: 1, width: '130px',
+      render: row => {
+        if (row.stage === 'converted' || row.stage === 'lost') return <span className="text-[10px] text-t3">—</span>
+        const state = followUpState(row.nextFollowUpAt)
+        const neverContacted = !row.lastContactedAt
+        const label = row.nextFollowUpAt
+          ? state === 'overdue' ? `Overdue ${fmtDate(row.nextFollowUpAt.slice(0, 10))}` : state === 'today' ? 'Today' : fmtDate(row.nextFollowUpAt.slice(0, 10))
+          : neverContacted ? 'Not contacted' : 'None set'
+        return (
+          <span className="text-[10px] font-semibold" style={{ color: state === 'overdue' ? 'var(--danger)' : state === 'today' || (neverContacted && !row.nextFollowUpAt) ? 'var(--warning)' : 'var(--text-3)' }}>
+            {label}
+          </span>
+        )
+      },
+      exportValue: row => row.nextFollowUpAt?.slice(0, 10) ?? '',
+    },
+    {
       key: 'owner', label: 'Owner', priority: 2, width: '100px',
       render: row => <span className="text-[10px] text-t2">{ownerLabel(row, salesReps)}</span>,
       exportValue: row => ownerLabel(row, salesReps),
@@ -469,6 +511,13 @@ export default function LeadsPanel({
               </div>
             </div>
 
+            <LeadFollowUp<LeadRow>
+              lead={detail}
+              onUpdated={replaceLead}
+              onEmail={detail.email ? () => setEmailing(true) : undefined}
+              showToast={showToast}
+            />
+
             {(ctx.subject || ctx.body || detail.notes) && (
               <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3 space-y-2">
                 <p className="text-[10px] uppercase font-bold text-t4">
@@ -538,6 +587,27 @@ export default function LeadsPanel({
         </Modal>
         )
       })()}
+
+      {detail && emailing && (
+        <CrmEmailComposer
+          target={{ leadId: detail.id }}
+          defaultTo={detail.email}
+          defaultSubject={(() => {
+            const subject = displayEmailContext(detail).subject
+            if (subject) return /^re:/i.test(subject) ? subject : `Re: ${subject}`
+            return detail.companyName ? `Deed Digital Solutions — ${detail.companyName}` : 'Deed Digital Solutions'
+          })()}
+          defaultBody={(() => {
+            // Inbound leads are often named after the enquiry ("RFQ 10 laptops").
+            const first = detail.name.trim().split(/\s+/)[0] ?? ''
+            const looksLikeName = /^[A-Za-z'-]{2,20}$/.test(first) && !/^(re|rfq|quote|quotation|request|enquiry|inquiry)$/i.test(first)
+            return `Dear ${looksLikeName ? first : 'Sir/Madam'},\n\n`
+          })()}
+          onSent={data => { if (data.lead) replaceLead(data.lead as LeadRow) }}
+          onClose={() => setEmailing(false)}
+          showToast={showToast}
+        />
+      )}
 
       {showForm && (
         <Modal title="New Lead" subtitle="Capture the prospect and the next sales action" variant="workspace" onClose={() => setShowForm(false)} width={520}>

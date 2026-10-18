@@ -45,6 +45,9 @@ export interface EmailMessage {
    */
   senderName?: string
   senderEmail?: string
+  /** Thread a reply under the customer's message (SMTP only). */
+  inReplyTo?: string
+  references?: string | string[]
 }
 
 interface MailboxConfig {
@@ -530,6 +533,8 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
         html: message.html,
         text: message.text,
         attachments: message.attachments,
+        ...(message.inReplyTo ? { inReplyTo: message.inReplyTo } : {}),
+        ...(message.references ? { references: message.references } : {}),
       })
       const accepted = (result.accepted || []) as string[]
       const rejected = (result.rejected || []) as string[]

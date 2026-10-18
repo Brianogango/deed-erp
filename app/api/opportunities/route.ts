@@ -2,17 +2,9 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { normalizePermissionRole } from '@/lib/auth/authorization'
-import { saveStoreKeys } from '@/lib/server-store'
-import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
-
-const OPP_INCLUDE = { client: true, assignedTo: true, activities: true } as const
-
-async function broadcastOpportunities() {
-  try {
-    const all = await prisma.opportunity.findMany({ include: OPP_INCLUDE, orderBy: { createdAt: 'desc' } })
-    void saveStoreKeys({ deed_opportunities: JSON.stringify(normalizeOpportunitiesForClient(all)) })
-  } catch {}
-}
+import { normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
+import { clientOpportunityId, opportunityExtras } from '@/lib/opportunity-extras'
+import { broadcastOpportunities, opportunityRef, OPPORTUNITY_INCLUDE } from '@/lib/opportunity-server'
 
 function mapOpportunityToDb(body: any) {
   return {
@@ -66,18 +58,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const body = await request.json()
+    // Keep the browser's id. The table used to give every new deal an id of
+    // its own, so the browser's later edits, activities and quotations all
+    // pointed at a deal the server did not have.
+    const id = clientOpportunityId(body)
+    if (id) {
+      const existing = await prisma.opportunity.findUnique({ where: { id }, include: OPPORTUNITY_INCLUDE })
+      if (existing) return NextResponse.json(normalizeOpportunityForClient(existing))
+    }
+    const extras = opportunityExtras(body)
+    extras.ref = await opportunityRef(extras.ref)
     const opportunity = await prisma.opportunity.create({
       data: {
+        ...(id ? { id } : {}),
         ...mapOpportunityToDb(body),
         ...(role === 'sales_rep' ? { assignedToId: session.user.id } : {}),
+        screenExtras: extras as object,
         createdById: session.user.id,
       },
-      include: {
-        client: true,
-        assignedTo: true,
-      }
+      include: OPPORTUNITY_INCLUDE,
     })
     void broadcastOpportunities()
-    return NextResponse.json(opportunity, { status: 201 })
+    return NextResponse.json(normalizeOpportunityForClient(opportunity), { status: 201 })
   })
 }

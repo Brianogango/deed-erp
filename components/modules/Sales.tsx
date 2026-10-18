@@ -438,6 +438,8 @@ function SalesContent() {
   const [newOptionalProducts, setNewOptionalProducts] = useState<OptionalProductDraft[]>([])
   const [newQuoteAttachments, setNewQuoteAttachments] = useState<File[]>([])
   const [newCustomerRef, setNewCustomerRef] = useState('')
+  /** Set when the quotation is started from a CRM deal; the server links them. */
+  const [newOpportunityId, setNewOpportunityId] = useState('')
   const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
   const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -1054,7 +1056,7 @@ function SalesContent() {
   }
   const openNewForm = () => {
     setNewCustomer(null); setNewDeliveryDate(''); setNewValidUntil('')
-    setNewNotes(''); setNewCustomerRef('')
+    setNewNotes(''); setNewCustomerRef(''); setNewOpportunityId('')
     setNewInvoiceAddress(''); setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setNewPricelist('')
@@ -1086,8 +1088,12 @@ function SalesContent() {
     )
     setNewDeliveryDate('')
     setNewValidUntil('')
-    setNewNotes(opportunityId ? `CRM opportunity ${opportunityId}` : '')
-    setNewCustomerRef(opportunityId ? `OPP:${opportunityId.slice(0, 8)}` : '')
+    // The deal travels as a real link now. It used to be written into the
+    // notes and the customer's PO number field, which then printed on the
+    // quotation and the invoice.
+    setNewNotes('')
+    setNewCustomerRef('')
+    setNewOpportunityId(opportunityId)
     setNewInvoiceAddress('')
     setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -1654,6 +1660,7 @@ function SalesContent() {
       ...(newTermsAndConditions ? { termsAndConditions: newTermsAndConditions.trim() } : {}),
       ...(newOptionalProducts.length ? { optionalProducts: newOptionalProducts.map(item => ({ ...item, qty: Number(item.qty) })) } : {}),
       ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
+      ...(newOpportunityId ? { opportunityId: newOpportunityId } : {}),
       ...(newInvoiceAddress ? { invoiceAddress: newInvoiceAddress } : {}),
       ...(newDeliveryAddress ? { deliveryAddress: newDeliveryAddress } : {}),
     })
@@ -1695,6 +1702,7 @@ function SalesContent() {
     setNewOptionalProducts([])
     setNewQuoteAttachments([])
     setNewCustomerRef('')
+    setNewOpportunityId('')
     setNewInvoiceAddress('')
     setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })

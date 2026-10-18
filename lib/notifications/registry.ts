@@ -32,6 +32,11 @@ const POLICY = (
 export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   // ── CRM & Sales ──────────────────────────────────────────────────────────
   'crm.lead.created': POLICY(['in_app', 'push'], 'attention'),
+  'crm.lead.assigned': POLICY(['in_app', 'push'], 'attention'),
+  /** A lead's follow-up date has come, or a new lead has had no contact for a day. */
+  'crm.lead.follow_up_due': POLICY(['in_app', 'push'], 'warning', { cooldownHours: 24 }),
+  /** A call / meeting / task scheduled on a deal is due or overdue. */
+  'crm.activity.due': POLICY(['in_app', 'push'], 'warning', { cooldownHours: 24 }),
   'crm.opportunity.stale': POLICY(['in_app'], 'warning', { cooldownHours: 72 }),
   'crm.opportunity.close_due': POLICY(['in_app', 'push'], 'warning', { cooldownHours: 24 }),
   'sales.quote.approval_required': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 120 }),

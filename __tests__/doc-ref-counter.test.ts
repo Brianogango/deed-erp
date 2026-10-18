@@ -30,6 +30,7 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   outsource_payment: 'OPAY',
   rider_pay: 'RWP',
   expense: 'EXP',
+  opportunity: 'OPP',
   kilimall_order: 'KO',
   kilimall_dispatch: 'KD',
   kilimall_settlement: 'KS',
@@ -66,6 +67,7 @@ describe('prefixToKind()', () => {
     expect(prefixToKind('OPAY')).toBe('outsource_payment')
     expect(prefixToKind('RWP')).toBe('rider_pay')
     expect(prefixToKind('EXP')).toBe('expense')
+    expect(prefixToKind('OPP')).toBe('opportunity')
     expect(prefixToKind('KO')).toBe('kilimall_order')
     expect(prefixToKind('KD')).toBe('kilimall_dispatch')
     expect(prefixToKind('KS')).toBe('kilimall_settlement')

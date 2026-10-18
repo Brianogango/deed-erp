@@ -49,7 +49,7 @@ export function buildInboundLeadNotifyContent(input: InboundLeadNotifyInput): {
   text: string
 } {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
-  const leadPath = `${appUrl}/crm?tab=leads`
+  const leadPath = `${appUrl}/crm?crmTab=leads`
   const subjectBit = input.subject ? ` — ${input.subject}` : ''
   const subject = `New sales@ lead: ${input.leadName}${subjectBit}`.slice(0, 180)
 

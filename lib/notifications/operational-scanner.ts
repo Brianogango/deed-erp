@@ -149,7 +149,9 @@ async function publishDigest(input: {
 async function scanCrm() {
   const current = now()
   const opportunities = await prisma.opportunity.findMany({
-    where: { stage: { notIn: ['won', 'lost', 'closed', 'cancelled'] } },
+    // The CRM stores closed deals as closed_won / closed_lost: the old list
+    // missed both, so won and lost deals were nagged as "needs follow-up".
+    where: { stage: { notIn: ['won', 'lost', 'closed', 'cancelled', 'closed_won', 'closed_lost', 'on_hold'] } },
     select: {
       id: true, name: true, stage: true, closeDate: true, updatedAt: true,
       assignedToId: true, createdById: true,
@@ -170,7 +172,7 @@ async function scanCrm() {
         userIds: users,
         title: `Opportunity needs follow-up: ${opp.name}`,
         body: `No update has been recorded on this opportunity for at least 7 days.`,
-        actionUrl: `/crm?opportunity=${opp.id}`,
+        actionUrl: `/crm?crmTab=pipeline&id=${opp.id}`,
         idempotencyKey: '',
         stateVersion: opp.updatedAt,
       })) emitted++
@@ -184,7 +186,7 @@ async function scanCrm() {
         userIds: users,
         title: `Opportunity close date approaching: ${opp.name}`,
         body: `Expected close date is ${dateOnly(opp.closeDate)}.`,
-        actionUrl: `/crm?opportunity=${opp.id}`,
+        actionUrl: `/crm?crmTab=pipeline&id=${opp.id}`,
         idempotencyKey: '',
         stateVersion: opp.closeDate,
       })) emitted++
@@ -192,6 +194,71 @@ async function scanCrm() {
   }
   await resolveInactive('crm.opportunity.stale', 'opportunity', staleIds)
   await resolveInactive('crm.opportunity.close_due', 'opportunity', closeIds)
+
+  // Leads: a follow-up date that has come, or a new lead nobody has
+  // contacted within a day. Leads had no reminder of any kind, so they went
+  // cold between arriving and being converted.
+  const leads = await prisma.lead.findMany({
+    where: {
+      stage: { notIn: ['converted', 'lost'] },
+      OR: [
+        { nextFollowUpAt: { lte: current } },
+        { nextFollowUpAt: null, lastContactedAt: null, createdAt: { lte: minusDays(current, 1) } },
+      ],
+    },
+    select: { id: true, name: true, companyName: true, ownerId: true, nextFollowUpAt: true, createdAt: true },
+  })
+  const dueLeadIds: string[] = []
+  for (const lead of leads) {
+    dueLeadIds.push(lead.id)
+    const firstContact = !lead.nextFollowUpAt
+    if (await publishCondition({
+      eventType: 'crm.lead.follow_up_due',
+      entityType: 'lead',
+      entityId: lead.id,
+      // Nobody owns it: the directors decide who does.
+      ...(lead.ownerId ? { userIds: [lead.ownerId] } : { roles: ['director'] }),
+      title: firstContact ? `New lead not contacted yet: ${lead.name}` : `Follow up today: ${lead.name}`,
+      body: firstContact
+        ? `${lead.companyName ? `${lead.companyName} · ` : ''}arrived ${dateOnly(lead.createdAt)} and has had no call, email or message logged.`
+        : `${lead.companyName ? `${lead.companyName} · ` : ''}follow-up was due ${dateOnly(lead.nextFollowUpAt!)}.`,
+      actionUrl: `/crm?crmTab=leads&leadId=${lead.id}`,
+      idempotencyKey: '',
+      stateVersion: lead.nextFollowUpAt ?? lead.createdAt,
+    })) emitted++
+  }
+  await resolveInactive('crm.lead.follow_up_due', 'lead', dueLeadIds)
+
+  // Deal activities scheduled for today or earlier and not done.
+  const endOfToday = new Date(current)
+  endOfToday.setHours(23, 59, 59, 999)
+  const activities = await prisma.opportunityActivity.findMany({
+    where: { scheduledAt: { lte: endOfToday } },
+    select: {
+      id: true, type: true, description: true, scheduledAt: true, screenExtras: true, createdById: true,
+      opportunity: { select: { id: true, name: true, stage: true, assignedToId: true } },
+    },
+  })
+  const dueActivityIds: string[] = []
+  for (const a of activities) {
+    const extras = (a.screenExtras ?? {}) as { status?: string; subject?: string }
+    if (extras.status === 'completed' || extras.status === 'cancelled') continue
+    if (['closed_won', 'closed_lost', 'won', 'lost'].includes(a.opportunity.stage)) continue
+    dueActivityIds.push(a.id)
+    const subject = extras.subject || a.description || a.type
+    if (await publishCondition({
+      eventType: 'crm.activity.due',
+      entityType: 'opportunity_activity',
+      entityId: a.id,
+      userIds: [a.opportunity.assignedToId, a.createdById].filter(Boolean) as string[],
+      title: `${a.type === 'call' ? 'Call' : a.type === 'meeting' ? 'Meeting' : 'Follow-up'} due: ${a.opportunity.name}`,
+      body: `${subject} — scheduled ${dateOnly(a.scheduledAt!)}.`,
+      actionUrl: `/crm?crmTab=pipeline&id=${a.opportunity.id}`,
+      idempotencyKey: '',
+      stateVersion: a.scheduledAt,
+    })) emitted++
+  }
+  await resolveInactive('crm.activity.due', 'opportunity_activity', dueActivityIds)
 
   // `pending_approval` on a quote is how a quotation SENT TO THE CLIENT is
   // stored (the quotes API maps sent → pending_approval) — it waits for the

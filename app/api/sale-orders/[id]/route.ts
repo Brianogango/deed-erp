@@ -1,3 +1,4 @@
+import { dealWon } from '@/lib/crm/deal-progress.server'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
@@ -115,6 +116,7 @@ async function buildSaleOrderUpdateData(body: any, existing: any) {
   if (body.confirmedById !== undefined) data.confirmedById = optionalUuid(body.confirmedById) ?? null
   if (body.locked !== undefined) data.locked = Boolean(body.locked)
   if (body.customerRef !== undefined) data.customerRef = body.customerRef ?? null
+  if (body.opportunityId !== undefined) data.opportunityId = optionalUuid(body.opportunityId) ?? null
   if (body.invoiceAddress !== undefined) data.invoiceAddress = body.invoiceAddress ?? null
   if (body.deliveryAddress !== undefined) data.deliveryAddress = body.deliveryAddress ?? null
   if (body.amountPaid !== undefined) data.amountPaid = Number(body.amountPaid ?? 0)
@@ -602,6 +604,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // the status flip was persisted).
     try {
       if (confirming) {
+        // The deal this quotation came from is won at the order's value.
+        await dealWon(String(data.opportunityId ?? existing.opportunityId ?? '') || null, {
+          id: existing.id,
+          orderNumber: existing.orderNumber,
+          totalAmount: data.totalAmount ?? existing.totalAmount,
+        })
         await writeFinancialAudit({
           userId: session.user.id,
           action: 'confirm_sale_order',

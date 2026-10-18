@@ -432,6 +432,10 @@ interface Opportunity {
   companyName?: string
   contactPersonId?: string
   contactPersonName?: string
+  contactEmail?: string
+  contactPhone?: string
+  /** The lead this deal was converted from. */
+  leadId?: string
   assignedToId?: string
   ownerId?: string
   ownerName?: string
@@ -449,8 +453,11 @@ interface Opportunity {
   notes?: string
   tags?: string[]
   quoteIds?: string[]
+  /** Quotations / sale orders raised from this deal. */
+  saleOrderIds?: string[]
   lostReason?: string
   lostToCompetitor?: string
+  wonReason?: string
   createdAt: string
   createdDate?: string
   lastActivityDate?: string
@@ -1222,6 +1229,8 @@ export interface SaleOrder {
   // Lock Confirmed Sales — commercial fields frozen until unlocked
   locked?: boolean
   customerRef?: string
+  /** The CRM deal this quotation came from. */
+  opportunityId?: string
   invoiceAddress?: string
   deliveryAddress?: string
   lines: any[]
@@ -3714,7 +3723,7 @@ interface AppState {
   releaseSerialToStock: (serialId: string, destination?: LocationId) => boolean
 
   // Sale Orders
-  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam' | 'discountAmount' | 'termsAndConditions' | 'optionalProducts'>>) => SaleOrder | Promise<SaleOrder>
+  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'opportunityId' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam' | 'discountAmount' | 'termsAndConditions' | 'optionalProducts'>>) => SaleOrder | Promise<SaleOrder>
   updateSaleOrder: (
     id: string,
     p: Partial<SaleOrder>,
@@ -10763,16 +10772,27 @@ const storeCtx: AppState = {
       const opportunity: Opportunity = {
         ...opp,
         id: uid(),
-        ref: seq('OPP', 'opp'),
+        // Provisional: the server issues OPP/NNNN and the answer replaces it.
+        // It used to come from this browser's own counter (duplicates).
+        ref: allocateDocNumberSync('OPP'),
         createdDate: now(),
         quoteIds: [],
         actualValue: 0,
         leadScore,
+        contactEmail: contact?.email,
+        contactPhone: contact?.phone || contact?.mobile,
+        ownerId: opp.ownerId ?? user?.id,
+        assignedToId: opp.assignedToId ?? opp.ownerId ?? user?.id,
       }
       setOpportunities(p => [opportunity, ...p])
-      addAuditLog('create_opportunity', opportunity.ref, `Opportunity ${opportunity.name} created`)
-      showToast(`Opportunity ${opportunity.ref} created`)
-      sync('/api/opportunities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opportunity) })
+      addAuditLog('create_opportunity', opportunity.name, `Opportunity ${opportunity.name} created`)
+      showToast('Opportunity created')
+      void sync('/api/opportunities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opportunity) })
+        .then(async res => {
+          if (!res || !res.ok) return
+          const saved = await res.json().catch(() => null)
+          if (saved?.id) storeCtxRef.current?.ingestOpportunity(saved)
+        })
       return opportunity
     },
     ingestOpportunity: (raw) => {
@@ -12234,6 +12254,7 @@ const storeCtx: AppState = {
         termsAndConditions: initial.termsAndConditions,
         optionalProducts: initial.optionalProducts ?? [],
         customerRef: initial.customerRef,
+        opportunityId: initial.opportunityId,
         invoiceAddress: initial.invoiceAddress,
         deliveryAddress: initial.deliveryAddress,
         pricelist: initial.pricelist || 'RETAIL',
