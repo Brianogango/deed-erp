@@ -75,6 +75,7 @@ export const userUpdateSchema = z.object({
   modules: z.array(z.string()).optional(),
   active: z.boolean().optional(),
   actsAsTechnician: z.boolean().optional(),
+  accessRoleId: z.string().min(1).max(80).nullable().optional(),
   password: z.string()
     .min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
     .refine(value => !REQUIRE_PASSWORD_UPPERCASE || /[A-Z]/.test(value), 'Password must contain an uppercase letter')

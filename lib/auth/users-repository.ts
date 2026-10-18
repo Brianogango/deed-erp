@@ -4,6 +4,8 @@ import { sql } from './db'
 import type { AuthUserRecord, CreateUserInput, PublicUser, UpdateUserInput } from './types'
 import { invalidateUserSessions } from './session-validity'
 import { PASSWORD_HISTORY_COUNT } from './password-policy'
+import { effectivePermissions, type AccessRole } from './access-roles'
+import { ensureAccessRoleStore, getAccessRoleMap } from './access-roles.server'
 
 // Row type matches the live PostgreSQL schema which has BOTH Prisma-managed
 // columns (is_active, must_reset_pw) AND legacy app columns (active, must_change_password).
@@ -28,6 +30,7 @@ type UserRow = {
   email?: string | null
   acts_as_technician?: boolean | number | null
   session_version?: number | null
+  access_role_id?: string | null
 }
 
 const normalizeStoredRole = (role: string): AuthUserRecord['role'] => {
@@ -70,7 +73,29 @@ const parseModulesJson = (value: any): AuthUserRecord['modules'] => {
   return []
 }
 
-const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] } => ({
+const toAuthUser = (row: UserRow, roles?: Map<string, AccessRole>): AuthUserRecord & { passwordHistory: string[] } =>
+  withAccessRole(toBaseAuthUser(row), row.access_role_id ?? null, roles)
+
+/**
+ * A person on a custom role gets that role's base role, modules and permission
+ * list — read live, so editing the role changes everyone on it. If the role is
+ * gone, the person keeps what is stored for them (as a built-in role).
+ */
+const withAccessRole = <T extends AuthUserRecord>(user: T, accessRoleId: string | null, roles?: Map<string, AccessRole>): T => {
+  if (!accessRoleId) return { ...user, accessRoleId: null }
+  const role = roles?.get(accessRoleId)
+  if (!role) return { ...user, accessRoleId }
+  return {
+    ...user,
+    accessRoleId,
+    role: role.baseRole,
+    modules: [...role.modules],
+    permissions: effectivePermissions(role.modules, role.permissions),
+    accessRole: { id: role.id, name: role.name },
+  }
+}
+
+const toBaseAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] } => ({
   id: row.id,
   username: row.username,
   name: row.name || '',
@@ -104,6 +129,8 @@ const toPublicUser = (user: AuthUserRecord): PublicUser => ({
   employeeId: user.employeeId ?? null,
   email: user.email ?? null,
   actsAsTechnician: Boolean(user.actsAsTechnician),
+  ...(user.permissions ? { permissions: [...user.permissions] } : {}),
+  ...(user.accessRole ? { accessRole: { ...user.accessRole } } : {}),
 })
 
 const uid = () => require("crypto").randomUUID()
@@ -220,6 +247,7 @@ const ensureUserStore = async () => {
   await migrateActsAsTechnician()
   await migrateSessionVersion()
   await migrateRoles()
+  await ensureAccessRoleStore()
 }
 
 export const listAuthUsers = async () => {
@@ -231,12 +259,13 @@ export const listAuthUsers = async () => {
            active, must_change_password,
            created_at, password_hash, password_history_json,
            failed_login_attempts, locked_until,
-           employee_id, email, acts_as_technician, session_version
+           employee_id, email, acts_as_technician, session_version, access_role_id
     FROM users
     ORDER BY created_at DESC, username ASC
   `
 
-  return rows.map(r => toAuthUser(r as UserRow))
+  const roles = await getAccessRoleMap()
+  return rows.map(r => toAuthUser(r as UserRow, roles))
 }
 
 export const listPublicUsers = async () => {
@@ -253,12 +282,12 @@ export const findAuthUserById = async (id: string) => {
            active, must_change_password,
            created_at, password_hash, password_history_json,
            failed_login_attempts, locked_until,
-           employee_id, email, acts_as_technician, session_version
+           employee_id, email, acts_as_technician, session_version, access_role_id
     FROM users
     WHERE id = ${id}
   `
 
-  return rows.length ? toAuthUser(rows[0] as unknown as UserRow) : null
+  return rows.length ? toAuthUser(rows[0] as unknown as UserRow, await getAccessRoleMap()) : null
 }
 
 export const findAuthUserByUsername = async (username: string) => {
@@ -270,12 +299,12 @@ export const findAuthUserByUsername = async (username: string) => {
            active, must_change_password,
            created_at, password_hash, password_history_json,
            failed_login_attempts, locked_until,
-           employee_id, email, acts_as_technician, session_version
+           employee_id, email, acts_as_technician, session_version, access_role_id
     FROM users
     WHERE lower(username) = lower(${username})
   `
 
-  return rows.length ? toAuthUser(rows[0] as unknown as UserRow) : null
+  return rows.length ? toAuthUser(rows[0] as unknown as UserRow, await getAccessRoleMap()) : null
 }
 
 export const createAuthUser = async (input: CreateUserInput, passwordHash: string) => {
@@ -283,12 +312,15 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
   const username = input.username?.trim()
   const name = input.name?.trim()
   if (!username || !name) throw Object.assign(new Error('Generated username and name are required before saving the user'), { status: 400 })
+  const customRole = input.accessRoleId ? (await getAccessRoleMap()).get(input.accessRoleId) : undefined
+  if (input.accessRoleId && !customRole) throw Object.assign(new Error('That role no longer exists'), { status: 400 })
   const user: AuthUserRecord = {
     id: uid(),
     username,
     name,
-    role: normalizeStoredRole(input.role),
-    modules: [...input.modules],
+    role: customRole ? customRole.baseRole : normalizeStoredRole(input.role),
+    modules: customRole ? [...customRole.modules] : [...input.modules],
+    accessRoleId: customRole?.id ?? null,
     active: input.active ?? true,
     createdAt: now(),
     passwordHash,
@@ -311,7 +343,7 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
       active, must_change_password,
       created_at, updated_at,
       password_hash, password_history_json,
-      employee_id, email, acts_as_technician, session_version
+      employee_id, email, acts_as_technician, session_version, access_role_id
     )
     VALUES (
       ${user.id}, ${user.username}, ${user.name}, ${user.role},
@@ -320,10 +352,10 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
       ${user.active ? 1 : 0}, ${user.mustChangePassword ? 1 : 0},
       ${user.createdAt}, ${nowTs},
       ${user.passwordHash}, ${historyJson},
-      ${user.employeeId}, ${user.email}, ${user.actsAsTechnician ?? false}, ${user.sessionVersion}
+      ${user.employeeId}, ${user.email}, ${user.actsAsTechnician ?? false}, ${user.sessionVersion}, ${user.accessRoleId ?? null}
     )
   `
-  return user
+  return withAccessRole(user, user.accessRoleId ?? null, await getAccessRoleMap())
 }
 
 export const updateAuthUser = async (id: string, input: UpdateUserInput, passwordHash?: string) => {
@@ -339,12 +371,25 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     historyJson = JSON.stringify([passwordHash, ...history].slice(0, PASSWORD_HISTORY_COUNT)) // Keep the configured password history
   }
 
+  // Moving a person onto a custom role (or off it) is explicit; editing other
+  // fields leaves the assignment as it is.
+  let nextAccessRoleId = existingUser.accessRoleId ?? null
+  let roleFromAssignment: AccessRole | undefined
+  if (input.accessRoleId !== undefined) {
+    nextAccessRoleId = input.accessRoleId || null
+    if (nextAccessRoleId) {
+      roleFromAssignment = (await getAccessRoleMap()).get(nextAccessRoleId)
+      if (!roleFromAssignment) throw Object.assign(new Error('That role no longer exists'), { status: 400 })
+    }
+  }
+
   const nextUser: AuthUserRecord = {
     ...existingUser,
+    accessRoleId: nextAccessRoleId,
     username: input.username ?? existingUser.username,
     name: input.name ?? existingUser.name,
-    role: normalizeStoredRole(input.role ?? existingUser.role),
-    modules: input.modules ? [...input.modules] : existingUser.modules,
+    role: roleFromAssignment ? roleFromAssignment.baseRole : normalizeStoredRole(input.role ?? existingUser.role),
+    modules: roleFromAssignment ? [...roleFromAssignment.modules] : input.modules ? [...input.modules] : existingUser.modules,
     active: input.active ?? existingUser.active,
     passwordHash: passwordHash ?? existingUser.passwordHash,
     sessionVersion: passwordWillChange ? Math.max(1, existingUser.sessionVersion) + 1 : Math.max(1, existingUser.sessionVersion),
@@ -374,6 +419,7 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
         email                = ${nextUser.email ?? null},
         acts_as_technician   = ${nextUser.actsAsTechnician ?? false},
         session_version      = ${nextUser.sessionVersion},
+        access_role_id       = ${nextUser.accessRoleId ?? null},
         updated_at           = ${nowTs}
     WHERE id = ${id}
   `
@@ -390,6 +436,7 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     })
   } else if (
     nextUser.role !== existingUser.role ||
+    (nextUser.accessRoleId ?? null) !== (existingUser.accessRoleId ?? null) ||
     nextUser.active !== existingUser.active ||
     Boolean(nextUser.actsAsTechnician) !== Boolean(existingUser.actsAsTechnician)
   ) {
@@ -400,7 +447,10 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     })
   }
 
-  return nextUser
+  // Re-derive the role-based fields from the role the person is on now, not the
+  // one they were on before this change.
+  const { permissions: _stalePermissions, accessRole: _staleRole, ...fresh } = nextUser
+  return withAccessRole(fresh as AuthUserRecord, nextUser.accessRoleId ?? null, await getAccessRoleMap())
 }
 
 // ─── Hard delete ─────────────────────────────────────────────────────────────

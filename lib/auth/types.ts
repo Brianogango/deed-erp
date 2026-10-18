@@ -58,9 +58,18 @@ export interface PublicUser {
   email?: string | null
   /** Opt-in: non-technician roles (e.g. kilimall) may be assigned repair jobs. */
   actsAsTechnician?: boolean
+  /**
+   * Set when the person is on a custom role. `role` is then that role's base
+   * role and `modules` the role's modules; `permissions` is the exact list the
+   * role holds. Absent for built-in roles, whose rights are the role rules.
+   */
+  accessRole?: { id: string; name: string } | null
+  permissions?: string[]
 }
 
 export interface AuthUserRecord extends PublicUser {
+  /** Id of the custom role the person is on, or null for a built-in role. */
+  accessRoleId?: string | null
   passwordHash: string
   sessionVersion: number
   /** Recent password hashes (newest first), used to block reuse. */
@@ -80,6 +89,7 @@ export interface CreateUserInput {
   mustChangePassword?: boolean
   email?: string | null
   actsAsTechnician?: boolean
+  accessRoleId?: string | null
 }
 
 export interface UpdateUserInput {
@@ -94,6 +104,8 @@ export interface UpdateUserInput {
   employeeId?: string | null
   email?: string | null
   actsAsTechnician?: boolean
+  /** Put the person on a custom role (id), or back on a built-in role (null). */
+  accessRoleId?: string | null
 }
 
 export interface SessionPayload {

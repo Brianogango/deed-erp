@@ -93,6 +93,7 @@ import PartnerLedgerTab from './accounting/PartnerLedgerTab'
 import CustomerCreditsTab from './accounting/CustomerCreditsTab'
 import RefundsTab from './accounting/RefundsTab'
 import Cheques from '@/components/finance/Cheques'
+import { userCan } from '@/lib/auth/can'
 import CommissionsTab from './accounting/CommissionsTab'
 import AgeingTab from './accounting/AgeingTab'
 import IntegrityDashboard from './accounting/IntegrityDashboard'
@@ -690,7 +691,18 @@ function AccountingContent() {
   const canManageFullFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   // The Admin Officer adds agents and adds/cancels commission bills (no payouts or payout settings).
   const canAddAgentCommission = canManageFullFinance || currentUser?.role === 'admin_officer'
-  const canSeeCheques = canAddAgentCommission
+  // A person on a custom role sees exactly the Finance parts their role lists;
+  // everyone else keeps the screens their built-in role has always had.
+  const customPermissions = Array.isArray(currentUser?.permissions)
+  const canSeeFinancePart = (tabId: string) =>
+    !customPermissions || userCan(currentUser, tabId === 'cheques' ? 'accounting.cheques.view' : `accounting.${tabId}`)
+  useEffect(() => {
+    if (!customPermissions || canSeeFinancePart(tab)) return
+    const first = Object.values(FINANCE_SECTION_TABS).flat().find(t => canSeeFinancePart(t.id))
+    if (first) setTab(first.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, customPermissions, currentUser?.permissions])
+  const canSeeCheques = customPermissions ? canSeeFinancePart('cheques') : canAddAgentCommission
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
   // Operating-expense accounts (6xxx) a bill line can be booked to.
@@ -1551,11 +1563,11 @@ function AccountingContent() {
 
         <div className="border-b border-border-lt bg-card">
           <TabBar
-            tabs={FINANCE_SECTIONS.map(section => ({ id: section.id, label: section.label }))}
+            tabs={FINANCE_SECTIONS.filter(section => FINANCE_SECTION_TABS[section.id].some(t => canSeeFinancePart(t.id))).map(section => ({ id: section.id, label: section.label }))}
             active={FINANCE_TAB_SECTION[tab] || 'overview'}
             onChange={id => {
               const section = FINANCE_SECTIONS.find(item => item.id === id)
-              if (section) setTab(section.defaultTab)
+              if (section) setTab(FINANCE_SECTION_TABS[section.id].find(t => canSeeFinancePart(t.id))?.id ?? section.defaultTab)
             }}
             maxVisibleMobile={3}
             maxVisibleTablet={6}
@@ -1565,7 +1577,7 @@ function AccountingContent() {
           {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && (
             <div className="px-3 pb-2">
               <TabBar
-                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => (t.id !== 'agent_commissions' || canAddAgentCommission) && (t.id !== 'cheques' || canSeeCheques))}
+                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => (t.id !== 'agent_commissions' || canAddAgentCommission) && (t.id !== 'cheques' || canSeeCheques) && canSeeFinancePart(t.id))}
                 active={tab}
                 onChange={id => setTab(id as MainTab)}
                 className="border-0 bg-transparent px-0 py-0"

@@ -12,6 +12,7 @@ import {
   inventoryCategoryFilterOptions,
   resolveProductCreationCategoryOptions,
 } from '@/lib/product-categories'
+import { userCan } from '@/lib/auth/can'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { PrimaryActionButton, SecondaryActionMenu, TablePageLayout, OperationalSummary, CompactInfoNotice, StatusBadge } from '@/components/erp'
@@ -737,6 +738,16 @@ function InventoryContent() {
     })), [stockMoves, products])
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
+  // A person on a custom role sees only the Inventory parts their role lists.
+  const customPermissions = Array.isArray(currentUser?.permissions)
+  const tabPart = (value: string) => value === 'product_catalog' ? 'catalog' : value === 'warehouse_view' ? 'warehouse' : value === 'checkouts' ? 'stock_out' : value
+  const tabAllowed = (value: string) => !customPermissions || userCan(currentUser, `inventory.${tabPart(value)}`)
+  useEffect(() => {
+    if (!customPermissions || tabAllowed(tab)) return
+    const first = ['product_catalog', 'product_master', 'warehouse_view', 'parts_requests', 'movements', 'stock_take', 'transfers', 'reports', 'opening_stock', 'stock_in', 'stock_out', 'adjustments'].find(tabAllowed)
+    if (first) setTab(first as MainTab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, customPermissions, currentUser?.permissions])
   const canTransfer = !!currentUser && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser.role)
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
   const canRequestAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(currentUser.role)
@@ -1709,6 +1720,7 @@ function InventoryContent() {
           .filter(([value]) => (value !== 'stock_in' && value !== 'stock_out') || canEditStock)
           .filter(([value]) => value !== 'adjustments' || canRequestAdj)
           .filter(([value]) => value !== 'checkouts' || canRequestAdj)
+          .filter(([value]) => tabAllowed(value))
           .filter(([value]) => value !== 'stock_take' || canRequestAdj)
           .map(([id, label]) => ({ id, label }))}
         active={tab}

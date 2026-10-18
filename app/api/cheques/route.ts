@@ -7,10 +7,10 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { requireCan, withApiErrorHandling } from '@/lib/auth/api'
 import { putObject } from '@/lib/infra/object-store'
 import { logRejectedUpload, validateFileContent } from '@/lib/file-validation'
-import { CHEQUE_ROLES, validateChequeInput, type ChequeDirection } from '@/lib/cheques/cheque-rules'
+import { validateChequeInput, type ChequeDirection } from '@/lib/cheques/cheque-rules'
 import {
   CHEQUE_IMAGE_BUCKET,
   CHEQUE_IMAGE_MAX_BYTES,
@@ -23,13 +23,12 @@ import {
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-const ROLES = [...CHEQUE_ROLES]
 const text = (value: unknown, max: number) => String(value ?? '').trim().slice(0, max)
 const dateOrNull = (value: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(value ?? '')) ? new Date(`${value}T00:00:00Z`) : null)
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requireCan('accounting.cheques.view')
     const rows = await prisma.cheque.findMany({ orderBy: [{ chequeDate: 'desc' }, { createdAt: 'desc' }], take: 2000 })
     const today = nairobiToday()
     return NextResponse.json({ today, cheques: rows.map(row => toChequeDto(row, today)) })
@@ -38,7 +37,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole(ROLES)
+    const user = await requireCan('accounting.cheques.manage')
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const direction = body.direction as ChequeDirection
     const chequeNumber = text(body.chequeNumber, 40)

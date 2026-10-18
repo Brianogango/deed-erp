@@ -10,6 +10,9 @@ const ACTION_LABEL: Record<string, string> = {
   'user.deactivated': 'Deactivated',
   'user.reactivated': 'Reactivated',
   'user.deleted': 'Deleted',
+  'role.created': 'Created role',
+  'role.updated': 'Changed role',
+  'role.deleted': 'Deleted role',
 }
 
 /** Who changed whose role, modules or status — Directors only. Loads when opened. */
