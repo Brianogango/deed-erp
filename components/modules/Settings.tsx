@@ -9,6 +9,8 @@ import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Selec
 import { ModuleChrome } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
+import { modulesOutsideRole, roleDefaultModules } from '@/lib/auth/access-control'
+import AccessHistory from '@/components/settings/AccessHistory'
 import { formatModuleLabel, formatRoleLabel, isAdmin, normalizeClientRole } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 import {
@@ -891,22 +893,29 @@ export default function Settings() {
                 <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest mb-4">Role Capabilities</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { role: 'Director',          color: '#fff',     bg: 'var(--navy)', border: 'var(--navy)', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
-                    { role: 'Admin Officer',     color: 'var(--navy)', bg: 'var(--info-bg)', border: '#C7D2FE', desc: 'Process, master-data, workflow control, invoicing, quotations, sales orders, customer records, and purchases.' },
-                    { role: 'Finance Officer',   color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, reports, CRM, quotations, sales orders, settlements, purchases, and workflow control.' },
-                    { role: 'Inventory Officer', color: '#C2410C', bg: '#FFF7ED', border: '#FED7AA', desc: 'Physical stock control — receives goods, transfers, counts. No accounting.' },
-                    { role: 'Kilimall Officer',  color: '#7E22CE', bg: '#FDF4FF', border: '#E9D5FF', desc: 'Processes Kilimall orders, allocates stock, manages returns and settlement uploads.' },
-                    { role: 'Sales Rep',         color: 'var(--success)', bg: '#ECFDF5', border: '#A7F3D0', desc: 'CRM, quotations, sales orders, customer records. No purchasing or stock edits.' },
-                    { role: 'Technical Lead',    color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', desc: 'Assigns repair jobs, QA sign-off, refurbishment oversight. No accounting.' },
-                    { role: 'Technician',        color: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE', desc: 'Works on assigned repair jobs only. Diagnosis, parts request, status updates.' },
+                    { id: 'director', role: 'Director',          color: '#fff',     bg: 'var(--navy)', border: 'var(--navy)', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
+                    { id: 'admin_officer', role: 'Admin Officer',     color: 'var(--navy)', bg: 'var(--info-bg)', border: '#C7D2FE', desc: 'Process, master-data, workflow control, invoicing, quotations, sales orders, customer records, and purchases.' },
+                    { id: 'finance_officer', role: 'Finance Officer',   color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, reports, CRM, quotations, sales orders, settlements, purchases, and workflow control.' },
+                    { id: 'inventory_officer', role: 'Inventory Officer', color: '#C2410C', bg: '#FFF7ED', border: '#FED7AA', desc: 'Physical stock control — receives goods, transfers, counts. No accounting.' },
+                    { id: 'kilimall_officer', role: 'Kilimall Officer',  color: '#7E22CE', bg: '#FDF4FF', border: '#E9D5FF', desc: 'Processes Kilimall orders, allocates stock, manages returns and settlement uploads.' },
+                    { id: 'sales_rep', role: 'Sales Rep',         color: 'var(--success)', bg: '#ECFDF5', border: '#A7F3D0', desc: 'CRM, quotations, sales orders, customer records. No purchasing or stock edits.' },
+                    { id: 'technical_lead', role: 'Technical Lead',    color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', desc: 'Assigns repair jobs, QA sign-off, refurbishment oversight. No accounting.' },
+                    { id: 'technician', role: 'Technician',        color: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE', desc: 'Works on assigned repair jobs only. Diagnosis, parts request, status updates.' },
                   ].map(r => (
                     <div key={r.role} className="rounded-xl p-4 border" style={{ background: r.bg, borderColor: r.border }}>
                       <p className="text-[11px] font-bold mb-1.5" style={{ color: r.color }}>{r.role}</p>
                       <p className="text-[11px] text-gray-500 leading-relaxed">{r.desc}</p>
+                      <p className="mt-2 text-[10.5px] text-gray-500 leading-relaxed">
+                        <span className="font-semibold text-gray-600">Opens by default: </span>
+                        {r.id === 'director'
+                          ? 'every module'
+                          : roleDefaultModules(r.id).filter(m => !['dashboard', 'hr', 'sops', 'sop_documents', 'expenses', 'leave', 'my_documents'].includes(m)).map(m => formatModuleLabel(m)).join(', ') || 'only the shared screens'}
+                      </p>
                     </div>
                   ))}
                 </div>
               </div>
+              {normalizedRole === 'director' && <AccessHistory />}
             </div>
           )}
 
@@ -1453,6 +1462,16 @@ export default function Settings() {
                   })}
                 </div>
               </Field>
+              {(() => {
+                const outside = userForm.role ? modulesOutsideRole(userForm.role, userForm.modules) : []
+                if (!outside.length) return null
+                return (
+                  <p className="mt-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }} role="note">
+                    Beyond a {formatRoleLabel(userForm.role)}&apos;s usual access: <strong>{outside.map(m => formatModuleLabel(m)).join(', ')}</strong>.
+                    They will see {outside.length === 1 ? 'this screen' : 'these screens'}, but what they can do there is still decided by their role, so some actions may be refused.
+                  </p>
+                )
+              })()}
             </div>
           </div>
           <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">

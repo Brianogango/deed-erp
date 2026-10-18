@@ -13,7 +13,11 @@ type UserApiResult = {
 }
 
 const parseResponse = async (response: Response): Promise<UserApiResult> => {
-  const payload = (await response.json().catch(() => null)) as UserApiSuccess | { message?: string } | null
+  const raw = (await response.json().catch(() => null)) as (UserApiSuccess & { error?: string }) | null
+  // The API reports failures as { error }. Callers read { message }, so the
+  // reason ("last active Director", "Username already exists") was being lost
+  // behind a generic "Unable to update user".
+  const payload = raw && !raw.message && typeof raw.error === 'string' ? { ...raw, message: raw.error } : raw
 
   return {
     ok: response.ok,

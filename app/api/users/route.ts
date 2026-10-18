@@ -7,6 +7,8 @@ import { normalizeCreateUserInput } from '@/lib/auth/validation'
 import { ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
 import { buildCredentialMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
 import { generateTemporaryPassword } from '@/lib/auth/temporary-credentials'
+import { snapshotAccess } from '@/lib/auth/access-control'
+import { recordAccessChange } from '@/lib/auth/access-audit.server'
 
 const sanitizeUsername = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9_.-]+/g, '.').replace(/^\.+|\.+$/g, '')
 
@@ -119,6 +121,14 @@ export async function POST(request: Request) {
         { status: 503 },
       )
     }
+
+    await recordAccessChange({
+      action: 'user.created',
+      actor,
+      target: { id: user.id, name: user.name, username: user.username },
+      before: null,
+      after: snapshotAccess(user),
+    })
 
     console.log('[users] User created', {
       userId: user.id,
