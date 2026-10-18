@@ -7,6 +7,7 @@ import { findExistingClientForLead, findExistingContactPerson } from '@/lib/crm/
 import { normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
 import { broadcastOpportunities, opportunityRef, OPPORTUNITY_INCLUDE } from '@/lib/opportunity-server'
 import { notifyLeadAssigned } from '@/lib/crm/lead-notify'
+import { canAssignLead, canDeleteLead, canEditLead, canSeeLead } from '@/lib/crm/lead-access'
 import { appendLeadActivity, LEAD_ACTIVITY_TYPES, type LeadActivityType } from '@/lib/crm/lead-activity'
 
 const LEAD_INCLUDE = {
@@ -20,12 +21,12 @@ const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'finance_officer'
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const lead = await prisma.lead.findUnique({
       where: { id: resolvedParams.id },
       include: LEAD_INCLUDE,
     })
-    if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!lead || !canSeeLead(session.user.role, session.user.id, lead)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(lead)
   })
 }
@@ -38,8 +39,28 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const body = await request.json()
+    const current = await prisma.lead.findUnique({ where: { id: resolvedParams.id } })
+    if (!current || !canEditLead(session.user.role, session.user.id, current)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    if (body.ownerId !== undefined && !canAssignLead(session.user.role)) {
+      // A rep may pick up an unassigned lead, nothing more.
+      const pickingUp = !current.ownerId && body.ownerId === session.user.id
+      if (!pickingUp) return NextResponse.json({ error: 'Only a director or admin officer can reassign leads' }, { status: 403 })
+    }
+    if (body.stage === 'converted' && current.stage !== 'converted') {
+      return NextResponse.json({ error: 'Use Convert: it creates the customer and the deal' }, { status: 400 })
+    }
+    if (current.stage === 'converted' && body.stage !== undefined && body.stage !== 'converted') {
+      return NextResponse.json({ error: 'This lead is already a deal — work it from the Pipeline' }, { status: 409 })
+    }
+    if (body.stage === 'lost' && current.stage !== 'lost' && !String(body.lostReason || '').trim()) {
+      return NextResponse.json({ error: 'Say why the lead was lost' }, { status: 400 })
+    }
+    if (body.name !== undefined && !String(body.name).trim()) return NextResponse.json({ error: 'Give the lead a name' }, { status: 400 })
+    if (body.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(body.email).trim())) return NextResponse.json({ error: 'Check the email address' }, { status: 400 })
     const data: Record<string, unknown> = {}
-    if (body.name !== undefined) data.name = String(body.name).trim()
+    if (body.name !== undefined) data.name = String(body.name).trim().slice(0, 200)
     if (body.companyName !== undefined) data.companyName = body.companyName?.trim() || null
     if (body.email !== undefined) data.email = body.email?.trim() || null
     if (body.phone !== undefined) data.phone = body.phone?.trim() || null
@@ -49,10 +70,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.clientId !== undefined) data.clientId = body.clientId
     if (body.notes !== undefined) data.notes = body.notes
     if (body.nextFollowUpAt !== undefined) data.nextFollowUpAt = body.nextFollowUpAt ? new Date(body.nextFollowUpAt) : null
+    if (body.stage === 'lost' && current.stage !== 'lost') {
+      // Why it was lost goes on the record; a lost lead needs no reminder.
+      Object.assign(data, appendLeadActivity(current, {
+        type: 'note',
+        note: `Marked lost: ${String(body.lostReason).trim().slice(0, 1000)}`,
+        byId: session.user.id,
+        byName: session.user.name || session.user.username || 'Staff',
+      }))
+      data.stage = 'lost'
+      data.nextFollowUpAt = null
+    }
 
-    const before = data.ownerId !== undefined
-      ? await prisma.lead.findUnique({ where: { id: resolvedParams.id }, select: { ownerId: true } })
-      : null
+    const before = data.ownerId !== undefined ? current : null
     const lead = await prisma.lead.update({
       where: { id: resolvedParams.id },
       data,
@@ -70,6 +100,11 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     if (!WRITE_ROLES.includes(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+    const lead = await prisma.lead.findUnique({ where: { id: resolvedParams.id } })
+    if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!canDeleteLead(session.user.role, session.user.id, lead)) {
+      return NextResponse.json({ error: 'Only a director or admin officer can delete this lead' }, { status: 403 })
+    }
     await prisma.lead.delete({ where: { id: resolvedParams.id } })
     return NextResponse.json({ ok: true })
   })
@@ -85,6 +120,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const body = await request.json().catch(() => ({}))
+    const target = await prisma.lead.findUnique({ where: { id: resolvedParams.id }, select: { ownerId: true, stage: true } })
+    if (!target || !canEditLead(session.user.role, session.user.id, target)) {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
+    }
     if (body.action === 'log') {
       // A call, email, WhatsApp, meeting or note on the lead, and when to follow up next.
       const type = String(body.type || '') as LeadActivityType

@@ -93,6 +93,11 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     }, session.user.id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+    // A deal that turned into quotations is sales history: mark it lost instead.
+    const orders = await prisma.saleOrder.count({ where: { opportunityId: resolvedParams.id } })
+    if (orders > 0) {
+      return NextResponse.json({ error: `This deal has ${orders} quotation${orders === 1 ? '' : 's'} — mark it lost instead of deleting it` }, { status: 409 })
+    }
     await prisma.opportunity.delete({ where: { id: resolvedParams.id } })
     void broadcastOpportunities()
     return NextResponse.json({ ok: true })

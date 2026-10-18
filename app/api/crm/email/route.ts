@@ -6,6 +6,8 @@ import { notifyStoreKeysChanged } from '@/lib/server-store'
 import { pickMailbox, sendEmail } from '@/lib/integrations/email'
 import { appendLeadActivity } from '@/lib/crm/lead-activity'
 import { crmEmailHtml, crmEmailText } from '@/lib/crm/crm-email'
+import { canEditLead } from '@/lib/crm/lead-access'
+import { canAccessRecord } from '@/lib/auth/authorization'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +55,12 @@ export async function POST(request: Request) {
     if (b.leadId && !lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
     const opp = b.opportunityId ? await prisma.opportunity.findUnique({ where: { id: b.opportunityId } }) : null
     if (b.opportunityId && !opp) return NextResponse.json({ error: 'Deal not found' }, { status: 404 })
+    if (lead && !canEditLead(session.user.role, session.user.id, lead)) {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
+    }
+    if (opp && !canAccessRecord(session.user.role, 'opportunity', { ownerId: opp.createdById, assignedToId: opp.assignedToId }, session.user.id)) {
+      return NextResponse.json({ error: 'Deal not found' }, { status: 404 })
+    }
     // Answering an inbound enquiry: thread under the customer's own message.
     if (lead?.inboundMessageId && lead.inboundMessageId.includes('@')) {
       inReplyTo = lead.inboundMessageId.startsWith('<') ? lead.inboundMessageId : `<${lead.inboundMessageId}>`

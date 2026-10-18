@@ -1178,6 +1178,7 @@ function CRMContent() {
             showToast={showToast}
             salesReps={salesReps}
             currentUserId={currentUserId ?? undefined}
+            canAssign={['director', 'admin_officer'].includes(currentUser?.role ?? '')}
             onConverted={(opportunityId, meta) => {
               // Inject the convert response immediately — waiting on SSE left a blank
               // detail view and made the deal look "missing" for the assignee.

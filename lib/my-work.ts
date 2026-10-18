@@ -42,6 +42,10 @@ export type MyWorkInput = {
   clientExchanges?: Any[]
   donations?: Any[]
   returnOrders?: Any[]
+  /** CRM: the leads this person may see (from /api/leads), deals and their activities. */
+  leads?: Any[]
+  opportunities?: Any[]
+  opportunityActivities?: Any[]
   invoiceHref: (id: string) => string
 }
 
@@ -120,6 +124,54 @@ export function buildMyWork(input: MyWorkInput): WorkQueue[] {
     const toReceive = input.purchaseOrders.filter(p => ['confirmed', 'purchase', 'partial', 'sent'].includes(String(p.status)))
     out.push(queue('po-to-receive', 'Purchase orders to receive', 'Ordered, not fully received', '/purchases',
       toReceive.map(p => ({ id: p.id, title: p.ref, subtitle: `${p.vendorName ?? ''} · ${kes(p.total)}`, href: `/purchases?id=${encodeURIComponent(p.id)}`, ageDays: ageDays(p.expectedDate ?? p.date, now) }))))
+  }
+
+  // ── CRM ───────────────────────────────────────────────────────────────
+  if (is('sales_rep', 'admin_officer')) {
+    const today = now.toISOString().slice(0, 10)
+    const mine = (ownerId: unknown) => role !== 'sales_rep' ? true : ownerId === input.userId
+    const leads = (input.leads ?? []).filter(l =>
+      !['converted', 'lost'].includes(String(l.stage))
+      && (role === 'sales_rep' ? (l.ownerId === input.userId || !l.ownerId) : true)
+      && (l.nextFollowUpAt
+        ? String(l.nextFollowUpAt).slice(0, 10) <= today
+        : !l.lastContactedAt && ageDays(l.createdAt, now) >= 1))
+    out.push(queue('crm-leads', 'Leads to follow up', 'Follow-up due, or new and not contacted yet', '/crm?crmTab=leads',
+      leads.map(l => ({
+        id: l.id,
+        title: l.name,
+        subtitle: `${l.companyName ? `${l.companyName} · ` : ''}${l.ownerId ? '' : 'unassigned · '}${l.nextFollowUpAt ? `due ${String(l.nextFollowUpAt).slice(0, 10)}` : 'not contacted'}`,
+        href: `/crm?crmTab=leads&leadId=${encodeURIComponent(l.id)}`,
+        ageDays: ageDays(l.nextFollowUpAt ?? l.createdAt, now),
+      })), 'urgent'))
+
+    const openDeals = new Map((input.opportunities ?? [])
+      .filter(o => !['closed_won', 'closed_lost'].includes(String(o.stage)) && mine(o.ownerId ?? o.assignedToId))
+      .map(o => [o.id, o]))
+    const due = (input.opportunityActivities ?? []).filter(a =>
+      openDeals.has(a.opportunityId)
+      && a.status === 'scheduled'
+      && a.scheduledDate && String(a.scheduledDate).slice(0, 10) <= today)
+    out.push(queue('crm-activities', 'Deal follow-ups due', 'Calls, meetings and tasks scheduled for today or earlier', '/crm',
+      due.map(a => ({
+        id: a.id,
+        title: openDeals.get(a.opportunityId)?.name ?? 'Deal',
+        subtitle: `${a.subject ?? a.type} · ${String(a.scheduledDate).slice(0, 10)}`,
+        href: `/crm?crmTab=pipeline&id=${encodeURIComponent(a.opportunityId)}`,
+        ageDays: ageDays(a.scheduledDate, now),
+      })), 'urgent'))
+
+    // An open deal with nothing scheduled drifts: nobody knows the next step.
+    const scheduled = new Set((input.opportunityActivities ?? []).filter(a => a.status === 'scheduled').map(a => a.opportunityId))
+    const drifting = [...openDeals.values()].filter(o => !scheduled.has(o.id) && ageDays(o.lastActivityDate ?? o.createdAt, now) >= 3)
+    out.push(queue('crm-no-next-step', 'Deals with no next step', 'Open, nothing scheduled — log a follow-up', '/crm',
+      drifting.map(o => ({
+        id: o.id,
+        title: o.name,
+        subtitle: `${o.companyName ?? ''} · ${String(o.stage).replace(/_/g, ' ')} · ${kes(o.expectedValue)}`,
+        href: `/crm?crmTab=pipeline&id=${encodeURIComponent(o.id)}`,
+        ageDays: ageDays(o.lastActivityDate ?? o.createdAt, now),
+      }))))
   }
 
   // ── Sales & delivery ──────────────────────────────────────────────────

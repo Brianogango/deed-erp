@@ -6,6 +6,7 @@ import { pickRoundRobinOwner, pickStickyOwnerFromPriorLeads } from '@/lib/crm/sa
 import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
 import { storedRoleNames } from '@/lib/auth/authorization'
 import { notifyLeadAssigned } from '@/lib/crm/lead-notify'
+import { canAssignLead, leadListWhere, leadRole, phoneKey } from '@/lib/crm/lead-access'
 
 const LEAD_INCLUDE = {
   owner: { select: { id: true, username: true, email: true } },
@@ -17,8 +18,10 @@ const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'finance_officer'
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
+    if (!leadRole(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const leads = await prisma.lead.findMany({
+      where: leadListWhere(session.user.role, session.user.id),
       include: LEAD_INCLUDE,
       orderBy: { createdAt: 'desc' },
     })
@@ -33,11 +36,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const body = await request.json()
-    let ownerId = body.ownerId ?? session.user.id
+    const name = String(body.name || '').trim()
+    const email = String(body.email || '').trim().toLowerCase()
+    const phone = String(body.phone || '').trim()
+    if (!name) return NextResponse.json({ error: 'Give the lead a name' }, { status: 400 })
+    if (!email && !phone) return NextResponse.json({ error: 'Add a phone number or an email, or nobody can follow it up' }, { status: 400 })
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return NextResponse.json({ error: 'Check the email address' }, { status: 400 })
+
+    // The same person arriving twice (a call, then an email) used to become two
+    // leads worked by two reps. Stop and show the open one unless told to go on.
+    if (body.allowDuplicate !== true) {
+      const key = phoneKey(phone)
+      const open = await prisma.lead.findMany({
+        where: {
+          stage: { notIn: ['converted', 'lost'] },
+          OR: [
+            ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
+            ...(key ? [{ phone: { endsWith: key.slice(-6) } }] : []),
+          ],
+        },
+        select: { id: true, name: true, companyName: true, email: true, phone: true, ownerId: true, owner: { select: { username: true } } },
+        take: 20,
+      })
+      const matches = open.filter(l => (email && l.email?.toLowerCase() === email) || (key && phoneKey(l.phone) === key))
+      if (matches.length) {
+        return NextResponse.json({
+          error: 'This person is already an open lead',
+          duplicates: matches.map(m => ({ id: m.id, name: m.name, companyName: m.companyName, owner: m.owner?.username ?? null })),
+        }, { status: 409 })
+      }
+    }
+
+    // Reps add leads for themselves; managers may assign.
+    let ownerId = canAssignLead(session.user.role) ? (body.ownerId ?? session.user.id) : session.user.id
 
     // When Auto-assign Leads is on and the client did not pick an owner,
     // sticky-match same org/domain first, then round-robin.
-    if (!body.ownerId) {
+    if (!body.ownerId && canAssignLead(session.user.role)) {
       const state = await loadAppState(['deed_systemSettings', 'deed_salesLeadRoundRobin'])
       const auto = state.deed_systemSettings && typeof state.deed_systemSettings === 'object'
         ? Boolean((state.deed_systemSettings as { crmAutoAssignLeads?: boolean }).crmAutoAssignLeads)
@@ -79,10 +114,10 @@ export async function POST(request: Request) {
 
     const lead = await prisma.lead.create({
       data: {
-        name: String(body.name || '').trim(),
-        companyName: body.companyName?.trim() || null,
-        email: body.email?.trim() || null,
-        phone: body.phone?.trim() || null,
+        name: name.slice(0, 200),
+        companyName: body.companyName?.trim()?.slice(0, 200) || null,
+        email: email || null,
+        phone: phone.slice(0, 40) || null,
         source: body.source?.trim() || null,
         stage: body.stage ?? 'new',
         ownerId,

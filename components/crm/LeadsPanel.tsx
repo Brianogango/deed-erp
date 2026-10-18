@@ -104,11 +104,14 @@ export default function LeadsPanel({
   showToast,
   salesReps,
   currentUserId,
+  canAssign = false,
   onConverted,
 }: {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
   salesReps: { id: string; name: string }[]
   currentUserId?: string
+  /** Directors and admin officers assign leads; a rep can only pick up an unassigned one. */
+  canAssign?: boolean
   /** Called after a successful convert so CRM can open the new opportunity / pipeline. */
   onConverted?: (opportunityId: string, meta?: { clientId?: string; clientName?: string; opportunity?: unknown }) => void
 }) {
@@ -160,13 +163,19 @@ export default function LeadsPanel({
   }, [linkedLeadId, leads, loading, showToast])
 
   const [emailing, setEmailing] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [edit, setEdit] = useState({ name: '', companyName: '', email: '', phone: '' })
   const replaceLead = useCallback((next: LeadRow) => {
     setLeads(prev => prev.map(l => (l.id === next.id ? { ...l, ...next } : l)))
     setDetail(prev => (prev && prev.id === next.id ? { ...prev, ...next } : prev))
   }, [])
 
-  async function createLead() {
-    const missing = [!form.name.trim() && 'Lead name', !form.source && 'Source'].filter(Boolean)
+  async function createLead(allowDuplicate = false) {
+    const missing = [
+      !form.name.trim() && 'Lead name',
+      !form.source && 'Source',
+      !form.email.trim() && !form.phone.trim() && 'Phone or email',
+    ].filter(Boolean)
     if (missing.length) {
       showToast(`Required: ${missing.join(', ')}`, 'error')
       return
@@ -175,8 +184,16 @@ export default function LeadsPanel({
       const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, allowDuplicate }),
       })
+      if (res.status === 409) {
+        const err = await res.json().catch(() => ({})) as { duplicates?: Array<{ name: string; companyName?: string | null; owner?: string | null }> }
+        const list = (err.duplicates ?? []).map(d => `• ${d.name}${d.companyName ? ` (${d.companyName})` : ''}${d.owner ? ` — ${d.owner}` : ' — unassigned'}`).join('\n')
+        if (window.confirm(`This person is already an open lead:\n${list}\n\nCreate another lead anyway?`)) {
+          await createLead(true)
+        }
+        return
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Create failed')
@@ -241,7 +258,12 @@ export default function LeadsPanel({
     }
   }
 
-  async function updateLeadFields(id: string, patch: { ownerId?: string | null; stage?: string }) {
+  async function updateLeadFields(id: string, patch: { ownerId?: string | null; stage?: string; lostReason?: string; name?: string; companyName?: string; email?: string; phone?: string }) {
+    if (patch.stage === 'lost' && !patch.lostReason) {
+      const reason = window.prompt('Why was this lead lost? (e.g. price, bought elsewhere, no budget, no response)')
+      if (!reason?.trim()) return
+      patch = { ...patch, lostReason: reason.trim() }
+    }
     setSavingOwnerId(id)
     try {
       const res = await fetch(`/api/leads/${id}`, {
@@ -274,15 +296,22 @@ export default function LeadsPanel({
         stage: data.stage ?? patch.stage,
         owner: data.owner ?? undefined,
         opportunityId: data.opportunityId ?? undefined,
+        name: data.name,
+        companyName: data.companyName,
+        email: data.email,
+        phone: data.phone,
+        activity: data.activity,
+        nextFollowUpAt: data.nextFollowUpAt,
       }
       setLeads(prev => prev.map(l => (l.id === id ? { ...l, ...nextFields } : l)))
       setDetail(prev => (prev && prev.id === id ? { ...prev, ...nextFields } : prev))
       showToast(
         patch.ownerId !== undefined
-          ? (patch.ownerId ? 'Lead reassigned' : 'Lead unassigned')
-          : 'Lead updated',
+          ? (patch.ownerId ? 'Lead assigned' : 'Lead unassigned')
+          : patch.stage === 'lost' ? 'Lead marked lost' : 'Lead updated',
         'success',
       )
+      setEditing(false)
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Update failed', 'error')
     } finally {
@@ -460,21 +489,53 @@ export default function LeadsPanel({
       {detail && (() => {
         const ctx = displayEmailContext(detail)
         return (
-        <Modal title={detail.name} onClose={() => setDetail(null)} width={680}>
+        <Modal title={detail.name} onClose={() => { setDetail(null); setEditing(false) }} width={680}>
           <div className="space-y-3 text-xs">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-[10px] uppercase font-bold text-t4">Company</p>
-                <p className="text-t1">{detail.companyName || '—'}</p>
+                {editing ? (
+                  <Input value={edit.companyName} onChange={v => setEdit(e => ({ ...e, companyName: v }))} />
+                ) : (
+                  <p className="text-t1">{detail.companyName || '—'}</p>
+                )}
+                {detail.stage !== 'converted' && !editing && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-[var(--info)] underline mt-1"
+                    onClick={() => {
+                      setEdit({ name: detail.name, companyName: detail.companyName ?? '', email: detail.email ?? '', phone: detail.phone ?? '' })
+                      setEditing(true)
+                    }}
+                  >
+                    Edit details
+                  </button>
+                )}
               </div>
               <div>
                 <p className="text-[10px] uppercase font-bold text-t4 mb-1">Owner</p>
-                <Select
-                  value={detail.ownerId || ''}
-                  disabled={savingOwnerId === detail.id}
-                  onChange={v => void updateLeadFields(detail.id, { ownerId: v || null })}
-                  options={[{ value: '', label: '— Unassigned —' }, ...salesReps.map(r => ({ value: r.id, label: r.name }))]}
-                />
+                {canAssign ? (
+                  <Select
+                    value={detail.ownerId || ''}
+                    disabled={savingOwnerId === detail.id}
+                    onChange={v => void updateLeadFields(detail.id, { ownerId: v || null })}
+                    options={[{ value: '', label: '— Unassigned —' }, ...salesReps.map(r => ({ value: r.id, label: r.name }))]}
+                  />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="text-t1">{ownerLabel(detail, salesReps)}</p>
+                    {!detail.ownerId && currentUserId && (
+                      <button
+                        type="button"
+                        className="btn-primary text-[10px] py-1 px-2"
+                        disabled={savingOwnerId === detail.id}
+                        onClick={() => void updateLeadFields(detail.id, { ownerId: currentUserId })}
+                      >
+                        Take this lead
+                      </button>
+                    )}
+                  </div>
+                )}
                 {detail.stage === 'converted' && detail.opportunityId && (
                   <p className="text-[10px] text-t3 mt-1">
                     Converted —{' '}
@@ -496,8 +557,29 @@ export default function LeadsPanel({
               </div>
               <div>
                 <p className="text-[10px] uppercase font-bold text-t4">Contact</p>
-                <p className="text-t1">{detail.email || '—'}</p>
-                {detail.phone && <p className="text-t3">{detail.phone}</p>}
+                {editing ? (
+                  <div className="space-y-1">
+                    <Input value={edit.name} onChange={v => setEdit(e => ({ ...e, name: v }))} placeholder="Name" />
+                    <Input value={edit.email} onChange={v => setEdit(e => ({ ...e, email: v }))} placeholder="Email" />
+                    <Input value={edit.phone} onChange={v => setEdit(e => ({ ...e, phone: v }))} placeholder="Phone" />
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" className="btn-outline text-[10px] py-1 px-2" onClick={() => setEditing(false)}>Cancel</button>
+                      <button
+                        type="button"
+                        className="btn-primary text-[10px] py-1 px-2"
+                        disabled={savingOwnerId === detail.id}
+                        onClick={() => void updateLeadFields(detail.id, { name: edit.name.trim(), companyName: edit.companyName.trim(), email: edit.email.trim(), phone: edit.phone.trim() })}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-t1">{detail.email || '—'}</p>
+                    {detail.phone && <p className="text-t3">{detail.phone}</p>}
+                  </>
+                )}
               </div>
               <div>
                 <p className="text-[10px] uppercase font-bold text-t4 mb-1">Stage</p>
@@ -505,7 +587,8 @@ export default function LeadsPanel({
                   value={detail.stage}
                   disabled={savingOwnerId === detail.id || detail.stage === 'converted'}
                   onChange={v => void updateLeadFields(detail.id, { stage: v })}
-                  options={STAGE_OPTIONS}
+                  // Converted only through Convert, which creates the customer and the deal.
+                  options={detail.stage === 'converted' ? STAGE_OPTIONS : STAGE_OPTIONS.filter(o => o.value !== 'converted')}
                 />
                 <p className="text-[10px] text-t3 mt-1 capitalize">Source: {detail.source?.replace(/_/g, ' ') ?? '—'}</p>
               </div>
