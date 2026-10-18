@@ -274,6 +274,7 @@ import { deniedSaveMessage } from '@/lib/store-denied-message'
 import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
 import { isSellableSerial } from '@/lib/inventory/sellable-stock'
 import { reportingFetch } from '@/lib/save-failure'
+import { allocateReceiptToPoLines, billedQtyByPoLine } from '@/lib/purchase/receipt-allocation'
 import { reissueAfterClientDecision, reissueBlocker, reissueOnRevision, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
 import { countCorrectionBlocker, countCorrectionNote, partsOrderNote, purchaseOrderBlocker, requestAfterCountCheck, requestAfterPurchaseOrder, type PartsRequest } from '@/lib/repair/parts-request'
 import { executeRepairConsolidation, mergedSaleOrderFromPlan } from '@/lib/repair/consolidation-execute'
@@ -1699,6 +1700,8 @@ export interface Receipt {
   date: string
   lines: {
     productId: string; productName: string
+    /** The PO line this fills — several PO lines can carry the same product. */
+    poLineId?: string
     qtyExpected: number; qtyReceived: number
     serials: string[]       // serial numbers entered/confirmed during receipt
     requiresSerial: boolean
@@ -6846,6 +6849,8 @@ function StoreProvider({
   const soRef      = useRef(saleOrders); soRef.current   = saleOrders
   const invRef    = useRef(invoices);  invRef.current    = invoices
   const poRef     = useRef(purchaseOrders); poRef.current = purchaseOrders
+  /** Purchase orders being confirmed right now (double-click guard). */
+  const confirmingPoRef = useRef(new Set<string>())
   const recRef    = useRef(receipts);   recRef.current    = receipts
   const purchaseReturnsRef = useRef(purchaseReturns); purchaseReturnsRef.current = purchaseReturns
   const warRef    = useRef(warranties); warRef.current    = warranties
@@ -14979,6 +14984,25 @@ const storeCtx: AppState = {
       }
       const po = poRef.current.find(p => p.id === id)
       if (!po) return
+      // A double click (or a second tab) confirmed twice and opened a second
+      // goods receipt for the same order.
+      if (!['draft', 'sent'].includes(po.status)) {
+        showToast(`${po.ref} is already confirmed`, 'info'); return
+      }
+      if (confirmingPoRef.current.has(id)) return
+      if (!po.lines.length) { showToast('Add at least one line before confirming', 'error'); return }
+      confirmingPoRef.current.add(id)
+      try {
+      if (recRef.current.some(r => r.poId === id && r.status === 'draft')) {
+        setPurchaseOrders(p => {
+          const next = p.map(row => row.id === id ? { ...row, status: 'confirmed' as const, approvalStatus: 'not_required' as const } : row)
+          const updated = next.find(row => row.id === id)
+          if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
+        showToast('Order confirmed · its goods receipt is ready')
+        return
+      }
 
       // Auto-create incoming shipment (receipt) when PO is confirmed — Odoo behaviour
       const receiptRef = await storeCtxRef.current!.allocateDocRef('REC')
@@ -14986,8 +15010,8 @@ const storeCtx: AppState = {
         id: uid(), ref: receiptRef, poId: id, poRef: po.ref,
         vendorId: po.vendorId, vendorName: po.vendorName,
         status: 'draft', date: now(),
-        lines: po.lines.map(l => ({
-          productId: l.productId, productName: l.productName,
+        lines: po.lines.filter(l => l.qty - l.qtyReceived > 0).map(l => ({
+          productId: l.productId, productName: l.productName, poLineId: l.id,
           qtyExpected: l.qty - l.qtyReceived, qtyReceived: 0, serials: [],
           requiresSerial: l.requiresSerial,
           importedSerials: l.importedSerials,
@@ -15007,6 +15031,9 @@ const storeCtx: AppState = {
       })
       addAuditLog('confirm_po', po.ref, `PO confirmed — receipt ${receipt.ref} created automatically`)
       showToast(`Order confirmed · Receipt ${receipt.ref} ready for goods receiving`)
+      } finally {
+        confirmingPoRef.current.delete(id)
+      }
     },
     createReceiptFromPO: async (poId, forcedRef) => {
       const po = poRef.current.find(p => p.id === poId)!
@@ -15022,7 +15049,7 @@ const storeCtx: AppState = {
         vendorId: po.vendorId, vendorName: po.vendorName,
         status: 'draft', date: now(),
         lines: outstandingLines.map(l => ({
-          productId: l.productId, productName: l.productName,
+          productId: l.productId, productName: l.productName, poLineId: l.id,
           qtyExpected: l.qty - l.qtyReceived, qtyReceived: 0, serials: [],
           requiresSerial: l.requiresSerial,
           importedSerials: l.importedSerials,
@@ -15064,13 +15091,21 @@ const storeCtx: AppState = {
           }
         }
       }
+      // The same serial typed twice on this receipt would become two machines.
+      const typed = lines.flatMap(l => l.serials.map(sn => sn.trim().toUpperCase())).filter(Boolean)
+      const twice = typed.find((sn, i) => typed.indexOf(sn) !== i)
+      if (twice) { showToast(`Serial ${twice} is entered twice on this receipt`, 'error'); return false }
 
-      const receivedByProduct = new Map(lines.map(line => [line.productId, line.qtyReceived]))
-      const updatedPoLines = po.lines.map(line => {
-        const receivedQty = receivedByProduct.get(line.productId)
-        if (receivedQty === undefined) return line
-        return { ...line, qtyReceived: Math.min(line.qty, line.qtyReceived + receivedQty) }
-      })
+      // Received units fill the PO lines in order (the same product can be on
+      // several lines); more than the order still has open is refused.
+      const allocation = allocateReceiptToPoLines(po.lines, lines)
+      if (allocation.overReceived.length) {
+        const extra = allocation.overReceived
+          .map(o => `${lines.find(l => l.productId === o.productId)?.productName ?? 'item'} (+${o.qty})`).join(', ')
+        showToast(`More received than ${po.ref} still has open: ${extra}. Add the extra to the purchase order first.`, 'error')
+        return false
+      }
+      const updatedPoLines = allocation.lines
       const allReceived = updatedPoLines.every(line => line.qtyReceived >= line.qty)
       const anyReceived = updatedPoLines.some(line => line.qtyReceived > 0)
       const hasOtherDraftReceipt = recRef.current.some(r => r.poId === receipt.poId && r.status === 'draft' && r.id !== receiptId)
@@ -15079,6 +15114,7 @@ const storeCtx: AppState = {
         .map(line => ({
           productId: line.productId,
           productName: line.productName,
+          poLineId: line.id,
           qtyExpected: line.qty - line.qtyReceived,
           qtyReceived: 0,
           serials: [] as string[],
@@ -15162,6 +15198,7 @@ const storeCtx: AppState = {
             purchaseOrderId: po.id,
             lines: lines.map(line => ({
               productId: line.productId,
+              poLineId: line.poLineId,
               productName: line.productName,
               qtyReceived: Number(line.qtyReceived ?? 0),
               requiresSerial: Boolean(line.requiresSerial),
@@ -15303,10 +15340,17 @@ const storeCtx: AppState = {
       addAuditLog('validate_receipt', receipt.ref, `Stock received from ${receipt.vendorName}`)
       return true
     },
-    deletePO: (id) => { 
-      setPurchaseOrders(p => p.filter(po => po.id !== id)); 
+    deletePO: (id) => {
+      const po = poRef.current.find(p => p.id === id)
+      if (!po) return
+      // The server refuses these; the list used to drop them anyway and say
+      // "PO deleted", until the next reload brought them back.
+      if (['partial', 'received'].includes(po.status) || po.lines.some(l => (l.qtyReceived ?? 0) > 0 || (l.qtyBilled ?? 0) > 0)) {
+        showToast(`${po.ref} has received or billed goods — it cannot be deleted`, 'error'); return
+      }
+      setPurchaseOrders(p => p.filter(row => row.id !== id))
       sync(`/api/purchase-orders/${id}`, { method: 'DELETE' })
-      showToast('PO deleted') 
+      showToast('PO deleted')
     },
     createBillFromPO: async (poId, lineOverrides) => {
       if (!canManageFinance(currentUser())) {
@@ -15334,15 +15378,8 @@ const storeCtx: AppState = {
         const isLive = !['cancelled', 'voided', 'void'].includes(String(inv.status))
         return inv.type === 'vendor_bill' && belongsToPO && isLive
       })
-      const activeBilledQty = (line: POLine) =>
-        liveBillsForPO.reduce((total, bill) => total + bill.lines.reduce((sum, billLine) => {
-          const sameProduct = Boolean(line.productId && billLine.productId && line.productId === billLine.productId)
-          // The bill line may carry a corrected product id (see resolveBillProductId),
-          // so the PO-line link is the reliable key.
-          const sameLine = Boolean(billLine.purchaseOrderItemId && billLine.purchaseOrderItemId === line.id)
-          const sameDescription = !billLine.productId && String(billLine.description ?? '').includes(line.productName)
-          return sum + (sameProduct || sameLine || sameDescription ? Math.max(0, Math.floor(Number(billLine.qty) || 0)) : 0)
-        }, 0), 0)
+      const billedByLine = billedQtyByPoLine(po.lines, liveBillsForPO.flatMap(bill => bill.lines))
+      const activeBilledQty = (line: POLine) => billedByLine.get(line.id) ?? 0
 
       let billableLines: Array<POLine & { billQty: number }>
       try {
@@ -15436,12 +15473,21 @@ const storeCtx: AppState = {
       const receipt = recRef.current.find(r => r.id === receiptId)!
       const po = poRef.current.find(p => p.id === receipt.poId)!
       const ret: PurchaseReturn = {
-        id: uid(), ref: seq('RET', 'ret'), poId: po.id, poRef: po.ref,
+        // Provisional; the server's RET/NNNN replaces it a moment later. It
+        // used to come from this browser's own counter (duplicates).
+        id: uid(), ref: allocateDocNumberSync('RET'), poId: po.id, poRef: po.ref,
         receiptId, receiptRef: receipt.ref, vendorId: po.vendorId, vendorName: po.vendorName,
         status: 'draft', date: now(), reason, lines: [],
       }
       purchaseReturnsRef.current = [ret, ...purchaseReturnsRef.current]
-      setPurchaseReturns(p => [ret, ...p]); showToast(`Return ${ret.ref} created`); return ret
+      setPurchaseReturns(p => [ret, ...p])
+      const provisional = ret.ref
+      void storeCtxRef.current?.allocateDocRef('RET').then(finalRef => {
+        if (!finalRef || finalRef === provisional || finalRef.includes('/L')) return
+        purchaseReturnsRef.current = purchaseReturnsRef.current.map(r => (r.ref === provisional ? { ...r, ref: finalRef } : r))
+        setPurchaseReturns(p => p.map(r => (r.ref === provisional ? { ...r, ref: finalRef } : r)))
+      }).catch(() => { /* the temporary number stays; it is unique */ })
+      showToast('Return to vendor created'); return ret
     },
     addReturnLine: (returnId, productId, productName, qty, serialIds, requiresSerial) => {
       if (!canManageProcurement(currentUser())) {
@@ -15532,8 +15578,12 @@ const storeCtx: AppState = {
         })
       }
       // Vendor credit note for the posted-billed portion only.
+      // A number from the server: two browsers' own counters issued the same
+      // VCN, and the second credit note was then refused after the goods had
+      // already gone back.
+      const creditRef = allocation.creditTotal > 0 ? await storeCtxRef.current!.allocateDocRef('VCN') : ''
       const creditNote: Invoice | null = allocation.creditTotal > 0 ? {
-        id: uid(), ref: seq('VCN', 'inv'), type: 'vendor_bill', status: 'posted',
+        id: uid(), ref: creditRef, type: 'vendor_bill', status: 'posted',
         partnerId: ret.vendorId, partnerName: ret.vendorName,
         date: now(), dueDate: now(), postedAt: now(),
         lines: allocation.creditLines.map(l => ({

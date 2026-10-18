@@ -797,7 +797,7 @@ async function applyReceiptRelational(params: {
   supplierInvoiceNo?: string
   notes?: string
   userId?: string
-  lines: Array<{ productId: string; productName: string; qty: number; sku?: string; requiresSerial?: boolean; trackingMethod?: string; costPrice?: number; sellingPrice?: number }>
+  lines: Array<{ productId: string; productName: string; qty: number; poLineId?: string; sku?: string; requiresSerial?: boolean; trackingMethod?: string; costPrice?: number; sellingPrice?: number }>
 }): Promise<{ grnItemsByProductId: Map<string, string>; resolvedProductIds: Map<string, string> }> {
   const grnItemsByProductId = new Map<string, string>()
   const resolvedProductIds = new Map<string, string>()
@@ -894,29 +894,47 @@ async function applyReceiptRelational(params: {
       resolvedProductIds.set(line.productId, resolved)
       await adjustStockLevel(tx, resolved, { onHand: line.qty })
 
-      const poItemMatch = po
-        ? resolveVendorBillPoItem(
+      // Which PO lines this receipt line fills. The named PO line first, then
+      // the product's other lines in order, each up to what is still open on
+      // it. A product on two PO lines used to match neither ("ambiguous"), so
+      // the order never showed those goods as received and could not be billed.
+      const targets: NonNullable<typeof po>['items'] = []
+      if (po) {
+        const named = line.poLineId ? po.items.find(item => item.id === line.poLineId) : undefined
+        if (named) targets.push(named)
+        for (const item of po.items) if (item.productId === resolved && item !== named) targets.push(item)
+        if (!targets.length) {
+          const byName = resolveVendorBillPoItem(
             po.items.map(item => ({ id: item.id, productId: item.productId, description: item.description })),
             { productId: resolved, description: line.productName },
           )
-        : undefined
-      const poItem = po && poItemMatch ? po.items.find(item => item.id === poItemMatch.id) : undefined
-      if (poItem) {
+          const hit = byName ? po.items.find(item => item.id === byName.id) : undefined
+          if (hit) targets.push(hit)
+        }
+      }
+      let remaining = line.qty
+      for (const poItem of targets) {
+        if (remaining <= 0) break
+        const open = Math.max(0, poItem.qtyOrdered - poItem.qtyReceived)
+        const take = targets.length === 1 ? remaining : Math.min(remaining, open)
+        if (take <= 0) continue
+        poItem.qtyReceived = Math.min(poItem.qtyOrdered, poItem.qtyReceived + take)
         await tx.purchaseOrderItem.update({
           where: { id: poItem.id },
-          data: { qtyReceived: Math.min(poItem.qtyOrdered, poItem.qtyReceived + line.qty) },
+          data: { qtyReceived: poItem.qtyReceived },
         })
+        remaining -= take
         if (grnId) {
           const grnItem = await tx.grnItem.create({
             data: {
               grnId,
               poItemId: poItem.id,
               productId: resolved,
-              qtyReceived: line.qty,
+              qtyReceived: take,
               unitCost: poItem.unitCost,
             },
           })
-          grnItemsByProductId.set(line.productId, grnItem.id)
+          if (!grnItemsByProductId.has(line.productId)) grnItemsByProductId.set(line.productId, grnItem.id)
         }
       }
     }
@@ -1194,6 +1212,7 @@ export async function applyReceiptStockMutation(params: {
   lines: Array<{
     productId: string
     productName: string
+    poLineId?: string
     qtyReceived: number
     requiresSerial: boolean
     serials?: string[]
@@ -1285,6 +1304,7 @@ export async function applyReceiptStockMutation(params: {
             productId: String(line.productId || ''),
             productName: line.productName || blob?.name || 'Item',
             qty: Math.max(0, Math.floor(Number(line.qtyReceived) || 0)),
+            poLineId: line.poLineId,
             sku: blob?.sku,
             requiresSerial: line.requiresSerial || blob?.requiresSerial,
             trackingMethod: blob?.trackingMethod,

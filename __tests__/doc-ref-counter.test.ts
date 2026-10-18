@@ -32,6 +32,8 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   expense: 'EXP',
   opportunity: 'OPP',
   contract: 'CTR',
+  purchase_return: 'RET',
+  vendor_credit: 'VCN',
   kilimall_order: 'KO',
   kilimall_dispatch: 'KD',
   kilimall_settlement: 'KS',

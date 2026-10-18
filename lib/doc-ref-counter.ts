@@ -45,6 +45,10 @@ export type DocKind =
   | 'opportunity'
   /** Customer contracts (CTR/NNNN), yearless. */
   | 'contract'
+  /** Returns to vendor (RET/NNNN), yearless. */
+  | 'purchase_return'
+  /** Vendor credit notes from returns (VCN/YYYY/NNNN). */
+  | 'vendor_credit'
   /** Kilimall orders (KO/NNNN), dispatches (KD/NNNN) and settlements (KS/NNNN), yearless. */
   | 'kilimall_order'
   | 'kilimall_dispatch'
@@ -75,6 +79,8 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   expense: 'EXP',
   opportunity: 'OPP',
   contract: 'CTR',
+  purchase_return: 'RET',
+  vendor_credit: 'VCN',
   kilimall_order: 'KO',
   kilimall_dispatch: 'KD',
   kilimall_settlement: 'KS',
@@ -250,6 +256,11 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
         return maxYearlessSeq('deed_opportunities', prefix)
       case 'contract':
         return maxYearlessSeq('deed_customerContracts', prefix)
+      case 'purchase_return':
+        return maxYearlessSeq('deed_purchaseReturns', prefix)
+      case 'vendor_credit':
+        ({ rows } = await sql`SELECT COALESCE(MAX((substring(invoice_number from '[0-9]+$'))::int), 0) AS max_num FROM invoices WHERE invoice_number ~ ${pattern}`)
+        break
       case 'kilimall_order':
         return maxYearlessSeq('deed_kilimallOrders', prefix)
       case 'kilimall_dispatch':
@@ -273,7 +284,7 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   await ensureCounterTable()
   const now = new Date().toISOString()
   const year = new Date().getFullYear()
-  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : kind === 'outsource' ? 'out_seq' : kind === 'outsource_payment' ? 'opay_seq' : kind === 'rider_pay' ? 'rwp_seq' : kind === 'expense' ? 'exp_seq' : kind === 'opportunity' ? 'opp_seq' : kind === 'contract' ? 'ctr_seq' : kind === 'kilimall_order' ? 'ko_seq' : kind === 'kilimall_dispatch' ? 'kd_seq' : kind === 'kilimall_settlement' ? 'ks_seq' : `${PREFIX[kind]}_${year}`
+  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : kind === 'outsource' ? 'out_seq' : kind === 'outsource_payment' ? 'opay_seq' : kind === 'rider_pay' ? 'rwp_seq' : kind === 'expense' ? 'exp_seq' : kind === 'opportunity' ? 'opp_seq' : kind === 'contract' ? 'ctr_seq' : kind === 'purchase_return' ? 'ret_seq' : kind === 'kilimall_order' ? 'ko_seq' : kind === 'kilimall_dispatch' ? 'kd_seq' : kind === 'kilimall_settlement' ? 'ks_seq' : `${PREFIX[kind]}_${year}`
 
   // Fast path: counter row exists — atomic increment.
   const updated = await sql`
@@ -302,6 +313,6 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   if (kind === 'client') return `CLT-${String(nextValue).padStart(5, '0')}`
   if (kind === 'pos') return `POS/${String(nextValue).padStart(4, '0')}`
   if (kind === 'delivery_job') return `DJB/${String(nextValue).padStart(4, '0')}`
-  if (kind === 'outsource' || kind === 'outsource_payment' || kind === 'rider_pay' || kind === 'expense' || kind === 'opportunity' || kind === 'contract' || kind === 'kilimall_order' || kind === 'kilimall_dispatch' || kind === 'kilimall_settlement') return `${PREFIX[kind]}/${String(nextValue).padStart(4, '0')}`
+  if (kind === 'outsource' || kind === 'outsource_payment' || kind === 'rider_pay' || kind === 'expense' || kind === 'opportunity' || kind === 'contract' || kind === 'purchase_return' || kind === 'kilimall_order' || kind === 'kilimall_dispatch' || kind === 'kilimall_settlement') return `${PREFIX[kind]}/${String(nextValue).padStart(4, '0')}`
   return `${PREFIX[kind]}/${year}/${String(nextValue).padStart(4, '0')}`
 }

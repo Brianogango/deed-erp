@@ -1,3 +1,4 @@
+import { billedQtyByPoLine } from '@/lib/purchase/receipt-allocation'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
@@ -331,30 +332,26 @@ export async function POST(request: Request) {
                 }))
                 .filter((m): m is { item: typeof items[number]; poItem: NonNullable<typeof m.poItem> } => Boolean(m.poItem))
             : []
-          const activeBilledByProduct = new Map<string, number>()
-          for (const bill of activeBills) {
-            for (const line of bill.items) {
-              if (!line.productId) continue
-              activeBilledByProduct.set(
-                line.productId,
-                (activeBilledByProduct.get(line.productId) ?? 0) + Math.max(0, Math.floor(Number(line.qty) || 0)),
-              )
-            }
-          }
-
+          // Billed so far per PO line (a product can be on several lines;
+          // counting per product made each line count the other's bills).
+          const poLinesForMatch = (po?.items ?? []).map(i => ({ id: i.id, productId: i.productId, productName: i.description, qty: i.qtyOrdered }))
+          const billedByLine = billedQtyByPoLine(poLinesForMatch, activeBills.flatMap(bill => bill.items))
+          // This bill's own lines count against the same PO line together.
+          const thisBill = new Map<string, number>()
           for (const { item, poItem } of matchedItems) {
-            const alreadyBilled = activeBilledByProduct.get(poItem.productId) ?? 0
-            assertBillableQty({ qtyReceived: poItem.qtyReceived, qtyBilled: alreadyBilled }, Number(item.qty) || 0)
+            const qty = Math.max(0, Math.floor(Number(item.qty) || 0))
+            const alreadyBilled = (billedByLine.get(poItem.id) ?? 0) + (thisBill.get(poItem.id) ?? 0)
+            assertBillableQty({ qtyReceived: poItem.qtyReceived, qtyBilled: alreadyBilled }, qty)
+            thisBill.set(poItem.id, (thisBill.get(poItem.id) ?? 0) + qty)
           }
 
           const created = await tx.invoice.create({ data: invoiceData, include: { items: true } })
 
-          for (const { item, poItem } of matchedItems) {
-            const qty = Math.max(0, Math.floor(Number(item.qty) || 0))
-            const alreadyBilled = activeBilledByProduct.get(poItem.productId) ?? 0
+          for (const [poItemId, qty] of thisBill) {
+            const poItem = po!.items.find(i => i.id === poItemId)!
             await tx.purchaseOrderItem.update({
-              where: { id: poItem.id },
-              data: { qtyBilled: Math.min(poItem.qtyOrdered, alreadyBilled + qty) },
+              where: { id: poItemId },
+              data: { qtyBilled: Math.min(poItem.qtyOrdered, (billedByLine.get(poItemId) ?? 0) + qty) },
             })
           }
 

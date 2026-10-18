@@ -1,3 +1,4 @@
+import { allocateReceiptToPoLines } from '@/lib/purchase/receipt-allocation'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { hasPermission } from '@/lib/auth/authorization'
@@ -11,6 +12,8 @@ export const dynamic = 'force-dynamic'
 
 type ReceiptLinePayload = {
   productId: string
+  /** The purchase-order line this receipt line fills (several lines may share a product). */
+  poLineId?: string
   productName?: string
   qtyReceived: number
   requiresSerial: boolean
@@ -116,10 +119,24 @@ export async function POST(request: NextRequest) {
       { status: 409 },
     )
   }
-  if (!preflightOrders.some(item => item?.id === body.purchaseOrderId)) {
+  const preflightPo = preflightOrders.find(item => item?.id === body.purchaseOrderId)
+  if (!preflightPo) {
     return NextResponse.json(
       { ok: false, error: 'The linked purchase order no longer exists. No stock was changed.' },
       { status: 404 },
+    )
+  }
+  // More than the order still has open would be stock nobody ordered or will
+  // be billed for. Amend the purchase order first.
+  const preflightAllocation = allocateReceiptToPoLines(Array.isArray(preflightPo.lines) ? preflightPo.lines : [], receiptLines)
+  if (preflightAllocation.overReceived.length) {
+    const names = preflightAllocation.overReceived.map(o => {
+      const line = receiptLines.find(l => l.productId === o.productId)
+      return `${line?.productName || 'item'} (+${o.qty})`
+    }).join(', ')
+    return NextResponse.json(
+      { ok: false, error: `More received than ${preflightPo.ref || 'the purchase order'} still has open: ${names}. Add the extra to the purchase order first. No stock was changed.` },
+      { status: 422 },
     )
   }
 
@@ -134,6 +151,7 @@ export async function POST(request: NextRequest) {
         notes: body.notes,
         lines: body.lines.map(line => ({
           productId: line.productId,
+          poLineId: line.poLineId,
           productName: line.productName || '',
           qtyReceived: Number(line.qtyReceived || 0),
           requiresSerial: Boolean(line.requiresSerial),
@@ -177,7 +195,9 @@ export async function POST(request: NextRequest) {
         requiresSerial: Boolean(line.requiresSerial),
         serials: line.serials,
       })),
-      poLines: Array.isArray(po?.lines) ? po.lines : [],
+      // Cost each product at the prices of the PO lines this receipt filled.
+      poLines: [...preflightAllocation.unitCostByProduct].map(([productId, unitPrice]) => ({ productId, unitPrice }))
+        .concat(Array.isArray(po?.lines) ? po.lines : []),
       userId: session.user.id,
     })
   } catch (err) {
@@ -214,17 +234,7 @@ export async function POST(request: NextRequest) {
     const poIndex = purchaseOrders.findIndex(item => item?.id === body.purchaseOrderId)
     if (poIndex >= 0) {
       const currentPo = purchaseOrders[poIndex]
-      const receivedByProduct = new Map<string, number>()
-      for (const line of receiptLines) {
-        const productId = String(line.productId || '')
-        receivedByProduct.set(productId, (receivedByProduct.get(productId) || 0) + Math.max(0, Number(line.qtyReceived) || 0))
-      }
-      const poLines = (Array.isArray(currentPo.lines) ? currentPo.lines : []).map((line: any) => {
-        const added = receivedByProduct.get(String(line.productId || '')) || 0
-        return added > 0
-          ? { ...line, qtyReceived: Math.min(Number(line.qty) || 0, (Number(line.qtyReceived) || 0) + added) }
-          : line
-      })
+      const poLines = allocateReceiptToPoLines(Array.isArray(currentPo.lines) ? currentPo.lines : [], receiptLines).lines
       const allReceived = poLines.length > 0 && poLines.every((line: any) => Number(line.qtyReceived) >= Number(line.qty))
       const anyReceived = poLines.some((line: any) => Number(line.qtyReceived) > 0)
       const receiptIds = Array.isArray(currentPo.receiptIds) ? currentPo.receiptIds : []

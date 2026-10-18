@@ -25,6 +25,8 @@ type DocKind =
   | 'expense'
   | 'opportunity'
   | 'contract'
+  | 'purchase_return'
+  | 'vendor_credit'
   | 'kilimall_order'
   | 'kilimall_dispatch'
   | 'kilimall_settlement'
@@ -50,6 +52,8 @@ const PREFIX_TO_KIND: Record<string, DocKind> = {
   EXP: 'expense',
   OPP: 'opportunity',
   CTR: 'contract',
+  RET: 'purchase_return',
+  VCN: 'vendor_credit',
   KO: 'kilimall_order',
   KD: 'kilimall_dispatch',
   KS: 'kilimall_settlement',
