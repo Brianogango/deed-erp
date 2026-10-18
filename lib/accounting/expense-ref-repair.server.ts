@@ -95,6 +95,12 @@ export async function postMissingExpenseJournals(params: {
   since: string
   entryDate: 'claim_date' | 'today'
   actorId: string | null
+  /**
+   * Only claims approved but not yet paid. Their money has not left, so the
+   * approval journal (expense + amount owed) is what their coming payment
+   * settles — whatever date the books started.
+   */
+  unpaidOnly?: boolean
 }): Promise<PostOutcome[]> {
   const plans = await expenseRefPlan()
   const claims = new Map((await loadClaims()).map(c => [c.id, c]))
@@ -108,6 +114,7 @@ export async function postMissingExpenseJournals(params: {
     const c = claims.get(p.id)
     if (!c) continue
     if (day(c.expenseDate) < params.since) continue
+    if (params.unpaidOnly && c.status !== 'approved') continue
     for (const kind of p.missing) {
       if ((refCount.get(c.ref) ?? 0) > 1) {
         outcomes.push({ id: p.id, ref: c.ref, kind, ok: false, error: 'still shares its number — renumber first' })

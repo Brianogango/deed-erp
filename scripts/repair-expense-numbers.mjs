@@ -7,6 +7,11 @@
  *   node scripts/repair-expense-numbers.mjs --numbers             # step 1: new numbers, no money moves
  *   node scripts/repair-expense-numbers.mjs --journals 2026-09-13 claim_date
  *   node scripts/repair-expense-numbers.mjs --journals 2026-09-13 today
+ *   node scripts/repair-expense-numbers.mjs --journals 2000-01-01 today --unpaid-only
+ *
+ * --unpaid-only posts only for claims approved but not yet paid: the money
+ * has not left, so their approval journal is needed before Finance pays
+ * them, whenever they were made.
  *
  * Step 2 posts the missing journals for approved / paid claims dated on or
  * after the given date. The date and the date basis have no default: claims
@@ -186,7 +191,7 @@ async function main() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(since ?? '') || !['claim_date', 'today'].includes(entryDate)) {
       fail('--journals needs a start date and a date basis, e.g.  --journals 2026-09-13 claim_date')
     }
-    const r = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ step: 'journals', since, entryDate }) })
+    const r = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ step: 'journals', since, entryDate, unpaidOnly: argv.includes('--unpaid-only') }) })
     const body = await r.json()
     if (!r.ok) fail(body.error ?? `HTTP ${r.status}`)
     const ok = body.posted.filter(o => o.ok)

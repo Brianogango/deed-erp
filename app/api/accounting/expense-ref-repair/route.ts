@@ -26,6 +26,7 @@ const PostSchema = z.discriminatedUnion('step', [
     step: z.literal('journals'),
     since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     entryDate: z.enum(['claim_date', 'today']),
+    unpaidOnly: z.boolean().optional(),
   }).strict(),
 ])
 
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
       posted: await postMissingExpenseJournals({
         since: parsed.data.since,
         entryDate: parsed.data.entryDate,
+        unpaidOnly: parsed.data.unpaidOnly,
         actorId: auth.actorId,
       }),
     })
