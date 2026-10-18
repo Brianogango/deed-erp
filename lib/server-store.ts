@@ -539,12 +539,17 @@ export async function loadChangedStoreKeysSince(
  * loadAppState/saveStoreKeys calls inside `fn` to share this connection.
  */
 export async function withAppStateKeyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  let started = false
   try {
     return await withDbTransaction(async client => {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [key])
+      started = true
       return fn()
     })
   } catch (err) {
+    // An error from the work itself is the caller's: running it a second
+    // time unlocked could apply half-done stock changes twice.
+    if (started) throw err
     console.error(`[server-store] withAppStateKeyLock(${key}) failed, proceeding unlocked:`, err)
     // Fail open: correctness of the guarded write matters less than the
     // feature working at all if the lock infrastructure itself is broken

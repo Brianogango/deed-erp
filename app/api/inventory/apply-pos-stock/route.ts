@@ -53,6 +53,10 @@ export async function POST(request: NextRequest) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 422 })
   }
+  // A retry of a sale already taken: its cost and loyalty were booked then.
+  if (result.alreadyApplied) {
+    return NextResponse.json({ ok: true, moves: result.moves, alreadyApplied: true })
+  }
 
   let valuation: Awaited<ReturnType<typeof postPosValuationFromPayload>> | { ok: false; reason: string } = { ok: false, reason: 'not_attempted' }
   try {

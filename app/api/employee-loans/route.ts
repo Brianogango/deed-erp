@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { cashLabelForBankAccount } from '@/lib/accounting/bank-cash-account.server'
+import { isUuid } from '@/lib/legacy-compat'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
@@ -69,6 +71,8 @@ export async function POST(request: Request) {
       let journalRef: string | null = null
       if (bankAccountId) {
         const cashRole = cashAccountRoleForBankId(bankAccountId)
+        // Accounts added on the Bank accounts screen resolve to their own GL account.
+        const cashLabel = isUuid(bankAccountId) ? await cashLabelForBankAccount(tx, bankAccountId) : labelForRole(cashRole)
         journalRef = `JRN/LOAN/${row.id.slice(0, 8).toUpperCase()}`
         await createJournalEntryInTx(tx, {
           ref: journalRef,
@@ -82,7 +86,7 @@ export async function POST(request: Request) {
           skipIfExists: true,
           lines: [
             { accountLabel: labelForRole('employee_advances'), label: 'Staff loan issued', debit: amount, credit: 0 },
-            { accountLabel: labelForRole(cashRole), label: 'Staff loan paid out', debit: 0, credit: amount },
+            { accountLabel: cashLabel, label: 'Staff loan paid out', debit: 0, credit: amount },
           ],
         })
       }

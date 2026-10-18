@@ -465,6 +465,12 @@ export default function PointOfSale() {
   }
 
   const [charging, setCharging] = useState(false)
+  /**
+   * An M-Pesa payment the customer already made for the sale on screen. If
+   * the sale then fails (stock, network), charging again uses this payment
+   * instead of sending the customer a second prompt.
+   */
+  const [paidMpesa, setPaidMpesa] = useState<{ amount: number; receipt: string } | null>(null)
   const [openingSession, setOpeningSession] = useState(false)
   const [closingSession, setClosingSession] = useState(false)
   const orphanedSession = isOrphanedPosSession({
@@ -523,9 +529,17 @@ export default function PointOfSale() {
       }
     }
 
+    if (paidMpesa && (payMethod !== 'mpesa' || Math.abs(paidMpesa.amount - paymentDue) > 0.5)) {
+      showToast(`The customer already paid ${fmtKes(paidMpesa.amount)} by M-Pesa (${paidMpesa.receipt}) for this sale. Charge exactly that amount by M-Pesa, or clear the cart and refund them.`, 'error')
+      return
+    }
+
     setCharging(true)
     try {
-      if (paymentDue > 0 && payMethod === 'mpesa' && darajaReady) {
+      if (paidMpesa) {
+        mpesaReceipt = paidMpesa.receipt
+        setStkStatus(`Using M-Pesa payment ${paidMpesa.receipt} already received`)
+      } else if (paymentDue > 0 && payMethod === 'mpesa' && darajaReady) {
         const phone = normalizeMpesaPhone(mpesaPhone) as string
         setStkStatus('Sending M-Pesa prompt…')
         const pushed = await sendMpesaStk({
@@ -543,6 +557,7 @@ export default function PointOfSale() {
           return
         }
         mpesaReceipt = settled.mpesaReceipt || settled.checkoutRequestId
+        setPaidMpesa({ amount: paymentDue, receipt: mpesaReceipt })
         setStkStatus(settled.mpesaReceipt ? `Paid ${settled.mpesaReceipt}` : 'M-Pesa confirmed')
       }
 
@@ -552,6 +567,7 @@ export default function PointOfSale() {
           productName: i.productName,
           barcode: i.barcode,
           price: i.price,
+          listPrice: i.listPrice,
           qty: i.qty,
           subtotal: i.price * i.qty,
           serialId: i.serialId,
@@ -577,6 +593,7 @@ export default function PointOfSale() {
       )
 
       if (order) {
+        setPaidMpesa(null)
         setCart([])
         setCustomerId('')
         setCustomerName('')
@@ -840,6 +857,8 @@ export default function PointOfSale() {
                 type="button"
                 className="pos-clear-cart"
                 onClick={() => {
+                  if (paidMpesa && !window.confirm(`The customer already paid ${fmtKes(paidMpesa.amount)} by M-Pesa (${paidMpesa.receipt}) for this sale. Clear it anyway? You will need to refund them.`)) return
+                  setPaidMpesa(null)
                   setCart([])
                   setCartOpen(false)
                 }}
@@ -1048,6 +1067,11 @@ export default function PointOfSale() {
                     />
                   </Field>
                   {stkStatus && <p className="text-[11px] text-t2 mt-1">{stkStatus}</p>}
+                  {paidMpesa && !charging && (
+                    <p className="text-[11px] mt-1 font-semibold" style={{ color: 'var(--success)' }}>
+                      M-Pesa {paidMpesa.receipt} received ({fmtKes(paidMpesa.amount)}) — Charge again to finish this sale; no new prompt is sent.
+                    </p>
+                  )}
                 </div>
               )}
               {payMethod === 'bank' && (

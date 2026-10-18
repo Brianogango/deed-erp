@@ -20,7 +20,7 @@ export function buildLoanDrawdownLines(params: {
   const amount = roundMoney(params.amount)
   const bankId = bankAccountIdForPaymentMethod(params.method, params.bankAccountId)
   return [
-    { accountLabel: bankAccountLabelForId(bankId, params.method), description: `Loan received ${params.ref}: ${params.lender}`, debit: amount, credit: 0 },
+    { accountLabel: bankAccountLabelForId(bankId, params.method), cashBankAccountId: bankId, description: `Loan received ${params.ref}: ${params.lender}`, debit: amount, credit: 0 },
     { accountLabel: LOAN_LIABILITY_ACCOUNT, description: `Loan ${params.ref}: ${params.lender}`, debit: 0, credit: amount },
   ]
 }
@@ -40,7 +40,7 @@ export function buildLoanRepaymentLines(params: {
   return [
     ...(principal > 0 ? [{ accountLabel: LOAN_LIABILITY_ACCOUNT, description: `Principal repaid ${params.ref}: ${params.lender}`, debit: principal, credit: 0 }] : []),
     ...(interest > 0 ? [{ accountLabel: LOAN_INTEREST_ACCOUNT, description: `Interest ${params.ref}: ${params.lender}`, debit: interest, credit: 0 }] : []),
-    { accountLabel: bankAccountLabelForId(bankId, params.method), description: `Loan repayment ${params.ref}`, debit: 0, credit: roundMoney(principal + interest) },
+    { accountLabel: bankAccountLabelForId(bankId, params.method), cashBankAccountId: bankId, description: `Loan repayment ${params.ref}`, debit: 0, credit: roundMoney(principal + interest) },
   ]
 }
 

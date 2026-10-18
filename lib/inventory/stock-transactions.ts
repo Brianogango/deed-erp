@@ -974,85 +974,94 @@ export async function applyPosStockMutation(params: {
     sourceLocation?: string
   }>
   userId?: string
-}): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
-  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
-  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
-  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
-  let bulkStock: BulkStockLevel[] =
-    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
-  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
-  const newMoves: BlobStockMove[] = []
-  const stockLevelDeltas = new Map<string, number>()
+}): Promise<{ ok: true; moves: BlobStockMove[]; alreadyApplied?: boolean } | { ok: false; error: string }> {
+  // Under the serial lock (like receipts): two tills selling the same unit
+  // at once could otherwise both see it available and both sell it.
+  return withAppStateKeyLock('deed_serials', async () => {
+    const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+    const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+    const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+    let bulkStock: BulkStockLevel[] =
+      Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+    const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+    const newMoves: BlobStockMove[] = []
+    // A retry of a sale the server already took (the till lost the reply)
+    // must not take the stock a second time.
+    const label = `${params.reasonLabel || 'POS'} ${params.orderRef}`
+    const already = stockMoves.filter(m => m.documentRef === params.orderRef && String(m.reason ?? '') === label)
+    if (already.length) return { ok: true, moves: already, alreadyApplied: true }
+    const stockLevelDeltas = new Map<string, number>()
 
-  for (const line of params.lines) {
-    const productId = String(line.productId || '')
-    const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
-    if (!productId || qty <= 0) continue
-    const product = products.find(p => p.id === productId)
-    if (product && isNonStockProduct(product)) continue
-    // POS always sells from warehouse (shop = "With Issues", not a sales floor).
-    const location: LocationId = 'warehouse'
+    for (const line of params.lines) {
+      const productId = String(line.productId || '')
+      const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
+      if (!productId || qty <= 0) continue
+      const product = products.find(p => p.id === productId)
+      if (product && isNonStockProduct(product)) continue
+      // POS always sells from warehouse (shop = "With Issues", not a sales floor).
+      const location: LocationId = 'warehouse'
 
-    if (line.serialId || (product && isSerialTracking(inferTrackingMethod(product)))) {
-      const serial = line.serialId
-        ? serials.find(s => s.id === line.serialId)
-        : serials.find(s =>
-            s.productId === productId
-            && String(s.serial || '').toLowerCase() === String(line.serialNumber || '').toLowerCase()
-            && isOnHandSerialStatus(s.status),
-          )
-      if (!serial || !isOnHandSerialStatus(serial.status)) {
-        return { ok: false, error: `Serial not available for ${line.productName || productId}` }
-      }
-      if (String(serial.location || '') !== 'warehouse') {
-        return {
-          ok: false,
-          error: `Serial for ${line.productName || productId} is not at warehouse (at ${serial.location || 'unknown'})`,
+      if (line.serialId || (product && isSerialTracking(inferTrackingMethod(product)))) {
+        const serial = line.serialId
+          ? serials.find(s => s.id === line.serialId)
+          : serials.find(s =>
+              s.productId === productId
+              && String(s.serial || '').toLowerCase() === String(line.serialNumber || '').toLowerCase()
+              && isOnHandSerialStatus(s.status),
+            )
+        if (!serial || !isOnHandSerialStatus(serial.status)) {
+          return { ok: false, error: `Serial not available for ${line.productName || productId}` }
         }
+        if (String(serial.location || '') !== 'warehouse') {
+          return {
+            ok: false,
+            error: `Serial for ${line.productName || productId} is not at warehouse (at ${serial.location || 'unknown'})`,
+          }
+        }
+        serial.status = 'sold'
+        serial.location = 'customer'
+        serial.soldDate = nowIso()
+        const idx = products.findIndex(p => p.id === productId)
+        if (idx >= 0) products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - 1) }
+        stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - 1)
+        newMoves.push({
+          id: randomUUID(), type: 'out', productId, productName: line.productName || product?.name || 'Item',
+          qty: 1, reason: `${params.reasonLabel || 'POS'} ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
+          serialNumbers: [String(serial.serial || line.serialNumber || '')].filter(Boolean),
+          date: nowIso(), userId: params.userId ?? 'system', documentRef: params.orderRef,
+        })
+      } else {
+        const locs = calcStockByLocation(
+          product ?? { requiresSerial: false },
+          serials as any,
+          bulkStock,
+          productId,
+        )
+        const available = Number(locs[location] ?? 0)
+        if (available < qty) {
+          return { ok: false, error: `Insufficient stock for ${line.productName || productId} at ${location}` }
+        }
+        bulkStock = upsertBulkStock(bulkStock, productId, location, -qty)
+        const idx = products.findIndex(p => p.id === productId)
+        if (idx >= 0) products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - qty) }
+        stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - qty)
+        newMoves.push({
+          id: randomUUID(), type: 'out', productId, productName: line.productName || product?.name || 'Item',
+          qty, reason: `${params.reasonLabel || 'POS'} ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
+          serialNumbers: [], date: nowIso(), userId: params.userId ?? 'system', documentRef: params.orderRef,
+        })
       }
-      serial.status = 'sold'
-      serial.location = 'customer'
-      serial.soldDate = nowIso()
-      const idx = products.findIndex(p => p.id === productId)
-      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - 1) }
-      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - 1)
-      newMoves.push({
-        id: randomUUID(), type: 'out', productId, productName: line.productName || product?.name || 'Item',
-        qty: 1, reason: `${params.reasonLabel || 'POS'} ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
-        serialNumbers: [String(serial.serial || line.serialNumber || '')].filter(Boolean),
-        date: nowIso(), userId: params.userId ?? 'system', documentRef: params.orderRef,
-      })
-    } else {
-      const locs = calcStockByLocation(
-        product ?? { requiresSerial: false },
-        serials as any,
-        bulkStock,
-        productId,
-      )
-      const available = Number(locs[location] ?? 0)
-      if (available < qty) {
-        return { ok: false, error: `Insufficient stock for ${line.productName || productId} at ${location}` }
-      }
-      bulkStock = upsertBulkStock(bulkStock, productId, location, -qty)
-      const idx = products.findIndex(p => p.id === productId)
-      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - qty) }
-      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - qty)
-      newMoves.push({
-        id: randomUUID(), type: 'out', productId, productName: line.productName || product?.name || 'Item',
-        qty, reason: `${params.reasonLabel || 'POS'} ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
-        serialNumbers: [], date: nowIso(), userId: params.userId ?? 'system', documentRef: params.orderRef,
-      })
     }
-  }
 
-  await bumpPrismaOnHand(stockLevelDeltas)
-  await saveStoreKeys({
-    deed_products: JSON.stringify(products),
-    deed_serials: JSON.stringify(serials),
-    deed_bulkStock: JSON.stringify(bulkStock),
-    deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+    await bumpPrismaOnHand(stockLevelDeltas)
+    await saveStoreKeys({
+      deed_products: JSON.stringify(products),
+      deed_serials: JSON.stringify(serials),
+      deed_bulkStock: JSON.stringify(bulkStock),
+      deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+    })
+    return { ok: true, moves: newMoves }
   })
-  return { ok: true, moves: newMoves }
 }
 
 export interface KilimallSerialRepairItem {

@@ -24,6 +24,9 @@ import {
 } from '@/lib/accounting/expense-pos-accounts'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
 import { roundMoney } from '@/lib/accounting/money'
+import { cashLabelForBankAccount } from '@/lib/accounting/bank-cash-account.server'
+import { isUuid } from '@/lib/legacy-compat'
+import prisma from '@/lib/prisma'
 export type { CoaRole } from '@/lib/accounting/coa-roles'
 export { invoiceResidual, roundMoney } from '@/lib/accounting/money'
 
@@ -32,6 +35,13 @@ export type PostingLineInput = {
   role?: CoaRole
   /** Escape hatch when label is already known (e.g. product sale account). */
   accountLabel?: string
+  /**
+   * The cashbook account this cash/bank line moves money through. An account
+   * added on the Bank accounts screen (Tende, say) has a random id the role
+   * map does not know — it fell through to the I&M/ABSA account. commitPosting
+   * resolves such ids to the account's own GL account.
+   */
+  cashBankAccountId?: string
   description: string
   debit?: number
   credit?: number
@@ -343,6 +353,7 @@ export function buildBankChargeLines(params: {
     },
     {
       role: cashRole,
+      cashBankAccountId: params.bankAccountId,
       description: params.description || 'Bank charges',
       debit: 0,
       credit: amount,
@@ -361,6 +372,7 @@ export function buildBankInterestLines(params: {
   return [
     {
       role: cashRole,
+      cashBankAccountId: params.bankAccountId,
       description: params.description || 'Interest earned',
       debit: amount,
       credit: 0,
@@ -429,6 +441,7 @@ export function buildExpenseCompanyPaymentLines(params: {
     },
     {
       accountLabel: bankAccountLabelForId(bankId, params.paymentMethod),
+      cashBankAccountId: bankId,
       description: `Cash paid for ${params.ref}`,
       debit: 0,
       credit: amount,
@@ -454,6 +467,7 @@ export function buildExpenseReimbursementLines(params: {
     },
     {
       accountLabel: bankAccountLabelForId(bankId),
+      cashBankAccountId: bankId,
       description: `Cash paid for ${params.ref}`,
       debit: 0,
       credit: amount,
@@ -485,6 +499,7 @@ export function buildPosSaleLines(params: {
   if (tenderTotal > 0) {
     lines.push({
       accountLabel: bankAccountLabelForId(bankId, params.paymentMethod),
+      cashBankAccountId: bankId,
       description: `POS receipt ${params.orderRef}`,
       debit: tenderTotal,
       credit: 0,
@@ -536,7 +551,11 @@ export function buildPosSaleLines(params: {
  * Resolve labels, assert balance, persist via journal-service (fiscal lock + idempotent ref).
  */
 export async function commitPosting(input: CommitPostingInput) {
-  const resolved = input.lines.map(l => ({
+  const lines = await Promise.all(input.lines.map(async l =>
+    l.cashBankAccountId && isUuid(l.cashBankAccountId)
+      ? { ...l, role: undefined, accountLabel: await cashLabelForBankAccount(input.tx ?? prisma, l.cashBankAccountId) }
+      : l))
+  const resolved = lines.map(l => ({
     account: resolvePostingAccountLabel(l),
     description: l.description,
     debit: roundMoney(l.debit),

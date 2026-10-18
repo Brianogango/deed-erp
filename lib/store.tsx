@@ -6851,6 +6851,13 @@ function StoreProvider({
   const poRef     = useRef(purchaseOrders); poRef.current = purchaseOrders
   /** Purchase orders being confirmed right now (double-click guard). */
   const confirmingPoRef = useRef(new Set<string>())
+  /**
+   * Till ticket numbers of POS sales whose stock call did not come back
+   * (network drop, server error), keyed by session + cart. Charging the same
+   * cart again reuses the number, so a sale the server did take is not taken
+   * twice; a refused sale (stock gone) frees it.
+   */
+  const posPendingRefs = useRef(new Map<string, string>())
   const recRef    = useRef(receipts);   recRef.current    = receipts
   const purchaseReturnsRef = useRef(purchaseReturns); purchaseReturnsRef.current = purchaseReturns
   const warRef    = useRef(warranties); warRef.current    = warranties
@@ -19997,14 +20004,19 @@ const storeCtx: AppState = {
       const paymentReference = tenderTotal > 0
         ? ((paymentMeta?.paymentReference || '').trim() || undefined)
         : undefined
-      let orderRef: string
-      try {
-        orderRef = await storeCtxRef.current!.allocateDocRef('POS')
-      } catch {
-        orderRef = nextPosTicketRef(posOrders.map(o => o.ref))
-      }
-      if (!/^POS\/\d+$/.test(orderRef)) {
-        orderRef = nextPosTicketRef(posOrders.map(o => o.ref))
+      const cartKey = [sessionId, ...normalizedLines
+        .map(l => `${l.productId}:${l.serialId ?? ''}:${l.qty}`)
+        .sort()].join('|')
+      let orderRef = posPendingRefs.current.get(cartKey) ?? ''
+      if (!orderRef) {
+        try {
+          orderRef = await storeCtxRef.current!.allocateDocRef('POS')
+        } catch {
+          orderRef = nextPosTicketRef(posOrders.map(o => o.ref))
+        }
+        if (!/^POS\/\d+$/.test(orderRef)) {
+          orderRef = nextPosTicketRef(posOrders.map(o => o.ref))
+        }
       }
       const invoiceId = uid()
       const creditAppliedAt = now()
@@ -20085,19 +20097,24 @@ const storeCtx: AppState = {
         })
         if (!res.ok) {
           const payload = await res.json().catch(() => null) as { error?: string } | null
+          // Refused outright (no stock, serial gone): nothing was taken, the
+          // number can go. Otherwise the server may have taken the stock.
+          if (res.status >= 400 && res.status < 500) posPendingRefs.current.delete(cartKey)
+          else posPendingRefs.current.set(cartKey, orderRef)
           showToast(payload?.error || 'POS stock update failed', 'error')
           return null
         }
       } catch {
-        showToast('Could not apply POS stock on server', 'error')
+        posPendingRefs.current.set(cartKey, orderRef)
+        showToast('Could not reach the server — the sale was not completed. Charge again to retry; stock will not be taken twice.', 'error')
         return null
       }
-      // Mirror server stock into local UI (moves already persisted server-side).
+      posPendingRefs.current.delete(cartKey)
+      // The server has taken the stock and tells every screen; quantities come
+      // back from it. Subtracting here as well took a unit off twice whenever
+      // the server's new figure reached this tab first — and the browser then
+      // saved that figure. Only the serial is marked (setting it is harmless twice).
       normalizedLines.forEach(l => {
-        const product = prodRef.current.find(x => x.id === l.productId)
-        const sourceLocation: LocationId = 'warehouse'
-        if (!product?.requiresSerial) setBulkStock(prev => upsertBulkStock(prev, l.productId, sourceLocation, -l.qty))
-        setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
         if (l.serialId) setSerials(p => p.map(s => s.id === l.serialId ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s))
       })
       if (customerId) {
@@ -20120,13 +20137,16 @@ const storeCtx: AppState = {
       // Transaction History intact. Server union-merge is the source of truth.
       setPosOrders(p => [order, ...p])
       try {
-        await fetch('/api/pos/record-order', {
+        const recorded = await fetch('/api/pos/record-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ order }),
         })
+        if (!recorded.ok) throw new Error(`HTTP ${recorded.status}`)
       } catch {
-        /* local + later blob sync still hold the ticket */
+        // The browser copy still syncs it later; say so instead of staying silent.
+        showToast(`${order.ref}: the till ticket is saved on this device only for now — keep this tab open until it syncs`, 'info')
+        addAuditLog('pos_record_order_failed', order.ref, 'Till ticket not confirmed by the server')
       }
       // POS sales carry the till-ticket number (POS/NNNN) as their document
       // ref — the invoice record IS the sale receipt, so it shows as POS/0069
@@ -20212,6 +20232,14 @@ const storeCtx: AppState = {
       if (posJournalHasValue) {
         setJournalEntries(p => [posJournal, ...p])
         addAuditLog('post_pos', order.ref, `POS sale posted to journal ${posJournal.ref}`)
+      }
+      // A price typed in below the catalogue price is a discount someone gave:
+      // leave a trail of who, what and how much.
+      const discounted = normalizedLines.filter(l => Number((l as { listPrice?: number }).listPrice) > Number(l.price))
+      if (discounted.length) {
+        addAuditLog('pos_price_override', order.ref, discounted.map(l =>
+          `${l.productName}${l.serialNumber ? ` (${l.serialNumber})` : ''}: ${fmtKes(Number((l as { listPrice?: number }).listPrice))} → ${fmtKes(l.price)}`,
+        ).join('; '))
       }
       let accountingPostError: string | null = null
       try {

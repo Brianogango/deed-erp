@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cashLabelForBankAccount } from '@/lib/accounting/bank-cash-account.server'
+import { isUuid } from '@/lib/legacy-compat'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { cashAccountRoleForBankId, labelForRole } from '@/lib/accounting/coa-roles'
@@ -54,6 +56,8 @@ export async function POST(
     const journalRef = `JRN/PAYROLL-PAY/${payroll.runReference}`.slice(0, 80)
     const actorId = /^[0-9a-f-]{36}$/i.test(actor.id) ? actor.id : null
     const cashRole = cashAccountRoleForBankId(bankAccountId)
+    // Accounts added on the Bank accounts screen resolve to their own GL account.
+    const cashLabel = isUuid(bankAccountId) ? await cashLabelForBankAccount(prisma, bankAccountId) : labelForRole(cashRole)
     const journalCode = cashRole === 'cash_mobile' ? 'CSH' : 'BNK'
 
     const journal = await prisma.$transaction(async tx => {
@@ -77,7 +81,7 @@ export async function POST(
             credit: 0,
           },
           {
-            accountLabel: labelForRole(cashRole),
+            accountLabel: cashLabel,
             label: reference
               ? `Payroll payment ${payroll.runReference} — ${reference}`
               : `Payroll payment ${payroll.runReference}`,

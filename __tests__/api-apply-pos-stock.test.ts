@@ -75,4 +75,12 @@ describe('POST /api/inventory/apply-pos-stock', () => {
     expect(json.ok).toBe(true)
     expect(json.valuation.ok).toBe(false)
   })
+
+  it('does not book cost of goods again for a retried sale', async () => {
+    mockApplyPosStockMutation.mockResolvedValue({ ok: true, moves: [{ id: 'm1' }], alreadyApplied: true })
+    const res = await POST(postReq(body))
+    expect(res.status).toBe(200)
+    expect((await res.json()).alreadyApplied).toBe(true)
+    expect(mockPostPosValuationFromPayload).not.toHaveBeenCalled()
+  })
 })
