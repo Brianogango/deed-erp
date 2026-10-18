@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { PrimaryActionButton } from '@/components/erp'
+import { PanelHeader, EmptyState } from '@/components/ui'
 
 type ReviewLead = {
   id: string
@@ -109,19 +110,9 @@ export default function EmailReviewPanel({
 
   return (
     <div className="crm-email-review flex flex-col gap-4">
-      <div className="crm-submodule-header">
-        <div>
-          <h2 className="text-sm font-semibold">Email review</h2>
-          <p className="text-[11px] text-text-3 mt-0.5">
-            Medium-confidence inbound mail and classifier failures. Accept to assign; reject or mark non-sales to close.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            className="text-xs border border-border rounded-md px-2 py-1.5 bg-bg"
-            value={status}
-            onChange={e => setStatus(e.target.value)}
-          >
+      <div className="card overflow-hidden">
+        <PanelHeader title="Email review">
+          <select className="form-select text-xs py-1.5" aria-label="Filter by status" value={status} onChange={e => setStatus(e.target.value)}>
             <option value="">All statuses</option>
             <option value="REVIEW_REQUIRED">Review required</option>
             <option value="LEAD_CREATED">Created</option>
@@ -129,34 +120,28 @@ export default function EmailReviewPanel({
             <option value="NON_SALES">Non-sales</option>
             <option value="CLASSIFIED">Classified (shadow)</option>
           </select>
-          <PrimaryActionButton onClick={() => void load()} disabled={loading}>
-            Refresh
-          </PrimaryActionButton>
-          <button
-            type="button"
-            disabled={dryRunBusy}
-            onClick={() => void runDryReport()}
-            className="text-[11px] px-3 py-1.5 rounded-lg border border-border font-medium hover:bg-surface"
-          >
+          <PrimaryActionButton onClick={() => void load()} disabled={loading}>Refresh</PrimaryActionButton>
+          <button type="button" disabled={dryRunBusy} onClick={() => void runDryReport()} className="btn-outline text-[11px]">
             {dryRunBusy ? 'Running…' : '72h dry-run'}
           </button>
-        </div>
+        </PanelHeader>
+        <p className="px-4 py-2.5 text-[11px] text-text-3">
+          Medium-confidence inbound mail and classifier failures. Accept to assign; reject or mark non-sales to close.
+        </p>
       </div>
 
       {dryRunSummary && (
-        <div className="text-xs px-3 py-2 rounded-lg border border-border bg-surface text-text-2">
+        <div className="card px-4 py-2.5 text-xs text-text-2">
           {dryRunSummary}
         </div>
       )}
 
       <div className="card overflow-hidden crm-directory-card">
-        <div className="px-3 py-2 border-b border-border text-[10px] uppercase tracking-wider font-semibold text-text-3">
-          Needs review leads ({reviewLeads.length})
-        </div>
+        <PanelHeader title="Needs review leads" count={reviewLeads.length} />
         {loading ? (
-          <div className="p-6 text-sm text-text-3">Loading…</div>
+          <EmptyState title="Loading…" />
         ) : reviewLeads.length === 0 ? (
-          <div className="p-6 text-sm text-text-3">No leads waiting for review</div>
+          <EmptyState title="No leads waiting for review" />
         ) : (
           <ul className="divide-y divide-border">
             {reviewLeads.map(row => (
@@ -176,7 +161,7 @@ export default function EmailReviewPanel({
                     type="button"
                     disabled={busyId === row.id}
                     onClick={() => void act(row.id, 'accept')}
-                    className="text-[11px] px-2.5 py-1 rounded-md border border-border hover:bg-surface font-medium"
+                    className="btn-outline text-[11px] py-1 px-2.5"
                   >
                     Accept
                   </button>
@@ -184,7 +169,7 @@ export default function EmailReviewPanel({
                     type="button"
                     disabled={busyId === row.id}
                     onClick={() => void act(row.id, 'non_sales')}
-                    className="text-[11px] px-2.5 py-1 rounded-md border border-border hover:bg-surface text-text-2"
+                    className="btn-outline text-[11px] py-1 px-2.5"
                   >
                     Not sales
                   </button>
@@ -192,7 +177,7 @@ export default function EmailReviewPanel({
                     type="button"
                     disabled={busyId === row.id}
                     onClick={() => void act(row.id, 'reject')}
-                    className="text-[11px] px-2.5 py-1 rounded-md border border-border hover:bg-surface text-text-2"
+                    className="btn-outline text-[11px] py-1 px-2.5"
                   >
                     Reject
                   </button>
@@ -204,13 +189,11 @@ export default function EmailReviewPanel({
       </div>
 
       <div className="card overflow-hidden crm-directory-card">
-        <div className="px-3 py-2 border-b border-border text-[10px] uppercase tracking-wider font-semibold text-text-3">
-          Inbound audit ({inbound.length})
-        </div>
+        <PanelHeader title="Inbound audit" count={inbound.length} />
         {loading ? (
-          <div className="p-6 text-sm text-text-3">Loading…</div>
+          <EmptyState title="Loading…" />
         ) : inbound.length === 0 ? (
-          <div className="p-6 text-sm text-text-3">No inbound rows for this filter</div>
+          <EmptyState title="No inbound rows for this filter" subtitle="Try another status filter." />
         ) : (
           <ul className="divide-y divide-border">
             {inbound.map(row => (

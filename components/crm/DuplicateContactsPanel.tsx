@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { CompactInfoNotice, PrimaryActionButton } from '@/components/erp'
+import { PanelHeader, EmptyState } from '@/components/ui'
 import { isEnquiryTitledContact } from '@/lib/crm/duplicate-contact-policy'
 
 type DuplicateContactMember = {
@@ -141,28 +142,18 @@ export default function DuplicateContactsPanel({
 
   return (
     <div className="crm-duplicates flex flex-col gap-4">
-      <div className="crm-submodule-header">
-        <div>
-          <h2 className="text-sm font-semibold">Duplicate contacts</h2>
-          <p className="text-[11px] text-text-3 mt-0.5">
-            Same normalized email or phone. Keep one record; others are deactivated and sales history moves with them.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <PrimaryActionButton
-            variant="secondary"
-            onClick={() => void load()}
-            disabled={loading || Boolean(busyKey)}
-          >
+      <div className="card overflow-hidden">
+        <PanelHeader title="Duplicate contacts" count={groups.length}>
+          <PrimaryActionButton variant="secondary" onClick={() => void load()} disabled={loading || Boolean(busyKey)}>
             Refresh
           </PrimaryActionButton>
-          <PrimaryActionButton
-            onClick={() => void mergeObvious()}
-            disabled={loading || Boolean(busyKey)}
-          >
+          <PrimaryActionButton onClick={() => void mergeObvious()} disabled={loading || Boolean(busyKey)}>
             {busyKey === 'obvious' ? 'Merging…' : 'Merge obvious duplicates'}
           </PrimaryActionButton>
-        </div>
+        </PanelHeader>
+        <p className="px-4 py-2.5 text-[11px] text-text-3">
+          Same normalized email or phone. Keep one record; others are deactivated and sales history moves with them.
+        </p>
       </div>
 
       <CompactInfoNotice>
@@ -171,9 +162,9 @@ export default function DuplicateContactsPanel({
       </CompactInfoNotice>
 
       {loading ? (
-        <div className="p-6 text-sm text-text-3">Loading…</div>
+        <EmptyState title="Loading…" />
       ) : groups.length === 0 ? (
-        <div className="card p-6 text-sm text-text-3">No duplicate contact groups found.</div>
+        <div className="card"><EmptyState title="No duplicate contact groups found" subtitle="Every contact has a unique email and phone." /></div>
       ) : (
         groups.map(group => {
           const extras = group.members.filter(m => m.id !== keepByGroup[group.key])
@@ -189,7 +180,7 @@ export default function DuplicateContactsPanel({
                   <label className="text-[11px] text-text-2 flex items-center gap-1.5">
                     Keep
                     <select
-                      className="text-xs border border-border rounded-md px-2 py-1 bg-bg"
+                      className="form-select text-xs py-1"
                       value={keepByGroup[group.key] || ''}
                       onChange={e => setKeepByGroup(prev => ({ ...prev, [group.key]: e.target.value }))}
                     >
@@ -205,7 +196,7 @@ export default function DuplicateContactsPanel({
                       type="button"
                       disabled={Boolean(busyKey)}
                       onClick={() => void mergeRest(group)}
-                      className="text-[11px] px-2.5 py-1 rounded-md border border-border hover:bg-surface font-medium"
+                      className="btn-outline text-[11px] py-1 px-2.5"
                     >
                       Merge the rest
                     </button>
@@ -237,7 +228,7 @@ export default function DuplicateContactsPanel({
                           type="button"
                           disabled={busyKey === `${group.key}:${m.id}` || Boolean(busyKey)}
                           onClick={() => void mergeOne(group, m.id)}
-                          className="text-[11px] px-2.5 py-1 rounded-md border border-border hover:bg-surface font-medium"
+                          className="btn-outline text-[11px] py-1 px-2.5"
                         >
                           Merge into keep
                         </button>
