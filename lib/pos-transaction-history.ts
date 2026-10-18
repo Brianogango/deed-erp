@@ -91,13 +91,16 @@ export function ticketLines(
   stockMoves?: PosStockMoveHint[],
 ): string {
   const names = (order.lines ?? []).map(line => formatPosReceiptProduct(line, serials, stockMoves, order.ref))
-  if (names.length === 0) return '—'
+  if (names.length === 0) return 'No items recorded'
   if (names.length === 1) return names[0]
   return `${names[0]} +${names.length - 1}`
 }
 
 export function payLabel(order: PosHistoryTicket): string {
-  const tender = isPosBankPayment(order.payment) ? 'Bank' : (order.payment || '—')
+  const method = String(order.payment || '').toLowerCase()
+  const tender = isPosBankPayment(order.payment)
+    ? 'Bank'
+    : method === 'mpesa' ? 'M-Pesa' : method === 'cash' ? 'Cash' : (order.payment || '—')
   const credit = Math.max(0, Number(order.customerCreditAmount) || 0)
   if (credit <= 0) return tender
   if (Number(order.total) > 0 && credit >= Number(order.total)) return 'Client credit'

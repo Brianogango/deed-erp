@@ -54,7 +54,7 @@ export function PosTransactionHistory({
                   </p>
                   <p className="mt-0.5 text-[11px] text-t3">
                     {ticketWhen(order)}
-                    {order.invoiceRef ? ` · ${order.invoiceRef}` : ''}
+                    {order.invoiceRef && order.invoiceRef !== order.ref ? ` · ${order.invoiceRef}` : ''}
                   </p>
                   <p className="mt-1 truncate text-[12px] font-semibold text-t1" title={ticketLines(order, serials, stockMoves)}>
                     {ticketLines(order, serials, stockMoves)}

@@ -304,7 +304,11 @@ export default function PointOfSale() {
     (p.unit === 'service' || getSellableQty(p.id, p.requiresSerial) > 0)
   )
 
-  const categories = ['All', ...Array.from(new Set(sellable.map(p => p.category)))]
+  // Products with no category are grouped as "Other" (they showed as an empty chip).
+  const categoryOf = (p: { category?: string | null }) => String(p.category ?? '').trim() || 'Other'
+  const categoryNames = Array.from(new Set(sellable.map(categoryOf))).sort((a, b) => a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b))
+  // One category is no choice at all: show only "All".
+  const categories = ['All', ...(categoryNames.length > 1 ? categoryNames : [])]
   const customers = contacts.filter(c => c.isCustomer)
 
   // Search matches product name/SKU/barcode, and also serial numbers or SKUs of
@@ -322,7 +326,7 @@ export default function PointOfSale() {
   }
 
   const filteredProducts = sellable.filter(p => {
-    const matchCat = category === 'All' || p.category === category
+    const matchCat = category === 'All' || categoryOf(p) === category
     const matchSearch = !searchTerm
       || p.name.toLowerCase().includes(searchTerm)
       || (p.barcode || '').toLowerCase().includes(searchTerm)
@@ -755,7 +759,7 @@ export default function PointOfSale() {
               }}
             />
 
-            <div className="pos-category-tabs" role="tablist" aria-label="Product categories">
+            {categories.length > 1 && <div className="pos-category-tabs" role="tablist" aria-label="Product categories">
               {categories.map(c => (
                 <button key={c} onClick={() => { setCategory(c); setMobilePage(1) }}
                   className="pos-category-tab"
@@ -770,7 +774,7 @@ export default function PointOfSale() {
                   {c}
                 </button>
               ))}
-            </div>
+            </div>}
 
             {/* Products grid */}
             <div className="pos-product-scroll">
@@ -919,6 +923,60 @@ export default function PointOfSale() {
             </div>
 
             <div className="pos-checkout-summary">
+              <section className="pos-payment-section">
+                <h3>Payment method</h3>
+                <div className="pos-payment-methods">
+                {(['mpesa', 'cash', 'bank'] as const).map(m => (
+                  <button key={m} type="button" onClick={() => {
+                    setPayMethod(m)
+                  }}
+                    className="pos-payment-method"
+                    style={{
+                      background: payMethod === m ? 'var(--primary-light)' : 'var(--bg-surface)',
+                      color: payMethod === m ? 'var(--navy)' : 'var(--text-3)',
+                      border: `1px solid ${payMethod === m ? 'var(--primary)' : 'var(--border-lt)'}`,
+                      fontWeight: payMethod === m ? 600 : 400,
+                    }}>
+                    {m === 'mpesa' ? <><Fa icon={faMobileScreenButton} /> M-Pesa</> : m === 'cash' ? <><Fa icon={faMoneyBillWave} /> Cash</> : <><Fa icon={faBuildingColumns} /> Bank</>}
+                  </button>
+                ))}
+                </div>
+              </section>
+              {payMethod === 'mpesa' && darajaReady && (
+                <div className="pos-bank-payment">
+                  <Field label="M-Pesa number">
+                    <Input
+                      value={mpesaPhone}
+                      onChange={setMpesaPhone}
+                      placeholder="07XX XXX XXX"
+                    />
+                  </Field>
+                  {stkStatus && <p className="text-[11px] text-t2 mt-1">{stkStatus}</p>}
+                  {paidMpesa && !charging && (
+                    <p className="text-[11px] mt-1 font-semibold" style={{ color: 'var(--success)' }}>
+                      M-Pesa {paidMpesa.receipt} received ({fmtKes(paidMpesa.amount)}) — Charge again to finish this sale; no new prompt is sent.
+                    </p>
+                  )}
+                </div>
+              )}
+              {payMethod === 'bank' && (
+                <div className="pos-bank-payment">
+                  <Field label="Bank account" required>
+                    <Select
+                      value={bankAccountId}
+                      onChange={setBankAccountId}
+                      options={[{ value: '', label: 'Select bank account…' }, ...tenderBanks.map(b => ({ value: b.id, label: b.bankName || b.name }))]}
+                    />
+                  </Field>
+                  <Field label="Payment reference (optional)">
+                    <Input
+                      value={paymentReference}
+                      onChange={setPaymentReference}
+                      placeholder="Transfer / deposit ref"
+                    />
+                  </Field>
+                </div>
+              )}
               <section className="pos-customer-section">
                 <h3>Customer & sale</h3>
                 <Field label="Customer (optional)">
@@ -1029,7 +1087,11 @@ export default function PointOfSale() {
                 </button>
               </section>
 
-              <section className="pos-order-totals">
+
+            </div>
+
+            <div className="pos-checkout-footer">
+              <section className="pos-order-totals" aria-label="Sale total">
                 <div className="flex justify-between text-[11px] text-t3"><span>Subtotal</span><span>{fmtKes(cartSubtotal)}</span></div>
                 {cartTax > 0 && <div className="flex justify-between text-[11px] text-t3"><span>VAT ({companySettings.vatRate}%)</span><span>{fmtKes(cartTax)}</span></div>}
                 {pointsToRedeem > 0 && <div className="flex justify-between text-[11px] text-indigo-600 font-bold"><span>Points Discount</span><span>-{fmtKes(pointsToRedeem)}</span></div>}
@@ -1037,64 +1099,6 @@ export default function PointOfSale() {
                 <div className="flex justify-between text-lg font-black text-t1 pt-1"><span>Total due</span><span>{fmtKes(paymentDue)}</span></div>
                 {pointsToEarn > 0 && <p className="text-[10px] text-center font-bold text-indigo-600 pt-1">Earns {pointsToEarn} loyalty points</p>}
               </section>
-
-              <section className="pos-payment-section">
-                <h3>Payment method</h3>
-                <div className="pos-payment-methods">
-                {(['mpesa', 'cash', 'bank'] as const).map(m => (
-                  <button key={m} type="button" onClick={() => {
-                    setPayMethod(m)
-                  }}
-                    className="pos-payment-method"
-                    style={{
-                      background: payMethod === m ? 'var(--primary-light)' : 'var(--bg-surface)',
-                      color: payMethod === m ? 'var(--navy)' : 'var(--text-3)',
-                      border: `1px solid ${payMethod === m ? 'var(--primary)' : 'var(--border-lt)'}`,
-                      fontWeight: payMethod === m ? 600 : 400,
-                    }}>
-                    {m === 'mpesa' ? <><Fa icon={faMobileScreenButton} /> M-Pesa</> : m === 'cash' ? <><Fa icon={faMoneyBillWave} /> Cash</> : <><Fa icon={faBuildingColumns} /> Bank</>}
-                  </button>
-                ))}
-                </div>
-              </section>
-              {payMethod === 'mpesa' && darajaReady && (
-                <div className="pos-bank-payment">
-                  <Field label="M-Pesa number">
-                    <Input
-                      value={mpesaPhone}
-                      onChange={setMpesaPhone}
-                      placeholder="07XX XXX XXX"
-                    />
-                  </Field>
-                  {stkStatus && <p className="text-[11px] text-t2 mt-1">{stkStatus}</p>}
-                  {paidMpesa && !charging && (
-                    <p className="text-[11px] mt-1 font-semibold" style={{ color: 'var(--success)' }}>
-                      M-Pesa {paidMpesa.receipt} received ({fmtKes(paidMpesa.amount)}) — Charge again to finish this sale; no new prompt is sent.
-                    </p>
-                  )}
-                </div>
-              )}
-              {payMethod === 'bank' && (
-                <div className="pos-bank-payment">
-                  <Field label="Bank account" required>
-                    <Select
-                      value={bankAccountId}
-                      onChange={setBankAccountId}
-                      options={[{ value: '', label: 'Select bank account…' }, ...tenderBanks.map(b => ({ value: b.id, label: b.bankName || b.name }))]}
-                    />
-                  </Field>
-                  <Field label="Payment reference (optional)">
-                    <Input
-                      value={paymentReference}
-                      onChange={setPaymentReference}
-                      placeholder="Transfer / deposit ref"
-                    />
-                  </Field>
-                </div>
-              )}
-            </div>
-
-            <div className="pos-checkout-footer">
               <button
                 type="button"
                 className="pos-charge-action"
