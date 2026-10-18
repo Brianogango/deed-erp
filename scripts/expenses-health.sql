@@ -27,23 +27,25 @@ SELECT ref, count(*) AS claims, string_agg(submitted_by || ' ' || amount || ' ' 
 FROM ex GROUP BY ref HAVING count(*) > 1 ORDER BY ref;
 
 \echo ''
-\echo '3. Approved / paid claims whose approval journal is not in the books, or belongs to another claim with the same number'
-SELECT ex.ref, ex.submitted_by, ex.amount, ex.status, ex.reviewed,
-       CASE WHEN je.id IS NULL THEN 'no journal' ELSE 'journal is another claim''s (' || je.total_debit || ')' END AS problem
+\echo '3. Approved / paid claims with no approval journal of their own (scripts/repair-expense-numbers.mjs lists them exactly)'
+SELECT ex.ref, ex.submitted_by, ex.amount, ex.status, ex.reviewed
 FROM ex
-LEFT JOIN journal_entries je ON je.ref = 'JRN/EXP/' || ex.ref
 WHERE ex.status IN ('approved', 'paid', 'reimbursed')
-  AND (je.id IS NULL OR coalesce(je.blob_id, je.source_id, '') NOT LIKE ex.id || '%')
+  AND NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.ref LIKE 'JRN/EXP/%' AND NOT je.is_reversed
+                    AND (coalesce(je.blob_id, '') LIKE ex.id || '%' OR coalesce(je.source_id, '') LIKE ex.id || '%'))
+  AND NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.ref = 'JRN/EXP/' || ex.ref AND NOT je.is_reversed
+                    AND (SELECT count(*) FROM ex e2 WHERE e2.ref = ex.ref) = 1)
 ORDER BY ex.reviewed;
 
 \echo ''
-\echo '4. Paid / reimbursed claims with no payment journal (the money left, the books do not show it)'
+\echo '4. Paid / reimbursed claims with no payment journal of their own (the money left, the books do not show it)'
 SELECT ex.ref, ex.submitted_by, ex.amount, ex.status, ex.method, ex.paid
 FROM ex
-WHERE (ex.status = 'paid' AND NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.ref = 'JRN/EXPPAY/' || ex.ref
-                                           AND coalesce(je.blob_id, je.source_id, '') LIKE ex.id || '%'))
-   OR (ex.status = 'reimbursed' AND NOT EXISTS (SELECT 1 FROM journal_entries je WHERE je.ref = 'JRN/RIM/' || ex.ref
-                                           AND coalesce(je.blob_id, je.source_id, '') LIKE ex.id || '%'))
+WHERE ex.status IN ('paid', 'reimbursed')
+  AND NOT EXISTS (SELECT 1 FROM journal_entries je
+                  WHERE je.ref LIKE (CASE ex.status WHEN 'paid' THEN 'JRN/EXPPAY/%' ELSE 'JRN/RIM/%' END) AND NOT je.is_reversed
+                    AND (coalesce(je.blob_id, '') LIKE ex.id || '%' OR coalesce(je.source_id, '') LIKE ex.id || '%'
+                         OR (je.ref LIKE '%/' || ex.ref AND (SELECT count(*) FROM ex e2 WHERE e2.ref = ex.ref) = 1)))
 ORDER BY ex.paid;
 
 \echo ''
