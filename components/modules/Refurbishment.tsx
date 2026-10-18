@@ -897,13 +897,6 @@ function RefurbishmentContent() {
             onRowClick={j => setActiveId(j.id)}
             rowStyle={j => ({ borderLeft: `3px solid ${STATUS_LEFT_BORDER[j.status]}` })}
             cardAccent={j => STATUS_LEFT_BORDER[j.status]}
-            rowActions={j => (
-              <button
-                onClick={() => setActiveId(j.id)}
-                style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 5, background: '#E8F3FA', color: 'var(--navy)', border: '1px solid #A8D4E8', cursor: 'pointer' }}>
-                Open
-              </button>
-            )}
             exportTitle="Refurbishment Jobs"
             exportFilename="refurbishment-jobs"
           />

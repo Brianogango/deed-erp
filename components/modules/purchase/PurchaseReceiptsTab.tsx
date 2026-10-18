@@ -55,19 +55,6 @@ export default function PurchaseReceiptsTab() {
     },
   ]
 
-  function rowActions(r: Receipt) {
-    return (
-      <button
-        type="button"
-        className="btn-outline min-h-11 md:min-h-8 text-[10px] py-1 px-3"
-        aria-label={`Open goods receipt ${r.ref}`}
-        onClick={e => { e.stopPropagation(); openReceiptDetail(r.id, 'list') }}
-      >
-        Open
-      </button>
-    )
-  }
-
   return (
     <section className="card overflow-hidden purchase-directory purchase-receipts-panel" aria-label="Goods receipts">
       <PanelHeader title="Goods Receipts (GRN)" count={receipts.length} />
@@ -86,7 +73,6 @@ export default function PurchaseReceiptsTab() {
           emptyMessage="No receipts match the current search or filters"
           searchPlaceholder="Search receipts by ref, vendor, product, or serial…"
           onRowClick={r => openReceiptDetail(r.id, 'list')}
-          rowActions={rowActions}
           renderCard={r => (
             <RecordCard
               key={r.id}
@@ -100,7 +86,6 @@ export default function PurchaseReceiptsTab() {
                 { label: 'Location', value: `${LOCATIONS[r.destinationLocation].icon} ${LOCATIONS[r.destinationLocation].name}` },
                 { label: 'Serials', value: receiptSerialCount(r) || 'None' },
               ]}
-              actions={rowActions(r)}
               onClick={() => openReceiptDetail(r.id, 'list')}
             />
           )}

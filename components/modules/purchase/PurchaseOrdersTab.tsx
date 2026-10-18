@@ -164,7 +164,7 @@ export default function PurchaseOrdersTab() {
       exportValue: po => po.date,
     },
     {
-      key: 'total', label: 'Total', priority: 2, width: '85px', align: 'right',
+      key: 'total', label: 'Total', priority: 2, width: '120px', align: 'right',
       render: po => <span className="font-mono text-[11px] font-semibold text-t1">{fmtKes(po.total)}</span>,
       exportValue: po => po.total,
       footer: pageRows => (
@@ -175,38 +175,22 @@ export default function PurchaseOrdersTab() {
     },
   ]
 
+  // The whole row opens the order (and the selection bar exports), so the
+  // only button a row needs is Approve, when the user can approve it.
   function poRowActions(po: PurchaseOrder) {
+    if (!canApproveOrder(po)) return null
     return (
-      <>
-        <button
-          type="button"
-          className="btn-outline min-h-9 text-[10px] px-2"
-          aria-label={`Open ${po.ref}`}
-          onClick={e => { e.stopPropagation(); openOrder(po) }}
-        >
-          Open
-        </button>
-        {canApproveOrder(po) && (
-          <button
-            type="button"
-            className="btn-primary min-h-9 text-[10px] px-2"
-            aria-label={`Approve ${po.ref}`}
-            onClick={e => { e.stopPropagation(); confirmPO(po.id) }}
-          >
-            Approve
-          </button>
-        )}
-        <button
-          type="button"
-          className="btn-outline min-h-9 text-[10px] px-2"
-          aria-label={`Export ${po.ref}`}
-          onClick={e => { e.stopPropagation(); exportOrders([po]) }}
-        >
-          Export
-        </button>
-      </>
+      <button
+        type="button"
+        className="btn-primary min-h-9 text-[10px] px-2"
+        aria-label={`Approve ${po.ref}`}
+        onClick={e => { e.stopPropagation(); confirmPO(po.id) }}
+      >
+        Approve
+      </button>
     )
   }
+  const hasApprovable = filteredPOs.some(canApproveOrder)
 
   return (
     <section className="card overflow-hidden purchase-directory purchase-orders-panel" aria-label="Purchase orders and requests for quotation">
@@ -230,7 +214,8 @@ export default function PurchaseOrdersTab() {
           <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
         ) : undefined}
         onRowClick={openOrder}
-        rowActions={poRowActions}
+        rowActions={hasApprovable ? poRowActions : undefined}
+        rowActionsWidth={96}
         bulkActions={({ rows }) => {
           const approvableRows = rows.filter(canApproveOrder)
           return (
@@ -268,7 +253,7 @@ export default function PurchaseOrdersTab() {
                 { label: 'Date', value: fmtDate(po.date) },
                 { label: 'Lines', value: po.lines.length },
               ]}
-              actions={poRowActions(po)}
+              actions={poRowActions(po) ?? undefined}
               onClick={() => openOrder(po)}
             />
           )
