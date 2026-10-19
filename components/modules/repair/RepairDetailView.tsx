@@ -301,21 +301,21 @@ export default function RepairDetailView() {
   // part of why billing "works at times and at times not".
   const canBillRole = ['director', 'finance_officer', 'admin_officer'].includes(currentRole)
   const billingDue = (['ready', 'unrepairable'].includes(r.status) || declinedFeeDue) && !noCharge
+  // Billing is offered only while the invoice still needs creating or
+  // aligning: a posted invoice that matches the job needs nothing more.
+  // (These conditions were once split off onto the button label by mistake,
+  // so every Ready / Invoiced repair kept asking for a draft invoice.)
   const canInvoice = (['ready', 'invoiced', 'unrepairable'].includes(r.status) || declinedFeeDue)
     && !noCharge
     && canBillRole
+    && billingSync.needed
+    && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
+    && !pendingOutsourceJob
   // Fee-only jobs (unrepairable / declined / stopped) bill the diagnosis fee, not the quote.
   const billsFeeOnly = repairBillsFeeOnly(r)
   const invoiceActionLabel = billsFeeOnly
     ? (linkedInvoice ? 'Update diagnosis fee invoice' : 'Bill diagnosis fee')
     : billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice'
-    && billingSync.needed
-    && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
-    // Whoever stops a job at diagnosis (lead tech, assigned technician) can
-    // also raise its fee invoice.
-    && (['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-      || ((!!r.diagnosisStopped || declinedFeeDue) && (currentRole === 'technical_lead' || isMyRepair)))
-    && !pendingOutsourceJob
   // Offered only when this repair can itself go on a combined invoice and the
   // client has at least one other repair that can join it.
   const consolidationOptions = !linkedInvoice && !r.invoiceId
@@ -376,6 +376,8 @@ export default function RepairDetailView() {
       : billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen
       ? 'Align the draft invoice with the approved quote'
       : 'Create a draft invoice for Finance review')
+    : canPrepareRelease ? (linkedInvoice ? `Invoiced (${linkedInvoice.ref}) — prepare the release so the client can collect` : 'Prepare the release so the client can collect')
+    : r.status === 'invoiced' && !repairOrc ? 'Invoiced — waiting for the release to be prepared'
     : canQuote && !r.quote ? 'Generate a repair quote'
     : awaitingAssignedTech ? `Quote approved — waiting for ${technicianLabel} to start the repair`
     : otherTechWorking ? `${technicianLabel} is working on this repair`
