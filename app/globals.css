@@ -887,6 +887,24 @@
   margin-bottom: 4px;
 }
 
+.contacts-person-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.contacts-person-link .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.contacts-person-link__hint {
+  flex-basis: 100%;
+  color: var(--contacts-muted);
+  font-size: 11px;
+}
+
 .contacts-section-heading p {
   margin-top: 2px;
   color: var(--contacts-muted);

@@ -5,7 +5,7 @@ import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaul
 
 const CONTACT_STORE_KEY = 'deed_contacts'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type PrismaClientLike = {
   client: {
@@ -155,7 +155,12 @@ function normalizeContact(body: ContactInput, existing?: Contact): Contact | str
     // value must become null rather than reaching Postgres — that is the
     // `invalid input syntax for type uuid` failure that has bitten this
     // codebase repeatedly. Only a company may be an employer.
-    companyId: isUuid(body.companyId) ? body.companyId : (isUuid(existing?.companyId) ? existing?.companyId : undefined),
+    // Left out = keep the current company; sent empty = no company.
+    companyId: isUuid(body.companyId)
+      ? body.companyId
+      : ('companyId' in body && (body.companyId === '' || body.companyId === null))
+        ? undefined
+        : (isUuid(existing?.companyId) ? existing?.companyId : undefined),
     jobTitle: cleanText(body.jobTitle) ?? existing?.jobTitle,
     email: cleanTextOrEmpty(body.email, existing?.email ?? ''),
     phone: cleanTextOrEmpty(body.phone, existing?.phone ?? ''),
@@ -183,7 +188,7 @@ function normalizeContact(body: ContactInput, existing?: Contact): Contact | str
 
 function contactToClientData(contact: Contact, includeCreateFields = false): Record<string, unknown> {
   return {
-    ...(includeCreateFields && isUuid(contact.id) ? { id: contact.id } : {}),
+    // The database gives a new contact its id; an id sent by the browser is not reused.
     ...(includeCreateFields ? { clientNumber: clientNumber(), createdAt: asDate(contact.createdAt) } : {}),
     clientType: contact.type,
     name: contact.name,

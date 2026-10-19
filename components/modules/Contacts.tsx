@@ -166,7 +166,7 @@ function ContactsInner() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { contacts, addContact,
+  const { contacts, addContact, updateContact,
     saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
   const canSeeCredit = ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(normalizeClientRole(currentUser?.role))
@@ -190,6 +190,9 @@ function ContactsInner() {
   const [formDraft, setFormDraft] = useState<ContactFormValues>(blankCompanyContact())
   const [formKey, setFormKey] = useState(0)
   const [viewTabValue, setViewTabValue] = useUrlQueryState('contactTab', 'info')
+  // "Link existing contact" on a company's Contact persons tab.
+  const [linkQuery, setLinkQuery] = useState('')
+  const [linking, setLinking] = useState(false)
   // A customer opened goes into the sidebar's Recent list.
   useEffect(() => {
     if (viewContact?.id && viewContact.name) {
@@ -881,6 +884,53 @@ function ContactsInner() {
                     <Fa icon={faPlus} /> Add person
                   </button>
                 </div>
+                {(() => {
+                  // People already in the directory, so a person is linked rather than typed in twice.
+                  const linkLabel = (c: Contact) => [c.name, c.phone || c.mobile, c.email].filter(Boolean).join(' · ')
+                  const candidates = contacts.filter(c => c.type === 'individual' && !c.isArchived && c.companyId !== vc.id)
+                  const byName = candidates.filter(c => c.name.trim().toLowerCase() === linkQuery.trim().toLowerCase())
+                  const picked = candidates.find(c => linkLabel(c) === linkQuery.trim()) ?? (byName.length === 1 ? byName[0] : undefined)
+                  const link = async () => {
+                    if (!picked) { showToast('Pick a contact from the list', 'error'); return }
+                    const from = picked.companyId ? contacts.find(c => c.id === picked.companyId)?.name : undefined
+                    setLinking(true)
+                    try {
+                      await updateContact(picked.id, { companyId: vc.id })
+                      showToast(from ? `${picked.name} moved from ${from} to ${vc.name}` : `${picked.name} linked to ${vc.name}`, 'success')
+                      setLinkQuery('')
+                    } catch {
+                      // updateContact already reports the failure
+                    } finally {
+                      setLinking(false)
+                    }
+                  }
+                  return (
+                    <div className="contacts-person-link">
+                      <input
+                        className="form-input"
+                        list="contacts-person-link-options"
+                        value={linkQuery}
+                        onChange={e => setLinkQuery(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void link() } }}
+                        placeholder="Link an existing contact: search name, phone or email"
+                        aria-label="Link an existing contact"
+                      />
+                      <datalist id="contacts-person-link-options">
+                        {candidates.map(c => (
+                          <option key={c.id} value={linkLabel(c)}>
+                            {c.companyId ? `Now at ${contacts.find(x => x.id === c.companyId)?.name ?? 'another company'}` : ''}
+                          </option>
+                        ))}
+                      </datalist>
+                      <button className="btn-outline" disabled={!picked || linking} onClick={() => { void link() }}>
+                        {linking ? 'Linking…' : 'Link'}
+                      </button>
+                      {!picked && byName.length > 1 && (
+                        <p className="contacts-person-link__hint">{byName.length} contacts are called {byName[0].name}. Pick the right one from the list.</p>
+                      )}
+                    </div>
+                  )
+                })()}
                 {persons.length === 0 ? (
                   <p className="contacts-empty-copy contacts-empty-copy--large">No contact persons linked yet</p>
                 ) : persons.map(p => (
