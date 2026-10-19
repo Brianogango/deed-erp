@@ -31934,3 +31934,18 @@ button, [role="button"], [role="tab"] {
     grid-column: auto;
   }
 }
+
+/* Quick actions: tiles wide enough for their labels, labels wrap instead of colliding. */
+.dashboard-quick-actions-grid {
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  padding: var(--dash-inset, 1rem);
+}
+.dashboard-quick-action {
+  min-width: 0;
+  overflow: hidden;
+}
+.dashboard-quick-action span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
