@@ -1,5 +1,5 @@
 'use client'
-import { defaultContactPerson } from '@/lib/crm/default-contact-person'
+import { defaultContactPerson, contactPersonHint } from '@/lib/crm/default-contact-person'
 import { useState, useMemo, useEffect, Suspense, useCallback, useRef, startTransition } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate, type CustomerContract } from '@/lib/store'
@@ -1143,7 +1143,7 @@ function CRMContent() {
                   <button type="button" className="btn-outline text-xs px-2 py-1 whitespace-nowrap" onClick={() => setShowOppCompanyModal(true)}>+ New</button>
                 </div>
               </Field>
-              <Field label="Contact Person">
+              <Field label="Contact Person" hint={contactPersonHint(contactPersons, oppForm.companyId, oppForm.contactPersonId)}>
                 <div className="flex gap-2 items-center">
                   <div className="flex-1">
                     <Select value={oppForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setOppForm(p => ({ ...p, contactPersonId: v, contactPersonName: c ? `${c.firstName} ${c.lastName}` : '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => (c.companyId ?? c.clientId) === oppForm.companyId).map(c => ({value:c.id, label:`${c.firstName} ${c.lastName}`}))]} />
@@ -1354,7 +1354,7 @@ function CRMContent() {
                <Select value={contractForm.companyId} onChange={v => { const c = companies.find(x => x.id === v); const person = defaultContactPerson(contactPersons, v); setContractForm(p => ({ ...p, companyId: v, companyName: c?.name || '', contactPersonId: person?.id ?? '', contactPersonName: person ? `${person.firstName} ${person.lastName}` : '' })) }} options={[{value:'', label:'Select...'}, ...companies.map(c => ({value:c.id, label:c.name}))]} />
              </Field>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-               <Field label="Contact Person">
+               <Field label="Contact Person" hint={contactPersonHint(contactPersons, contractForm.companyId, contractForm.contactPersonId)}>
                  <Select value={contractForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setContractForm(p => ({ ...p, contactPersonId: v, contactPersonName: c ? `${c.firstName} ${c.lastName}` : '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => (c.companyId ?? c.clientId) === contractForm.companyId).map(c => ({value:c.id, label:`${c.firstName} ${c.lastName}`}))]} />
                </Field>
                <Field label="Contract Value (KES)"><Input type="number" value={contractForm.contractValue} onChange={v => setContractForm(p => ({...p, contractValue: v}))} /></Field>

@@ -21,3 +21,10 @@ export function defaultContactPerson<T extends DefaultablePerson>(persons: reado
   if (primary.length === 0 && mine.length === 1) return mine[0]
   return null
 }
+
+/** A prompt for the field when a company has several people and none is chosen yet. */
+export function contactPersonHint(persons: readonly DefaultablePerson[], companyId: string, selectedId: string): string | undefined {
+  if (!companyId || selectedId) return undefined
+  const count = persons.filter(p => (p.companyId ?? p.clientId) === companyId || p.clientId === companyId).length
+  return count > 1 ? `${count} contact persons on file — choose who this is for` : undefined
+}
