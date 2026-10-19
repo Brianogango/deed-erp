@@ -75,11 +75,11 @@ function PasswordChangeForm({ user }: Props) {
         return
       }
 
-      setToast({ msg: 'Password updated. Redirecting…', type: 'success' })
-      window.setTimeout(() => {
-        router.replace('/')
-        router.refresh()
-      }, 800)
+      // Changing the password signs every session out, so go to a fresh sign-in.
+      // A soft redirect here kept the old "must change" flag in the shell and
+      // sent the person straight back to this screen, which looked like flicker.
+      setToast({ msg: 'Password updated. Please sign in with your new password.', type: 'success' })
+      window.setTimeout(() => { window.location.assign('/login') }, 1200)
     } catch {
       setToast({ msg: 'Network error. Please try again.', type: 'error' })
       setPending(false)

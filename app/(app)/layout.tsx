@@ -19,6 +19,12 @@ export default async function AppGroupLayout({ children }: { children: React.Rea
     redirect('/login')
   }
 
+  // Someone still on the temporary password sets their own before anything else.
+  // Done here, on the server, so there is no flash of the app first.
+  if (session?.user?.mustChangePassword) {
+    redirect('/account/password-change?force=true')
+  }
+
   const fallbackUser = PUBLIC_USERS.find(user => user.username === 'brian') ?? PUBLIC_USERS[0]
   const shellUser = session?.user ?? fallbackUser
   const initialUsers = visregBypassAuth ? PUBLIC_USERS : [shellUser]
