@@ -4,7 +4,7 @@ const { mockPrisma, mockLoadAppState, mockSaveStoreKeys, mockResolveClientId } =
   mockPrisma: {
     user: { findFirst: vi.fn(), findMany: vi.fn() },
     invoice: { findUnique: vi.fn() },
-    repair: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue(null), update: vi.fn().mockResolvedValue({}) },
+    repair: { upsert: vi.fn(), findFirst: vi.fn().mockResolvedValue(null), findUnique: vi.fn().mockResolvedValue(null), update: vi.fn().mockResolvedValue({}) },
   },
   mockLoadAppState: vi.fn(),
   mockSaveStoreKeys: vi.fn(),
@@ -50,6 +50,7 @@ beforeEach(() => {
   mockPrisma.invoice.findUnique.mockResolvedValue(null)
   mockPrisma.repair.upsert.mockResolvedValue({})
   mockPrisma.repair.findUnique.mockResolvedValue(null)
+  mockPrisma.repair.findFirst?.mockResolvedValue(null)
   mockPrisma.repair.update.mockResolvedValue({})
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
 })
@@ -188,5 +189,21 @@ describe('mirrorRepairsToPrisma()', () => {
 
     // Trailing pass re-mirrored from the re-read blob state.
     expect(mockPrisma.repair.upsert).toHaveBeenCalledTimes(2)
+  })
+
+  it('a stale save cannot put a closed job back to Ready', async () => {
+    // The table already holds the job as closed (a queued release/close landed
+    // first); a browser list merged earlier still says ready.
+    mockPrisma.repair.findFirst.mockResolvedValue({ payload: { ...blobRepair, status: 'closed', closedDate: '2026-10-18' } })
+    await mirrorRepairsToPrisma([{ ...blobRepair, status: 'ready' }])
+    const call = mockPrisma.repair.upsert.mock.calls[0][0]
+    expect(call.update.payload.status).toBe('closed')
+    expect(call.update.status).toBe('collected')
+  })
+
+  it('a save that moves a job forward is written as sent', async () => {
+    mockPrisma.repair.findFirst.mockResolvedValue({ payload: { ...blobRepair, status: 'ready' } })
+    await mirrorRepairsToPrisma([{ ...blobRepair, status: 'collected' }])
+    expect(mockPrisma.repair.upsert.mock.calls[0][0].update.payload.status).toBe('collected')
   })
 })

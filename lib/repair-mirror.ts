@@ -1,4 +1,5 @@
 import 'server-only'
+import { pickRepairStoreRow } from '@/lib/repair-store-merge'
 import { createHash } from 'crypto'
 import prisma from './prisma'
 import { loadAppState, saveStoreKeys } from './server-store'
@@ -229,13 +230,34 @@ export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force
     const nextHashes: Record<string, string> = { ...hashes }
     let dirty = false
 
-    for (const r of repairs) {
+    for (let r of repairs) {
       const ref = String(r?.ref ?? '').trim()
       if (!ref) continue
       try {
-        const mapped = mapRepair(r)
         const hash = fingerprint(r)
         if (!opts.force && hashes[ref] === hash) { result.skipped++; continue }
+
+        // Apply the stale-write rules again against the row as it is NOW.
+        // Saves queue up behind a running pass, and each was merged against
+        // the table as it stood when it arrived — so a browser's list merged
+        // before a queued "collected" / "closed" landed was written after it
+        // and put the job back to Ready. Checked here, a closed job stays closed.
+        const blobIdForCheck = UUID_RE.test(String(r.id ?? '')) ? String(r.id) : null
+        const stored = await prisma.repair.findFirst({
+          where: { OR: [{ jobNumber: ref }, ...(blobIdForCheck ? [{ id: blobIdForCheck }] : [])] },
+          select: { payload: true },
+        })
+        const storedPayload = stored?.payload && typeof stored.payload === 'object' ? stored.payload as Record<string, unknown> : undefined
+        if (storedPayload) {
+          // Only a refused status change is acted on; any other save is
+          // written exactly as sent (e.g. reissue deliberately unlinks an invoice).
+          const picked = pickRepairStoreRow(storedPayload, r)
+          if (String(picked.status ?? '') !== String(r.status ?? '')) {
+            console.warn(`[repair-mirror] kept ${ref} at "${String(picked.status)}"; a stale save tried "${String(r.status)}"`)
+            r = picked
+          }
+        }
+        const mapped = mapRepair(r)
 
         const clientId = await resolveClientId(prisma as any, r.customerId, {
           name: r.customerName, phone: r.customerPhone, email: r.customerEmail,
