@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AuthToast, PortalPageSkeleton } from '@/components/auth/AuthFeedback'
-import { PASSWORD_HISTORY_COUNT, PASSWORD_RULES } from '@/lib/auth/password-policy'
 
 type ToastState = { msg: string; type: 'success' | 'error' | 'info' } | null
 
@@ -16,6 +15,20 @@ type SessionUser = {
 
 interface Props {
   user: SessionUser
+}
+
+/**
+ * Returns a list of human-readable validation problems for a candidate password.
+ * Mirrors the server-side rule (>= 8 chars) but adds basic strength hints.
+ */
+const evaluatePassword = (pwd: string): string[] => {
+  const problems: string[] = []
+  if (pwd.length < 8) problems.push('At least 8 characters')
+  if (!/[A-Z]/.test(pwd)) problems.push('One uppercase letter')
+  if (!/[a-z]/.test(pwd)) problems.push('One lowercase letter')
+  if (!/[0-9]/.test(pwd)) problems.push('One number')
+  if (!/[^A-Za-z0-9]/.test(pwd)) problems.push('One symbol')
+  return problems
 }
 
 function PasswordChangeForm({ user }: Props) {
@@ -37,11 +50,11 @@ function PasswordChangeForm({ user }: Props) {
     return () => window.clearTimeout(timer)
   }, [toast])
 
-  const rules = useMemo(() => PASSWORD_RULES.map(rule => ({ label: rule.label, met: rule.test(newPassword) })), [newPassword])
-  const problems = rules.filter(rule => !rule.met)
+  const problems = useMemo(() => evaluatePassword(newPassword), [newPassword])
   const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword
   const formValid =
     currentPassword.length > 0 &&
+    newPassword.length >= 8 &&
     problems.length === 0 &&
     passwordsMatch &&
     newPassword !== currentPassword
@@ -75,11 +88,11 @@ function PasswordChangeForm({ user }: Props) {
         return
       }
 
-      // Changing the password signs every session out, so go to a fresh sign-in.
-      // A soft redirect here kept the old "must change" flag in the shell and
-      // sent the person straight back to this screen, which looked like flicker.
-      setToast({ msg: 'Password updated. Please sign in with your new password.', type: 'success' })
-      window.setTimeout(() => { window.location.assign('/login') }, 1200)
+      setToast({ msg: 'Password updated. Redirecting…', type: 'success' })
+      window.setTimeout(() => {
+        router.replace('/')
+        router.refresh()
+      }, 800)
     } catch {
       setToast({ msg: 'Network error. Please try again.', type: 'error' })
       setPending(false)
@@ -170,7 +183,7 @@ function PasswordChangeForm({ user }: Props) {
                   onChange={(e) => setNewPassword(e.target.value)}
                   autoComplete="new-password"
                   required
-                  minLength={12}
+                  minLength={6}
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 pr-10 text-sm text-gray-900 outline-none focus:border-navy-500 focus:ring-2 focus:ring-[#1B2762]/20"
                 />
                 <button
@@ -181,14 +194,18 @@ function PasswordChangeForm({ user }: Props) {
                   {showNew ? 'HIDE' : 'SHOW'}
                 </button>
               </div>
-              <ul className="mt-2 space-y-0.5" aria-label="Password rules">
-                {rules.map(rule => (
-                  <li key={rule.label} className={`text-[11px] ${newPassword.length === 0 ? 'text-gray-500' : rule.met ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {newPassword.length === 0 ? '○' : rule.met ? '✓' : '○'} {rule.label}
-                  </li>
-                ))}
-                <li className="text-[11px] text-gray-500">○ Different from your last {PASSWORD_HISTORY_COUNT} passwords</li>
-              </ul>
+              {newPassword.length > 0 && problems.length > 0 ? (
+                <ul className="mt-2 space-y-0.5">
+                  {problems.map((p) => (
+                    <li key={p} className="text-[10px] text-amber-600">
+                      • {p}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {newPassword.length > 0 && problems.length === 0 ? (
+                <p className="mt-2 text-[10px] text-emerald-600">Strong password</p>
+              ) : null}
             </div>
 
             <div>
@@ -199,7 +216,7 @@ function PasswordChangeForm({ user }: Props) {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 autoComplete="new-password"
                 required
-                minLength={12}
+                minLength={6}
                 className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-navy-500 focus:ring-2 focus:ring-[#1B2762]/20"
               />
               {confirmPassword.length > 0 && !passwordsMatch ? (
