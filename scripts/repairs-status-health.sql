@@ -54,3 +54,18 @@ SELECT left(coalesce(r.payload->>'intakeDate', r.payload->>'createdDate', ''), 7
 FROM repairs r
 WHERE r.payload->>'status' IN ('ready', 'invoiced')
 GROUP BY 1, 2 ORDER BY 1 DESC;
+
+\echo ''
+\echo '6. Shown Ready / Invoiced, but the audit log records it was collected, delivered or closed'
+SELECT r.job_number AS ref, r.payload->>'customerName' AS customer, r.payload->>'status' AS shown_status,
+       string_agg(DISTINCT a.action || ' ' || to_char(a.created_at, 'YYYY-MM-DD') || ' ' || coalesce(a.new_values->>'username', ''), ' | ') AS recorded,
+       r.updated_at::date AS last_saved
+FROM repairs r
+JOIN audit_logs a ON a.entity_key IN (r.job_number, r.payload->>'id')
+WHERE r.payload->>'status' IN ('ready', 'invoiced')
+  AND (
+    a.action IN ('close_repair', 'deliver_repair')
+    OR (a.action = 'update_repair_progress' AND a.new_values->>'details' ~* 'status changed to (collected|delivered|closed|verified_released)')
+  )
+GROUP BY 1, 2, 3, 5
+ORDER BY 5 DESC;
