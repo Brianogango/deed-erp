@@ -6,15 +6,6 @@ export const REQUIRE_PASSWORD_LOWERCASE = true
 export const REQUIRE_PASSWORD_NUMBER = true
 export const REQUIRE_PASSWORD_SPECIAL = true
 
-/** The rules in plain words, in the order they are checked — shown wherever a password is chosen. */
-export const PASSWORD_RULES: Array<{ label: string; test: (password: string) => boolean }> = [
-  { label: `At least ${MIN_PASSWORD_LENGTH} characters`, test: p => p.length >= MIN_PASSWORD_LENGTH },
-  ...(REQUIRE_PASSWORD_UPPERCASE ? [{ label: 'One uppercase letter (A–Z)', test: (p: string) => /[A-Z]/.test(p) }] : []),
-  ...(REQUIRE_PASSWORD_LOWERCASE ? [{ label: 'One lowercase letter (a–z)', test: (p: string) => /[a-z]/.test(p) }] : []),
-  ...(REQUIRE_PASSWORD_NUMBER ? [{ label: 'One number (0–9)', test: (p: string) => /\d/.test(p) }] : []),
-  ...(REQUIRE_PASSWORD_SPECIAL ? [{ label: 'One symbol, such as ! @ # $ %', test: (p: string) => /[^A-Za-z0-9]/.test(p) }] : []),
-]
-
 /**
  * New/reset passwords must satisfy this policy. Existing hashes remain valid
  * until a password change is requested; the UI does not force-expire users.
