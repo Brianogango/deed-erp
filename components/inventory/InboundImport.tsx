@@ -61,6 +61,7 @@ export default function InboundImport({ onClose }: { onClose: () => void }) {
   const existingSerials = useMemo(() => new Set((serials as any[]).map(s => String(s.serial ?? '').toUpperCase())), [serials])
 
   const [vendorId, setVendorId] = useState('')
+  const [vendorQuery, setVendorQuery] = useState('')
   const [fileName, setFileName] = useState('')
   const [reference, setReference] = useState('')
   const [rows, setRows] = useState<InboundSourceRow[]>([])
@@ -129,7 +130,7 @@ export default function InboundImport({ onClose }: { onClose: () => void }) {
       if (body.documentReference) setReference(body.documentReference)
       if (!vendorId && body.supplierName) {
         const match = vendors.find(v => norm(v.name) === norm(body.supplierName) || norm(body.supplierName).includes(norm(v.name)))
-        if (match) setVendorId(match.id)
+        if (match) { setVendorId(match.id); setVendorQuery(match.name) }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The file could not be read')
@@ -206,10 +207,27 @@ export default function InboundImport({ onClose }: { onClose: () => void }) {
         <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <label className="flex flex-col gap-1">
             <span className="font-semibold text-t2">Supplier</span>
-            <select className="form-input text-xs" value={vendorId} onChange={e => setVendorId(e.target.value)} aria-label="Supplier">
-              <option value="">Choose the supplier…</option>
-              {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
+            {/* Type to search; picking a name from the list selects that supplier. */}
+            <input
+              className="form-input text-xs"
+              list="inbound-import-suppliers"
+              value={vendorQuery}
+              onChange={e => {
+                const text = e.target.value
+                setVendorQuery(text)
+                const match = vendors.find(v => v.name.trim().toLowerCase() === text.trim().toLowerCase())
+                setVendorId(match?.id ?? '')
+              }}
+              placeholder="Type to search suppliers…"
+              aria-label="Supplier"
+              autoComplete="off"
+            />
+            <datalist id="inbound-import-suppliers">
+              {vendors.map(v => <option key={v.id} value={v.name} />)}
+            </datalist>
+            {vendorQuery.trim() && !vendorId && (
+              <span className="text-[10px] text-t3">No supplier by that exact name — pick one from the list, or add it in Contacts first.</span>
+            )}
           </label>
           <label className="flex flex-col gap-1">
             <span className="font-semibold text-t2">Delivery file</span>

@@ -1,8 +1,8 @@
 // @ts-nocheck
 'use client'
 
-import { defaultContactPerson } from '@/lib/crm/default-contact-person'
-import { useState, useMemo } from 'react'
+import { contactPersonHint, defaultContactPerson } from '@/lib/crm/default-contact-person'
+import { useState, useMemo, useEffect } from 'react'
 import { useOperationsStore, RepairOrder, fmtDate, fmtDateTime } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { diagnosisFeeAmount, isDiagnosisFeePolicyInEffect, resolveCustomerBillingType, resolveDiagnosisFee } from '@/lib/diagnosis-fee'
@@ -198,6 +198,19 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     () => companyPersons.find(p => p.id === selectedPersonId) ?? null,
     [companyPersons, selectedPersonId],
   )
+
+  // Once a company is chosen (picked from the list or just created): its one
+  // contact — or its primary — is filled in; with none on file the new-contact
+  // form opens straight away; with several the user is asked to choose.
+  // Never overrides a choice already made or a form the user opened.
+  useEffect(() => {
+    if (!selectedCompany || selectedPersonId || showNewPersonForm) return
+    const pick = defaultContactPerson(companyPersons, selectedCompany.id)
+    if (pick) setSelectedPersonId(pick.id)
+    else if (companyPersons.length === 0) setShowNewPersonForm(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCompany?.id, companyPersons.length])
+  const contactChoiceHint = selectedCompany ? contactPersonHint(companyPersons, selectedCompany.id, selectedPersonId) : undefined
 
   const filteredCompanies = useMemo(() => {
     const q = companySearch.toLowerCase()
@@ -815,6 +828,13 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                       <p id="intake-contactPerson-error" role="alert" className="text-[10px] text-destructive font-semibold mb-2">
                         {fieldErrors.contactPerson}
                       </p>
+                    )}
+
+                    {contactChoiceHint && !showNewPersonForm && !fieldErrors.contactPerson && (
+                      <p className="text-[11px] font-semibold mb-2" style={{ color: 'var(--warning-text, #92400E)' }}>{contactChoiceHint}</p>
+                    )}
+                    {companyPersons.length === 0 && showNewPersonForm && (
+                      <p className="text-[11px] mb-2" style={{ color: 'var(--text-3)' }}>No contact person on file for {selectedCompany.name} — add the person handing in the device.</p>
                     )}
 
                     {/* Existing persons list */}
