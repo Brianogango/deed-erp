@@ -42,8 +42,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       throw Object.assign(new Error('Invalid JSON payload'), { status: 400 })
     }
 
-    // Validate using Zod
-    const validated = await validate(userUpdateSchema, body)
+    // Validate using Zod. `unlock` is an action, not a field to store.
+    const { unlock, ...validated } = await validate(userUpdateSchema, body)
+    if (unlock && actor.id === resolvedParams.id) {
+      throw Object.assign(new Error('You cannot unlock your own account'), { status: 403 })
+    }
 
     const existingUser = await findAuthUserById(resolvedParams.id)
     if (!existingUser) {
@@ -102,8 +105,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       throw Object.assign(new Error('Update failed'), { status: 500 })
     }
 
-    if (body.unlock) {
+    // The unlock button sent `unlock`, which the strict schema refused, so
+    // a locked account could only wait out its lock.
+    if (unlock) {
       await clearFailedLogin(resolvedParams.id)
+      updatedUser.lockedUntil = null
+      updatedUser.failedLoginAttempts = 0
     }
 
     const accessAfter = snapshotAccess(updatedUser)

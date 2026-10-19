@@ -84,6 +84,8 @@ export const userUpdateSchema = z.object({
     .refine(value => !REQUIRE_PASSWORD_SPECIAL || /[^A-Za-z0-9]/.test(value), 'Password must contain a special character')
     .optional(),
   mustChangePassword: z.boolean().optional(),
+  /** Clear failed logins and the lock (Settings → Users → Unlock). */
+  unlock: z.boolean().optional(),
 }).strict()
 
 export const loginSchema = z.object({

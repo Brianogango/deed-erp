@@ -127,3 +127,18 @@ describe('keeping a history of access changes', () => {
     error.mockRestore()
   })
 })
+
+describe('unlocking an account locked by wrong passwords', () => {
+  it('unlocks: the request is accepted and the user comes back unlocked', async () => {
+    const repo = await import('@/lib/auth/users-repository')
+    h.users[2].lockedUntil = new Date(Date.now() + 10 * 60000).toISOString()
+    h.users[2].failedLoginAttempts = 5
+    const res = await call(PATCH, 'rep-1', { unlock: true })
+    expect(res.status).toBe(200)
+    expect(repo.clearFailedLogin).toHaveBeenCalledWith('rep-1')
+    const body = await res.json()
+    expect(body.user.lockedUntil).toBeNull()
+    // `unlock` is an action, never written to the user record.
+    expect(h.users[2]).not.toHaveProperty('unlock')
+  })
+})

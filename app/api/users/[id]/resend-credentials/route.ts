@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requirePermission, sanitizeActor, withApiErrorHandling } from '@/lib/auth/api'
 import { hashPassword } from '@/lib/auth/password'
-import { findAuthUserById, updateAuthUser, toPublicAuthUser } from '@/lib/auth/users-repository'
+import { clearFailedLogin, findAuthUserById, updateAuthUser, toPublicAuthUser } from '@/lib/auth/users-repository'
 import { buildCredentialMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
 import { generateTemporaryPassword } from '@/lib/auth/temporary-credentials'
 
@@ -63,6 +63,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         { status: 503 },
       )
     }
+
+    // A new password for someone locked out by wrong attempts is usable at
+    // once: the reset clears the lock too.
+    await clearFailedLogin(resolvedParams.id)
+    updated.lockedUntil = null
+    updated.failedLoginAttempts = 0
 
     console.log('[users] Credentials reset', { userId: user.id, credentialDelivered: true })
 
