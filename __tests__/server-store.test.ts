@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // vi.hoisted ensures the variable is available when vi.mock() factory runs
 // (vi.mock is hoisted to the top of the file by Vitest's transformer).
@@ -25,10 +25,15 @@ import { loadAppState, saveStoreKeys, loadChangedStoreKeysSince } from '@/lib/se
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // These tests mock the database layer; with a real DATABASE_URL (CI) the table
+  // overlays would try to reach it and the store would refuse to serve the copy.
+  vi.stubEnv('DATABASE_URL', '')
   mockPrismaStore.storeBackend.mockReturnValue('dual')
   mockPrismaStore.readStoreRecords.mockResolvedValue({})
   mockPrismaStore.writeStoreRecords.mockResolvedValue(undefined)
 })
+
+afterEach(() => { vi.unstubAllEnvs() })
 
 describe('loadAppState()', () => {
   it('returns empty object when table has no rows', async () => {
