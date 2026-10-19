@@ -1,6 +1,7 @@
 'use client'
 
 import JobTrail from '@/components/erp/JobTrail'
+import { addChequeToRegister, chequeDirectionForDoc, chequeLinkedType } from '@/lib/cheques/cheque-link'
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -113,6 +114,10 @@ export default function InvoiceDetail() {
   const [serverPayments, setServerPayments] = useState<Array<{ id: string; amount: string | number; paymentMethod: string; reference: string | null; paidAt: string }>>([])
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState('')
+  // Paying by cheque: the cheque details, so it goes into the cheque register too.
+  const [chequeNumber, setChequeNumber] = useState('')
+  const [chequeBank, setChequeBank] = useState('')
+  const [chequeDate, setChequeDate] = useState('')
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payReference, setPayReference] = useState('')
   const [payDate, setPayDate] = useState('')
@@ -417,21 +422,49 @@ export default function InvoiceDetail() {
       : []),
   ].sort((a, b) => String(b.date).localeCompare(String(a.date)))
 
-  const handlePayment = () => {
+  const handlePayment = async () => {
     if (balance <= 0) { showToast(`${docLabel} is already fully settled`, 'info'); return }
     const missing: string[] = []
     if (!payDate) missing.push(invoice.type === 'customer_invoice' ? 'Receipt date' : 'Payment date')
     if (!payAmount || !Number.isFinite(Number(payAmount)) || Number(payAmount) <= 0) missing.push('Amount (greater than 0)')
     if (!payMethod) missing.push(invoice.type === 'customer_invoice' ? 'Receipt method' : 'Payment method')
+    const byCheque = payMethod === 'cheque' && !!chequeDirectionForDoc(invoice.type)
+    if (byCheque && !chequeNumber.trim()) missing.push('Cheque number')
     if (missing.length) { showToast(`Required: ${missing.join(', ')}`, 'error'); return }
     if (payMethod === 'bank_transfer' && !payBankAccountId) { showToast('Select a bank account for bank transfer payments', 'error'); return }
-    registerPayment(invoice.id, financePaymentPreview(payAmount, balance).applied, payMethod, payBankAccountId || undefined, payReference, payDate)
+    const applied = financePaymentPreview(payAmount, balance).applied
+    const reference = payReference.trim() || (byCheque ? `Cheque ${chequeNumber.trim()}` : payReference)
+    const paid = await registerPayment(invoice.id, applied, payMethod, payBankAccountId || undefined, reference, payDate)
+    if (paid && byCheque) {
+      // The same cheque goes into the cheque register, linked to this document,
+      // so nobody types it in a second time.
+      const direction = chequeDirectionForDoc(invoice.type)!
+      const ourBank = activeBanks.find(b => b.id === payBankAccountId)
+      const result = await addChequeToRegister({
+        direction,
+        chequeNumber: chequeNumber.trim(),
+        bankName: direction === 'given' ? (ourBank?.bankName || ourBank?.name || chequeBank.trim()) : chequeBank.trim(),
+        partyName: invoice.partnerName,
+        amount: applied,
+        chequeDate: chequeDate || payDate,
+        receivedDate: payDate,
+        linkedType: chequeLinkedType(invoice.type),
+        linkedRef: invoice.ref,
+      })
+      if (result.ok) showToast(`Cheque ${chequeNumber.trim()} added to the cheque register`, 'success')
+      else if (result.duplicate) showToast(`Cheque ${chequeNumber.trim()} was already in the cheque register`, 'info')
+      else showToast(`Payment recorded, but the cheque was not added to the register: ${result.error}`, 'error')
+    }
+    if (!paid) return
     setShowPayModal(false)
     focusDetailTab('payments')
     setPayAmount('')
     setPayReference('')
     setPayDate('')
     setPayMethod('')
+    setChequeNumber('')
+    setChequeBank('')
+    setChequeDate('')
     setStkStatus('')
   }
 
@@ -1380,11 +1413,34 @@ export default function InvoiceDetail() {
               </Field>
             )}
 
+            {payMethod === 'cheque' && chequeDirectionForDoc(invoice.type) && (
+              <div className="grid grid-cols-2 gap-3 rounded-xl border border-[var(--border-lt)] p-3">
+                <p className="col-span-2 text-[11px] text-[var(--text-3)]">
+                  {invoice.type === 'customer_invoice'
+                    ? `Goes into the cheque register as received from ${invoice.partnerName}, for ${displayDocRef(invoice.ref)}.`
+                    : `Goes into the cheque register as given to ${invoice.partnerName}, for ${displayDocRef(invoice.ref)}.`}
+                </p>
+                <Field label="Cheque number *">
+                  <Input value={chequeNumber} onChange={setChequeNumber} placeholder="e.g. 000123" />
+                </Field>
+                <Field label="Date on the cheque">
+                  <Input type="date" value={chequeDate} onChange={setChequeDate} />
+                </Field>
+                {invoice.type === 'customer_invoice' && (
+                  <div className="col-span-2">
+                    <Field label="Customer's bank">
+                      <Input value={chequeBank} onChange={setChequeBank} placeholder="e.g. Equity Bank" />
+                    </Field>
+                  </div>
+                )}
+              </div>
+            )}
+
             <Field label="Memo / Reference">
               <Input
                 value={payReference}
                 onChange={setPayReference}
-                placeholder="M-Pesa code, receipt no., cheque no..."
+                placeholder={payMethod === 'cheque' ? 'Optional — the cheque number is used if left empty' : 'M-Pesa code, receipt no., cheque no...'}
               />
             </Field>
 
@@ -1409,7 +1465,7 @@ export default function InvoiceDetail() {
               <button
                 className="btn-primary disabled:opacity-40"
                 disabled={!payAmount || Number(payAmount) <= 0 || balance <= 0 || stkBusy}
-                onClick={handlePayment}
+                onClick={() => { void handlePayment() }}
               >
                 {invoice.type === 'customer_invoice' ? (willFullyPay || overpay ? 'Confirm full receipt' : 'Record partial receipt') : (willFullyPay || overpay ? 'Confirm full payment' : 'Record partial payment')}
               </button>

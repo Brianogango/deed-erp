@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fmtDate, fmtKes } from '@/lib/store'
+import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
+import { chequeLinkedType, docBalance, findDocByRef, openDocsForCheque } from '@/lib/cheques/cheque-link'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Modal } from '@/components/ui'
 import {
@@ -324,6 +325,26 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const set = (patch: Partial<typeof EMPTY_FORM>) => setForm(prev => ({ ...prev, ...patch }))
+  // The invoice or bill this cheque settles: picking it fills the name and
+  // amount, and the payment can be recorded on it in the same step.
+  const { invoices, bankAccounts, registerPayment } = useFinanceStore()
+  const openDocs = useMemo(() => openDocsForCheque(invoices, form.direction), [invoices, form.direction])
+  const linkedDoc = useMemo(() => findDocByRef(openDocs, form.linkedRef), [openDocs, form.linkedRef])
+  const [recordPayment, setRecordPayment] = useState(true)
+  const [payBankId, setPayBankId] = useState('')
+  const activeBanks = bankAccounts.filter(b => b.active)
+
+  const pickDoc = (ref: string) => {
+    const doc = findDocByRef(openDocs, ref)
+    if (!doc) { set({ linkedRef: ref }); return }
+    set({
+      linkedRef: doc.ref,
+      partyName: form.partyName || doc.partnerName || '',
+      amount: form.amount || String(docBalance(doc)),
+      // A cheque we write is usually dated the day it is issued.
+      chequeDate: form.chequeDate || (form.direction === 'given' ? form.receivedDate : ''),
+    })
+  }
 
   const fillFrom = (result: Scan, direction: ChequeDirection) => set({
     chequeNumber: result.chequeNumber || form.chequeNumber,
@@ -367,9 +388,21 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
       await readJson(await fetch('/api/cheques', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, amount: Number(form.amount), imageBase64: image?.base64, imageType: image?.mimeType }),
+        body: JSON.stringify({
+          ...form,
+          amount: Number(form.amount),
+          linkedType: linkedDoc ? chequeLinkedType(linkedDoc.type) : undefined,
+          imageBase64: image?.base64,
+          imageType: image?.mimeType,
+        }),
       }))
       showToast(`Cheque ${form.chequeNumber} added`, 'success')
+      if (linkedDoc && recordPayment) {
+        const amount = Math.min(Number(form.amount), docBalance(linkedDoc))
+        const paid = await registerPayment(linkedDoc.id, amount, 'cheque', payBankId || undefined, `Cheque ${form.chequeNumber}`, form.receivedDate || today())
+        if (paid) showToast(`${fmtKes(amount)} recorded on ${linkedDoc.ref}`, 'success')
+        else showToast(`The cheque is in the register, but the payment on ${linkedDoc.ref} was not recorded — record it from the ${linkedDoc.type === 'vendor_bill' ? 'bill' : 'invoice'}`, 'error')
+      }
       await onSaved()
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not save the cheque', 'error')
@@ -421,9 +454,52 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
           {field('Amount (KES)', <input className="form-input text-[12px]" type="number" min="0" step="0.01" value={form.amount} onChange={e => set({ amount: e.target.value })} />)}
           {field('Date on the cheque', <input className="form-input text-[12px]" type="date" value={form.chequeDate} onChange={e => set({ chequeDate: e.target.value })} />)}
           {field(form.direction === 'received' ? 'Received on' : 'Issued on', <input className="form-input text-[12px]" type="date" value={form.receivedDate} onChange={e => set({ receivedDate: e.target.value })} />)}
-          {field('For (invoice or bill number)', <input className="form-input text-[12px]" value={form.linkedRef} onChange={e => set({ linkedRef: e.target.value })} placeholder="e.g. INV/2026/0191" />)}
+          {field(form.direction === 'received' ? 'For invoice' : 'For bill', (
+            <>
+              <input
+                className="form-input text-[12px]"
+                list="cheque-open-docs"
+                value={form.linkedRef}
+                onChange={e => pickDoc(e.target.value)}
+                placeholder={openDocs.length ? `Pick from ${openDocs.length} open ${form.direction === 'received' ? 'invoices' : 'bills'}…` : 'e.g. INV/2026/0191'}
+              />
+              <datalist id="cheque-open-docs">
+                {openDocs.slice(0, 300).map(d => (
+                  <option key={d.id} value={d.ref}>{`${d.partnerName ?? ''} · ${fmtKes(docBalance(d))} owing`}</option>
+                ))}
+              </datalist>
+            </>
+          ))}
           {field('Notes', <input className="form-input text-[12px]" value={form.notes} onChange={e => set({ notes: e.target.value })} />, true)}
         </div>
+
+        {linkedDoc && (
+          <div className="rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: 'var(--border-lt)' }}>
+            <p className="text-t2">
+              {linkedDoc.ref} · {linkedDoc.partnerName} · <span className="font-semibold">{fmtKes(docBalance(linkedDoc))} owing</span>
+            </p>
+            <label className="mt-2 flex items-center gap-2 text-t1">
+              <input type="checkbox" checked={recordPayment} onChange={e => setRecordPayment(e.target.checked)} />
+              {form.direction === 'received' ? 'Also record this as a receipt on the invoice' : 'Also record this as a payment on the bill'}
+            </label>
+            {recordPayment && activeBanks.length > 0 && (
+              <select
+                className="form-input mt-2 text-[12px]"
+                value={payBankId}
+                aria-label="Bank account"
+                onChange={e => {
+                  setPayBankId(e.target.value)
+                  // Our own cheque is drawn on this account: that is its bank.
+                  const bank = activeBanks.find(b => b.id === e.target.value)
+                  if (form.direction === 'given' && bank && !form.bankName) set({ bankName: bank.bankName || bank.name })
+                }}
+              >
+                <option value="">{form.direction === 'received' ? 'Bank account it will be banked into…' : 'Bank account it is drawn on…'}</option>
+                {activeBanks.map(b => <option key={b.id} value={b.id}>{b.bankName || b.name}</option>)}
+              </select>
+            )}
+          </div>
+        )}
 
         {stale && <p className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">This cheque is over six months old, so the bank will treat it as stale.</p>}
         {alert === 'overdue' && !stale && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-900">The date on this cheque has already passed{form.direction === 'received' ? ' — it can be banked now' : ''}.</p>}
