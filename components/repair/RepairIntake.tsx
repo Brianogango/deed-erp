@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client'
 
+import { defaultContactPerson } from '@/lib/crm/default-contact-person'
 import { useState, useMemo } from 'react'
 import { useOperationsStore, RepairOrder, fmtDate, fmtDateTime } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
@@ -760,7 +761,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                           <button
                             key={c.id}
                             type="button"
-                            onClick={() => { setSelectedCompany(c); setCompanySearch(''); setSelectedPersonId(''); setShowNewPersonForm(false); clearFieldError('company') }}
+                            onClick={() => { setSelectedCompany(c); setCompanySearch(''); setSelectedPersonId(defaultContactPerson(contactPersons, c.id)?.id ?? ''); setShowNewPersonForm(false); clearFieldError('company') }}
                             className="w-full text-left px-4 py-3 text-xs hover:bg-[var(--bg-surface)] transition-colors"
                           >
                             <div className="font-bold" style={{ color: NAVY }}>{c.name}</div>
