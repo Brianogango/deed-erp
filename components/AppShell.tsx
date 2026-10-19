@@ -797,13 +797,6 @@ export default function AppShell({
   serverState?: Record<string, unknown> | any
   children: React.ReactNode
 }) {
-  // A person still on the temporary password must choose their own first.
-  const router = useRouter()
-  const pathname = usePathname()
-  const mustChangePassword = Boolean(initialUser?.mustChangePassword)
-  useEffect(() => {
-    if (mustChangePassword && pathname !== '/account/password-change') router.replace('/account/password-change?force=true')
-  }, [mustChangePassword, pathname, router])
   return (
     <AppProvider initialUser={initialUser} initialUsers={initialUsers} serverState={serverState}>
       <AppContent>{children}</AppContent>

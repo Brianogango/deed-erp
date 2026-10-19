@@ -34,6 +34,9 @@ const originalNodeEnv = env.NODE_ENV
 const originalBackend = env.STORE_BACKEND
 
 beforeEach(() => {
+  // These tests mock the database layer; with a real DATABASE_URL (CI) the table
+  // overlays would try to reach it and the store would refuse to serve the copy.
+  vi.stubEnv('DATABASE_URL', '')
   vi.clearAllMocks()
   storedAppState = {}
   storeRecordsPresent = false
