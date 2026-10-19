@@ -31946,6 +31946,9 @@ button, [role="button"], [role="tab"] {
 }
 .dashboard-quick-action span {
   max-width: 100%;
+  overflow: visible;
   overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
   line-height: 1.25;
 }
