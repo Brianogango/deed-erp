@@ -22,7 +22,7 @@ interface PartnerKey {
 
 function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
+    <div className="settings-section-card bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center px-4 sm:px-5 py-3 border-b border-gray-50 gap-2 sm:gap-0">
         <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest">{title}</p>
         {action && <div>{action}</div>}
@@ -156,7 +156,7 @@ export default function PartnerApiKeys() {
       </SectionCard>
 
       <SectionCard
-        title="Partner API Keys"
+        title="Partner API keys"
         action={
           <button className="btn-primary text-[11px]" onClick={() => setShowCreate(true)}>
             <Fa icon={faPlus} style={{ fontSize: 10, marginRight: 5 }} />New Partner Key

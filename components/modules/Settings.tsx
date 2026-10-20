@@ -58,7 +58,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
       aria-label={`${on ? 'Disable' : 'Enable'} ${label}`}
       aria-pressed={on}
       onClick={() => onChange(!on)}
-      className={`relative inline-flex h-[22px] w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-navy-500 focus:ring-offset-1 ${on ? 'bg-navy-500' : 'bg-gray-200'}`}
+      className={`settings-toggle relative inline-flex h-[22px] w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-navy-500 focus:ring-offset-1 ${on ? 'is-on bg-navy-500' : 'bg-gray-200'}`}
     >
       <span
         aria-hidden="true"
@@ -138,7 +138,7 @@ const SECTION_DESCRIPTIONS: Partial<Record<Section, string>> = {
   pos: 'Till, receipt and payment settings for point of sale.',
   notifications: 'Templates, automation, delivery log and gateways for email, SMS, in-app, push and WhatsApp.',
   security: 'Sign-in, sessions, access control and system protection.',
-  data_cutover: 'Opening balances and the switch-over from the old system.',
+  data_cutover: 'Retire the old shared data store, one part at a time, once each part is verified against its own table.',
   partner_api: 'Keys for partners and integrations that call the ERP.',
 }
 
@@ -799,6 +799,7 @@ export default function Settings() {
                 searchPlaceholder="Search accounts…"
                 emptyMessage="No bank accounts yet"
                 emptyAction={canManageBanks ? <button className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-navy-500 text-white border-none cursor-pointer" onClick={openAddBank}>Add your first account</button> : undefined}
+                rowActionsWidth={200}
                 rowActions={a => canManageBanks ? (
                   <div className="flex gap-1.5">
                     <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
@@ -911,10 +912,10 @@ export default function Settings() {
 
               {/* Role capabilities */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-                <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest mb-4">Role Capabilities</p>
+                <p className="settings-card-title mb-4">Role capabilities</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { id: 'director', role: 'Director',          color: '#fff',     bg: 'var(--navy)', border: 'var(--navy)', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
+                    { id: 'director', role: 'Director',          color: 'var(--navy)', bg: '#EEF0FB', border: '#C7CDEF', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
                     { id: 'admin_officer', role: 'Admin Officer',     color: 'var(--navy)', bg: 'var(--info-bg)', border: '#C7D2FE', desc: 'Process, master-data, workflow control, invoicing, quotations, sales orders, customer records, and purchases.' },
                     { id: 'finance_officer', role: 'Finance Officer',   color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, reports, CRM, quotations, sales orders, settlements, purchases, and workflow control.' },
                     { id: 'inventory_officer', role: 'Inventory Officer', color: '#C2410C', bg: '#FFF7ED', border: '#FED7AA', desc: 'Physical stock control — receives goods, transfers, counts. No accounting.' },
@@ -1321,7 +1322,7 @@ export default function Settings() {
               </SectionCard>
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-50 gap-3 sm:gap-0">
-                  <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest">Daily Shift Summary</p>
+                  <p className="settings-card-title">Daily shift summary</p>
                   <ExportButtons
                     title="POS Daily Shift Summary"
                     filename="pos_shift_summary"
