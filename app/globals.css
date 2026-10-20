@@ -31952,3 +31952,72 @@ button, [role="button"], [role="tab"] {
   :root:not([data-theme="light"]) .bill-account-guide__warn { background: #3b2a06; border-color: #92400e; color: #fde68a; }
 }
 :root[data-theme="dark"] .bill-account-guide__warn { background: #3b2a06; border-color: #92400e; color: #fde68a; }
+
+/* ── Dashboard rhythm ──
+   One gap, one card inset, balanced KPI rows, headers that keep their action
+   beside the title. Layered after the dashboard blocks above so it wins by order. */
+.dashboard-page {
+  --dash-gap: 1rem;
+  --dash-inset: 1rem;
+  gap: var(--dash-gap);
+}
+
+.dashboard-executive-grid,
+.dashboard-executive-main,
+.dashboard-executive-side,
+.dashboard-workspace-grid {
+  gap: var(--dash-gap);
+}
+
+/* A section title belongs to the block below it: air above, tight below. */
+.dashboard-section-title {
+  margin: 0.5rem 0 calc(var(--dash-gap) * -0.5);
+}
+
+.dashboard-card-header {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem var(--dash-inset);
+}
+
+.dashboard-list-rows,
+.dashboard-performance-grid {
+  padding-inline: var(--dash-inset);
+}
+
+/* Six KPI tiles read as 3 × 2, not 4 + 2 with a hole. */
+@media (min-width: 1101px) {
+  .dashboard-executive-main .dashboard-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* An odd last period cell spans the row instead of leaving a gap. */
+.dashboard-period-strip > div:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+@media (min-width: 768px) {
+  .dashboard-period-strip > div:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+
+/* Quick actions: tiles wide enough for their labels, labels wrap instead of colliding. */
+.dashboard-quick-actions-grid {
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  padding: var(--dash-inset, 1rem);
+}
+.dashboard-quick-action {
+  min-width: 0;
+  overflow: hidden;
+}
+.dashboard-quick-action span {
+  max-width: 100%;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.25;
+}
