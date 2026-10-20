@@ -186,6 +186,7 @@ function humanize(value: string) {
     .replaceAll('.', ' ')
     .replaceAll('_', ' ')
     .replace(/\b\w/g, letter => letter.toUpperCase())
+    .replace(/\b(Crm|Hr|Pos|Sms|Otp|Grn|Po|Vat)\b/g, word => word.toUpperCase())
 }
 
 function moduleFromEvent(eventType: string) {
@@ -729,21 +730,29 @@ export default function NotificationOperationsPanel({
   return (
     <div className="notification-console min-w-0">
       <section className="mb-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Settings / Notifications</p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-[#10183E]">Notifications</h2>
-            <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-slate-500">
-              Configure, automate and monitor system notifications across email, SMS, in-app, push and WhatsApp.
-            </p>
+        {/* The section heading above names this page; only the actions sit here. */}
+        <div className="notification-console__bar">
+          <div className="notification-console__tabs scrollbar-hide" role="tablist" aria-label="Notification sections">
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                onClick={() => switchTab(tab.id)}
+                className={'notification-console__tab' + (activeTab === tab.id ? ' is-active' : '')}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="notification-console__actions">
             <button
               type="button"
               onClick={() => switchTab('templates')}
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[10px] font-bold text-[#1A1F5E] hover:border-cyan-300 hover:bg-cyan-50"
             >
-              <Fa icon={faFileLines} /> Manage templates
+              <Fa icon={faFileLines} /> Templates
             </button>
             <button
               type="button"
@@ -755,23 +764,9 @@ export default function NotificationOperationsPanel({
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#00AEEF] px-4 text-[10px] font-black text-white shadow-sm transition hover:bg-[#009bd6] disabled:opacity-50"
             >
               <Fa icon={faRotate} className={loading ? 'animate-spin' : ''} />
-              {loading ? 'Refreshing…' : 'Refresh activity'}
+              {loading ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
-        </div>
-
-        <div className="mt-4 flex gap-1 overflow-x-auto border-b border-slate-200 scrollbar-hide">
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => switchTab(tab.id)}
-              className={'relative min-h-11 shrink-0 px-4 text-[10.5px] font-bold transition-colors ' + (activeTab === tab.id ? 'text-[#0878C9]' : 'text-slate-500 hover:text-slate-800')}
-            >
-              {tab.label}
-              {activeTab === tab.id && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-[#00AEEF]" />}
-            </button>
-          ))}
         </div>
       </section>
 
@@ -1004,13 +999,13 @@ export default function NotificationOperationsPanel({
       )}
 
       {activeTab === 'templates' && (
-        <div className="grid gap-4 2xl:grid-cols-[250px_minmax(0,1fr)_340px]">
+        <div className="notification-templates grid gap-4">
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 px-4 py-3">
               <h3 className="text-[11px] font-black text-[#14213D]">Template Categories</h3>
             </div>
             <div className="p-2">
-              {Array.from(new Set(templateEvents.map(eventType => eventType.split('.')[0]))).map(module => {
+              {Array.from(new Set(templateEvents.map(eventType => eventType.split('.')[0]))).filter(module => /^[a-z]/i.test(module)).map(module => {
                 const count = templateEvents.filter(eventType => eventType.startsWith(module + '.')).length
                 return (
                   <button
@@ -1059,7 +1054,7 @@ export default function NotificationOperationsPanel({
                 type="button"
                 onClick={() => void saveTemplate()}
                 disabled={savingTemplate || loadingSecondary}
-                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl bg-[#00AEEF] px-4 text-[9.5px] font-black text-white disabled:opacity-50"
+                className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#00AEEF] px-4 text-[9.5px] font-black text-white disabled:opacity-50"
               >
                 <Fa icon={faFloppyDisk} />
                 {savingTemplate ? 'Saving…' : 'Save template'}
@@ -1076,7 +1071,7 @@ export default function NotificationOperationsPanel({
               </label>
               <div>
                 <span className="text-[9px] font-black text-slate-600">Trigger event</span>
-                <div className="mt-1.5 flex h-10 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-[9px] text-slate-500">{selectedEvent || '—'}</div>
+                <div className="mt-1.5 flex h-10 min-w-0 items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-[9px] text-slate-500" title={selectedEvent}><span className="truncate">{selectedEvent || '—'}</span></div>
               </div>
             </div>
 
@@ -1134,14 +1129,16 @@ export default function NotificationOperationsPanel({
                 <h3 className="text-[11px] font-black text-[#14213D]">Live Preview</h3>
                 {templateChannel && <ChannelBadge channel={templateChannel} />}
               </div>
-              <div className="mt-4 rounded-[28px] border-[6px] border-[#141927] bg-white p-2 shadow-sm">
-                <div className="rounded-[18px] bg-slate-50 px-3 py-3">
-                  <p className="text-center text-[8px] font-semibold text-slate-400">Deed Technologies · now</p>
-                  <div className="mt-4 rounded-2xl rounded-tl-md bg-white p-3 shadow-sm">
-                    <p className="whitespace-pre-wrap text-[9.5px] leading-relaxed text-slate-700">{renderPreview(templateBody)}</p>
+              {templateBody.trim() ? (
+                <div className="notification-preview">
+                  <p className="notification-preview__from">Deed Technologies · now</p>
+                  <div className="notification-preview__bubble">
+                    <p className="whitespace-pre-wrap">{renderPreview(templateBody)}</p>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <p className="notification-preview__empty">Write a message to see how it will look. Variables such as {'{{customer_name}}'} are filled with sample values.</p>
+              )}
               {templateChannel === 'email' && (
                 <div className="mt-4 rounded-xl border border-slate-200">
                   <div className="border-b border-slate-100 p-3 text-[8px] text-slate-500">

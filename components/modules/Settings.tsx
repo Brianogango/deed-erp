@@ -122,6 +122,26 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
   )
 }
 
+const SECTION_DESCRIPTIONS: Partial<Record<Section, string>> = {
+  general: 'Company identity, address, currency and regional formats used on every document.',
+  document_layout: 'How quotes, invoices, delivery notes and receipts look when printed or sent.',
+  banks: 'The bank, M-Pesa and cash accounts money is received into and paid from.',
+  access: 'Who can sign in, their role, and which modules they can open.',
+  email: 'The mail server used to send documents and notifications.',
+  crm: 'Lead sources, pipeline stages and follow-up rules.',
+  sales: 'Quotation, order and pricing defaults.',
+  inventory: 'Product categories, stock rules and warehouse defaults.',
+  purchase: 'Purchase order approvals and supplier defaults.',
+  repair: 'Workshop flow, fees and repair document defaults.',
+  accounting: 'Fiscal year, taxes, reconciliation and posting rules.',
+  hr_config: 'Payroll, leave and staff record defaults.',
+  pos: 'Till, receipt and payment settings for point of sale.',
+  notifications: 'Templates, automation, delivery log and gateways for email, SMS, in-app, push and WhatsApp.',
+  security: 'Sign-in, sessions, access control and system protection.',
+  data_cutover: 'Opening balances and the switch-over from the old system.',
+  partner_api: 'Keys for partners and integrations that call the ERP.',
+}
+
 function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="settings-section-card bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
@@ -533,11 +553,7 @@ export default function Settings() {
 
   return (
     <div className="settings-workspace">
-    <ModuleChrome
-      title="System settings"
-      subtitle="Configure company info, users, and module behaviour"
-      icon={<Fa icon={faCog} />}
-    >
+    <div className="mod-page settings-page min-w-0 max-w-full">
       <div className="settings-shell p-4 sm:p-5 pb-16">
       <div className="settings-layout flex flex-col lg:flex-row gap-5 items-start">
 
@@ -584,18 +600,16 @@ export default function Settings() {
         {/* ── Main content ── */}
         <main className="settings-main flex-1 min-w-0">
 
-          {/* Section heading — Security renders its approved dashboard heading internally. */}
-          {section !== 'security' && section !== 'notifications' && (
-            <div className="settings-section-heading flex items-center gap-2 mb-4">
-              {activeNav && (
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[var(--info-bg)] flex items-center justify-center">
-                    <Fa icon={activeNav.icon} style={{ fontSize: 12, color: 'var(--navy)' }} />
-                  </div>
-                  <h3 className="text-[13px] font-bold text-gray-800">{activeNav.label}</h3>
-                </div>
-              )}
-            </div>
+          {/* One heading per section: the page has no other title. */}
+          {activeNav && (
+            <header className="settings-section-heading">
+              <span className="settings-section-heading__icon" aria-hidden="true"><Fa icon={activeNav.icon} /></span>
+              <div className="min-w-0">
+                <p className="settings-section-heading__eyebrow">Settings · {activeNav.group}</p>
+                <h2 className="settings-section-heading__title">{activeNav.label}</h2>
+                {SECTION_DESCRIPTIONS[activeNav.id] && <p className="settings-section-heading__desc">{SECTION_DESCRIPTIONS[activeNav.id]}</p>}
+              </div>
+            </header>
           )}
 
           {/* ════ GENERAL ════ */}
@@ -1536,7 +1550,7 @@ export default function Settings() {
           onCancel={() => setResetStep(0)}
         />
       )}
-    </ModuleChrome>
+    </div>
     </div>
   )
 }

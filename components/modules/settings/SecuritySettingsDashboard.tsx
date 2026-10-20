@@ -553,17 +553,7 @@ export default function SecuritySettingsDashboard({
   return (
     <div className="security-dashboard min-w-0">
       <div className="mb-4 flex flex-col gap-3 border-b border-[#E7ECF3] pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] border border-[#D4E8F0] bg-[#F4FBFE] text-[var(--primary)]">
-            <Fa icon={faShieldHalved} style={{ fontSize: 16 }} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-[17px] font-black tracking-[-0.025em] text-[#151D2D]">
-              Settings / <span className="text-[var(--primary-dark)]">Security</span>
-            </h2>
-            <p className="mt-1 text-[10.5px] text-[#778399]">Manage authentication, sessions, access control and system protection.</p>
-          </div>
-        </div>
+        <p className="text-[11px] text-[#778399]">Live status from the server.</p>
         <button
           type="button"
           onClick={() => void refresh(true)}
