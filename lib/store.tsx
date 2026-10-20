@@ -685,6 +685,8 @@ export interface CashbookEntry {
   category: string
   /** Tooltip for the category badge — e.g. every revenue account a sale was posted to. */
   categoryTitle?: string
+  /** A sale's money by product line (sales account), e.g. Laptops 7,500 + Accessories 2,500. */
+  salesLines?: Array<{ code: string; name: string; amount: number }>
   bankAccountId: string  // which bank/cash account
   debit: number          // money out
   credit: number         // money in

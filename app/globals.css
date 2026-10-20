@@ -32021,3 +32021,34 @@ button, [role="button"], [role="tab"] {
   white-space: normal;
   line-height: 1.25;
 }
+
+/* Cashbook month summary */
+.cashbook-summary { display: grid; gap: 16px; padding: 16px; }
+.cashbook-summary__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.cashbook-summary__title { font-size: 14px; font-weight: 800; color: var(--text-1); }
+.cashbook-summary__sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.cashbook-summary__actions { display: flex; gap: 8px; }
+.cashbook-summary__kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.cashbook-summary__kpis > div { border: 1px solid var(--border-lt); border-radius: 12px; padding: 10px 12px; background: var(--bg-surface); display: grid; gap: 2px; min-width: 0; }
+.cashbook-summary__kpis span { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--text-4); }
+.cashbook-summary__kpis strong { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text-1); overflow-wrap: anywhere; }
+.cashbook-summary .is-in { color: var(--success, #16a34a); }
+.cashbook-summary .is-out { color: var(--danger, #dc2626); }
+.cashbook-summary__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.cashbook-summary__grid > div { display: grid; gap: 16px; }
+.cashbook-summary__section { display: grid; gap: 8px; }
+.cashbook-summary__section h4 { font-size: 12px; font-weight: 800; color: var(--text-1); }
+.cashbook-summary__empty { font-size: 11px; color: var(--text-4); }
+.cashbook-summary__table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cashbook-summary__table th { text-align: right; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-4); padding: 6px 8px; border-bottom: 1px solid var(--border-lt); }
+.cashbook-summary__table th:first-child { text-align: left; }
+.cashbook-summary__table td { padding: 7px 8px; border-bottom: 1px solid var(--border-lt); color: var(--text-2); vertical-align: top; }
+.cashbook-summary__table tfoot td { font-weight: 800; color: var(--text-1); border-bottom: 0; border-top: 2px solid var(--border); }
+.cashbook-summary__amount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cashbook-summary__share { text-align: right; color: var(--text-4); font-variant-numeric: tabular-nums; width: 64px; }
+.cashbook-summary__count { display: block; font-size: 10px; color: var(--text-4); }
+.cashbook-summary__note { font-size: 10px; color: var(--text-4); }
+@media (max-width: 760px) {
+  .cashbook-summary__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cashbook-summary__grid { grid-template-columns: minmax(0, 1fr); }
+}

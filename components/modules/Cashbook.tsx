@@ -7,7 +7,8 @@ import {
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
 import { computeCashbookTotals } from '@/lib/finance-alerts'
-import { saleCategoryLabel } from '@/lib/accounting/cashbook-category'
+import { GENERAL_SALES_CODE, splitSaleAmount } from '@/lib/accounting/sales-lines'
+import CashbookMonthSummary from '@/components/finance/CashbookMonthSummary'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { EmptyState } from '@/components/ui'
@@ -136,13 +137,27 @@ export function buildCashbookEntries(
 ): CashbookEntry[] {
   const { invoices, posOrders, expenses, journalEntries, deposits, products } = state
   const entries: CashbookEntry[] = []
-  const saleCategory = (lines: Array<{ productId?: string; subtotal: number; accountCode?: string; lineType?: 'item' | 'section' }>) =>
-    products ? saleCategoryLabel({ lines, products: products as any, accounts }) : null
+  // Each sale's money is split by product line: a line linked to a product
+  // uses its sales account, a line typed by hand is read from its description.
+  const productById = new Map((products ?? []).map(p => [p.id, p as any]))
+  const accountName = new Map(accounts.map(a => [String(a.code), a.name]))
+  const known = (code: string) => accountName.has(code)
+  const saleCategory = (lines: any[], amount: number) => {
+    if (!products) return null
+    const parts = splitSaleAmount(amount, lines ?? [], productById, known)
+      .map(p => ({ ...p, name: p.code === GENERAL_SALES_CODE ? 'Other sales' : (accountName.get(p.code) ?? 'Other sales') }))
+    const names = parts.map(p => p.name)
+    return {
+      label: names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} + ${names[1]}` : `${names[0]} +${names.length - 1} more`,
+      title: parts.map(p => `${p.code} ${p.name}: KES ${Math.round(p.amount).toLocaleString('en-KE')}`).join('\n'),
+      salesLines: parts,
+    }
+  }
 
   // 1. Customer invoice payments → Credit actual bank account used per receipt.
   invoices.filter(i => i.type === 'customer_invoice' && (i.payments?.length ?? 0) > 0).forEach(inv => {
-    const sale = saleCategory(inv.lines ?? [])
     inv.payments!.forEach(payment => {
+      const sale = saleCategory(inv.lines ?? [], payment.amount)
       entries.push({
         id: `inv-pay-${inv.id}-${payment.id}`,
         date: payment.date,
@@ -150,6 +165,7 @@ export function buildCashbookEntries(
         description: `Invoice payment — ${inv.partnerName}`,
         category: sale?.label ?? getCOACategory('customer_invoice', accounts),
         categoryTitle: sale?.title,
+        salesLines: sale?.salesLines,
         bankAccountId: payment.bankAccountId || posBank((payment.method === 'mpesa' || payment.method === 'card' || payment.method === 'cash') ? payment.method : 'card'),
         debit: 0,
         credit: payment.amount,
@@ -202,7 +218,7 @@ export function buildCashbookEntries(
 
   // 4. POS orders → Credit per payment method
   posOrders.forEach(pos => {
-    const sale = saleCategory(pos.lines ?? [])
+    const sale = saleCategory(pos.lines ?? [], pos.total)
     entries.push({
       id: `pos-${pos.id}`,
       date: pos.date,
@@ -210,6 +226,7 @@ export function buildCashbookEntries(
       description: `POS Sale${pos.customerName ? ` — ${pos.customerName}` : ' — Walk-in'}`,
       category: sale?.label ?? getCOACategory('pos', accounts),
       categoryTitle: sale?.title,
+      salesLines: sale?.salesLines,
       bankAccountId: posBank(pos.payment, pos.bankAccountId),
       debit: 0,
       credit: pos.total,
@@ -994,10 +1011,12 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
 
   // Month filter starts empty = all months (no date filtering) for the
   // cashbook list; reconciliation asks the user to pick a month.
-  const [activeMonth, setActiveMonth] = useUrlUiState('bankMonth', '')
+  // The cashbook is kept month by month: it opens on the current month.
+  const thisMonth = useMemo(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }).slice(0, 7), [])
+  const [activeMonth, setActiveMonth] = useUrlUiState('bankMonth', thisMonth)
   const [activeTabValue, setActiveTabValue] = useUrlQueryState('bankView', 'cashbook')
-  const activeTab: 'cashbook' | 'reconcile' = activeTabValue === 'reconcile' ? 'reconcile' : 'cashbook'
-  const setActiveTab = (next: 'cashbook' | 'reconcile') => setActiveTabValue(next)
+  const activeTab: 'cashbook' | 'summary' | 'reconcile' = activeTabValue === 'reconcile' ? 'reconcile' : activeTabValue === 'summary' ? 'summary' : 'cashbook'
+  const setActiveTab = (next: 'cashbook' | 'summary' | 'reconcile') => setActiveTabValue(next)
   const [filterAccount, setFilterAccount] = useUrlUiState('bankAccount', 'all')
 
   // Honor Settings → Accounting → Bank reconciliation toggle.
@@ -1062,6 +1081,11 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
     ncba: 'var(--navy)', equity: '#0891B2', kcb: 'var(--warning)', mpesa: '#16A34A', cash: 'var(--text-4)',
   }
 
+  const summaryAccounts = useMemo(
+    () => bankAccounts.map(a => ({ id: a.id, label: bankAccountLabel(a), openingBalance: a.openingBalance })),
+    [bankAccounts],
+  )
+
   const filterAccountName = filterAccount === 'all'
     ? 'All accounts'
     : bankAccountLabel(bankAccounts.find(a => a.id === filterAccount))
@@ -1076,7 +1100,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             {visibleTab === 'reconcile' ? 'Bank reconciliation' : 'Cashbook'}
           </p>
           <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>
-            {visibleTab === 'reconcile' ? `${monthLabel(activeMonth)} · match, review and validate` : 'Daily transactions · bank reconciliation'}
+            {visibleTab === 'reconcile' ? `${monthLabel(activeMonth)} · match, review and validate` : visibleTab === 'summary' ? `${monthLabel(activeMonth)} · what came in and went out` : `${monthLabel(activeMonth)} · money in and out, with running balance`}
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1133,14 +1157,25 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
 
       {/* Section tabs */}
       <div className="finance-cashbook-view-tabs flex items-center gap-2 flex-wrap">
-        {(['cashbook', ...(reconEnabled ? ['reconcile'] as const : [])] as const).map(t => (
+        {(['cashbook', 'summary', ...(reconEnabled ? ['reconcile'] as const : [])] as const).map(t => (
           <button key={t}
             className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-medium transition-all ${visibleTab === t ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab(t)}>
-            {t === 'cashbook' ? 'Transactions' : 'Reconcile accounts'}
+            {t === 'cashbook' ? 'Transactions' : t === 'summary' ? 'Month summary' : 'Reconcile accounts'}
           </button>
         ))}
       </div>
+
+      {visibleTab === 'summary' && (
+        <CashbookMonthSummary
+          entries={allEntries}
+          month={activeMonth}
+          monthName={monthLabel(activeMonth)}
+          bankAccounts={summaryAccounts}
+          accountId={filterAccount}
+          accountName={filterAccountName}
+        />
+      )}
 
       {/* ── CASH BOOK TABLE ─────────────────────────────────────────────── */}
       {visibleTab === 'cashbook' && (
@@ -1180,7 +1215,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                 exportValue: (e: CashbookEntry & { balance: number }) => e.description,
               },
               {
-                key: 'coa', label: 'COA account', priority: 3, width: '160px',
+                key: 'coa', label: 'Account / product line', priority: 3, width: '160px',
                 render: (e: CashbookEntry & { balance: number }) => <CatBadge label={e.category} sourceType={e.sourceType} title={e.categoryTitle} />,
                 exportValue: (e: CashbookEntry & { balance: number }) => e.category,
               },
@@ -1194,7 +1229,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                 exportValue: (e: CashbookEntry & { balance: number }) => bankAccountLabel(bankAccounts.find(a => a.id === e.bankAccountId)),
               },
               {
-                key: 'debit', label: 'Debit (out)', priority: 1, width: '110px', align: 'right',
+                key: 'debit', label: 'Money out', priority: 1, width: '110px', align: 'right',
                 render: (e: CashbookEntry & { balance: number }) => (
                   <span className={`font-mono text-xs ${e.debit > 0 ? 'text-red-500' : 'text-t4'}`}>
                     {e.debit > 0 ? fmtKes(e.debit) : '—'}
@@ -1203,7 +1238,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                 exportValue: (e: CashbookEntry & { balance: number }) => e.debit || '',
               },
               {
-                key: 'credit', label: 'Credit (in)', priority: 1, width: '110px', align: 'right',
+                key: 'credit', label: 'Money in', priority: 1, width: '110px', align: 'right',
                 render: (e: CashbookEntry & { balance: number }) => (
                   <span className={`font-mono text-xs ${e.credit > 0 ? 'text-green-600' : 'text-t4'}`}>
                     {e.credit > 0 ? fmtKes(e.credit) : '—'}
@@ -1226,8 +1261,8 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             hideSearch
             emptyMessage={`No transactions for ${monthLabel(activeMonth)}${filterAccount !== 'all' ? ` in ${filterAccountName}` : ''}`}
             perPage={50}
-            exportTitle="Cashbook"
-            exportFilename="cashbook"
+            exportTitle={`Cashbook — ${monthLabel(activeMonth)}${filterAccount !== 'all' ? ` — ${filterAccountName}` : ''}`}
+            exportFilename={`cashbook-${activeMonth || 'all'}`}
             renderCard={(e: CashbookEntry & { balance: number }) => {
               const acc = bankAccounts.find(a => a.id === e.bankAccountId)
               const bankColor = ACCT_COLOR[e.bankAccountId] ?? 'var(--text-4)'
