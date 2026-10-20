@@ -103,6 +103,8 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'credit.review_due': POLICY(['in_app', 'email'], 'warning', { recipientRoles: ['finance_officer'] }),
   'finance.invoice_overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer'], cooldownHours: 72 }),
   // Supplier credit notes (purchase returns) nobody has used or had refunded.
+  // A rent / internet / electricity bill whose day has come (Bills → Recurring bills).
+  'finance.recurring_bill.due': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['finance_officer'] }),
   'finance.vendor_credit_unapplied': POLICY(['in_app'], 'warning', { recipientRoles: ['finance_officer', 'director'], cooldownHours: 72 }),
   'finance.payment_received': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true }),
   'finance.payment_allocation_exception': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['finance_officer'], requiresAcknowledgement: true, escalationMinutes: 60, escalationRoles: ['director'], mandatory: true, cooldownHours: 24 }),

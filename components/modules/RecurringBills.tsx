@@ -7,6 +7,8 @@ import { contactPaymentTermsDays } from '@/lib/due-date'
 import {
   buildBillInput, dueOccurrences, isVariable, type Frequency, type RecurringBill,
 } from '@/lib/recurring/recurring-bills'
+import { useVendorExpenseAccounts } from '@/hooks/useVendorExpenseAccounts'
+import { suggestExpenseAccount } from '@/lib/accounting/bill-expense-accounts'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -20,7 +22,7 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 type FormLine = { description: string; accountCode: string; amount: string }
 const blankLine = (): FormLine => ({ description: '', accountCode: '', amount: '' })
 
-export default function RecurringBills() {
+export default function RecurringBills({ embedded = false }: { embedded?: boolean } = {}) {
   const { contacts, accounts, createManualInvoice, showToast } = useFinanceStore()
   const vendors = useMemo(() => contacts.filter(c => c.isVendor), [contacts])
   const expenseAccounts = useMemo(
@@ -30,6 +32,7 @@ export default function RecurringBills() {
     [accounts],
   )
 
+  const vendorExpense = useVendorExpenseAccounts()
   const [items, setItems] = useState<RecurringBill[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [showNew, setShowNew] = useState(false)
@@ -47,6 +50,8 @@ export default function RecurringBills() {
   useEffect(() => { void load() }, [load])
 
   async function create() {
+    const noAccount = lines.find(l => l.description.trim() && !l.accountCode)
+    if (noAccount) { showToast(`Choose the expense account for "${noAccount.description.trim()}"`, 'error'); return }
     setBusy(true)
     try {
       const vendor = vendors.find(v => v.id === form.vendorId)
@@ -80,7 +85,10 @@ export default function RecurringBills() {
       if (l.amount == null) variable[i] = Number(amounts[`${t.id}|${billDate}|${i}`] || 0)
     })
     const vendor = vendors.find(v => v.id === t.vendorId)
-    const input = buildBillInput(t, billDate, variable, contactPaymentTermsDays(vendor, 30))
+    // Older recurring bills may have lines with no account: they take the vendor's usual one.
+    const usual = vendorExpense.accounts[t.vendorId]
+    const withAccounts = usual ? { ...t, lines: t.lines.map(l => (l.accountCode ? l : { ...l, accountCode: usual })) } : t
+    const input = buildBillInput(withAccounts, billDate, variable, contactPaymentTermsDays(vendor, 30))
     if ('error' in input) { showToast(input.error, 'error'); return }
     setBusy(true)
     try {
@@ -101,11 +109,11 @@ export default function RecurringBills() {
   const asOf = today()
 
   return (
-    <div className="mx-auto w-[min(1100px,calc(100%-2rem))] py-6">
+    <div className={embedded ? 'p-4' : 'mx-auto w-[min(1100px,calc(100%-2rem))] py-6'}>
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <h1 className="text-lg font-black">Recurring bills</h1>
-          <p className="text-[12px] opacity-70">Rent, service charge, electricity, water. Each period you generate a draft vendor bill; nothing posts until you review and post it.</p>
+          <p className="text-[12px] opacity-70">Rent, service charge, internet, electricity, water. Set one up here, or tick "Repeat this bill" when you create a bill. When a bill is due it shows here and Finance is notified; one click makes the draft, and nothing posts until you review and post it.</p>
         </div>
         <button className="btn-primary text-[12px] px-4 min-h-10" onClick={() => setShowNew(true)}>New recurring bill</button>
       </div>
@@ -163,7 +171,12 @@ export default function RecurringBills() {
             <div className="w-full max-w-lg rounded-2xl bg-white p-5 space-y-3 max-h-[90vh] overflow-auto">
               <h2 className="font-black">New recurring bill</h2>
               <div><label className={label}>Vendor *</label>
-                <select className={input} value={form.vendorId} onChange={e => setForm(f => ({ ...f, vendorId: e.target.value }))}>
+                <select className={input} value={form.vendorId} onChange={e => {
+                  const vendorId = e.target.value
+                  setForm(f => ({ ...f, vendorId }))
+                  const usual = vendorExpense.accounts[vendorId]
+                  if (usual) setLines(ls => ls.map(l => (l.accountCode ? l : { ...l, accountCode: usual })))
+                }}>
                   <option value="">Select vendor</option>
                   {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
@@ -184,15 +197,23 @@ export default function RecurringBills() {
                 <p className={label}>Lines (leave amount blank if it changes every period, e.g. electricity)</p>
                 {lines.map((l, i) => (
                   <div key={i} className="grid grid-cols-[1fr_1fr_90px] gap-2">
-                    <input className={input} placeholder="Description" value={l.description} onChange={e => setLines(ls => ls.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} />
+                    <input className={input} placeholder="Description" value={l.description} onChange={e => {
+                      const description = e.target.value
+                      const vendorName = vendors.find(v => v.id === form.vendorId)?.name
+                      setLines(ls => ls.map((x, j) => {
+                        if (j !== i) return x
+                        const hint = x.accountCode ? '' : suggestExpenseAccount(description, vendorName)
+                        return { ...x, description, ...(hint && expenseAccounts.some((a: { code: string }) => a.code === hint) ? { accountCode: hint } : {}) }
+                      }))
+                    }} />
                     <select className={input} value={l.accountCode} onChange={e => setLines(ls => ls.map((x, j) => j === i ? { ...x, accountCode: e.target.value } : x))}>
-                      <option value="">Default expense</option>
+                      <option value="">Expense account *</option>
                       {expenseAccounts.map((a: { code: string; name: string }) => <option key={a.code} value={a.code}>{a.code} — {a.name}</option>)}
                     </select>
                     <input type="number" className={input} placeholder="Amount" value={l.amount} onChange={e => setLines(ls => ls.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))} />
                   </div>
                 ))}
-                <button className="text-[11px] font-bold underline" onClick={() => setLines(ls => [...ls, blankLine()])}>+ Add line</button>
+                <button className="text-[11px] font-bold underline" onClick={() => setLines(ls => [...ls, { ...blankLine(), accountCode: vendorExpense.accounts[form.vendorId] ?? '' }])}>+ Add line</button>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button className="btn-secondary text-[12px] px-4 min-h-10" onClick={() => setShowNew(false)}>Cancel</button>

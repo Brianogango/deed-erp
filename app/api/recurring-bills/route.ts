@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import {
-  nextRecurringRef, validateTemplate, type Frequency, type RecurringBill, type RecurringLine,
+  nextRecurringRef, periodKey, validateTemplate, type Frequency, type GeneratedBill, type RecurringBill, type RecurringLine,
 } from '@/lib/recurring/recurring-bills'
 
 export const dynamic = 'force-dynamic'
@@ -51,6 +51,14 @@ export async function POST(request: NextRequest) {
     const problem = validateTemplate(draft)
     if (problem) return NextResponse.json({ error: problem }, { status: 422 })
 
+    // Made from a bill just created ("Repeat this bill"): that period is done.
+    const billed = body.alreadyBilled && typeof body.alreadyBilled === 'object' ? body.alreadyBilled as Record<string, unknown> : null
+    const billedDate = String(billed?.billDate ?? '').trim()
+    const billedPeriod = billed ? periodKey(billedDate, draft.frequency!) : ''
+    const generated: GeneratedBill[] = billedPeriod
+      ? [{ period: billedPeriod, billDate: billedDate, invoiceId: String(billed?.invoiceId ?? '').slice(0, 80), invoiceRef: String(billed?.invoiceRef ?? '').slice(0, 60) }]
+      : []
+
     const item: RecurringBill = {
       id: crypto.randomUUID(),
       ref: nextRecurringRef(items),
@@ -65,7 +73,7 @@ export async function POST(request: NextRequest) {
       lines: draft.lines!,
       paused: false,
       notes: body.notes ? String(body.notes).slice(0, 500) : undefined,
-      generated: [],
+      generated,
       createdAt: new Date().toISOString(),
       createdBy: actor.id,
     }

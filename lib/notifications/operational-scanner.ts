@@ -9,6 +9,7 @@ import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
 import { loadAppState } from '@/lib/server-store'
 import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
 import { buildChequeDigests, type DigestCheque } from '@/lib/cheques/cheque-rules'
+import { recurringBillReminders, type RecurringBill } from '@/lib/recurring/recurring-bills'
 import { buildDirectorBrief, directorBriefBody, directorBriefTitle, type DirectorBriefInput } from './director-brief'
 
 const DAY = 86_400_000
@@ -656,6 +657,31 @@ async function scanCheques() {
   return emitted
 }
 
+/** Recurring bills whose bill day has come and have no bill for that period yet. */
+async function scanRecurringBills() {
+  const clock = nairobiClock()
+  if (clock.hour < 8) return 0
+  const state = await loadAppState(['deed_recurringBills'])
+  const items = Array.isArray(state.deed_recurringBills) ? state.deed_recurringBills as RecurringBill[] : []
+  const reminders = recurringBillReminders(items, clock.date, n => `KES ${Math.round(n).toLocaleString('en-KE')}`)
+  let emitted = 0
+  for (const r of reminders) {
+    if (await publishCondition({
+      eventType: 'finance.recurring_bill.due',
+      entityType: 'recurring_bill',
+      entityId: r.id,
+      title: r.title,
+      body: r.body,
+      actionUrl: '/finance?tab=recurring_bills',
+      idempotencyKey: '',
+      stateVersion: r.period,
+    })) emitted++
+  }
+  // Bill created (or the recurring bill paused / ended): the reminder goes away.
+  await resolveInactive('finance.recurring_bill.due', 'recurring_bill', reminders.map(r => r.id))
+  return emitted
+}
+
 async function scanInventory() {
   let emitted = 0
   const products = await prisma.product.findMany({
@@ -1188,6 +1214,7 @@ export async function scanOperationalNotificationEvents() {
     ['repairs', scanRepairs],
     ['purchasing', scanPurchasing],
     ['cheques', scanCheques],
+    ['recurring_bills', scanRecurringBills],
     ['inventory', scanInventory],
     ['delivery', scanDelivery],
     ['finance', scanFinance],

@@ -1,6 +1,6 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import dynamic from 'next/dynamic'
-import { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
-const RecurringBills = dynamic(() => import('@/components/modules/RecurringBills'), { loading: () => <ModuleSkeleton />, ssr: false })
-export default function RecurringBillsPage() { return <RecurringBills /> }
+// Recurring bills live under Finance → Bills now.
+export default function RecurringBillsPage() {
+  redirect('/finance?tab=recurring_bills')
+}

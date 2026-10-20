@@ -31883,3 +31883,72 @@ button, [role="button"], [role="tab"] {
   font-style: normal;
   font-weight: 500;
 }
+
+/* Vendor bill: usual expense account, Purchases warning, repeat */
+.bill-account-guide {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border-lt);
+  border-radius: 16px;
+  background: var(--bg-surface);
+  padding: 12px 14px;
+}
+.bill-account-guide__row,
+.bill-account-guide__repeat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.bill-account-guide__row select,
+.bill-account-guide__repeat select {
+  width: auto;
+  min-width: 220px;
+  max-width: 100%;
+}
+.bill-account-guide__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.bill-account-guide__hint {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--text-4);
+}
+.bill-account-guide__warn {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #78350f;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.bill-account-guide__warn ul {
+  display: grid;
+  gap: 4px;
+}
+.bill-account-guide__warn li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+.bill-account-guide__warn > .btn-outline {
+  justify-self: start;
+}
+.bill-account-guide__keep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bill-account-guide__warn { background: #3b2a06; border-color: #92400e; color: #fde68a; }
+}
+:root[data-theme="dark"] .bill-account-guide__warn { background: #3b2a06; border-color: #92400e; color: #fde68a; }

@@ -156,3 +156,29 @@ export function buildBillInput(
     lines,
   }
 }
+
+export type RecurringBillReminder = { id: string; period: string; title: string; body: string }
+
+/** One reminder per recurring bill that has a period waiting for its bill, on or after its bill day. */
+export function recurringBillReminders(items: RecurringBill[], asOf: string, fmt: (n: number) => string): RecurringBillReminder[] {
+  const out: RecurringBillReminder[] = []
+  for (const t of items) {
+    if (!t || !Array.isArray(t.lines) || !Array.isArray(t.generated)) continue
+    const due = dueOccurrences(t, asOf)
+    if (!due.length) continue
+    const latest = due[due.length - 1]
+    const period = periodKey(latest, t.frequency)
+    const fixed = t.lines.every(l => l.amount != null)
+    const amount = fixed ? t.lines.reduce((s, l) => s + Number(l.amount || 0), 0) : 0
+    const more = due.length > 1 ? ` ${due.length} periods are waiting.` : ''
+    out.push({
+      id: t.id,
+      period,
+      title: `${t.title} bill due (${period})`,
+      body: fixed
+        ? `${t.vendorName}: ${fmt(amount)}${t.vatRate ? ` + ${t.vatRate}% VAT` : ''}. Create the draft bill under Bills → Recurring bills.${more}`
+        : `${t.vendorName}: the amount changes each time. Enter it from their invoice under Bills → Recurring bills.${more}`,
+    })
+  }
+  return out
+}

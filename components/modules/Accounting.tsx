@@ -4,6 +4,11 @@ import { planMigrationImport } from '@/lib/finance/migration-import'
 import { isOpeningBalanceDocument } from '@/lib/finance/opening-balance'
 import OpeningBalanceCorrection from '@/components/finance/OpeningBalanceCorrection'
 import AgentCommissions from '@/components/finance/AgentCommissions'
+import BillAccountGuide, { NO_REPEAT, type RepeatSettings } from '@/components/finance/BillAccountGuide'
+import RecurringBills from '@/components/modules/RecurringBills'
+import { useVendorExpenseAccounts } from '@/hooks/useVendorExpenseAccounts'
+import { overheadLinesInPurchases } from '@/lib/accounting/bill-expense-accounts'
+import { saveBillAsRecurring } from '@/lib/recurring/recurring-from-bill'
 import InvoiceCustomerCheck from '@/components/finance/InvoiceCustomerCheck'
 import BillPaymentFix from '@/components/finance/BillPaymentFix'
 import DuplicateInvoiceJournals from '@/components/finance/DuplicateInvoiceJournals'
@@ -126,6 +131,7 @@ type MainTab =
   | 'credit_applications'
   | 'commissions'
   | 'agent_commissions'
+  | 'recurring_bills'
   | 'coa'
   | 'analytics'
   | 'gl'
@@ -166,6 +172,7 @@ const FINANCE_SECTION_TABS: Record<FinanceSection, Array<{ id: MainTab; label: s
   ],
   money_out: [
     { id: 'bills', label: 'Vendor bills' },
+    { id: 'recurring_bills', label: 'Recurring bills' },
     { id: 'agent_commissions', label: 'Agent commissions' },
   ],
   banking: [
@@ -626,6 +633,9 @@ function AccountingContent() {
     })
   }
   const [newNotes, setNewNotes] = useState('')
+  // Vendor bills: keep Purchases on an overhead vendor's bill only when said so; repeat it every period.
+  const [keepPurchases, setKeepPurchases] = useState(false)
+  const [repeatBill, setRepeatBill] = useState<RepeatSettings>(NO_REPEAT)
   const [newPoNumber, setNewPoNumber] = useState('')
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [applyVat, setApplyVat] = useState(false)
@@ -695,7 +705,7 @@ function AccountingContent() {
   // everyone else keeps the screens their built-in role has always had.
   const customPermissions = Array.isArray(currentUser?.permissions)
   const canSeeFinancePart = (tabId: string) =>
-    !customPermissions || userCan(currentUser, tabId === 'cheques' ? 'accounting.cheques.view' : `accounting.${tabId}`)
+    !customPermissions || userCan(currentUser, tabId === 'cheques' ? 'accounting.cheques.view' : tabId === 'recurring_bills' ? 'accounting.bills' : `accounting.${tabId}`)
   useEffect(() => {
     if (!customPermissions || canSeeFinancePart(tab)) return
     const first = Object.values(FINANCE_SECTION_TABS).flat().find(t => canSeeFinancePart(t.id))
@@ -712,6 +722,20 @@ function AccountingContent() {
       .sort((a: { code: string }, b: { code: string }) => a.code.localeCompare(b.code)),
     [accounts],
   )
+  const vendorExpense = useVendorExpenseAccounts(tab === 'bills' && canManageFinance)
+  const billVendorDefault = tab === 'bills' && newPartnerId ? vendorExpense.accounts[newPartnerId] : undefined
+  const billVendorSuppliesStock = useMemo(
+    () => !!newPartnerId && (purchaseOrders ?? []).some((po: { vendorId?: string }) => po.vendorId === newPartnerId),
+    [purchaseOrders, newPartnerId],
+  )
+  // A vendor with a usual account fills the lines that have none yet.
+  useEffect(() => {
+    if (!billVendorDefault || editingInvId) return
+    setNewLines(prev => prev.some(l => l.type !== 'section' && !l.account)
+      ? prev.map(l => (l.type !== 'section' && !l.account ? { ...l, account: billVendorDefault } : l))
+      : prev)
+  }, [billVendorDefault, editingInvId])
+  useEffect(() => { setKeepPurchases(false) }, [newPartnerId])
 
   // New invoice / bill: derive the due date from the contact's credit period
   // (Contacts → Payment terms) and the document date, until the user sets one.
@@ -939,6 +963,7 @@ function AccountingContent() {
     credits: { title: 'Customer credits', subtitle: 'Credit balances and applications' },
     credit_applications: { title: 'Credit account applications', subtitle: 'Corporate credit terms: documents, credit check and approval' },
     commissions: { title: 'Salespeople', subtitle: 'Commission statements and payment status' },
+    recurring_bills: { title: 'Recurring bills', subtitle: 'Rent, internet, electricity: bills that come every period' },
     agent_commissions: { title: 'Agent commissions', subtitle: 'Deed Express agents: commissions earned and payouts' },
     refunds: { title: 'Refunds', subtitle: 'Approved customer refund payments' },
     journals: { title: 'Accounting entries', subtitle: 'Posted entries and audit-ready movements' },
@@ -1139,6 +1164,8 @@ function AccountingContent() {
     setApplyVat(false)
     setChangingPartner(false)
     setReceiptFile(null)
+    setKeepPurchases(false)
+    setRepeatBill(NO_REPEAT)
     if (opts?.navigateToInvoiceId) {
       router.push(financeInvoicePath(opts.navigateToInvoiceId, {
         listPage: invoiceListPage,
@@ -1407,6 +1434,11 @@ function AccountingContent() {
     const type = tab === 'invoices' ? 'customer_invoice' : 'vendor_bill'
     const vatRate = applyVat ? invoiceVatRate : 0
     let savedId: string | null = null
+    if (type === 'vendor_bill' && !keepPurchases
+      && overheadLinesInPurchases(invoicePreview.lines, billVendorSuppliesStock).length > 0) {
+      showToast('Choose an operating expense account for the lines going to Purchases, or tick "These are stock for resale"', 'error')
+      return
+    }
 
     if (editingInvId) {
       const existing = allInvoices.find(i => i.id === editingInvId)
@@ -1449,6 +1481,22 @@ function AccountingContent() {
         setDocumentPaymentDetails(created.id, normalizeDocumentPaymentDetails(newPaymentDetails))
       }
       savedId = created?.id ?? null
+      if (type === 'vendor_bill' && repeatBill.enabled && created?.id) {
+        void saveBillAsRecurring({
+          bill: { id: created.id, ref: created.ref ?? '' },
+          vendorId: newPartnerId,
+          vendorName: newPartnerName,
+          billDate: newDocumentDate,
+          frequency: repeatBill.frequency,
+          amountChanges: repeatBill.amountChanges,
+          vatRate,
+          lines: invoicePreview.lines,
+          notes: newNotes.trim(),
+        }).then(problem => {
+          if (problem) showToast(`Bill saved, but it was not set to repeat: ${problem}`, 'error')
+          else showToast(`Repeats ${repeatBill.frequency === 'monthly' ? 'every month' : repeatBill.frequency === 'quarterly' ? 'every quarter' : 'every year'}: see Bills → Recurring bills`, 'success')
+        })
+      }
     }
     if (savedId) handledEditRef.current = savedId
     resetInvForm({ navigateToInvoiceId: savedId })
@@ -1577,7 +1625,7 @@ function AccountingContent() {
           {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && (
             <div className="px-3 pb-2">
               <TabBar
-                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => (t.id !== 'agent_commissions' || canAddAgentCommission) && (t.id !== 'cheques' || canSeeCheques) && canSeeFinancePart(t.id))}
+                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => (t.id !== 'agent_commissions' || canAddAgentCommission) && (t.id !== 'recurring_bills' || canManageFullFinance) && (t.id !== 'cheques' || canSeeCheques) && canSeeFinancePart(t.id))}
                 active={tab}
                 onChange={id => setTab(id as MainTab)}
                 className="border-0 bg-transparent px-0 py-0"
@@ -1878,6 +1926,14 @@ function AccountingContent() {
                 <Cheques showToast={showToast} />
               ) : (
                 <p className="p-6 text-xs text-text-3">Cheques are handled by the Director, Finance Officer and Admin Officer.</p>
+              )}
+            </div>
+          ) : tab === 'recurring_bills' ? (
+            <div className="finance-subview finance-subview--recurring-bills">
+              {canManageFullFinance ? (
+                <RecurringBills embedded />
+              ) : (
+                <p className="p-6 text-xs text-text-3">Recurring bills are set up by the Director and Finance Officer.</p>
               )}
             </div>
           ) : tab === 'agent_commissions' ? (
@@ -3078,7 +3134,7 @@ function AccountingContent() {
                     <div className="flex flex-wrap items-center gap-4">
                       <button
                         type="button"
-                        onClick={() => setNewLines(p => [...p, newManualInvoiceLine()])}
+                        onClick={() => setNewLines(p => [...p, { ...newManualInvoiceLine(), account: billVendorDefault ?? '' }])}
                         className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold cursor-pointer"
                       >
                         <Fa icon={faPlus} className="text-[10px]" /> Add a line
@@ -3094,6 +3150,31 @@ function AccountingContent() {
                   </div>
                 </div>
               </div>
+
+              {tab === 'bills' && (
+                <BillAccountGuide
+                  vendorId={newPartnerId}
+                  vendorName={newPartnerName}
+                  lines={newLines}
+                  setLines={update => setNewLines(prev => update(prev) as ManualInvoiceLine[])}
+                  accounts={billExpenseAccounts}
+                  vendorDefault={billVendorDefault}
+                  canSetDefault={canManageFullFinance}
+                  onSetDefault={code => {
+                    void vendorExpense.setDefault(newPartnerId, code).then(error => {
+                      if (error) { showToast(error, 'error'); return }
+                      if (code) setNewLines(prev => prev.map(l => (l.type !== 'section' && !l.account ? { ...l, account: code } : l)))
+                      showToast(code ? `Bills from ${newPartnerName} now start on ${code}` : `${newPartnerName} has no usual account now`, 'success')
+                    })
+                  }}
+                  vendorSuppliesStock={billVendorSuppliesStock}
+                  keepPurchases={keepPurchases}
+                  setKeepPurchases={setKeepPurchases}
+                  repeat={repeatBill}
+                  setRepeat={setRepeatBill}
+                  canRepeat={!editingInvId && canManageFullFinance}
+                />
+              )}
 
               <div className="finance-document-editor__support-grid grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="finance-document-editor__support flex flex-col gap-4">
