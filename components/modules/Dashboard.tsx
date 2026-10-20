@@ -47,6 +47,7 @@ import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
 import { Fa } from '@/components/icons'
 import { OnboardingChecklist } from '@/components/erp/OnboardingChecklist'
+import { repairsByInvoice } from '@/lib/repair/repair-invoice-index'
 
 // Full sales analytics and rep performance (Recharts/tables) — loaded only
 // when their sections are expanded, so the default dashboard stays light.
@@ -532,7 +533,6 @@ export function Dashboard() {
   // value, recorded collections, residuals and recorded execution costs.
   const techLeadStats = useMemo(() => {
     const now = new Date()
-    const visibleRepairIds = new Set(visibleRepairs.map(repair => repair.id))
     const productCostById = new Map(products.map(product => [product.id, Number(product.costPrice) || 0]))
     const repairById = new Map(visibleRepairs.map(repair => [repair.id, repair]))
     const months = Array.from({ length: 6 }, (_, i) => {
@@ -551,6 +551,9 @@ export function Dashboard() {
       }
     })
     const currentRepairInvoices: any[] = []
+    // Repairs billed through a sale order or several to one invoice leave the
+    // invoice's own repairId empty; match from the repair's side too.
+    const repairsOnInvoice = repairsByInvoice(visibleRepairs as any[], invoices as any[])
 
     for (const inv of invoices) {
       if (inv.type === 'vendor_bill') continue
@@ -558,8 +561,8 @@ export function Dashboard() {
       const slot = months.find(month => month.year === d.getFullYear() && month.month === d.getMonth())
       if (!slot) continue
 
-      const repairId = String((inv as any).repairId || '')
-      const isVisibleRepairInvoice = repairId && visibleRepairIds.has(repairId)
+      const linkedRepairIds = repairsOnInvoice.get(inv.id) ?? []
+      const isVisibleRepairInvoice = linkedRepairIds.length > 0
       if (isVisibleRepairInvoice) {
         if (invoiceDocState(inv.status) === 'posted') {
           const total = Number(inv.total) || 0
@@ -567,7 +570,7 @@ export function Dashboard() {
           slot.repairInvoiced += total
           slot.repairCollected += collected
           slot.repairOutstanding += Math.max(0, total - collected)
-          if (slot === months[5]) currentRepairInvoices.push(inv)
+          if (slot === months[5]) currentRepairInvoices.push({ ...inv, linkedRepairIds })
         }
         if (invoicePaymentStatus(inv) === 'paid') {
           slot.revenue += Number(inv.total) || 0
@@ -596,7 +599,7 @@ export function Dashboard() {
 
     const currentRepairRecords = [...new Map(
       currentRepairInvoices
-        .map(invoice => repairById.get(String(invoice.repairId)))
+        .flatMap(invoice => (invoice.linkedRepairIds as string[]).map(id => repairById.get(id)))
         .filter(Boolean)
         .map(repair => [repair.id, repair]),
     ).values()]
@@ -630,25 +633,29 @@ export function Dashboard() {
 
     const technicianMap = new Map<string, { name: string; jobs: Set<string>; invoiced: number; turnaroundDays: number[] }>()
     for (const invoice of currentRepairInvoices) {
-      const repair = repairById.get(String(invoice.repairId))
-      if (!repair) continue
-      const key = repair.assignedTechnicianId || repair.assignedTechnicianName || 'unassigned'
-      const entry = technicianMap.get(key) || {
-        name: repair.assignedTechnicianName || 'Unassigned',
-        jobs: new Set<string>(),
-        invoiced: 0,
-        turnaroundDays: [],
-      }
-      entry.jobs.add(repair.id)
-      entry.invoiced += Number(invoice.total) || 0
-      if (repair.intakeDate && repair.repairCompletedDate) {
-        const start = new Date(repair.intakeDate).getTime()
-        const finish = new Date(repair.repairCompletedDate).getTime()
-        if (Number.isFinite(start) && Number.isFinite(finish) && finish >= start) {
-          entry.turnaroundDays.push((finish - start) / 86400000)
+      // An invoice billing several repairs is shared between them.
+      const linked = (invoice.linkedRepairIds as string[])
+        .map(id => repairById.get(id))
+        .filter(Boolean) as typeof visibleRepairs
+      for (const repair of linked) {
+        const key = repair.assignedTechnicianId || repair.assignedTechnicianName || 'unassigned'
+        const entry = technicianMap.get(key) || {
+          name: repair.assignedTechnicianName || 'Unassigned',
+          jobs: new Set<string>(),
+          invoiced: 0,
+          turnaroundDays: [],
         }
+        entry.jobs.add(repair.id)
+        entry.invoiced += (Number(invoice.total) || 0) / linked.length
+        if (repair.intakeDate && repair.repairCompletedDate) {
+          const start = new Date(repair.intakeDate).getTime()
+          const finish = new Date(repair.repairCompletedDate).getTime()
+          if (Number.isFinite(start) && Number.isFinite(finish) && finish >= start) {
+            entry.turnaroundDays.push((finish - start) / 86400000)
+          }
+        }
+        technicianMap.set(key, entry)
       }
-      technicianMap.set(key, entry)
     }
     const technicianPerformance = [...technicianMap.values()]
       .map(entry => ({
