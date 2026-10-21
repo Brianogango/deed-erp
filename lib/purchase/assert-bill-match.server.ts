@@ -31,8 +31,8 @@ type AssertVendorBillMatchInput = {
    */
   excludeBillId?: string | null
   /**
-   * A supplier billing a different unit price than ordered is normal (prices
-   * move). When allowed — the poster is Director / Finance — the bill posts and
+   * A supplier billing a different unit price or VAT than ordered is normal
+   * (prices move; some suppliers do not charge VAT). When allowed — the poster is Director / Finance — the bill posts and
    * the difference goes to Purchase Price Difference; otherwise it is refused
    * with a message saying who can confirm it.
    */
@@ -107,8 +107,9 @@ export async function assertVendorBillThreeWayMatchInTx(
         + 'A Director or Finance Officer can confirm it — the difference is posted to Purchase Price Difference — or correct the price to match the order.',
       )
     }
-    if (bill.taxRate != null && !close(n(bill.taxRate), n(poItem.taxRate), taxTolerance)) {
-      throw matchError(`Tax mismatch on ${po.poNumber}: the bill has ${n(bill.taxRate)}% VAT but the order has ${n(poItem.taxRate)}%. Correct the VAT on the bill line to match the order.`)
+    // VAT can differ too — e.g. a supplier who is not VAT-registered bills without it.
+    if (bill.taxRate != null && !close(n(bill.taxRate), n(poItem.taxRate), taxTolerance) && !input.allowPriceVariance) {
+      throw matchError(`${bill.description || 'A line'}: the bill has ${n(bill.taxRate)}% VAT but purchase order ${po.poNumber} has ${n(poItem.taxRate)}%. A Director or Finance Officer can confirm it as billed, or set the VAT on the bill line to match the order.`)
     }
     if (bill.grnItemId) {
       const grn = await tx.grnItem.findUnique({ where: { id: bill.grnItemId } })

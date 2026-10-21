@@ -159,3 +159,26 @@ describe('vendor bill priced differently from the order', () => {
     expect(err.status).toBe(409)
   })
 })
+
+describe('vendor bill without the VAT the order had', () => {
+  it('is refused for others with a plain message', async () => {
+    setup()
+    const err = await assertVendorBillThreeWayMatchInTx(mockPrisma as any, {
+      purchaseOrderId: PO_ID,
+      billLines: [{ productId: PRODUCT_ID, qty: 3, unitPrice: 74500, taxRate: 16, description: 'Lenovo' }],
+      excludeBillId: BILL_ID,
+    }).catch(e => e)
+    expect(err.status).toBe(409)
+    expect(err.message).toMatch(/16% VAT/)
+  })
+  it('posts when Director / Finance confirm it', async () => {
+    setup()
+    const result = await assertVendorBillThreeWayMatchInTx(mockPrisma as any, {
+      purchaseOrderId: PO_ID,
+      billLines: [{ productId: PRODUCT_ID, qty: 3, unitPrice: 74500, taxRate: 16 }],
+      excludeBillId: BILL_ID,
+      allowPriceVariance: true,
+    })
+    expect(result.ok).toBe(true)
+  })
+})
