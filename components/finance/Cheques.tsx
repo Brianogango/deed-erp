@@ -327,7 +327,15 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
   const set = (patch: Partial<typeof EMPTY_FORM>) => setForm(prev => ({ ...prev, ...patch }))
   // The invoice or bill this cheque settles: picking it fills the name and
   // amount, and the payment can be recorded on it in the same step.
-  const { invoices, bankAccounts, registerPayment } = useFinanceStore()
+  const { invoices, bankAccounts, registerPayment, contacts } = useFinanceStore()
+  // Who the cheque is from / paid to: searched from Contacts, or typed when not there.
+  const partyContacts = useMemo(
+    () => (contacts ?? [])
+      .filter(c => !c.isArchived && (form.direction === 'given' ? c.isVendor : c.isCustomer))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [contacts, form.direction],
+  )
+  const sameParty = (name?: string) => !!name && !!form.partyName.trim() && name.trim().toLowerCase() === form.partyName.trim().toLowerCase()
   const openDocs = useMemo(() => openDocsForCheque(invoices, form.direction), [invoices, form.direction])
   // One cheque often pays several bills (or invoices): they are listed here.
   const [linkedIds, setLinkedIds] = useState<string[]>([])
@@ -482,7 +490,23 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {field('Cheque number', <input className="form-input text-[12px]" value={form.chequeNumber} onChange={e => set({ chequeNumber: e.target.value })} inputMode="numeric" />)}
           {field('Bank', <input className="form-input text-[12px]" value={form.bankName} onChange={e => set({ bankName: e.target.value })} />)}
-          {field(form.direction === 'received' ? 'From (account holder)' : 'Paid to', <input className="form-input text-[12px]" value={form.partyName} onChange={e => set({ partyName: e.target.value })} />, true)}
+          {field(form.direction === 'received' ? 'From (account holder)' : 'Paid to', (
+            <>
+              <input
+                className="form-input text-[12px]"
+                list="cheque-parties"
+                value={form.partyName}
+                onChange={e => set({ partyName: e.target.value })}
+                placeholder={form.direction === 'received' ? 'Search customers or type the name on the cheque' : 'Search suppliers or type a name'}
+                autoComplete="off"
+              />
+              <datalist id="cheque-parties">
+                {partyContacts.slice(0, 500).map(c => (
+                  <option key={c.id} value={c.name}>{[c.phone, c.email].filter(Boolean).join(' · ')}</option>
+                ))}
+              </datalist>
+            </>
+          ), true)}
           {field('Amount (KES)', <input className="form-input text-[12px]" type="number" min="0" step="0.01" value={form.amount} onChange={e => set({ amount: e.target.value })} />)}
           {field('Date on the cheque', <input className="form-input text-[12px]" type="date" value={form.chequeDate} onChange={e => set({ chequeDate: e.target.value })} />)}
           {field(form.direction === 'received' ? 'Received on' : 'Issued on', <input className="form-input text-[12px]" type="date" value={form.receivedDate} onChange={e => set({ receivedDate: e.target.value })} />)}
@@ -493,13 +517,21 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
                 list="cheque-open-docs"
                 value={docQuery}
                 onChange={e => pickDoc(e.target.value)}
-                placeholder={openDocs.length ? `Pick from ${openDocs.length} open ${form.direction === 'received' ? 'invoices' : 'bills'}…` : 'e.g. INV/2026/0191'}
+                placeholder={(() => {
+                  const kind = form.direction === 'received' ? 'invoices' : 'bills'
+                  const mine = openDocs.filter(d => sameParty(d.partnerName) && !linkedIds.includes(d.id)).length
+                  if (mine) return `${mine} open ${mine === 1 ? kind.slice(0, -1) : kind} for ${form.partyName.trim()} — pick…`
+                  return openDocs.length ? `Pick from ${openDocs.length} open ${kind}…` : 'e.g. INV/2026/0191'
+                })()}
               />
               <datalist id="cheque-open-docs">
                 {openDocs
                   .filter(d => !linkedIds.includes(d.id))
-                  // Once one is picked, the same supplier's / customer's come first.
-                  .sort((a, b) => Number(b.partnerName === linkedDocs[0]?.partnerName) - Number(a.partnerName === linkedDocs[0]?.partnerName))
+                  // The chosen supplier's / customer's documents come first.
+                  .sort((a, b) => {
+                    const rank = (d: typeof a) => (sameParty(d.partnerName) ? 2 : 0) + (d.partnerName === linkedDocs[0]?.partnerName ? 1 : 0)
+                    return rank(b) - rank(a)
+                  })
                   .slice(0, 300)
                   .map(d => (
                     <option key={d.id} value={d.ref}>{`${d.partnerName ?? ''} · ${fmtKes(docBalance(d))} owing`}</option>
