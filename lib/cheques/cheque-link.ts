@@ -75,3 +75,33 @@ export async function addChequeToRegister(body: {
     return { ok: false, duplicate: false, error: 'Could not reach the server to add the cheque' }
   }
 }
+
+/**
+ * One cheque settling several invoices / bills: how much goes to each.
+ * Oldest first, each up to what it still owes, until the cheque is used up.
+ * Rounded to the cent.
+ */
+export function allocateCheque<T extends Pick<Doc, 'id' | 'ref' | 'total' | 'amountPaid'> & { date?: string }>(
+  amount: number,
+  docs: T[],
+): Array<{ doc: T; amount: number }> {
+  let left = Math.round(Math.max(0, Number(amount) || 0) * 100)
+  const ordered = [...docs].sort((a, b) => String(a.date ?? a.ref).localeCompare(String(b.date ?? b.ref)))
+  return ordered.map(doc => {
+    const owing = Math.round(docBalance(doc) * 100)
+    const take = Math.min(owing, left)
+    left -= take
+    return { doc, amount: take / 100 }
+  })
+}
+
+/** The register keeps one short reference: as many refs as fit, then "+N more". */
+export function chequeLinkedRefs(refs: string[], max = 80): string {
+  const list = refs.filter(Boolean)
+  for (let shown = list.length; shown > 0; shown--) {
+    const head = list.slice(0, shown).join(', ')
+    const text = shown === list.length ? head : `${head} +${list.length - shown} more`
+    if (text.length <= max) return text
+  }
+  return list.length ? `${list[0].slice(0, max - 10)} +${list.length - 1} more` : ''
+}

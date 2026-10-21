@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
-import { chequeLinkedType, docBalance, findDocByRef, openDocsForCheque } from '@/lib/cheques/cheque-link'
+import { allocateCheque, chequeLinkedRefs, chequeLinkedType, docBalance, findDocByRef, openDocsForCheque } from '@/lib/cheques/cheque-link'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Modal } from '@/components/ui'
 import {
@@ -329,21 +329,40 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
   // amount, and the payment can be recorded on it in the same step.
   const { invoices, bankAccounts, registerPayment } = useFinanceStore()
   const openDocs = useMemo(() => openDocsForCheque(invoices, form.direction), [invoices, form.direction])
-  const linkedDoc = useMemo(() => findDocByRef(openDocs, form.linkedRef), [openDocs, form.linkedRef])
+  // One cheque often pays several bills (or invoices): they are listed here.
+  const [linkedIds, setLinkedIds] = useState<string[]>([])
+  const [docQuery, setDocQuery] = useState('')
+  const linkedDocs = useMemo(
+    () => linkedIds.map(id => openDocs.find(d => d.id === id)).filter(Boolean) as typeof openDocs,
+    [linkedIds, openDocs],
+  )
+  const linkedTotal = useMemo(() => Math.round(linkedDocs.reduce((s, d) => s + docBalance(d), 0) * 100) / 100, [linkedDocs])
+  const allocation = useMemo(() => allocateCheque(Number(form.amount) || 0, linkedDocs as any[]), [form.amount, linkedDocs])
   const [recordPayment, setRecordPayment] = useState(true)
   const [payBankId, setPayBankId] = useState('')
   const activeBanks = bankAccounts.filter(b => b.active)
 
+  // Adding a document fills the name and keeps the amount at the total owed,
+  // unless the amount was typed (or scanned) as something else.
+  const amountFollowsTotal = !form.amount || Number(form.amount) === linkedTotal
   const pickDoc = (ref: string) => {
     const doc = findDocByRef(openDocs, ref)
-    if (!doc) { set({ linkedRef: ref }); return }
+    if (!doc) { setDocQuery(ref); return }
+    setDocQuery('')
+    if (linkedIds.includes(doc.id)) return
+    const nextTotal = Math.round((linkedTotal + docBalance(doc)) * 100) / 100
+    setLinkedIds(ids => [...ids, doc.id])
     set({
-      linkedRef: doc.ref,
       partyName: form.partyName || doc.partnerName || '',
-      amount: form.amount || String(docBalance(doc)),
+      amount: amountFollowsTotal ? String(nextTotal) : form.amount,
       // A cheque we write is usually dated the day it is issued.
       chequeDate: form.chequeDate || (form.direction === 'given' ? form.receivedDate : ''),
     })
+  }
+  const removeDoc = (id: string) => {
+    const doc = linkedDocs.find(d => d.id === id)
+    setLinkedIds(ids => ids.filter(x => x !== id))
+    if (doc && amountFollowsTotal) set({ amount: String(Math.round((linkedTotal - docBalance(doc)) * 100) / 100 || '') })
   }
 
   const fillFrom = (result: Scan, direction: ChequeDirection) => set({
@@ -375,6 +394,8 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
   }
 
   const setDirection = (direction: ChequeDirection) => {
+    // Invoices belong to received cheques and bills to given ones.
+    if (direction !== form.direction) { setLinkedIds([]); setDocQuery('') }
     set({ direction })
     if (scan) set({ direction, partyName: (direction === 'received' ? scan.accountName : scan.payeeName) || '' })
   }
@@ -391,17 +412,28 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
         body: JSON.stringify({
           ...form,
           amount: Number(form.amount),
-          linkedType: linkedDoc ? chequeLinkedType(linkedDoc.type) : undefined,
+          linkedRef: linkedDocs.length ? chequeLinkedRefs(linkedDocs.map(d => d.ref)) : form.linkedRef,
+          linkedType: linkedDocs.length ? chequeLinkedType(linkedDocs[0].type) : undefined,
+          // Every document the cheque covers, even when the short reference had to shorten.
+          notes: linkedDocs.length > 1
+            ? [form.notes.trim(), `Covers ${linkedDocs.map(d => d.ref).join(', ')}`].filter(Boolean).join(' · ').slice(0, 1000)
+            : form.notes,
           imageBase64: image?.base64,
           imageType: image?.mimeType,
         }),
       }))
       showToast(`Cheque ${form.chequeNumber} added`, 'success')
-      if (linkedDoc && recordPayment) {
-        const amount = Math.min(Number(form.amount), docBalance(linkedDoc))
-        const paid = await registerPayment(linkedDoc.id, amount, 'cheque', payBankId || undefined, `Cheque ${form.chequeNumber}`, form.receivedDate || today())
-        if (paid) showToast(`${fmtKes(amount)} recorded on ${linkedDoc.ref}`, 'success')
-        else showToast(`The cheque is in the register, but the payment on ${linkedDoc.ref} was not recorded — record it from the ${linkedDoc.type === 'vendor_bill' ? 'bill' : 'invoice'}`, 'error')
+      if (linkedDocs.length && recordPayment) {
+        const failed: string[] = []
+        let recorded = 0
+        for (const { doc, amount } of allocation) {
+          if (!(amount > 0)) continue
+          const paid = await registerPayment(doc.id, amount, 'cheque', payBankId || undefined, `Cheque ${form.chequeNumber}`, form.receivedDate || today())
+          if (paid) recorded += amount
+          else failed.push(doc.ref)
+        }
+        if (recorded > 0) showToast(`${fmtKes(recorded)} recorded on ${allocation.filter(a => a.amount > 0 && !failed.includes(a.doc.ref)).map(a => a.doc.ref).join(', ')}`, 'success')
+        if (failed.length) showToast(`The cheque is in the register, but the payment on ${failed.join(', ')} was not recorded — record it from the ${linkedDocs[0].type === 'vendor_bill' ? 'bill' : 'invoice'}`, 'error')
       }
       await onSaved()
     } catch (err) {
@@ -454,33 +486,62 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
           {field('Amount (KES)', <input className="form-input text-[12px]" type="number" min="0" step="0.01" value={form.amount} onChange={e => set({ amount: e.target.value })} />)}
           {field('Date on the cheque', <input className="form-input text-[12px]" type="date" value={form.chequeDate} onChange={e => set({ chequeDate: e.target.value })} />)}
           {field(form.direction === 'received' ? 'Received on' : 'Issued on', <input className="form-input text-[12px]" type="date" value={form.receivedDate} onChange={e => set({ receivedDate: e.target.value })} />)}
-          {field(form.direction === 'received' ? 'For invoice' : 'For bill', (
+          {field(form.direction === 'received' ? (linkedDocs.length ? 'Add another invoice' : 'For invoice(s)') : (linkedDocs.length ? 'Add another bill' : 'For bill(s)'), (
             <>
               <input
                 className="form-input text-[12px]"
                 list="cheque-open-docs"
-                value={form.linkedRef}
+                value={docQuery}
                 onChange={e => pickDoc(e.target.value)}
                 placeholder={openDocs.length ? `Pick from ${openDocs.length} open ${form.direction === 'received' ? 'invoices' : 'bills'}…` : 'e.g. INV/2026/0191'}
               />
               <datalist id="cheque-open-docs">
-                {openDocs.slice(0, 300).map(d => (
-                  <option key={d.id} value={d.ref}>{`${d.partnerName ?? ''} · ${fmtKes(docBalance(d))} owing`}</option>
-                ))}
+                {openDocs
+                  .filter(d => !linkedIds.includes(d.id))
+                  // Once one is picked, the same supplier's / customer's come first.
+                  .sort((a, b) => Number(b.partnerName === linkedDocs[0]?.partnerName) - Number(a.partnerName === linkedDocs[0]?.partnerName))
+                  .slice(0, 300)
+                  .map(d => (
+                    <option key={d.id} value={d.ref}>{`${d.partnerName ?? ''} · ${fmtKes(docBalance(d))} owing`}</option>
+                  ))}
               </datalist>
             </>
           ))}
           {field('Notes', <input className="form-input text-[12px]" value={form.notes} onChange={e => set({ notes: e.target.value })} />, true)}
         </div>
 
-        {linkedDoc && (
+        {linkedDocs.length > 0 && (
           <div className="rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: 'var(--border-lt)' }}>
-            <p className="text-t2">
-              {linkedDoc.ref} · {linkedDoc.partnerName} · <span className="font-semibold">{fmtKes(docBalance(linkedDoc))} owing</span>
-            </p>
+            <table className="w-full" data-no-responsive>
+              <tbody>
+                {allocation.map(({ doc, amount }) => (
+                  <tr key={doc.id} className="border-b last:border-0" style={{ borderColor: 'var(--border-lt)' }}>
+                    <td className="py-1.5 pr-2 font-mono text-t1">{doc.ref}</td>
+                    <td className="py-1.5 pr-2 text-t3">{doc.partnerName}</td>
+                    <td className="py-1.5 pr-2 text-right text-t3 whitespace-nowrap">{fmtKes(docBalance(doc))} owing</td>
+                    <td className="py-1.5 pr-2 text-right font-semibold whitespace-nowrap">{amount > 0 ? `pays ${fmtKes(amount)}` : 'not covered'}</td>
+                    <td className="py-1.5 text-right">
+                      <button type="button" className="text-[11px] text-red-600 underline" onClick={() => removeDoc(doc.id)} aria-label={`Remove ${doc.ref}`}>Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {linkedDocs.length > 1 && (
+              <p className="mt-1.5 text-t3">
+                Total owing {fmtKes(linkedTotal)}
+                {Number(form.amount) > 0 && Math.abs(Number(form.amount) - linkedTotal) >= 0.01 && (
+                  Number(form.amount) < linkedTotal
+                    ? ` · the cheque covers ${fmtKes(Number(form.amount))}, paid oldest first`
+                    : ` · the cheque is ${fmtKes(Number(form.amount) - linkedTotal)} more than owed; only what is owed is recorded`
+                )}
+              </p>
+            )}
             <label className="mt-2 flex items-center gap-2 text-t1">
               <input type="checkbox" checked={recordPayment} onChange={e => setRecordPayment(e.target.checked)} />
-              {form.direction === 'received' ? 'Also record this as a receipt on the invoice' : 'Also record this as a payment on the bill'}
+              {form.direction === 'received'
+                ? `Also record this as a receipt on the ${linkedDocs.length > 1 ? 'invoices' : 'invoice'}`
+                : `Also record this as a payment on the ${linkedDocs.length > 1 ? 'bills' : 'bill'}`}
             </label>
             {recordPayment && activeBanks.length > 0 && (
               <select

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chequeDirectionForDoc, chequeLinkedType, docBalance, findDocByRef, openDocsForCheque } from '@/lib/cheques/cheque-link'
+import { allocateCheque, chequeLinkedRefs, chequeDirectionForDoc, chequeLinkedType, docBalance, findDocByRef, openDocsForCheque } from '@/lib/cheques/cheque-link'
 
 const doc = (over: Record<string, unknown>) => ({ id: String(over.ref), type: 'customer_invoice', status: 'posted', partnerName: 'Acme', total: 1000, amountPaid: 0, ...over }) as {
   id: string; ref: string; type: string; status: string; partnerName: string; total: number; amountPaid: number
@@ -30,5 +30,28 @@ describe('cheque ↔ invoice / bill links', () => {
     expect(bill?.partnerName).toBe('Tokyo IT')
     expect(docBalance(bill!)).toBe(4000000)
     expect(findDocByRef(docs, '')).toBeNull()
+  })
+})
+
+describe('one cheque for several bills', () => {
+  const bills = [
+    { id: 'b2', ref: 'BILL/2026/0012', total: 50000, amountPaid: 0, date: '2026-10-05' },
+    { id: 'b1', ref: 'BILL/2026/0010', total: 80000, amountPaid: 30000, date: '2026-10-01' },
+  ]
+  it('pays each bill in full when the cheque covers them all', () => {
+    expect(allocateCheque(100000, bills).map(a => [a.doc.ref, a.amount])).toEqual([['BILL/2026/0010', 50000], ['BILL/2026/0012', 50000]])
+  })
+  it('pays the oldest first when the cheque is short', () => {
+    expect(allocateCheque(70000, bills).map(a => a.amount)).toEqual([50000, 20000])
+  })
+  it('never records more than is owed', () => {
+    expect(allocateCheque(250000, bills).reduce((s, a) => s + a.amount, 0)).toBe(100000)
+  })
+  it('keeps the register reference short', () => {
+    expect(chequeLinkedRefs(['BILL/2026/0010', 'BILL/2026/0012'])).toBe('BILL/2026/0010, BILL/2026/0012')
+    const many = Array.from({ length: 9 }, (_, i) => `BILL/2026/00${10 + i}`)
+    const ref = chequeLinkedRefs(many)
+    expect(ref.length).toBeLessThanOrEqual(80)
+    expect(ref).toMatch(/\+\d+ more$/)
   })
 })
