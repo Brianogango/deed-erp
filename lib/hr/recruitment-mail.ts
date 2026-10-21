@@ -1,3 +1,5 @@
+import { brandedEmailFromHtml } from '@/lib/email/branded-layout'
+
 /** Emails and the offer letter sent to candidates. Pure builders; the API route sends them. */
 
 const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -37,11 +39,8 @@ export interface CandidateMailInput {
 const MODE_LABEL = { in_person: 'In person', video: 'Video call', phone: 'Phone call' } as const
 
 function shell(company: string, heading: string, inner: string) {
-  return `<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;background:#f8fafc;margin:0;padding:24px;">
-    <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-      <div style="background:#1B2762;color:#fff;padding:20px 24px;"><h1 style="margin:0;font-size:20px;">${esc(company)}</h1><p style="margin:4px 0 0;opacity:.85;">${esc(heading)}</p></div>
-      <div style="padding:24px;line-height:1.55;">${inner}</div>
-    </div></body></html>`
+  // The sign-off is part of `inner`; the branded frame adds logo, title and footer.
+  return brandedEmailFromHtml({ title: heading, eyebrow: 'Recruitment', companyName: company, html: inner })
 }
 
 export function buildCandidateEmail(i: CandidateMailInput): { subject: string; text: string; html: string } {

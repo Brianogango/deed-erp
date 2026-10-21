@@ -1,3 +1,4 @@
+import { brandedEmailFromHtml, emailDetailsHtml, emailSignature } from '@/lib/email/branded-layout'
 import { sendEmail, type EmailMessage, type EmailResult, type MailboxProfile } from './email'
 import { sendNotification, formatPhoneNumber, type NotificationResult } from './notifications'
 
@@ -160,22 +161,16 @@ export const buildRepairLinkMessage = (params: {
     text,
     smsText: `Hi ${greeting}, track repair ${params.repairRef}: ${params.trackingUrl} - Deed Technologies`,
     whatsappText: text,
-    html: `<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;background:#f8fafc;margin:0;padding:24px;">
-      <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-        <div style="background:#1B2762;color:#fff;padding:24px;"><h1 style="margin:0;font-size:22px;">Deed Technologies</h1><p style="margin:4px 0 0;opacity:.85;">Repair Tracking</p></div>
-        <div style="padding:28px;">
-          <p>Hi ${escapeHtml(greeting)},</p>
-          <p>${escapeHtml(intro)}</p>
-          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;">
-            <p style="margin:4px 0;"><strong>Repair:</strong> ${escapeHtml(params.repairRef)}</p>
-            ${params.deviceName ? `<p style="margin:4px 0;"><strong>Device:</strong> ${escapeHtml(params.deviceName)}</p>` : ''}
-          </div>
-          <p><a href="${escapeHtml(params.trackingUrl)}" style="display:inline-block;background:#1B2762;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">Track Repair</a></p>
-          <p style="font-size:13px;color:#64748b;">If the button does not open, copy this link into your browser:<br>${escapeHtml(params.trackingUrl)}</p>
-          <p>Best regards,<br><strong>Deed Technologies</strong></p>
-        </div>
-      </div>
-    </body></html>`,
+    html: brandedEmailFromHtml({
+      title: `Repair ${params.repairRef}`,
+      eyebrow: 'Repair tracking',
+      html: `<p style="margin:0 0 14px">Hi ${escapeHtml(greeting)},</p>
+          <p style="margin:0 0 14px">${escapeHtml(intro)}</p>
+          ${emailDetailsHtml([['Repair', params.repairRef], ...(params.deviceName ? [['Device', params.deviceName] as [string, string]] : [])])}`,
+      actions: [{ label: 'Track repair', url: params.trackingUrl }],
+      footnote: `If the button does not open, copy this link into your browser: ${params.trackingUrl}`,
+      signatureHtml: emailSignature(['Best regards,', 'Deed Technologies']),
+    }),
   }
 }
 
@@ -198,21 +193,15 @@ export const buildCredentialMessage = (params: {
     text,
     smsText: `Deed ERP credentials for ${params.name}: username ${params.username}. Temporary password sent by email.`,
     whatsappText: text,
-    html: `<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;background:#f8fafc;margin:0;padding:24px;">
-      <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-        <div style="background:#1B2762;color:#fff;padding:24px;"><h1 style="margin:0;font-size:22px;">Deed Technologies</h1><p style="margin:4px 0 0;opacity:.85;">ERP Account Access</p></div>
-        <div style="padding:28px;">
-          <p>Hi ${escapeHtml(params.name)},</p>
-          <p>${escapeHtml(action)}</p>
-          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;">
-            <p style="margin:4px 0;"><strong>Username:</strong> <code>${escapeHtml(params.username)}</code></p>
-            <p style="margin:4px 0;"><strong>Temporary password:</strong> <code>${escapeHtml(params.temporaryPassword)}</code></p>
-          </div>
-          <p><a href="${escapeHtml(loginUrl)}" style="display:inline-block;background:#1B2762;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">Sign in to Deed ERP</a></p>
-          <p style="font-size:13px;color:#64748b;">You must change this password after signing in. If you were not expecting this message, contact HR immediately.</p>
-          <p>Best regards,<br><strong>HR Department</strong><br>Deed Technologies</p>
-        </div>
-      </div>
-    </body></html>`,
+    html: brandedEmailFromHtml({
+      title: params.mode === 'welcome' ? 'Your ERP account is ready' : 'Your ERP password was reset',
+      eyebrow: 'Account access',
+      html: `<p style="margin:0 0 14px">Hi ${escapeHtml(params.name)},</p>
+          <p style="margin:0 0 14px">${escapeHtml(action)}</p>
+          ${emailDetailsHtml([['Username', params.username], ['Temporary password', params.temporaryPassword]])}
+          <p style="margin:0 0 14px;font-size:13px;color:#64748b">You must change this password after signing in. If you were not expecting this message, contact HR immediately.</p>`,
+      actions: [{ label: 'Sign in to Deed ERP', url: loginUrl }],
+      signatureHtml: emailSignature(['Best regards,', 'HR Department', 'Deed Technologies']),
+    }),
   }
 }

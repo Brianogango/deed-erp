@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { sendMultiChannelMessage } from '@/lib/integrations/messaging'
 import { appendDocumentEmailSend, parseEmailList } from '@/lib/document-email-sends'
+import { brandedEmailFromHtml, emailDetailsHtml, emailSignature, escapeEmailHtml } from '@/lib/email/branded-layout'
 
 /**
  * POST /api/invoices/[id]/send
@@ -48,26 +49,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const total = Number(invoice.totalAmount).toLocaleString()
     const due = invoice.dueDate ? new Date(invoice.dueDate).toISOString().slice(0, 10) : 'On receipt'
 
-    const html = `
-<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#333;">
-  <div style="max-width:640px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
-    <div style="background:#1B2762;color:#fff;padding:18px;border-radius:8px 8px 0 0;">
-      <h1 style="margin:0;font-size:20px;">${companyName}</h1>
-      <p style="margin:4px 0 0;opacity:.85;">Accounts Department</p>
-    </div>
-    <div style="padding:18px 0;">
-      <p>${greeting},</p>
-      ${body.message ? `<p>${String(body.message).replace(/\n/g, '<br/>')}</p>` : '<p>Please find your invoice details below. The PDF copy is attached.</p>'}
-      <div style="background:#f9fafb;padding:14px;border-radius:8px;margin:14px 0;">
-        <p style="margin:4px 0;"><strong>Invoice:</strong> ${invoice.invoiceNumber}</p>
-        <p style="margin:4px 0;"><strong>Amount due:</strong> KES ${total}</p>
-        <p style="margin:4px 0;"><strong>Due date:</strong> ${due}</p>
-      </div>
-      <p>For any questions about this invoice, reply to this email or contact <a href="mailto:${process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke'}">${process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke'}</a>.</p>
-      <p style="margin-top:24px;">Best regards,<br/><strong>Accounts Department</strong><br/>${companyName}</p>
-    </div>
-  </div>
-</body></html>`
+    const accountsEmail = process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke'
+    const html = brandedEmailFromHtml({
+      title: `Invoice ${invoice.invoiceNumber}`,
+      eyebrow: 'Accounts',
+      preheader: `Invoice ${invoice.invoiceNumber}: KES ${total}, due ${due}`,
+      companyName,
+      html: [
+        `<p style="margin:0 0 14px">${escapeEmailHtml(greeting)},</p>`,
+        body.message
+          ? `<p style="margin:0 0 14px">${escapeEmailHtml(String(body.message)).replace(/\r?\n/g, '<br>')}</p>`
+          : `<p style="margin:0 0 14px">Please find invoice <strong>${escapeEmailHtml(invoice.invoiceNumber)}</strong> attached as a PDF.</p>`,
+        emailDetailsHtml([
+          ['Invoice', invoice.invoiceNumber],
+          ['Amount due', `KES ${total}`],
+          ['Due date', due],
+        ]),
+        `<p style="margin:0 0 14px">For any questions about this invoice, reply to this email or write to <a href="mailto:${escapeEmailHtml(accountsEmail)}">${escapeEmailHtml(accountsEmail)}</a>.</p>`,
+      ].join(''),
+      signatureHtml: emailSignature(['Best regards,', 'Accounts Department', companyName]),
+    })
 
     const text = `${greeting},
 

@@ -195,3 +195,15 @@ export function emailSignature(lines: Array<string | { email: string }>): string
 export function emailParagraph(text: string, muted = false): string {
   return `<p style="margin:0 0 16px;font-family:${FONT};font-size:${muted ? 13 : 15}px;line-height:1.6;color:${muted ? MUTED : INK}">${escapeEmailHtml(text).replace(/\r?\n/g, '<br>')}</p>`
 }
+
+/** Plain HTML (paragraphs, lists, small tables) inside the branded frame, with the email font applied. */
+export function brandedEmailFromHtml(input: Omit<BrandedEmailInput, 'bodyHtml'> & { html: string }): string {
+  const { html, ...rest } = input
+  return brandedEmailHtml({ ...rest, bodyHtml: `<div style="font-family:${FONT};font-size:15px;line-height:1.6;color:${INK}">${html}</div>` })
+}
+
+/** A light box of label / value rows: invoice number, amount, due date… */
+export function emailDetailsHtml(rows: Array<[string, string]>): string {
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#F8FAFC" style="margin:4px 0 18px;background:#F8FAFC;border:1px solid ${LINE};border-radius:10px">${rows.map(([k, v], i) =>
+    `<tr><td style="padding:11px 16px;${i ? `border-top:1px solid ${LINE};` : ''}font-family:${FONT};font-size:13px;color:${MUTED};width:40%">${escapeEmailHtml(k)}</td><td align="right" style="padding:11px 16px;${i ? `border-top:1px solid ${LINE};` : ''}font-family:${FONT};font-size:15px;font-weight:600;color:${INK};text-align:right">${escapeEmailHtml(v)}</td></tr>`).join('')}</table>`
+}
