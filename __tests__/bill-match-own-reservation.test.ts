@@ -60,7 +60,7 @@ describe('vendor bill 3-way match — own reservation excluded', () => {
       purchaseOrderId: PO_ID,
       billLines: [{ productId: PRODUCT_ID, qty: 4, unitPrice: 74500, taxRate: 0 }],
       excludeBillId: BILL_ID,
-    })).rejects.toThrow(/3-way match failed/)
+    })).rejects.toThrow(/only 3 has been received and not yet billed/)
   })
 
   it('reserves only the increment when the bill grew after creation', async () => {
@@ -121,5 +121,41 @@ describe('vendor bill 3-way match — own reservation excluded', () => {
       excludeBillId: BILL_ID,
     })
     expect(result.ok).toBe(true)
+  })
+})
+
+describe('vendor bill priced differently from the order', () => {
+  it('is refused with a plain message and a 409, not a crash', async () => {
+    setup()
+    const err = await assertVendorBillThreeWayMatchInTx(mockPrisma as any, {
+      purchaseOrderId: PO_ID,
+      billLines: [{ productId: PRODUCT_ID, qty: 3, unitPrice: 80000, taxRate: 0, description: 'Lenovo' }],
+      excludeBillId: BILL_ID,
+    }).catch(e => e)
+    expect(err.status).toBe(409)
+    expect(err.message).toMatch(/differs from the purchase order price/)
+    expect(err.message).toMatch(/Director or Finance Officer/)
+  })
+
+  it('posts when Director / Finance confirm it (the difference goes to price difference)', async () => {
+    setup()
+    const result = await assertVendorBillThreeWayMatchInTx(mockPrisma as any, {
+      purchaseOrderId: PO_ID,
+      billLines: [{ productId: PRODUCT_ID, qty: 3, unitPrice: 80000, taxRate: 0 }],
+      excludeBillId: BILL_ID,
+      allowPriceVariance: true,
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('a quantity problem is still refused, with a 409', async () => {
+    setup()
+    const err = await assertVendorBillThreeWayMatchInTx(mockPrisma as any, {
+      purchaseOrderId: PO_ID,
+      billLines: [{ productId: PRODUCT_ID, qty: 5, unitPrice: 74500, taxRate: 0 }],
+      excludeBillId: BILL_ID,
+      allowPriceVariance: true,
+    }).catch(e => e)
+    expect(err.status).toBe(409)
   })
 })

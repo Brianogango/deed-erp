@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { normalizeClientRole } from '@/lib/auth/access'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { computeInvoiceTotals, computeInvoiceLineMoney, inferInvoiceLineTaxCategory, invoiceLineMissingTaxCategory, postedInvoicePutDecision, stripPostedInvoiceEconomicFields, POSTED_INVOICE_ECONOMIC_PUT_KEYS, PRISMA_POSTED_INVOICE_STATUSES } from '@/lib/finance-invoice'
 import { writeFinancialAudit, writeFinancialAuditInTx } from '@/lib/finance-audit'
@@ -431,6 +432,9 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
           vendorId: before.clientId,
           billLines: postingBillLines,
           excludeBillId: id,
+          // Prices move: Director / Finance may confirm a bill priced differently
+          // from the order; the difference posts to Purchase Price Difference.
+          allowPriceVariance: ['director', 'finance_officer'].includes(normalizeClientRole(actor.role)),
         })
       }
 

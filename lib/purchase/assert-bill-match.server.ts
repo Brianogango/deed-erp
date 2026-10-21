@@ -30,9 +30,22 @@ type AssertVendorBillMatchInput = {
    * reservation ("exceeds received/unbilled" on a perfectly matched bill).
    */
   excludeBillId?: string | null
+  /**
+   * A supplier billing a different unit price than ordered is normal (prices
+   * move). When allowed — the poster is Director / Finance — the bill posts and
+   * the difference goes to Purchase Price Difference; otherwise it is refused
+   * with a message saying who can confirm it.
+   */
+  allowPriceVariance?: boolean
 }
 
 const n = (v: unknown) => Number(v) || 0
+const kes = (v: number) => `KES ${v.toLocaleString('en-KE', { maximumFractionDigits: 2 })}`
+
+/** A matching failure is the user's to fix, not a server crash: it answers 409 with this message. */
+function matchError(message: string): Error {
+  return Object.assign(new Error(message), { status: 409 })
+}
 const close = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol
 
 export async function assertVendorBillThreeWayMatchInTx(
@@ -49,7 +62,7 @@ export async function assertVendorBillThreeWayMatchInTx(
     throw err
   }
   if (input.vendorId && po.clientId && input.vendorId !== po.clientId) {
-    throw new Error(`Vendor mismatch: bill vendor does not match PO ${po.poNumber}`)
+    throw matchError(`Vendor mismatch: bill vendor does not match PO ${po.poNumber}`)
   }
 
   const priceTolerance = Math.max(0, input.priceTolerance ?? 0.01)
@@ -79,25 +92,28 @@ export async function assertVendorBillThreeWayMatchInTx(
   const requested = new Map<string, { qty: number; line: VendorBillMatchLine }>()
   for (const bill of input.billLines) {
     const qty = n(bill.qty)
-    if (qty <= 0) throw new Error(`Vendor bill line must have a positive quantity: ${bill.description || 'line'}`)
+    if (qty <= 0) throw matchError(`Vendor bill line must have a positive quantity: ${bill.description || 'line'}`)
 
     if (bill.productId && (productMultiplicity.get(bill.productId) || 0) > 1 && !bill.purchaseOrderItemId) {
-      throw new Error(`PO ${po.poNumber} contains product ${bill.productId} on multiple lines; purchaseOrderItemId is required`)
+      throw matchError(`PO ${po.poNumber} contains product ${bill.productId} on multiple lines; purchaseOrderItemId is required`)
     }
     const poItem = resolveVendorBillPoItem(po.items, bill)
     if (!poItem) {
-      throw new Error(`Every vendor bill line must reference a valid purchase-order line: ${bill.description || bill.productId || 'line'}`)
+      throw matchError(`Every vendor bill line must reference a valid purchase-order line: ${bill.description || bill.productId || 'line'}`)
     }
-    if (bill.unitPrice != null && !close(n(bill.unitPrice), n(poItem.unitCost), priceTolerance)) {
-      throw new Error(`Price mismatch on PO ${po.poNumber}: billed ${n(bill.unitPrice)} vs ordered ${n(poItem.unitCost)}`)
+    if (bill.unitPrice != null && !close(n(bill.unitPrice), n(poItem.unitCost), priceTolerance) && !input.allowPriceVariance) {
+      throw matchError(
+        `${bill.description || 'A line'}: the bill price ${kes(n(bill.unitPrice))} differs from the purchase order price ${kes(n(poItem.unitCost))} (${po.poNumber}). `
+        + 'A Director or Finance Officer can confirm it — the difference is posted to Purchase Price Difference — or correct the price to match the order.',
+      )
     }
     if (bill.taxRate != null && !close(n(bill.taxRate), n(poItem.taxRate), taxTolerance)) {
-      throw new Error(`Tax mismatch on PO ${po.poNumber}: billed ${n(bill.taxRate)} vs ordered ${n(poItem.taxRate)}`)
+      throw matchError(`Tax mismatch on ${po.poNumber}: the bill has ${n(bill.taxRate)}% VAT but the order has ${n(poItem.taxRate)}%. Correct the VAT on the bill line to match the order.`)
     }
     if (bill.grnItemId) {
       const grn = await tx.grnItem.findUnique({ where: { id: bill.grnItemId } })
       if (!grn || grn.poItemId !== poItem.id) {
-        throw new Error(`Receipt line ${bill.grnItemId} does not belong to PO line ${poItem.id}`)
+        throw matchError(`Receipt line ${bill.grnItemId} does not belong to PO line ${poItem.id}`)
       }
     }
 
@@ -114,8 +130,8 @@ export async function assertVendorBillThreeWayMatchInTx(
     const additional = Math.max(0, req.qty - ownQty)
     const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled) + ownQty
     if (req.qty > remaining + 1e-9) {
-      throw new Error(
-        `3-way match failed for PO ${po.poNumber}: bill requests ${req.qty}, but only ${remaining} received and unbilled on line ${poItemId}`,
+      throw matchError(
+        `${po.poNumber}: the bill has quantity ${req.qty} on ${req.line.description || 'a line'}, but only ${remaining} has been received and not yet billed. Receive the rest first, or lower the quantity on the bill.`,
       )
     }
 
@@ -127,7 +143,7 @@ export async function assertVendorBillThreeWayMatchInTx(
         data: { qtyBilled: { increment: Math.trunc(additional) } },
       })
       if (claimed.count !== 1) {
-        throw new Error(`PO ${po.poNumber} billing quantity changed concurrently; retry the bill posting.`)
+        throw matchError(`${po.poNumber} was billed by someone else at the same moment — try confirming again.`)
       }
     }
     reservations.push({ poItemId, qty: req.qty })
@@ -150,7 +166,7 @@ export async function assertVendorBillThreeWayMatchServer(
     })
     if (!po) throw new Error(`Purchase order not found: ${input.purchaseOrderId}`)
     if (input.vendorId && po.clientId && input.vendorId !== po.clientId) {
-      throw new Error(`Vendor mismatch: bill vendor does not match PO ${po.poNumber}`)
+      throw matchError(`Vendor mismatch: bill vendor does not match PO ${po.poNumber}`)
     }
     const ownQtyByPoItem = new Map<string, number>()
     if (input.excludeBillId) {
@@ -169,14 +185,14 @@ export async function assertVendorBillThreeWayMatchServer(
     const requested = new Map<string, number>()
     for (const bill of input.billLines) {
       const poItem = resolveVendorBillPoItem(po.items, bill)
-      if (!poItem) throw new Error('Vendor bill line is not linked to a purchase-order line')
+      if (!poItem) throw matchError(`A bill line (${bill.description || 'unnamed'}) is not on purchase order ${po.poNumber}. Remove it, or bill it separately.`)
       requested.set(poItem.id, (requested.get(poItem.id) || 0) + n(bill.qty))
     }
     for (const [poItemId, qty] of requested) {
       const poItem = po.items.find(x => x.id === poItemId)!
       const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled) + (ownQtyByPoItem.get(poItemId) || 0)
       if (qty <= 0 || qty > remaining) {
-        throw new Error(`3-way match failed: quantity ${qty} exceeds received/unbilled ${remaining}`)
+        throw matchError(`${po.poNumber}: the bill has quantity ${qty} on a line, but only ${remaining} has been received and not yet billed. Receive the rest first, or lower the quantity on the bill.`)
       }
     }
     return { ok: true as const, poRef: po.poNumber }
