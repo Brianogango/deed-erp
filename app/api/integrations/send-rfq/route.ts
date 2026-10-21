@@ -49,10 +49,16 @@ export async function POST(request: Request) {
       message: payload.message,
     })
 
+    // The RFQ goes as a PDF too, so the supplier can file it and quote against it.
+    const { rfqAttachment } = await import('@/lib/integrations/document-pdf.server')
+    const attachment = await rfqAttachment({ ...payload.rfq, vendorName: payload.rfq.vendorName })
+      .catch(err => { console.error('[send-rfq] PDF failed; sending without it', err); return null })
+
     const result = await sendEmail({
       to,
       cc: payload.cc,
       mailbox: 'default',
+      ...(attachment ? { attachments: [attachment] } : {}),
       from: process.env.EMAIL_FROM || process.env.SMTP_USER || undefined,
       ...content,
     })

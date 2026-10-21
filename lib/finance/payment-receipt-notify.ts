@@ -61,6 +61,8 @@ export function buildPaymentReceiptContent(input: {
     `Amount paid to date: ${formatKes(input.amountPaid)}`,
     paidInFull ? 'Status: Paid in full. Thank you.' : `Balance remaining: ${formatKes(input.balance)}`,
     '',
+    'Your receipt is attached as a PDF.',
+    '',
     'Deed Technologies',
     process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke',
   ]
@@ -74,6 +76,7 @@ export function buildPaymentReceiptContent(input: {
     paidInFull
       ? 'Status: <strong>Paid in full</strong>. Thank you.</p>'
       : `Balance remaining: <strong>${escapeHtml(formatKes(input.balance))}</strong></p>`,
+    '<p>Your receipt is attached as a PDF.</p>',
     `<p>Deed Technologies<br/>${escapeHtml(process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke')}</p>`,
   ].join('\n')
 
@@ -177,6 +180,9 @@ export async function notifyCustomerPaymentReceived(
         reference: input.reference || null,
         emailSubject: content.subject,
         emailHtml: content.html,
+        // The receipt PDF is built when the email is sent (files are not stored on the event).
+        emailAttachment: { kind: 'payment_receipt' },
+        paidAt: paidAt.toISOString(),
         emailText: content.text,
         whatsappText: content.whatsappText,
         smsText: content.smsText,

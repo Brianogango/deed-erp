@@ -46,6 +46,27 @@ export function genericHtml(title: string, body: string, actionUrl?: string | nu
   })
 }
 
+async function emailAttachmentsFor(metadata: Record<string, unknown>) {
+  const spec = metadata.emailAttachment as { kind?: string } | undefined
+  if (spec?.kind !== 'payment_receipt' || typeof metadata.invoiceId !== 'string' || typeof metadata.paymentId !== 'string') return []
+  try {
+    const { paymentReceiptAttachment } = await import('@/lib/integrations/document-pdf.server')
+    const pdf = await paymentReceiptAttachment({
+      invoiceId: metadata.invoiceId,
+      paymentId: metadata.paymentId,
+      amount: Number(metadata.amount) || 0,
+      paymentMethod: typeof metadata.paymentMethod === 'string' ? metadata.paymentMethod : null,
+      reference: typeof metadata.reference === 'string' ? metadata.reference : null,
+      paidAt: typeof metadata.paidAt === 'string' ? metadata.paidAt : null,
+    })
+    return pdf ? [pdf] : []
+  } catch (err) {
+    // The email still goes; only the PDF is missing.
+    console.error('[notifications] receipt PDF failed', err)
+    return []
+  }
+}
+
 type ProviderDeliveryInput = {
   channel: NotificationChannel
   eventType: string
@@ -75,6 +96,8 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
           !!a && typeof (a as EmailAction).label === 'string' && typeof (a as EmailAction).url === 'string')
       : undefined
     const html = String(metadata.emailHtml || genericHtml(input.title, input.body, input.actionUrl, actions, input.eventType))
+    // A document the email stands for (a payment receipt) is attached as a PDF.
+    const attachments = await emailAttachmentsFor(metadata)
     const result = await sendEmail({
       to: input.destination,
       mailbox: mailboxForEvent(input.eventType),
@@ -87,6 +110,7 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
       subject,
       html,
       text: [String(metadata.emailText || text), absoluteAppUrl(input.actionUrl)].filter(Boolean).join('\n\n'),
+      ...(attachments.length ? { attachments } : {}),
     })
     return {
       success: result.success,
