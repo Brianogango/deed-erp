@@ -75,6 +75,7 @@ export async function POST(request: Request) {
       senderEmail: repEmail || undefined,
       subject: b.subject,
       html: crmEmailHtml(b.body, { name: repName, email: repEmail }),
+      plain: true,
       text: crmEmailText(b.body, { name: repName, email: repEmail }),
       ...(inReplyTo ? { inReplyTo, references: inReplyTo } : {}),
     })

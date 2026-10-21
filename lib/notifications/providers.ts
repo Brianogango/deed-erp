@@ -4,11 +4,9 @@ import { resolveEmailProvider, sendEmail, type MailboxProfile } from '@/lib/inte
 import { sendWhatsAppMessage } from '@/lib/integrations/whatsapp'
 import { sendNotification } from '@/lib/integrations/notifications'
 import { sendWebPush } from './web-push'
+import { brandedEmailHtml, textToEmailHtml } from '@/lib/email/branded-layout'
 import { resolveSmsProvider } from './sms-provider'
 import type { NotificationChannel, ProviderSendResult } from './types'
-
-const escapeHtml = (value: string) =>
-  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 function mailboxForEvent(eventType: string): MailboxProfile {
   if (eventType.startsWith('hr.')) return 'hr'
@@ -28,34 +26,24 @@ export function absoluteAppUrl(url: string | null | undefined): string | null {
 
 export type EmailAction = { label: string; url: string; tone?: 'primary' | 'success' | 'danger' }
 
-const BUTTON_COLORS: Record<NonNullable<EmailAction['tone']>, string> = { primary: '#00AEEF', success: '#15803D', danger: '#B91C1C' }
-
-/** A table-cell button: Outlook ignores padding/background on a bare link. */
-function emailButton(action: EmailAction) {
-  const href = absoluteAppUrl(action.url)
-  if (!href) return ''
-  const color = BUTTON_COLORS[action.tone || 'primary']
-  return `<td style="padding:0 10px 10px 0"><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td bgcolor="${color}" style="background:${color};border-radius:8px"><a href="${escapeHtml(href)}" target="_blank" style="display:inline-block;padding:12px 20px;font-family:Segoe UI,Arial,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px">${escapeHtml(action.label)}</a></td></tr></table></td>`
+const MAILBOX_LABEL: Record<MailboxProfile, string> = {
+  accounts: 'Accounts',
+  hr: 'Human resources',
+  sales: 'Sales',
+  default: 'Deed ERP',
 }
 
-export function genericHtml(title: string, body: string, actionUrl?: string | null, actions?: EmailAction[]) {
-  const brand = process.env.PDF_COMPANY_NAME || 'Deed Technologies'
-  const buttons = (actions?.length ? actions : actionUrl ? [{ label: 'Open in Deed ERP', url: actionUrl }] : [])
-    .map(emailButton).filter(Boolean).join('')
-  // One line per line: mail apps drop "white-space: pre-wrap".
-  const bodyHtml = escapeHtml(body).split(/\r?\n/).join('<br>')
-  return `<!doctype html><html><body style="margin:0;background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fafc"><tr><td align="center" style="padding:24px 12px">
-    <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;width:100%;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px">
-      <tr><td bgcolor="#1B2762" style="background:#1B2762;color:#ffffff;padding:20px 26px;border-radius:12px 12px 0 0"><strong style="font-size:20px">${escapeHtml(brand)}</strong></td></tr>
-      <tr><td style="padding:26px">
-        <h2 style="margin:0 0 14px;font-size:20px">${escapeHtml(title)}</h2>
-        <p style="margin:0 0 20px;font-size:14px;line-height:1.7">${bodyHtml}</p>
-        ${buttons ? `<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>${buttons}</tr></table>` : ''}
-      </td></tr>
-    </table>
-    </td></tr></table>
-  </body></html>`
+/** A system notification as an email: the branded layout with the alert as a tidy list. */
+export function genericHtml(title: string, body: string, actionUrl?: string | null, actions?: EmailAction[], eventType?: string) {
+  const buttons = actions?.length ? actions : actionUrl ? [{ label: 'Open in Deed ERP', url: actionUrl }] : []
+  return brandedEmailHtml({
+    title,
+    eyebrow: eventType ? (MAILBOX_LABEL[mailboxForEvent(eventType)] ?? 'Deed ERP') : 'Deed ERP',
+    preheader: body.split(/\r?\n/).map(line => line.replace(/^\s*[•\-*]\s+/, '').trim()).filter(Boolean).slice(0, 2).join(' · ') || title,
+    bodyHtml: textToEmailHtml(body),
+    actions: buttons,
+    footnote: 'Sent automatically by Deed ERP because of your role. Reply to this email if something looks wrong.',
+  })
 }
 
 type ProviderDeliveryInput = {
@@ -86,7 +74,7 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
       ? (metadata.emailActions as unknown[]).filter((a): a is EmailAction =>
           !!a && typeof (a as EmailAction).label === 'string' && typeof (a as EmailAction).url === 'string')
       : undefined
-    const html = String(metadata.emailHtml || genericHtml(input.title, input.body, input.actionUrl, actions))
+    const html = String(metadata.emailHtml || genericHtml(input.title, input.body, input.actionUrl, actions, input.eventType))
     const result = await sendEmail({
       to: input.destination,
       mailbox: mailboxForEvent(input.eventType),

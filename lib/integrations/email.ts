@@ -1,3 +1,4 @@
+import { brandedEmailHtml, emailParagraph, emailSignature, emailTableHtml, emailTotalsHtml, wrapEmailFragment, type BrandedAction } from '@/lib/email/branded-layout'
 // ─── Email Integration Layer ─────────────────────────────────────────────────
 
 /**
@@ -37,6 +38,11 @@ export interface EmailMessage {
   }>
   /** Which mailbox to send through. Defaults to the global SMTP_USER/EMAIL_FROM. */
   mailbox?: MailboxProfile
+  /**
+   * A personal email (a rep writing to a customer): sent as written, without
+   * the branded frame every other ERP email gets.
+   */
+  plain?: boolean
   /**
    * Send as a staff member (e.g. the leave applicant): From shows their name and
    * company work email, while the ERP still signs in as the mailbox above —
@@ -251,7 +257,12 @@ export interface EmailResult {
  * NOTE: In development mode, emails are logged to console instead of sent.
  * Set NODE_ENV=production and configure email provider to enable sending.
  */
-export const sendEmail = async (message: EmailMessage): Promise<EmailResult> => {
+export const sendEmail = async (input: EmailMessage): Promise<EmailResult> => {
+  // Every system email gets the same branded frame (logo, footer); a body
+  // that is already a full document, or a personal email, is sent as is.
+  const message: EmailMessage = input.plain || !input.html
+    ? input
+    : { ...input, html: wrapEmailFragment(input.html, input.subject) }
   // Development mode: Just log
   if (process.env.NODE_ENV !== 'production') {
     logEmailForDev(message)
@@ -637,130 +648,37 @@ export const generateQuoteEmail = (quote: {
   const isUpdate = quote.kind === 'update'
   const hasMessage = Boolean(quote.message?.trim())
   const pdfAttached = quote.pdfAttached !== false
-  const greetingName = escapeHtml(quote.contactPersonName || quote.companyName || 'there')
-  const company = escapeHtml(quote.companyName || 'your organisation')
-  const ref = escapeHtml(quote.ref)
-  const validUntil = escapeHtml(quote.validUntil || '—')
-
   const subject = isUpdate
     ? `Updated Quote ${quote.ref} — ${brand}`
     : `Quote ${quote.ref} — ${brand}`
 
-  const introHtml = hasMessage
-    ? ''
-    : isUpdate
-      ? `<p>Please find the <strong>updated quotation</strong> for ${company} below.</p>`
-      : `<p>Please find our quotation for ${company} below.</p>`
-
-  const downloadHtml = quote.pdfDownloadUrl
-    ? `
-            <p style="margin: 20px 0 8px 0;">
-              <a href="${escapeHtml(quote.pdfDownloadUrl)}"
-                 style="display:inline-block;background:#1A1F5E;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;font-size:14px;">
-                Download PDF
-              </a>
-            </p>
-            ${pdfAttached ? `<p style="margin:0;font-size:13px;color:#64748B;">The quotation PDF is also attached to this email.</p>` : ''}`
-    : pdfAttached
-      ? `<p style="margin:20px 0 0 0;font-size:14px;">The full quotation PDF is <strong>attached</strong> to this email — open the attachment to download.</p>`
-      : ''
-
-  const portalHtml = quote.portalLink
-    ? `
-            <p style="margin: 20px 0 8px 0;">
-              <a href="${escapeHtml(quote.portalLink)}"
-                 style="display:inline-block;background:#00AEEF;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;font-size:14px;">
-                View &amp; Respond Online
-              </a>
-            </p>
-            <p style="margin:0;font-size:13px;color:#64748B;">Accept or decline this quotation directly from your browser — no account needed.</p>`
-    : ''
-
-  const lineRows = quote.lines.map(line => `
-                    <tr>
-                      <td>${escapeHtml(line.productName)}</td>
-                      <td style="text-align: center;">${line.qty}</td>
-                      <td style="text-align: right;">KES ${Number(line.lineTotal || 0).toLocaleString()}</td>
-                    </tr>`).join('')
+  const kes = (n: number) => `KES ${Number(n || 0).toLocaleString('en-KE')}`
+  const bodyHtml = [
+    emailParagraph(`Hello ${quote.contactPersonName || quote.companyName || 'there'},`),
+    hasMessage ? emailParagraph(quote.message!.trim()) : emailParagraph(isUpdate
+      ? `Please find the updated quotation for ${quote.companyName || 'your organisation'} below.`
+      : `Please find our quotation for ${quote.companyName || 'your organisation'} below.`),
+    emailTableHtml(['Item', 'Qty', 'Amount'], quote.lines.map(line => [line.productName, line.qty, kes(line.lineTotal)]), ['l', 'c', 'r']),
+    emailTotalsHtml([['Total (incl. VAT)', kes(quote.total)]]),
+    emailParagraph(`Valid until ${quote.validUntil || '—'}.${pdfAttached ? ' The full quotation is attached as a PDF.' : ''}`, true),
+  ].join('')
+  const actions: BrandedAction[] = [
+    ...(quote.portalLink ? [{ label: 'View & Respond Online', url: quote.portalLink, tone: 'primary' as const }] : []),
+    ...(quote.pdfDownloadUrl ? [{ label: 'Download PDF', url: quote.pdfDownloadUrl, tone: quote.portalLink ? 'secondary' as const : 'primary' as const }] : []),
+  ]
 
   return {
     subject,
-    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #1A1F5E; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
-          .content { background: #f9f9f9; padding: 20px; }
-          .quote-summary { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e5e7eb; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-          th { background: #f5f5f5; font-weight: 600; }
-          .total { font-size: 18px; font-weight: bold; color: #1A1F5E; }
-          .badge { display:inline-block;font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 8px;border-radius:999px;background:${isUpdate ? '#FEF3C7' : '#E0E7FF'};color:${isUpdate ? '#92400E' : '#1A1F5E'}; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1 style="margin: 0; font-size: 24px;">${escapeHtml(brand)}</h1>
-            <p style="margin: 5px 0 0 0; opacity: 0.9;">${isUpdate ? 'Updated quotation' : 'Quotation'}</p>
-          </div>
-
-          <div class="content">
-            <p>Hello ${greetingName},</p>
-            ${hasMessage ? `<p style="white-space: pre-wrap;">${escapeHtml(quote.message!.trim())}</p>` : ''}
-            ${introHtml}
-
-            <div class="quote-summary">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 15px 0;flex-wrap:wrap;">
-                <h2 style="margin: 0; font-size: 18px; color: #1A1F5E;">
-                  Quote ${ref}
-                </h2>
-                <span class="badge">${isUpdate ? 'Updated' : 'New'}</span>
-              </div>
-
-              <table>
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th style="text-align: center;">Qty</th>
-                    <th style="text-align: right;">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${lineRows}
-                </tbody>
-              </table>
-
-              <div style="text-align: right; margin-top: 20px; padding-top: 15px; border-top: 2px solid #1A1F5E;">
-                <p style="margin: 5px 0; font-size: 14px;">Total Amount (incl. VAT)</p>
-                <p class="total" style="margin: 0;">KES ${Number(quote.total || 0).toLocaleString()}</p>
-              </div>
-              <p style="margin: 16px 0 0 0; font-size: 13px; color: #64748B;"><strong>Valid until:</strong> ${validUntil}</p>
-            </div>
-
-            ${portalHtml}
-            ${downloadHtml}
-
-            <p style="margin: 28px 0 0 0;">Best regards,<br>
-            <strong>Sales</strong><br>
-            ${escapeHtml(brand)}<br>
-            <a href="mailto:${escapeHtml(salesEmail)}">${escapeHtml(salesEmail)}</a></p>
-          </div>
-
-          <div class="footer">
-            <p>${escapeHtml(brand)}</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
+    html: brandedEmailHtml({
+      title: `Quotation ${quote.ref}`,
+      eyebrow: isUpdate ? 'Updated quotation' : 'Quotation',
+      preheader: `${isUpdate ? 'Updated quotation' : 'Quotation'} ${quote.ref} · ${kes(quote.total)} · valid until ${quote.validUntil || '—'}`,
+      bodyHtml: bodyHtml,
+      actions,
+      footnote: quote.portalLink ? 'You can accept or decline online — no account needed.' : undefined,
+      companyName: brand,
+      signatureHtml: emailSignature(['Best regards,', 'Sales', brand, { email: salesEmail }]),
+    }),
     text: [
       subject,
       '',
@@ -803,46 +721,28 @@ export const generateRfqEmail = (rfq: {
   message?: string
 }) => {
   const company = escapeHtml(rfq.companyName || 'Deed Technologies')
-  const vendor = escapeHtml(rfq.vendorName || 'Vendor')
-  const rows = rfq.lines.map((line, index) => `
-    <tr>
-      <td style="padding:8px;border-bottom:1px solid #eee;">${index + 1}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;">${escapeHtml(line.productName)}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${line.qty}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">KES ${Number(line.unitPrice || 0).toLocaleString()}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">KES ${Number(line.subtotal || 0).toLocaleString()}</td>
-    </tr>`).join('')
+  const kes = (n: number) => `KES ${Number(n || 0).toLocaleString('en-KE')}`
+  const rfqBody = [
+    emailParagraph(`Hello ${rfq.vendorName || 'there'},`),
+    rfq.message ? emailParagraph(rfq.message) : '',
+    emailParagraph('Please send us your best price, availability, lead time and payment terms for the items below.'),
+    rfq.expectedDate ? emailParagraph(`Needed by ${rfq.expectedDate}.`, true) : '',
+    emailTableHtml(['#', 'Item', 'Qty', 'Target price', 'Line total'], rfq.lines.map((l, i) => [i + 1, l.productName, l.qty, kes(l.unitPrice), kes(l.subtotal)]), ['c', 'l', 'c', 'r', 'r']),
+    emailTotalsHtml([['Subtotal', kes(rfq.subtotal)], ['VAT', kes(rfq.taxTotal)], ['Expected total', kes(rfq.total)]]),
+    rfq.notes ? emailParagraph(`Notes: ${rfq.notes}`) : '',
+  ].join('')
 
   return {
     subject: `RFQ ${rfq.ref} from ${rfq.companyName || 'Deed Technologies'}`,
-    html: `
-<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#333;">
-  <div style="max-width:640px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
-    <h2 style="margin:0 0 8px;color:#1A1F5E;">Request for Quotation</h2>
-    <p style="margin:0 0 16px;color:#64748B;">${escapeHtml(rfq.ref)} · ${company}</p>
-    <p>Hello ${vendor},</p>
-    ${rfq.message ? `<p>${escapeHtml(rfq.message)}</p>` : ''}
-    <p>Please quote availability, lead time, payment terms, and final pricing for the items below.</p>
-    ${rfq.expectedDate ? `<p><strong>Expected date:</strong> ${escapeHtml(rfq.expectedDate)}</p>` : ''}
-    <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;">
-      <thead>
-        <tr style="background:#F8FAFC;text-align:left;">
-          <th style="padding:8px;">#</th>
-          <th style="padding:8px;">Item</th>
-          <th style="padding:8px;text-align:right;">Qty</th>
-          <th style="padding:8px;text-align:right;">Target</th>
-          <th style="padding:8px;text-align:right;">Line</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <p style="text-align:right;margin:0;"><strong>Subtotal:</strong> KES ${Number(rfq.subtotal || 0).toLocaleString()}</p>
-    <p style="text-align:right;margin:4px 0;"><strong>Tax:</strong> KES ${Number(rfq.taxTotal || 0).toLocaleString()}</p>
-    <p style="text-align:right;margin:4px 0 16px;font-size:16px;"><strong>Expected total:</strong> KES ${Number(rfq.total || 0).toLocaleString()}</p>
-    ${rfq.notes ? `<p><strong>Notes:</strong> ${escapeHtml(rfq.notes)}</p>` : ''}
-    <p>Regards,<br/>${escapeHtml(rfq.senderName || company)}</p>
-  </div>
-</body></html>`,
+    html: brandedEmailHtml({
+      title: `Request for quotation ${rfq.ref}`,
+      eyebrow: 'Purchasing',
+      preheader: `${rfq.lines.length} item${rfq.lines.length === 1 ? '' : 's'}${rfq.expectedDate ? ` · needed by ${rfq.expectedDate}` : ''}`,
+      bodyHtml: rfqBody,
+      footnote: 'Reply to this email with your quotation.',
+      companyName: rfq.companyName || undefined,
+      signatureHtml: emailSignature(['Kind regards,', rfq.senderName || 'Purchasing', rfq.companyName || 'Deed Technologies']),
+    }),
     text: [
       `RFQ ${rfq.ref} from ${rfq.companyName || 'Deed Technologies'}`,
       '',
