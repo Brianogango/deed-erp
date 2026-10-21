@@ -624,3 +624,210 @@ export function deedPdfToBuffer(doc: jsPDF): Uint8Array<ArrayBuffer> {
   const output = doc.output('arraybuffer') as ArrayBuffer
   return new Uint8Array(output)
 }
+
+export type DeedPdfCompanyInput = DeedPdfCompany
+
+export interface DeedStatementInput {
+  side: 'customer' | 'supplier'
+  /** Shown in the footer and used as the payment reference. */
+  ref: string
+  statementDate: string
+  periodLabel: string
+  partyName: string
+  partyPhone?: string
+  partyEmail?: string
+  partyTaxId?: string
+  partyAddress?: string
+  /** Balance before the period; null for "all time". */
+  opening: number | null
+  periodCharges: number
+  periodPayments: number
+  closing: number
+  overdue: number
+  aging: Array<[string, number]>
+  lines: Array<{ date: string; type: string; ref: string; details: string; charge: number; payment: number; balance: number }>
+  openItems: Array<{ ref: string; date: string; dueDate: string; daysOverdue: number; total: number; paid: number; balance: number }>
+  /** Credit in the party's favour not yet used (store credit, credit notes). */
+  creditAvailable?: number
+}
+
+/** A statement of account on the company letterhead: summary, aging, every movement, and what is still open. */
+export function buildDeedStatementPdf(
+  input: DeedStatementInput,
+  company: DeedPdfCompany,
+  bankAccountsInput: DeedPdfBank[] = [],
+): jsPDF {
+  const banks: DeedPdfBank[] = Array.isArray(bankAccountsInput) ? bankAccountsInput.filter(Boolean) : []
+  const doc = new jsPDF({ unit: 'pt', format: normalizePaperFormat(company.printPaperFormat) })
+  const selectedFont = pdfFont(company.printFont)
+  const originalSetFont = doc.setFont.bind(doc)
+  doc.setFont = ((_: string, style?: string) => originalSetFont(selectedFont, style)) as typeof doc.setFont
+  const currency = company.currency || 'KES'
+  const layout = normalizeDocumentLayout(company.printTemplate)
+  const accent = layoutAccent(layout, company)
+  const customer = input.side === 'customer'
+  const title = customer ? 'Statement of account' : 'Supplier statement'
+  const pseudo = { title, ref: input.ref } as DeedPdfInput
+  const words = customer
+    ? { charge: 'INVOICED', payment: 'RECEIVED', closing: 'BALANCE DUE', party: 'Statement for' }
+    : { charge: 'BILLED', payment: 'PAID', closing: 'WE OWE', party: 'Supplier' }
+
+  drawDocumentBackground(doc, company)
+  drawLetterhead(doc, company)
+
+  let y = 112
+  doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...accent)
+  doc.text(title.toUpperCase(), MARGIN, y)
+  y += 26
+
+  // Party (left) and statement details (right)
+  const leftX = MARGIN
+  const rightX = MARGIN + contentW(doc) * 0.58
+  writeLabel(doc, words.party, leftX, y)
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...INK)
+  doc.text(input.partyName || '—', leftX, y + 16, { maxWidth: rightX - leftX - 20 })
+  let partyY = y + 31
+  ;[input.partyAddress, input.partyPhone ? `Phone: ${input.partyPhone}` : '', input.partyEmail ? `Email: ${input.partyEmail}` : '', input.partyTaxId ? `PIN: ${input.partyTaxId}` : '']
+    .filter(Boolean)
+    .forEach(v => { writeValue(doc, String(v), leftX, partyY, { maxWidth: rightX - leftX - 20 }); partyY += 12 })
+  drawMetaRow(doc, 'Statement date', fmtDate(input.statementDate), rightX, y, 84)
+  drawMetaRow(doc, 'Period', input.periodLabel, rightX, y + 17, 84)
+  drawMetaRow(doc, 'Currency', currency, rightX, y + 34, 84)
+  y = Math.max(partyY, y + 48) + 12
+
+  // Summary boxes
+  const boxes: Array<[string, number, boolean?]> = [
+    ...(input.opening != null ? [['BROUGHT FORWARD', input.opening] as [string, number]] : []),
+    [words.charge, input.periodCharges],
+    [words.payment, input.periodPayments],
+    [words.closing, input.closing, true],
+  ]
+  const gap = 8
+  const boxW = (contentW(doc) - gap * (boxes.length - 1)) / boxes.length
+  boxes.forEach(([label, value, strong], i) => {
+    const x = MARGIN + i * (boxW + gap)
+    if (strong) doc.setFillColor(...accent)
+    else doc.setFillColor(...SOFT)
+    doc.setDrawColor(...(strong ? accent : BORDER)).setLineWidth(.5).roundedRect(x, y, boxW, 44, 4, 4, 'FD')
+    doc.setFont('helvetica', 'bold').setFontSize(6.6).setTextColor(...(strong ? [255, 255, 255] as [number, number, number] : MUTED))
+    doc.text(label, x + 9, y + 14)
+    doc.setFont('helvetica', 'bold').setFontSize(strong ? 12 : 10.5).setTextColor(...(strong ? [255, 255, 255] as [number, number, number] : INK))
+    doc.text(`${currency} ${money(value)}`, x + 9, y + 33, { maxWidth: boxW - 14 })
+  })
+  y += 58
+
+  if (input.overdue > 0.005 || input.aging.some(([, v]) => v > 0.005)) {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
+      head: [input.aging.map(([label]) => label.toUpperCase())],
+      body: [input.aging.map(([, v]) => money(v))],
+      theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 8, textColor: INK, lineColor: BORDER, lineWidth: .45, halign: 'center', cellPadding: 5 },
+      headStyles: { fillColor: SOFT, textColor: MUTED, fontStyle: 'bold', fontSize: 6.5 },
+    })
+    y = (doc as any).lastAutoTable.finalY + 16
+  }
+
+  // Movements
+  writeLabel(doc, 'Transactions', MARGIN, y)
+  y += 6
+  const body: any[] = []
+  if (input.opening != null) {
+    body.push([{ content: 'Balance brought forward', colSpan: 6, styles: { fontStyle: 'bold', fillColor: SOFT } }, { content: money(input.opening), styles: { fontStyle: 'bold', fillColor: SOFT } }])
+  }
+  input.lines.forEach(l => body.push([
+    fmtDate(l.date), l.type, l.ref, l.details,
+    l.charge ? money(l.charge) : '', l.payment ? money(l.payment) : '', money(l.balance),
+  ]))
+  if (!input.lines.length) body.push([{ content: 'No transactions in this period.', colSpan: 7, styles: { textColor: MUTED, halign: 'center' } }])
+  body.push([
+    { content: 'Totals for the period', colSpan: 4, styles: { fontStyle: 'bold' } },
+    { content: money(input.periodCharges), styles: { fontStyle: 'bold' } },
+    { content: money(input.periodPayments), styles: { fontStyle: 'bold' } },
+    { content: money(input.closing), styles: { fontStyle: 'bold' } },
+  ])
+  autoTable(doc, {
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
+    head: [['DATE', 'TYPE', 'DOCUMENT', 'DETAILS', words.charge, words.payment, 'BALANCE']],
+    body,
+    theme: 'plain',
+    styles: { font: 'helvetica', fontSize: 7.6, textColor: INK, lineColor: BORDER, lineWidth: { bottom: .4 } as any, cellPadding: { top: 5, right: 5, bottom: 5, left: 5 }, overflow: 'linebreak', valign: 'top' },
+    headStyles: { fillColor: accent, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 6.6 },
+    columnStyles: {
+      0: { cellWidth: 56 },
+      1: { cellWidth: 56 },
+      2: { cellWidth: 74 },
+      3: { cellWidth: 'auto' },
+      4: { cellWidth: 66, halign: 'right' },
+      5: { cellWidth: 66, halign: 'right' },
+      6: { cellWidth: 72, halign: 'right' },
+    },
+    didParseCell: data => { if (data.section === 'head' && data.column.index >= 4) data.cell.styles.halign = 'right' },
+    didDrawPage: data => { if (data.pageNumber > 1) drawLetterhead(doc, company, `${title.toUpperCase()} · ${input.partyName}`) },
+  })
+  y = (doc as any).lastAutoTable.finalY + 18
+
+  if (input.openItems.length) {
+    y = ensureRoom(doc, company, pseudo, y, 60)
+    writeLabel(doc, customer ? 'Unpaid invoices' : 'Unpaid bills', MARGIN, y)
+    y += 6
+    autoTable(doc, {
+      startY: y,
+      margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
+      head: [['DOCUMENT', 'DATE', 'DUE', 'OVERDUE BY', 'TOTAL', words.payment, 'STILL OWED']],
+      body: [
+        ...input.openItems.map(o => [o.ref, fmtDate(o.date), fmtDate(o.dueDate), o.daysOverdue > 0 ? `${o.daysOverdue} days` : 'Not yet due', money(o.total), o.paid ? money(o.paid) : '', money(o.balance)]),
+        [{ content: 'Total still owed', colSpan: 6, styles: { fontStyle: 'bold' } }, { content: money(input.openItems.reduce((s, o) => s + o.balance, 0)), styles: { fontStyle: 'bold' } }],
+      ] as any,
+      theme: 'plain',
+      styles: { font: 'helvetica', fontSize: 7.6, textColor: INK, lineColor: BORDER, lineWidth: { bottom: .4 } as any, cellPadding: 5 },
+      headStyles: { fillColor: SOFT, textColor: MUTED, fontStyle: 'bold', fontSize: 6.6 },
+      columnStyles: { 3: { halign: 'center' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
+      didParseCell: data => { if (data.section === 'head' && data.column.index >= 3) data.cell.styles.halign = data.column.index === 3 ? 'center' : 'right' },
+      didDrawPage: data => { if (data.pageNumber > 1) drawLetterhead(doc, company, `${title.toUpperCase()} · ${input.partyName}`) },
+    })
+    y = (doc as any).lastAutoTable.finalY + 16
+  }
+
+  if ((input.creditAvailable ?? 0) > 0.005) {
+    y = ensureRoom(doc, company, pseudo, y, 30)
+    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...INK)
+    doc.text(customer
+      ? `Credit available to you: ${currency} ${money(input.creditAvailable!)} (can be used on your next invoice).`
+      : `Credit owed to us by ${input.partyName}: ${currency} ${money(input.creditAvailable!)}.`, MARGIN, y + 8)
+    y += 22
+  }
+
+  if (customer && input.closing > 0.005) {
+    const payment = defaultPaymentLines({ ...pseudo, paymentCommunication: true } as DeedPdfInput, company, banks)
+    if (payment.length) {
+      const paymentH = Math.max(56, Math.ceil(payment.length / 2) * 14 + 30)
+      y = ensureRoom(doc, company, pseudo, y, paymentH + 12)
+      line(doc, MARGIN, y, right(doc), BORDER, .55)
+      writeLabel(doc, 'How to pay', MARGIN, y + 18)
+      const midpoint = Math.ceil(payment.length / 2)
+      payment.forEach((entry, index) => {
+        const isRight = index >= midpoint
+        const x = isRight ? MARGIN + contentW(doc) / 2 + 12 : MARGIN
+        doc.setFont('helvetica', /BANK|M-PESA|PAYMENT/i.test(entry) ? 'bold' : 'normal').setFontSize(7.5).setTextColor(...INK)
+        doc.text(entry, x, y + 36 + (isRight ? index - midpoint : index) * 13, { maxWidth: contentW(doc) / 2 - 24 })
+      })
+      y += paymentH
+    }
+  }
+
+  y = ensureRoom(doc, company, pseudo, y, 30)
+  doc.setFont('helvetica', 'italic').setFontSize(7.2).setTextColor(...MUTED)
+  doc.text(customer
+    ? 'If your records differ from this statement, please contact our accounts team within 14 days.'
+    : 'Please let us know if your records differ from this statement.', MARGIN, y + 10, { maxWidth: contentW(doc) })
+
+  const pages = doc.getNumberOfPages()
+  for (let page = 1; page <= pages; page += 1) {
+    doc.setPage(page)
+    drawFooter(doc, company, pseudo, page, pages)
+  }
+  return doc
+}

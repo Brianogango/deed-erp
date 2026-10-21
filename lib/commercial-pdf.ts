@@ -9,6 +9,7 @@ import type { jsPDF } from 'jspdf'
 import type { BankAccount, CompanySettings } from '@/lib/store'
 import {
   buildDeedDocumentPdf,
+  type DeedPdfCompanyInput,
   type DeedPdfInput,
 } from '@/lib/deed-document-pdf'
 import { loadLogoForPdfClient } from '@/lib/pdf-logo'
@@ -74,6 +75,35 @@ export interface CommercialPdfInput {
    * When set, overrides the default first-bank + company M-Pesa block.
    */
   paymentDetailLines?: string[]
+}
+
+/** The company settings and logo in the shape the PDF builders take. */
+export async function companyForPdf(company: CompanySettings, currency?: string): Promise<DeedPdfCompanyInput> {
+  const logo = await loadLogoForPdfClient(company.logoUrl)
+  return {
+    name: company.name,
+    address: company.address,
+    city: company.city,
+    phone: company.phone,
+    email: company.email,
+    website: company.website,
+    kraPin: company.kraPin,
+    currency: currency || company.currency,
+    mpesaPaybill: company.mpesaPaybill,
+    mpesaAccount: company.mpesaAccount,
+    invoiceFooter: company.invoiceFooter,
+    printTemplate: company.printTemplate,
+    printFont: company.printFont,
+    printBackground: company.printBackground,
+    printPrimaryColor: company.printPrimaryColor,
+    printSecondaryColor: company.printSecondaryColor,
+    printTagline: company.printTagline,
+    printPaperFormat: company.printPaperFormat,
+    logoDataUrl: logo?.dataUrl,
+    logoWidth: logo?.width,
+    logoHeight: logo?.height,
+    logoFormat: logo?.format,
+  }
 }
 
 export async function buildCommercialPdf(

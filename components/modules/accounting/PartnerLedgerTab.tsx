@@ -56,7 +56,8 @@ function Aging({ aging, total }: { aging: Record<AgingBucket, number>; total: nu
 
 export default function PartnerLedgerTab() {
   const { allInvoices, contacts, plPartner, setPlPartner, plDateFrom, setPlDateFrom, plDateTo, setPlDateTo } = useAccounting()
-  const { customerCredits, deposits } = useFinanceStore()
+  const { customerCredits, deposits, companySettings, bankAccounts, showToast } = useFinanceStore()
+  const [downloading, setDownloading] = useState(false)
   const router = useRouter()
   const [overviewSide, setOverviewSide] = useState<LedgerSide>('customer')
   const [sideChoice, setSideChoice] = useState<LedgerSide | null>(null)
@@ -273,6 +274,53 @@ export default function PartnerLedgerTab() {
       footer: () => <span className="font-mono text-[11px] font-bold">{fmtKes(ledger.outstanding)}</span> },
   ]
 
+  const downloadStatement = async () => {
+    if (downloading) return
+    setDownloading(true)
+    try {
+      const [{ buildDeedStatementPdf }, { companyForPdf }] = await Promise.all([
+        import('@/lib/deed-document-pdf'),
+        import('@/lib/commercial-pdf'),
+      ])
+      const company = await companyForPdf(companySettings)
+      const pc = partner.contact as any
+      const statementDate = plDateTo || today()
+      const doc = buildDeedStatementPdf({
+        side,
+        ref: partner.name,
+        statementDate,
+        periodLabel,
+        partyName: partner.name,
+        partyPhone: pc?.phone || undefined,
+        partyEmail: pc?.email || undefined,
+        partyTaxId: pc?.vatNumber || undefined,
+        partyAddress: [pc?.address, pc?.city].filter(Boolean).join(', ') || undefined,
+        opening: plDateFrom ? ledger.opening : null,
+        periodCharges: ledger.periodCharges,
+        periodPayments: ledger.periodPayments,
+        closing: ledger.closing,
+        overdue: ledger.overdue,
+        aging: BUCKETS.map(b => [AGING_LABELS[b], ledger.aging[b]] as [string, number]),
+        lines: ledger.lines.map(l => ({
+          date: l.date,
+          type: KIND_LABEL[l.kind],
+          ref: l.documentRef,
+          details: l.infoOnly ? `${l.description} (no money moved)` : l.description,
+          charge: l.charge,
+          payment: l.payment,
+          balance: l.balance,
+        })),
+        openItems: ledger.openItems,
+        creditAvailable: side === 'customer' ? storeCredit + ledger.unappliedCredit : ledger.unappliedCredit,
+      }, company, bankAccounts as any)
+      doc.save(`Statement - ${partner.name.replace(/[/\\]/g, '-')} - ${statementDate}.pdf`)
+    } catch (err) {
+      showToast(`Could not build the statement: ${err instanceof Error ? err.message : 'unknown error'}`, 'error')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const c = partner.contact as any
   const contactLine = [c?.phone, c?.email, c?.vatNumber ? `KRA ${c.vatNumber}` : ''].filter(Boolean).join(' · ')
   const creditValue = side === 'customer' ? storeCredit + ledger.unappliedCredit : ledger.unappliedCredit
@@ -286,12 +334,17 @@ export default function PartnerLedgerTab() {
           <h3 className="partner-ledger__name">{partner.name}</h3>
           {contactLine && <p className="partner-ledger__contact">{contactLine}</p>}
         </div>
+        <div className="partner-ledger__head-actions">
         {hasCustomer && hasSupplier && (
           <div className="partner-ledger__tabs is-compact" role="tablist" aria-label="Ledger side">
             <button type="button" role="tab" aria-selected={side === 'customer'} className={side === 'customer' ? 'is-on' : ''} onClick={() => setSideChoice('customer')}>As customer</button>
             <button type="button" role="tab" aria-selected={side === 'supplier'} className={side === 'supplier' ? 'is-on' : ''} onClick={() => setSideChoice('supplier')}>As supplier</button>
           </div>
         )}
+          <button type="button" className="btn-primary text-[12px] min-h-[38px] px-4" onClick={() => { void downloadStatement() }} disabled={downloading}>
+            {downloading ? 'Preparing…' : 'Download statement (PDF)'}
+          </button>
+        </div>
       </div>
 
       <div className="partner-ledger__kpis">
