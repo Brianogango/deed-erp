@@ -46,3 +46,16 @@ describe('findMisfiledInvoices', () => {
     expect(rows.map(r => [r.ref, r.shouldBe, r.source])).toEqual([['INV/1', 'Acme Ltd', 'sale_order']])
   })
 })
+
+describe('repair invoices whose sale order carries the same wrong customer', () => {
+  it('checks against the repair, not the sale order', () => {
+    const rows = findMisfiledInvoices({
+      invoices: [{ id: 'i1', ref: 'INV/2026/0170', date: '2026-08-30', total: 6000, clientId: 'brian', clientName: 'Brian Ogango', saleOrderId: 'so89', repairId: 'r1', isPosInvoice: false }],
+      posByInvoiceId: new Map(),
+      saleOrders: new Map([['so89', { clientId: 'brian', name: 'Brian Ogango' }]]),
+      repairs: new Map([['r1', { clientId: 'jane', name: 'Jane Wanjiru' }]]),
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ source: 'repair', filedUnder: 'Brian Ogango', shouldBe: 'Jane Wanjiru', targetClientId: 'jane', saleOrderId: 'so89' })
+  })
+})

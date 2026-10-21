@@ -17,6 +17,9 @@ export default function InvoiceCustomerCheck({ showToast }: { showToast: (msg: s
   const [rows, setRows] = useState<Row[] | null>(null)
   const [failed, setFailed] = useState<Result[]>([])
   const [busy, setBusy] = useState(false)
+  // Untick an invoice that is billed to someone else on purpose (a company paying for its staff's repair).
+  const [skip, setSkip] = useState<Set<string>>(new Set())
+  const chosen = (rows ?? []).filter(r => !skip.has(r.invoiceId))
 
   const load = async () => {
     setBusy(true)
@@ -25,6 +28,7 @@ export default function InvoiceCustomerCheck({ showToast }: { showToast: (msg: s
       const body = await res.json().catch(() => null) as { rows?: Row[]; error?: string } | null
       if (!res.ok) throw new Error(body?.error || `server returned ${res.status}`)
       setRows(body?.rows ?? [])
+      setSkip(new Set())
     } catch (err) {
       showToast(`Could not check invoices: ${err instanceof Error ? err.message : 'error'}`, 'error')
     } finally {
@@ -33,11 +37,15 @@ export default function InvoiceCustomerCheck({ showToast }: { showToast: (msg: s
   }
 
   const fix = async () => {
-    if (!rows?.length) return
-    if (!window.confirm(`Move ${rows.length} invoice${rows.length === 1 ? '' : 's'} to the customer on their till ticket, sale order or repair?\n\nAmounts, payments and journals do not change. Each change is written to the audit log.`)) return
+    if (!chosen.length) return
+    if (!window.confirm(`Move ${chosen.length} invoice${chosen.length === 1 ? '' : 's'} to the customer on their till ticket, repair or sale order?\n\nA repair invoice's sale order moves with it. Amounts, payments and journals do not change. Each change is written to the audit log.`)) return
     setBusy(true)
     try {
-      const res = await fetch('/api/accounting/invoice-customers', { method: 'POST' })
+      const res = await fetch('/api/accounting/invoice-customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceIds: chosen.map(r => r.invoiceId) }),
+      })
       const body = await res.json().catch(() => null) as { results?: Result[]; error?: string } | null
       if (!res.ok) throw new Error(body?.error || `server returned ${res.status}`)
       const results = body?.results ?? []
@@ -57,25 +65,34 @@ export default function InvoiceCustomerCheck({ showToast }: { showToast: (msg: s
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="text-sm font-extrabold text-text-1">Invoices under the wrong customer</h3>
-          <p className="mt-1 text-xs text-text-3">Compares each invoice with its till ticket, sale order or repair — the record of who actually bought.</p>
+          <p className="mt-1 text-xs text-text-3">Compares each invoice with its till ticket, repair or sale order — the record of who actually bought. Untick any billed to someone else on purpose.</p>
         </div>
         <div className="flex gap-2">
           <button type="button" className="btn-secondary text-[11px]" disabled={busy} onClick={() => void load()}>
             {busy && !rows ? 'Checking…' : rows ? 'Check again' : 'Check invoices'}
           </button>
           {rows && rows.length > 0 && (
-            <button type="button" className="btn-primary text-[11px]" disabled={busy} onClick={() => void fix()}>
-              {busy ? 'Correcting…' : `Correct ${rows.length}`}
+            <button type="button" className="btn-primary text-[11px]" disabled={busy || chosen.length === 0} onClick={() => void fix()}>
+              {busy ? 'Correcting…' : `Correct ${chosen.length}`}
             </button>
           )}
         </div>
       </div>
       {rows && rows.length === 0 && <p className="mt-3 text-xs font-semibold text-emerald-700">Every invoice matches its source document.</p>}
       {rows && rows.length > 0 && (
+        <p className="mt-3 text-xs font-semibold text-text-2">
+          {rows.length} invoice{rows.length === 1 ? '' : 's'} under a different customer, {fmtKes(rows.reduce((t, r) => t + r.total, 0))} in total.
+        </p>
+      )}
+      {rows && rows.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="erp-table">
             <thead className="text-text-3">
               <tr>
+                <th className="py-1.5 pr-2 font-semibold">
+                  <input type="checkbox" aria-label="Select all" checked={skip.size === 0}
+                    onChange={e => setSkip(e.target.checked ? new Set() : new Set(rows.map(r => r.invoiceId)))} />
+                </th>
                 <th className="py-1.5 pr-3 font-semibold">Invoice</th>
                 <th className="py-1.5 pr-3 font-semibold">Date</th>
                 <th className="py-1.5 pr-3 text-right font-semibold">Amount</th>
@@ -87,6 +104,10 @@ export default function InvoiceCustomerCheck({ showToast }: { showToast: (msg: s
             <tbody className="divide-y divide-[var(--border-lt)]">
               {rows.map(r => (
                 <tr key={r.invoiceId}>
+                  <td className="py-1.5 pr-2">
+                    <input type="checkbox" aria-label={`Correct ${r.ref}`} checked={!skip.has(r.invoiceId)}
+                      onChange={() => setSkip(prev => { const next = new Set(prev); if (next.has(r.invoiceId)) next.delete(r.invoiceId); else next.add(r.invoiceId); return next })} />
+                  </td>
                   <td className="py-1.5 pr-3 font-mono">{r.ref}</td>
                   <td className="py-1.5 pr-3">{r.date}</td>
                   <td className="py-1.5 pr-3 text-right">{fmtKes(r.total)}</td>

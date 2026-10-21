@@ -32,6 +32,8 @@ export type MisfiledInvoice = {
   /** Contact id the source names (may not be a server contact yet). */
   targetClientId: string | null
   source: 'pos' | 'sale_order' | 'repair'
+  /** The invoice's sale order — moved with it when the repair says otherwise. */
+  saleOrderId: string | null
 }
 
 const norm = (v: unknown) => String(v ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
@@ -48,15 +50,18 @@ export function findMisfiledInvoices(input: {
   for (const inv of input.invoices) {
     let source: MisfiledInvoice['source'] | null = null
     let expected: SourceCustomer | undefined
+    // The document the sale started from decides. A repair comes before its
+    // sale order: the order (and invoice) made from it could carry the same
+    // wrong customer, so checking against the order would find nothing.
     if (inv.isPosInvoice || input.posByInvoiceId.has(inv.id)) {
       source = 'pos'
       expected = input.posByInvoiceId.get(inv.id)
+    } else if (inv.repairId && input.repairs.has(inv.repairId)) {
+      source = 'repair'
+      expected = input.repairs.get(inv.repairId)
     } else if (inv.saleOrderId) {
       source = 'sale_order'
       expected = input.saleOrders.get(inv.saleOrderId)
-    } else if (inv.repairId) {
-      source = 'repair'
-      expected = input.repairs.get(inv.repairId)
     }
     if (!source || !expected) continue
     if (WALK_IN.has(norm(expected.name)) && !expected.clientId) continue
@@ -73,6 +78,7 @@ export function findMisfiledInvoices(input: {
       shouldBe: expected.name || '(contact on the source document)',
       targetClientId: expected.clientId,
       source,
+      saleOrderId: inv.saleOrderId,
     })
   }
   return out.sort((a, b) => a.date.localeCompare(b.date))

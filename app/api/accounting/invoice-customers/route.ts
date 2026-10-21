@@ -26,9 +26,19 @@ async function buildReport(): Promise<MisfiledInvoice[]> {
       select: { id: true, invoiceNumber: true, invoiceDate: true, totalAmount: true, clientId: true, saleOrderId: true, repairId: true, isPosInvoice: true, client: { select: { name: true } } },
     }),
     prisma.saleOrder.findMany({ select: { id: true, clientId: true, client: { select: { name: true } } } }),
-    prisma.repair.findMany({ select: { id: true, clientId: true, client: { select: { name: true } } } }),
+    prisma.repair.findMany({ select: { id: true, clientId: true, invoiceId: true, payload: true, client: { select: { name: true } } } }),
     loadAppState(['deed_posOrders']),
   ])
+  // An invoice made from a repair through its sale order often does not name
+  // the repair itself; the repair names its invoice and its sale order.
+  const repairByInvoice = new Map<string, string>()
+  const repairBySaleOrder = new Map<string, string>()
+  for (const r of repairs) {
+    const p = (r.payload && typeof r.payload === 'object' ? r.payload : {}) as Record<string, unknown>
+    if (r.invoiceId) repairByInvoice.set(r.invoiceId, r.id)
+    if (typeof p.invoiceId === 'string' && p.invoiceId) repairByInvoice.set(p.invoiceId, r.id)
+    if (typeof p.saleOrderId === 'string' && p.saleOrderId) repairBySaleOrder.set(p.saleOrderId, r.id)
+  }
   const invoices: InvoiceForCheck[] = rows.map(r => ({
     id: r.id,
     ref: r.invoiceNumber,
@@ -37,7 +47,7 @@ async function buildReport(): Promise<MisfiledInvoice[]> {
     clientId: r.clientId,
     clientName: r.client?.name ?? '',
     saleOrderId: r.saleOrderId,
-    repairId: r.repairId,
+    repairId: r.repairId ?? repairByInvoice.get(r.id) ?? (r.saleOrderId ? repairBySaleOrder.get(r.saleOrderId) : undefined) ?? null,
     isPosInvoice: r.isPosInvoice,
   }))
   const idByRef = new Map(invoices.map(i => [i.ref, i.id]))
@@ -53,7 +63,12 @@ async function buildReport(): Promise<MisfiledInvoice[]> {
   }
   const toMap = (list: Array<{ id: string; clientId: string; client: { name: string } | null }>) =>
     new Map<string, SourceCustomer>(list.map(x => [x.id, { clientId: x.clientId, name: x.client?.name ?? '' }]))
-  return findMisfiledInvoices({ invoices, posByInvoiceId, saleOrders: toMap(saleOrders), repairs: toMap(repairs) })
+  // The repair's customer as booked: its contact, or the name on the job.
+  const repairCustomers = new Map<string, SourceCustomer>(repairs.map(r => {
+    const p = (r.payload && typeof r.payload === 'object' ? r.payload : {}) as Record<string, unknown>
+    return [r.id, { clientId: r.clientId, name: r.client?.name || String(p.customerName ?? '') }]
+  }))
+  return findMisfiledInvoices({ invoices, posByInvoiceId, saleOrders: toMap(saleOrders), repairs: repairCustomers })
 }
 
 export async function GET() {
@@ -63,10 +78,13 @@ export async function GET() {
   })
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(ROLES)
-    const rows = await buildReport()
+    // Only the invoices ticked on screen (none sent = all, for older screens).
+    const body = await request.json().catch(() => ({})) as { invoiceIds?: unknown }
+    const only = Array.isArray(body.invoiceIds) ? new Set(body.invoiceIds.map(String)) : null
+    const rows = (await buildReport()).filter(r => !only || only.has(r.invoiceId))
     const results: Array<{ ref: string; status: 'fixed' | 'failed'; message: string }> = []
     for (const row of rows) {
       try {
@@ -80,6 +98,10 @@ export async function POST() {
         await prisma.$transaction([
           prisma.invoice.update({ where: { id: row.invoiceId }, data: { clientId } }),
           prisma.creditNote.updateMany({ where: { invoiceId: row.invoiceId }, data: { clientId } }),
+          // The sale order made from the repair carried the same wrong customer.
+          ...(row.source === 'repair' && row.saleOrderId
+            ? [prisma.saleOrder.updateMany({ where: { id: row.saleOrderId }, data: { clientId } })]
+            : []),
         ])
         await appendInventoryAuditLog({
           action: 'invoice_customer_corrected',
