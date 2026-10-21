@@ -813,6 +813,13 @@ export function invoicePaymentStatus(inv: PaymentStatusInput): PaymentStatus {
   if (invoiceDocState(inv.status) === 'cancelled') {
     return paid > 0 ? 'reversed' : 'not_paid'
   }
+  // A credit note has a negative total, and what has been used of it is
+  // stored as a negative amount paid: compare sizes, or it never leaves Not Paid.
+  if (total < 0) {
+    const used = Math.abs(paid)
+    if (used <= 0.009) return 'not_paid'
+    return used >= Math.abs(total) - 0.01 ? 'paid' : 'partially_paid'
+  }
   if (inv.paymentBlocked && paid < total) return 'blocked'
   if (paid <= 0) return 'not_paid'
   const uncleared = (inv.payments ?? []).some(p => p.cleared === false)
@@ -830,7 +837,13 @@ export function financeListPaymentStatusLabel(inv: PaymentStatusInput): string {
   if (paymentState === 'reversed') return PAYMENT_STATUS_LABELS.reversed
   const docState = invoiceDocState(inv.status)
   if (docState !== 'posted') return INVOICE_DOC_STATE_LABELS[docState]
+  if ((Number(inv.total) || 0) < 0) return creditNoteStatusLabel(paymentState)
   return PAYMENT_STATUS_LABELS[paymentState]
+}
+
+/** A credit note is applied (used against bills or refunded), not paid. */
+export function creditNoteStatusLabel(state: PaymentStatus): string {
+  return state === 'paid' ? 'Applied' : state === 'partially_paid' ? 'Part applied' : 'Open credit'
 }
 
 /**

@@ -20,7 +20,7 @@ import {
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
 import { canCancelOrResetInvoice, canApplyCustomerCredit } from '@/lib/finance-controls'
 import { financePaymentPreview } from '@/lib/finance-payment-preview'
-import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, invoiceDueRelativeLabel, invoiceDueDateNeedsAlert, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, invoiceDueRelativeLabel, invoiceDueDateNeedsAlert, displayDocRef, creditNoteStatusLabel, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Breadcrumbs, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import Chatter from '@/components/erp/Chatter'
@@ -31,7 +31,8 @@ import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
 import { canScheduleInvoiceDelivery, findInvoiceDeliveryJob } from '@/lib/invoice-delivery-job'
-import { financeInvoiceListPath, parseFinanceListPage } from '@/lib/finance-invoice'
+import { financeInvoiceListPath, financeInvoicePath, parseFinanceListPage } from '@/lib/finance-invoice'
+import { isVendorCreditNote, vendorCreditSummary } from '@/lib/finance/vendor-credit-note'
 import {
   alignPaymentDetailsToTax,
   documentHasVat,
@@ -283,7 +284,11 @@ export default function InvoiceDetail() {
   // Odoo semantics: document state + separately computed payment status.
   const docState = invoiceDocState(invoice.status)
   const payState = invoicePaymentStatus(invoice)
-  const overdue = isInvoiceOverdue(invoice)
+  // A supplier credit note (negative total) is applied to bills, never paid.
+  const isCreditNote = isVendorCreditNote(invoice)
+  const credit = isCreditNote ? vendorCreditSummary(invoice, invoices) : null
+  const payStateLabel = isCreditNote ? creditNoteStatusLabel(payState) : PAYMENT_STATUS_LABELS[payState]
+  const overdue = !isCreditNote && isInvoiceOverdue(invoice)
   const badgeStatus = payState === 'paid' ? 'active' : payState === 'blocked' || docState === 'cancelled' ? 'cancelled' : payState === 'partially_paid' || payState === 'in_payment' ? 'warning' : 'pending'
   const existingOrc = outboundReleases?.find(r => r.invoiceId === invoice.id && r.status !== 'voided')
   const serialLines = (invoice.lines || []).filter(l => l.productId)
@@ -305,6 +310,16 @@ export default function InvoiceDetail() {
     const isPosted = docState === 'posted'
     const isPartPaid = isPosted && (payState === 'partially_paid' || payState === 'in_payment')
     const isPaid = isPosted && payState === 'paid'
+    if (isCreditNote) {
+      const applied = isPosted && payState === 'paid'
+      const part = isPosted && payState === 'partially_paid'
+      return [
+        { key: 'draft', label: 'Draft', state: docState === 'draft' ? 'current' : isPosted ? 'done' : 'todo' },
+        { key: 'posted', label: 'Confirmed', state: docState === 'draft' ? 'todo' : part || applied ? 'done' : isPosted ? 'current' : 'todo' },
+        { key: 'part-paid', label: 'Part applied', state: applied ? 'done' : part ? 'current' : 'todo' },
+        { key: 'paid', label: 'Applied', state: applied ? 'current' : 'todo' },
+      ] as Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>
+    }
     return [
       { key: 'draft', label: 'Draft', state: docState === 'draft' ? 'current' : isPosted ? 'done' : 'todo' },
       { key: 'posted', label: 'Confirmed', state: docState === 'draft' ? 'todo' : isPartPaid || isPaid ? 'done' : isPosted ? 'current' : 'todo' },
@@ -644,7 +659,7 @@ export default function InvoiceDetail() {
       id: 'block',
       label: invoice.paymentBlocked ? 'Release payment block' : 'Block payment (dispute)',
       onClick: () => setInvoicePaymentBlocked(invoice.id, !invoice.paymentBlocked),
-      hidden: !(docState === 'posted' && payState !== 'paid' && canManageFullFinance),
+      hidden: !(docState === 'posted' && payState !== 'paid' && canManageFullFinance && !isCreditNote),
     },
     {
       id: 'reset',
@@ -715,7 +730,7 @@ export default function InvoiceDetail() {
           <div className="invoice-detail__header-main">
             <div className="invoice-detail__title-row">
               <div className="invoice-detail__identity">
-                <h1 className="invoice-detail__title">{invoice.type === 'customer_invoice' ? 'Customer invoice' : 'Vendor bill'}</h1>
+                <h1 className="invoice-detail__title">{invoice.type === 'customer_invoice' ? 'Customer invoice' : isCreditNote ? 'Supplier credit note' : 'Vendor bill'}</h1>
                 <p className="invoice-detail__ref">{titleRef}</p>
               </div>
               {docState === 'posted' && (
@@ -730,7 +745,7 @@ export default function InvoiceDetail() {
               {docState === 'posted' && (
                 <StatusBadge
                   status={badgeStatus as string}
-                  label={PAYMENT_STATUS_LABELS[payState]}
+                  label={payStateLabel}
                 />
               )}
               {overdue && <StatusBadge status="cancelled" label="Overdue" />}
@@ -775,7 +790,7 @@ export default function InvoiceDetail() {
                 </PrimaryActionButton>
               </>
             )}
-            {docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance && (
+            {docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance && !isCreditNote && (
               <PrimaryActionButton
                 icon={<Fa icon={faMoneyBillWave} />}
                 onClick={() => { setPayAmount(moneyInputValue(balance)); setShowPayModal(true) }}
@@ -828,6 +843,48 @@ export default function InvoiceDetail() {
       </div>
 
       <div className="mod-body invoice-detail__body">
+        {credit ? (
+        <section className={`invoice-detail__summary ${credit.remaining > 0 ? 'has-balance' : 'is-settled'}`} aria-label="Credit note summary">
+          <div className="invoice-detail__summary-primary">
+            <div className="invoice-detail__summary-label-row">
+              <p className="invoice-detail__summary-label">{credit.remaining > 0 ? 'Credit still owed to us' : 'Credit note total'}</p>
+              <span className={`invoice-detail__summary-status ${credit.remaining > 0 ? 'is-due' : 'is-paid'}`}>{payStateLabel}</span>
+            </div>
+            <p className="invoice-detail__summary-amount">{fmtKes(credit.remaining > 0 ? credit.remaining : credit.amount)}</p>
+            <p className="invoice-detail__summary-context">
+              {credit.applied > 0
+                ? `${fmtKes(credit.applied)} taken off ${credit.usedOn.length ? credit.usedOn.map(u => u.billRef).join(', ') : 'this supplier\'s bills'}`
+                : 'Not used yet'}
+              {credit.remaining > 0 ? ` · ${invoice.partnerName} owes us ${fmtKes(credit.remaining)}: get a refund or use it on their next bill` : ' · nothing more to do'}
+            </p>
+          </div>
+
+          <dl className="invoice-detail__summary-stats">
+            <div>
+              <dt>Credit</dt>
+              <dd>{fmtKes(credit.amount)}</dd>
+            </div>
+            <div>
+              <dt>Applied</dt>
+              <dd>{fmtKes(credit.applied)}</dd>
+            </div>
+            <div>
+              <dt>Remaining</dt>
+              <dd>{fmtKes(credit.remaining)}</dd>
+            </div>
+          </dl>
+
+          <div className="invoice-detail__summary-progress" aria-label={`${credit.amount > 0 ? Math.round((credit.applied / credit.amount) * 100) : 0}% applied`}>
+            <div className="invoice-detail__summary-progress-copy">
+              <span>Applied</span>
+              <strong>{credit.amount > 0 ? Math.round((credit.applied / credit.amount) * 100) : 0}%</strong>
+            </div>
+            <div className="invoice-detail__summary-track" aria-hidden="true">
+              <span style={{ width: `${credit.amount > 0 ? Math.min(100, (credit.applied / credit.amount) * 100) : 0}%` }} />
+            </div>
+          </div>
+        </section>
+        ) : (
         <section className={`invoice-detail__summary ${balance > 0 ? 'has-balance' : 'is-settled'}`} aria-label="Invoice financial summary">
           <div className="invoice-detail__summary-primary">
             <div className="invoice-detail__summary-label-row">
@@ -871,6 +928,7 @@ export default function InvoiceDetail() {
             </div>
           </div>
         </section>
+        )}
 
         <section className="invoice-detail__card" aria-label="Line items">
           <div className="invoice-detail__card-head">
@@ -1159,7 +1217,35 @@ export default function InvoiceDetail() {
               </div>
             )}
 
-            {detailTab === 'payments' && (
+            {detailTab === 'payments' && credit && (
+              credit.usedOn.length > 0 ? (
+                <div className="invoice-detail__pay-list">
+                  {credit.usedOn.map(use => (
+                    <div key={use.billRef} className="invoice-detail__pay-row">
+                      <div>
+                        <p className="invoice-detail__pay-method">Applied to bill</p>
+                        <p className="invoice-detail__pay-meta">
+                          {use.billId
+                            ? <button type="button" className="underline-offset-2 hover:underline" style={{ color: 'var(--navy)' }} onClick={() => router.push(financeInvoicePath(use.billId!))}>{use.billRef}</button>
+                            : use.billRef}
+                        </p>
+                      </div>
+                      <span className="invoice-detail__pay-amount">{use.amount > 0 ? fmtKes(use.amount) : ''}</span>
+                    </div>
+                  ))}
+                  {credit.remaining > 0 && (
+                    <p className="invoice-detail__info-muted">{fmtKes(credit.remaining)} not used yet: {invoice.partnerName} owes us this.</p>
+                  )}
+                </div>
+              ) : (
+                <p className="invoice-detail__info-muted">
+                  {credit.applied > 0
+                    ? `${fmtKes(credit.applied)} of this credit has been used.`
+                    : `Not used yet. ${invoice.partnerName} owes us ${fmtKes(credit.remaining)}: ask for a refund, or agree to use it against their next bill.`}
+                </p>
+              )
+            )}
+            {detailTab === 'payments' && !credit && (
               shownPayments.length > 0 || (invoice.voidedPayments || []).length > 0 ? (
                 <div className="invoice-detail__pay-list">
                   {shownPayments.map(pay => (
