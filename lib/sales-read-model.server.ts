@@ -85,7 +85,30 @@ async function buildScreenSaleOrders(screenCopy: unknown): Promise<Row[]> {
   return withCopyOnlyRows(out, list, new Set(orders.map(o => o.id)), new Set(orders.map(o => o.orderNumber)))
 }
 
+/**
+ * Quotes were rebuilt from the tables on every load that included them (the
+ * 'sales' time in the slow-load log). Kept now until quotes, their lines,
+ * customers or opportunities change — the same scheme as sale orders.
+ */
 export async function loadScreenQuotes(screenCopy: unknown): Promise<Row[]> {
+  const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  return cachedByFingerprint(
+    'quotes',
+    async () => {
+      const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(`
+        SELECT concat_ws('|',
+          (SELECT max(updated_at)::text || ':' || count(*) FROM quotes),
+          (SELECT count(*) || ':' || coalesce(sum(line_total), 0) || ':' || coalesce(sum(qty), 0) FROM quote_items),
+          (SELECT max(updated_at)::text || ':' || count(*) FROM clients),
+          (SELECT max(updated_at)::text || ':' || count(*) FROM opportunities)
+        ) AS fp`)
+      return `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
+    },
+    () => buildScreenQuotes(screenCopy),
+  )
+}
+
+async function buildScreenQuotes(screenCopy: unknown): Promise<Row[]> {
   const { list, map } = byId(screenCopy)
   const quotes = await prisma.quote.findMany({
     include: { items: true, client: true, opportunity: true },
