@@ -14,6 +14,8 @@ type SaleOrderItemRow = {
   lineTotal: number
   notes: string | null
   serialNumberId: string | null
+  /** Every serial on the line, not just the first. */
+  serialIds: string[]
   /**
    * Position in the document, taken from the client array index. This is the
    * only record of the user's ordering: the lines arrive as a positional JSON
@@ -75,6 +77,7 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
         lineTotal: 0,
         notes: item.notes ?? null,
         serialNumberId: null,
+        serialIds: [],
         sortOrder: index,
       }
     }
@@ -110,9 +113,11 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
       discountPct: money.discountPct,
       lineTotal: money.lineTotal,
       notes: item.notes ?? null,
-      serialNumberId: optionalUuid(
-        item.serialNumberId ?? item.serialIds?.[0] ?? prev?.serialNumberId,
-      ) ?? null,
+      // The first serial of the list; cleared with it when every serial is removed.
+      serialNumberId: Array.isArray(item.serialIds)
+        ? (lineSerialIds(item, prev, demand)[0] ?? null)
+        : optionalUuid(item.serialNumberId ?? prev?.serialNumberId) ?? null,
+      serialIds: lineSerialIds(item, prev, demand),
       sortOrder: index,
     }
   })
@@ -150,4 +155,21 @@ export function buildSaleOrderItemsNestedWrite(lines: any[], existingItems: any[
     update: update.length > 0 ? update : undefined,
     create: create.length > 0 ? create : undefined,
   }
+}
+
+/**
+ * The serials to keep on a line: what the screen sent (deduplicated, valid
+ * ids, at most the line quantity), or what the line already had when the
+ * screen sent none.
+ */
+export function lineSerialIds(item: any, prev: any, qty: number): string[] {
+  const sent = Array.isArray(item?.serialIds) ? item.serialIds : undefined
+  const source: unknown[] = sent
+    ?? (Array.isArray(prev?.serialIds) && prev.serialIds.length ? prev.serialIds : (prev?.serialNumberId ? [prev.serialNumberId] : []))
+  const out: string[] = []
+  for (const raw of source) {
+    const id = optionalUuid(raw)
+    if (id && !out.includes(id)) out.push(id)
+  }
+  return qty > 0 ? out.slice(0, qty) : out
 }

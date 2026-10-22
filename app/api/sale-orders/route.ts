@@ -1,3 +1,4 @@
+import { lineSerialIds } from '@/lib/sale-order-items-write'
 import { dealQuotationRaised, dealWon } from '@/lib/crm/deal-progress.server'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
@@ -39,6 +40,7 @@ function mapSaleOrderItems(lines: any[], knownProductIds?: Set<string>) {
         lineTotal: 0,
         notes: item.notes ?? null,
         serialNumberId: null,
+        serialIds: [],
         qtyInvoiced: 0,
       }
     }
@@ -63,6 +65,7 @@ function mapSaleOrderItems(lines: any[], knownProductIds?: Set<string>) {
       lineTotal: money.lineTotal,
       notes: item.notes ?? null,
       serialNumberId: optionalUuid(item.serialNumberId ?? item.serialIds?.[0]),
+      serialIds: lineSerialIds(item, null, qty),
       qtyInvoiced: Math.max(0, Number(item.qtyInvoiced ?? 0) || 0),
     }
   })

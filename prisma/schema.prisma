@@ -1639,6 +1639,9 @@ model SaleOrderItem {
   lineTotal     Decimal   @db.Decimal(14, 2)
   notes         String?   @db.Text
   serialNumberId String?  @map("serial_number_id") @db.Uuid
+  // Every serial assigned to the line (a 15-laptop line has 15). serialNumberId
+  // above is only the first one, kept for the foreign-key links.
+  serialIds      String[] @default([]) @map("serial_ids")
   // Position of the line within its document. Without this the table had no
   // ordering at all and an unordered SELECT returned physical row order, so a
   // reorder in the UI had nowhere to persist and snapped back on reload.

@@ -81,7 +81,9 @@ export function mapSaleOrderToClient(order: any) {
         discountPercent: Number(item.discountPct ?? 0),
         subtotal: Number(item.lineTotal ?? 0),
         lineTotal: Number(item.lineTotal ?? 0),
-        serialIds: item.serialNumberId ? [item.serialNumberId] : [],
+        serialIds: Array.isArray(item.serialIds) && item.serialIds.length
+          ? item.serialIds.map(String)
+          : item.serialNumberId ? [item.serialNumberId] : [],
         notes: item.notes ?? undefined,
         qtyDelivered: Number(item.qtyDelivered ?? 0),
         qtyInvoiced: Number(item.qtyInvoiced ?? 0),
