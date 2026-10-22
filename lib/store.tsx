@@ -13582,10 +13582,17 @@ const storeCtx: AppState = {
         // The server rewrote stock, serials and reservations; the store stream
         // brings those back. Reflect the delivery itself immediately.
         setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, status: 'cancelled' as const } : d))
+        // Same as the server: this delivery's reservations are released, so a
+        // later save from this screen cannot put them back.
+        setStockReservations(prev => prev.map(r =>
+          r.deliveryId === deliveryId && (r.status === 'reserved' || r.status === 'fulfilled')
+            ? { ...r, status: 'cancelled' as const }
+            : r,
+        ))
         addAuditLog('reverse_delivery', del.ref, `Delivery reversed${reason ? ` — ${reason}` : ''}`)
         showToast(payload?.reversedStock
           ? `${del.ref} reversed — stock and serials returned`
-          : `${del.ref} cancelled`)
+          : `${del.ref} cancelled — reserved stock released`)
         return true
       } catch (err) {
         showToast(`Could not reverse delivery — ${err instanceof Error ? err.message : 'unexpected error'}`, 'error')

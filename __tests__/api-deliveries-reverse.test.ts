@@ -3,13 +3,14 @@ import { NextRequest } from 'next/server'
 
 const {
   mockRequireRole, mockLoadAppState, mockSaveStoreKeys, mockWithAppStateKeyLock,
-  mockReverseStock, mockReverseJournal, mockMirror,
+  mockReverseStock, mockReverseJournal, mockMirror, mockReleaseReservations,
 } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
   mockLoadAppState: vi.fn(),
   mockSaveStoreKeys: vi.fn(),
   mockWithAppStateKeyLock: vi.fn(async (_key: string, fn: () => Promise<any>) => fn()),
   mockReverseStock: vi.fn(),
+  mockReleaseReservations: vi.fn(async () => 0),
   mockReverseJournal: vi.fn(),
   mockMirror: vi.fn(),
 }))
@@ -23,7 +24,7 @@ vi.mock('@/lib/server-store', () => ({
   saveStoreKeys: mockSaveStoreKeys,
   withAppStateKeyLock: mockWithAppStateKeyLock,
 }))
-vi.mock('@/lib/inventory/stock-transactions', () => ({ reverseDeliveryStockMutation: mockReverseStock }))
+vi.mock('@/lib/inventory/stock-transactions', () => ({ reverseDeliveryStockMutation: mockReverseStock, releaseDeliveryReservations: mockReleaseReservations }))
 vi.mock('@/lib/accounting/journal-service', () => ({ reverseJournalEntry: mockReverseJournal }))
 vi.mock('@/lib/delivery-mirror', () => ({ mirrorDeliveryToPrisma: mockMirror }))
 
@@ -73,6 +74,8 @@ describe('POST /api/deliveries/:id/reverse', () => {
     await expect(res.json()).resolves.toMatchObject({ reversedStock: false })
     expect(mockReverseStock).not.toHaveBeenCalled()
     expect(mockReverseJournal).not.toHaveBeenCalled()
+    // Its reserved stock (bulk items included) goes back to free stock.
+    expect(mockReleaseReservations).toHaveBeenCalledWith({ deliveryId: ID, deliveryRef: 'DN/2026/0195' })
     expect(savedDeliveries()[0].status).toBe('cancelled')
   })
 

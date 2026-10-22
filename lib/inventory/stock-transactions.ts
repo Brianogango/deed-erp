@@ -379,7 +379,7 @@ export async function reverseDeliveryStockMutation(params: {
   const stockReservations: BlobReservation[] =
     Array.isArray(state.deed_stockReservations) ? [...(state.deed_stockReservations as BlobReservation[])] : []
   const stockLevelDeltas = new Map<string, number>()
-  const reservedRestoreByProduct = new Map<string, number>()
+  const reservedReleaseByProduct = new Map<string, number>()
 
   for (const line of params.lines) {
     const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
@@ -414,27 +414,33 @@ export async function reverseDeliveryStockMutation(params: {
       stockLevelDeltas.set(line.productId, (stockLevelDeltas.get(line.productId) ?? 0) + qty)
     }
 
+    // The goods come back to the shelf as free stock (serials above go back
+    // to 'available' too). The delivery's reservation is released, not
+    // restored: it used to be set back to 'reserved', so bulk items came back
+    // already held for the order and never showed as available. Preparing a
+    // new delivery reserves again. Other deliveries of the same order
+    // (backorders) keep their own reservations.
+    const releasedAt = new Date().toISOString()
     for (let rIdx = 0; rIdx < stockReservations.length; rIdx++) {
       const reservation = stockReservations[rIdx]
-      if (
-        reservation.productId !== line.productId ||
-        (reservation.referenceId !== params.saleOrderId && reservation.deliveryId !== params.deliveryId)
-      ) continue
-      const prevFulfilled = Number(reservation.fulfilledQty ?? 0)
-      const restored = Math.min(prevFulfilled, qty)
-      const fulfilledQty = Math.max(0, prevFulfilled - restored)
+      if (reservation.productId !== line.productId) continue
+      const ownDelivery = reservation.deliveryId === params.deliveryId
+      const orderLevelFulfilled = !reservation.deliveryId
+        && reservation.referenceId === params.saleOrderId
+        && Number(reservation.fulfilledQty ?? 0) > 0
+      if (!ownDelivery && !orderLevelFulfilled) continue
+      if (reservation.status === 'reserved' && isUuid(line.productId)) {
+        const open = Math.max(0, Number(reservation.qty) - Number(reservation.fulfilledQty ?? 0))
+        if (open > 0) reservedReleaseByProduct.set(line.productId, (reservedReleaseByProduct.get(line.productId) ?? 0) + open)
+      }
       stockReservations[rIdx] = {
         ...reservation,
-        fulfilledQty,
-        status: 'reserved',
-        fulfilledDate: fulfilledQty > 0 ? reservation.fulfilledDate : undefined,
-      }
-      if (restored > 0 && isUuid(line.productId)) {
-        reservedRestoreByProduct.set(
-          line.productId,
-          (reservedRestoreByProduct.get(line.productId) ?? 0) + restored,
-        )
-      }
+        status: 'cancelled',
+        fulfilledQty: 0,
+        fulfilledDate: undefined,
+        releasedDate: releasedAt,
+        notes: `${(reservation as any).notes ?? ''} · released: delivery ${params.deliveryRef} reversed`.trim(),
+      } as BlobReservation
     }
   }
 
@@ -443,11 +449,7 @@ export async function reverseDeliveryStockMutation(params: {
   try {
     await prisma.$transaction(async tx => {
       for (const [productId, delta] of stockLevelDeltas) {
-        const reservedDelta = reservedRestoreByProduct.get(productId) ?? 0
-        await adjustStockLevel(tx, productId, {
-          onHand: delta,
-          reserved: reservedDelta,
-        })
+        await adjustStockLevel(tx, productId, { onHand: delta, reserved: -(reservedReleaseByProduct.get(productId) ?? 0) })
       }
     })
   } catch (err) {
@@ -462,6 +464,46 @@ export async function reverseDeliveryStockMutation(params: {
     deed_stockMoves: JSON.stringify(remainingMoves),
     deed_stockReservations: JSON.stringify(stockReservations),
   })
+}
+
+/**
+ * Cancelling a delivery that was prepared but never shipped: its reserved
+ * quantities go back to free stock. Returns how many units were released.
+ */
+export async function releaseDeliveryReservations(params: {
+  deliveryId: string
+  deliveryRef: string
+}): Promise<number> {
+  const state = await loadAppState(['deed_stockReservations'])
+  const reservations: BlobReservation[] =
+    Array.isArray(state.deed_stockReservations) ? [...(state.deed_stockReservations as BlobReservation[])] : []
+  const releasedAt = new Date().toISOString()
+  const byProduct = new Map<string, number>()
+  let released = 0
+  for (let i = 0; i < reservations.length; i++) {
+    const r = reservations[i]
+    if (r.deliveryId !== params.deliveryId || r.status !== 'reserved') continue
+    const open = Math.max(0, Number(r.qty) - Number(r.fulfilledQty ?? 0))
+    reservations[i] = {
+      ...r,
+      status: 'cancelled',
+      releasedDate: releasedAt,
+      notes: `${(r as any).notes ?? ''} · released: delivery ${params.deliveryRef} cancelled`.trim(),
+    } as BlobReservation
+    released += open
+    if (open > 0 && isUuid(r.productId)) byProduct.set(r.productId, (byProduct.get(r.productId) ?? 0) + open)
+  }
+  if (!released) return 0
+  await saveStoreKeys({ deed_stockReservations: JSON.stringify(reservations) })
+  try {
+    await prisma.$transaction(async tx => {
+      for (const [productId, qty] of byProduct) await adjustStockLevel(tx, productId, { reserved: -qty })
+    })
+  } catch (err) {
+    // The reservations above are released; the reserved counter heals on the next stock recount.
+    console.error('[releaseDeliveryReservations] stock level update failed:', err)
+  }
+  return released
 }
 
 export async function reverseReceiptStockMutation(params: {

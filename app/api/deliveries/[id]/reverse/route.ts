@@ -18,7 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
-import { reverseDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
+import { releaseDeliveryReservations, reverseDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
 import { reverseJournalEntry } from '@/lib/accounting/journal-service'
 import { mirrorDeliveryToPrisma } from '@/lib/delivery-mirror'
 import { effectiveDeliveryLineQty, normalizeDeliveryStatus } from '@/lib/odoo-sales-flow'
@@ -78,6 +78,13 @@ export async function POST(request: NextRequest, { params }: { params: RoutePara
           saleOrderId: String(delivery.saleOrderId ?? ''),
           lines,
         })
+      }
+
+      // An open delivery never moved stock, but preparing it reserved the
+      // quantities: free them, or bulk items stay held for a delivery that no
+      // longer exists.
+      if (status !== 'done') {
+        await releaseDeliveryReservations({ deliveryId: delivery.id, deliveryRef: String(delivery.ref ?? delivery.id) })
       }
 
       deliveries[idx] = {
