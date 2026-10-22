@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
+import { cachedByFingerprint } from '@/lib/read-model-cache'
 
 /**
  * Journal entries as the screens use them, read from journal_entries.
@@ -64,6 +65,31 @@ export async function findJournalsForScreen(where: Prisma.JournalEntryWhereInput
 }
 
 /** The full journal list for the screens (store hydration). */
+/**
+ * Every posted journal for the screens. Building it reads every entry with all
+ * its lines (0.4–1.2 s on production) and it was rebuilt on every load that
+ * included journals. It is now kept until the journals change: new, reversed
+ * or relinked entries, or any change in line counts or amounts. Edits made in
+ * place only touch is_reversed, reversal_of_id and the invoice / payment /
+ * source links, which the fingerprint covers.
+ */
 export async function loadScreenJournals(): Promise<ReturnType<typeof mapJournalForScreen>[]> {
-  return (await loadRows()).map(mapJournalForScreen)
+  return cachedByFingerprint(
+    'journals',
+    async () => {
+      const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(`
+        SELECT concat_ws('|',
+          (SELECT count(*) || ':' || max(created_at)::text || ':' || count(*) FILTER (WHERE is_posted)
+                  || ':' || count(*) FILTER (WHERE is_reversed) || ':' || count(reversal_of_id)
+                  || ':' || md5(coalesce(string_agg(
+                       coalesce(invoice_id::text, '') || '/' || coalesce(payment_id::text, '') || '/' || coalesce(source_id::text, ''),
+                       ',' ORDER BY id), ''))
+             FROM journal_entries),
+          (SELECT count(*) || ':' || coalesce(sum(debit), 0) || ':' || coalesce(sum(credit), 0) || ':' || max(created_at)::text
+             FROM journal_entry_lines)
+        ) AS fp`)
+      return rows[0]?.fp ?? ''
+    },
+    async () => (await loadRows()).map(mapJournalForScreen),
+  )
 }
