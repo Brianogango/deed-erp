@@ -33,6 +33,7 @@ import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
 import { canScheduleInvoiceDelivery, findInvoiceDeliveryJob } from '@/lib/invoice-delivery-job'
 import { financeInvoiceListPath, financeInvoicePath, parseFinanceListPage } from '@/lib/finance-invoice'
 import { isVendorCreditNote, vendorCreditSummary } from '@/lib/finance/vendor-credit-note'
+import type { HistoryEvent } from '@/lib/finance/invoice-history'
 import {
   alignPaymentDetailsToTax,
   documentHasVat,
@@ -43,6 +44,12 @@ import { fetchMpesaStatus, sendMpesaStk, waitForMpesaStk } from '@/lib/mpesa/cli
 import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
 import { moneyInputValue } from '@/lib/intl-cache'
 
+
+const fmtHistoryTime = (iso: string) => {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Nairobi' })
+}
 
 export default function InvoiceDetail() {
   const mounted = useMounted()
@@ -140,6 +147,19 @@ export default function InvoiceDetail() {
   const [hydratingLines, setHydratingLines] = useState(false)
   const [lookupReady, setLookupReady] = useState(false)
   const [detailTab, setDetailTab] = useState<'payments' | 'notes' | 'activity' | 'instructions'>('payments')
+  // The audit trail (who did what, when) from the server.
+  const historyKey = invoice ? `${invoice.id}:${invoice.status}:${invoice.total}:${invoice.amountPaid}:${(invoice.voidedPayments || []).length}:${emailHistoryKey}` : ''
+  const [auditTrail, setAuditTrail] = useState<HistoryEvent[] | null>(null)
+  useEffect(() => {
+    if (!historyKey || detailTab !== 'activity') return
+    const invoiceId = historyKey.split(':')[0]
+    let cancelled = false
+    fetch(`/api/invoices/${invoiceId}/history`, { cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : null))
+      .then(body => { if (!cancelled) setAuditTrail(Array.isArray(body?.events) ? body.events : []) })
+      .catch(() => { if (!cancelled) setAuditTrail([]) })
+    return () => { cancelled = true }
+  }, [historyKey, detailTab])
   const hydrateAttempted = useRef<string | null>(null)
 
   // Wait briefly for store hydration before declaring the invoice missing —
@@ -1348,16 +1368,43 @@ export default function InvoiceDetail() {
 
             {detailTab === 'activity' && (
               <div className="invoice-detail__tab-stack">
-                <div className="invoice-detail__pay-list" aria-label="Document history">
-                  {documentHistory.map(event => (
-                    <div key={event.id} className="invoice-detail__pay-row">
-                      <div>
-                        <p className="invoice-detail__pay-method">{event.title}</p>
-                        <p className="invoice-detail__pay-meta">{fmtDate(event.date)} · {event.detail}</p>
+                {auditTrail && auditTrail.length > 0 ? (
+                  <ol className="invoice-history" aria-label="Document history">
+                    {auditTrail.map(event => (
+                      <li key={event.id} className={`invoice-history__item is-${event.tone || 'neutral'}`}>
+                        <div className="invoice-history__head">
+                          <p className="invoice-history__title">{event.title}</p>
+                          <time className="invoice-history__when" dateTime={event.at}>{fmtHistoryTime(event.at)}</time>
+                        </div>
+                        <p className="invoice-history__by">{event.by ? `By ${event.by}` : 'By the system'}{event.detail ? ` · ${event.detail}` : ''}</p>
+                        {event.changes && event.changes.length > 0 && (
+                          <ul className="invoice-history__changes">
+                            {event.changes.map(change => (
+                              <li key={change.field}>
+                                <span>{change.label}</span>
+                                <s>{change.from}</s>
+                                <i aria-hidden="true">→</i>
+                                <b>{change.to}</b>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <div className="invoice-detail__pay-list" aria-label="Document history">
+                    {auditTrail === null && <p className="invoice-detail__info-muted">Loading history…</p>}
+                    {documentHistory.map(event => (
+                      <div key={event.id} className="invoice-detail__pay-row">
+                        <div>
+                          <p className="invoice-detail__pay-method">{event.title}</p>
+                          <p className="invoice-detail__pay-meta">{fmtDate(event.date)} · {event.detail}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
                 <Chatter
                   model="invoice"
                   recordId={invoice.id}

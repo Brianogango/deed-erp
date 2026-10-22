@@ -142,6 +142,19 @@ export const createInvoiceTool: ToolDefinition = {
       },
       include: { items: true },
     })
+    try {
+      const { writeFinancialAudit } = await import('@/lib/finance-audit')
+      await writeFinancialAudit({
+        userId: ctx.user.id,
+        action: 'create_invoice',
+        entityType: 'invoice',
+        entityId: invoice.id,
+        approvalReason: 'Created by the assistant (DIA)',
+        newValues: { invoiceNumber: invoice.invoiceNumber, totalAmount: Number(invoice.totalAmount), status: invoice.status },
+      })
+    } catch (err) {
+      console.error('[jarvis] invoice history entry not written:', err)
+    }
 
     return {
       ok: true,

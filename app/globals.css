@@ -32239,3 +32239,21 @@ button, [role="button"], [role="tab"] {
   .partner-ledger__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .partner-ledger__head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Invoice / bill history: who did what, when */
+.invoice-history { list-style: none; margin: 0; padding: 0 0 0 14px; display: grid; gap: 0; border-left: 2px solid var(--border-lt); }
+.invoice-history__item { position: relative; padding: 10px 0 12px 14px; }
+.invoice-history__item::before { content: ''; position: absolute; left: -21px; top: 15px; width: 10px; height: 10px; border-radius: 99px; background: var(--bg-card, #fff); border: 2px solid #94a3b8; }
+.invoice-history__item.is-good::before { border-color: #16a34a; background: #dcfce7; }
+.invoice-history__item.is-bad::before { border-color: #dc2626; background: #fee2e2; }
+.invoice-history__item.is-warn::before { border-color: #d97706; background: #fef3c7; }
+.invoice-history__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.invoice-history__title { font-size: 13px; font-weight: 700; color: var(--text-1); }
+.invoice-history__when { font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.invoice-history__by { margin-top: 2px; font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+.invoice-history__changes { list-style: none; margin: 8px 0 0; padding: 8px 10px; display: grid; gap: 4px; border: 1px solid var(--border-lt); border-radius: 8px; background: var(--bg-surface); }
+.invoice-history__changes li { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 11.5px; align-items: baseline; }
+.invoice-history__changes span { min-width: 82px; font-weight: 600; color: var(--text-2); }
+.invoice-history__changes s { color: var(--text-4); overflow-wrap: anywhere; }
+.invoice-history__changes i { font-style: normal; color: var(--text-4); }
+.invoice-history__changes b { color: var(--text-1); font-weight: 600; overflow-wrap: anywhere; }

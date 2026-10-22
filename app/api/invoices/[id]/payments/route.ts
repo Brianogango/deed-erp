@@ -249,6 +249,8 @@ export async function POST(
           newValues: {
             paymentAmount: capped,
             paymentMethod,
+            reference: reference || null,
+            paidAt: paymentDate,
             idempotencyKey,
             paymentId: paymentRow.id,
             allocationIds: allocationRows.map((a: any) => a.id),

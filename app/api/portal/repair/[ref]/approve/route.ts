@@ -238,6 +238,8 @@ async function handlePOST(
           targetRepair.notes = [targetRepair.notes, residualNote].filter(Boolean).join('\n')
         }
 
+        const invoiceExisted = Boolean(invoice)
+        const totalBefore = invoice ? Number(invoice.totalAmount) : null
         if (invoice) {
           invoice = await prisma.invoice.update({
             where: { id: invoice.id },
@@ -260,6 +262,29 @@ async function handlePOST(
               items: { create: invoiceItems }
             }
           })
+        }
+        // History: the customer's approval changed (or created) this invoice.
+        try {
+          const { writeFinancialAudit } = await import('@/lib/finance-audit')
+          await writeFinancialAudit({
+            userId: null,
+            action: invoiceExisted ? 'portal_quote_approval' : 'create_invoice',
+            entityType: 'invoice',
+            entityId: invoice.id,
+            approvalReason: `Customer approved repair ${ref} on the portal${partiallyApproved ? ' (approved items only)' : ''}`,
+            oldValues: totalBefore != null ? { totalAmount: totalBefore } : undefined,
+            newValues: {
+              invoiceNumber: invoice.invoiceNumber,
+              totalAmount: Number(invoice.totalAmount),
+              status: invoice.status,
+              username: 'Customer (portal)',
+              ...(totalBefore != null && totalBefore !== Number(invoice.totalAmount)
+                ? { changes: [{ field: 'totalAmount', label: 'Total', from: `KES ${totalBefore.toLocaleString('en-KE')}`, to: `KES ${Number(invoice.totalAmount).toLocaleString('en-KE')}` }] }
+                : {}),
+            },
+          })
+        } catch (err) {
+          console.error('[APPROVE] history entry not written:', err)
         }
         // The invoice is confirmed here, so it must be in the ledger too (it
         // used to be written as 'approved' with no entry — INV/2026/0308).

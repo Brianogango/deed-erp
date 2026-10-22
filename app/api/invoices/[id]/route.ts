@@ -15,6 +15,7 @@ import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
 import { allowedOnlyAsTechnician } from '@/lib/auth/authorization'
+import { invoiceEditChanges } from '@/lib/finance/invoice-history'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -438,6 +439,19 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
         })
       }
 
+      // What this save changed, field by field, for the History tab.
+      const partyIds = data.clientId && String(data.clientId) !== String(before.clientId) ? [before.clientId, String(data.clientId)] : []
+      const parties = partyIds.length ? await tx.client.findMany({ where: { id: { in: partyIds } }, select: { id: true, name: true } }) : []
+      const changes = invoiceEditChanges({
+        before: before as unknown as Record<string, any>,
+        data,
+        beforeLines: before.items as any[],
+        afterLines: lines !== undefined ? mapInvoiceItems(lines) : undefined,
+        partyNames: {
+          before: parties.find(p => p.id === before.clientId)?.name,
+          after: parties.find(p => p.id === data.clientId)?.name,
+        },
+      })
       await writeFinancialAuditInTx(tx, {
         userId: actor.id,
         action: willPostNow ? 'post_invoice' : 'update_invoice',
@@ -445,7 +459,13 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
         entityId: id,
         relatedJournalId: null,
         oldValues: { status: before.status, totalAmount: Number(before.totalAmount), amountPaid: Number(before.amountPaid), lockVersion: before.lockVersion },
-        newValues: { status: data.status ?? before.status, totalAmount: Number(data.totalAmount ?? before.totalAmount), lockVersion: nextLockVersion(before.lockVersion) },
+        newValues: {
+          status: data.status ?? before.status,
+          totalAmount: Number(data.totalAmount ?? before.totalAmount),
+          invoiceNumber: data.invoiceNumber ?? before.invoiceNumber,
+          lockVersion: nextLockVersion(before.lockVersion),
+          changes,
+        },
       })
 
       return tx.invoice.findUniqueOrThrow({
