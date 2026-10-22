@@ -12,6 +12,7 @@ type Entry = {
   sourceType: string
   category: string
   salesLines?: Array<{ code: string; name: string; amount: number }>
+  billLines?: Array<{ key: string; name: string; amount: number }>
 }
 
 export type SummaryRow = { key: string; label: string; amount: number; count: number }
@@ -91,6 +92,9 @@ export function buildCashbookMonthSummary(args: {
       const amount = -net
       row.moneyOut = round(row.moneyOut + amount)
       if (e.sourceType === 'expense') add(out, `expense:${e.category}`, e.category || 'Expenses', amount)
+      else if (e.sourceType === 'vendor_bill' && e.billLines?.length) {
+        for (const p of e.billLines) add(out, `bill:${p.key}`, p.name === 'Supplier payment' ? 'Supplier payments' : `${p.name} (suppliers)`, p.amount)
+      }
       else add(out, e.sourceType, OUT_LABELS[e.sourceType] ?? (e.category || 'Other payments'), amount)
     }
   }

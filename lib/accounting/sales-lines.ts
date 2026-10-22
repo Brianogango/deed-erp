@@ -7,6 +7,7 @@
  * description; only when nothing matches does it stay on general sales (5000).
  */
 import { COMPANY_ACCOUNT_FALLBACKS, resolveProductAccounts, type AccountableProduct } from '@/lib/product-accounts'
+import { isOperatingExpenseCode } from '@/lib/accounting/bill-expense-accounts'
 
 export const GENERAL_SALES_CODE = COMPANY_ACCOUNT_FALLBACKS.saleAccountCode // 5000
 
@@ -110,5 +111,71 @@ export function splitSaleAmount(
     const cents = i === parts.length - 1 ? left : Math.round((amount * 100 * value) / total)
     left -= cents
     return { code, amount: cents / 100 }
+  })
+}
+
+/** The hand-typed lines that could not be matched to a product line ("Other sales"). */
+export function unmatchedSaleLines(
+  lines: SaleLineInput[],
+  products: Map<string, AccountableProduct & { name?: string }>,
+  known: (code: string) => boolean,
+): string[] {
+  return (lines ?? [])
+    .filter(l => l.lineType !== 'section' && lineAmount(l) > 0)
+    .filter(l => saleLineCode(l, l.productId ? products.get(l.productId) : undefined, known) === GENERAL_SALES_CODE)
+    .map(l => String(l.description || l.productName || 'Line without a description').trim())
+}
+
+export type BillLineInput = SaleLineInput
+
+/**
+ * What a supplier payment paid for, split like a sale: stock bought shows its
+ * product line (Laptops, Desktops…), overheads show their expense account
+ * (Rent, Internet…), anything else shows the account it was booked to.
+ */
+export function splitBillAmount(
+  amount: number,
+  lines: BillLineInput[],
+  products: Map<string, AccountableProduct & { name?: string }>,
+  known: (code: string) => boolean,
+  accountName: (code: string) => string | undefined,
+): Array<{ key: string; name: string; amount: number }> {
+  const groups = new Map<string, { name: string; value: number }>()
+  for (const l of lines ?? []) {
+    if (l.lineType === 'section') continue
+    const value = lineAmount(l)
+    if (!(value > 0)) continue
+    const code = String(l.accountCode ?? '').trim().split(/\s+/)[0]
+    let key: string
+    let name: string
+    if (code && isOperatingExpenseCode(code)) {
+      key = `acct:${code}`
+      name = accountName(code) ?? `Account ${code}`
+    } else {
+      const product = l.productId ? products.get(l.productId) : undefined
+      const line = saleLineCode(l, product, known)
+      if (line !== GENERAL_SALES_CODE) {
+        key = `line:${line}`
+        name = accountName(line) ?? 'Stock purchases'
+      } else if (code && accountName(code)) {
+        key = `acct:${code}`
+        name = accountName(code)!
+      } else {
+        key = 'purchases'
+        name = 'Other purchases'
+      }
+    }
+    const g = groups.get(key) ?? { name, value: 0 }
+    g.value += value
+    groups.set(key, g)
+  }
+  const total = [...groups.values()].reduce((s, g) => s + g.value, 0)
+  if (!(total > 0)) return [{ key: 'purchases', name: 'Supplier payment', amount }]
+  const parts = [...groups.entries()].sort((a, b) => b[1].value - a[1].value)
+  let left = Math.round(amount * 100)
+  return parts.map(([key, g], i) => {
+    const cents = i === parts.length - 1 ? left : Math.round((amount * 100 * g.value) / total)
+    left -= cents
+    return { key, name: g.name, amount: cents / 100 }
   })
 }

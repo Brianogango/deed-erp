@@ -687,6 +687,8 @@ export interface CashbookEntry {
   categoryTitle?: string
   /** A sale's money by product line (sales account), e.g. Laptops 7,500 + Accessories 2,500. */
   salesLines?: Array<{ code: string; name: string; amount: number }>
+  /** What a supplier payment paid for: product lines for stock, expense accounts for overheads. */
+  billLines?: Array<{ key: string; name: string; amount: number }>
   bankAccountId: string  // which bank/cash account
   debit: number          // money out
   credit: number         // money in

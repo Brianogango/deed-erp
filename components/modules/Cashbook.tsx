@@ -7,7 +7,7 @@ import {
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
 import { computeCashbookTotals } from '@/lib/finance-alerts'
-import { GENERAL_SALES_CODE, splitSaleAmount } from '@/lib/accounting/sales-lines'
+import { GENERAL_SALES_CODE, splitBillAmount, splitSaleAmount, unmatchedSaleLines } from '@/lib/accounting/sales-lines'
 import CashbookMonthSummary from '@/components/finance/CashbookMonthSummary'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
@@ -147,10 +147,25 @@ export function buildCashbookEntries(
     const parts = splitSaleAmount(amount, lines ?? [], productById, known)
       .map(p => ({ ...p, name: p.code === GENERAL_SALES_CODE ? 'Other sales' : (accountName.get(p.code) ?? 'Other sales') }))
     const names = parts.map(p => p.name)
+    // Name the hand-typed lines behind "Other sales" so nobody has to guess.
+    const unmatched = parts.some(p => p.code === GENERAL_SALES_CODE) ? unmatchedSaleLines(lines ?? [], productById, known) : []
     return {
       label: names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} + ${names[1]}` : `${names[0]} +${names.length - 1} more`,
-      title: parts.map(p => `${p.code} ${p.name}: KES ${Math.round(p.amount).toLocaleString('en-KE')}`).join('\n'),
+      title: [
+        ...parts.map(p => `${p.code} ${p.name}: KES ${Math.round(p.amount).toLocaleString('en-KE')}`),
+        ...(unmatched.length ? ['', 'Other sales = lines not linked to a product line:', ...unmatched.slice(0, 6).map(d => `• ${d}`)] : []),
+      ].join('\n'),
       salesLines: parts,
+    }
+  }
+  const billCategory = (lines: any[], amount: number) => {
+    if (!products) return null
+    const parts = splitBillAmount(amount, lines ?? [], productById, known, code => accountName.get(code))
+    const names = parts.map(p => p.name)
+    return {
+      label: names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} + ${names[1]}` : `${names[0]} +${names.length - 1} more`,
+      title: parts.map(p => `${p.name}: KES ${Math.round(p.amount).toLocaleString('en-KE')}`).join('\n'),
+      billLines: parts,
     }
   }
 
@@ -181,12 +196,15 @@ export function buildCashbookEntries(
   // without any cash movement, so they never belong in the cashbook.
   invoices.filter(i => i.type === 'vendor_bill' && (i.payments?.length ?? 0) > 0).forEach(inv => {
     inv.payments!.filter(payment => payment.method !== 'vendor_credit').forEach(payment => {
+      const bought = billCategory(inv.lines ?? [], payment.amount)
       entries.push({
         id: `bill-pay-${inv.id}-${payment.id}`,
         date: payment.date,
         ref: payment.reference || inv.ref,
         description: `Bill payment — ${inv.partnerName}`,
-        category: getCOACategory('vendor_bill', accounts),
+        category: bought?.label ?? getCOACategory('vendor_bill', accounts),
+        categoryTitle: bought?.title,
+        billLines: bought?.billLines,
         bankAccountId: payment.bankAccountId || posBank((payment.method === 'mpesa' || payment.method === 'card' || payment.method === 'cash') ? payment.method : 'card'),
         debit: payment.amount,
         credit: 0,
