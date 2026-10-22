@@ -4,6 +4,7 @@ import { planMigrationImport } from '@/lib/finance/migration-import'
 import { isOpeningBalanceDocument } from '@/lib/finance/opening-balance'
 import OpeningBalanceCorrection from '@/components/finance/OpeningBalanceCorrection'
 import AgentCommissions from '@/components/finance/AgentCommissions'
+import AccountSearchSelect from '@/components/finance/AccountSearchSelect'
 import BillAccountGuide, { NO_REPEAT, type RepeatSettings } from '@/components/finance/BillAccountGuide'
 import RecurringBills from '@/components/modules/RecurringBills'
 import { useVendorExpenseAccounts } from '@/hooks/useVendorExpenseAccounts'
@@ -3043,17 +3044,15 @@ function AccountingContent() {
                                 />
                                 {isInvalid && !l.desc.trim() && <p className="text-[9px] text-red-600 font-semibold mt-1">Description required</p>}
                                 {tab === 'bills' && (
-                                  <select
-                                    className="form-input text-[11px] w-full mt-1"
-                                    aria-label="Expense account"
+                                  <AccountSearchSelect
+                                    className="mt-1 text-[11px]"
+                                    accounts={billExpenseAccounts}
                                     value={l.account ?? ''}
-                                    onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, account: e.target.value } : x)))}
-                                  >
-                                    <option value="">Expense account: Purchases (default)</option>
-                                    {billExpenseAccounts.map(a => (
-                                      <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
-                                    ))}
-                                  </select>
+                                    onChange={code => setNewLines(p => p.map((x, j) => (j === i ? { ...x, account: code } : x)))}
+                                    label="Expense account"
+                                    noneLabel="Expense account: Purchases (default)"
+                                    placeholder="Expense account: Purchases (default) — type to search"
+                                  />
                                 )}
                               </td>
                               <td className="px-3 py-2">

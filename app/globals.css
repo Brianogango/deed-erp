@@ -32257,3 +32257,4 @@ button, [role="button"], [role="tab"] {
 .invoice-history__changes s { color: var(--text-4); overflow-wrap: anywhere; }
 .invoice-history__changes i { font-style: normal; color: var(--text-4); }
 .invoice-history__changes b { color: var(--text-1); font-weight: 600; overflow-wrap: anywhere; }
+.bill-account-guide__picker { flex: 1 1 280px; min-width: 240px; max-width: 440px; }

@@ -1,4 +1,5 @@
 'use client'
+import AccountSearchSelect from '@/components/finance/AccountSearchSelect'
 
 import { goesToPurchases, suggestExpenseAccount } from '@/lib/accounting/bill-expense-accounts'
 import type { Frequency } from '@/lib/recurring/recurring-bills'
@@ -50,15 +51,14 @@ export default function BillAccountGuide({
       <div className="bill-account-guide__row">
         <span className="bill-account-guide__label">Usual expense account for {vendorName}</span>
         {canSetDefault ? (
-          <select
-            className="form-input text-xs"
-            aria-label={`Usual expense account for ${vendorName}`}
+          <AccountSearchSelect
+            className="bill-account-guide__picker"
+            accounts={accounts}
             value={vendorDefault ?? ''}
-            onChange={e => onSetDefault(e.target.value)}
-          >
-            <option value="">None set (lines start on Purchases)</option>
-            {accounts.map(a => <option key={a.code} value={a.code}>{a.code} — {a.name}</option>)}
-          </select>
+            onChange={onSetDefault}
+            label={`Usual expense account for ${vendorName}`}
+            noneLabel="None set (lines start on Purchases)"
+          />
         ) : (
           <strong className="text-xs">{vendorDefault ? label(accounts, vendorDefault) : 'None set'}</strong>
         )}

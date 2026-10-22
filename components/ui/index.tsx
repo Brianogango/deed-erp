@@ -1533,9 +1533,13 @@ export function SearchPicker<T extends { id: string }>({
     }
   }, [selectedLabel, open])
 
+  // While the box still shows the current choice, list everything: clicking in
+  // to change it should not show only the item already picked.
   const filtered = useMemo(
-    () => items.filter(item => searchPickerMatches(item, query, searchText ? `${searchPickerItemText(item)} ${searchText(item)}` : undefined)),
-    [items, query, searchText],
+    () => (selectedLabel && query === selectedLabel
+      ? items
+      : items.filter(item => searchPickerMatches(item, query, searchText ? `${searchPickerItemText(item)} ${searchText(item)}` : undefined))),
+    [items, query, searchText, selectedLabel],
   )
 
   const commitItem = useCallback((item: T) => {
@@ -1632,7 +1636,7 @@ export function SearchPicker<T extends { id: string }>({
             const exact = searchPickerExactMatch(items, next)
             if (exact) onSelect(exact)
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={e => { setOpen(true); if (e.currentTarget.value) e.currentTarget.select() }}
           onKeyDown={e => {
             if (e.key === 'ArrowDown') {
               e.preventDefault()
