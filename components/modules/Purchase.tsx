@@ -272,8 +272,9 @@ function PurchaseContent() {
   const activeReceipt = useMemo(() => receipts.find(r => r.id === activeReceiptId) ?? null, [receipts, activeReceiptId])
   const linkedBill    = useMemo(() => {
     if (!activePO) return null
+    // A supplier credit note (negative total, from a return) is not the bill.
     const isLiveBill = (bill: typeof vendorBills[number]) =>
-      !['cancelled', 'voided', 'void'].includes(String(bill.status))
+      !['cancelled', 'voided', 'void'].includes(String(bill.status)) && Number(bill.total) >= 0
     const stored = activePO.billId
       ? vendorBills.find(bill => bill.id === activePO.billId && isLiveBill(bill))
       : undefined

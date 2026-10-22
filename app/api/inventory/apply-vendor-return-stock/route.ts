@@ -85,8 +85,14 @@ async function windBackPurchaseOrder(po: { id?: string; lines?: Array<{ poLineId
     changed = true
   }
   if (!changed) return null
-  if (order.status === 'received' && order.items.some(i => i.qtyReceived < i.qtyOrdered)) {
-    await prisma.purchaseOrder.update({ where: { id: poId }, data: { status: 'partial' } })
+  // Everything sent back: the order waits for a replacement again (or is
+  // closed by the user). Some still in stock: partially received.
+  const nothingLeft = order.items.every(i => Number(i.qtyReceived) <= 0)
+  const nextStatus = nothingLeft
+    ? 'confirmed'
+    : order.items.some(i => i.qtyReceived < i.qtyOrdered) ? 'partial' : order.status
+  if ((order.status === 'received' || order.status === 'partial') && nextStatus !== order.status) {
+    await prisma.purchaseOrder.update({ where: { id: poId }, data: { status: nextStatus as any } })
   }
   await notifyStoreKeysChanged(['deed_purchaseOrders'])
   return { id: poId }

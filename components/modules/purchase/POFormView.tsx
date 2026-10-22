@@ -9,6 +9,7 @@ import Chatter from '@/components/erp/Chatter'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import { SmartButtons } from '@/components/erp/SmartButtons'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
+import { poStatusView } from '@/lib/purchase/po-status'
 import { billableQty } from '@/lib/purchase/three-way-match'
 import {
   Fa, faBox, faCheck, faCreditCard, faFileInvoice, faPaperPlane, faPlus, faTrash, faUpload,
@@ -212,6 +213,9 @@ export default function POFormView() {
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
     const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)
+    const statusView     = poStatusView(activePO, purchaseReturns)
+    const poCreditNotes  = invoices.filter(i => i.type === 'vendor_bill' && i.purchaseOrderId === activePO.id && Number(i.total) < 0 && !['cancelled', 'voided'].includes(String(i.status)))
+    const canCloseReturned = statusView.key === 'returned' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const billsCount     = linkedBill ? 1 : 0
     const activityItems = [
       { key: `po-${activePO.id}`, date: activePO.date, title: 'Purchase order created', detail: activePO.ref },
@@ -233,6 +237,12 @@ export default function POFormView() {
         title: invoiceDocState(linkedBill.status) === 'posted' ? 'Vendor bill confirmed' : 'Vendor bill created',
         detail: linkedBill.ref,
       }] : []),
+      ...poCreditNotes.map(cn => ({
+        key: `credit-${cn.id}`,
+        date: cn.date,
+        title: 'Supplier credit note issued',
+        detail: `${cn.ref} · ${fmtKes(Math.abs(Number(cn.total)))}`,
+      })),
       ...(linkedBill && (linkedBill.amountPaid ?? 0) > 0 ? [{
         key: `payment-${linkedBill.id}`,
         date: linkedBill.date,
@@ -259,7 +269,9 @@ export default function POFormView() {
       return sum + receivedQty * line.unitPrice * (1 + (line.taxRate || 0) / 100)
     }, 0)
     const toReceiveValue = Math.max(0, activePO.total - receivedValue)
-    const nextActionLabel = canSend
+    const nextActionLabel = statusView.key === 'returned'
+      ? 'Receive replacement, or close the order'
+      : canSend
       ? 'Send RFQ'
       : canConfirm
         ? 'Confirm order'
@@ -319,7 +331,7 @@ export default function POFormView() {
           <div className="purchase-order-detail__identity">
           <button type="button" className="btn-outline text-[11px] py-1 px-2.5" onClick={backToList} aria-label="Back to orders">← Orders</button>
           <span className="text-sm font-bold text-t1">{activePO.ref}</span>
-          <StatusBadge status={activePO.status} label={STATUS_LABEL[activePO.status]} />
+          <StatusBadge status={statusView.badge} label={statusView.label} />
           {canEdit && <span className="purchase-order-detail__edit-hint">Click table values to edit</span>}
           </div>
           <div className="purchase-order-detail__actions">
@@ -455,6 +467,15 @@ export default function POFormView() {
                 },
                 { id: 'revert', label: 'Revert to draft', hidden: !canRevertToDraft, onClick: () => revertPOToDraft(activePO.id) },
                 { id: 'return', label: 'Return to vendor', hidden: !canReturn, onClick: () => openReturnForPO() },
+                {
+                  id: 'close-returned',
+                  label: 'Close order (no replacement)',
+                  hidden: !canCloseReturned,
+                  onClick: () => {
+                    if (!window.confirm(`Close ${activePO.ref}? Everything received was returned to ${activePO.vendorName}. Close it only if no replacement is coming.`)) return
+                    updatePO(activePO.id, { status: 'cancelled', notes: [activePO.notes, `Closed after full return (${poReturns.map(r => r.ref).join(', ')}) — no replacement expected.`].filter(Boolean).join('\n') })
+                  },
+                },
                 { id: 'delete', label: 'Delete', hidden: !canEdit, danger: true, onClick: () => setDelId(activePO.id) },
               ]}
             />
@@ -869,7 +890,27 @@ export default function POFormView() {
                       size="xs"
                     />
                   </div>
-                ) : (
+                ) : null}
+                {poCreditNotes.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-t4">Supplier credit notes (returns)</p>
+                    {poCreditNotes.map(cn => {
+                      const left = Math.max(0, Math.abs(Number(cn.total)) - Math.abs(Number(cn.amountPaid) || 0))
+                      return (
+                        <div key={cn.id} className="p-2.5 rounded-lg flex flex-col gap-1" style={{ background: 'var(--warning-bg)', border: '1px solid color-mix(in srgb, var(--warning) 30%, transparent)' }}>
+                          <div className="flex justify-between text-xs">
+                            <span className="font-mono font-semibold" style={{ color: 'var(--navy)' }}>{displayDocRef(cn.ref)}</span>
+                            <span className="font-mono text-t1">{fmtKes(Math.abs(Number(cn.total)))}</span>
+                          </div>
+                          <p className="text-[10px] text-t3">
+                            {left > 0.005 ? `${fmtKes(left)} not used yet: ${activePO.vendorName} owes us this` : 'Fully applied to the bill'}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                {!linkedBill && poCreditNotes.length === 0 && (
                   <p className="text-[11px] text-t3 text-center py-3">
                     {activePO.status === 'received' || activePO.status === 'partial'
                       ? 'Click "Create Bill" to generate the vendor invoice'

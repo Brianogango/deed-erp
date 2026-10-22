@@ -63,7 +63,7 @@ const CLIENT_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   draft: ['draft', 'sent', 'confirmed', 'cancelled'],
   sent: ['sent', 'confirmed', 'cancelled'],
   confirmed: ['confirmed', 'cancelled'],
-  partial: ['partial'],
+  partial: ['partial', 'cancelled'],
   received: ['received'],
   cancelled: ['cancelled'],
 }

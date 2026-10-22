@@ -4,6 +4,7 @@ import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { usePurchase } from './PurchaseContext'
 import { PanelHeader, RecordCard } from '@/components/ui'
 import { StatusBadge } from '@/components/erp'
+import { poStatusView } from '@/lib/purchase/po-status'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import type { PurchaseOrder } from '@/lib/store'
 import {
@@ -31,8 +32,9 @@ const APPROVABLE_PURCHASE_STATUSES = ['draft', 'sent']
 export default function PurchaseOrdersTab() {
   const {
     purchaseOrders, filteredPOs, typeFilter, setTypeFilter, statusFilter, setStatusFilter,
-    setActiveId, setSubView, setShowNewRFQ, fmtKes, fmtDate, confirmPO, currentUser,
+    setActiveId, setSubView, setShowNewRFQ, fmtKes, fmtDate, confirmPO, currentUser, purchaseReturns,
   } = usePurchase()
+  const statusOf = (po: Parameters<typeof poStatusView>[0]) => poStatusView(po, purchaseReturns)
   const canManageProcurement = CAN_MANAGE_PROCUREMENT_ROLES.includes(currentUser?.role ?? '')
   const savedViewKey = 'deed_po_saved_view'
   const patchUi = useUrlUiPatch()
@@ -116,7 +118,7 @@ export default function PurchaseOrdersTab() {
         po.vendorName,
         fmtDate(po.date),
         String(po.total),
-        STATUS_LABEL[po.status],
+        statusOf(po).label,
       ]).map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
     ].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -155,8 +157,8 @@ export default function PurchaseOrdersTab() {
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '120px',
-      render: po => <StatusBadge status={po.status} label={STATUS_LABEL[po.status]} />,
-      exportValue: po => STATUS_LABEL[po.status],
+      render: po => { const v = statusOf(po); return <StatusBadge status={v.badge} label={v.label} /> },
+      exportValue: po => statusOf(po).label,
     },
     {
       key: 'date', label: 'Date', priority: 2, width: '100px',
@@ -247,7 +249,7 @@ export default function PurchaseOrdersTab() {
               title={po.vendorName}
               subtitle={isRFQ ? 'RFQ' : 'Purchase Order'}
               amount={fmtKes(po.total)}
-              status={<StatusBadge status={po.status} label={STATUS_LABEL[po.status]} size="xs" />}
+              status={<StatusBadge status={statusOf(po).badge} label={statusOf(po).label} size="xs" />}
               accent={isRFQ ? 'var(--warning)' : 'var(--primary)'}
               meta={[
                 { label: 'Date', value: fmtDate(po.date) },

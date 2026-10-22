@@ -15587,7 +15587,10 @@ const storeCtx: AppState = {
               return { ...line, qtyReceived: adj.qtyReceived, qtyBilled: adj.qtyBilled }
             })
             // Returned goods reopen the receiving step (vendor may re-supply).
-            const status = x.status === 'received' && lines.some(l => l.qtyReceived < l.qty) ? 'partial' as const : x.status
+            const nothingLeft = lines.every(l => (Number(l.qtyReceived) || 0) <= 0)
+            const status = (x.status === 'received' || x.status === 'partial')
+              ? (nothingLeft ? 'confirmed' as const : lines.some(l => l.qtyReceived < l.qty) ? 'partial' as const : x.status)
+              : x.status
             return { ...x, lines, status }
           })
           const updated = next.find(x => x.id === po.id)
