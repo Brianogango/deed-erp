@@ -692,7 +692,7 @@ export interface CashbookEntry {
   bankAccountId: string  // which bank/cash account
   debit: number          // money out
   credit: number         // money in
-  sourceType: 'customer_invoice' | 'vendor_bill' | 'deposit' | 'pos' | 'expense' | 'payroll' | 'purchase'
+  sourceType: 'customer_invoice' | 'vendor_bill' | 'deposit' | 'pos' | 'expense' | 'payroll' | 'purchase' | 'bank_charge' | 'bank_interest'
   sourceId: string
   recordedBy: string
 }
@@ -711,6 +711,11 @@ export interface BankStatementLine {
   balance?: number         // running balance per statement (optional)
   category: StatementLineCategory
   matchedEntryId?: string  // cashbook entry id it's matched to
+  /** Set when a bank charge / interest line was booked to the ledger from reconciliation. */
+  bookedAs?: 'bank_charge' | 'interest_earned'
+  bookedJournalRef?: string
+  bookedAt?: string
+  bookedBy?: string
 }
 
 // Default bank accounts — each row carries its own M-Pesa paybill/account pair
@@ -4365,6 +4370,7 @@ type FinanceStoreState = Pick<AppState,
   | 'initRelease'
   | 'logReturnPickup'
   | 'matchStatementLine'
+  | 'updateStatementLine'
   | 'postInvoice'
   | 'recordOutsourcePayment'
   | 'createOutsourceJobBill'
@@ -7632,6 +7638,7 @@ function StoreProvider({
     addPOLine: (...args: Parameters<AppState['addPOLine']>) => storeCtxRef.current!.addPOLine(...args),
     addReturnLine: (...args: Parameters<AppState['addReturnLine']>) => storeCtxRef.current!.addReturnLine(...args),
     addStatementLine: (...args: Parameters<AppState['addStatementLine']>) => storeCtxRef.current!.addStatementLine(...args),
+    updateStatementLine: (...args: Parameters<AppState['updateStatementLine']>) => storeCtxRef.current!.updateStatementLine(...args),
     applyCustomerCreditToInvoice: (...args: Parameters<AppState['applyCustomerCreditToInvoice']>) => storeCtxRef.current!.applyCustomerCreditToInvoice(...args),
     autoMatchStatements: (...args: Parameters<AppState['autoMatchStatements']>) => storeCtxRef.current!.autoMatchStatements(...args),
     bulkAddPOLines: (...args: Parameters<AppState['bulkAddPOLines']>) => storeCtxRef.current!.bulkAddPOLines(...args),

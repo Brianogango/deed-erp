@@ -42,6 +42,7 @@ const OUT_LABELS: Record<string, string> = {
   pos: 'Till refunds',
   customer_invoice: 'Customer refunds',
   deposit: 'Deposit refunds',
+  bank_charge: 'Bank charges',
 }
 
 function add(map: Map<string, SummaryRow>, key: string, label: string, amount: number) {

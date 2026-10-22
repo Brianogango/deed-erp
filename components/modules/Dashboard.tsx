@@ -703,7 +703,7 @@ export function Dashboard() {
   const financeDeskStats = useMemo(() => {
     if (!canSeeFinance) return null
     const entries = buildCashbookEntries(
-      { invoices, posOrders, expenses, journalEntries, deposits },
+      { invoices, posOrders, expenses, journalEntries, deposits, bankStatementLines },
       accounts,
     )
     const cashbookTotals = computeCashbookTotals(bankAccounts, entries)

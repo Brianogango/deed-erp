@@ -5,6 +5,7 @@ import { canManageBankRecon } from '@/lib/finance-controls'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { postBankStatementAdjustment } from '@/lib/accounting/posting-service'
 import { roundMoney } from '@/lib/accounting/money'
+import prisma from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,6 +52,13 @@ export async function POST(request: NextRequest) {
     const lock = await checkFiscalLock(new Date(date.includes('T') ? date : `${date}T00:00:00Z`))
     if (!lock.ok) {
       return NextResponse.json({ error: lock.error }, { status: lock.status })
+    }
+
+    // Booking the same statement line twice returns the entry already made.
+    if (body.statementLineId) {
+      const ref = `JRN/BNK/${kind}/${String(body.statementLineId)}`.slice(0, 80)
+      const existing = await prisma.journalEntry.findUnique({ where: { ref }, select: { id: true, ref: true } })
+      if (existing) return NextResponse.json({ journal: existing, kind, amount, alreadyBooked: true })
     }
 
     const journal = await postBankStatementAdjustment({

@@ -122,6 +122,9 @@ function getCOACategory(
   }
 }
 
+/** The cashbook entry a booked bank charge / interest line becomes. */
+export const bankAdjustmentEntryId = (statementLineId: string) => `bank-adj-${statementLineId}`
+
 // ── Build cashbook entries from all transaction sources ───────────────────────
 export function buildCashbookEntries(
   state: {
@@ -132,6 +135,8 @@ export function buildCashbookEntries(
     deposits: Deposit[]
     /** When given, sales show the revenue account(s) they were posted to instead of a fixed one. */
     products?: Array<{ id: string; category?: string | null }>
+    /** Bank charges and interest booked from the bank reconciliation. */
+    bankStatementLines?: BankStatementLine[]
   },
   accounts: Account[],
 ): CashbookEntry[] {
@@ -282,7 +287,26 @@ export function buildCashbookEntries(
       })
     })
 
-  // 6. Payroll → only an explicit payroll payment journal moves cash.
+  // 6. Bank charges / interest booked from the reconciliation (they exist
+  // only on the bank statement until Finance books them).
+  ;(state.bankStatementLines ?? []).filter(l => l.bookedJournalRef).forEach(l => {
+    const charge = l.bookedAs !== 'interest_earned'
+    entries.push({
+      id: bankAdjustmentEntryId(l.id),
+      date: l.date,
+      ref: l.reference || l.bookedJournalRef!,
+      description: `${charge ? 'Bank charges' : 'Interest earned'} — ${l.description}`,
+      category: charge ? 'Bank charges' : 'Interest earned',
+      bankAccountId: l.bankAccountId,
+      debit: charge ? l.debit : 0,
+      credit: charge ? 0 : l.credit,
+      sourceType: charge ? 'bank_charge' : 'bank_interest',
+      sourceId: l.id,
+      recordedBy: l.bookedBy || 'Finance',
+    })
+  })
+
+  // 7. Payroll → only an explicit payroll payment journal moves cash.
   journalEntries
     .filter(j => Boolean(j.payrollRunId) && j.ref.startsWith('JRN/PAYROLL-PAY/'))
     .forEach(journal => {
@@ -323,6 +347,8 @@ const TYPE_COLORS: Record<CashbookEntry['sourceType'], { bg: string; text: strin
   purchase:         { bg: 'var(--warning-bg)', text: 'var(--warning-text)' },
   payroll:          { bg: '#EDE9FE', text: '#5B21B6' },
   expense:          { bg: '#FEF9C3', text: '#713F12' },
+  bank_charge:      { bg: '#FFEDD5', text: '#9A3412' },
+  bank_interest:    { bg: '#CFFAFE', text: '#155E75' },
 }
 function CatBadge({ label, sourceType, title }: { label: string; sourceType: CashbookEntry['sourceType']; title?: string }) {
   const c = TYPE_COLORS[sourceType] ?? { bg: 'var(--bg-muted)', text: 'var(--text-4)' }
@@ -364,8 +390,10 @@ function ReconPanel({
 }) {
   const {
     bankStatementLines, addStatementLine, deleteStatementLine, currentUser, systemSettings,
-    matchStatementLine, unmatchStatementLine, autoMatchStatements, showToast,
+    matchStatementLine, unmatchStatementLine, autoMatchStatements, showToast, updateStatementLine,
   } = useFinanceStore()
+  const canBook = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const [bookingIds, setBookingIds] = useState<Set<string>>(new Set())
 
   // Local form state for adding a statement line
   // Date and category start empty — the user sets them for each line.
@@ -433,6 +461,57 @@ function ReconPanel({
     })
     setForm(p => ({ ...p, description: '', reference: '', debit: '', credit: '', balance: '' }))
   }
+
+  /** Bank charges and interest exist only on the statement: book them to the ledger and the cashbook. */
+  const bookableKind = (l: BankStatementLine): 'bank_charge' | 'interest_earned' | null =>
+    l.bookedJournalRef ? null
+      : l.category === 'bank_charge' && l.debit > 0 ? 'bank_charge'
+        : l.category === 'interest_earned' && l.credit > 0 ? 'interest_earned'
+          : null
+
+  async function bookLines(lines: BankStatementLine[]) {
+    if (isLocked) { showToast('This reconciled bank period is locked. Reopen it before booking charges.', 'error'); return }
+    const todo = lines.filter(l => bookableKind(l))
+    if (!todo.length) return
+    setBookingIds(prev => new Set([...prev, ...todo.map(l => l.id)]))
+    let booked = 0
+    let failed = ''
+    for (const l of todo) {
+      const kind = bookableKind(l)!
+      try {
+        const res = await fetch('/api/bank-recon/adjustments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind,
+            amount: kind === 'bank_charge' ? l.debit : l.credit,
+            bankAccountId: account.id,
+            month,
+            date: l.date,
+            statementLineId: l.id,
+            description: `${kind === 'bank_charge' ? 'Bank charges' : 'Interest earned'} — ${l.description}${l.reference ? ` (${l.reference})` : ''}`,
+          }),
+        })
+        const body = await res.json().catch(() => null) as { journal?: { ref?: string } | null; error?: string } | null
+        if (!res.ok) { failed = body?.error || `Could not book (${res.status})`; break }
+        updateStatementLine(l.id, {
+          bookedAs: kind,
+          bookedJournalRef: body?.journal?.ref || `JRN/BNK/${kind}/${l.id}`,
+          bookedAt: new Date().toISOString(),
+          bookedBy: currentUser?.name || currentUser?.username || 'Finance',
+          matchedEntryId: bankAdjustmentEntryId(l.id),
+        })
+        booked += 1
+      } catch {
+        failed = 'Could not reach the server'
+        break
+      }
+    }
+    setBookingIds(prev => { const next = new Set(prev); todo.forEach(l => next.delete(l.id)); return next })
+    if (booked) showToast(`Booked ${booked} line${booked === 1 ? '' : 's'} to the ledger and the cashbook`, 'success')
+    if (failed) showToast(failed, 'error')
+  }
+  const bookableLines = stmtLines.filter(l => bookableKind(l))
 
   function handleAutoMatch() {
     if (isLocked) { showToast('This reconciled bank period is locked. Reopen it before auto-matching.', 'error'); return }
@@ -801,9 +880,17 @@ function ReconPanel({
               <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
               On Statement Only — Not in books ({unmatchedStmt.length})
             </p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-4)' }}>
-              Bank charges, interest, and transactions not yet recorded in the cashbook
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-0.5">
+              <p className="text-[10px]" style={{ color: 'var(--text-4)' }}>
+                Bank charges, interest, and transactions not yet recorded in the cashbook. Bank charges and interest are booked from here
+                (Dr Bank Charges / Cr bank, or Dr bank / Cr Interest Income).
+              </p>
+              {canBook && bookableLines.length > 1 && !isLocked && (
+                <button type="button" className="btn-primary text-[10px] px-3 py-1" disabled={bookingIds.size > 0} onClick={() => { void bookLines(bookableLines) }}>
+                  Book all {bookableLines.length} ({fmtKes(bookableLines.reduce((t, l) => t + (l.debit || l.credit), 0))})
+                </button>
+              )}
+            </div>
           </div>
           <DataTable
             tableId={`cashbook-unmatched-stmt-${account.id}`}
@@ -814,6 +901,20 @@ function ReconPanel({
               { key: 'category', label: 'Category', priority: 3, width: '80px', render: (l: BankStatementLine) => stmtCatBadge(l.category), exportValue: (l: BankStatementLine) => l.category },
               { key: 'debit', label: 'Debit', priority: 1, width: '100px', align: 'right', render: (l: BankStatementLine) => <span className="font-mono text-xs" style={{ color: 'var(--danger)' }}>{l.debit > 0 ? fmtKes(l.debit) : '—'}</span>, exportValue: (l: BankStatementLine) => l.debit || '' },
               { key: 'credit', label: 'Credit', priority: 1, width: '100px', align: 'right', render: (l: BankStatementLine) => <span className="font-mono text-xs" style={{ color: 'var(--success)' }}>{l.credit > 0 ? fmtKes(l.credit) : '—'}</span>, exportValue: (l: BankStatementLine) => l.credit || '' },
+              { key: 'book', label: '', priority: 1, width: '150px', align: 'right', render: (l: BankStatementLine) => {
+                const kind = bookableKind(l)
+                if (!kind) return l.category === 'other' && l.debit > 0 && canBook && !isLocked
+                  ? <button type="button" className="btn-outline text-[10px] px-2.5 py-1" title="Mark this line as a bank charge so it can be booked"
+                      onClick={() => updateStatementLine(l.id, { category: 'bank_charge' })}>It’s a bank charge</button>
+                  : null
+                if (!canBook) return <span className="text-[10px]" style={{ color: 'var(--text-4)' }}>Finance books this</span>
+                return (
+                  <button type="button" className="btn-primary text-[10px] px-2.5 py-1" disabled={bookingIds.has(l.id) || isLocked}
+                    onClick={() => { void bookLines([l]) }}>
+                    {bookingIds.has(l.id) ? 'Booking…' : kind === 'bank_charge' ? 'Book bank charge' : 'Book interest'}
+                  </button>
+                )
+              } },
             ] as ColumnDef<BankStatementLine>[]}
             rows={unmatchedStmt}
             rowKey={l => l.id}
@@ -930,7 +1031,7 @@ function ReconPanel({
             {bankCharges > 0 && (
               <p className="text-[10px] mt-2 pt-2 border-t" style={{ color: 'var(--warning)', borderColor: 'var(--border-lt)' }}>
                 ⚠ Bank charges of <strong>{fmtKes(bankCharges)}</strong> are on the statement but not yet recorded in the books.
-                Post these as journal entries under "Bank Charges / Financial Expenses".
+                Book them in the <strong>Matching</strong> tab under “On statement only” (Book bank charge).
               </p>
             )}
           </div>

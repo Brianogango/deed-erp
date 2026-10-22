@@ -415,10 +415,10 @@ function AccountingContent() {
   const allCashbookEntries = useMemo(
     () =>
       buildCashbookEntries(
-        { invoices, posOrders, expenses, journalEntries, deposits },
+        { invoices, posOrders, expenses, journalEntries, deposits, bankStatementLines },
         accounts
       ),
-    [invoices, posOrders, expenses, journalEntries, deposits, accounts]
+    [invoices, posOrders, expenses, journalEntries, deposits, bankStatementLines, accounts]
   )
   const cashbookTotals = useMemo(
     () => computeCashbookTotals(bankAccounts, allCashbookEntries),
