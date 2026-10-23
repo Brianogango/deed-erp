@@ -11,6 +11,7 @@ import { keepReversedPaymentsOff } from '@/lib/accounting/payment-reversal'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
+import { mergeDeliveryStoreWrite } from '@/lib/delivery/delivery-store-merge'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { mergePosSessionsStoreWrite, reconcileOpenPosSessionFlags, type PosSessionLike } from '@/lib/pos-session'
@@ -356,6 +357,7 @@ export async function POST(request: Request) {
     ...keysToProtect,
     ...(needsPosReconcile ? ['deed_posSessions', 'deed_posSessionId', 'deed_posSessionOpen'] : []),
     ...(needsInvoiceGuard ? ['deed_invoices'] : []),
+    ...(['deed_deliveryJobs', 'deed_riders'] as const).filter(k => !!entries[k]),
   ])]
   const serverState = mergeStateKeys.length > 0
     ? await loadAppStateForWrite(mergeStateKeys)
@@ -426,6 +428,12 @@ export async function POST(request: Request) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
         entries[key] = JSON.stringify(mergeSaleOrdersStoreWrite(serverState[key], incoming))
+        continue
+      }
+      if ((key === 'deed_deliveryJobs' || key === 'deed_riders') && entries[key]) {
+        let incoming: unknown
+        try { incoming = JSON.parse(entries[key]) } catch { continue }
+        entries[key] = JSON.stringify(mergeDeliveryStoreWrite(key, serverState[key], incoming))
         continue
       }
       if (key === 'deed_repairs_v2' && entries[key]) {

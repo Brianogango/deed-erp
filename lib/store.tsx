@@ -1613,6 +1613,8 @@ export interface Rider {
   active: boolean
   ratePerDelivery: number   // KES paid per completed delivery
   createdAt: string
+  /** Secret part of the rider's personal job link (set by the server). */
+  portalToken?: string
 }
 
 export interface DeliveryJob {
@@ -1650,6 +1652,12 @@ export interface DeliveryJob {
   // Metadata
   notes: string
   failureReason?: string
+  /** Name of the person who received it, entered by the rider. */
+  recipientName?: string
+  /** Money the customer paid the rider on delivery. */
+  cashCollected?: { amount: number; method: 'cash' | 'mpesa'; reference?: string; at: string }
+  /** When the rider last changed this job from their link. */
+  riderUpdatedAt?: string
   createdByUserId: string
   createdByName: string
   createdAt: string

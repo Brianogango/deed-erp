@@ -89,6 +89,7 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
 
   // ── Delivery ────────────────────────────────────────────────────────────
   'delivery.dispatched': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true }),
+  'delivery.rider_completed': POLICY(['in_app', 'push'], 'success', { recipientRoles: ['admin_officer'] }),
   'delivery.failed': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['admin_officer'], requiresAcknowledgement: true, escalationMinutes: 30, escalationRoles: ['director'] }),
   'delivery.overdue': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 24 }),
   'delivery.pod_missing': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 48 }),

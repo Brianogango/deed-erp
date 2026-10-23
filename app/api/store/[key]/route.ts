@@ -13,6 +13,7 @@ import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { keepReversedPaymentsOff } from '@/lib/accounting/payment-reversal'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability } from '@/lib/finance-invoice'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
+import { mergeDeliveryStoreWrite } from '@/lib/delivery/delivery-store-merge'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
@@ -136,6 +137,12 @@ export async function PUT(request: NextRequest, { params }: Params) {
     try { incoming = JSON.parse(value) } catch { incoming = null }
     const currentState = await loadAppState([key])
     value = JSON.stringify(mergeRepairsStoreWrite(currentState[key], incoming))
+  }
+  if (key === 'deed_deliveryJobs' || key === 'deed_riders') {
+    let incoming: unknown
+    try { incoming = JSON.parse(value) } catch { incoming = null }
+    const currentState = await loadAppState([key])
+    value = JSON.stringify(mergeDeliveryStoreWrite(key, currentState[key], incoming))
   }
   if (key === 'deed_posOrders') {
     let incoming: unknown

@@ -645,6 +645,14 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
           {job.failureReason && (
             <p className="text-[9px]" style={{ color: 'var(--danger)' }}>Fail: {job.failureReason}</p>
           )}
+          {job.recipientName && (
+            <p className="text-[9px]" style={{ color: 'var(--success-text)' }}>Received by {job.recipientName}{job.deliveredAt ? ` · ${new Date(job.deliveredAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' })}` : ''}</p>
+          )}
+          {job.cashCollected && (
+            <p className="text-[9px] font-semibold" style={{ color: 'var(--warning-text)' }}>
+              Rider collected {fmtKes(job.cashCollected.amount)} {job.cashCollected.method === 'mpesa' ? `by M-Pesa ${job.cashCollected.reference ?? ''}` : 'in cash'}
+            </p>
+          )}
         </div>
       ),
       accessor: job => `${job.customerName} ${job.pickupAddress} ${job.deliveryAddress}`,
@@ -935,6 +943,26 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
 // ── Riders Tab ─────────────────────────────────────────────────────────────────
 function RidersTab() {
   const { riders, addRider, updateRider, deliveryJobs, showToast } = useDeliveryStore()
+  const [linkBusy, setLinkBusy] = useState<string | null>(null)
+  const riderLink = async (rider: Rider, reset: boolean) => {
+    setLinkBusy(rider.id)
+    try {
+      const res = await fetch(`/api/riders/${rider.id}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reset }),
+      })
+      const body = await res.json().catch(() => ({})) as { url?: string; pinHint?: string; error?: string }
+      if (!res.ok || !body.url) { showToast(body.error || 'Could not make the link', 'error'); return }
+      const token = body.url.split('/').pop()
+      if (token && token !== rider.portalToken) updateRider(rider.id, { portalToken: token })
+      const message = `Hi ${rider.name.split(/\s+/)[0]}, this is your Deed delivery link: ${body.url}\nOpen it to see your jobs and mark them done. Your PIN is the ${body.pinHint}.`
+      try { await navigator.clipboard.writeText(message) } catch { window.prompt('Copy this message for the rider:', message) }
+      showToast(reset ? `New link for ${rider.name} copied — the old one no longer works` : `Link for ${rider.name} copied — paste it into WhatsApp`)
+    } finally {
+      setLinkBusy(null)
+    }
+  }
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
@@ -1024,6 +1052,25 @@ function RidersTab() {
         return <span className="font-mono text-xs text-t2">{jobCount}</span>
       },
       exportValue: rider => deliveryJobs.filter(j => j.riderId === rider.id && j.status === 'delivered').length,
+    },
+    {
+      key: 'link', label: 'Rider link', priority: 2, width: '170px',
+      render: rider => (
+        <span className="inline-flex gap-1">
+          <button type="button" className="btn-outline text-[10px] px-2 py-1" disabled={!rider.active || linkBusy === rider.id}
+            onClick={() => void riderLink(rider, false)} title="Copy the rider's personal link to send on WhatsApp">
+            {linkBusy === rider.id ? '…' : 'Copy link'}
+          </button>
+          {rider.portalToken && (
+            <button type="button" className="btn-outline text-[10px] px-2 py-1" disabled={linkBusy === rider.id}
+              onClick={() => { if (window.confirm(`Give ${rider.name} a new link? The old link stops working.`)) void riderLink(rider, true) }}
+              title="Stop the old link (lost phone, rider left) and make a new one">
+              New link
+            </button>
+          )}
+        </span>
+      ),
+      exportValue: rider => (rider.portalToken ? 'Yes' : 'No'),
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '80px',
