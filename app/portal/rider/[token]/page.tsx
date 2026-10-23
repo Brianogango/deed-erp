@@ -383,7 +383,7 @@ export default function RiderPage() {
 
   const thisWeek = view?.weeks[0]
   return (
-    <main className="min-h-screen bg-slate-100 px-4 pb-10 pt-6">
+    <main className="h-[100dvh] overflow-y-auto overscroll-contain bg-slate-100 px-4 pb-10 pt-6">
       <div className="mx-auto max-w-md space-y-4">
         <header className="flex items-center justify-between">
           <div>

@@ -16,3 +16,14 @@ import { isUuid } from '@/lib/legacy-compat'
 export function bankAccountFk(value: unknown): string | null {
   return isUuid(value) ? value : null
 }
+
+/**
+ * The legacy cashbook id ('absa', 'ncba', 'im', or a later account's random id)
+ * the payment was booked against. `bank_account_id` drops it (see above), but
+ * the payment route also writes it into the payment notes as "Account: <id>",
+ * so the screens can still show the account that was actually paid from.
+ */
+export function legacyBankIdFromNotes(notes: unknown): string | null {
+  const match = /(?:^|·)\s*Account:\s*([^\s·]+)/.exec(String(notes ?? ''))
+  return match ? match[1] : null
+}
