@@ -6,6 +6,7 @@
  * a customer paid them, and sees their trips and pay by week.
  */
 import crypto from 'node:crypto'
+import { carriedItems, hasStops, jobStops, stopProgress, tripCashTotal, type Stop, type TripJob } from './trip'
 
 export type RiderLike = {
   id: string
@@ -41,6 +42,11 @@ export type JobLike = {
   cashCollected?: { amount: number; method: 'cash' | 'mpesa'; reference?: string; at: string }
   /** When the rider last changed this job from their link. */
   riderUpdatedAt?: string
+  stops?: Stop[]
+  stopsFinishedAt?: string
+  backAtShopAt?: string
+  returnConfirmedAt?: string
+  tripUpdatedAt?: string
 }
 
 export type PayLike = { riderId: string; weekStart: string; status: string; totalAmount?: number; paidDate?: string; jobIds?: string[] }
@@ -114,6 +120,24 @@ export function riderJobView(job: JobLike) {
     recipientName: job.recipientName,
     failureReason: job.failureReason,
     cashCollected: job.cashCollected,
+    cashTotal: tripCashTotal(job as TripJob),
+    // Stops: contact phones only while the trip is open.
+    stops: jobStops(job as TripJob).map(s => ({
+      id: s.id, kind: s.kind, address: s.address, contactName: s.contactName ?? '',
+      contactPhone: open ? (s.contactPhone ?? '') : '', notes: open ? (s.notes ?? '') : '',
+      status: s.status, doneAt: s.doneAt, recipientName: s.recipientName, failureReason: s.failureReason,
+      cashCollected: s.cashCollected,
+      items: s.items.map(i => ({
+        id: i.id, direction: i.direction, description: i.description, serial: i.serial ?? '', qty: i.qty,
+        status: i.status, unplanned: i.unplanned ? { reason: i.unplanned.reason, billOnInvoice: !!i.unplanned.billOnInvoice, note: i.unplanned.note ?? '' } : undefined,
+        received: !!i.receivedAt,
+      })),
+    })),
+    hasStops: hasStops(job as TripJob),
+    progress: stopProgress(job as TripJob),
+    carrying: carriedItems(job as TripJob).map(i => ({ id: i.id, description: i.description, serial: i.serial ?? '', qty: i.qty, direction: i.direction, stopAddress: i.stopAddress })),
+    stopsFinished: !!job.stopsFinishedAt,
+    backAtShopAt: job.backAtShopAt,
   }
 }
 
@@ -135,7 +159,7 @@ export function riderWeeks(riderId: string, jobs: JobLike[], pays: PayLike[], we
     if (!w) continue
     w.trips += 1
     w.earned += Number(job.riderFee) || 0
-    if (job.cashCollected) w.cashCollected += Number(job.cashCollected.amount) || 0
+    w.cashCollected += tripCashTotal(job as TripJob)
   }
   for (const pay of pays) {
     if (pay.riderId !== riderId || pay.status !== 'paid') continue
@@ -155,9 +179,10 @@ export function applyRiderAction(job: JobLike, riderId: string, input: RiderActi
   { ok: true; job: JobLike } | { ok: false; error: string } {
   if (job.riderId !== riderId) return { ok: false, error: 'This job is not assigned to you' }
   if (!ACTIVE.has(job.status)) return { ok: false, error: `This job is already ${job.status.replace('_', ' ')}` }
+  if (input.action !== 'picked_up' && hasStops(job as TripJob)) return { ok: false, error: 'This trip has several stops: update each stop' }
   if (input.action === 'picked_up') {
     if (job.status === 'in_transit') return { ok: true, job }
-    return { ok: true, job: { ...job, status: 'in_transit', pickedUpAt: at, riderUpdatedAt: at } }
+    return { ok: true, job: { ...job, status: 'in_transit', pickedUpAt: at, riderUpdatedAt: at, tripUpdatedAt: at } }
   }
   if (input.action === 'delivered') {
     const name = input.recipientName.trim()
@@ -181,10 +206,11 @@ export function applyRiderAction(job: JobLike, riderId: string, input: RiderActi
         recipientName: name.slice(0, 80),
         ...(cash ? { cashCollected: cash } : {}),
         riderUpdatedAt: at,
+        tripUpdatedAt: at,
       },
     }
   }
   const reason = input.reason.trim()
   if (reason.length < 3) return { ok: false, error: 'Say why it could not be delivered' }
-  return { ok: true, job: { ...job, status: 'failed', failureReason: reason.slice(0, 240), riderUpdatedAt: at } }
+  return { ok: true, job: { ...job, status: 'failed', failureReason: reason.slice(0, 240), riderUpdatedAt: at, tripUpdatedAt: at } }
 }

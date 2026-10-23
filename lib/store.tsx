@@ -1658,6 +1658,14 @@ export interface DeliveryJob {
   cashCollected?: { amount: number; method: 'cash' | 'mpesa'; reference?: string; at: string }
   /** When the rider last changed this job from their link. */
   riderUpdatedAt?: string
+  /** Stops in order (drop off / collect / exchange). Jobs without stops are one stop. See lib/delivery/trip.ts. */
+  stops?: import('@/lib/delivery/trip').Stop[]
+  stopsFinishedAt?: string
+  backAtShopAt?: string
+  returnConfirmedAt?: string
+  returnConfirmedBy?: string
+  /** Last server-side change (rider link or office check-in / follow-up). */
+  tripUpdatedAt?: string
   createdByUserId: string
   createdByName: string
   createdAt: string

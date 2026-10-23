@@ -20,6 +20,10 @@ import {
   isGeneralDeliveryJob,
 } from '@/lib/delivery-job-type'
 import { useUrlQueryState, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import {
+  CheckInModal, draftsToStops, EditStopsModal, emptyItem, emptyStop, FollowUpModal, StopsEditor, TripSummary, type StopDraft,
+} from '@/components/modules/delivery/TripParts'
+import { carriedItems, hasStops, jobStops, openFollowUps, STOP_KIND_LABELS, stopsFinished } from '@/lib/delivery/trip'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -74,6 +78,23 @@ function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, com
           <p className="text-sm font-semibold">{job.deliveryAddress}</p>
         </div>
       </div>
+
+      {hasStops(job) && (
+        <div className="mb-8">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Stops</p>
+          {jobStops(job).map((stop, i) => (
+            <div key={stop.id} className="p-3 mb-2 border border-gray-200 rounded-lg text-sm">
+              <p className="font-semibold">{i + 1}. {STOP_KIND_LABELS[stop.kind]} — {stop.address}</p>
+              {(stop.contactName || stop.contactPhone) && <p className="text-gray-600">{[stop.contactName, stop.contactPhone].filter(Boolean).join(' · ')}</p>}
+              {stop.items.map(item => (
+                <p key={item.id} className="text-gray-800">{item.direction === 'out' ? 'Give' : 'Bring back'}: {item.qty > 1 ? `${item.qty} × ` : ''}{item.description}{item.serial ? ` (${item.serial})` : ''}</p>
+              ))}
+              {stop.notes && <p className="text-gray-600">{stop.notes}</p>}
+              <p className="text-xs text-gray-500 mt-2">Name & signature: ______________________</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {job.notes && (
         <div className="mb-8 p-4 border border-gray-200 rounded-lg">
@@ -236,7 +257,7 @@ function JobModal({
 }: {
   onClose: () => void
   repairs: { id: string; ref: string; customerName: string; customerPhone: string }[]
-  saleOrders: { id: string; ref: string; customerName: string }[]
+  saleOrders: { id: string; ref: string; customerName: string; lines?: any[] }[]
   riders: Rider[]
   createDeliveryJob: ReturnType<typeof useDeliveryStore>['createDeliveryJob']
   assignRiderToJob: ReturnType<typeof useDeliveryStore>['assignRiderToJob']
@@ -255,6 +276,27 @@ function JobModal({
   })
 
   function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })) }
+
+  // Several stops, or items to give / bring back: the trip is planned as stops.
+  const [useStops, setUseStops] = useState(false)
+  const [stopDrafts, setStopDrafts] = useState<StopDraft[]>([])
+  function soItems(soId: string) {
+    const so = saleOrders.find(x => x.id === soId)
+    return (so?.lines ?? [])
+      .filter((l: any) => l?.lineType !== 'section' && Number(l?.qty) > 0 && (l?.productName || l?.description))
+      .map((l: any) => ({ ...emptyItem('out'), description: String(l.productName || l.description), qty: String(Number(l.qty) || 1) }))
+  }
+  function turnOnStops() {
+    const collect = form.type === 'repair_pickup'
+    setStopDrafts([emptyStop({
+      kind: collect ? 'collect' : 'drop',
+      address: collect ? form.pickupAddress : form.deliveryAddress,
+      contactName: form.customerName,
+      contactPhone: form.customerPhone,
+      items: form.type === 'sales_delivery' && form.saleOrderId ? soItems(form.saleOrderId) : [],
+    })])
+    setUseStops(true)
+  }
 
   function selectType(type: DeliveryJobType) {
     setForm(p => ({
@@ -280,6 +322,7 @@ function JobModal({
     if (type === 'sales_delivery') {
       const so = saleOrders.find(s => s.id === id)
       if (so) setForm(p => ({ ...p, saleOrderId: id, customerName: so.customerName }))
+      if (so && useStops) setStopDrafts(d => d.length ? [{ ...d[0], items: soItems(id) }, ...d.slice(1)] : d)
     } else if (type === 'repair_dropoff') {
       const r = repairs.find(r => r.id === id)
       // Recipient comes from the chosen repair; addresses are typed by the user
@@ -292,11 +335,17 @@ function JobModal({
   }
 
   async function submit() {
+    let stops: ReturnType<typeof draftsToStops> | null = null
+    if (useStops) {
+      stops = draftsToStops(stopDrafts)
+      if ('error' in stops) { showToast(stops.error, 'error'); return }
+    }
+    const firstStop = stops && 'stops' in stops ? stops.stops[0] : undefined
     const missing = [
       !form.type && 'Job type',
       !form.customerName.trim() && 'Customer name',
-      !form.pickupAddress.trim() && 'Pickup address',
-      !form.deliveryAddress.trim() && 'Delivery address',
+      !form.pickupAddress.trim() && (useStops ? 'Start address (shop)' : 'Pickup address'),
+      !useStops && !form.deliveryAddress.trim() && 'Delivery address',
       !form.scheduledDate && 'Scheduled date',
       !form.riderFee.trim() && 'Rider fee',
     ].filter(Boolean)
@@ -325,11 +374,12 @@ function JobModal({
       customerName:    form.customerName,
       customerPhone:   form.customerPhone,
       pickupAddress:   form.pickupAddress,
-      deliveryAddress: form.deliveryAddress,
+      deliveryAddress: firstStop ? firstStop.address : form.deliveryAddress,
       scheduledDate:   form.scheduledDate,
       riderFee:        fee,
       billedTo:        isGeneral ? 'company' : undefined,
       notes:           form.notes,
+      ...(stops && 'stops' in stops ? { stops: stops.stops } : {}),
     })
     // Ref allocation failed (offline/server) — no job was created; keep the form open.
     if (!job) return
@@ -379,13 +429,30 @@ function JobModal({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label={form.type === 'repair_pickup' ? 'Collect From (Customer) *' : form.type === 'repair_dropoff' ? 'Collect From (Shop) *' : 'Pickup Address *'}>
+          <Field label={useStops ? 'Start From (Shop) *' : form.type === 'repair_pickup' ? 'Collect From (Customer) *' : form.type === 'repair_dropoff' ? 'Collect From (Shop) *' : 'Pickup Address *'}>
             <Input value={form.pickupAddress} onChange={v => set('pickupAddress', v)} placeholder="Where to collect from" />
           </Field>
+          {!useStops && (
           <Field label={form.type === 'repair_pickup' ? 'Deliver To (Shop) *' : form.type === 'repair_dropoff' ? 'Deliver To (Customer) *' : 'Delivery Address *'}>
             <Input value={form.deliveryAddress} onChange={v => set('deliveryAddress', v)} placeholder="Where to deliver to" />
           </Field>
+          )}
         </div>
+
+        {useStops ? (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-semibold text-t2">Stops, in order *</label>
+              <button type="button" className="text-[10px] text-t3" onClick={() => { setUseStops(false); setStopDrafts([]) }}>Single delivery instead</button>
+            </div>
+            <StopsEditor stops={stopDrafts} onChange={setStopDrafts} />
+            <p className="text-[10px] text-t4 mt-1">One trip, one rider fee. The rider updates each stop; anything collected or not handed over stays “with rider” until you check it in.</p>
+          </div>
+        ) : (
+          <button type="button" className="text-[11px] font-semibold" style={{ color: 'var(--navy)' }} onClick={turnOnStops}>
+            + Items to give / bring back, or more stops (exchange, collection)
+          </button>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Scheduled Date *"><Input type="date" value={form.scheduledDate} onChange={v => set('scheduledDate', v)} /></Field>
@@ -531,6 +598,11 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
   const [assignTarget, setAssignTarget] = useState<DeliveryJob | null>(null)
   const [feeTarget, setFeeTarget] = useState<DeliveryJob | null>(null)
   const [failTarget, setFailTarget] = useState<DeliveryJob | null>(null)
+  const [checkInTarget, setCheckInTarget] = useState<DeliveryJob | null>(null)
+  const [followUpTarget, setFollowUpTarget] = useState<{ job: DeliveryJob; itemId: string } | null>(null)
+  const [stopsTarget, setStopsTarget] = useState<DeliveryJob | null>(null)
+  // A trip action saved on the server: take its copy as-is.
+  const applyServerJob = (job: DeliveryJob) => updateDeliveryJob(job.id, job)
   const patchJobsUi = useUrlUiPatch()
   const [filterStatusValue, setFilterStatusValue] = useUrlUiState('status', 'all')
   const filterStatus: DeliveryJobStatus | 'all' =
@@ -570,6 +642,13 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
     failed:     deliveryJobs.filter(j => j.status === 'failed').length,
   }), [deliveryJobs])
 
+  const withRider = useMemo(() => deliveryJobs
+    .filter(j => j.status === 'in_transit')
+    .map(job => ({ job, items: carriedItems(job) }))
+    .filter(x => x.items.length > 0 && stopsFinished(x.job)), [deliveryJobs])
+  const followUps = useMemo(() => deliveryJobs
+    .flatMap(job => openFollowUps(job).map(item => ({ job, item }))), [deliveryJobs])
+
   const deliveryPrimaryFilters: PrimaryFilterConfig[] = [
     {
       key: 'status',
@@ -604,7 +683,7 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
   // Next status button labels
   function nextAction(job: DeliveryJob): { label: string; status: DeliveryJobStatus } | null {
     if (job.status === 'assigned')   return { label: 'Mark In Transit', status: 'in_transit' }
-    if (job.status === 'in_transit') return { label: 'Mark Delivered',  status: 'delivered'  }
+    if (job.status === 'in_transit' && !hasStops(job)) return { label: 'Mark Delivered',  status: 'delivered'  }
     return null
   }
 
@@ -643,12 +722,13 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
           </p>
           {job.notes && <p className="text-[9px] erp-truncate" title={job.notes} style={{ color: 'var(--text-4)' }}>{job.notes}</p>}
           {job.failureReason && (
-            <p className="text-[9px]" style={{ color: 'var(--danger)' }}>Fail: {job.failureReason}</p>
+            <p className="text-[9px]" style={{ color: 'var(--danger)' }}>{hasStops(job) && job.status !== 'failed' ? 'Stop not done' : 'Fail'}: {job.failureReason}</p>
           )}
           {job.recipientName && (
             <p className="text-[9px]" style={{ color: 'var(--success-text)' }}>Received by {job.recipientName}{job.deliveredAt ? ` · ${new Date(job.deliveredAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' })}` : ''}</p>
           )}
-          {job.cashCollected && (
+          <TripSummary job={job} onCheckIn={() => setCheckInTarget(job)} onFollowUp={itemId => setFollowUpTarget({ job, itemId })} />
+          {job.cashCollected && !hasStops(job) && (
             <p className="text-[9px] font-semibold" style={{ color: 'var(--warning-text)' }}>
               Rider collected {fmtKes(job.cashCollected.amount)} {job.cashCollected.method === 'mpesa' ? `by M-Pesa ${job.cashCollected.reference ?? ''}` : 'in cash'}
             </p>
@@ -723,6 +803,16 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
           <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
             style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: 'none' }}
             onClick={() => setFailTarget(job)}>Failed</button>
+        )}
+        {['pending', 'assigned'].includes(job.status) && !job.riderUpdatedAt && (
+          <button className="text-[9px] px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--bg-muted)', color: 'var(--text-2)', border: '1px solid var(--border)', cursor: 'pointer' }}
+            onClick={() => setStopsTarget(job)}>Stops</button>
+        )}
+        {job.status === 'in_transit' && stopsFinished(job) && carriedItems(job).length > 0 && (
+          <button className="text-[9px] px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--info-bg, var(--bg-surface))', color: 'var(--navy)', border: 'none', cursor: 'pointer' }}
+            onClick={() => setCheckInTarget(job)}>Check in</button>
         )}
         {['pending', 'cancelled'].includes(job.status) && (
           <button className="text-[9px] px-1.5 py-0.5 rounded"
@@ -891,6 +981,28 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
             ))}
             {!deliveryJobs.some(job => job.status === 'in_transit') && <p className="delivery-queue-empty">No jobs are in transit.</p>}
           </section>
+          {withRider.length > 0 && (
+            <section>
+              <div className="delivery-queue-heading"><strong>Items with riders</strong></div>
+              {withRider.slice(0, 4).map(({ job, items }) => (
+                <button key={job.id} type="button" className="delivery-queue-item" onClick={() => stopsFinished(job) ? setCheckInTarget(job) : setFilterStatus('in_transit')}>
+                  <span><strong>{job.riderName || 'Rider'}</strong><small>{items.length} item{items.length === 1 ? '' : 's'} · {job.ref}</small></span>
+                  <em>{stopsFinished(job) ? (job.backAtShopAt ? 'Back · check in' : 'Check in') : 'On trip'}</em>
+                </button>
+              ))}
+            </section>
+          )}
+          {followUps.length > 0 && (
+            <section>
+              <div className="delivery-queue-heading"><strong>Customer items to follow up</strong></div>
+              {followUps.slice(0, 4).map(({ job, item }) => (
+                <button key={item.id} type="button" className="delivery-queue-item" onClick={() => setFollowUpTarget({ job, itemId: item.id })}>
+                  <span><strong>{item.description}</strong><small>{job.customerName} · {job.ref}{item.unplanned?.billOnInvoice ? ' · bill on invoice' : ''}</small></span>
+                  <em>Follow up</em>
+                </button>
+              ))}
+            </section>
+          )}
           {stats.failed > 0 && (
             <section className="delivery-queue-failed">
               <div className="delivery-queue-heading"><strong>Failed</strong><button type="button" onClick={() => setFilterStatus('failed')}>Review</button></div>
@@ -905,7 +1017,7 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
         <JobModal
           onClose={() => setShowCreateModal(false)}
           repairs={repairs.map(r => ({ id: r.id, ref: r.ref, customerName: r.customerName, customerPhone: r.customerPhone }))}
-          saleOrders={saleOrders.filter(so => so.status === 'sale' || so.status === 'quotation' || so.status === 'quotation_sent').map(so => ({ id: so.id, ref: so.ref, customerName: so.customerName }))}
+          saleOrders={saleOrders.filter(so => so.status === 'sale' || so.status === 'quotation' || so.status === 'quotation_sent').map(so => ({ id: so.id, ref: so.ref, customerName: so.customerName, lines: so.lines }))}
           riders={riders}
           createDeliveryJob={createDeliveryJob}
           assignRiderToJob={assignRiderToJob}
@@ -928,6 +1040,22 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
             showToast(`Rider fee updated to ${fmtKes(fee)}`)
           }}
           onClose={() => setFeeTarget(null)}
+        />
+      )}
+      {checkInTarget && (
+        <CheckInModal job={checkInTarget} onDone={applyServerJob} onClose={() => setCheckInTarget(null)} />
+      )}
+      {followUpTarget && (
+        <FollowUpModal job={followUpTarget.job} itemId={followUpTarget.itemId} onDone={applyServerJob} onClose={() => setFollowUpTarget(null)} />
+      )}
+      {stopsTarget && (
+        <EditStopsModal
+          job={stopsTarget}
+          onSave={stops => {
+            updateDeliveryJob(stopsTarget.id, { stops, deliveryAddress: stops[0]?.address || stopsTarget.deliveryAddress })
+            showToast(`${stopsTarget.ref}: ${stops.length} stop${stops.length === 1 ? '' : 's'} saved`)
+          }}
+          onClose={() => setStopsTarget(null)}
         />
       )}
       {failTarget && (
