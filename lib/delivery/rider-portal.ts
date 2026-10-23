@@ -141,19 +141,34 @@ export function riderJobView(job: JobLike) {
   }
 }
 
+/**
+ * The rider link starts on Monday 19 October 2026: jobs dated before it
+ * (scheduled, or created when there is no date) are not shown to riders,
+ * and their trips and weeks start there.
+ */
+export const RIDER_LINK_START = '2026-10-19'
+
+export function onRiderLink(job: Pick<JobLike, 'scheduledDate'> & { createdAt?: string }, start = RIDER_LINK_START): boolean {
+  const day = String(job.scheduledDate || job.createdAt || '').slice(0, 10)
+  return !day || day >= start
+}
+
 export type RiderWeek = { weekStart: string; trips: number; earned: number; cashCollected: number; paid: boolean }
 
 /** Trips by week, newest first: delivered jobs, what they earned, cash collected, and whether the week was paid. */
 export function riderWeeks(riderId: string, jobs: JobLike[], pays: PayLike[], weeks = 8, now = new Date().toISOString()): RiderWeek[] {
   const out = new Map<string, RiderWeek>()
   const current = weekStartOf(now)
+  const firstWeek = weekStartOf(`${RIDER_LINK_START}T12:00:00Z`)
   for (let i = 0; i < weeks; i++) {
     const d = new Date(`${current}T00:00:00Z`)
     d.setUTCDate(d.getUTCDate() - i * 7)
     const key = d.toISOString().slice(0, 10)
+    if (key < firstWeek) break
     out.set(key, { weekStart: key, trips: 0, earned: 0, cashCollected: 0, paid: false })
   }
   for (const job of jobs) {
+    if (!onRiderLink(job as JobLike & { createdAt?: string })) continue
     if (job.riderId !== riderId || job.status !== 'delivered' || !job.deliveredAt) continue
     const w = out.get(weekStartOf(job.deliveredAt))
     if (!w) continue

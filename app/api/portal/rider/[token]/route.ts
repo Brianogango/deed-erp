@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 import { hasRiderSession, loadRiderData, needPin, noStore, riderForToken } from '@/lib/delivery/rider-portal.server'
-import { riderJobView, riderWeeks } from '@/lib/delivery/rider-portal'
+import { onRiderLink, riderJobView, riderWeeks } from '@/lib/delivery/rider-portal'
 
 export const dynamic = 'force-dynamic'
 type Params = { params: Promise<{ token: string }> }
@@ -16,7 +16,7 @@ export const GET = guardPortalRoute('rider-read', 600, async (req: NextRequest, 
   if (!hasRiderSession(req, rider)) return needPin(rider)
 
   const { jobs, pays } = await loadRiderData()
-  const mine = jobs.filter(j => j.riderId === rider.id)
+  const mine = jobs.filter(j => j.riderId === rider.id && onRiderLink(j as any))
   const since = Date.now() - 14 * 86_400_000
   const open = mine
     .filter(j => ACTIVE.has(j.status))

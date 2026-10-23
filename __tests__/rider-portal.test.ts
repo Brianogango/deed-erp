@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyRiderAction, pinMatches, riderJobView, riderPin, riderSession, riderWeeks, sessionValid, weekStartOf } from '@/lib/delivery/rider-portal'
+import { applyRiderAction, onRiderLink, pinMatches, riderJobView, riderPin, riderSession, riderWeeks, sessionValid, weekStartOf } from '@/lib/delivery/rider-portal'
 import { mergeDeliveryJobsStoreWrite, mergeRidersStoreWrite } from '@/lib/delivery/delivery-store-merge'
 
 const job = (o: Record<string, any> = {}) => ({ id: 'j1', ref: 'DLV-1', status: 'assigned', riderId: 'r1', customerName: 'Acme', customerPhone: '0700', riderFee: 300, ...o })
@@ -50,12 +50,22 @@ describe('trips by week', () => {
       job({ id: 'j3', status: 'delivered', deliveredAt: '2026-10-14T09:00:00Z' }),
       job({ id: 'j4', status: 'failed', deliveredAt: '2026-10-22T09:00:00Z' }),
       job({ id: 'j5', riderId: 'r2', status: 'delivered', deliveredAt: '2026-10-22T09:00:00Z' }),
-    ], [{ riderId: 'r1', weekStart: '2026-10-12', status: 'paid' }], 3, '2026-10-23T09:00:00Z')
+    ], [{ riderId: 'r1', weekStart: '2026-10-19', status: 'paid' }], 3, '2026-11-04T09:00:00Z')
+    // Weeks start at the rider link's first week (19 Oct): earlier weeks are not listed.
     expect(weeks).toEqual([
-      { weekStart: '2026-10-19', trips: 2, earned: 600, cashCollected: 1000, paid: false },
-      { weekStart: '2026-10-12', trips: 1, earned: 300, cashCollected: 0, paid: true },
-      { weekStart: '2026-10-05', trips: 0, earned: 0, cashCollected: 0, paid: false },
+      { weekStart: '2026-11-02', trips: 0, earned: 0, cashCollected: 0, paid: false },
+      { weekStart: '2026-10-26', trips: 0, earned: 0, cashCollected: 0, paid: false },
+      { weekStart: '2026-10-19', trips: 2, earned: 600, cashCollected: 1000, paid: true },
     ])
+  })
+
+  it('riders only see jobs dated from 19 October onwards', () => {
+    expect(onRiderLink({ scheduledDate: '2026-10-18' })).toBe(false)
+    expect(onRiderLink({ scheduledDate: '2026-10-19' })).toBe(true)
+    expect(onRiderLink({ scheduledDate: '', createdAt: '2026-10-10T08:00:00Z' })).toBe(false)
+    expect(onRiderLink({ scheduledDate: '' })).toBe(true)
+    const old = riderWeeks('r1', [job({ status: 'delivered', scheduledDate: '2026-10-17', deliveredAt: '2026-10-20T09:00:00Z' })], [], 1, '2026-10-23T09:00:00Z')
+    expect(old[0].trips).toBe(0)
   })
 })
 
