@@ -15271,6 +15271,20 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   text-align: center;
 }
 
+/* These dialogs are drawn outside their workspace (in a portal), so the
+   workspace's colour variables never reached them: the footer's primary button
+   was white text on a transparent background and could not be seen. */
+.holdover-modal,
+.deposit-modal {
+  --deed-navy: #21124f;
+  --deed-accent: #08a8cb;
+  --deed-accent-strong: #078eaf;
+  --deed-accent-soft: #e9f8fb;
+  --deed-ink: #0f172a;
+  --deed-muted: #64748b;
+  --deed-border: #e2e8f0;
+}
+
 /* Holdover and deposit mobile/detail surfaces */
 .holdover-modal,
 .deposit-modal {
