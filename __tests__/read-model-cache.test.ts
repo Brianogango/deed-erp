@@ -48,3 +48,16 @@ describe('cachedByFingerprint', () => {
     expect([a, b]).toEqual(['inv', 'so'])
   })
 })
+
+describe('lists structuredClone cannot copy', () => {
+  it('are copied as JSON instead of failing the load', async () => {
+    const { cachedByFingerprint, clearReadModelCache } = await import('@/lib/read-model-cache')
+    clearReadModelCache()
+    const money = { toJSON: () => '12.50', round: () => 12 } // like a Prisma Decimal
+    const build = async () => [{ id: 'q1', client: { creditLimit: money } }]
+    const first = await cachedByFingerprint('decimal-list', async () => 'a', build)
+    const again = await cachedByFingerprint('decimal-list', async () => 'a', build)
+    expect(first).toEqual([{ id: 'q1', client: { creditLimit: '12.50' } }])
+    expect(again).toEqual(first)
+  })
+})

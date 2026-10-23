@@ -51,7 +51,7 @@ export async function loadScreenSaleOrders(screenCopy: unknown): Promise<Row[]> 
           (SELECT count(*) || ':' || coalesce(sum(line_total), 0) || ':' || coalesce(sum(qty), 0) FROM sale_order_items),
           (SELECT max(updated_at)::text || ':' || count(*) FROM invoices WHERE sale_order_id IS NOT NULL),
           (SELECT max(updated_at)::text || ':' || count(*) FROM delivery_notes),
-          (SELECT max(updated_at)::text || ':' || count(*) FROM clients)
+          (SELECT md5(coalesce(string_agg(id::text || ':' || name, ',' ORDER BY id), '')) FROM clients)
         ) AS fp`)
       return `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
     },
@@ -99,7 +99,7 @@ export async function loadScreenQuotes(screenCopy: unknown): Promise<Row[]> {
         SELECT concat_ws('|',
           (SELECT max(updated_at)::text || ':' || count(*) FROM quotes),
           (SELECT count(*) || ':' || coalesce(sum(line_total), 0) || ':' || coalesce(sum(qty), 0) FROM quote_items),
-          (SELECT max(updated_at)::text || ':' || count(*) FROM clients),
+          (SELECT md5(coalesce(string_agg(concat_ws(':', id::text, name, company_name, email, phone), ',' ORDER BY id), '')) FROM clients),
           (SELECT max(updated_at)::text || ':' || count(*) FROM opportunities)
         ) AS fp`)
       return `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
@@ -119,5 +119,9 @@ async function buildScreenQuotes(screenCopy: unknown): Promise<Row[]> {
     return { ...rest, ...readScreenExtras(screenExtras, QUOTE_EXTRA_KEYS) }
   }))
   const out = normalized.map((q: Row) => ({ ...(map.get(String(q.id)) ?? {}), ...q }))
-  return withCopyOnlyRows(out, list, new Set(quotes.map(q => q.id)), new Set(quotes.map(q => q.quoteNumber)))
+  // Plain JSON, as the browser receives it: the attached customer and deal
+  // carry Decimal money fields, which the list cache cannot copy.
+  return JSON.parse(JSON.stringify(
+    withCopyOnlyRows(out, list, new Set(quotes.map(q => q.id)), new Set(quotes.map(q => q.quoteNumber))),
+  ))
 }

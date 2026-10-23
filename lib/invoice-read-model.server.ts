@@ -176,8 +176,8 @@ export async function loadScreenInvoices(screenCopy: unknown): Promise<Row[]> {
           (SELECT count(*) || ':' || coalesce(sum(line_total), 0) || ':' || coalesce(sum(qty), 0) FROM invoice_items),
           (SELECT count(*) || ':' || max(created_at)::text || ':' || count(*) FILTER (WHERE is_voided) || ':' || coalesce(sum(amount), 0) FROM payments),
           (SELECT count(*) || ':' || max(created_at)::text || ':' || count(reversed_at) || ':' || coalesce(sum(amount), 0) FROM payment_allocations),
-          (SELECT max(updated_at)::text FROM users),
-          (SELECT max(updated_at)::text || ':' || count(*) FROM clients)
+          (SELECT md5(coalesce(string_agg(id::text || ':' || username, ',' ORDER BY id), '')) FROM users),
+          (SELECT md5(coalesce(string_agg(id::text || ':' || name, ',' ORDER BY id), '')) FROM clients)
         ) AS fp`)
       return `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
     },

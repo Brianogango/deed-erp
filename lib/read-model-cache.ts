@@ -21,6 +21,19 @@
  * share one build.
  */
 const cache = new Map<string, { fingerprint: string; value: unknown }>()
+
+/**
+ * A separate copy of a list. Lists holding values structuredClone cannot copy
+ * (Prisma Decimals) are copied as JSON — the form the browser gets anyway —
+ * instead of failing the load.
+ */
+function copyOf<T>(value: T): T {
+  try {
+    return structuredClone(value)
+  } catch {
+    return JSON.parse(JSON.stringify(value)) as T
+  }
+}
 const inFlight = new Map<string, { fingerprint: string; promise: Promise<unknown> }>()
 
 /** Which parts of a `|`-separated fingerprint changed, e.g. "2,5" — for the log. */
@@ -39,33 +52,42 @@ export async function cachedByFingerprint<T>(
   build: () => Promise<T>,
 ): Promise<T> {
   let fp = ''
+  const t0 = Date.now()
   try {
     fp = await fingerprint()
   } catch {
     return build()
   }
   if (!fp) return build()
+  const fpMs = Date.now() - t0
   const hit = cache.get(name)
-  if (hit && hit.fingerprint === fp) return structuredClone(hit.value) as T
+  if (hit && hit.fingerprint === fp) {
+    const value = copyOf(hit.value) as T
+    const total = Date.now() - t0
+    if (total >= 150 && process.env.NODE_ENV !== 'test') {
+      console.warn(`[read-model-cache] slow hit ${name} ${total}ms (check ${fpMs}ms, copy ${total - fpMs}ms)`)
+    }
+    return value
+  }
 
   const running = inFlight.get(name)
   if (running && running.fingerprint === fp) {
-    return structuredClone(await running.promise) as T
+    return copyOf(await running.promise) as T
   }
 
   const started = Date.now()
   const promise = build().then(value => {
-    cache.set(name, { fingerprint: fp, value: structuredClone(value) })
+    cache.set(name, { fingerprint: fp, value: copyOf(value) })
     const ms = Date.now() - started
-    if (ms >= 200 && process.env.NODE_ENV !== 'test') {
-      console.warn(`[read-model-cache] rebuilt ${name} in ${ms}ms (${changedParts(hit?.fingerprint, fp)})`)
+    if (ms >= 100 && process.env.NODE_ENV !== 'test') {
+      console.warn(`[read-model-cache] rebuilt ${name} in ${ms}ms (check ${fpMs}ms; ${changedParts(hit?.fingerprint, fp)})`)
     }
     return value
   })
   inFlight.set(name, { fingerprint: fp, promise })
   try {
     const value = await promise
-    return structuredClone(value) as T
+    return copyOf(value) as T
   } finally {
     if (inFlight.get(name)?.promise === promise) inFlight.delete(name)
   }

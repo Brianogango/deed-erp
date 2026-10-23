@@ -142,16 +142,19 @@ async function overlayAuthoritativeSales(state: AppStateMap, keys?: string[]) {
   const want = (key: string) => !keys || keys.includes(key)
   if (!want('deed_saleOrders') && !want('deed_quotes')) return
   const m = await import('./sales-read-model.server')
-  if (want('deed_saleOrders')) {
-    const orders = await m.loadScreenSaleOrders(state.deed_saleOrders)
-      .catch(err => { console.error('[server-store] sale orders from table failed:', err); failOverlay(state, 'deed_saleOrders'); return null })
-    if (orders) state.deed_saleOrders = orders
-  }
-  if (want('deed_quotes')) {
-    const quotes = await m.loadScreenQuotes(state.deed_quotes)
-      .catch(err => { console.error('[server-store] quotes from table failed:', err); failOverlay(state, 'deed_quotes'); return null })
-    if (quotes) state.deed_quotes = quotes
-  }
+  // Independent lists: read them side by side.
+  const [orders, quotes] = await Promise.all([
+    want('deed_saleOrders')
+      ? m.loadScreenSaleOrders(state.deed_saleOrders)
+        .catch(err => { console.error('[server-store] sale orders from table failed:', err); failOverlay(state, 'deed_saleOrders'); return null })
+      : null,
+    want('deed_quotes')
+      ? m.loadScreenQuotes(state.deed_quotes)
+        .catch(err => { console.error('[server-store] quotes from table failed:', err); failOverlay(state, 'deed_quotes'); return null })
+      : null,
+  ])
+  if (orders) state.deed_saleOrders = orders
+  if (quotes) state.deed_quotes = quotes
 }
 
 async function overlayAuthoritativeJournals(state: AppStateMap, keys?: string[]) {

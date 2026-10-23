@@ -90,6 +90,79 @@ export async function loadScreenJournals(): Promise<ReturnType<typeof mapJournal
         ) AS fp`)
       return rows[0]?.fp ?? ''
     },
-    async () => (await loadRows()).map(mapJournalForScreen),
+    buildJournalsIncrementally,
   )
+}
+
+type ScreenJournal = ReturnType<typeof mapJournalForScreen>
+
+/**
+ * One row per posted entry: its id and a hash of its header, links and
+ * totals, newest first — the same order as the full list. Lines are written
+ * only together with their entry (journal-service) and never edited after,
+ * so the header covers them; hashing every line would double the cost.
+ */
+const ENTRY_SIGNATURES_SQL = `
+  SELECT e.id::text AS id, md5(concat_ws('/',
+           e.ref, e.entry_date::text, e.description, e.source_type, e.source_id, e.journal_id::text,
+           e.is_reversed::text, e.reversal_of_id::text, e.invoice_id::text, e.payment_id::text, e.blob_id,
+           e.total_debit::text, e.total_credit::text)) AS sig
+    FROM journal_entries e
+   WHERE e.is_posted
+   ORDER BY e.entry_date DESC, e.created_at DESC`
+
+/** Changed entries above this many: read the whole list instead. */
+const INCREMENTAL_LIMIT = 400
+
+/** The last list built, by entry id, with each entry's hash. */
+let lastBuilt: Map<string, { sig: string; row: ScreenJournal }> | null = null
+
+/**
+ * A new posting used to re-read every entry with all its lines (0.5–0.9 s on
+ * production) — on every invoice, payment or bill. Now only entries that are
+ * new or whose hash changed are read; the rest are reused from the last build.
+ * Runs only when the list's check (loadScreenJournals) has seen a change.
+ * Signatures are taken before rows are read: an entry that changes in between
+ * keeps its older hash and is simply read again next time.
+ */
+async function buildJournalsIncrementally(): Promise<ScreenJournal[]> {
+  let sigs: Array<{ id: string; sig: string }>
+  try {
+    sigs = await prisma.$queryRawUnsafe<Array<{ id: string; sig: string }>>(ENTRY_SIGNATURES_SQL)
+  } catch {
+    lastBuilt = null
+    return (await loadRows()).map(mapJournalForScreen)
+  }
+  if (!Array.isArray(sigs)) sigs = []
+  const previous = lastBuilt
+  const changed = sigs.filter(s => previous?.get(s.id)?.sig !== s.sig).map(s => s.id)
+
+  let fresh: Map<string, ScreenJournal>
+  // Something changed (the caller's check said so) but no entry looks
+  // different: a change the hashes do not see, so read everything.
+  if (!previous || changed.length > INCREMENTAL_LIMIT || (changed.length === 0 && sigs.length === previous.size)) {
+    fresh = new Map((await loadRows()).map(e => [e.id, mapJournalForScreen(e)]))
+  } else {
+    fresh = new Map()
+    for (let i = 0; i < changed.length; i += 200) {
+      const rows = await loadRows({ id: { in: changed.slice(i, i + 200) } })
+      for (const e of rows) fresh.set(e.id, mapJournalForScreen(e))
+    }
+  }
+
+  const next = new Map<string, { sig: string; row: ScreenJournal }>()
+  const out: ScreenJournal[] = []
+  for (const s of sigs) {
+    const row = fresh.get(s.id) ?? previous?.get(s.id)?.row
+    if (!row) continue // posted after the signatures were taken, or no longer posted
+    next.set(s.id, { sig: fresh.has(s.id) || previous?.get(s.id)?.sig === s.sig ? s.sig : '', row })
+    out.push(row)
+  }
+  lastBuilt = next
+  return out
+}
+
+/** For tests. */
+export function resetJournalSnapshot(): void {
+  lastBuilt = null
 }
