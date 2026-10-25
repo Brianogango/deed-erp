@@ -5,6 +5,7 @@ import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
 import { cachedByFingerprint } from '@/lib/read-model-cache'
+import { legacyBankIdFromNotes } from '@/lib/accounting/bank-account-ref'
 
 /**
  * Invoices and bills as the screens use them, read from the invoices table.
@@ -73,7 +74,10 @@ function paymentsOf(inv: DbInvoice) {
       amount,
       method: String(p.paymentMethod),
       ...(p.reference ? { reference: p.reference } : {}),
-      ...(p.bankAccountId ? { bankAccountId: p.bankAccountId } : {}),
+      // The column only holds real bank_accounts ids; a payment into a built-in
+      // or later-added account ('absa', 'ncba', …) keeps its id in the notes.
+      // Without this the cashbook fell back to NCBA for every such payment.
+      ...((p.bankAccountId ?? legacyBankIdFromNotes(p.notes)) ? { bankAccountId: p.bankAccountId ?? legacyBankIdFromNotes(p.notes) } : {}),
       ...(p.journalId ? { journalEntryId: p.journalId } : {}),
       recordedBy: personName(p.createdBy),
     }

@@ -214,9 +214,12 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
           </div>
 
           {/* Step indicator */}
-          <div className="flex gap-2 px-5 pt-4 flex-shrink-0">
-            {[1, 2].map(s => (
-              <div key={s} className={`flex-1 h-1 rounded-full transition-all duration-300 ${s <= step ? 'bg-blue-500' : 'bg-[var(--border)]'}`} />
+          <div className="flex gap-3 px-5 pt-4 flex-shrink-0" aria-label={`Step ${step} of 2`}>
+            {[{ n: 1, label: 'Client & device' }, { n: 2, label: 'Loan details' }].map(s => (
+              <div key={s.n} className="flex-1">
+                <div className={`h-1.5 rounded-full transition-all duration-300 ${s.n <= step ? 'bg-[var(--deed-accent)]' : 'bg-[var(--border)]'}`} />
+                <p className={`mt-1 text-[11px] font-semibold ${s.n === step ? 'text-[var(--text-1)]' : 'text-[var(--text-4)]'}`}>{s.n}. {s.label}</p>
+              </div>
             ))}
           </div>
 
@@ -226,6 +229,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
                 {/* Client */}
                 <div>
                   <p className="text-[11px] font-bold text-[var(--text-4)] uppercase tracking-wider mb-2">Client</p>
+                  <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Find an existing contact (optional)</label>
                   <div className="relative mb-3">
                     <input
                       aria-label="Search contacts"
@@ -394,24 +398,33 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
           </div>
 
           {/* Footer */}
-          <div className="holdover-modal__footer px-5 py-4 border-t border-[var(--border-lt)] flex gap-3 flex-shrink-0">
-            {step === 1 ? (
-              <>
-                <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">Cancel</button>
-                <button onClick={goToStep2}
-                  className="flex-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
-                  Continue →
-                </button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => setStep(1)} className="px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">← Back</button>
-                <button onClick={handleSave} disabled={saving}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
-                  {saving ? 'Issuing…' : 'Issue Device'}
-                </button>
-              </>
+          <div className="holdover-modal__footer px-5 py-4 border-t border-[var(--border-lt)] flex-shrink-0">
+            {(step === 1 ? step1Missing : step2Missing).length > 0 && (
+              <p className="mb-2 text-[11px] text-[var(--text-3)]" role="note">
+                Still needed: <strong>{(step === 1 ? step1Missing : step2Missing).join(', ')}</strong>
+              </p>
             )}
+            <div className="flex gap-3">
+              {step === 1 ? (
+                <>
+                  <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">Cancel</button>
+                  <button type="button" onClick={goToStep2}
+                    className="flex-[2] px-4 py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+                    style={{ background: 'var(--deed-accent, #08a8cb)', color: '#fff' }}>
+                    Continue →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={() => setStep(1)} className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">← Back</button>
+                  <button type="button" onClick={handleSave} disabled={saving}
+                    className="flex-[2] px-4 py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    style={{ background: 'var(--deed-accent, #08a8cb)', color: '#fff' }}>
+                    {saving ? 'Issuing…' : 'Issue Device'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
