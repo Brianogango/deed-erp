@@ -10,7 +10,8 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     setupFiles: ['__tests__/setup.ts'],
-    exclude: ['e2e/**', 'node_modules/**', '.next/**'],
+    // Skill folders ship their own node:test files; they are not part of this app's suite.
+    exclude: ['e2e/**', 'node_modules/**', '.next/**', '.agents/**', '.claude/**'],
     env: {
       NEXTAUTH_SECRET: 'test-secret-for-vitest-32-chars-long!!',
       AUTH_SECRET: 'test-secret-for-vitest-32-chars-long!!',

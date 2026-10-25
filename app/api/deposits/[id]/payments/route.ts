@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { hasPermission } from '@/lib/auth/authorization'
 import { addDepositReceipt } from '@/lib/accounting/deposit-service'
 import { z } from 'zod'
 import { notifyStoreKeysChanged } from '@/lib/server-store'
@@ -27,6 +28,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
+    // Same people as the other deposit routes: a receipt posts a journal, so
+    // being signed in is not enough.
+    if (!hasPermission(session.user, 'manageDeposits')) {
+      return NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 })
+    }
     const parsed = depositPaymentSchema.safeParse(await request.json())
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid deposit payment' }, { status: 422 })

@@ -120,3 +120,21 @@ describe('POST /api/deposits/:id/payments', () => {
     expect(res.status).toBe(401)
   })
 })
+
+describe('POST /api/deposits/:id/payments — who may post a receipt', () => {
+  const body = { amount: 1000, method: 'cash' }
+  const ctx = { params: Promise.resolve({ id: DEPOSIT_ID }) }
+
+  it.each(['technician', 'sales_rep', 'inventory_officer', 'kilimall_officer', 'technical_lead'])('refuses a %s', async role => {
+    mockGetSession.mockResolvedValue({ user: { id: USER_ID, name: 'Staff', username: 'staff', role } })
+    const res = await POST(postReq(DEPOSIT_ID, body), ctx)
+    expect(res.status).toBe(403)
+    expect(mockAddDepositReceipt).not.toHaveBeenCalled()
+  })
+
+  it.each(['director', 'admin_officer', 'finance_officer'])('lets a %s through', async role => {
+    mockGetSession.mockResolvedValue({ user: { id: USER_ID, name: 'Staff', username: 'staff', role } })
+    const res = await POST(postReq(DEPOSIT_ID, body), ctx)
+    expect(res.status).toBe(200)
+  })
+})

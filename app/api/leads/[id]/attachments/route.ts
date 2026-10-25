@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { canSeeLead } from '@/lib/crm/lead-access'
 import { readLeadAttachmentFile, type LeadAttachmentMeta } from '@/lib/crm/lead-attachments'
 
 /**
@@ -11,12 +12,16 @@ import { readLeadAttachmentFile, type LeadAttachmentMeta } from '@/lib/crm/lead-
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const lead = await prisma.lead.findUnique({
       where: { id: resolvedParams.id },
-      select: { id: true, emailAttachments: true },
+      select: { id: true, ownerId: true, stage: true, emailAttachments: true },
     })
-    if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    // Attachments are read on the same terms as the lead itself: a rep sees
+    // their own and unassigned leads, and anything else looks like it is not there.
+    if (!lead || !canSeeLead(session.user.role, session.user.id, lead)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
 
     const attachments = Array.isArray(lead.emailAttachments)
       ? (lead.emailAttachments as LeadAttachmentMeta[])

@@ -93,6 +93,8 @@ describe('POST /api/repairs — intake fields', () => {
       deed_repairs_v2: [{
         id: 'rep_intake_2',
         ref: 'TEMP',
+        status: 'received',
+        createdByUserId: 'u1',
         customerName: 'Jane Doe',
         productName: 'HP EliteBook',
         repairPath: 'direct_repair',
@@ -203,5 +205,48 @@ describe('POST /api/repairs — intake fields', () => {
     const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_repairs_v2)
     expect(saved[0].ref).toBe('REP/2099/0001')
     expect(saved[0].previousRefs).toEqual(['REP-227532'])
+  })
+})
+
+describe('POST /api/repairs — a caller-chosen id', () => {
+  const finished = {
+    id: 'rep_taken', ref: 'REP/2099/0009', status: 'closed', customerName: 'Other Customer',
+    productName: 'Dell', createdByUserId: 'someone-else', serialNumber: '',
+  }
+  const base = { id: 'rep_taken', customerId: 'c1', customerName: 'Jane Doe', productName: 'HP EliteBook', issueDescription: 'No power' }
+
+  it('will not overwrite a job that already left intake', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_repairs_v2: [finished], deed_warranties: [] })
+    const res = await POST(makeReq(base))
+    expect(res.status).toBe(409)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it("will not touch someone else's job even while it is at intake", async () => {
+    mockLoadAppState.mockResolvedValue({ deed_repairs_v2: [{ ...finished, status: 'received' }], deed_warranties: [] })
+    const res = await POST(makeReq(base))
+    expect(res.status).toBe(409)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('lets the person who booked it send the same intake again, keeping its status', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_repairs_v2: [{ ...finished, status: 'received', createdByUserId: 'u1' }], deed_warranties: [] })
+    const res = await POST(makeReq(base))
+    expect(res.status).toBe(201)
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0]['deed_repairs_v2'])
+    expect(saved.find((r: any) => r.id === 'rep_taken').status).toBe('received')
+  })
+
+  it('lets a Director complete a draft someone else started', async () => {
+    mockGetServerSession.mockResolvedValue({ user: { id: 'boss', role: 'director', name: 'Boss' } })
+    mockLoadAppState.mockResolvedValue({ deed_repairs_v2: [{ ...finished, status: 'received' }], deed_warranties: [] })
+    const res = await POST(makeReq(base))
+    expect(res.status).toBe(201)
+  })
+
+  it("recognises the intake form's own draft by the booker's username", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { id: 'u9', username: 'jane', role: 'technician', name: 'Jane' } })
+    mockLoadAppState.mockResolvedValue({ deed_repairs_v2: [{ ...finished, status: 'received', createdByUserId: undefined, createdBy: 'jane' }], deed_warranties: [] })
+    expect((await POST(makeReq(base))).status).toBe(201)
   })
 })
