@@ -3,6 +3,7 @@ import 'server-only'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import type { ToolDefinition } from '../types'
+import { hasFullStoreContentAccess } from '@/lib/auth/authorization'
 
 const inputSchema = z.object({
   query: z.string().min(1).max(100),
@@ -22,8 +23,11 @@ export const trackRepairTool: ToolDefinition = {
   requiredModule: 'repair',
   requiredPermission: null,
   mutates: false,
-  run: async (_ctx, rawInput) => {
+  run: async (ctx, rawInput) => {
     const { query } = inputSchema.parse(rawInput)
+    // Technicians see only jobs assigned to them or booked by them, as in
+    // GET /api/repairs.
+    const ownJobsOnly = !hasFullStoreContentAccess(ctx.user, 'deed_repairs_v2')
 
     const repair = await prisma.repair.findFirst({
       where: {
@@ -32,6 +36,9 @@ export const trackRepairTool: ToolDefinition = {
           { serialNumber: { equals: query, mode: 'insensitive' } },
           { imei: { equals: query, mode: 'insensitive' } },
         ],
+        ...(ownJobsOnly
+          ? { AND: [{ OR: [{ assignedToId: ctx.user.id }, { payload: { path: ['createdByUserId'], equals: ctx.user.id } }] }] }
+          : {}),
       },
       orderBy: { createdAt: 'desc' },
       include: {

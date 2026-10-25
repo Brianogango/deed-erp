@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
-import { recordPaymentWithAllocations } from '@/lib/accounting/payment-allocations'
+import { allocationPayerFor, recordPaymentWithAllocations } from '@/lib/accounting/payment-allocations'
 import { paymentAllocatedSum, paymentUnallocated } from '@/lib/accounting/residuals'
 import { makeCollectionHandlers } from '@/lib/server-store-crud'
 import type { Payment } from '@/lib/store'
@@ -240,6 +240,9 @@ export async function POST(request: NextRequest) {
         idempotencyKey,
         allocations,
         allowUnallocated: true,
+        // Same posted-status and segregation-of-duties gates as
+        // POST /api/invoices/[id]/payments.
+        payer: await allocationPayerFor(actor),
         journal: postingLines.length
           ? paymentId => ({
               ref: `JRN/PAY/${reference || paymentId.slice(0, 8)}/${paymentId}`.slice(0, 80),

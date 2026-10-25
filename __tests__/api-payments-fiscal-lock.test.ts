@@ -25,6 +25,7 @@ vi.mock('@/lib/fiscal-lock.server', () => ({ checkFiscalLock: mockCheckFiscalLoc
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
 vi.mock('@/lib/accounting/payment-allocations', () => ({
   recordPaymentWithAllocations: mockRecordPayment,
+  allocationPayerFor: async (actor: { id: string; role: string }) => ({ id: actor.id, role: actor.role }),
 }))
 vi.mock('@/lib/server-store-crud', () => ({
   makeCollectionHandlers: () => ({

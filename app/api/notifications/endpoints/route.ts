@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { isAllowedPushEndpoint } from '@/lib/notifications/web-push'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     const endpoint = String(body.endpoint || '').trim()
     const p256dh = String(body.keys?.p256dh || body.p256dh || '').trim()
     const authSecret = String(body.keys?.auth || body.authSecret || '').trim()
-    if (!endpoint.startsWith('https://') || !p256dh || !authSecret) {
+    if (!isAllowedPushEndpoint(endpoint) || !p256dh || !authSecret) {
       return NextResponse.json({ error: 'Valid Web Push subscription is required' }, { status: 400 })
     }
 

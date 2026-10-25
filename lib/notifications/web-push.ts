@@ -109,6 +109,28 @@ function encryptPayload(
   }
 }
 
+/**
+ * Browser push services a subscription endpoint may point at. Anything else
+ * would make the server POST to a URL a user chose (an internal host, a
+ * cloud metadata service), so it is refused when registered and when sent.
+ */
+const PUSH_SERVICE_HOSTS = [
+  /^fcm\.googleapis\.com$/,
+  /^android\.googleapis\.com$/,
+  /^([a-z0-9-]+\.)*push\.services\.mozilla\.com$/,
+  /^([a-z0-9-]+\.)*push\.apple\.com$/,
+  /^([a-z0-9-]+\.)*notify\.windows\.com$/,
+]
+
+export function isAllowedPushEndpoint(endpoint: string): boolean {
+  let url: URL
+  try { url = new URL(endpoint) } catch { return false }
+  if (url.protocol !== 'https:' || url.username || url.password) return false
+  if (url.port && url.port !== '443') return false
+  const host = url.hostname.toLowerCase()
+  return PUSH_SERVICE_HOSTS.some(re => re.test(host))
+}
+
 export async function sendWebPush(
   subscription: WebPushSubscriptionRecord,
   payload: Record<string, unknown>,
@@ -117,6 +139,10 @@ export async function sendWebPush(
   const privateRaw = String(process.env.VAPID_PRIVATE_KEY || '').trim()
   if (!publicRaw || !privateRaw) {
     return { success: false, provider: 'web_push', error: 'Web Push VAPID keys are not configured', errorCode: 'not_configured' }
+  }
+
+  if (!isAllowedPushEndpoint(subscription.endpoint)) {
+    return { success: false, provider: 'web_push', error: 'Push endpoint is not a known browser push service', errorCode: 'invalid_endpoint' }
   }
 
   try {
@@ -142,17 +168,19 @@ export async function sendWebPush(
         },
         body: new Uint8Array(encrypted.body),
         signal: controller.signal,
+        // Never follow a push service redirect to another host.
+        redirect: 'manual',
       })
     } finally {
       clearTimeout(timeout)
     }
 
     if (!response.ok) {
-      const body = (await response.text().catch(() => '')).slice(0, 500)
+      // The status only: the response body is not passed back to the user.
       return {
         success: false,
         provider: 'web_push',
-        error: `Push service returned HTTP ${response.status}${body ? `: ${body}` : ''}`,
+        error: `Push service returned HTTP ${response.status}`,
         errorCode: String(response.status),
         response: { status: response.status },
       }

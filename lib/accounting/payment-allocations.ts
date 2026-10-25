@@ -8,6 +8,8 @@ import {
   paymentAllocatedSum,
   paymentUnallocated,
 } from '@/lib/accounting/residuals'
+import { invoiceDocState } from '@/lib/odoo-sales-flow'
+import { canPayOwnPostedInvoice } from '@/lib/finance-controls'
 
 export function round2(n: number) {
   return roundMoney(n)
@@ -166,12 +168,54 @@ async function sumAllocationsForPaymentInTx(
   return round2(rows.reduce((s, r) => s + Number(r.amount || 0), 0))
 }
 
+/**
+ * The person settling invoices through an allocation. When given, each
+ * invoice must be posted and the segregation-of-duties rule applies — the
+ * same gates as POST /api/invoices/[id]/payments, which the /api/payments
+ * allocation paths used to skip.
+ */
+export type AllocationPayer = { id: string; role: string; sodThresholdKes?: number | null }
+
+// Mirrors isPayableInvoiceStatus in app/api/invoices/[id]/payments.
+export function isPayableInvoiceStatus(status: string): boolean {
+  if (status === 'pending_approval' || status === 'rejected') return false
+  return invoiceDocState(status) === 'posted'
+}
+
+/** The payer for an allocation route, with the SoD threshold from system settings. */
+export async function allocationPayerFor(actor: { id: string; role: string }): Promise<AllocationPayer> {
+  const { loadAppState } = await import('@/lib/server-store')
+  const state = await loadAppState(['deed_systemSettings']).catch(() => ({} as Record<string, unknown>))
+  const settings = (state.deed_systemSettings && typeof state.deed_systemSettings === 'object')
+    ? state.deed_systemSettings as Record<string, unknown>
+    : {}
+  return { id: actor.id, role: actor.role, sodThresholdKes: Number(settings.accAdminOfficerInvoiceLimitKes) || null }
+}
+
+function assertPayerMayPay(
+  payer: AllocationPayer | undefined,
+  inv: { id: string; status: unknown; totalAmount: unknown; postedById?: string | null; invoiceNumber?: string | null },
+) {
+  if (!payer) return
+  const label = inv.invoiceNumber || inv.id
+  if (!isPayableInvoiceStatus(String(inv.status))) throw taggedError(`Only posted invoices can receive payments (${label})`)
+  const sod = canPayOwnPostedInvoice({
+    role: payer.role,
+    actorUserId: payer.id,
+    postedByUserId: inv.postedById ?? null,
+    invoiceTotal: Number(inv.totalAmount),
+    sodThresholdKes: payer.sodThresholdKes,
+  })
+  if (!sod.ok) throw taggedError(`${sod.reason || 'Segregation of duties'} (${label})`)
+}
+
 export async function allocatePayment(opts: {
   paymentId: string
   allocations: AllocationInput[]
   createdById?: string
   journal?: (paymentId: string, created: Array<{ invoiceId: string; amount: unknown }>) => CreateJournalEntryInput
   audit?: (tx: Prisma.TransactionClient, payment: any, created: any[]) => Promise<void>
+  payer?: AllocationPayer
 }) {
   return runSerializable(async tx => {
     const payment = await tx.payment.findUniqueOrThrow({
@@ -187,7 +231,7 @@ export async function allocatePayment(opts: {
     const invoiceIds = [...new Set(opts.allocations.map(a => a.invoiceId))]
     const invoices = await tx.invoice.findMany({
       where: { id: { in: invoiceIds } },
-      select: { id: true, totalAmount: true, paymentBlocked: true, invoiceNumber: true },
+      select: { id: true, totalAmount: true, paymentBlocked: true, invoiceNumber: true, status: true, postedById: true },
     })
     const invoiceMap = new Map(invoices.map(i => [i.id, i]))
     const residuals = new Map<string, number>()
@@ -196,6 +240,7 @@ export async function allocatePayment(opts: {
       const inv = invoiceMap.get(invoiceId)
       if (!inv) throw taggedError(`Invoice not found: ${invoiceId}`, 404)
       if (inv.paymentBlocked) throw taggedError(`Payments blocked on invoice ${invoiceId}`)
+      assertPayerMayPay(opts.payer, inv)
       const allocated = await sumAllocationsForInvoiceInTx(tx, invoiceId)
       residuals.set(invoiceId, invoiceResidual(Number(inv.totalAmount), allocated))
     }
@@ -262,6 +307,7 @@ export async function recordPaymentWithAllocations(opts: {
   allowUnallocated?: boolean
   journal?: (paymentId: string) => CreateJournalEntryInput
   audit?: (tx: Prisma.TransactionClient, payment: any, allocations: any[]) => Promise<void>
+  payer?: AllocationPayer
 }) {
   return runSerializable(async tx => {
     if (opts.idempotencyKey) {
@@ -291,7 +337,7 @@ export async function recordPaymentWithAllocations(opts: {
     const invoices = invoiceIds.length
       ? await tx.invoice.findMany({
           where: { id: { in: invoiceIds } },
-          select: { id: true, totalAmount: true, status: true, paymentBlocked: true },
+          select: { id: true, totalAmount: true, status: true, paymentBlocked: true, postedById: true, invoiceNumber: true },
         })
       : []
     const invoiceMap = new Map(invoices.map(i => [i.id, i]))
@@ -301,6 +347,7 @@ export async function recordPaymentWithAllocations(opts: {
       const inv = invoiceMap.get(invoiceId)
       if (!inv) throw taggedError(`Invoice not found: ${invoiceId}`, 404)
       if (inv.paymentBlocked) throw taggedError(`Payments blocked on invoice ${invoiceId}`)
+      assertPayerMayPay(opts.payer, inv)
       const allocated = await sumAllocationsForInvoiceInTx(tx, invoiceId)
       residuals.set(invoiceId, invoiceResidual(Number(inv.totalAmount), allocated))
     }
