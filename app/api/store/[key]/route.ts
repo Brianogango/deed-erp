@@ -112,7 +112,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     let incoming: unknown
     try { incoming = JSON.parse(value) } catch { incoming = null }
     const currentState = await loadAppState([key])
-    value = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming))
+    value = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming, { user: session.user, key }))
   }
   let rejectedPostedInvoiceEdits: ReturnType<typeof enforcePostedInvoiceImmutability>['rejected'] = []
   if (key === 'deed_invoices') {
@@ -136,7 +136,11 @@ export async function PUT(request: NextRequest, { params }: Params) {
     let incoming: unknown
     try { incoming = JSON.parse(value) } catch { incoming = null }
     const currentState = await loadAppState([key])
-    value = JSON.stringify(mergeRepairsStoreWrite(currentState[key], incoming))
+    // Same as POST /api/store: a repair deleted through DELETE /api/repairs/[id]
+    // must not come back from a tab that still holds it.
+    const { loadRepairTombstones, tombstoneIds } = await import('@/lib/repair-tombstones')
+    const deletedIds = tombstoneIds(await loadRepairTombstones())
+    value = JSON.stringify(mergeRepairsStoreWrite(currentState[key], incoming, deletedIds))
   }
   if (key === 'deed_deliveryJobs' || key === 'deed_riders') {
     let incoming: unknown

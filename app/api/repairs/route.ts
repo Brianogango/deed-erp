@@ -16,7 +16,7 @@ import { resolveDiagnosisFee, normalizeDeviceTier } from '@/lib/diagnosis-fee'
 import { configuredPhoneChannels } from '@/lib/notifications/channel-availability'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { findOpenRepairWithSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
-import { isUserAllowed } from '@/lib/auth/authorization'
+import { canAccessRecord, isUserAllowed } from '@/lib/auth/authorization'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -231,6 +231,12 @@ export async function POST(request: NextRequest) {
     const repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
     const existingIdx = repairs.findIndex(r => r.id === repairId)
     const existing = existingIdx >= 0 ? repairs[existingIdx] : null
+    // An id that already exists is an update: the same row-level rule as
+    // PATCH /api/repairs/[id] applies, so a technician cannot take over (or
+    // reset) another technician's job by posting its id.
+    if (existing && !canAccessRecord(user.role, 'repair', existing as any, user.id, { actsAsTechnician: user.actsAsTechnician === true })) {
+      return NextResponse.json({ error: 'You do not have access to this repair' }, { status: 403 })
+    }
     const existingByRef = repairs.find(r => r.ref.toLowerCase() === requestedRef.toLowerCase())
     const submittedSerial = (
       'serialNumber' in body ? String(body.serialNumber ?? '') : String(existing?.serialNumber ?? '')
@@ -386,6 +392,24 @@ export async function POST(request: NextRequest) {
       ref,
       previousRefs,
       intakeDate,
+      // A repeat POST for a job that already exists keeps who booked it and
+      // the work done on it (status, costs, parts, QC, technician).
+      ...(existing
+        ? {
+            createdByUserId: existing.createdByUserId ?? repair.createdByUserId,
+            createdBy: existing.createdBy ?? repair.createdBy,
+            bookedByName: existing.bookedByName ?? repair.bookedByName,
+            createdDate: existing.createdDate ?? repair.createdDate,
+            status: existing.status ?? repair.status,
+            partsUsed: existing.partsUsed ?? repair.partsUsed,
+            laborCost: existing.laborCost ?? repair.laborCost,
+            logisticsCost: existing.logisticsCost ?? repair.logisticsCost,
+            total: existing.total ?? repair.total,
+            qcItems: existing.qcItems ?? repair.qcItems,
+            technicianName: existing.technicianName ?? repair.technicianName,
+            assignedTechnicianId: existing.assignedTechnicianId,
+          }
+        : {}),
       // Thin creates (no repairPath) must not wipe intake applied by a parallel
       // updateRepair / store sync before this POST finished.
       ...(!incomingHasPath && existing

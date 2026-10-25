@@ -396,12 +396,28 @@ export function filterStoreValueForRole(
  * would silently delete every record outside their view. Incoming rows are
  * upserted by id; existing rows they can't see are preserved.
  */
-export function mergeFilteredStoreWrite(current: unknown, incoming: unknown): StoreRow[] {
+export function mergeFilteredStoreWrite(
+  current: unknown,
+  incoming: unknown,
+  /** The writer and key: a stored row outside the writer's read slice is kept as stored. */
+  scope?: { user: StoreReadUser | null | undefined; key: string },
+): StoreRow[] {
   const currentArr: StoreRow[] = Array.isArray(current) ? current : []
   const incomingArr: StoreRow[] = Array.isArray(incoming) ? incoming : []
   const byId = new Map<unknown, StoreRow>()
   for (const row of currentArr) if (row && row.id != null) byId.set(row.id, row)
-  for (const row of incomingArr) if (row && row.id != null) byId.set(row.id, row)
+  // A partial-view writer may change only rows it can read — the same rule
+  // as the row-level API checks (canAccessRecord). Without this, a
+  // technician could overwrite another technician's repair (and assign it
+  // to themselves) or a user could rewrite a colleague's expense claim.
+  const visible = (row: StoreRow) =>
+    !scope || (filterStoreValueForRole(scope.user, scope.key, [row]) as StoreRow[]).length === 1
+  for (const row of incomingArr) {
+    if (!row || row.id == null) continue
+    const stored = byId.get(row.id)
+    if (stored && !visible(stored)) continue
+    byId.set(row.id, row)
+  }
   return [...byId.values()]
 }
 

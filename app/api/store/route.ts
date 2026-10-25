@@ -371,7 +371,7 @@ export async function POST(request: Request) {
     for (const key of mergeKeys) {
       let incoming: unknown
       try { incoming = JSON.parse(entries[key]) } catch { continue }
-      entries[key] = JSON.stringify(mergeFilteredStoreWrite(serverState[key], incoming))
+      entries[key] = JSON.stringify(mergeFilteredStoreWrite(serverState[key], incoming, { user: session.user, key }))
     }
   }
 

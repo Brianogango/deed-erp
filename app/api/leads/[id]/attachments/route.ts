@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { readLeadAttachmentFile, type LeadAttachmentMeta } from '@/lib/crm/lead-attachments'
+import { canSeeLead } from '@/lib/crm/lead-access'
 
 /**
  * GET /api/leads/[id]/attachments
@@ -11,12 +12,14 @@ import { readLeadAttachmentFile, type LeadAttachmentMeta } from '@/lib/crm/lead-
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const lead = await prisma.lead.findUnique({
       where: { id: resolvedParams.id },
-      select: { id: true, emailAttachments: true },
+      select: { id: true, ownerId: true, emailAttachments: true },
     })
-    if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    // Same rule as GET /api/leads/[id]: CRM roles only, reps their own or
+    // unassigned leads.
+    if (!lead || !canSeeLead(session.user.role, session.user.id, lead)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const attachments = Array.isArray(lead.emailAttachments)
       ? (lead.emailAttachments as LeadAttachmentMeta[])
@@ -36,7 +39,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': meta.contentType || 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${meta.name.replace(/"/g, '')}"`,
+        'Content-Disposition': `attachment; filename="${meta.name.replace(/["\r\n]/g, '')}"`,
+        'X-Content-Type-Options': 'nosniff',
       },
     })
   })

@@ -6,6 +6,7 @@ import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
 import { storedRoleNames } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { publishNotificationEvent } from '@/lib/notifications/service'
+import { canAssignLead, canEditLead, leadListWhere, leadRole } from '@/lib/crm/lead-access'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'sales']
 
@@ -14,7 +15,12 @@ const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'sales']
  */
 export async function GET(req: NextRequest) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
+    // CRM roles only (as GET /api/leads); reps see their own and unassigned.
+    const role = leadRole(session.user.role)
+    if (!role) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const repScope = leadListWhere(session.user.role, session.user.id)
+    const isRep = role === 'sales_rep'
 
     const status = (req.nextUrl.searchParams.get('status') || 'REVIEW_REQUIRED').trim()
     const limit = Math.min(100, Math.max(1, Number(req.nextUrl.searchParams.get('limit') || 50) || 50))
@@ -22,7 +28,10 @@ export async function GET(req: NextRequest) {
     let inbound: unknown[] = []
     try {
       inbound = await prisma.salesInboundEmail.findMany({
-        where: status === 'all' ? undefined : { processingStatus: status },
+        where: {
+          ...(status === 'all' ? {} : { processingStatus: status }),
+          ...(isRep ? { OR: [{ leadId: null }, { lead: { ownerId: null } }, { lead: { ownerId: session.user.id } }] } : {}),
+        },
         orderBy: { createdAt: 'desc' },
         take: limit,
         include: {
@@ -52,6 +61,7 @@ export async function GET(req: NextRequest) {
           { source: 'inbound_email' },
           { inboundMessageId: { not: null } },
         ],
+        ...(isRep ? { AND: [repScope] } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -93,7 +103,12 @@ export async function POST(req: NextRequest) {
     }
 
     const lead = await prisma.lead.findUnique({ where: { id: body.leadId } })
-    if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
+    // Same rules as PUT /api/leads/[id]: only a lead the caller may edit, and
+    // this queue acts only on leads still waiting for review.
+    if (!lead || !canEditLead(session.role, session.id, lead)) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
+    if (lead.stage !== 'needs_review') {
+      return NextResponse.json({ error: 'This lead has already been reviewed' }, { status: 409 })
+    }
 
     if (body.action === 'reject' || body.action === 'non_sales') {
       const updated = await prisma.lead.update({
@@ -117,7 +132,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === 'accept') {
-      let ownerId = body.ownerId || lead.ownerId || null
+      // Only managers choose the owner; a rep can only pick the lead up.
+      const requestedOwner = body.ownerId && (canAssignLead(session.role) || body.ownerId === session.id) ? body.ownerId : null
+      let ownerId = requestedOwner || lead.ownerId || null
       if (!ownerId) {
         const reps = await prisma.user.findMany({
           where: { isActive: true, role: { in: storedRoleNames(LEAD_ASSIGNEE_ROLES) as any } },

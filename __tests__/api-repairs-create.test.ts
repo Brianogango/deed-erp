@@ -205,3 +205,30 @@ describe('POST /api/repairs — intake fields', () => {
     expect(saved[0].previousRefs).toEqual(['REP-227532'])
   })
 })
+
+describe('POST /api/repairs — an existing id is an update (security audit)', () => {
+  const other = {
+    id: 'rep_other', ref: 'REP/2099/0009', customerName: 'Owner', customerPhone: '0711', productName: 'Dell',
+    status: 'in_repair', laborCost: 4000, total: 9000, partsUsed: [{ id: 'p1' }], qcItems: [],
+    technicianName: 'Tech B', assignedTechnicianId: 'tech-b', createdByUserId: 'lead-1', createdDate: '2099-01-01T00:00:00.000Z',
+  }
+
+  it('a technician cannot take over another technician\'s job by posting its id', async () => {
+    mockGetServerSession.mockResolvedValue({ user: { id: 'tech-a', role: 'technician', name: 'Tech A' } })
+    mockLoadAppState.mockResolvedValue({ deed_repairs_v2: [structuredClone(other)] })
+    const res = await POST(makeReq({ id: 'rep_other', ref: 'REP/2099/0009', customerName: 'Mallory', productName: 'Dell' }))
+    expect(res.status).toBe(403)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('a permitted re-post keeps the owner and the work done', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_repairs_v2: [structuredClone(other)] })
+    const res = await POST(makeReq({ id: 'rep_other', ref: 'REP/2099/0009', customerName: 'Owner', productName: 'Dell' }))
+    expect(res.status).toBe(201)
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_repairs_v2)
+    expect(saved[0]).toMatchObject({
+      id: 'rep_other', createdByUserId: 'lead-1', status: 'in_repair', laborCost: 4000, total: 9000,
+      technicianName: 'Tech B', assignedTechnicianId: 'tech-b',
+    })
+  })
+})
