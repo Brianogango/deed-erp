@@ -566,6 +566,19 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       }
     }
 
+    // A bill leaving for cancelled / voided gives its quantities back to the
+    // purchase order, so the order no longer counts them as billed.
+    const nowCancelled = (invoice.status === 'cancelled' || invoice.status === 'voided')
+      && before.status !== 'cancelled' && before.status !== 'voided'
+    if (nowCancelled) {
+      try {
+        const { releaseCancelledBillQty } = await import('@/lib/purchase/release-cancelled-bill.server')
+        await releaseCancelledBillQty(invoice.id)
+      } catch (err) {
+        console.error('[invoice] releasing billed quantities on cancel failed:', err)
+      }
+    }
+
     // Keep the deed_invoices blob aligned with Prisma after Confirm / Reset
     // so a later store hydrate does not resurrect draft vs posted.
     if (leftPosted || becamePosted) {
@@ -650,6 +663,13 @@ export async function DELETE(_: Request, { params }: { params: RouteParams<{ id:
       where: { id },
       data: { status: 'voided' as any },
     })
+
+    try {
+      const { releaseCancelledBillQty } = await import('@/lib/purchase/release-cancelled-bill.server')
+      await releaseCancelledBillQty(invoice.id)
+    } catch (err) {
+      console.error('[invoice] releasing billed quantities on void failed:', err)
+    }
 
     if (Number(invoice.amountPaid) <= 0) {
       try {

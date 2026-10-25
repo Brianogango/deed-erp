@@ -61,6 +61,44 @@ interface SalesReturnAllocation {
   requiresCreditNote: boolean
 }
 
+/**
+ * Units on each sale order line invoiced on a customer invoice still in force
+ * (not cancelled or voided, not a down payment or credit note). The order's
+ * stored qtyInvoiced only ever goes up, so after an invoice is cancelled a
+ * customer return still asked for a credit note against an invoice nobody
+ * owes. The lower of the stored count and this live count is what is really
+ * invoiced. Invoice lines are matched to order lines by product, in order.
+ */
+export function liveQtyInvoicedBySoLine(
+  saleOrderId: string,
+  soLines: ReadonlyArray<{ id: string; productId?: string | null; qty?: unknown; qtyInvoiced?: unknown }>,
+  invoices: ReadonlyArray<{ saleOrderId?: string | null; type?: string; status?: string; total?: number; isDownPayment?: boolean; lines?: Array<{ productId?: string | null; qty?: unknown; lineType?: string }> }>,
+): Map<string, number> {
+  const live = invoices.filter(inv =>
+    inv.saleOrderId === saleOrderId
+    && inv.type === 'customer_invoice'
+    && !inv.isDownPayment
+    && Number(inv.total) > 0
+    && !['cancelled', 'canceled', 'voided', 'void'].includes(String(inv.status)),
+  )
+  const byProduct = new Map<string, number>()
+  for (const inv of live) {
+    for (const line of inv.lines ?? []) {
+      if (line.lineType === 'section' || !line.productId) continue
+      byProduct.set(String(line.productId), (byProduct.get(String(line.productId)) ?? 0) + Math.max(0, Math.floor(Number(line.qty) || 0)))
+    }
+  }
+  const out = new Map<string, number>()
+  for (const l of soLines) {
+    const key = String(l.productId ?? '')
+    const available = byProduct.get(key) ?? 0
+    const fromLive = Math.min(available, Math.max(0, Math.floor(Number(l.qty) || 0)))
+    byProduct.set(key, available - fromLive)
+    out.set(l.id, Math.min(Math.max(0, Math.floor(Number(l.qtyInvoiced) || 0)), fromLive))
+  }
+  return out
+}
+
 export function allocateSalesReturn(args: {
   soLines: SalesReturnSoLine[]
   returnLines: SalesReturnLineInput[]

@@ -83,7 +83,15 @@ import {
 } from '@/lib/sales-approvals'
 import { actorSatisfiesApprovalRoles, isSalesConfirmGatingApproval } from '@/lib/sales-approval-rules'
 import { computeSaleOrderApprovalTriggers } from '@/lib/sales/margin-approval'
-import { allocateSalesReturn } from '@/lib/sales/return-allocation'
+import { allocateSalesReturn, liveQtyInvoicedBySoLine } from '@/lib/sales/return-allocation'
+
+/**
+ * Roles the server sends customer invoices to (see invoiceSliceForRole). For
+ * anyone else the screen holds no customer invoices, so counting live ones
+ * would read as "none" and drop a credit note that is owed.
+ */
+const seesCustomerInvoices = (user: { role?: string } | null | undefined) =>
+  ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer'].includes(normalizeClientRole(String(user?.role ?? '')))
 import {
   findReleasedOrcsForReturn,
   pickPostedInvoiceForReturn,
@@ -21441,6 +21449,12 @@ const storeCtx: AppState = {
           id: i.id,
           lines: (i.lines ?? []).map(l => ({ id: l.id, productId: l.productId, qty: Number(l.qty) || 0 })),
         }))
+      // Invoiced means invoiced on an invoice still in force: a cancelled
+      // invoice must not turn the return into a credit note obligation.
+      const liveInvoiced = so && seesCustomerInvoices(currentUser())
+        ? liveQtyInvoicedBySoLine(ro.saleOrderId, (so.lines ?? []).filter((l: any) => l.lineType !== 'section').map((l: any) => ({ ...l, id: String(l.id) })), invRef.current)
+        // Roles that are not sent customer invoices keep the stored count.
+        : new Map<string, number>()
       const allocation = so
         ? allocateSalesReturn({
             soLines: (so.lines ?? [])
@@ -21451,7 +21465,7 @@ const storeCtx: AppState = {
                 productName: l.productName,
                 qty: Number(l.qty) || 0,
                 qtyDelivered: Number(l.qtyDelivered) || 0,
-                qtyInvoiced: Number(l.qtyInvoiced) || 0,
+                qtyInvoiced: liveInvoiced.get(String(l.id)) ?? (Number(l.qtyInvoiced) || 0),
                 unitPrice: Number(l.unitPrice) || 0,
                 taxRate: Number(l.taxRate) || 0,
               })),
@@ -21662,6 +21676,9 @@ const storeCtx: AppState = {
       let creditNoteRef: string | null = null
       if (resolution === 'credit_note') {
         const so = soRef.current.find(s => s.id === rma.saleOrderId)
+        const liveInvoiced = so && seesCustomerInvoices(user)
+          ? liveQtyInvoicedBySoLine(rma.saleOrderId, (so.lines ?? []).filter((l: any) => l.lineType !== 'section').map((l: any) => ({ ...l, id: String(l.id) })), invRef.current)
+          : new Map<string, number>()
         const allocation = so
           ? allocateSalesReturn({
               soLines: (so.lines ?? [])
@@ -21676,7 +21693,7 @@ const storeCtx: AppState = {
                   qtyDelivered: (Number(l.qtyDelivered) || 0) + (rma.lines
                     .filter(rl => rl.productId === l.productId)
                     .reduce((s, rl) => s + (Number(rl.qty) || 0), 0)),
-                  qtyInvoiced: Number(l.qtyInvoiced) || 0,
+                  qtyInvoiced: liveInvoiced.get(String(l.id)) ?? (Number(l.qtyInvoiced) || 0),
                   unitPrice: Number(l.unitPrice) || 0,
                   taxRate: Number(l.taxRate) || 0,
                 })),
