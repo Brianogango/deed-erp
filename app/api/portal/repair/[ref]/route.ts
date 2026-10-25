@@ -11,18 +11,30 @@ function publicQcReportUrl(ref: string, id?: string) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/qc-report/${encodeURIComponent(id || 'latest')}`
 }
 
+function publicDiagnosisReportUrl(ref: string, id?: string) {
+  return `/api/portal/repair/${encodeURIComponent(ref)}/diagnosis-report/${encodeURIComponent(id || 'latest')}`
+}
+
+// Files never travel inline in this public status response: photos and
+// reports are fetched from their own endpoints, which check the customer's
+// phone number the way the invoice and receipt PDFs do.
 function stripInlinePhotoPayloads(repair: any) {
   const next = { ...repair }
   if (Array.isArray(repair?.issuePhotos)) {
     next.issuePhotos = repair.issuePhotos.map((photo: any, index: number) => ({
       ...photo,
-      url: typeof photo?.url === 'string' && photo.url.startsWith('data:image/')
+      url: typeof photo?.url === 'string' && photo.url.startsWith('data:')
         ? publicPhotoUrl(repair.ref, index)
         : photo?.url,
     }))
   }
-  if (!next.qcReportUrl && typeof next.qcReportData === 'string' && next.qcReportData.startsWith('data:')) {
-    next.qcReportUrl = publicQcReportUrl(next.ref, next.qcReportId)
+  if (typeof next.qcReportData === 'string' && next.qcReportData) {
+    if (!next.qcReportUrl || String(next.qcReportUrl).startsWith('data:')) next.qcReportUrl = publicQcReportUrl(next.ref, next.qcReportId)
+    delete next.qcReportData
+  }
+  if (typeof next.diagnosisReportData === 'string' && next.diagnosisReportData) {
+    if (!next.diagnosisReportUrl || String(next.diagnosisReportUrl).startsWith('data:')) next.diagnosisReportUrl = publicDiagnosisReportUrl(next.ref, next.diagnosisReportId)
+    delete next.diagnosisReportData
   }
   // Mask the customer phone so it can serve as an ownership secret for
   // state-changing portal actions (quote approval, payment confirmation).

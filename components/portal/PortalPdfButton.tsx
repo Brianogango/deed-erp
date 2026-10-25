@@ -10,10 +10,12 @@ import React, { useState } from 'react'
  * first and says why it could not download.
  */
 export default function PortalPdfButton({
-  repairRef, kind, phone, label, filename, style, children,
+  repairRef, kind, href, phone, label, filename, style, children,
 }: {
   repairRef: string
-  kind: 'quote-pdf' | 'invoice-pdf' | 'receipt-pdf'
+  kind?: 'quote-pdf' | 'invoice-pdf' | 'receipt-pdf'
+  /** A portal file path from the server (QC / diagnosis report), any file type. */
+  href?: string
   phone: string
   label?: string
   filename: string
@@ -28,10 +30,12 @@ export default function PortalPdfButton({
     setError('')
     setBusy(true)
     try {
-      const url = `/api/portal/repair/${encodeURIComponent(repairRef)}/${kind}?phone=${encodeURIComponent(phone.trim())}`
+      const base = href ?? `/api/portal/repair/${encodeURIComponent(repairRef)}/${kind}`
+      const url = `${base}${base.includes('?') ? '&' : '?'}phone=${encodeURIComponent(phone.trim())}`
       const res = await fetch(url, { cache: 'no-store' })
       const type = res.headers.get('content-type') || ''
-      if (!res.ok || !type.includes('pdf')) {
+      const isFile = href ? !type.includes('application/json') : type.includes('pdf')
+      if (!res.ok || !isFile) {
         const payload = await res.json().catch(() => null) as { error?: string } | null
         let message = payload?.error || 'Could not download the document. Please try again.'
         if (res.status === 403 && !phone.trim()) message = 'Enter the phone number registered on this repair, then tap download again.'
@@ -40,14 +44,14 @@ export default function PortalPdfButton({
         return
       }
       const blob = await res.blob()
-      const href = URL.createObjectURL(blob)
+      const objectUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = href
+      a.href = objectUrl
       a.download = filename
       document.body.appendChild(a)
       a.click()
       a.remove()
-      setTimeout(() => URL.revokeObjectURL(href), 10_000)
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000)
     } catch {
       setError('No connection. Check your internet and try again.')
     } finally {
@@ -58,7 +62,7 @@ export default function PortalPdfButton({
   return (
     <>
       <button type="button" onClick={download} disabled={busy} style={{ cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.75 : 1, width: '100%', ...style }}>
-        {busy ? 'Preparing PDF…' : (children ?? label)}
+        {busy ? (href ? 'Downloading…' : 'Preparing PDF…') : (children ?? label)}
       </button>
       {error && (
         <div role="alert" style={{ marginTop: 8, padding: '8px 12px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', fontSize: 12, color: '#F87171', textAlign: 'center' }}>

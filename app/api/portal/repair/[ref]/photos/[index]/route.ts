@@ -3,8 +3,13 @@ import sharp from 'sharp'
 import { loadAppState } from '@/lib/server-store'
 import type { RepairOrder } from '@/lib/repair-types'
 import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
+import { repairAttachmentReadAllowed } from '@/lib/repair-attachment-access'
 
 type RepairPhoto = { url?: string; name?: string; date?: string; uploaded_at?: string }
+
+// Only raster images are served; a stored data URL of any other type (HTML,
+// SVG) would otherwise run as a page on this origin.
+const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/avif'])
 
 const MAX_DISPLAY_WIDTH = 1400
 const DISPLAY_JPEG_QUALITY = 78
@@ -72,6 +77,11 @@ async function handleGET(
     return NextResponse.json({ error: 'Invalid photo reference' }, { status: 400 })
   }
 
+  // Same check as the invoice and receipt PDFs: a staff session, or the
+  // phone number on the repair (?phone=). Repair refs are sequential.
+  if (!await repairAttachmentReadAllowed(req, decodeURIComponent(resolvedParams.ref))) {
+    return NextResponse.json({ error: 'Enter the phone number on this repair to view it.' }, { status: 403 })
+  }
   try {
     const photos = await loadPhotos(resolvedParams.ref)
     const photo = index >= 0 ? photos[index] : photos.find(p => (p as any).id === rawKey)
@@ -83,7 +93,7 @@ async function handleGET(
     }
 
     const parsed = parseDataUrl(url)
-    if (!parsed) return NextResponse.json({ error: 'Unsupported photo format' }, { status: 415 })
+    if (!parsed || !PHOTO_TYPES.has(parsed.contentType.toLowerCase())) return NextResponse.json({ error: 'Unsupported photo format' }, { status: 415 })
 
     const original = req.nextUrl.searchParams.get('original') === '1'
     const payload = original ? parsed : await optimizeForDisplay(parsed.buffer, parsed.contentType)
@@ -93,7 +103,9 @@ async function handleGET(
       status: 200,
       headers: {
         'Content-Type': payload.contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        // Private: the response depends on who is asking.
+        'Cache-Control': 'private, max-age=86400',
+        'X-Content-Type-Options': 'nosniff',
         'Content-Length': String(payload.buffer.length),
         'Vary': 'Accept',
       },

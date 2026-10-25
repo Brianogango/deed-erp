@@ -1,6 +1,7 @@
 'use client'
 
 import PortalPdfButton from '@/components/portal/PortalPdfButton'
+import PortalRepairFile from '@/components/portal/PortalRepairFile'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import type { PortalRepair } from '@/lib/portal-repairs'
@@ -155,6 +156,13 @@ export default function RepairPortalPage() {
 
   const [company, setCompany] = useState({ phone: '', email: 'support@deed.co.ke', name: 'Deed Technologies', mpesaPaybill: '880100', mpesaAccount: '468778' })
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  // Photos served by the portal need the phone on the repair (?phone=).
+  const [photoPhone, setPhotoPhone] = useState('')
+  const [photoError, setPhotoError] = useState('')
+  const photoSrc = (url: string) => url.startsWith('/api/portal/')
+    ? `${url}${url.includes('?') ? '&' : '?'}phone=${encodeURIComponent(photoPhone)}`
+    : url
+  const photosLocked = !photoPhone && (repair?.issuePhotos ?? []).some(photo => String(photo.url || '').startsWith('/api/portal/'))
 
   async function load() {
     try {
@@ -440,15 +448,15 @@ export default function RepairPortalPage() {
                 </div>
               )}
 
-              {(repair.diagnosisReportUrl || repair.diagnosisReportData) && repair.diagnosisReportName && (
-                <a href={repair.diagnosisReportUrl || repair.diagnosisReportData} download={repair.diagnosisReportName}
+              {repair.diagnosisReportUrl && repair.diagnosisReportName && (
+                <PortalRepairFile repairRef={ref} url={repair.diagnosisReportUrl || ''} filename={repair.diagnosisReportName} phone={verifyPhone} onPhoneChange={setVerifyPhone}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '10px 14px', borderRadius: 10, background: 'rgba(0,176,215,0.08)', border: '1px solid rgba(0,176,215,0.2)', cursor: 'pointer', textDecoration: 'none' }}>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 11, color: '#7DD3FC', fontWeight: 700 }}>Diagnosis Report</p>
                     <p style={{ fontSize: 10, color: '#4B5563' }}>{repair.diagnosisReportName}</p>
                   </div>
                   <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 700 }}>Download ↓</span>
-                </a>
+                </PortalRepairFile>
               )}
             </div>
           </Card>
@@ -656,16 +664,30 @@ export default function RepairPortalPage() {
         <Card accent="#7C3AED" delay={250}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>Device Photos</SectionLabel>
-              {(repair.issuePhotos?.length ?? 0) > 0 ? (
+              {(repair.issuePhotos?.length ?? 0) > 0 && photosLocked ? (
+                <form onSubmit={e => { e.preventDefault(); setPhotoError(''); setPhotoPhone(verifyPhone.trim()) }}>
+                  <p style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 10, lineHeight: 1.5 }}>
+                    {repair.issuePhotos!.length} photo{repair.issuePhotos!.length !== 1 ? 's' : ''} on file. Enter the phone number on this repair to view them.
+                  </p>
+                  <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="Phone number on this repair" inputMode="tel"
+                    style={{ width: '100%', marginBottom: 10, background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none' }} />
+                  <button type="submit" disabled={!verifyPhone.trim()}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.3)', color: '#E5E7EB', fontSize: 12, fontWeight: 800, cursor: verifyPhone.trim() ? 'pointer' : 'not-allowed', opacity: verifyPhone.trim() ? 1 : 0.6 }}>
+                    Show photos
+                  </button>
+                  {photoError && <p role="alert" style={{ marginTop: 8, fontSize: 12, color: '#F87171', textAlign: 'center' }}>{photoError}</p>}
+                </form>
+              ) : (repair.issuePhotos?.length ?? 0) > 0 ? (
                 <>
                   <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 14, lineHeight: 1.5 }}>
                     Photos of your device taken by our team. Tap any photo to view full size.
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                     {repair.issuePhotos!.map((photo, i) => (
-                      <button key={i} onClick={() => setLightboxSrc(photo.url)}
+                      <button key={i} onClick={() => setLightboxSrc(photoSrc(photo.url))}
                         style={{ all: 'unset', cursor: 'pointer', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', display: 'block', position: 'relative', border: '1px solid rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.08)' }}>
-                        <img src={photo.url} alt={photo.name}
+                        <img src={photoSrc(photo.url)} alt={photo.name}
+                          onError={() => { if (photoPhone && i === 0) { setPhotoPhone(''); setPhotoError('That phone number does not match this repair. Use the number you gave when dropping off the device.') } }}
                           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.25s' }}
                           onMouseEnter={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.05)' }}
                           onMouseLeave={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)' }}
@@ -752,11 +774,11 @@ export default function RepairPortalPage() {
         </Card>
 
         {/* ── QC Report ── */}
-        {(repair.qcReportUrl || repair.qcReportData) && repair.qcReportName && (
+        {repair.qcReportUrl && repair.qcReportName && (
           <Card accent="#10B981" delay={500}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>Quality Assurance Report</SectionLabel>
-              <a href={repair.qcReportUrl || repair.qcReportData} download={repair.qcReportName}
+              <PortalRepairFile repairRef={ref} url={repair.qcReportUrl || ''} filename={repair.qcReportName} phone={verifyPhone} onPhoneChange={setVerifyPhone}
                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', cursor: 'pointer', textDecoration: 'none' }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✅</div>
                 <div style={{ flex: 1 }}>
@@ -765,7 +787,7 @@ export default function RepairPortalPage() {
                   {repair.qcReportUploadedAt && <p style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Uploaded {new Date(repair.qcReportUploadedAt).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>}
                 </div>
                 <span style={{ fontSize: 12, color: '#10B981', fontWeight: 700, whiteSpace: 'nowrap' }}>Download ↓</span>
-              </a>
+              </PortalRepairFile>
             </div>
           </Card>
         )}

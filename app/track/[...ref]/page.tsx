@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import type { PortalRepair, PortalRepairStatus, RepairMessage } from '@/lib/portal-repairs'
 import { PortalPageSkeleton } from '@/components/ui'
 import { DiagnosisChargeNotice } from '@/components/portal/DiagnosisChargeNotice'
+import PortalRepairFile from '@/components/portal/PortalRepairFile'
 import { startVisiblePoll } from '@/lib/visible-poll'
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -69,6 +70,8 @@ export default function RepairTrackDetail() {
   const ref = Array.isArray(params.ref) ? params.ref.join('/') : decodeURIComponent(params.ref as string)
 
   const [repair, setRepair] = useState<PortalRepair | null>(null)
+  // Phone on the repair, for report downloads.
+  const [docPhone, setDocPhone] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -495,7 +498,7 @@ export default function RepairTrackDetail() {
         )}
 
         {/* ── Diagnosis Report download (customer-facing) ──────────────── */}
-        {(repair.diagnosisReportUrl || repair.diagnosisReportData) && (
+        {repair.diagnosisReportUrl && (
           <div className="rounded-2xl p-5" style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.2)' }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: '#FCD34D', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               🔍 Diagnosis Report
@@ -503,23 +506,19 @@ export default function RepairTrackDetail() {
             <p style={{ fontSize: 12, color: '#9095B0', marginBottom: 14 }}>
               Our technician has completed a full diagnosis of your device. You can download the detailed report below.
             </p>
-            <a
-              href={repair.diagnosisReportUrl || repair.diagnosisReportData}
-              download={repair.diagnosisReportName ?? 'diagnosis-report.pdf'}
-              style={{
+            <PortalRepairFile repairRef={ref} url={repair.diagnosisReportUrl || ''} filename={repair.diagnosisReportName ?? 'diagnosis-report.pdf'} phone={docPhone} onPhoneChange={setDocPhone} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 padding: '11px 0', borderRadius: 10, textDecoration: 'none',
                 background: 'rgba(245,158,11,0.12)', border: '1.5px solid rgba(245,158,11,0.35)',
                 color: '#FCD34D', fontWeight: 700, fontSize: 13,
-              }}
-            >
+              }}>
               ⬇ Download Diagnosis Report
-            </a>
+            </PortalRepairFile>
           </div>
         )}
 
         {/* ── QC Report download (customer-facing) ────────────────────── */}
-        {(repair.qcReportUrl || repair.qcReportData) && (
+        {repair.qcReportUrl && (
           <div className="rounded-2xl p-5" style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.2)' }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: '#6EE7B7', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               📋 Quality Control Report
@@ -527,18 +526,14 @@ export default function RepairTrackDetail() {
             <p style={{ fontSize: 12, color: '#9095B0', marginBottom: 14 }}>
               Your device has passed our quality control process. You can download the full QC report below.
             </p>
-            <a
-              href={repair.qcReportUrl || repair.qcReportData}
-              download={repair.qcReportName ?? 'qc-report.pdf'}
-              style={{
+            <PortalRepairFile repairRef={ref} url={repair.qcReportUrl || ''} filename={repair.qcReportName ?? 'qc-report.pdf'} phone={docPhone} onPhoneChange={setDocPhone} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 padding: '11px 0', borderRadius: 10, textDecoration: 'none',
                 background: 'rgba(16,185,129,0.12)', border: '1.5px solid rgba(16,185,129,0.35)',
                 color: '#6EE7B7', fontWeight: 700, fontSize: 13,
-              }}
-            >
+              }}>
               ⬇ Download QC Report (PDF)
-            </a>
+            </PortalRepairFile>
           </div>
         )}
 

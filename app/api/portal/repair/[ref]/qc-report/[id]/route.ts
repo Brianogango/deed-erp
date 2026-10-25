@@ -4,6 +4,7 @@ import { readFile } from 'fs/promises'
 import { loadAppState } from '@/lib/server-store'
 import type { RepairOrder } from '@/lib/repair-types'
 import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
+import { repairAttachmentReadAllowed } from '@/lib/repair-attachment-access'
 
 type QcReportMeta = {
   id: string
@@ -29,6 +30,14 @@ function safeFileName(name?: string) {
   return (name || 'qc-report').replace(/[\r\n"]/g, '_')
 }
 
+// Reports are served as downloads; only these types keep their own type,
+// anything else (an uploaded .html, .svg, ...) goes out as a plain download.
+const REPORT_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+function reportContentType(type?: string) {
+  const t = String(type || '').toLowerCase().split(';')[0].trim()
+  return REPORT_TYPES.has(t) ? t : 'application/octet-stream'
+}
+
 async function loadReports(ref: string): Promise<QcReportMeta[]> {
   const decoded = decodeURIComponent(ref)
   const key = stateKey(decoded)
@@ -44,8 +53,13 @@ async function loadReports(ref: string): Promise<QcReportMeta[]> {
   return []
 }
 
-async function handleGET(_req: NextRequest, { params }: { params: Promise<{ ref: string; id: string }> }) {
+async function handleGET(req: NextRequest, { params }: { params: Promise<{ ref: string; id: string }> }) {
   const resolvedParams = await params
+  // Same check as the invoice and receipt PDFs: a staff session, or the
+  // phone number on the repair (?phone=). Repair refs are sequential.
+  if (!await repairAttachmentReadAllowed(req, decodeURIComponent(resolvedParams.ref))) {
+    return NextResponse.json({ error: 'Enter the phone number on this repair to view it.' }, { status: 403 })
+  }
   try {
     const reports = await loadReports(resolvedParams.ref)
     const report = resolvedParams.id === 'latest' ? reports[reports.length - 1] : reports.find(r => r.id === resolvedParams.id)
@@ -60,7 +74,8 @@ async function handleGET(_req: NextRequest, { params }: { params: Promise<{ ref:
       return new NextResponse(body as BodyInit, {
         status: 200,
         headers: {
-          'Content-Type': report.contentType || 'application/octet-stream',
+          'Content-Type': reportContentType(report.contentType),
+          'X-Content-Type-Options': 'nosniff',
           'Content-Disposition': `attachment; filename="${safeFileName(report.name)}"`,
           'Content-Length': String(buffer.length),
           'Cache-Control': 'private, max-age=3600',
@@ -80,7 +95,8 @@ async function handleGET(_req: NextRequest, { params }: { params: Promise<{ ref:
     return new NextResponse(body as BodyInit, {
       status: 200,
       headers: {
-        'Content-Type': parsed.contentType,
+        'Content-Type': reportContentType(parsed.contentType),
+        'X-Content-Type-Options': 'nosniff',
         'Content-Disposition': `attachment; filename="${safeFileName(repair?.qcReportName)}"`,
         'Content-Length': String(parsed.buffer.length),
         'Cache-Control': 'private, max-age=3600',

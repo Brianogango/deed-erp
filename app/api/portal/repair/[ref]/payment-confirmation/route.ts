@@ -69,6 +69,7 @@ async function handlePOST(req: NextRequest, { params }: { params: Promise<{ ref:
   // deed_repairs_v2 bloats every page load, sync, and localStorage write and
   // can push the repairs key past the SSE size cap, stopping live sync.
   let imageUrl: string | undefined
+  let proofDataUrl: string | undefined
   if (screenshot instanceof File && screenshot.size > 0) {
     if (screenshot.size > 5 * 1024 * 1024) return NextResponse.json({ error: 'Screenshot must be 5MB or smaller.' }, { status: 400 })
     const buffer = await screenshot.arrayBuffer()
@@ -78,9 +79,7 @@ async function handlePOST(req: NextRequest, { params }: { params: Promise<{ ref:
     }
     // Never trust the browser-supplied MIME header; store the type detected
     // from file signatures so HTML/SVG/polyglot uploads cannot masquerade as screenshots.
-    const dataUrl = dataUrlFor(detectedMime, buffer)
-    await saveStoreKeys({ [paymentProofKey(ref)]: JSON.stringify({ dataUrl, uploadedAt: new Date().toISOString() }) })
-    imageUrl = `/api/portal/repair/${encodeURIComponent(ref)}/payment-proof`
+    proofDataUrl = dataUrlFor(detectedMime, buffer)
   }
 
   const appState = await loadAppState(['deed_systemSettings', 'deed_repairs_v2', 'deed_invoices'])
@@ -90,6 +89,12 @@ async function handlePOST(req: NextRequest, { params }: { params: Promise<{ ref:
   const settings = appState['deed_systemSettings'] as { secPortalRequirePhoneVerification?: boolean } | undefined
   if (isPortalPhoneVerificationRequired(settings) && !phoneMatches(String(form.get('verifyPhone') ?? '').slice(0, 80), repair.customerPhone)) {
     return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
+  }
+  // Only after the phone check: an unverified caller must not be able to
+  // replace a customer's payment proof.
+  if (proofDataUrl) {
+    await saveStoreKeys({ [paymentProofKey(ref)]: JSON.stringify({ dataUrl: proofDataUrl, uploadedAt: new Date().toISOString() }) })
+    imageUrl = `/api/portal/repair/${encodeURIComponent(ref)}/payment-proof`
   }
   const repairs = (appState['deed_repairs_v2'] as any[]) || []
   const resolvedRepair = findRepairByPortalRef(repairs, ref)
