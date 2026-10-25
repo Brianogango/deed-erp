@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import {
   CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
-  CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
+  CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite, redactStoreValueForUser,
 } from '@/lib/auth/authorization'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { keepReversedPaymentsOff } from '@/lib/accounting/payment-reversal'
@@ -43,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 
   const state = await loadAppState([key])
-  const value = filterStoreValueForRole(session.user, key, state[key] ?? null)
+  const value = redactStoreValueForUser(session.user, key, filterStoreValueForRole(session.user, key, state[key] ?? null))
 
   return NextResponse.json({ key, value })
 }

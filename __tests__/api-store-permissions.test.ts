@@ -755,3 +755,45 @@ describe('POST /api/store — partial-view writes merge instead of replace', () 
     expect(saved.map((o: { id: string }) => o.id).sort()).toEqual(['a', 'b'])
   })
 })
+
+describe('GET /api/store — HR, finance and rider secrets (security audit)', () => {
+  const getReq = (keys: string) => new NR(`http://localhost/api/store?keys=${keys}`, { method: 'GET' })
+  const riders = [{ id: 'rd1', name: 'Rider', phone: '0700', idNumber: '12345678', portalToken: 'secret-token' }]
+
+  it('hides contracts, loans and the audit timeline from a technician', async () => {
+    mockGetSession.mockResolvedValue(technicianSession)
+    mockLoadAppState.mockResolvedValue({
+      deed_contracts: [{ id: 'c1', salary: 90000 }], deed_candidates: [{ id: 'k1' }],
+      deed_loans: [{ id: 'l1' }], deed_audit_timeline_v1: [{ id: 'a1' }], deed_quotes: [{ id: 'q1' }],
+    })
+    const body = await (await STORE_GET(getReq('deed_contracts,deed_candidates,deed_loans,deed_audit_timeline_v1,deed_quotes'))).json()
+    expect(body.deed_contracts).toBeUndefined()
+    expect(body.deed_candidates).toBeUndefined()
+    expect(body.deed_loans).toBeUndefined()
+    expect(body.deed_audit_timeline_v1).toBeUndefined()
+    expect(body.deed_quotes).toBeDefined()
+  })
+
+  it('never returns a rider link token; ID numbers only to rider admins', async () => {
+    mockLoadAppState.mockImplementation(async () => ({ deed_riders: riders }))
+    mockGetSession.mockResolvedValue(salesSession)
+    const sales = await (await STORE_GET(getReq('deed_riders'))).json()
+    expect(sales.deed_riders[0]).toMatchObject({ id: 'rd1', hasPortalLink: true })
+    expect(sales.deed_riders[0].portalToken).toBeUndefined()
+    expect(sales.deed_riders[0].idNumber).toBeUndefined()
+
+    mockGetSession.mockResolvedValue(directorSession)
+    const director = await (await STORE_GET(getReq('deed_riders'))).json()
+    expect(director.deed_riders[0].portalToken).toBeUndefined()
+    expect(director.deed_riders[0].idNumber).toBe('12345678')
+  })
+
+  it('GET /api/store/[key] redacts riders the same way', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_riders: riders })
+    mockGetSession.mockResolvedValue(salesSession)
+    const res = await STORE_KEY_GET(new NR('http://localhost/api/store/deed_riders'), { params: Promise.resolve({ key: 'deed_riders' }) })
+    const text = await res.text()
+    expect(text).not.toContain('secret-token')
+    expect(text).not.toContain('12345678')
+  })
+})

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import {
   CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
-  CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
+  CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite, redactStoreValueForUser,
 } from '@/lib/auth/authorization'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, getAppStateVersion, getAppStateKeyVersions } from '@/lib/server-store'
@@ -164,6 +164,7 @@ export async function GET(request: NextRequest) {
   // (repair-linked invoices for workshop roles, own expense claims, ...).
   for (const key of Object.keys(state)) {
     if (CONTENT_FILTERED_STORE_KEYS.has(key)) state[key] = filterStoreValueForRole(session.user, key, state[key]) as typeof state[string]
+    state[key] = redactStoreValueForUser(session.user, key, state[key]) as typeof state[string]
   }
   // Slim lists: finished records without their heavy, display-only fields
   // (lib/store-slim.ts). The full row comes from /api/store/record on open.

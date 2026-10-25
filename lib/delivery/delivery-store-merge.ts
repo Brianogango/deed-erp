@@ -36,8 +36,12 @@ export function mergeRidersStoreWrite(current: unknown, incoming: unknown): unkn
   const byId = new Map((current as Row[]).filter(r => r?.id).map(r => [String(r.id), r]))
   return (incoming as Row[]).map(row => {
     const server = row?.id ? byId.get(String(row.id)) : undefined
-    if (!server || row.portalToken === server.portalToken) return row
+    if (!server) return row
     const kept: Row = { ...row }
+    // Readers without rider-admin rights get rows without the ID number
+    // (redactStoreValueForUser); their saves must not erase it.
+    if (!('idNumber' in row) && server.idNumber !== undefined) kept.idNumber = server.idNumber
+    if (row.portalToken === server.portalToken) return kept
     if (server.portalToken === undefined) delete kept.portalToken
     else kept.portalToken = server.portalToken
     return kept

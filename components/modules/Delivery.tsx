@@ -1083,7 +1083,8 @@ function RidersTab() {
       const body = await res.json().catch(() => ({})) as { url?: string; pinHint?: string; error?: string }
       if (!res.ok || !body.url) { showToast(body.error || 'Could not make the link', 'error'); return }
       const token = body.url.split('/').pop()
-      if (token && token !== rider.portalToken) updateRider(rider.id, { portalToken: token })
+      // The token itself is never kept in the browser list (the store redacts it).
+      if (token && !rider.hasPortalLink) updateRider(rider.id, { hasPortalLink: true })
       const message = `Hi ${rider.name.split(/\s+/)[0]}, this is your Deed delivery link: ${body.url}\nOpen it to see your jobs and mark them done. Your PIN is the ${body.pinHint}.`
       try { await navigator.clipboard.writeText(message) } catch { window.prompt('Copy this message for the rider:', message) }
       showToast(reset ? `New link for ${rider.name} copied — the old one no longer works` : `Link for ${rider.name} copied — paste it into WhatsApp`)
@@ -1189,7 +1190,7 @@ function RidersTab() {
             onClick={() => void riderLink(rider, false)} title="Copy the rider's personal link to send on WhatsApp">
             {linkBusy === rider.id ? '…' : 'Copy link'}
           </button>
-          {rider.portalToken && (
+          {(rider.hasPortalLink || rider.portalToken) && (
             <button type="button" className="btn-outline text-[10px] px-2 py-1" disabled={linkBusy === rider.id}
               onClick={() => { if (window.confirm(`Give ${rider.name} a new link? The old link stops working.`)) void riderLink(rider, true) }}
               title="Stop the old link (lost phone, rider left) and make a new one">
@@ -1198,7 +1199,7 @@ function RidersTab() {
           )}
         </span>
       ),
-      exportValue: rider => (rider.portalToken ? 'Yes' : 'No'),
+      exportValue: rider => (rider.hasPortalLink || rider.portalToken ? 'Yes' : 'No'),
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '80px',

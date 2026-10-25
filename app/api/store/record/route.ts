@@ -6,7 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { canReadStoreKey, CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole } from '@/lib/auth/authorization'
+import { canReadStoreKey, CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, redactStoreValueForUser } from '@/lib/auth/authorization'
 import { loadAppState } from '@/lib/server-store'
 import { SLIM_RULES } from '@/lib/store-slim'
 
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const state = await loadAppState([key])
   let rows: unknown = state[key]
   if (CONTENT_FILTERED_STORE_KEYS.has(key)) rows = filterStoreValueForRole(session.user, key, rows)
+  rows = redactStoreValueForUser(session.user, key, rows)
   const row = Array.isArray(rows) ? rows.find(r => r && typeof r === 'object' && String((r as { id?: unknown }).id) === id) : undefined
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ row }, { headers: { 'Cache-Control': 'private, no-store' } })

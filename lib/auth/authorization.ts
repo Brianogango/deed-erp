@@ -119,6 +119,18 @@ const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionAction> = {
   deed_agentCommissions: 'postFinancial',
   deed_agentPayouts: 'postFinancial',
   deed_agentSettings: 'postFinancial',
+  // Salaries live on contracts; applicant and asset records are HR data.
+  deed_contracts: 'managePayroll',
+  deed_candidates: 'manageHR',
+  deed_employeeAssets: 'viewHrRecords',
+  // Server-owned keys written by role-gated routes (loans, recurring bills,
+  // sales agents, store audit/restore history) must not leak through the
+  // generic store read.
+  deed_loans: 'postFinancial',
+  deed_recurringBills: 'postFinancial',
+  deed_saleAgents: 'postFinancial',
+  deed_audit_timeline_v1: 'viewAuditLog',
+  deed_backup_restore_meta: 'viewAuditLog',
 }
 
 type StoreReadUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician'> & { permissions?: readonly string[] | null }
@@ -269,6 +281,30 @@ export const hasFullStoreContentAccess = (
   if (key === 'deed_opportunities') return role !== 'sales_rep'
   if (key === 'deed_oppActivities') return role !== 'sales_rep'
   return true
+}
+
+/**
+ * Field-level redaction applied to every store read, after key and row
+ * policies. Some collaborative keys carry secrets in a few fields:
+ * - deed_riders: portalToken is the rider's link secret (served only by the
+ *   role-gated POST /api/riders/[id]/link) and idNumber is the PIN source, so
+ *   readers get hasPortalLink instead of the token, and only directors and
+ *   admin officers (who manage riders) see ID numbers.
+ */
+export function redactStoreValueForUser(
+  user: StoreReadUser | null | undefined,
+  key: string,
+  value: unknown,
+): unknown {
+  if (key === 'deed_riders' && Array.isArray(value)) {
+    const seesIds = isRoleAllowed(user?.role, ['director', 'admin_officer'])
+    return (value as StoreRow[]).map(row => {
+      if (!row || typeof row !== 'object') return row
+      const { portalToken, idNumber, ...rest } = row as StoreRow & { portalToken?: unknown; idNumber?: unknown }
+      return { ...rest, hasPortalLink: Boolean(portalToken), ...(seesIds && idNumber !== undefined ? { idNumber } : {}) }
+    })
+  }
+  return value
 }
 
 /**

@@ -83,4 +83,9 @@ describe('office saves from an older copy', () => {
   it('keep the rider link token', () => {
     expect(mergeRidersStoreWrite([{ id: 'r1', name: 'A', portalToken: 'tok' }], [{ id: 'r1', name: 'A2' }])).toEqual([{ id: 'r1', name: 'A2', portalToken: 'tok' }])
   })
+  it('keep the ID number when the saver was not shown it', () => {
+    expect(mergeRidersStoreWrite([{ id: 'r1', name: 'A', idNumber: '12345678' }], [{ id: 'r1', name: 'A2', hasPortalLink: false }]))
+      .toEqual([{ id: 'r1', name: 'A2', hasPortalLink: false, idNumber: '12345678' }])
+    expect(mergeRidersStoreWrite([{ id: 'r1', idNumber: '1' }], [{ id: 'r1', idNumber: '2' }])).toEqual([{ id: 'r1', idNumber: '2' }])
+  })
 })

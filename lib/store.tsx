@@ -1615,6 +1615,8 @@ export interface Rider {
   createdAt: string
   /** Secret part of the rider's personal job link (set by the server). */
   portalToken?: string
+  /** Set by the server on reads instead of the token (which only the link API returns). */
+  hasPortalLink?: boolean
 }
 
 export interface DeliveryJob {

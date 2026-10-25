@@ -142,3 +142,24 @@ describe('unlocking an account locked by wrong passwords', () => {
     expect(h.users[2]).not.toHaveProperty('unlock')
   })
 })
+
+describe('editing your own account', () => {
+  it('a non-director cannot give themselves technician authority or skip a forced password change', async () => {
+    h.users[2].mustChangePassword = true
+    h.actor = { id: 'rep-1', name: 'Rep', username: 'rep-1', role: 'sales_rep' }
+    const res = await call(PATCH, 'rep-1', { actsAsTechnician: true, mustChangePassword: false })
+    h.actor = { id: 'dir-1', name: 'Brian', username: 'brian', role: 'director' }
+    expect(res.status).toBe(200)
+    expect(h.users[2].actsAsTechnician).toBe(false)
+    expect(h.users[2].mustChangePassword).toBe(true)
+  })
+
+  it('changing the password still clears the forced change', async () => {
+    h.users[2].mustChangePassword = true
+    h.actor = { id: 'rep-1', name: 'Rep', username: 'rep-1', role: 'sales_rep' }
+    const res = await call(PATCH, 'rep-1', { password: 'N3w-Passw0rd!long', mustChangePassword: false })
+    h.actor = { id: 'dir-1', name: 'Brian', username: 'brian', role: 'director' }
+    expect(res.status).toBe(200)
+    expect(h.users[2].mustChangePassword).toBe(false)
+  })
+})

@@ -60,6 +60,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       delete validated.modules
       delete validated.active
       delete validated.accessRoleId
+      // actsAsTechnician grants technician authority (isUserAllowed); only a
+      // director may set it, like the role itself.
+      delete validated.actsAsTechnician
+      // A forced password change can only be cleared by actually changing it.
+      if (validated.mustChangePassword === false && !validated.password) delete validated.mustChangePassword
     }
 
     // The role must be one the app knows; anything else used to be written as-is.

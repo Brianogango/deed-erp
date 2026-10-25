@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { CONTENT_FILTERED_STORE_KEYS, canReadStoreKey, filterStoreValueForRole } from '@/lib/auth/authorization'
+import { CONTENT_FILTERED_STORE_KEYS, canReadStoreKey, filterStoreValueForRole, redactStoreValueForUser } from '@/lib/auth/authorization'
 import { loadAppState } from '@/lib/server-store'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import { searchRecords } from '@/lib/universal-search'
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const state = await loadAppState(KEYS)
   const list = (key: string): Record<string, any>[] => {
     if (!canReadStoreKey(session.user, key)) return []
-    const value = CONTENT_FILTERED_STORE_KEYS.has(key) ? filterStoreValueForRole(session.user, key, state[key]) : state[key]
+    const value = redactStoreValueForUser(session.user, key, CONTENT_FILTERED_STORE_KEYS.has(key) ? filterStoreValueForRole(session.user, key, state[key]) : state[key])
     return Array.isArray(value) ? value as Record<string, any>[] : []
   }
 
