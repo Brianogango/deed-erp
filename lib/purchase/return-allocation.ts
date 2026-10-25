@@ -11,6 +11,39 @@
  *    unless the PO line itself carried VAT).
  */
 
+import { billedQtyByPoLine } from '@/lib/purchase/receipt-allocation'
+
+type ReturnBillDoc = {
+  id: string
+  type?: string
+  status?: string
+  total?: number
+  purchaseOrderId?: string | null
+  lines?: Array<{ productId?: string | null; purchaseOrderItemId?: string | null; description?: string | null; qty?: unknown }>
+}
+
+/**
+ * Units on each PO line that are billed on a bill still in force. The PO's
+ * stored qtyBilled goes down when a return credits units, but not when a bill
+ * is cancelled, so a return after a cancelled bill treated the units as still
+ * owed and issued a supplier credit for a bill nobody owed (VCN/2026/0005).
+ * The live bills (not cancelled, not credit notes) give the other bound; the
+ * lower of the two is what is really billed.
+ */
+export function liveQtyBilledByPoLine(
+  po: { id: string; billId?: string | null; lines: Array<{ id: string; productId?: string | null; productName?: string | null; qty?: unknown; qtyBilled?: number }> },
+  invoices: ReadonlyArray<ReturnBillDoc>,
+): Map<string, number> {
+  const live = invoices.filter(inv =>
+    inv.type === 'vendor_bill'
+    && (inv.purchaseOrderId === po.id || (po.billId && inv.id === po.billId))
+    && !['cancelled', 'canceled', 'voided', 'void'].includes(String(inv.status))
+    && Number(inv.total) > 0,
+  )
+  const fromBills = billedQtyByPoLine(po.lines, live.flatMap(b => b.lines ?? []))
+  return new Map(po.lines.map(l => [l.id, Math.min(Math.max(0, Math.floor(Number(l.qtyBilled) || 0)), fromBills.get(l.id) ?? 0)]))
+}
+
 export interface ReturnPoLine {
   id: string
   productId: string

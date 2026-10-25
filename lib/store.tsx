@@ -298,7 +298,7 @@ import {
   isOpeningStockMove,
 } from '@/lib/inventory/opening-stock'
 import { billableQty, assertBillableQty, poHasReceivedGoods } from '@/lib/purchase/three-way-match'
-import { allocatePurchaseReturn } from '@/lib/purchase/return-allocation'
+import { allocatePurchaseReturn, liveQtyBilledByPoLine } from '@/lib/purchase/return-allocation'
 import {
   formatStockByLocation,
   resolveBulkDeliverySourceLocation,
@@ -15558,10 +15558,13 @@ const storeCtx: AppState = {
       const draftBills = invRef.current.filter(i =>
         i.type === 'vendor_bill' && i.purchaseOrderId === po.id && invoiceDocState(i.status) === 'draft' && i.total > 0,
       )
+      // Billed means billed on a bill still in force: a cancelled bill must
+      // not turn the return into a supplier credit.
+      const liveBilled = liveQtyBilledByPoLine(po, invRef.current)
       const allocation = allocatePurchaseReturn({
         poLines: po.lines.map(l => ({
           id: l.id, productId: l.productId, productName: l.productName,
-          qtyReceived: l.qtyReceived, qtyBilled: l.qtyBilled,
+          qtyReceived: l.qtyReceived, qtyBilled: liveBilled.get(l.id) ?? 0,
           unitPrice: l.unitPrice, taxRate: l.taxRate, accountCode: l.accountCode,
         })),
         returnLines: ret.lines.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty })),

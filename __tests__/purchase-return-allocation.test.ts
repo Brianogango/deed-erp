@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allocatePurchaseReturn, type ReturnPoLine } from '@/lib/purchase/return-allocation'
+import { allocatePurchaseReturn, liveQtyBilledByPoLine, type ReturnPoLine } from '@/lib/purchase/return-allocation'
 
 const poLine = (over: Partial<ReturnPoLine> = {}): ReturnPoLine => ({
   id: 'pol-1',
@@ -112,5 +112,32 @@ describe('allocatePurchaseReturn', () => {
       draftBills: [],
     })
     expect(result.creditTaxTotal).toBe(Math.round(333 * 16 / 100))
+  })
+})
+
+describe('liveQtyBilledByPoLine — what is really billed when a return is confirmed', () => {
+  const po = { id: 'po1', lines: [{ id: 'l1', productId: 'screen', productName: 'Screen', qty: 1, qtyBilled: 1 }] }
+  const bill = (o: Record<string, unknown>) => ({ id: 'b1', type: 'vendor_bill', status: 'posted', total: 23000, purchaseOrderId: 'po1', lines: [{ productId: 'screen', qty: 1 }], ...o })
+
+  it('a cancelled bill no longer counts, so the return makes no supplier credit (VCN/2026/0005)', () => {
+    const billed = liveQtyBilledByPoLine(po, [bill({ status: 'cancelled' })])
+    expect(billed.get('l1')).toBe(0)
+    const allocation = allocatePurchaseReturn({
+      poLines: [{ id: 'l1', productId: 'screen', productName: 'Screen', qtyReceived: 1, qtyBilled: billed.get('l1'), unitPrice: 23000, taxRate: 0 }],
+      returnLines: [{ productId: 'screen', productName: 'Screen', qty: 1 }],
+      draftBills: [],
+    })
+    expect(allocation.creditTotal).toBe(0)
+  })
+
+  it('a bill in force still counts', () => {
+    expect(liveQtyBilledByPoLine(po, [bill({})]).get('l1')).toBe(1)
+  })
+
+  it('units already credited by an earlier return stay off (stored count is lower)', () => {
+    const credited = { ...po, lines: [{ ...po.lines[0], qty: 2, qtyBilled: 1 }] }
+    const twoOnBill = bill({ lines: [{ productId: 'screen', qty: 2 }] })
+    const creditNote = bill({ id: 'c1', total: -23000 })
+    expect(liveQtyBilledByPoLine(credited, [twoOnBill, creditNote]).get('l1')).toBe(1)
   })
 })
