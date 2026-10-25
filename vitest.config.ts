@@ -10,7 +10,9 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     setupFiles: ['__tests__/setup.ts'],
-    exclude: ['e2e/**', 'node_modules/**', '.next/**'],
+    // .agents/ and .claude/ hold agent skills; their node:test helper
+    // scripts are not vitest suites.
+    exclude: ['e2e/**', 'node_modules/**', '.next/**', '.agents/**', '.claude/**'],
     env: {
       NEXTAUTH_SECRET: 'test-secret-for-vitest-32-chars-long!!',
       AUTH_SECRET: 'test-secret-for-vitest-32-chars-long!!',
