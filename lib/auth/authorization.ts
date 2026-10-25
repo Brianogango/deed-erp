@@ -247,6 +247,41 @@ const invoiceSliceForRole = (role: UserRole | null, invoices: StoreRow[]): Store
   }
 }
 
+/**
+ * The invoice REST routes' version of invoiceSliceForRole, as a Prisma
+ * filter: 'all' for the ledger roles, null when the role sees no invoices,
+ * otherwise a where clause matching that role's slice.
+ */
+export function invoiceReadScope(
+  user: StoreReadUser | null | undefined,
+): 'all' | null | Record<string, unknown> {
+  if (hasFullStoreContentAccess(user, 'deed_invoices')) return 'all'
+  switch (normalizePermissionRole(user?.role)) {
+    case 'technical_lead':
+    case 'technician':
+      return { repairId: { not: null } }
+    case 'sales_rep':
+    case 'kilimall_officer':
+      return { documentType: 'customer_invoice' }
+    case 'inventory_officer':
+      return { documentType: 'vendor_bill' }
+    default:
+      return null
+  }
+}
+
+/** Whether a loaded invoice row falls inside invoiceReadScope. */
+export function canReadInvoiceRow(
+  user: StoreReadUser | null | undefined,
+  invoice: { repairId?: string | null; documentType?: string | null },
+): boolean {
+  const scope = invoiceReadScope(user)
+  if (scope === 'all') return true
+  if (!scope) return false
+  if ('repairId' in scope) return !!invoice.repairId
+  return (invoice.documentType ?? 'customer_invoice') === scope.documentType
+}
+
 /** True when the role receives the UNFILTERED value for a content-filtered key. */
 export const hasFullStoreContentAccess = (
   user: StoreReadUser | null | undefined,

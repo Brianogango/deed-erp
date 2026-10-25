@@ -2,14 +2,22 @@ import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { generateRfqEmail, sendEmail } from '@/lib/integrations/email'
 import { appendDocumentEmailSend, parseEmailList } from '@/lib/document-email-sends'
+import { isUserAllowed } from '@/lib/auth/authorization'
 
 /**
  * POST /api/integrations/send-rfq
  * Server-send an RFQ to the vendor (uses default/info mailbox).
  */
+// Same roles that can write purchase orders (lib/purchase/po-api-shared).
+const RFQ_SEND_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
+
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
+    // Sending from the company mailbox is a purchasing action.
+    if (!isUserAllowed(session.user, RFQ_SEND_ROLES)) {
+      throw Object.assign(new Error('You do not have permission to send RFQs'), { status: 403 })
+    }
     let body: unknown
     try {
       body = await request.json()

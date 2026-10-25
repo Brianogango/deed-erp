@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { canReadInvoiceRow } from '@/lib/auth/authorization'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { listAuthUsers } from '@/lib/auth/users-repository'
 import { listDocumentEmailSends } from '@/lib/document-email-sends'
@@ -17,15 +18,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 export async function GET(_: Request, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const { id } = await resolveRouteParams(params)
     if (!UUID_RE.test(id)) return NextResponse.json({ events: [] })
 
     const invoice = await prisma.invoice.findUnique({
       where: { id },
-      select: { id: true, invoiceNumber: true, documentType: true, totalAmount: true, createdAt: true, createdById: true, postedAt: true, postedById: true },
+      select: { id: true, invoiceNumber: true, documentType: true, repairId: true, totalAmount: true, createdAt: true, createdById: true, postedAt: true, postedById: true },
     })
-    if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!invoice || !canReadInvoiceRow(session.user, invoice)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const allocations = await prisma.paymentAllocation.findMany({ where: { invoiceId: id }, select: { paymentId: true } })
     const paymentIds = [...new Set(allocations.map(a => a.paymentId))]

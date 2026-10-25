@@ -6,6 +6,14 @@ import { generateQuotePdfBuffer } from '@/lib/integrations/quote-pdf'
 import { appendDocumentEmailSend, parseEmailList } from '@/lib/document-email-sends'
 import { generateQuoteToken } from '@/lib/quote-token'
 import { loadAppState } from '@/lib/server-store'
+import { findPortalDocument } from '@/lib/portal-document-lookup'
+import { normalizeQuoteForClient } from '@/lib/quote-normalization'
+import { isUserAllowed } from '@/lib/auth/authorization'
+
+// Same people who can edit quotations (app/api/quotes/[id]); technicians only
+// for repair quotes.
+const SEND_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
+const REPAIR_SEND_ROLES = [...SEND_ROLES, 'technician']
 
 /**
  * POST /api/integrations/send-quote
@@ -50,8 +58,43 @@ export async function POST(request: Request) {
       channels: ('email' | 'whatsapp')[]
     }
 
-    if (!payload.quoteId || !payload.quote) {
+    if (!payload.quoteId || !payload.quote || typeof payload.quote !== 'object') {
       throw Object.assign(new Error('Quote data is required'), { status: 400 })
+    }
+    const channels = Array.isArray(payload.channels) ? payload.channels : []
+
+    // The document must exist on the server. Its content (ref, customer,
+    // lines, totals) is taken from there, never from the request: this route
+    // signs a portal acceptance link for quoteId and sends from the sales
+    // mailbox, so a caller must not be able to name any id or write any text.
+    const found = await findPortalDocument(String(payload.quoteId))
+    if (!found) {
+      throw Object.assign(new Error('Save the quotation before sending it'), { status: 404 })
+    }
+    const doc = found.doc as Record<string, unknown>
+    const repairLinked = Boolean(doc.repairId || doc.repairRef)
+    if (!isUserAllowed(session.user, repairLinked ? REPAIR_SEND_ROLES : SEND_ROLES)) {
+      throw Object.assign(new Error('You do not have permission to send quotations'), { status: 403 })
+    }
+    const rawLines = Array.isArray(doc.lines) ? doc.lines : Array.isArray(doc.items) ? doc.items : []
+    const stored = normalizeQuoteForClient({ ...doc, lines: rawLines.filter((line: any) => line && line.lineType !== 'section' && line.lineType !== 'note') })
+    const storedLines = stored.lines as Array<{ productName: string; qty: number; unitPrice: number; lineTotal: number }>
+    payload.quote = {
+      ref: stored.ref,
+      companyName: String(doc.companyName ?? doc.customerName ?? stored.companyName),
+      contactPersonName: String(doc.contactPersonName ?? doc.customerName ?? stored.contactPersonName),
+      // Recipients are chosen in the send dialog.
+      contactEmail: String(payload.quote.contactEmail ?? ''),
+      contactPhone: String(payload.quote.contactPhone ?? ''),
+      date: stored.issueDate || String(doc.date ?? ''),
+      subtotal: stored.subtotal,
+      taxTotal: stored.taxTotal,
+      total: stored.total,
+      validUntil: stored.validUntil || String(payload.quote.validUntil ?? ''),
+      ownerName: String(doc.createdByName ?? stored.ownerName ?? 'Sales'),
+      paymentTerms: doc.paymentTerms == null ? undefined : String(doc.paymentTerms),
+      notes: doc.notes == null ? undefined : String(doc.notes),
+      lines: storedLines.map(line => ({ productName: line.productName, qty: line.qty, unitPrice: line.unitPrice, lineTotal: line.lineTotal })),
     }
 
     const cc = parseEmailList(payload.cc)
@@ -61,7 +104,7 @@ export async function POST(request: Request) {
 
     // Send via Email — the quotation PDF travels as an attachment (Odoo:
     // Send by Email attaches the quotation document).
-    if (payload.channels.includes('email')) {
+    if (channels.includes('email')) {
       const isDev = process.env.NODE_ENV !== 'production'
       // "Online Acceptance" setting: quoteId works for both a CRM Quote and
       // a Sales module SaleOrder — generateQuoteToken/the portal route are
@@ -144,7 +187,7 @@ export async function POST(request: Request) {
     }
 
     // Send via WhatsApp
-    if (payload.channels.includes('whatsapp')) {
+    if (channels.includes('whatsapp')) {
       const isDev = process.env.NODE_ENV !== 'production'
 
       if (isDev) {

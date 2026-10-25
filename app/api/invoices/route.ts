@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+import { invoiceReadScope, isRoleAllowed } from '@/lib/auth/authorization'
 import { isUUID } from '@/lib/utils'
 import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney, inferInvoiceLineTaxCategory } from '@/lib/finance-invoice'
 import { assertBillableQty } from '@/lib/purchase/three-way-match'
@@ -176,7 +176,9 @@ function mapInvoiceItems(lines: any[], isCreditNote = false) {
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
+    // Each role reads only its slice of the ledger, as through /api/store.
+    const scope = invoiceReadScope(session.user)
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const q = searchParams.get('q')?.trim()
@@ -186,6 +188,7 @@ export async function GET(request: Request) {
     })
 
     const where: Record<string, unknown> = {
+      ...(scope === 'all' ? {} : scope ? { AND: [scope] } : { id: { in: [] } }),
       ...(status ? { status: INVOICE_STATUS_MAP[status] ?? status } : {}),
       ...(q
         ? {

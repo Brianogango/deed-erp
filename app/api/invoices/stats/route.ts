@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { invoiceReadScope } from '@/lib/auth/authorization'
 import { buildInvoiceStats, nairobiToday } from '@/lib/accounting/invoice-stats.server'
 
 export const dynamic = 'force-dynamic'
@@ -20,7 +21,12 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
  */
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
+    // Revenue, receivables and payables are whole-ledger figures. Roles that
+    // see only a slice get 403; the dashboard then totals its own slice.
+    if (invoiceReadScope(session.user) !== 'all') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const requested = request.nextUrl.searchParams.get('today')
     const today = requested && ISO_DAY.test(requested) ? requested : nairobiToday()
     const stats = await buildInvoiceStats(today)

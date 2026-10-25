@@ -14,7 +14,7 @@ import { buildInvoiceJournalInput, allocateInvoiceJournalRef } from '@/lib/accou
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
-import { allowedOnlyAsTechnician } from '@/lib/auth/authorization'
+import { allowedOnlyAsTechnician, canReadInvoiceRow } from '@/lib/auth/authorization'
 import { invoiceEditChanges } from '@/lib/finance/invoice-history'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
@@ -157,7 +157,7 @@ function mapInvoiceItems(lines: any[]) {
 
 export async function GET(_: Request, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const { id } = await resolveRouteParams(params)
     const invoice = await prisma.invoice.findUnique({
       where: { id },
@@ -165,7 +165,8 @@ export async function GET(_: Request, { params }: { params: RouteParams<{ id: st
       // never runs — the order has to come from the query.
       include: { items: { orderBy: { sortOrder: 'asc' } } },
     })
-    if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    // Outside the caller's slice reads as missing, like the store does.
+    if (!invoice || !canReadInvoiceRow(session.user, invoice)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(invoice)
   })
 }
