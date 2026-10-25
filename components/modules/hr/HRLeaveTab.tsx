@@ -60,7 +60,7 @@ export default function HRLeaveTab() {
   const { users, currentUserId, showToast } = useApp()
   const {
     employees, leaveRequests, leaveBalances,
-    addLeaveRequest, decideLeaveRequest,
+    addLeaveRequest, decideLeaveRequest, closeApprovedLeaveEarly,
   } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -74,6 +74,13 @@ export default function HRLeaveTab() {
   const [decideId, setDecideId] = useState<string | null>(null)
   const [decideNote, setDecideNote] = useState('')
   const [decideError, setDecideError] = useState('')
+  // Approved leave not taken, or cut short.
+  const [earlyId, setEarlyId] = useState<string | null>(null)
+  const [earlyKind, setEarlyKind] = useState<'not_taken' | 'returned_early'>('returned_early')
+  const [earlyLastDay, setEarlyLastDay] = useState('')
+  const [earlyNote, setEarlyNote] = useState('')
+  const [earlyError, setEarlyError] = useState('')
+  const [earlySaving, setEarlySaving] = useState(false)
 
   const myEmployee      = employees.find(e => e.userId === currentUserId) ?? null
   const myLeaves        = leaveRequests.filter(r => r.employeeId === myEmployee?.id)
@@ -278,6 +285,15 @@ export default function HRLeaveTab() {
           <span className="flex items-center gap-1" style={{ color: 'var(--success)', fontSize: 10 }}>
             <Fa icon={faCircleCheck} style={{ fontSize: 10 }} /> {req.hrApprovalBy}
           </span>
+        )}
+        {req.status === 'approved' && !req.isSystemGenerated && canDecideLeaveFor(req) && (
+          <button
+            style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-2)', padding: '2px 7px', fontSize: 10, cursor: 'pointer', fontWeight: 600 }}
+            title="The employee did not go, or came back before the end date"
+            onClick={e => { e.stopPropagation(); setEarlyId(req.id); setEarlyKind('returned_early'); setEarlyLastDay(''); setEarlyNote(''); setEarlyError('') }}
+          >
+            Not taken / back early
+          </button>
         )}
         {req.status === 'rejected' && (
           <span className="flex items-center gap-1" style={{ color: 'var(--danger)', fontSize: 10 }} title={req.reviewNotes || undefined}>
@@ -505,6 +521,57 @@ export default function HRLeaveTab() {
           </div>
         </Modal>
       )}
+      {earlyId && (() => {
+        const req = leaveRequests.find(r => r.id === earlyId)
+        if (!req) return null
+        const close = () => { if (!earlySaving) { setEarlyId(null); setEarlyError('') } }
+        const validDay = /^\d{4}-\d{2}-\d{2}$/.test(earlyLastDay) && earlyLastDay >= req.startDate.slice(0, 10) && earlyLastDay < req.endDate.slice(0, 10)
+        const taken = earlyKind === 'returned_early' && validDay ? leaveDaysForRange(req.leaveType as StoreLeaveType, req.startDate.slice(0, 10), earlyLastDay) : 0
+        const returned = earlyKind === 'not_taken' ? req.days : validDay ? Math.max(0, req.days - taken) : 0
+        const submit = async () => {
+          if (earlyKind === 'returned_early' && !validDay) {
+            setEarlyError(`Pick the last day they were on leave, from ${fmtDate(req.startDate)} to the day before ${fmtDate(req.endDate)}.`)
+            return
+          }
+          if (returned <= 0) { setEarlyError('No leave days fall after that date — nothing to return.'); return }
+          setEarlySaving(true)
+          const ok = await closeApprovedLeaveEarly(req.id, earlyKind === 'not_taken' ? { kind: 'not_taken' } : { kind: 'returned_early', lastDayTaken: earlyLastDay }, earlyNote)
+          setEarlySaving(false)
+          if (ok) setEarlyId(null)
+        }
+        return (
+          <Modal title="Leave not taken or cut short" subtitle={`${req.ref} · ${req.employeeName} · ${fmtDate(req.startDate)} → ${fmtDate(req.endDate)} · ${req.days} day${req.days !== 1 ? 's' : ''}`} onClose={close} width={480}>
+            <div className="flex flex-col gap-2 text-xs mb-3">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="radio" checked={earlyKind === 'returned_early'} onChange={() => { setEarlyKind('returned_early'); setEarlyError('') }} />
+                <span><strong>Came back early</strong> — record the last day they were on leave; the days after it go back to their balance.</span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="radio" checked={earlyKind === 'not_taken'} onChange={() => { setEarlyKind('not_taken'); setEarlyError('') }} />
+                <span><strong>Did not go at all</strong> — cancel the leave; all {req.days} day{req.days !== 1 ? 's' : ''} go back to their balance.</span>
+              </label>
+            </div>
+            {earlyKind === 'returned_early' && (
+              <Field label="Last day on leave" required>
+                <Input type="date" value={earlyLastDay} onChange={v => { setEarlyLastDay(v); if (earlyError) setEarlyError('') }} />
+              </Field>
+            )}
+            {returned > 0 && (
+              <div className="rounded-lg p-2 text-[11px] mt-2" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>
+                {earlyKind === 'returned_early' ? `${taken} of ${req.days} day(s) taken · ` : ''}{returned} day{returned !== 1 ? 's' : ''} back to {req.employeeName}'s {LEAVE_LABELS[req.leaveType as StoreLeaveType] ?? 'leave'} balance
+              </div>
+            )}
+            <Field label="Note" hint="Kept on the leave's history.">
+              <Textarea value={earlyNote} onChange={setEarlyNote} rows={2} placeholder="e.g. Called back for the stock count / trip cancelled" />
+            </Field>
+            {earlyError && <p className="text-[11px] mt-2" style={{ color: 'var(--danger)' }}>{earlyError}</p>}
+            <div className="hr-modal-actions flex justify-end gap-2 pt-3">
+              <button className="btn-outline" onClick={close} disabled={earlySaving}>Cancel</button>
+              <button className="btn-primary" onClick={() => void submit()} disabled={earlySaving}>{earlySaving ? 'Saving…' : 'Return days to balance'}</button>
+            </div>
+          </Modal>
+        )
+      })()}
       {decideId && (() => {
         const req = leaveRequests.find(r => r.id === decideId)
         if (!req) return null

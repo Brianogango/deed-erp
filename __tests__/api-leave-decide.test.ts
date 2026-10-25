@@ -109,3 +109,51 @@ describe('PUT /api/leave-requests/[id] — no self-approval', () => {
     expect(mockPrisma.leaveRequest.update).toHaveBeenCalled()
   })
 })
+
+// Approved leave the employee did not take, or cut short.
+describe('PUT /api/leave-requests/[id] — leave not taken or cut short', () => {
+  // Mon 3 Aug – Fri 7 Aug 2026: 5 working days, all used.
+  const approved = { ...pendingRow, status: 'approved', startDate: new Date('2026-08-03'), endDate: new Date('2026-08-07'), daysRequested: 5, reviewNotes: 'Approved' }
+  const balanceRow = { employeeId: 'emp-a', leaveType: 'annual', year: 2026, entitlement: 21, carryForward: 0, pending: 0, used: 5 }
+  const params = { params: Promise.resolve({ id: 'lr-1' }) }
+
+  beforeEach(() => {
+    mockPrisma.leaveRequest.findUnique.mockResolvedValue({ ...approved })
+    mockPrisma.leaveRequest.update.mockImplementation(({ data }: any) => Promise.resolve({ ...approved, ...data }))
+    mockPrisma.leaveBalance.findUnique.mockResolvedValue({ ...balanceRow })
+  })
+
+  it('came back early: the leave ends on the last day taken and the rest goes back', async () => {
+    const res = await PUT(putReq({ action: 'return_early', lastDayTaken: '2026-08-04', note: 'Called back' }), params)
+    expect(res.status).toBe(200)
+    expect((await res.json()).returnedDays).toBe(3)
+    expect(mockPrisma.leaveBalance.upsert.mock.calls[0][0].update).toEqual({ pending: 0, used: 2 })
+    const data = mockPrisma.leaveRequest.update.mock.calls[0][0].data
+    expect(data.daysRequested).toBe(2)
+    expect(data.endDate.toISOString().slice(0, 10)).toBe('2026-08-04')
+    expect(data.reviewNotes).toContain('Returned early')
+    expect(data.reviewNotes).toContain('Approved')
+  })
+
+  it('refuses a last day outside the leave, or leave that is not approved', async () => {
+    for (const lastDayTaken of ['2026-08-01', '2026-08-07', 'soon']) {
+      expect((await PUT(putReq({ action: 'return_early', lastDayTaken }), params)).status).toBe(422)
+    }
+    mockPrisma.leaveRequest.findUnique.mockResolvedValue({ ...pendingRow })
+    expect((await PUT(putReq({ action: 'return_early', lastDayTaken: '2026-08-04' }), params)).status).toBe(409)
+    expect(mockPrisma.leaveBalance.upsert).not.toHaveBeenCalled()
+  })
+
+  it('not taken at all: cancelling returns every day', async () => {
+    const res = await PUT(putReq({ request: { status: 'cancelled', reviewNotes: 'Leave not taken' } }), params)
+    expect(res.status).toBe(200)
+    expect(mockPrisma.leaveBalance.upsert.mock.calls[0][0].update).toEqual({ pending: 0, used: 0 })
+  })
+
+  it('nobody gives their own approved leave days back', async () => {
+    mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-a' })
+    expect((await PUT(putReq({ action: 'return_early', lastDayTaken: '2026-08-04' }), params)).status).toBe(403)
+    expect((await PUT(putReq({ request: { status: 'cancelled' } }), params)).status).toBe(403)
+    expect(mockPrisma.leaveBalance.upsert).not.toHaveBeenCalled()
+  })
+})

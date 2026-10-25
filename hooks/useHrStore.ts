@@ -108,6 +108,8 @@ interface HrState {
   addLeaveRequest: (request: Omit<LeaveRequest, 'id' | 'ref' | 'submittedDate' | 'status' | 'isSystemGenerated'>) => LeaveRequest
   decideLeaveRequest: (id: string, approved: boolean, note?: string) => void
   cancelLeaveRequest: (id: string) => void
+  /** Approved leave not taken (cancel, all days back) or cut short (unused days back). */
+  closeApprovedLeaveEarly: (id: string, outcome: { kind: 'not_taken' } | { kind: 'returned_early'; lastDayTaken: string }, note?: string) => Promise<boolean>
   updateLeaveBalance: (id: string, patch: Partial<Pick<LeaveBalance, 'entitlement' | 'used' | 'carryForward'>>) => void
   initYearBalances: (year: number) => void
   applyDecemberClosure: (year: number) => void
@@ -425,6 +427,39 @@ export const useHrStore = create<HrState>((set, get) => ({
     ctx.showToast('Leave request cancelled')
     const cancelledBals = get().leaveBalances.filter(b => b.employeeId === req.employeeId)
     fetch(`/api/leave-requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: { ...req, status: 'cancelled' }, balances: cancelledBals }) }).catch(() => {})
+  },
+
+  closeApprovedLeaveEarly: async (id, outcome, note) => {
+    const { ctx } = get()
+    const user = ctx.currentUser()
+    const req = get().leaveRequests.find(r => r.id === id)
+    if (!req || req.status !== 'approved') { ctx.showToast('Only approved leave can be changed here', 'error'); return false }
+    const trimmed = String(note ?? '').trim()
+    const body = outcome.kind === 'returned_early'
+      ? { action: 'return_early', lastDayTaken: outcome.lastDayTaken, note: trimmed || undefined }
+      : {
+          request: {
+            status: 'cancelled',
+            reviewNotes: [req.reviewNotes, `Leave not taken — cancelled by ${user?.name ?? 'HR'} on ${new Date().toISOString().slice(0, 10)}; ${req.days} day(s) returned to balance${trimmed ? ` — ${trimmed}` : ''}`].filter(Boolean).join('\n'),
+          },
+        }
+    try {
+      const res = await fetch(`/api/leave-requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const data = await res.json().catch(() => null) as { error?: string; returnedDays?: number } | null
+      if (!res.ok) { ctx.showToast(data?.error || 'Could not update the leave', 'error'); return false }
+      // The server owns the balance arithmetic: take its figures.
+      const fresh = await fetch('/api/leave-requests', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+      if (fresh?.requests) get().setLeaveRequests(fresh.requests)
+      if (fresh?.balances) get().setLeaveBalances(fresh.balances)
+      const returned = outcome.kind === 'returned_early' ? Number(data?.returnedDays) || 0 : req.days
+      ctx.addAuditLog(outcome.kind === 'returned_early' ? 'return_early_leave' : 'cancel_leave', req.ref,
+        `${outcome.kind === 'returned_early' ? `Returned early (last day ${outcome.lastDayTaken})` : 'Leave not taken'}: ${returned} day(s) back to balance — ${user?.name}`)
+      ctx.showToast(`${returned} leave day${returned === 1 ? '' : 's'} returned to ${req.employeeName}'s balance`)
+      return true
+    } catch {
+      ctx.showToast('Could not reach the server — the leave was not changed', 'error')
+      return false
+    }
   },
 
   updateLeaveBalance: (id, patch) => {
