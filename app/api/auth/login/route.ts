@@ -7,6 +7,7 @@ import { publishSessionStatus } from '@/lib/auth/session-validity'
 import { getMfaState, mfaRequiredForRole, setMfaChallengeCookie } from '@/lib/auth/mfa'
 import { issueSessionResponse } from '@/lib/auth/session-issuer'
 import { isTrustedBrowserRequest } from '@/lib/auth/trusted-browser'
+import { clientIpFromHeaders } from '@/lib/client-ip'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Server configuration error' }, { status: 500 })
   }
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1'
+  const ip = clientIpFromHeaders(request.headers)
   const rl = await loginRatelimit.limit(ip)
   if (!rl.success) {
     return NextResponse.json(

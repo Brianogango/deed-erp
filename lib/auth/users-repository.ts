@@ -392,7 +392,7 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     modules: roleFromAssignment ? [...roleFromAssignment.modules] : input.modules ? [...input.modules] : existingUser.modules,
     active: input.active ?? existingUser.active,
     passwordHash: passwordHash ?? existingUser.passwordHash,
-    sessionVersion: passwordWillChange ? Math.max(1, existingUser.sessionVersion) + 1 : Math.max(1, existingUser.sessionVersion),
+    sessionVersion: Math.max(1, existingUser.sessionVersion),
     mustChangePassword: input.mustChangePassword ?? existingUser.mustChangePassword,
     employeeId: input.employeeId !== undefined ? input.employeeId : existingUser.employeeId,
     email: input.email !== undefined ? input.email : existingUser.email,
@@ -403,6 +403,16 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
 
   const nowTs = new Date().toISOString()
   // Update BOTH Prisma-managed and legacy columns
+  // A new password, or a change to what the account may do (role, custom
+  // role, technician rights, deactivation), ends every existing session: a
+  // session signed in before a promotion would otherwise carry the new
+  // authority without the MFA the new role requires.
+  const accessChanged = normalizeStoredRole(nextUser.role) !== normalizeStoredRole(existingUser.role)
+    || (nextUser.accessRoleId ?? null) !== (existingUser.accessRoleId ?? null)
+    || Boolean(nextUser.actsAsTechnician) !== Boolean(existingUser.actsAsTechnician)
+    || (existingUser.active !== false && nextUser.active === false)
+  if (passwordWillChange || accessChanged) nextUser.sessionVersion = Math.max(1, existingUser.sessionVersion) + 1
+
   await sql`
     UPDATE users
     SET username             = ${nextUser.username},

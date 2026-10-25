@@ -7,6 +7,7 @@ import { publishSessionStatus } from '@/lib/auth/session-validity'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { InputSecurityError, readSafeJson } from '@/lib/input-security'
 import { trustCurrentBrowser } from '@/lib/auth/trusted-browser'
+import { clientIpFromHeaders } from '@/lib/client-ip'
 
 export async function POST(request: NextRequest) {
   const challenge = challengeFromRequest(request)
@@ -14,9 +15,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'MFA challenge expired. Sign in again.' }, { status: 401 })
   }
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown'
+  const ip = clientIpFromHeaders(request.headers)
   const rl = await checkRateLimit(`mfa-verify:${challenge.uid}:${ip}`, 10, 5 * 60)
-  if (!rl.success) {
+  // Per account as well, whatever the address: a code guesser cannot get
+  // fresh tries by changing networks.
+  const rlUser = rl.success ? await checkRateLimit(`mfa-verify-user:${challenge.uid}`, 20, 15 * 60) : rl
+  if (!rl.success || !rlUser.success) {
     return NextResponse.json({ message: 'Too many verification attempts. Sign in again later.' }, { status: 429 })
   }
 

@@ -17,6 +17,16 @@ function canonicalSnsString(body: SnsEnvelope): string {
     .join('')
 }
 
+/**
+ * AWS signs every customer's SNS messages with the same certificate, so a
+ * valid signature alone proves nothing about whose topic sent it. Only the
+ * topics named in SES_SNS_TOPIC_ARNS (comma-separated) are accepted; with
+ * none configured, nothing is.
+ */
+function allowedTopicArns(): Set<string> {
+  return new Set(String(process.env.SES_SNS_TOPIC_ARNS || '').split(',').map(s => s.trim()).filter(Boolean))
+}
+
 async function verifySns(body: SnsEnvelope): Promise<boolean> {
   try {
     if (!isAllowedSnsHttpsUrl(body.SigningCertURL)) return false
@@ -51,7 +61,13 @@ async function verifySns(body: SnsEnvelope): Promise<boolean> {
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null) as SnsEnvelope | null
-  if (!body?.Type || !body.Signature || !body.SigningCertURL || !(await verifySns(body))) {
+  if (!body?.Type || !body.Signature || !body.SigningCertURL) {
+    return NextResponse.json({ error: 'Invalid SNS signature' }, { status: 401 })
+  }
+  if (!body.TopicArn || !allowedTopicArns().has(body.TopicArn)) {
+    return NextResponse.json({ error: 'Unknown SNS topic' }, { status: 403 })
+  }
+  if (!(await verifySns(body))) {
     return NextResponse.json({ error: 'Invalid SNS signature' }, { status: 401 })
   }
 

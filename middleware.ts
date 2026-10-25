@@ -4,6 +4,7 @@ import { getToken } from 'next-auth/jwt'
 import { safeReturnTo } from '@/lib/auth/return-to'
 import { assertSafeRequestEnvelope, assertSameOriginBrowserWrite, InputSecurityError } from '@/lib/input-security'
 import { requiresPrivilegedMfa } from '@/lib/auth/mfa-policy'
+import { clientIpFromHeaders } from '@/lib/client-ip'
 
 export { safeReturnTo }
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
@@ -77,11 +78,7 @@ export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
 }
 
 function getIP(req: NextRequest): string {
-  return (
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    req.headers.get('x-real-ip') ??
-    'unknown'
-  )
+  return clientIpFromHeaders(req.headers)
 }
 
 function redirectTo(path: string, req: NextRequest, returnTo?: string | null): NextResponse {

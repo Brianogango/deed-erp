@@ -51,6 +51,7 @@ export const authOptions: NextAuthOptions = {
       session.user.createdAt = token.createdAt as string
       session.user.actsAsTechnician = Boolean(token.actsAsTechnician)
       session.user.sessionVersion = Math.max(1, Number(token.sessionVersion ?? 1) || 1)
+      session.user.mfaVerified = token.mfaVerified === true
       return session
     },
   },

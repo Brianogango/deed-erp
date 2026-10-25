@@ -84,51 +84,76 @@ export async function startStkPush(input: {
   return { ...toRecord(row), customerMessage: accepted.customerMessage }
 }
 
-export async function refreshStkRequest(checkoutRequestId: string): Promise<StkRecord | null> {
+const TERMINAL_RESULT_CODES = new Set(['0', '1', '1032', '1037', '2001', '1001'])
+
+/**
+ * The receipt number from a stored callback, when that callback is for this
+ * request and the amount it reports is the amount asked for.
+ */
+function receiptFromStoredCallback(row: { merchantRequestId: string; amount: unknown; rawCallback?: unknown }): string | null {
+  const parsed = row.rawCallback ? parseStkCallback(row.rawCallback) : null
+  if (!parsed || parsed.merchantRequestId !== row.merchantRequestId) return null
+  if (parsed.amount === undefined || Math.round(parsed.amount) !== Math.round(Number(row.amount))) return null
+  return parsed.mpesaReceipt ?? null
+}
+
+/**
+ * Settle a pending request from Daraja's own STK Query. Only a pending row
+ * moves, and only once (the update is conditional on status 'pending').
+ */
+async function settleFromDaraja(checkoutRequestId: string) {
   const existing = await prisma.mpesaStkRequest.findUnique({ where: { checkoutRequestId } })
   if (!existing) return null
-  if (existing.status !== 'pending') return toRecord(existing)
+  if (existing.status !== 'pending') return existing
 
   const cfg = loadMpesaConfig()
-  if (!cfg) return toRecord(existing)
-
+  if (!cfg) return existing
   try {
     const queried = await queryStkPush(cfg, checkoutRequestId)
-    const terminal = new Set(['0', '1', '1032', '1037', '2001', '1001'])
-    if (!terminal.has(queried.resultCode)) return toRecord(existing)
-    const code = Number(queried.resultCode)
-    const status = stkStatusFromResultCode(code)
-    const updated = await prisma.mpesaStkRequest.update({
-      where: { checkoutRequestId },
+    if (!TERMINAL_RESULT_CODES.has(queried.resultCode)) return existing
+    const status = stkStatusFromResultCode(Number(queried.resultCode))
+    await prisma.mpesaStkRequest.updateMany({
+      where: { checkoutRequestId, status: 'pending' },
       data: {
         status,
         resultCode: queried.resultCode,
         resultDesc: queried.resultDesc.slice(0, 200),
+        ...(status === 'success' ? { mpesaReceipt: receiptFromStoredCallback(existing) ?? existing.mpesaReceipt } : {}),
       },
     })
-    return toRecord(updated)
+    return await prisma.mpesaStkRequest.findUnique({ where: { checkoutRequestId } })
   } catch {
-    return toRecord(existing)
+    return existing
   }
 }
 
+export async function refreshStkRequest(checkoutRequestId: string): Promise<StkRecord | null> {
+  const row = await settleFromDaraja(checkoutRequestId)
+  return row ? toRecord(row) : null
+}
+
+/**
+ * Safaricom's callback is unauthenticated, so it is only a signal to check:
+ * the outcome always comes from Daraja's STK Query. The callback is stored
+ * (for its receipt number) only when it names this request's merchant id
+ * and, for a payment, the amount asked for.
+ */
 export async function applyStkCallback(body: unknown): Promise<StkRecord | null> {
   const parsed = parseStkCallback(body)
   if (!parsed) return null
-  const status = stkStatusFromResultCode(parsed.resultCode)
   const existing = await prisma.mpesaStkRequest.findUnique({
     where: { checkoutRequestId: parsed.checkoutRequestId },
   })
   if (!existing) return null
-  const updated = await prisma.mpesaStkRequest.update({
-    where: { checkoutRequestId: parsed.checkoutRequestId },
-    data: {
-      status,
-      resultCode: String(parsed.resultCode),
-      resultDesc: parsed.resultDesc.slice(0, 200),
-      mpesaReceipt: parsed.mpesaReceipt ?? existing.mpesaReceipt,
-      rawCallback: body as object,
-    },
+  if (existing.status !== 'pending') return toRecord(existing)
+  if (parsed.merchantRequestId !== existing.merchantRequestId) return null
+  if (parsed.resultCode === 0 && (parsed.amount === undefined || Math.round(parsed.amount) !== Math.round(Number(existing.amount)))) {
+    return toRecord(existing)
+  }
+  await prisma.mpesaStkRequest.updateMany({
+    where: { checkoutRequestId: parsed.checkoutRequestId, status: 'pending' },
+    data: { rawCallback: body as object },
   })
-  return toRecord(updated)
+  const settled = await settleFromDaraja(parsed.checkoutRequestId)
+  return settled ? toRecord(settled) : null
 }

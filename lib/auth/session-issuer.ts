@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getFirstAllowedModule } from '@/lib/auth/access'
 import type { PublicUser } from '@/lib/auth/types'
 import { sql } from '@/lib/auth/db'
+import { clientIpOrNull } from '@/lib/client-ip'
 
 const SESSION_AGE = 12 * 60 * 60
 const COOKIE_NAME = 'deed-session'
@@ -61,9 +62,7 @@ export async function issueSessionResponse(
   try {
     const tokenHash = crypto.createHash('sha256').update(jwt).digest('hex')
     const ipAddress =
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || request.headers.get('x-real-ip')
-      || null
+      clientIpOrNull(request.headers)
     const userAgent = request.headers.get('user-agent')?.slice(0, 500) || null
     const expiresAt = new Date(issuedAt.getTime() + SESSION_AGE * 1000)
     await sql`

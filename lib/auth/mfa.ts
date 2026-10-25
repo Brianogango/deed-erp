@@ -219,4 +219,8 @@ export async function verifyMfaCode(userId: string, code: string, enableOnSucces
 export async function resetUserMfa(userId: string) {
   await revokeAllTrustedBrowsers(userId)
   await sql`DELETE FROM user_mfa WHERE user_id = ${userId}`
+  // Sessions the old authenticator signed in end too (the reset reports the
+  // user as signed out): the next sign-in needs the password and a new MFA
+  // enrolment.
+  await sql`UPDATE users SET session_version = COALESCE(session_version, 1) + 1 WHERE id = ${userId}`
 }

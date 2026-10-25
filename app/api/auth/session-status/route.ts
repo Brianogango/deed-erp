@@ -9,6 +9,7 @@ import {
   SESSION_WARN_BEFORE_SECONDS,
 } from '@/lib/auth/session-policy'
 import { sql } from '@/lib/auth/db'
+import { clientIpOrNull } from '@/lib/client-ip'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const COOKIE_NAME = 'deed-session'
@@ -127,9 +128,7 @@ export async function POST(request: NextRequest) {
     const newHash = crypto.createHash('sha256').update(jwt).digest('hex')
     const expiresAtDate = new Date(expiresAt)
     const ipAddress =
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || request.headers.get('x-real-ip')
-      || null
+      clientIpOrNull(request.headers)
     const userAgent = request.headers.get('user-agent')?.slice(0, 500) || null
 
     let updatedRows: Record<string, unknown>[] = []

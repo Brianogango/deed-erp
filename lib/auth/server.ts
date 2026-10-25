@@ -4,6 +4,7 @@ import { getServerSession as nextAuthGetServerSession } from 'next-auth'
 import { authOptions } from './auth-options'
 import type { PublicUser, ServerSession, UserRole, ModuleId } from './types'
 import { findAuthUserById } from './users-repository'
+import { requiresPrivilegedMfa } from './mfa-policy'
 
 export const getServerSession = async (): Promise<ServerSession | null> => {
   const session = await nextAuthGetServerSession(authOptions)
@@ -27,6 +28,10 @@ export const getServerSession = async (): Promise<ServerSession | null> => {
   if (jwtSessionVersion < 1 || jwtSessionVersion !== Math.max(1, liveUser.sessionVersion)) return null
 
   const role = liveUser.role as UserRole
+  // The middleware MFA gate reads the role in the token (or a short cache).
+  // Judge it again against the live role, so a session signed in before a
+  // promotion never carries a privileged role without MFA.
+  if (requiresPrivilegedMfa(role) && session.user.mfaVerified !== true) return null
 
   const user: PublicUser = {
     id:        liveUser.id,

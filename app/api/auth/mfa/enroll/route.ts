@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import { challengeFromRequest, prepareMfaEnrollment } from '@/lib/auth/mfa'
 import { findAuthUserById } from '@/lib/auth/users-repository'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { clientIpFromHeaders } from '@/lib/client-ip'
 
 export async function POST(request: NextRequest) {
   const challenge = challengeFromRequest(request)
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'MFA enrollment challenge expired. Sign in again.' }, { status: 401 })
   }
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown'
+  const ip = clientIpFromHeaders(request.headers)
   const rl = await checkRateLimit(`mfa-enroll:${challenge.uid}:${ip}`, 5, 5 * 60)
   if (!rl.success) {
     return NextResponse.json({ message: 'Too many MFA enrollment attempts. Sign in again later.' }, { status: 429 })

@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AuthToast } from '@/components/auth/AuthFeedback'
 import OtpField from '@/components/auth/OtpField'
+import { safeReturnTo } from '@/lib/auth/return-to'
 
 type LoginPhase = 'credentials' | 'enroll' | 'verify'
 
@@ -28,15 +29,8 @@ export default function Login() {
   }, [toast])
 
   const resolveDestination = (defaultModule?: string) => {
-    const rawReturn = searchParams.get('returnTo')
-    if (rawReturn) {
-      try {
-        const decoded = decodeURIComponent(rawReturn)
-        if (decoded.startsWith('/') && !decoded.startsWith('//') && !decoded.includes('://') && !decoded.startsWith('/login')) {
-          return decoded
-        }
-      } catch {}
-    }
+    const safe = safeReturnTo(searchParams.get('returnTo'))
+    if (safe) return safe
     if (typeof defaultModule === 'string' && defaultModule && defaultModule !== 'dashboard') {
       return `/${defaultModule}`
     }

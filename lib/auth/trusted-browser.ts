@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/auth/db'
 import { shouldUseSecureCookie } from '@/lib/auth/session-issuer'
+import { clientIpOrNull } from '@/lib/client-ip'
 
 const TRUSTED_BROWSER_COOKIE = 'deed-trusted-browser'
 const TRUSTED_BROWSER_TTL_SECONDS = 180 * 24 * 60 * 60
@@ -19,9 +20,7 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 function clientIp(request: NextRequest): string | null {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || request.headers.get('x-real-ip')?.trim()
-    || null
+  return clientIpOrNull(request.headers)
 }
 
 function parseCookie(value: string | undefined | null): { id: string; secret: string } | null {
