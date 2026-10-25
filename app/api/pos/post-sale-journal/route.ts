@@ -9,6 +9,7 @@ import { roundMoney } from '@/lib/accounting/money'
 export const dynamic = 'force-dynamic'
 
 const POS_ROLES = ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer']
+const FINANCE_ROLES = new Set(['director', 'finance_officer'])
 
 /**
  * POST /api/pos/post-sale-journal
@@ -54,6 +55,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: lock.error }, { status: lock.status })
     }
 
+    // Till roles may only post today's sale (a day either side for midnight
+    // and timezone edges); backdated or future POS journals are a finance job.
+    if (!FINANCE_ROLES.has(String(actor.role))) {
+      const days = Math.abs(parsedDate.getTime() - Date.now()) / 86_400_000
+      if (days > 1.5) {
+        return NextResponse.json({ error: 'POS journals can only be posted for today' }, { status: 422 })
+      }
+    }
+
     const revenueLines = Array.isArray(body.revenueLines)
       ? body.revenueLines
           .map((r: { account?: string; amount?: number }) => ({
@@ -63,6 +73,36 @@ export async function POST(request: NextRequest) {
           .filter((r: { account: string; amount: number }) => r.account && r.amount > 0)
       : undefined
 
+    // The request used to choose any account and any split, so a till user
+    // could post e.g. Dr Sales Discounts / Cr Cash and write off till cash.
+    // A POS sale journal is now held to the shape of a sale: revenue lines
+    // credit active revenue accounts only and add up to the subtotal, and
+    // loyalty / client credit cannot exceed the sale itself.
+    const pointsRedeemed = roundMoney(body.pointsRedeemed)
+    const customerCreditAmount = roundMoney(body.customerCreditAmount)
+    if (tax < 0 || pointsRedeemed < 0 || customerCreditAmount < 0) {
+      return NextResponse.json({ error: 'Amounts cannot be negative' }, { status: 422 })
+    }
+    if (pointsRedeemed > subtotal || customerCreditAmount > total) {
+      return NextResponse.json({ error: 'Loyalty or client credit is larger than the sale' }, { status: 422 })
+    }
+    if (revenueLines?.length) {
+      const revenueTotal = roundMoney(revenueLines.reduce((t: number, r: { amount: number }) => t + r.amount, 0))
+      if (Math.abs(revenueTotal - subtotal) > 0.01) {
+        return NextResponse.json({ error: 'Revenue lines must add up to the subtotal' }, { status: 422 })
+      }
+      const codes = [...new Set(revenueLines.map((r: { account: string }) => r.account.split(' - ')[0].trim()))] as string[]
+      const accounts = await prisma.accountCode.findMany({
+        where: { code: { in: codes } },
+        select: { code: true, accountType: true, isActive: true },
+      })
+      const ok = new Set(accounts.filter(a => a.isActive && String(a.accountType).toLowerCase() === 'revenue').map(a => a.code))
+      const bad = codes.filter(c => !ok.has(c))
+      if (bad.length) {
+        return NextResponse.json({ error: `Not a revenue account: ${bad.join(', ')}` }, { status: 422 })
+      }
+    }
+
     const journal = await prisma.$transaction(async tx => {
       const posted = await postPosSale({
         orderId,
@@ -71,8 +111,8 @@ export async function POST(request: NextRequest) {
         total,
         subtotal,
         tax,
-        pointsRedeemed: roundMoney(body.pointsRedeemed),
-        customerCreditAmount: roundMoney(body.customerCreditAmount),
+        pointsRedeemed,
+        customerCreditAmount,
         paymentMethod: body.paymentMethod ? String(body.paymentMethod) : undefined,
         bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
         customerName: body.customerName ? String(body.customerName) : undefined,

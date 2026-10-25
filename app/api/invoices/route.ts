@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
+import { isRoleAllowed } from '@/lib/auth/authorization'
 import { isUUID } from '@/lib/utils'
 import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney, inferInvoiceLineTaxCategory } from '@/lib/finance-invoice'
 import { assertBillableQty } from '@/lib/purchase/three-way-match'
@@ -218,6 +219,26 @@ export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const body = await request.json()
     const actor = await requireRole(invoiceWriteRoles(body))
+    // invoiceWriteRoles widens access from request markers ("repair" in the
+    // notes, isPosInvoice). Those markers only open a narrow lane: a caller
+    // outside WRITE_ROLES may create a customer invoice and nothing else —
+    // no vendor bills, credit notes or opening balances, and never one
+    // pre-marked as paid (settlement goes through the payment routes). A
+    // technician must also name a repair that actually exists.
+    if (!isRoleAllowed(actor.role, WRITE_ROLES)) {
+      if (body.type === 'vendor_bill' || body.isCreditNote || body.isOpeningBalance === true) {
+        return NextResponse.json({ error: 'You can only create customer invoices' }, { status: 403 })
+      }
+      body.amountPaid = 0
+      if (!isPosInvoiceWrite(body) || !isRoleAllowed(actor.role, [...POS_INVOICE_WRITE_ROLES])) {
+        const { findRepairInPrisma } = await import('@/lib/repair-mirror')
+        const repairKey = String(body.repairId || body.repairRef || '').trim()
+        const repair = repairKey ? await findRepairInPrisma(repairKey) : null
+        if (!repair) {
+          return NextResponse.json({ error: 'Technicians may only invoice an existing repair' }, { status: 403 })
+        }
+      }
+    }
     const lines: any[] = body.lines ?? body.items ?? []
     const isCreditNote = Boolean(body.isCreditNote)
 

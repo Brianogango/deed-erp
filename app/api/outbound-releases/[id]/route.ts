@@ -143,15 +143,28 @@ export async function GET(_: NextRequest, { params }: Params) {
   })
 }
 
-// ── PATCH — generic field update (e.g. item confirmedSerial) ─────────────────
+// ── PATCH — note fields only ─────────────────────────────────────────────────
+// Status moves only through pick / verify / release / void, which carry the
+// role and separation-of-duties checks. This used to pass the request body
+// straight to Prisma for any signed-in user, which also allowed nested writes
+// through the release's relations (e.g. changing a user's role).
+const PATCHABLE_FIELDS = ['releaseNotes', 'conditionOnRelease'] as const
+
 export async function PATCH(request: NextRequest, { params }: Params) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
-    const body = await request.json()
+    await requireRole(VERIFY_ROLES)
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>
+    const data: Record<string, string | null> = {}
+    for (const key of PATCHABLE_FIELDS) {
+      if (key in body) data[key] = body[key] == null ? null : String(body[key]).slice(0, 2000)
+    }
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: 'Only release notes and condition can be edited here' }, { status: 400 })
+    }
     const release = await prisma.outboundRelease.update({
       where: { id: resolvedParams.id },
-      data: body,
+      data,
     })
     return NextResponse.json(release)
   })

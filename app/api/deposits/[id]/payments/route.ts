@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
-import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { addDepositReceipt } from '@/lib/accounting/deposit-service'
 import { z } from 'zod'
 import { notifyStoreKeysChanged } from '@/lib/server-store'
 
 export const dynamic = 'force-dynamic'
+
+// Recording a receipt posts a cash journal and can mark the deposit paid:
+// same roles as creating or editing a deposit (app/api/deposits/route.ts).
+const DEPOSIT_WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
 
 const depositPaymentSchema = z.object({
   amount: z.coerce.number().finite().positive().max(9_999_999_999.99),
@@ -26,7 +30,7 @@ function depositPaymentError(err: unknown): { message: string; status: number } 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const session = await getRequiredSession()
+    const actor = await requireRole(DEPOSIT_WRITE_ROLES)
     const parsed = depositPaymentSchema.safeParse(await request.json())
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid deposit payment' }, { status: 422 })
@@ -41,7 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         paymentRef: body.ref || null,
         bankAccountId: body.bankAccountId || null,
         idempotencyKey: body.idempotencyKey || null,
-        actor: { id: session.user.id, name: session.user.name },
+        actor: { id: actor.id, name: actor.name },
       })
     } catch (err) {
       const mapped = depositPaymentError(err)

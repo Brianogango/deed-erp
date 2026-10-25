@@ -14,6 +14,7 @@ const {
   mockWriteFinancialAuditInTx: vi.fn(),
   mockPrisma: {
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({ id: 'tx' })),
+    accountCode: { findMany: vi.fn() },
   },
 }))
 
@@ -52,6 +53,12 @@ beforeEach(() => {
   mockCheckFiscalLock.mockResolvedValue({ ok: true })
   mockPostPosSale.mockResolvedValue({ id: 'je-1', ref: 'JRN/POS/0099' })
   mockWriteFinancialAuditInTx.mockResolvedValue(undefined)
+  mockPrisma.accountCode.findMany.mockImplementation(async ({ where }: any) =>
+    [
+      { code: '5000', accountType: 'revenue', isActive: true },
+      { code: '5010', accountType: 'revenue', isActive: true },
+      { code: '1000', accountType: 'asset', isActive: true },
+    ].filter(a => where.code.in.includes(a.code)))
 })
 
 describe('POST /api/pos/post-sale-journal', () => {
@@ -74,11 +81,47 @@ describe('POST /api/pos/post-sale-journal', () => {
     expect(mockPostPosSale).not.toHaveBeenCalled()
   })
 
-  it('posts when an explicit date is supplied', async () => {
+  it('posts when finance supplies an explicit date', async () => {
+    mockRequireRole.mockResolvedValue({ id: 'u2', role: 'finance_officer' })
     const res = await POST(postReq({ ...saleBody, date: '2026-09-13' }))
     expect(res.status).toBe(200)
     expect(mockPostPosSale).toHaveBeenCalledWith(
       expect.objectContaining({ date: '2026-09-13' }),
     )
+  })
+
+  it('refuses a backdated POS journal from a till role', async () => {
+    const res = await POST(postReq({ ...saleBody, date: '2026-09-13' }))
+    expect(res.status).toBe(422)
+    expect(mockPostPosSale).not.toHaveBeenCalled()
+  })
+
+  it('refuses revenue lines that credit a non-revenue account (e.g. writing off cash)', async () => {
+    const res = await POST(postReq({
+      orderId: 'x', orderRef: 'POS-X', total: 0, subtotal: 50000, tax: 0, pointsRedeemed: 50000,
+      revenueLines: [{ account: '1000 - Cash', amount: 50000 }],
+    }))
+    expect(res.status).toBe(422)
+    expect(mockPostPosSale).not.toHaveBeenCalled()
+  })
+
+  it('refuses loyalty redemption larger than the sale', async () => {
+    const res = await POST(postReq({ ...saleBody, pointsRedeemed: 5000 }))
+    expect(res.status).toBe(422)
+    expect(mockPostPosSale).not.toHaveBeenCalled()
+  })
+
+  it('refuses revenue lines that do not add up to the subtotal', async () => {
+    const res = await POST(postReq({ ...saleBody, revenueLines: [{ account: '5000 - Sales Revenue', amount: 400 }] }))
+    expect(res.status).toBe(422)
+  })
+
+  it('posts a normal sale split across revenue accounts', async () => {
+    const res = await POST(postReq({ ...saleBody, revenueLines: [
+      { account: '5000 - Sales Revenue', amount: 600 },
+      { account: '5010 - Accessories', amount: 400 },
+    ] }))
+    expect(res.status).toBe(200)
+    expect(mockPostPosSale).toHaveBeenCalledOnce()
   })
 })
