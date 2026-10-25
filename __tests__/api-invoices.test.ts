@@ -868,3 +868,36 @@ describe('POST /api/invoices — serial-tracked machines', () => {
   })
 })
 
+
+// A supplier credit note reset to draft and edited used to come back as a
+// positive bill (VCN/2026/0005: −23,000 saved as +23,000).
+describe('PUT /api/invoices/:id — credit notes stay credit notes', () => {
+  const vcn = {
+    ...baseInvoice, invoiceNumber: 'VCN/2026/0005', documentType: 'vendor_bill', status: 'draft',
+    subtotal: -23000, taxAmount: 0, totalAmount: -23000, lockVersion: 1,
+    items: [{ id: 'li1', description: 'RETURN: Screen ×1', qty: 1, unitPrice: -23000, lineSubtotal: -23000 }],
+  }
+
+  it('editing the lines keeps the total and lines negative', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue(vcn)
+    mockPrismaInvoice.update.mockResolvedValue(vcn)
+    // The edit screen sends what it shows: positive or negative prices.
+    for (const unitPrice of [23000, -23000]) {
+      vi.clearAllMocks()
+      mockPrismaInvoice.updateMany.mockResolvedValue({ count: 1 })
+      mockPrismaInvoice.findUnique.mockResolvedValue(vcn)
+      await PUT(idReq(INVOICE_ID, { lines: [{ description: 'RETURN: Screen ×1', qty: 1, unitPrice, taxRate: 0, taxCategory: 'exempt' }] }), { params: Promise.resolve({ id: INVOICE_ID }) })
+      const data = mockPrismaInvoice.updateMany.mock.calls[0][0].data
+      expect(data.totalAmount).toBe(-23000)
+      expect(data.subtotal).toBe(-23000)
+      const items = mockPrismaInvoiceItem.createMany.mock.calls[0][0].data
+      expect(items[0]).toMatchObject({ unitPrice: -23000, lineTotal: -23000 })
+    }
+  })
+
+  it('a normal bill is unchanged', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, lockVersion: 0 })
+    await PUT(idReq(INVOICE_ID, { lines: [{ description: 'Service', qty: 1, unitPrice: 5000, taxRate: 0, taxCategory: 'exempt' }] }), { params: Promise.resolve({ id: INVOICE_ID }) })
+    expect(mockPrismaInvoice.updateMany.mock.calls[0][0].data.totalAmount).toBe(5000)
+  })
+})

@@ -46,7 +46,12 @@ const VALID_STATUSES = new Set([
   'dispatched', 'delivered', 'cancelled', 'voided',
 ])
 
-function mapInvoiceUpdateToDb(body: any, clientId?: string) {
+/** A credit note's line, computed on its absolute values (the sign is applied after). */
+function absLine(l: any) {
+  return { ...l, qty: Math.abs(Number(l?.qty) || 0), unitPrice: Math.abs(Number(l?.unitPrice) || 0), subtotal: l?.subtotal != null ? Math.abs(Number(l.subtotal) || 0) : l?.subtotal, lineSubtotal: l?.lineSubtotal != null ? Math.abs(Number(l.lineSubtotal) || 0) : l?.lineSubtotal }
+}
+
+function mapInvoiceUpdateToDb(body: any, clientId?: string, isCreditNote = false) {
   const rawStatus = body.status
   const mappedStatus = rawStatus ? (INVOICE_STATUS_MAP[rawStatus] ?? rawStatus) : undefined
   const status = mappedStatus && VALID_STATUSES.has(mappedStatus) ? mappedStatus : undefined
@@ -59,8 +64,19 @@ function mapInvoiceUpdateToDb(body: any, clientId?: string) {
   // header totals or `amountPaid` directly on update — amountPaid is owned by the
   // payments endpoint, and totals must always tie back to the line items.
   const lines: any[] | undefined = body.lines ?? body.items ?? undefined
-  const totals = lines !== undefined
-    ? computeInvoiceTotals(lines, { headerTax: body.taxAmount ?? body.taxTotal, discount: body.discountAmount })
+  // A credit note (negative total, e.g. a supplier credit from a return) is
+  // computed on absolute values and stored negative, as POST /api/invoices
+  // does. Computing it like a normal bill clamped the negative prices and
+  // turned an edited credit note into a positive bill.
+  const sign = isCreditNote ? -1 : 1
+  const computed = lines !== undefined
+    ? computeInvoiceTotals(isCreditNote ? lines.map(absLine) : lines, {
+        headerTax: isCreditNote ? Math.abs(Number(body.taxAmount ?? body.taxTotal) || 0) : body.taxAmount ?? body.taxTotal,
+        discount: body.discountAmount,
+      })
+    : undefined
+  const totals = computed
+    ? { ...computed, subtotal: computed.subtotal * sign, taxAmount: computed.taxAmount * sign, totalAmount: computed.totalAmount * sign }
     : undefined
 
   const data: Record<string, any> = {
@@ -98,7 +114,8 @@ function textOrUndefined(v: unknown, max: number): string | null | undefined {
   return s ? s.slice(0, max) : null
 }
 
-function mapInvoiceItems(lines: any[]) {
+function mapInvoiceItems(lines: any[], isCreditNote = false) {
+  const sign = isCreditNote ? -1 : 1
   return lines.map((l: any, index: number) => {
     const isSection = l.lineType === 'section' || l.type === 'section'
     if (isSection) {
@@ -124,27 +141,28 @@ function mapInvoiceItems(lines: any[]) {
     const effectiveTaxRate = taxCategory === 'standard_16'
       ? Number(l.taxRate ?? 16)
       : 0
+    const source = isCreditNote ? absLine(l) : l
     const money = computeInvoiceLineMoney({
-      qty: l.qty,
-      unitPrice: l.unitPrice,
+      qty: source.qty,
+      unitPrice: source.unitPrice,
       taxRate: effectiveTaxRate,
-      discountPct: l.discountPct ?? l.discount,
-      subtotal: l.subtotal,
-      lineSubtotal: l.lineSubtotal,
+      discountPct: source.discountPct ?? source.discount,
+      subtotal: source.subtotal,
+      lineSubtotal: source.lineSubtotal,
     })
     return {
       description: l.description ?? '',
       qty: money.qty || 1,
-      unitPrice: money.unitPrice,
+      unitPrice: money.unitPrice * sign,
       discountPct: money.discountPct,
       taxRate: money.taxRate,
       taxCategory,
       taxCode: taxCategory === 'standard_16' ? 'VAT16' : taxCategory,
       taxableBase: money.lineSubtotal,
       taxClaimEligible: taxCategory === 'standard_16' || taxCategory === 'zero_rated',
-      lineSubtotal: money.lineSubtotal,
-      lineTax: money.lineTax,
-      lineTotal: money.lineTotal,
+      lineSubtotal: money.lineSubtotal * sign,
+      lineTax: money.lineTax * sign,
+      lineTotal: money.lineTotal * sign,
       sortOrder: index,
       ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
       ...(optionalUuid(l.purchaseOrderItemId ?? l.poItemId) ? { purchaseOrderItemId: optionalUuid(l.purchaseOrderItemId ?? l.poItemId) } : {}),
@@ -255,7 +273,9 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       delete body.items
     }
 
-    const data = mapInvoiceUpdateToDb(body, putDecision.kind === 'reversal' ? undefined : clientId)
+    // A document stored with a negative total is a credit note and stays one.
+    const isCreditNote = Number(before.totalAmount) < 0
+    const data = mapInvoiceUpdateToDb(body, putDecision.kind === 'reversal' ? undefined : clientId, isCreditNote)
     // The official number is assigned when a draft is posted. Once assigned it
     // is immutable — posted invoices can never be renumbered.
     if (data.invoiceNumber !== undefined && before && before.status !== 'draft' && data.invoiceNumber !== before.invoiceNumber) {
@@ -286,7 +306,9 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
       // Resolve blob-only / twin-id POs onto the Prisma record before matching.
       const poId = rawPoId ? (await ensurePrismaPurchaseOrder(rawPoId, actor.id)) ?? rawPoId : null
       vendorPoId = poId
-      if (willBeVendor && poId) {
+      // A supplier credit note returns goods: it is not billed against the
+      // order's received quantities.
+      if (willBeVendor && poId && !isCreditNote) {
         try {
           const { assertVendorBillThreeWayMatchServer } = await import('@/lib/purchase/assert-bill-match.server')
           const billLines = (lines ?? preMirror.lines ?? before.items).map((l: any) => ({
@@ -354,7 +376,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
         ? 'vendor_bill'
         : 'customer_invoice'
       const normalizedItems = lines !== undefined
-        ? mapInvoiceItems(lines)
+        ? mapInvoiceItems(lines, isCreditNote)
         : before.items.map(i => ({
             productId: i.productId ?? undefined,
             qty: Number(i.qty),
@@ -373,7 +395,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
           taxAmount: Number(data.taxAmount ?? before.taxAmount),
           type: postingInvoiceType,
           repairId: before.repairId ?? undefined,
-          purchaseOrderId: (postingPurchaseOrderId = vendorPoId ?? optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? null) ?? undefined,
+          purchaseOrderId: (postingPurchaseOrderId = isCreditNote ? null : vendorPoId ?? optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? null) ?? undefined,
           partnerName: postingMirror.partnerName,
           clientName: postingMirror.clientName,
           lines: normalizedItems.map((i: any) => ({
@@ -419,7 +441,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
 
       if (lines !== undefined) {
         await tx.invoiceItem.deleteMany({ where: { invoiceId: id } })
-        const mapped = mapInvoiceItems(lines)
+        const mapped = mapInvoiceItems(lines, isCreditNote)
         if (mapped.length) {
           await tx.invoiceItem.createMany({
             data: mapped.map((item: any) => ({ ...item, invoiceId: id })),
@@ -447,7 +469,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
         before: before as unknown as Record<string, any>,
         data,
         beforeLines: before.items as any[],
-        afterLines: lines !== undefined ? mapInvoiceItems(lines) : undefined,
+        afterLines: lines !== undefined ? mapInvoiceItems(lines, isCreditNote) : undefined,
         partyNames: {
           before: parties.find(p => p.id === before.clientId)?.name,
           after: parties.find(p => p.id === data.clientId)?.name,
