@@ -868,3 +868,31 @@ describe('POST /api/invoices — serial-tracked machines', () => {
   })
 })
 
+
+// ── Read access follows the same rule as the store sync ───────────────────────
+describe('invoice reads are limited by role', () => {
+  const detail = () => GET_ONE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`), { params: Promise.resolve({ id: INVOICE_ID }) })
+
+  it('hides a vendor bill from a sales rep (looks like it is not there)', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'rep-1', role: 'sales_rep', name: 'Rep' } })
+    mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, invoiceNumber: 'BILL/2026/0001', documentType: 'vendor_bill', purchaseOrderId: null, repairId: null })
+    expect((await detail()).status).toBe(404)
+  })
+
+  it('shows a customer invoice to a sales rep', async () => {
+    mockGetSession.mockResolvedValue({ user: { id: 'rep-1', role: 'sales_rep', name: 'Rep' } })
+    mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, documentType: 'customer_invoice', purchaseOrderId: null, repairId: null })
+    expect((await detail()).status).toBe(200)
+  })
+
+  it('limits the list for a technician to repair invoices, and leaves a director unrestricted', async () => {
+    mockPrismaInvoice.findMany.mockResolvedValue([])
+    mockPrismaInvoice.count.mockResolvedValue(0)
+    mockGetSession.mockResolvedValue({ user: { id: 't1', role: 'technician', name: 'Tech' } })
+    await GET(new Request('http://localhost/api/invoices'))
+    expect(mockPrismaInvoice.count.mock.calls.at(-1)![0].where.AND).toEqual([{ repairId: { not: null } }])
+    mockGetSession.mockResolvedValue(directorSession)
+    await GET(new Request('http://localhost/api/invoices'))
+    expect(mockPrismaInvoice.count.mock.calls.at(-1)![0].where.AND).toEqual([{}])
+  })
+})

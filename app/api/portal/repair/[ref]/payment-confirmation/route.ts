@@ -64,6 +64,14 @@ async function handlePOST(req: NextRequest, { params }: { params: Promise<{ ref:
     return NextResponse.json({ error: 'Paste the M-PESA confirmation message or upload a screenshot.' }, { status: 400 })
   }
 
+  const appState = await loadAppState(['deed_systemSettings', 'deed_repairs_v2', 'deed_invoices'])
+
+  // Ownership proof (default ON): enforced unless an admin explicitly sets
+  // secPortalRequirePhoneVerification to false (SEC-005).
+  const settings = appState['deed_systemSettings'] as { secPortalRequirePhoneVerification?: boolean } | undefined
+  if (isPortalPhoneVerificationRequired(settings) && !phoneMatches(String(form.get('verifyPhone') ?? '').slice(0, 80), repair.customerPhone)) {
+    return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
+  }
   // Store the screenshot under its own app-state key (like repair photos) —
   // NEVER inline in the repair record. A single base64 screenshot inside
   // deed_repairs_v2 bloats every page load, sync, and localStorage write and
@@ -83,14 +91,6 @@ async function handlePOST(req: NextRequest, { params }: { params: Promise<{ ref:
     imageUrl = `/api/portal/repair/${encodeURIComponent(ref)}/payment-proof`
   }
 
-  const appState = await loadAppState(['deed_systemSettings', 'deed_repairs_v2', 'deed_invoices'])
-
-  // Ownership proof (default ON): enforced unless an admin explicitly sets
-  // secPortalRequirePhoneVerification to false (SEC-005).
-  const settings = appState['deed_systemSettings'] as { secPortalRequirePhoneVerification?: boolean } | undefined
-  if (isPortalPhoneVerificationRequired(settings) && !phoneMatches(String(form.get('verifyPhone') ?? '').slice(0, 80), repair.customerPhone)) {
-    return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
-  }
   const repairs = (appState['deed_repairs_v2'] as any[]) || []
   const resolvedRepair = findRepairByPortalRef(repairs, ref)
   const repairIndex = resolvedRepair ? repairs.indexOf(resolvedRepair) : -1

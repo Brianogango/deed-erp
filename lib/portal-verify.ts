@@ -48,6 +48,22 @@ export function isPortalPhoneVerificationRequired(
  * a staff session or the customer phone on file (?phone=). Returns true when
  * access is allowed.
  */
+/**
+ * The phone-proof rule on its own, for routes that read the phone from a body
+ * or query instead of `?phone=`. A staff session, or the setting turned off,
+ * lets the call through; otherwise the phone must match the one on file.
+ */
+export function portalPhoneAccessAllowed(
+  phone: string | null | undefined,
+  repair: { customerPhone?: string | null } | null | undefined,
+  opts: { session?: unknown; phoneVerificationRequired?: boolean } = {},
+): boolean {
+  if (opts.session) return true
+  if (opts.phoneVerificationRequired === false) return true
+  if (!repair) return false
+  return phoneMatches(phone, repair.customerPhone)
+}
+
 export async function portalDocumentAccessAllowed(
   req: { url: string },
   repair: { customerPhone?: string | null } | null | undefined,

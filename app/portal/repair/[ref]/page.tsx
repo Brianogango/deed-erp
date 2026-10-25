@@ -150,6 +150,7 @@ export default function RepairPortalPage() {
   const [paymentDone, setPaymentDone] = useState(false)
 
   const [messages, setMessages] = useState<{ id: string; sender: string; senderName: string; text: string; timestamp: string }[]>([])
+  const [messagesLocked, setMessagesLocked] = useState(true)
   const [msgText,  setMsgText]  = useState('')
   const [sending,  setSending]  = useState(false)
 
@@ -167,14 +168,18 @@ export default function RepairPortalPage() {
   }
 
   async function loadMessages() {
+    // The thread is private: it opens with the phone number on the repair.
+    const phone = verifyPhone.trim()
+    if (!phone) { setMessagesLocked(true); return }
     try {
-      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/messages?by=customer`)
-      if (res.ok) { const d = await res.json(); setMessages(d.messages) }
+      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/messages?by=customer&phone=${encodeURIComponent(phone)}`)
+      if (res.ok) { const d = await res.json(); setMessages(d.messages); setMessagesLocked(false) }
+      else if (res.status === 403) setMessagesLocked(true)
     } catch { /* silent */ }
   }
 
   useEffect(() => startVisiblePoll(() => { void load() }), [ref])
-  useEffect(() => startVisiblePoll(() => { void loadMessages() }), [ref])
+  useEffect(() => startVisiblePoll(() => { void loadMessages() }), [ref, verifyPhone])
   useEffect(() => {
     fetch('/api/portal/company-info').then(r => { if (r.ok) r.json().then((d: typeof company) => setCompany(d)) }).catch(() => {})
   }, [])
@@ -229,7 +234,7 @@ export default function RepairPortalPage() {
     try {
       await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/messages`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sender: 'customer', senderName: repair?.customerName ?? 'Customer', text: msgText.trim() }),
+        body: JSON.stringify({ sender: 'customer', senderName: repair?.customerName ?? 'Customer', text: msgText.trim(), verifyPhone: verifyPhone.trim() }),
       })
       setMsgText('')
       await loadMessages()
@@ -836,6 +841,15 @@ export default function RepairPortalPage() {
         <Card delay={700}>
           <div style={{ padding: '20px 24px' }}>
             <SectionLabel>Messages with Our Team</SectionLabel>
+            {messagesLocked && (
+              <div style={{ marginBottom: 14 }}>
+                <p style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.5, marginBottom: 8 }}>
+                  To keep your messages private, enter the phone number on this repair to see and send them.
+                </p>
+                <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="Phone number on this repair" inputMode="tel" aria-label="Phone number on this repair"
+                  style={{ width: '100%', background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none' }} />
+              </div>
+            )}
             <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14, paddingRight: 4 }}>
               {messages.length === 0 && (
                 <p style={{ fontSize: 12, color: '#4B5563', textAlign: 'center', padding: '20px 0', lineHeight: 1.5 }}>
@@ -873,8 +887,8 @@ export default function RepairPortalPage() {
               />
               <button
                 onClick={sendMessage}
-                disabled={!msgText.trim() || sending}
-                style={{ padding: '11px 20px', borderRadius: 10, border: 'none', cursor: !msgText.trim() || sending ? 'not-allowed' : 'pointer', background: 'var(--accent-cyan)', color: '#fff', fontWeight: 700, fontSize: 13, opacity: !msgText.trim() || sending ? 0.45 : 1, transition: 'opacity 0.2s', whiteSpace: 'nowrap' }}>
+                disabled={!msgText.trim() || sending || messagesLocked}
+                style={{ padding: '11px 20px', borderRadius: 10, border: 'none', cursor: !msgText.trim() || sending || messagesLocked ? 'not-allowed' : 'pointer', background: 'var(--accent-cyan)', color: '#fff', fontWeight: 700, fontSize: 13, opacity: !msgText.trim() || sending || messagesLocked ? 0.45 : 1, transition: 'opacity 0.2s', whiteSpace: 'nowrap' }}>
                 {sending ? '…' : 'Send'}
               </button>
             </div>

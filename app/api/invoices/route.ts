@@ -1,4 +1,5 @@
 import { billedQtyByPoLine } from '@/lib/purchase/receipt-allocation'
+import { invoiceReadWhere } from '@/lib/accounting/invoice-read-scope'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
@@ -175,7 +176,7 @@ function mapInvoiceItems(lines: any[], isCreditNote = false) {
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const q = searchParams.get('q')?.trim()
@@ -184,7 +185,9 @@ export async function GET(request: Request) {
       allowedSorts: ['invoiceDate', 'createdAt', 'updatedAt', 'totalAmount', 'invoiceNumber'],
     })
 
+    // Each role reads only the invoices it works with (same rule as the store sync).
     const where: Record<string, unknown> = {
+      AND: [invoiceReadWhere(session.user)],
       ...(status ? { status: INVOICE_STATUS_MAP[status] ?? status } : {}),
       ...(q
         ? {

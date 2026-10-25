@@ -231,6 +231,20 @@ export async function POST(request: NextRequest) {
     const repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
     const existingIdx = repairs.findIndex(r => r.id === repairId)
     const existing = existingIdx >= 0 ? repairs[existingIdx] : null
+    // The id comes from the caller. Re-sending it is only the intake form
+    // retrying its own booking (or a store-sync draft of it); it must never
+    // reach a job that is someone else's or already past intake.
+    if (existing) {
+      // The intake form's own draft carries the booker's username in `createdBy`;
+      // the server stamps the id (`createdByUserId`) once it has saved the job.
+      const mine = (!!existing.createdByUserId && existing.createdByUserId === String(user?.id ?? ''))
+        || (!!existing.createdBy && existing.createdBy === String(user?.username ?? ''))
+      const oversight = isUserAllowed(user, ['director', 'admin_officer'])
+      const atIntake = ['pending_verification', 'received'].includes(String(existing.status))
+      if (!atIntake || !(mine || oversight)) {
+        return NextResponse.json({ error: 'A repair with this id already exists.' }, { status: 409 })
+      }
+    }
     const existingByRef = repairs.find(r => r.ref.toLowerCase() === requestedRef.toLowerCase())
     const submittedSerial = (
       'serialNumber' in body ? String(body.serialNumber ?? '') : String(existing?.serialNumber ?? '')
@@ -299,7 +313,7 @@ export async function POST(request: NextRequest) {
       id: repairId,
       ref,
       previousRefs,
-      status: 'received',
+      status: existing?.status ?? 'received',
       customerId: cleanText(body.customerId, 80),
       customerName: cleanText(body.customerName, 200),
       customerPhone: cleanText(body.customerPhone, 50),

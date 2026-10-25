@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { canReadInvoiceRow } from '@/lib/accounting/invoice-read-scope'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { normalizeClientRole } from '@/lib/auth/access'
@@ -157,7 +158,7 @@ function mapInvoiceItems(lines: any[]) {
 
 export async function GET(_: Request, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const { id } = await resolveRouteParams(params)
     const invoice = await prisma.invoice.findUnique({
       where: { id },
@@ -165,7 +166,10 @@ export async function GET(_: Request, { params }: { params: RouteParams<{ id: st
       // never runs — the order has to come from the query.
       include: { items: { orderBy: { sortOrder: 'asc' } } },
     })
-    if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    // A document the role may not read is answered exactly like a missing one.
+    if (!invoice || !canReadInvoiceRow(session.user, invoice)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
     return NextResponse.json(invoice)
   })
 }
