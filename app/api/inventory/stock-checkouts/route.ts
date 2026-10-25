@@ -40,6 +40,22 @@ const outstanding = (r: Checkout) => r.qty - r.consumedQty - r.returnedQty - r.e
 const isSourceLocation = (location: string): location is LocationId =>
   SOURCE_LOCATIONS.some(candidate => candidate === location)
 
+type ClosedCheckout = Checkout & { closedSerialIds?: string[]; returnedAfterClose?: number }
+
+/**
+ * A unit closed as consumed (written off with the holder) or as an exception
+ * (sent to quarantine) can still be brought back to stock: it was recorded
+ * wrongly, or it came back later. Serial units qualify only while they are
+ * still where that closure left them.
+ */
+const consumedSerial = (s: SerialRow | undefined) => Boolean(s && s.status === 'written_off' && s.location === 'employee')
+const exceptionSerial = (s: SerialRow | undefined) => Boolean(s && s.status === 'under_repair' && s.location === 'quarantine')
+function returnableSerialIds(row: ClosedCheckout, serials: SerialRow[]): string[] {
+  const byId = new Map(serials.map(s => [s.id, s]))
+  return (row.closedSerialIds || []).filter(id => row.serialIds.includes(id) && (consumedSerial(byId.get(id)) || exceptionSerial(byId.get(id))))
+}
+const returnableQty = (row: Checkout) => Math.max(0, (Number(row.consumedQty) || 0) + (Number(row.exceptionQty) || 0))
+
 async function auth(approve = false) {
   const session = await getServerSession()
   if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
@@ -65,7 +81,14 @@ export async function GET() {
   const products = list<ProductRow>(state.deed_products).filter(p => p.id && p.name && p.isActive !== false)
   const serials = list<SerialRow>(state.deed_serials)
   const bulk = list<BulkRow>(state.deed_bulkStock)
-  const checkouts = list<Checkout>(state.deed_stockCheckouts).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+  const checkouts = list<ClosedCheckout>(state.deed_stockCheckouts)
+    .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+    .map(row => {
+      // What "Return to stock" may bring back on a closed checkout.
+      const product = products.find(p => p.id === row.productId)
+      const serialIds = product && isSerialized(product) ? returnableSerialIds(row, serials) : []
+      return { ...row, returnableSerialIds: serialIds, returnableQty: product && isSerialized(product) ? serialIds.length : returnableQty(row) }
+    })
   return NextResponse.json({
     products: products.map(p => ({ id: p.id, name: p.name, sku: p.sku || '', serialized: isSerialized(p) })),
     serials: serials
@@ -82,7 +105,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null
   if (!body) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   const action = String(body.action || '')
-  const access = await auth(action === 'approve' || action === 'reject')
+  const access = await auth(action === 'approve' || action === 'reject' || action === 'return_closed')
   if ('error' in access) return access.error
 
   return withAppStateKeyLock('deed_stockCheckouts', async () => {
@@ -161,6 +184,43 @@ export async function POST(request: NextRequest) {
         }
         row.consumedQty += outcome === 'consumed' ? qty : 0; row.returnedQty += outcome === 'returned' ? qty : 0; row.exceptionQty += outcome === 'exception' ? qty : 0
         row.closureNotes = [row.closureNotes, String(body.notes || '')].filter(Boolean).join('\n'); row.closedAt = outstanding(row) === 0 ? now : undefined; row.status = outstanding(row) === 0 ? 'completed' : 'partially_closed'
+      } else if (action === 'return_closed') {
+        // Bring back units that were closed as consumed or as an exception.
+        if (!['completed', 'partially_closed'].includes(row.status)) return NextResponse.json({ error: 'Only closed checkouts can be returned to stock here' }, { status: 409 })
+        const product = products.find(p => p.id === row.productId)
+        if (!product) return NextResponse.json({ error: 'Product no longer exists' }, { status: 409 })
+        const qty = Math.floor(Number(body.qty) || 0)
+        let fromConsumed = 0
+        let fromException = 0
+        let returnedSerialNumbers: string[] = []
+        if (isSerialized(product)) {
+          const wanted = Array.isArray(body.serialIds) ? [...new Set(body.serialIds.map(String))] : []
+          const allowed = new Set(returnableSerialIds(row as ClosedCheckout, serials))
+          if (!wanted.length || wanted.length !== qty || wanted.some(id => !allowed.has(id))) return NextResponse.json({ error: 'Select serials that were closed as consumed or exception and are still recorded that way' }, { status: 422 })
+          const ids = new Set(wanted)
+          for (const unit of serials) {
+            if (!ids.has(unit.id)) continue
+            if (consumedSerial(unit)) fromConsumed++
+            else fromException++
+          }
+          returnedSerialNumbers = serials.filter(unit => ids.has(unit.id)).map(unit => unit.serial)
+          serials = serials.map(unit => ids.has(unit.id) ? { ...unit, location: row.sourceLocation, status: unit.saleOrderId ? 'assigned' : 'available' } : unit)
+        } else {
+          if (qty < 1 || qty > returnableQty(row)) return NextResponse.json({ error: `Enter a quantity between 1 and ${returnableQty(row)}` }, { status: 422 })
+          // Consumed units first, then exceptions.
+          fromConsumed = Math.min(qty, Number(row.consumedQty) || 0)
+          fromException = qty - fromConsumed
+          bulk = upsertBulkStock(bulk, row.productId, row.sourceLocation, qty)
+        }
+        if (fromConsumed > (Number(row.consumedQty) || 0) || fromException > (Number(row.exceptionQty) || 0)) return NextResponse.json({ error: 'That is more than was closed as consumed or exception' }, { status: 409 })
+        const pi = products.findIndex(p => p.id === row.productId); if (pi >= 0) products[pi] = { ...products[pi], stockQty: Number(products[pi].stockQty || 0) + qty }
+        row.consumedQty -= fromConsumed
+        row.exceptionQty -= fromException
+        row.returnedQty += qty
+        ;(row as ClosedCheckout).returnedAfterClose = ((row as ClosedCheckout).returnedAfterClose || 0) + qty
+        const note = String(body.notes || '').trim()
+        row.closureNotes = [row.closureNotes, `Returned to stock after closing: ${qty} unit(s) by ${sessionName(access.session.user)} on ${now.slice(0, 10)}${note ? ` — ${note}` : ''}`].filter(Boolean).join('\n')
+        moves.unshift({ id: randomUUID(), type: 'return', productId: row.productId, productName: row.productName, qty, reason: `Checkout return after close · ${row.ref}`, fromLocation: fromException && !fromConsumed ? 'quarantine' : 'employee', toLocation: row.sourceLocation, serialNumbers: returnedSerialNumbers, date: now.slice(0, 10), userId: access.session.user.id, documentRef: row.ref })
       } else return NextResponse.json({ error: 'Invalid checkout action' }, { status: 400 })
       rows[index] = row
     }

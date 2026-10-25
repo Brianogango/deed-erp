@@ -72,3 +72,49 @@ describe('stock checkout source stock', () => {
     expect((await post({ action: 'request', productId: 'p-845', sourceLocation: 'warehouse', serialIds: ['s-sold'], receiverName: 'Lab', purpose: 'testing' })).status).toBe(409)
   })
 })
+
+describe('return to stock after a checkout is closed', () => {
+  const issue = async (serialIds: string[]) => {
+    h.user = { id: 'u-tech', role: 'technical_lead', name: 'Tech' }
+    const id = (await (await post({ action: 'request', productId: 'p-845', sourceLocation: 'warehouse', serialIds, receiverName: 'Brian', purpose: 'Other' })).json()).checkout.id
+    h.user = { id: 'u-dir', role: 'director', name: 'Director' }
+    await post({ action: 'approve', id })
+    await post({ action: 'issue', id })
+    return id
+  }
+  const serial = (id: string) => (h.state.deed_serials as any[]).find(s => s.id === id)
+  const checkout = (id: string) => (h.state.deed_stockCheckouts as any[]).find(r => r.id === id)
+
+  it('brings a unit closed as consumed back to its source, available again', async () => {
+    const id = await issue(['s-free'])
+    await post({ action: 'close', id, outcome: 'consumed', qty: 1, serialIds: ['s-free'] })
+    expect(serial('s-free')).toMatchObject({ status: 'written_off' })
+    const listed = (await (await GET())!.json()).checkouts.find((r: any) => r.id === id)
+    expect(listed).toMatchObject({ status: 'completed', returnableSerialIds: ['s-free'], returnableQty: 1 })
+
+    const res = await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'], notes: 'Recorded as used by mistake' })
+    expect(res.status).toBe(200)
+    expect(serial('s-free')).toMatchObject({ location: 'warehouse', status: 'available' })
+    expect(checkout(id)).toMatchObject({ status: 'completed', consumedQty: 0, returnedQty: 1 })
+    expect((h.state.deed_products as any[])[0].stockQty).toBe(4)
+    expect((h.state.deed_stockMoves as any[])[0]).toMatchObject({ type: 'return', toLocation: 'warehouse', serialNumbers: ['FREE1'] })
+    // Nothing left to return.
+    expect((await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })).status).toBe(422)
+  })
+
+  it('brings an exception unit back from quarantine', async () => {
+    const id = await issue(['s-free'])
+    await post({ action: 'close', id, outcome: 'exception', qty: 1, serialIds: ['s-free'] })
+    expect((await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })).status).toBe(200)
+    expect(serial('s-free')).toMatchObject({ location: 'warehouse', status: 'available' })
+    expect(checkout(id)).toMatchObject({ exceptionQty: 0, returnedQty: 1 })
+  })
+
+  it('needs an approver role, and a closed checkout', async () => {
+    const id = await issue(['s-free'])
+    h.user = { id: 'u-fin', role: 'finance_officer', name: 'Fin' }
+    expect((await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })).status).toBe(403)
+    h.user = { id: 'u-dir', role: 'director', name: 'Director' }
+    expect((await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })).status).toBe(409)
+  })
+})
