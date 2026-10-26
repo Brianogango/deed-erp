@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { keepUnchangedRows, sameContent } from '@/lib/same-content'
+import { containedIn, keepContainedRows, keepUnchangedRows, sameContent } from '@/lib/same-content'
 
 describe('sameContent', () => {
   it('ignores key order and undefined fields', () => {
@@ -24,5 +24,21 @@ describe('keepUnchangedRows', () => {
   it('notices added, removed and reordered rows', () => {
     expect(keepUnchangedRows(prev, [prev[0]])).not.toBe(prev)
     expect(keepUnchangedRows(prev, [prev[1], prev[0]])).not.toBe(prev)
+  })
+})
+
+describe('rows that only leave fields out', () => {
+  it('counts a row missing fields the old one has as unchanged', () => {
+    expect(containedIn({ id: 1, name: 'A' }, { name: 'A', id: 1, brand: 'HP' })).toBe(true)
+    expect(containedIn({ id: 1, name: 'B' }, { id: 1, name: 'A', brand: 'HP' })).toBe(false)
+    expect(containedIn({ id: 1, extra: 'x' }, { id: 1 })).toBe(false)
+  })
+
+  it('keeps the previous list when every row is contained in its old row', () => {
+    const prev = [{ id: 'a', name: 'A', brand: 'HP' }, { id: 'b', name: 'B' }]
+    expect(keepContainedRows(prev, [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }])).toBe(prev)
+    const changed = keepContainedRows(prev, [{ id: 'a', name: 'A2' }, { id: 'b', name: 'B' }])
+    expect(changed).not.toBe(prev)
+    expect(changed[1]).toBe(prev[1])
   })
 })

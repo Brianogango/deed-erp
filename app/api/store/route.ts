@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withSharedReadModels } from '@/lib/read-model-cache'
+import { compressedJson } from '@/lib/http/compressed-json'
 import { getServerSession } from '@/lib/auth/server'
 import {
   CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
@@ -202,9 +203,8 @@ export async function GET(request: NextRequest) {
   if (totalMs >= 700 && process.env.NODE_ENV !== 'test') {
     console.warn(`[store] slow GET ${totalMs}ms ${Math.round(json.length / 1024)}KB loaded=${toLoad.join(',') || '-'} unchanged=${unchanged.length}: ${spans.map(([n, ms]) => `${n} ${ms}`).join(', ')}`)
   }
-  return new NextResponse(json, {
+  return compressedJson(request, json, {
     headers: {
-      'Content-Type': 'application/json',
       'Server-Timing': serverTiming(),
       ...(etag ? { ETag: etag } : {}),
       'x-store-read-at': readAt,

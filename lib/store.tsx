@@ -321,9 +321,9 @@ import { computeCollectionDelta, upsertOnlyDelta, type CollectionDelta } from '@
 import { deltaDisabledFor, forgetServerBaseline, patchServerBaseline, rememberServerBaseline, serverBaselineFor } from '@/lib/store-baseline'
 import { isSlimRow, SLIM_MARK } from '@/lib/store-slim'
 import { loadFullRecord } from '@/lib/full-record'
-import { awaitRouteHydration, awaitStoreDownloads, keysChangedSinceRead, noteStoreChanges, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
+import { awaitRouteHydration, awaitStoreDownloads, downloadedThisSession, keysChangedSinceRead, noteStoreChanges, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
 import { formatKeDate, formatKeDateTime, formatKeInteger, installIntlFormatCache } from '@/lib/intl-cache'
-import { keepUnchangedRows } from '@/lib/same-content'
+import { keepContainedRows, keepUnchangedRows } from '@/lib/same-content'
 import { contactFromPersonInput, deriveContactPersons } from '@/lib/contact-person-derive'
 import {
   applyCustomerToInvoice,
@@ -6265,21 +6265,40 @@ function StoreProvider({
 
   // The relational catalog (/api/products) is the source of truth for product
   // identity and commercial fields. Boot merge uses the lite endpoint (no serials).
+  const productsNowRef = useRef(products)
+  productsNowRef.current = products
   const refreshProductCatalog = useCallback(async () => {
     try {
       const rows = await useInventoryDomainStore.getState().refreshProducts()
       if (!Array.isArray(rows) || rows.length === 0) return 0
-      setProducts(prev => {
+      // Merge into the server's product list, not the browser's start-up copy:
+      // merged before that list arrived, every product looked new and the
+      // whole catalog was uploaded on each page load.
+      await awaitRouteHydration(['deed_products'])
+      await awaitStoreDownloads(['deed_products'])
+      const mergeInto = (prev: typeof products) => {
         const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG, { preserveClientOrder: true }) as any[]
         const healed = merged.map(p => {
           if (!isSerialOnlyCategory(p.category)) return p
           if (p.trackingMethod === 'SERIAL' && p.requiresSerial) return p
           return { ...p, trackingMethod: 'SERIAL' as TrackingMethod, requiresSerial: true }
         })
-        // Same data with keys in another order is not a change — saving it
-        // re-uploaded every product on every page load.
-        return keepUnchangedRows(prev as any[], healed) as typeof prev
-      })
+        // Same data with keys in another order, or only leaving out fields the
+        // server keeps anyway, is not a change: saving it re-uploaded every
+        // product on every page load.
+        return keepContainedRows(prev as any[], healed) as typeof prev
+      }
+      const before = productsNowRef.current
+      const next = mergeInto(before)
+      if (next === before) return rows.length
+      // The merged list is the server's own catalog: when this browser has no
+      // unsaved product edits, it is what the server holds — not an edit to
+      // upload. (A later edit is still saved, diffed against it.)
+      const key = 'deed_products'
+      if (!_pendingSync[key] && !_inFlightSyncKeys.has(key) && !getDirtyKeys().has(key)) {
+        try { rememberServerBaseline(key, JSON.stringify(next)) } catch { /* the save path diffs as before */ }
+      }
+      setProducts(current => (current === before ? next : mergeInto(current)))
       return rows.length
     } catch {
       return 0
@@ -7308,7 +7327,13 @@ function StoreProvider({
   })
 
   // Keep the cached product quantity aligned with the location-aware stock records.
+  // Only from complete, current copies: a page that has not downloaded the
+  // serials or stock levels (the dashboard, repairs) computed quantities from
+  // part of the stock, and that recalculated list — hundreds of products —
+  // was saved to the server on every load, overwriting good quantities and
+  // making every other open session download the catalog again.
   useEffect(() => {
+    if (!downloadedThisSession(['deed_products', 'deed_serials', 'deed_bulkStock'])) return
     setProducts(prev => {
       let changed = false
       const next = prev.map(product => {

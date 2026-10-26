@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   FRESH_WINDOW_MS,
   awaitStoreDownloads,
+  downloadedThisSession,
   keysChangedSinceRead,
   keysNeedingDownload,
   noteStoreChanges,
@@ -102,5 +103,14 @@ describe('route hydration — notices wait for the page load', () => {
   it('does not wait for keys the load is not fetching', async () => {
     const { awaitRouteHydration } = await import('@/lib/store-freshness')
     await expect(awaitRouteHydration(['deed_invoices'])).resolves.toBeUndefined()
+  })
+})
+
+describe('downloadedThisSession', () => {
+  beforeEach(() => resetStoreFreshness())
+  it('is true only once every key was downloaded, and stays true past the fresh window', () => {
+    noteStoreRead(['deed_products', 'deed_serials'], new Date().toISOString())
+    expect(downloadedThisSession(['deed_products', 'deed_serials'])).toBe(true)
+    expect(downloadedThisSession(['deed_products', 'deed_serials', 'deed_bulkStock'])).toBe(false)
   })
 })

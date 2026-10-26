@@ -40,3 +40,33 @@ export function keepUnchangedRows<T extends { id?: unknown }>(prev: T[], next: T
   })
   return changed ? out : prev
 }
+
+/**
+ * Every field `next` sets holds the same data in `prev`; `prev` may carry
+ * more. For lists the server stores field by field (a save keeps fields it
+ * is not sent), a row that only leaves some out changes nothing there.
+ */
+export function containedIn(next: unknown, prev: unknown): boolean {
+  if (!next || !prev || typeof next !== 'object' || typeof prev !== 'object' || Array.isArray(next) || Array.isArray(prev)) {
+    return sameContent(next, prev)
+  }
+  const n = next as Record<string, unknown>
+  const p = prev as Record<string, unknown>
+  return Object.keys(n).every(k => n[k] === undefined || sameContent(n[k], p[k]))
+}
+
+/** keepUnchangedRows, where a row that only leaves out fields of the old one is unchanged. */
+export function keepContainedRows<T extends { id?: unknown }>(prev: T[], next: T[]): T[] {
+  const byId = new Map(prev.map(row => [String(row?.id), row]))
+  let changed = prev.length !== next.length
+  const out = next.map((row, i) => {
+    const old = byId.get(String(row?.id))
+    if (old && containedIn(row, old)) {
+      if (prev[i] !== old) changed = true
+      return old
+    }
+    changed = true
+    return row
+  })
+  return changed ? out : prev
+}

@@ -75,6 +75,11 @@ export function holdsStoreCopy(keys: string[]): boolean {
   return keys.every(key => seen.has(key) || held.has(key))
 }
 
+/** Every one of these keys was downloaded from the server in this page session (not only read from the browser cache). */
+export function downloadedThisSession(keys: string[]): boolean {
+  return keys.every(key => seen.has(key))
+}
+
 /** Copies loaded from the browser cache: enough to ask for a 304, not to skip asking. */
 export function noteStoreHeld(keys: string[]) {
   for (const key of keys) held.add(key)

@@ -238,16 +238,35 @@ const migrateSessionVersion = async () => {
   }
 }
 
+/**
+ * Table set-up and one-off fixes, run once per server process. They used to
+ * run before EVERY user lookup — every signed-in API request: about nine
+ * ALTER TABLE attempts (each taking the users table's exclusive lock, so
+ * concurrent requests queued behind one another) and seven UPDATEs, which
+ * cost 100–600 ms per request. Roles are normalised on read
+ * (normalizeStoredRole), so a legacy role written later still reads right.
+ * A failed run is retried by the next lookup.
+ */
+let userStoreReady: Promise<void> | null = null
+
 const ensureUserStore = async () => {
-  await ensureSchemaReady()
-  await migratePasswordHistory()
-  await migrateLockoutFields()
-  await migrateMustChangePassword()
-  await migrateEmployeeLinkFields()
-  await migrateActsAsTechnician()
-  await migrateSessionVersion()
-  await migrateRoles()
-  await ensureAccessRoleStore()
+  if (!userStoreReady) {
+    userStoreReady = (async () => {
+      await ensureSchemaReady()
+      await migratePasswordHistory()
+      await migrateLockoutFields()
+      await migrateMustChangePassword()
+      await migrateEmployeeLinkFields()
+      await migrateActsAsTechnician()
+      await migrateSessionVersion()
+      await migrateRoles()
+      await ensureAccessRoleStore()
+    })().catch(error => {
+      userStoreReady = null
+      throw error
+    })
+  }
+  await userStoreReady
 }
 
 export const listAuthUsers = async () => {

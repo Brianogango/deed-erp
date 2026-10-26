@@ -1,3 +1,4 @@
+import { compressedJson } from '@/lib/http/compressed-json'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
@@ -43,7 +44,8 @@ export async function GET(request: Request) {
       .some(key => searchParams.has(key))
     if (!paged) {
       const products = await prisma.product.findMany({ include, orderBy: { name: 'asc' } })
-      return NextResponse.json(products)
+      // The whole catalog, on every page load: gzipped (~10x smaller).
+      return compressedJson(request, JSON.stringify(products))
     }
 
     // Accept pageSize as an alias for the shared contract's limit.
