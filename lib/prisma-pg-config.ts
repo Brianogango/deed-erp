@@ -21,9 +21,22 @@ import type { PoolConfig } from 'pg'
  */
 const PRISMA_SESSION_TIMEZONE = 'UTC'
 
+/**
+ * Connections per app process. pg's default of 10 was too few: a full store
+ * load reads about a dozen lists side by side, each with several queries, so
+ * requests from a few open tabs queued for a connection and every list looked
+ * slow. Two PM2 processes at 20 each (plus the small raw-SQL pool) stay well
+ * under Postgres' default limit of 100. PRISMA_POOL_MAX overrides it.
+ */
+export function prismaPoolMax(env: string | undefined = process.env.PRISMA_POOL_MAX): number {
+  const n = Number(env)
+  return Number.isInteger(n) && n >= 2 && n <= 80 ? n : 20
+}
+
 export function prismaPgConfig(connectionString: string): PoolConfig {
   return {
     connectionString,
     options: `-c TimeZone=${PRISMA_SESSION_TIMEZONE}`,
+    max: prismaPoolMax(),
   }
 }

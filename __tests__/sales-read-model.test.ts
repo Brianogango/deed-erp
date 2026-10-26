@@ -54,3 +54,29 @@ describe('quotes for the screens, read from the table', () => {
     expect(list.map(r => r.id)).toEqual(['q-1', 'q-local'])
   })
 })
+
+describe('sale orders: only changed orders are re-read', () => {
+  it('re-reads just the order whose signature changed', async () => {
+    const { clearReadModelCache } = await import('@/lib/read-model-cache')
+    clearReadModelCache()
+    let fp = 'a|b|c|d|clients'
+    let sigs = [{ id: 'so-1', sig: '1' }, { id: 'so-2', sig: '1' }]
+    const db: Record<string, ReturnType<typeof order>> = {
+      'so-1': order(), 'so-2': order({ id: 'so-2', orderNumber: 'SO/2026/0002' }),
+    }
+    ;(mockPrisma as any).$queryRawUnsafe = vi.fn(async (sql: string) => (sql.includes('AS fp') ? [{ fp }] : sigs))
+    mockPrisma.saleOrder.findMany.mockImplementation(async (args: any) => {
+      const ids: string[] | undefined = args?.where?.id?.in
+      return Object.values(db).filter(o => !ids || ids.includes(o.id))
+    })
+    await loadScreenSaleOrders([])
+    db['so-2'] = order({ id: 'so-2', orderNumber: 'SO/2026/0002', totalAmount: 2500 })
+    fp = 'a2|b|c|d|clients'
+    sigs = [{ id: 'so-1', sig: '1' }, { id: 'so-2', sig: '2' }]
+    const list = await loadScreenSaleOrders([])
+    expect(mockPrisma.saleOrder.findMany.mock.calls.at(-1)?.[0].where).toEqual({ id: { in: ['so-2'] } })
+    expect(list.map(o => o.id)).toEqual(['so-1', 'so-2'])
+    expect(list[1].total).toBe(2500)
+    delete (mockPrisma as any).$queryRawUnsafe
+  })
+})

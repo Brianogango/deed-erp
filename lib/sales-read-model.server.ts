@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { QUOTE_EXTRA_KEYS, readScreenExtras, SALE_ORDER_EXTRA_KEYS } from '@/lib/screen-extras'
-import { cachedByFingerprint } from '@/lib/read-model-cache'
+import { cachedByFingerprint, incrementalRows } from '@/lib/read-model-cache'
 
 /**
  * Sale orders and quotes as the screens use them, read from their tables
@@ -42,26 +42,76 @@ function withCopyOnlyRows(out: Row[], copy: Row[], tableIds: Set<string>, tableR
 
 export async function loadScreenSaleOrders(screenCopy: unknown): Promise<Row[]> {
   const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  let fingerprint = ''
   return cachedByFingerprint(
     'sale-orders',
     async () => {
       const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(`
         SELECT concat_ws('|',
           (SELECT max(updated_at)::text || ':' || count(*) FROM sale_orders),
-          (SELECT count(*) || ':' || coalesce(sum(line_total), 0) || ':' || coalesce(sum(qty), 0) FROM sale_order_items),
-          (SELECT max(updated_at)::text || ':' || count(*) FROM invoices WHERE sale_order_id IS NOT NULL),
+          -- Whole-row hash: this table's columns are camelCase ("lineTotal"); naming
+          -- line_total made this query fail on every load, so the list was rebuilt
+          -- every time instead of cached.
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(i::text, ',' ORDER BY i.id), '')) FROM sale_order_items i),
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(v.id::text || ':' || v.status || ':' || coalesce(v.sale_order_id::text, ''), ',' ORDER BY v.id), ''))
+             FROM invoices v WHERE v.sale_order_id IS NOT NULL OR v.id IN (SELECT "A" FROM "_InvoiceSourceSaleOrder")),
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(l."A"::text || l."B"::text, ',' ORDER BY l."A", l."B"), '')) FROM "_InvoiceSourceSaleOrder" l),
           (SELECT max(updated_at)::text || ':' || count(*) FROM delivery_notes),
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(l."A"::text || l."B"::text, ',' ORDER BY l."A", l."B"), '')) FROM "_DeliveryNoteSaleOrders" l),
           (SELECT md5(coalesce(string_agg(id::text || ':' || name, ',' ORDER BY id), '')) FROM clients)
         ) AS fp`)
-      return `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
+      fingerprint = `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
+      return fingerprint
     },
-    () => buildScreenSaleOrders(screenCopy),
+    // The last two parts (client names, the frozen copy) touch every order;
+    // while they are unchanged only changed orders are re-read.
+    () => buildScreenSaleOrders(screenCopy, fingerprint.split('|').slice(-2).join('|')),
   )
 }
 
-async function buildScreenSaleOrders(screenCopy: unknown): Promise<Row[]> {
+/**
+ * One hash per order over its row, its lines, and the invoices and delivery
+ * notes linked to it (only the parts the list shows), in list order.
+ */
+async function orderSignatures(): Promise<Array<{ id: string; sig: string }>> {
+  return prisma.$queryRawUnsafe<Array<{ id: string; sig: string }>>(`
+    WITH it AS (SELECT sale_order_id, string_agg(i::text, ',' ORDER BY i.id) AS s FROM sale_order_items i GROUP BY sale_order_id),
+         -- The list links invoices through the "_InvoiceSourceSaleOrder" join
+         -- table (A = invoice, B = order); sale_order_id is hashed as well.
+         inv AS (SELECT so_id AS sale_order_id, string_agg(s, ',' ORDER BY s) AS s FROM (
+                   SELECT l."B" AS so_id, 'm:' || v.id::text || ':' || v.status || ':' || v.created_at::text AS s
+                   FROM "_InvoiceSourceSaleOrder" l JOIN invoices v ON v.id = l."A"
+                   UNION ALL
+                   SELECT sale_order_id, 'c:' || id::text || ':' || status || ':' || created_at::text
+                   FROM invoices WHERE sale_order_id IS NOT NULL) x GROUP BY so_id),
+         dn AS (SELECT sale_order_id, string_agg(id::text || ':' || status || ':' || created_at::text, ',' ORDER BY id) AS s
+                FROM delivery_notes WHERE sale_order_id IS NOT NULL GROUP BY sale_order_id),
+         dm AS (SELECT l."B" AS sale_order_id, string_agg(d.id::text || ':' || d.status || ':' || d.created_at::text, ',' ORDER BY d.id) AS s
+                FROM "_DeliveryNoteSaleOrders" l JOIN delivery_notes d ON d.id = l."A" GROUP BY l."B")
+    SELECT o.id::text AS id,
+           md5(o::text || '#' || coalesce(it.s, '') || '#' || coalesce(inv.s, '') || '#' || coalesce(dn.s, '') || '#' || coalesce(dm.s, '')) AS sig
+    FROM sale_orders o
+    LEFT JOIN it ON it.sale_order_id = o.id
+    LEFT JOIN inv ON inv.sale_order_id = o.id
+    LEFT JOIN dn ON dn.sale_order_id = o.id
+    LEFT JOIN dm ON dm.sale_order_id = o.id
+    ORDER BY o.created_at DESC, o.id`)
+}
+
+async function buildScreenSaleOrders(screenCopy: unknown, base = ''): Promise<Row[]> {
   const { list, map } = byId(screenCopy)
+  const out = await incrementalRows<Row>({
+    name: 'sale-orders',
+    base,
+    signatures: orderSignatures,
+    load: async ids => new Map((await readSaleOrders(ids, map)).map(r => [String(r.id), r])),
+  })
+  return withCopyOnlyRows([...out], list, new Set(out.map(o => String(o.id))), new Set(out.map(o => String(o.ref ?? ''))))
+}
+
+async function readSaleOrders(ids: string[] | null, map: Map<string, Row>): Promise<Row[]> {
   const orders = await prisma.saleOrder.findMany({
+    where: ids ? { id: { in: ids } } : undefined,
     include: {
       client: true,
       items: true,
@@ -82,7 +132,7 @@ async function buildScreenSaleOrders(screenCopy: unknown): Promise<Row[]> {
       deliveryId: latestOpen([...deliveryNotesDirect, ...deliveries]) ?? copy?.deliveryId,
     }
   })
-  return withCopyOnlyRows(out, list, new Set(orders.map(o => o.id)), new Set(orders.map(o => o.orderNumber)))
+  return out
 }
 
 /**

@@ -2,6 +2,7 @@ import 'server-only'
 import { pickRepairStoreRow } from '@/lib/repair-store-merge'
 import { createHash } from 'crypto'
 import prisma from './prisma'
+import { cachedByFingerprint, clearReadModelCache } from './read-model-cache'
 import { loadAppState, saveStoreKeys } from './server-store'
 import { resolveClientId } from './legacy-compat'
 
@@ -23,13 +24,10 @@ const MIRROR_STATE_KEY = 'repair_mirror_hashes_v1'
 // type/brand/model take their own fields, createdById takes createdByUserId.
 const MIRROR_FINGERPRINT_VERSION = 3
 
-let repairsPayloadCache: { at: number; data: any[] } | null = null
-// Short TTL so GET /api/repairs does not serve a 15s-stale list after another
-// user's write while still coalescing the boot fan-out on one worker.
-const REPAIRS_PAYLOAD_CACHE_MS = 3_000
-
+// The repair list is kept until the repairs table changes (row count, last
+// update) — it used to be re-read every 3 seconds, ~300 ms each time.
 function invalidateRepairsPayloadCache() {
-  repairsPayloadCache = null
+  clearReadModelCache('repairs')
 }
 
 // Blob statuses → relational repair_status enum
@@ -130,24 +128,31 @@ const _mirrorQueue: unknown[] = []
  */
 export async function loadRepairsFromPrisma(): Promise<any[] | null> {
   try {
-    if (repairsPayloadCache && Date.now() - repairsPayloadCache.at < REPAIRS_PAYLOAD_CACHE_MS) {
-      return repairsPayloadCache.data
-    }
-    // Deterministic order: an unordered findMany returns rows in physical
-    // order, which changes every time the mirror updates a row — the visible
-    // list then re-sorted itself mid-click whenever a poll re-hydrated.
-    const rows = await prisma.repair.findMany({
-      select: { payload: true },
-      orderBy: [{ intakeDate: 'desc' }, { jobNumber: 'desc' }],
-    })
-    const withPayload = rows.filter(r => r.payload && typeof r.payload === 'object')
-    if (!withPayload.length) return null
-    const data = withPayload.map(r => r.payload)
-    repairsPayloadCache = { at: Date.now(), data }
-    return data
+    return await cachedByFingerprint<any[] | null>(
+      'repairs',
+      async () => {
+        const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(
+          `SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') AS fp FROM repairs`)
+        return rows[0]?.fp ?? ''
+      },
+      readRepairPayloads,
+    )
   } catch {
     return null
   }
+}
+
+async function readRepairPayloads(): Promise<any[] | null> {
+  // Deterministic order: an unordered findMany returns rows in physical
+  // order, which changes every time the mirror updates a row — the visible
+  // list then re-sorted itself mid-click whenever a poll re-hydrated.
+  const rows = await prisma.repair.findMany({
+    select: { payload: true },
+    orderBy: [{ intakeDate: 'desc' }, { jobNumber: 'desc' }],
+  })
+  const withPayload = rows.filter(r => r.payload && typeof r.payload === 'object')
+  if (!withPayload.length) return null
+  return withPayload.map(r => r.payload)
 }
 
 /** Single repair by current ref, prisma id, or blob payload id. */

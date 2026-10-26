@@ -153,6 +153,21 @@ function failOverlay(state: AppStateMap, key: string) {
   overlayFailures.set(state, set)
 }
 
+/**
+ * A table-built list kept until `sql` (one text value summarising the
+ * tables it is built from) changes. The frozen copy's shape is added because
+ * copy-only rows are merged in.
+ */
+async function cachedOverlay<T>(name: string, sql: string, screenCopy: unknown, build: () => Promise<T>): Promise<T> {
+  const [{ cachedByFingerprint }, prisma] = await Promise.all([import('./read-model-cache'), import('./prisma').then(m => m.default)])
+  const copy = Array.isArray(screenCopy) ? screenCopy as Array<Record<string, unknown>> : []
+  return cachedByFingerprint(name, async () => {
+    const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(sql)
+    const fp = rows[0]?.fp
+    return fp ? `${fp}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}` : ''
+  }, build)
+}
+
 async function overlayAuthoritativeInvoices(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_invoices')) return
   const fromPrisma = await import('./invoice-read-model.server')
@@ -191,7 +206,10 @@ async function overlayAuthoritativeJournals(state: AppStateMap, keys?: string[])
 async function overlayAuthoritativeAccounts(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_accounts')) return
   const fromPrisma = await import('./account-read-model.server')
-    .then(m => m.loadScreenAccounts(state.deed_accounts))
+    // Small table: hashed whole, so any column (balances included) counts.
+    .then(m => cachedOverlay('accounts',
+      `SELECT count(*) || ':' || md5(coalesce(string_agg(a::text, ',' ORDER BY a.id), '')) AS fp FROM account_codes a`,
+      state.deed_accounts, () => m.loadScreenAccounts(state.deed_accounts)))
     .catch(err => { console.error('[server-store] accounts from table failed:', err); failOverlay(state, 'deed_accounts'); return null })
   if (fromPrisma) state.deed_accounts = fromPrisma
 }
@@ -199,7 +217,9 @@ async function overlayAuthoritativeAccounts(state: AppStateMap, keys?: string[])
 async function overlayAuthoritativeContacts(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_contacts')) return
   const fromPrisma = await Promise.all([import('./contact-prisma'), import('./prisma')])
-    .then(([m, p]) => m.loadScreenContacts(p.default as any, state.deed_contacts))
+    .then(([m, p]) => cachedOverlay('contacts',
+      `SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') AS fp FROM clients`,
+      state.deed_contacts, () => m.loadScreenContacts(p.default as any, state.deed_contacts)))
     .catch(err => { console.error('[server-store] contacts from table failed:', err); failOverlay(state, 'deed_contacts'); return null })
   if (fromPrisma) state.deed_contacts = fromPrisma
 }
@@ -302,7 +322,9 @@ async function overlayAuthoritativeDeposits(state: AppStateMap, keys?: string[])
 async function overlayAuthoritativeHoldovers(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_holdovers')) return
   const fromPrisma = await import('./holdover-read-model.server')
-    .then(m => m.loadScreenHoldovers(state.deed_holdovers))
+    .then(m => cachedOverlay('holdovers',
+      `SELECT count(*) || ':' || md5(coalesce(string_agg(h::text, ',' ORDER BY h.id), '')) AS fp FROM holdovers h`,
+      state.deed_holdovers, () => m.loadScreenHoldovers(state.deed_holdovers)))
     .catch(err => { console.error('[server-store] holdovers from table failed:', err); failOverlay(state, 'deed_holdovers'); return null })
   if (fromPrisma) state.deed_holdovers = fromPrisma
 }
@@ -310,7 +332,10 @@ async function overlayAuthoritativeHoldovers(state: AppStateMap, keys?: string[]
 async function overlayAuthoritativeActivities(state: AppStateMap, keys?: string[]) {
   if (keys && !keys.includes('deed_oppActivities')) return
   const fromPrisma = await import('./opportunity-activity-read-model.server')
-    .then(m => m.loadScreenActivities(state.deed_oppActivities))
+    .then(m => cachedOverlay('activities',
+      `SELECT (SELECT count(*) || ':' || md5(coalesce(string_agg(a::text, ',' ORDER BY a.id), '')) FROM opportunity_activities a)
+         || '|' || (SELECT md5(coalesce(string_agg(concat_ws(':', id::text, assigned_to::text, created_by::text), ',' ORDER BY id), '')) FROM opportunities) AS fp`,
+      state.deed_oppActivities, () => m.loadScreenActivities(state.deed_oppActivities)))
     .catch(err => { console.error('[server-store] activities from table failed:', err); failOverlay(state, 'deed_oppActivities'); return null })
   if (fromPrisma) state.deed_oppActivities = fromPrisma
 }
@@ -319,36 +344,20 @@ async function overlayStockTables(state: AppStateMap, keys?: string[]) {
   const want = (key: string) => !keys || keys.includes(key)
   if (!['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations'].some(want)) return
   const m = await import('./stock-read-model.server')
-  if (want('deed_serials')) {
-    const serials = await m.loadScreenSerials(state.deed_serials)
-      .catch(err => { console.error('[server-store] serials from table failed:', err); failOverlay(state, 'deed_serials'); return null })
-    if (serials) state.deed_serials = serials
-  }
-  if (want('deed_bulkStock')) {
-    const levels = await m.loadScreenBulkStock(state.deed_bulkStock)
-      .catch(err => { console.error('[server-store] stock levels from table failed:', err); failOverlay(state, 'deed_bulkStock'); return null })
-    if (levels) state.deed_bulkStock = levels
-  }
-  if (want('deed_stockMoves')) {
-    const moves = await m.loadScreenStockMoves(state.deed_stockMoves)
-      .catch(err => { console.error('[server-store] stock moves from table failed:', err); failOverlay(state, 'deed_stockMoves'); return null })
-    if (moves) state.deed_stockMoves = moves
-  }
-  if (want('deed_products')) {
-    const products = await m.loadScreenProducts(state.deed_products)
-      .catch(err => { console.error('[server-store] products from table failed:', err); failOverlay(state, 'deed_products'); return null })
-    if (products) state.deed_products = products
-  }
-  if (want('deed_receipts')) {
-    const receipts = await m.loadScreenReceipts(state.deed_receipts)
-      .catch(err => { console.error('[server-store] receipts from table failed:', err); failOverlay(state, 'deed_receipts'); return null })
-    if (receipts) state.deed_receipts = receipts
-  }
-  if (want('deed_stockReservations')) {
-    const reservations = await m.loadScreenReservations(state.deed_stockReservations)
-      .catch(err => { console.error('[server-store] reservations from table failed:', err); failOverlay(state, 'deed_stockReservations'); return null })
-    if (reservations) state.deed_stockReservations = reservations
-  }
+  // Separate tables and keys: read side by side (they used to run one after another).
+  const lists: Array<[string, string, (copy: unknown) => Promise<unknown[]>]> = [
+    ['deed_serials', 'serials', m.loadScreenSerials],
+    ['deed_bulkStock', 'stock levels', m.loadScreenBulkStock],
+    ['deed_stockMoves', 'stock moves', m.loadScreenStockMoves],
+    ['deed_products', 'products', m.loadScreenProducts],
+    ['deed_receipts', 'receipts', m.loadScreenReceipts],
+    ['deed_stockReservations', 'reservations', m.loadScreenReservations],
+  ]
+  await Promise.all(lists.filter(([key]) => want(key)).map(async ([key, label, load]) => {
+    const value = await load(state[key])
+      .catch(err => { console.error(`[server-store] ${label} from table failed:`, err); failOverlay(state, key); return null })
+    if (value) state[key] = value as AppStateMap[string]
+  }))
 }
 
 /** The screen copies as stored, without the table overlays — for parity checks. */
@@ -394,8 +403,10 @@ async function applyOverlays(state: AppStateMap, keys?: string[]): Promise<void>
     timed('accounts', () => overlayAuthoritativeAccounts(state, keys))(),
     timed('contacts', () => overlayAuthoritativeContacts(state, keys))(),
     timed('purchase-orders+stock', async () => {
-      await overlayAuthoritativePurchaseOrders(state, keys)
-      await overlayStockTables(state, keys)
+      // The order overlay reads the stored receipts copy synchronously when
+      // it starts, before the stock overlay replaces that key, so the two
+      // can run side by side.
+      await Promise.all([overlayAuthoritativePurchaseOrders(state, keys), overlayStockTables(state, keys)])
     })(),
     timed('deposits', () => overlayAuthoritativeDeposits(state, keys))(),
     timed('holdovers', () => overlayAuthoritativeHoldovers(state, keys))(),

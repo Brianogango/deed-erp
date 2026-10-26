@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withSharedReadModels } from '@/lib/read-model-cache'
 import { getServerSession } from '@/lib/auth/server'
 import {
   CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
@@ -168,7 +169,9 @@ export async function GET(request: NextRequest) {
   }
   const toLoad = unchanged.length ? keys.filter(key => !unchanged.includes(key)) : keys
 
-  const state = toLoad.length ? await loadAppState(toLoad) : {}
+  // Read-only: the cached lists are used as they are, not copied. Everything
+  // below filters / maps into new arrays and only serializes.
+  const state = toLoad.length ? await withSharedReadModels(() => loadAppState(toLoad)) : {}
   mark('load')
   // Strip permission-gated and collaborative keys the caller isn't allowed to read.
   for (const key of Object.keys(state)) {

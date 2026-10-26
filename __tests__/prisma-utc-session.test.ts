@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
-import { prismaPgConfig } from '@/lib/prisma-pg-config'
+import { prismaPgConfig, prismaPoolMax } from '@/lib/prisma-pg-config'
 import { parsePrismaDateTimeColumns, PRISMA_ONLY_TABLES, MIXED_WRITER_TABLES } from '../scripts/fix-prisma-timestamptz-offset.mjs'
 
 describe('Prisma sessions are pinned to UTC', () => {
@@ -8,7 +8,15 @@ describe('Prisma sessions are pinned to UTC', () => {
     expect(prismaPgConfig('postgresql://u:p@h/db')).toEqual({
       connectionString: 'postgresql://u:p@h/db',
       options: '-c TimeZone=UTC',
+      max: 20,
     })
+  })
+
+  it('allows more than pg\'s default 10 connections, overridable within limits', () => {
+    expect(prismaPoolMax(undefined)).toBe(20)
+    expect(prismaPoolMax('30')).toBe(30)
+    expect(prismaPoolMax('500')).toBe(20)
+    expect(prismaPoolMax('abc')).toBe(20)
   })
 
   it('both Prisma clients use the shared config', () => {

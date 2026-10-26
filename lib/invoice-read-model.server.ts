@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma'
 import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
-import { cachedByFingerprint } from '@/lib/read-model-cache'
+import { cachedByFingerprint, clearReadModelCache, incrementalRows } from '@/lib/read-model-cache'
 import { legacyBankIdFromNotes } from '@/lib/accounting/bank-account-ref'
 
 /**
@@ -217,15 +217,8 @@ async function documentSignatures(): Promise<Array<{ id: string; sig: string }>>
     ORDER BY i.invoice_date DESC, i.id`)
 }
 
-/**
- * Converted documents from the last build, by id, with the signature each was
- * read at. A payment on one invoice used to re-read and convert all of them
- * (0.4–1 s on production, several times a minute); now only that one is.
- */
-let lastBuild: { base: string; sigs: Map<string, string>; rows: Map<string, Row> } | null = null
-
 export function clearInvoiceRowCache(): void {
-  lastBuild = null
+  clearReadModelCache('invoices')
 }
 
 async function convert(rows: DbInvoice[], screenById: Map<string, Row>): Promise<Map<string, Row>> {
@@ -237,49 +230,19 @@ async function convert(rows: DbInvoice[], screenById: Map<string, Row>): Promise
   return new Map(rows.map(inv => [inv.id, toScreenInvoice(inv, screenById.get(inv.id), inv.postedById ? posters.get(inv.postedById) : undefined)]))
 }
 
+/**
+ * A payment on one invoice used to re-read and convert all of them (0.4–1 s
+ * on production, several times a minute); now only that one is.
+ */
 async function buildScreenInvoices(screenCopy: unknown, base = ''): Promise<Row[]> {
   const screen = Array.isArray(screenCopy) ? screenCopy as Row[] : []
   const screenById = new Map(screen.filter(r => r?.id).map(r => [String(r.id), r]))
-
-  // Signatures are read BEFORE the rows, so a row is never older than the
-  // signature stored with it; a change in between only causes a re-read.
-  const sigList = await documentSignatures().catch(() => null)
-  const previous = lastBuild && base && lastBuild.base === base ? lastBuild : null
-
-  let ordered: Row[]
-  if (sigList && previous) {
-    const stale = sigList.filter(s => previous.sigs.get(s.id) !== s.sig).map(s => s.id)
-    const fresh = stale.length ? await convert(await loadRows(stale), screenById) : new Map<string, Row>()
-    const staleIds = new Set(stale)
-    const rows = new Map<string, Row>()
-    const sigs = new Map<string, string>()
-    for (const { id, sig } of sigList) {
-      // A changed document that is gone by the time it is read is dropped,
-      // never served in its old form.
-      const row = staleIds.has(id) ? fresh.get(id) : previous.rows.get(id)
-      if (!row) continue
-      rows.set(id, row)
-      sigs.set(id, sig)
-    }
-    ordered = [...rows.values()]
-    lastBuild = { base, sigs, rows }
-  } else {
-    const all = await loadRows()
-    const rows = await convert(all, screenById)
-    if (sigList) {
-      // List order follows the signature query (date, then id) in both paths.
-      const listed = new Set(sigList.map(s => s.id))
-      ordered = sigList.map(s => rows.get(s.id)).filter((r): r is Row => Boolean(r))
-      // Added after the signatures were read: shown now, re-read next time.
-      for (const inv of all) if (!listed.has(inv.id)) ordered.push(rows.get(inv.id)!)
-      const sigs = new Map(sigList.filter(s => rows.has(s.id)).map(s => [s.id, s.sig]))
-      lastBuild = base ? { base, sigs, rows } : null
-    } else {
-      ordered = all.map(inv => rows.get(inv.id)!)
-      lastBuild = null
-    }
-  }
-
+  const ordered = await incrementalRows<Row>({
+    name: 'invoices',
+    base,
+    signatures: documentSignatures,
+    load: async ids => convert(await loadRows(ids ?? undefined), screenById),
+  })
   const out = [...ordered]
   const tableIds = new Set(out.map(r => String(r.id)))
   const tableRefs = new Set(out.map(r => String(r.ref ?? '')))

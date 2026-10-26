@@ -2,6 +2,7 @@ import 'server-only'
 
 import prisma from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { cachedByFingerprint } from '@/lib/read-model-cache'
 
 /**
  * Serials, quantity stock and stock moves as the screens use them, read from
@@ -17,6 +18,25 @@ import { Prisma } from '@prisma/client'
 type Row = Record<string, any>
 
 const asObject = (v: unknown): Row => (v && typeof v === 'object' && !Array.isArray(v) ? v as Row : {})
+
+/**
+ * Keep a stock list until its table changes. `sql` returns one text value
+ * summarising the table (row count, last change); the frozen copy's shape is
+ * added because copy-only rows are merged in. Every list here used to be read
+ * in full on every load.
+ */
+function cachedStockList(name: string, sql: string, screenCopy: unknown, build: () => Promise<Row[]>): Promise<Row[]> {
+  const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  return cachedByFingerprint(
+    `stock:${name}`,
+    async () => {
+      const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(sql)
+      const fp = rows[0]?.fp
+      return fp ? `${fp}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}` : ''
+    },
+    build,
+  )
+}
 
 function toScreenSerial(s: { id: string; serialNumber: string; productId: string; inventoryBarcode: string | null; location: string | null; screenExtras: unknown }): Row {
   const extras = asObject(s.screenExtras)
@@ -39,6 +59,12 @@ async function tableSerials() {
 }
 
 export async function loadScreenSerials(screenCopy: unknown): Promise<Row[]> {
+  return cachedStockList('serials',
+    `SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') || ':' || count(removed_at) AS fp FROM serial_numbers`,
+    screenCopy, () => buildScreenSerials(screenCopy))
+}
+
+async function buildScreenSerials(screenCopy: unknown): Promise<Row[]> {
   const rows = await tableSerials()
   if (!rows.length) return Array.isArray(screenCopy) ? screenCopy as Row[] : []
   const out = rows.map(toScreenSerial)
@@ -53,6 +79,12 @@ export async function loadScreenSerials(screenCopy: unknown): Promise<Row[]> {
 }
 
 export async function loadScreenBulkStock(screenCopy: unknown): Promise<Row[]> {
+  return cachedStockList('levels',
+    `SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') || ':' || coalesce(sum(qty), 0) AS fp FROM stock_location_levels`,
+    screenCopy, () => buildScreenBulkStock(screenCopy))
+}
+
+async function buildScreenBulkStock(screenCopy: unknown): Promise<Row[]> {
   const rows = await prisma.stockLocationLevel.findMany({ orderBy: [{ productId: 'asc' }, { location: 'asc' }] })
   if (!rows.length) return Array.isArray(screenCopy) ? screenCopy as Row[] : []
   return rows.map(r => ({ productId: r.productId, location: r.location, qty: r.qty }))
@@ -63,6 +95,13 @@ export async function loadScreenBulkStock(screenCopy: unknown): Promise<Row[]> {
  * move kept as saved). Moves only the copy has stay listed.
  */
 export async function loadScreenStockMoves(screenCopy: unknown): Promise<Row[]> {
+  // No updated_at on moves: they are added and removed, not edited.
+  return cachedStockList('moves',
+    `SELECT count(*) || ':' || coalesce(max(created_at)::text, '') || ':' || count(removed_at) || ':' || coalesce(sum(qty), 0) AS fp FROM stock_movements`,
+    screenCopy, () => buildScreenStockMoves(screenCopy))
+}
+
+async function buildScreenStockMoves(screenCopy: unknown): Promise<Row[]> {
   const rows = await prisma.stockMovement.findMany({
     where: { screenExtras: { not: Prisma.DbNull } },
     select: { blobId: true, screenExtras: true, removedAt: true },
@@ -87,6 +126,12 @@ export async function loadScreenStockMoves(screenCopy: unknown): Promise<Row[]> 
  * do not come back from the copy.
  */
 export async function loadScreenReservations(screenCopy: unknown): Promise<Row[]> {
+  return cachedStockList('reservations',
+    `SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') || ':' || count(removed_at) || ':' || count(released_at) AS fp FROM stock_reservations`,
+    screenCopy, () => buildScreenReservations(screenCopy))
+}
+
+async function buildScreenReservations(screenCopy: unknown): Promise<Row[]> {
   const rows = await prisma.stockReservation.findMany({
     where: { blobId: { not: null } },
     select: { blobId: true, screenExtras: true, status: true, releasedAt: true, removedAt: true },
@@ -113,6 +158,12 @@ export async function loadScreenReservations(screenCopy: unknown): Promise<Row[]
 
 /** Goods receipts (drafts included) from receipt_documents, newest first. Receipts only the copy has stay listed. */
 export async function loadScreenReceipts(screenCopy: unknown): Promise<Row[]> {
+  return cachedStockList('receipts',
+    `SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') || ':' || count(removed_at) AS fp FROM receipt_documents`,
+    screenCopy, () => buildScreenReceipts(screenCopy))
+}
+
+async function buildScreenReceipts(screenCopy: unknown): Promise<Row[]> {
   const all = await prisma.receiptDocument.findMany({ select: { id: true, record: true, removedAt: true }, orderBy: { receiptDate: 'desc' } })
   const rows = all.filter(r => r.removedAt === null)
   const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
@@ -185,6 +236,12 @@ async function tableTwinOf(): Promise<(row: Row) => boolean> {
  * stale duplicate of a table product or a built-in demo product.
  */
 export async function loadScreenProducts(screenCopy: unknown): Promise<Row[]> {
+  return cachedStockList('products',
+    `SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') || ':' || count(screen_extras) AS fp FROM products`,
+    screenCopy, () => buildScreenProducts(screenCopy))
+}
+
+async function buildScreenProducts(screenCopy: unknown): Promise<Row[]> {
   const rows = await prisma.product.findMany({ where: { screenExtras: { not: Prisma.DbNull } }, select: PRODUCT_SELECT })
   const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
   if (!rows.length) return copy
