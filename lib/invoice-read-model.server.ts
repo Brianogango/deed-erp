@@ -174,6 +174,7 @@ export function toScreenInvoice(inv: DbInvoice, screen?: Row, postedByName?: str
  */
 export async function loadScreenInvoices(screenCopy: unknown): Promise<Row[]> {
   const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  let fingerprint = ''
   return cachedByFingerprint(
     'invoices',
     async () => {
@@ -186,22 +187,102 @@ export async function loadScreenInvoices(screenCopy: unknown): Promise<Row[]> {
           (SELECT md5(coalesce(string_agg(id::text || ':' || username, ',' ORDER BY id), '')) FROM users),
           (SELECT md5(coalesce(string_agg(id::text || ':' || name, ',' ORDER BY id), '')) FROM clients)
         ) AS fp`)
-      return `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
+      fingerprint = `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
+      return fingerprint
     },
-    () => buildScreenInvoices(screenCopy),
+    // The last three parts (user names, client names, the frozen copy) touch
+    // every row; while they are unchanged only changed documents are re-read.
+    // Counted from the end: concat_ws skips an empty table's part.
+    () => buildScreenInvoices(screenCopy, fingerprint.split('|').slice(-3).join('|')),
   )
 }
 
-async function buildScreenInvoices(screenCopy: unknown): Promise<Row[]> {
+/**
+ * One hash per document over its own row, its lines, its payments and its
+ * allocations (with their payments), in list order. Whole rows are hashed so
+ * any column change counts, without listing columns here.
+ */
+async function documentSignatures(): Promise<Array<{ id: string; sig: string }>> {
+  return prisma.$queryRawUnsafe<Array<{ id: string; sig: string }>>(`
+    WITH it AS (SELECT invoice_id, string_agg(ii::text, ',' ORDER BY ii.id) AS s FROM invoice_items ii GROUP BY invoice_id),
+         pa AS (SELECT invoice_id, string_agg(p::text, ',' ORDER BY p.id) AS s FROM payments p WHERE invoice_id IS NOT NULL GROUP BY invoice_id),
+         al AS (SELECT a.invoice_id, string_agg(a::text || p::text, ',' ORDER BY a.id) AS s
+                FROM payment_allocations a JOIN payments p ON p.id = a.payment_id GROUP BY a.invoice_id)
+    SELECT i.id::text AS id,
+           md5(i::text || '#' || coalesce(it.s, '') || '#' || coalesce(pa.s, '') || '#' || coalesce(al.s, '')) AS sig
+    FROM invoices i
+    LEFT JOIN it ON it.invoice_id = i.id
+    LEFT JOIN pa ON pa.invoice_id = i.id
+    LEFT JOIN al ON al.invoice_id = i.id
+    ORDER BY i.invoice_date DESC, i.id`)
+}
+
+/**
+ * Converted documents from the last build, by id, with the signature each was
+ * read at. A payment on one invoice used to re-read and convert all of them
+ * (0.4–1 s on production, several times a minute); now only that one is.
+ */
+let lastBuild: { base: string; sigs: Map<string, string>; rows: Map<string, Row> } | null = null
+
+export function clearInvoiceRowCache(): void {
+  lastBuild = null
+}
+
+async function convert(rows: DbInvoice[], screenById: Map<string, Row>): Promise<Map<string, Row>> {
+  const posterIds = [...new Set(rows.map(r => r.postedById).filter((id): id is string => Boolean(id)))]
+  const posters = posterIds.length
+    ? new Map((await prisma.user.findMany({ where: { id: { in: posterIds } }, select: { id: true, username: true } }))
+      .map(u => [u.id, personName(u)]))
+    : new Map<string, string>()
+  return new Map(rows.map(inv => [inv.id, toScreenInvoice(inv, screenById.get(inv.id), inv.postedById ? posters.get(inv.postedById) : undefined)]))
+}
+
+async function buildScreenInvoices(screenCopy: unknown, base = ''): Promise<Row[]> {
   const screen = Array.isArray(screenCopy) ? screenCopy as Row[] : []
   const screenById = new Map(screen.filter(r => r?.id).map(r => [String(r.id), r]))
-  const rows = await loadRows()
-  const posterIds = [...new Set(rows.map(r => r.postedById).filter((id): id is string => Boolean(id)))]
-  const posters = new Map((await prisma.user.findMany({ where: { id: { in: posterIds } }, select: { id: true, username: true } }))
-    .map(u => [u.id, personName(u)]))
-  const out = rows.map(inv => toScreenInvoice(inv, screenById.get(inv.id), inv.postedById ? posters.get(inv.postedById) : undefined))
-  const tableIds = new Set(rows.map(r => r.id))
-  const tableRefs = new Set(rows.map(r => r.invoiceNumber))
+
+  // Signatures are read BEFORE the rows, so a row is never older than the
+  // signature stored with it; a change in between only causes a re-read.
+  const sigList = await documentSignatures().catch(() => null)
+  const previous = lastBuild && base && lastBuild.base === base ? lastBuild : null
+
+  let ordered: Row[]
+  if (sigList && previous) {
+    const stale = sigList.filter(s => previous.sigs.get(s.id) !== s.sig).map(s => s.id)
+    const fresh = stale.length ? await convert(await loadRows(stale), screenById) : new Map<string, Row>()
+    const staleIds = new Set(stale)
+    const rows = new Map<string, Row>()
+    const sigs = new Map<string, string>()
+    for (const { id, sig } of sigList) {
+      // A changed document that is gone by the time it is read is dropped,
+      // never served in its old form.
+      const row = staleIds.has(id) ? fresh.get(id) : previous.rows.get(id)
+      if (!row) continue
+      rows.set(id, row)
+      sigs.set(id, sig)
+    }
+    ordered = [...rows.values()]
+    lastBuild = { base, sigs, rows }
+  } else {
+    const all = await loadRows()
+    const rows = await convert(all, screenById)
+    if (sigList) {
+      // List order follows the signature query (date, then id) in both paths.
+      const listed = new Set(sigList.map(s => s.id))
+      ordered = sigList.map(s => rows.get(s.id)).filter((r): r is Row => Boolean(r))
+      // Added after the signatures were read: shown now, re-read next time.
+      for (const inv of all) if (!listed.has(inv.id)) ordered.push(rows.get(inv.id)!)
+      const sigs = new Map(sigList.filter(s => rows.has(s.id)).map(s => [s.id, s.sig]))
+      lastBuild = base ? { base, sigs, rows } : null
+    } else {
+      ordered = all.map(inv => rows.get(inv.id)!)
+      lastBuild = null
+    }
+  }
+
+  const out = [...ordered]
+  const tableIds = new Set(out.map(r => String(r.id)))
+  const tableRefs = new Set(out.map(r => String(r.ref ?? '')))
   for (const r of screen) {
     if (r?.id && !tableIds.has(String(r.id)) && !tableRefs.has(String(r.ref ?? ''))) out.push(r)
   }

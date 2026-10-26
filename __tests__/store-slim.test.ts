@@ -93,6 +93,7 @@ const { mockGetSession, mockLoadAppState, mockSaveStoreKeys } = vi.hoisted(() =>
 vi.mock('@/lib/auth/server', () => ({ getServerSession: mockGetSession }))
 vi.mock('@/lib/server-store', () => ({
   loadAppState: mockLoadAppState, loadAppStateForWrite: mockLoadAppState, saveStoreKeys: mockSaveStoreKeys,
+  frozenTableFingerprints: async () => ({}),
   getAppStateVersion: vi.fn().mockResolvedValue('v'), getAppStateKeyVersions: vi.fn().mockResolvedValue({}),
 }))
 vi.mock('@/lib/auth/db', () => ({ sql: vi.fn(), withDbTransaction: vi.fn() }))

@@ -15,6 +15,10 @@ vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
 vi.mock('@/lib/server-store', () => ({
   loadAppState: vi.fn(async (keys: string[]) => Object.fromEntries(keys.filter(k => k in m.state).map(k => [k, m.state[k]]))),
   saveStoreKeys: m.saveStoreKeys,
+  findStoreItem: vi.fn(async (key: string, id: string) => {
+    const list = m.state[key]
+    return Array.isArray(list) ? list.find((e: any) => e?.id === id) ?? null : null
+  }),
 }))
 vi.mock('@/lib/prisma', () => ({
   default: {

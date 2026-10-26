@@ -6,7 +6,14 @@ const { mockSession, mockLoad, mockSave } = vi.hoisted(() => ({
   mockSave: vi.fn(),
 }))
 vi.mock('@/lib/auth/server', () => ({ getServerSession: mockSession }))
-vi.mock('@/lib/server-store', () => ({ loadAppState: mockLoad, saveStoreKeys: mockSave }))
+vi.mock('@/lib/server-store', () => ({
+  loadAppState: mockLoad,
+  saveStoreKeys: mockSave,
+  findStoreItem: async (key: string, id: string) => {
+    const list = (await mockLoad([key]))?.[key]
+    return Array.isArray(list) ? list.find((e: any) => e?.id === id) ?? null : null
+  },
+}))
 
 import { DELETE, POST } from '@/app/api/expense-receipts/[expenseId]/route'
 

@@ -5,7 +5,7 @@ import {
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite, redactStoreValueForUser,
 } from '@/lib/auth/authorization'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
-import { loadAppState, loadAppStateForWrite, saveStoreKeys, getAppStateVersion, getAppStateKeyVersions } from '@/lib/server-store'
+import { loadAppState, loadAppStateForWrite, saveStoreKeys, getAppStateVersion, getAppStateKeyVersions, frozenTableFingerprints } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
 import { keepReversedPaymentsOff } from '@/lib/accounting/payment-reversal'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
@@ -104,7 +104,14 @@ function viewerFingerprint(session: { user: { id: string; role: string; modules?
 
 export async function GET(request: NextRequest) {
   const t0 = Date.now()
+  // Where the time goes, per step: sent as Server-Timing (browser dev tools,
+  // Network → Timing) and logged when a load is slow.
+  const spans: Array<[string, number]> = []
+  let lastMark = t0
+  const mark = (name: string) => { const now = Date.now(); spans.push([name, now - lastMark]); lastMark = now }
+  const serverTiming = () => spans.map(([name, ms]) => `${name};dur=${ms}`).join(', ')
   const session = await getServerSession()
+  mark('auth')
   if (!session) {
     recordHttpMetric({ path: '/api/store', status: 401, ms: Date.now() - t0 })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -130,13 +137,18 @@ export async function GET(request: NextRequest) {
   const readAt = new Date().toISOString()
   let etag: string | undefined
   let version: string | undefined
+  // The table summaries are shared by the whole-set and per-key versions:
+  // computed once (each one scans its table).
+  const tables = await frozenTableFingerprints(keys)
+  mark('tables')
   if (keys?.length) {
-    version = await getAppStateVersion(keys)
+    version = await getAppStateVersion(keys, tables)
+    mark('version')
     if (version) {
       etag = buildStoreEtag(session, keys, version)
       if (request.headers.get('if-none-match') === etag) {
         recordHttpMetric({ path: '/api/store', status: 304, ms: Date.now() - t0 })
-        return new NextResponse(null, { status: 304, headers: { ETag: etag, 'x-store-read-at': readAt } })
+        return new NextResponse(null, { status: 304, headers: { ETag: etag, 'x-store-read-at': readAt, 'Server-Timing': serverTiming() } })
       }
     }
   }
@@ -149,13 +161,15 @@ export async function GET(request: NextRequest) {
   const have = parseHaveHeader(request.headers.get('x-store-have'))
   if (have) {
     const viewer = viewerFingerprint(session)
-    const raw = await getAppStateKeyVersions(keys)
+    const raw = await getAppStateKeyVersions(keys, tables)
+    mark('key-versions')
     keyVersions = Object.fromEntries(keys.map(key => [key, raw[key] ? `${raw[key]}#${viewer}` : '']))
     unchanged = keys.filter(key => keyVersions![key] && have[key] === keyVersions![key])
   }
   const toLoad = unchanged.length ? keys.filter(key => !unchanged.includes(key)) : keys
 
   const state = toLoad.length ? await loadAppState(toLoad) : {}
+  mark('load')
   // Strip permission-gated and collaborative keys the caller isn't allowed to read.
   for (const key of Object.keys(state)) {
     if (!canReadStoreKey(session.user, key)) delete state[key]
@@ -171,15 +185,24 @@ export async function GET(request: NextRequest) {
   for (const key of Object.keys(state)) {
     if (SLIM_RULES[key]) state[key] = slimCollection(key, state[key]) as typeof state[string]
   }
+  mark('filter')
   // Clients already ignore non-deed_ keys when hydrating; expose version for If-Match writes.
   const payload = {
     ...state,
     ...(version ? { version } : {}),
     ...(keyVersions ? { versions: keyVersions, unchanged } : {}),
   }
-  recordHttpMetric({ path: '/api/store', status: 200, ms: Date.now() - t0 })
-  return NextResponse.json(payload, {
+  const json = JSON.stringify(payload)
+  mark('json')
+  const totalMs = Date.now() - t0
+  recordHttpMetric({ path: '/api/store', status: 200, ms: totalMs })
+  if (totalMs >= 700 && process.env.NODE_ENV !== 'test') {
+    console.warn(`[store] slow GET ${totalMs}ms ${Math.round(json.length / 1024)}KB loaded=${toLoad.join(',') || '-'} unchanged=${unchanged.length}: ${spans.map(([n, ms]) => `${n} ${ms}`).join(', ')}`)
+  }
+  return new NextResponse(json, {
     headers: {
+      'Content-Type': 'application/json',
+      'Server-Timing': serverTiming(),
       ...(etag ? { ETag: etag } : {}),
       'x-store-read-at': readAt,
       // The body depends on x-store-have (unchanged collections are left

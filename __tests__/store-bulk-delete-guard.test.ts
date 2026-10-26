@@ -17,6 +17,7 @@ vi.mock('@/lib/server-store', async () => {
     loadAppState: mockLoadAppState,
     loadAppStateForWrite: mockLoadAppState,
     saveStoreKeys: mockSaveStoreKeys,
+    frozenTableFingerprints: async () => ({}),
     getAppStateVersion: mockGetAppStateVersion,
   }
 })

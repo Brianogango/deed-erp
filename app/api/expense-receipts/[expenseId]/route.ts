@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { findStoreItem, loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { canAccessRecord, isRoleAllowed } from '@/lib/auth/authorization'
 
 // Each expense receipt is stored under its own app_state key:
@@ -45,9 +45,7 @@ const RECEIPT_ADMIN_ROLES = ['director', 'finance_officer', 'admin_officer']
  * attach and only the finance roles may read.
  */
 async function expenseAccess(user: { id: string; role: string }, expenseId: string): Promise<'ok' | 'denied' | 'unknown'> {
-  const state = await loadAppState(['deed_expenses']).catch(() => ({} as Record<string, unknown>))
-  const expenses = Array.isArray(state.deed_expenses) ? state.deed_expenses as Array<Record<string, unknown>> : []
-  const expense = expenses.find(e => e?.id === expenseId)
+  const expense = await findStoreItem('deed_expenses', expenseId).catch(() => null)
   if (!expense) return 'unknown'
   return canAccessRecord(user.role, 'expense', expense, user.id) ? 'ok' : 'denied'
 }

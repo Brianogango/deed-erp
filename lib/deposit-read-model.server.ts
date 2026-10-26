@@ -1,6 +1,7 @@
 import 'server-only'
 
 import prisma from '@/lib/prisma'
+import { cachedByFingerprint } from '@/lib/read-model-cache'
 
 /**
  * Customer deposits as the screens use them, read from the deposits table
@@ -53,6 +54,25 @@ export function depositToScreen(d: any) {
 
 
 export async function loadScreenDeposits(screenCopy: unknown): Promise<Row[]> {
+  const copy = Array.isArray(screenCopy) ? screenCopy as Row[] : []
+  return cachedByFingerprint(
+    'deposits',
+    async () => {
+      // Whole-row hashes: these tables are small, and any column change counts.
+      const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(`
+        SELECT concat_ws('|',
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(d::text, ',' ORDER BY d.id), '')) FROM deposits d),
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(i::text, ',' ORDER BY i.id), '')) FROM deposit_items i),
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(p::text, ',' ORDER BY p.id), '')) FROM deposit_payments p)
+        ) AS fp`)
+      const fp = rows[0]?.fp
+      return fp ? `${fp}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}` : ''
+    },
+    () => buildScreenDeposits(copy),
+  )
+}
+
+async function buildScreenDeposits(screenCopy: Row[]): Promise<Row[]> {
   const rows = await prisma.deposit.findMany({
     include: { items: { orderBy: { sortOrder: 'asc' } }, payments: { orderBy: { paidAt: 'asc' } } },
     orderBy: { createdAt: 'desc' },

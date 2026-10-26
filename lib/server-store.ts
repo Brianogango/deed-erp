@@ -94,6 +94,29 @@ async function loadStateWithLegacyFallback(keys?: string[]): Promise<AppStateMap
   return loadLegacyAppState()
 }
 
+/**
+ * One item of a list key, by id, without loading the whole list. The shared
+ * store keeps each item of a list as its own row (record key `id:<id>`), so
+ * this reads one row. When that row is missing (key not moved to the row
+ * store yet, other backends, tests) it falls back to the full list.
+ */
+export async function findStoreItem(key: string, id: string): Promise<Record<string, unknown> | null> {
+  if (process.env.NODE_ENV !== 'test' && readsPrismaState() && !isBlobKey(key)) {
+    try {
+      const prisma = (await import('./prisma')).default
+      const row = await prisma.erpStateRecord.findUnique({
+        where: { key_recordKey: { key, recordKey: `id:${id}` } },
+        select: { payload: true },
+      })
+      const payload = row?.payload as Record<string, unknown> | null | undefined
+      if (payload && typeof payload === 'object' && String(payload.id) === id) return payload
+    } catch { /* fall through to the full list */ }
+  }
+  const state = await loadAppState([key])
+  const list = Array.isArray(state[key]) ? state[key] as Array<Record<string, unknown>> : []
+  return list.find(item => item && String(item.id) === id) ?? null
+}
+
 async function overlayExternalBlobs(state: AppStateMap, keys?: string[]) {
   if (!keys?.length) return
   for (const key of keys.filter(isBlobKey)) {
@@ -250,7 +273,12 @@ const FROZEN_TABLE_FINGERPRINTS: Record<string, string> = {
   deed_purchaseOrders: `SELECT (SELECT max(updated_at)::text || ':' || count(*) FROM purchase_orders) || ':' || (SELECT coalesce(sum(qty_received), 0) || '/' || coalesce(sum(qty_billed), 0) FROM purchase_order_items)`,
 }
 
-async function frozenTableFingerprints(keys: string[]): Promise<Record<string, string>> {
+/**
+ * Count / last-change summaries of the tables behind frozen keys. Each one
+ * scans its table, so a caller that needs both getAppStateVersion and
+ * getAppStateKeyVersions computes them once and passes them to both.
+ */
+export async function frozenTableFingerprints(keys: string[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {}
   const wanted = keys.filter(key => FROZEN_STORE_KEYS.has(key) && FROZEN_TABLE_FINGERPRINTS[key])
   if (!wanted.length || process.env.NODE_ENV === 'test') return out
@@ -412,7 +440,7 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
  * Change fingerprint combines the Prisma cursor with the frozen legacy cursor.
  * Once every requested key is backfilled, only the Prisma portion changes.
  */
-export async function getAppStateVersion(keys: string[]): Promise<string> {
+export async function getAppStateVersion(keys: string[], precomputedTables?: Record<string, string>): Promise<string> {
   try {
     const prismaVersion = process.env.NODE_ENV === 'test' || !readsPrismaState()
       ? ''
@@ -424,7 +452,7 @@ export async function getAppStateVersion(keys: string[]): Promise<string> {
       WHERE key = ANY(${keys})
     `
     const row = rows?.[0] as { latest?: string; n?: string | number } | undefined
-    const tables = await frozenTableFingerprints(keys)
+    const tables = precomputedTables ?? await frozenTableFingerprints(keys)
     const tableVersion = Object.keys(tables).sort().map(key => `${key}=${tables[key]}`).join(';')
     return `${prismaVersion}|legacy:${row?.latest ?? ''}:${row?.n ?? 0}${tableVersion ? `|tables:${tableVersion}` : ''}`
   } catch {
@@ -436,7 +464,7 @@ export async function getAppStateVersion(keys: string[]): Promise<string> {
  * Version of each key on its own (Prisma counter + legacy timestamp). Empty
  * string when unknown — never treated as unchanged.
  */
-export async function getAppStateKeyVersions(keys: string[]): Promise<Record<string, string>> {
+export async function getAppStateKeyVersions(keys: string[], precomputedTables?: Record<string, string>): Promise<Record<string, string>> {
   const out: Record<string, string> = {}
   if (!keys.length) return out
   try {
@@ -446,7 +474,7 @@ export async function getAppStateKeyVersions(keys: string[]): Promise<Record<str
     await ensureTable()
     const { rows } = await sql`SELECT key, updated_at FROM app_state WHERE key = ANY(${keys})`
     const legacy = new Map((rows as { key: string; updated_at: string }[]).map(r => [r.key, r.updated_at]))
-    const tables = await frozenTableFingerprints(keys)
+    const tables = precomputedTables ?? await frozenTableFingerprints(keys)
     for (const key of keys) {
       const p = projected[key] ?? ''
       const l = legacy.get(key) ?? ''

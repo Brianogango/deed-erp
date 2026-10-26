@@ -1,6 +1,7 @@
 import 'server-only'
 
 import prisma from '@/lib/prisma'
+import { cachedByFingerprint } from '@/lib/read-model-cache'
 import { mapPOToClient } from '@/lib/purchase/po-api-shared'
 
 /**
@@ -29,6 +30,31 @@ export async function loadScreenPurchaseOrders(screenCopy: unknown, receiptsCopy
     receiptsByPo.set(String(r.poId), list)
   }
 
+  const receiptLinks = [...receiptsByPo].map(([po, ids]) => `${po}:${ids.join(',')}`).sort().join(';')
+  return cachedByFingerprint(
+    'purchaseOrders',
+    async () => {
+      // Whole-row hashes of the orders and their lines; vendors, products and
+      // bills only as far as the list shows them.
+      const rows = await prisma.$queryRawUnsafe<Array<{ fp: string | null }>>(`
+        SELECT concat_ws('|',
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(o::text, ',' ORDER BY o.id), '')) FROM purchase_orders o),
+          (SELECT count(*) || ':' || md5(coalesce(string_agg(i::text, ',' ORDER BY i.id), '')) FROM purchase_order_items i),
+          (SELECT md5(coalesce(string_agg(c.id::text || ':' || c.name, ',' ORDER BY c.id), ''))
+             FROM clients c WHERE c.id IN (SELECT client_id FROM purchase_orders)),
+          (SELECT md5(coalesce(string_agg(p::text, ',' ORDER BY p.id), ''))
+             FROM products p WHERE p.id IN (SELECT product_id FROM purchase_order_items)),
+          (SELECT md5(coalesce(string_agg(b.id::text || ':' || b.status || ':' || b.purchase_order_id, ',' ORDER BY b.id), ''))
+             FROM invoices b WHERE b.purchase_order_id IS NOT NULL)
+        ) AS fp`)
+      const fp = rows[0]?.fp
+      return fp ? `${fp}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}|receipts:${receiptLinks}` : ''
+    },
+    () => buildScreenPurchaseOrders(copy, receiptsByPo),
+  )
+}
+
+async function buildScreenPurchaseOrders(copy: Row[], receiptsByPo: Map<string, string[]>): Promise<Row[]> {
   const orders = await prisma.purchaseOrder.findMany({
     include: {
       vendor: true,
