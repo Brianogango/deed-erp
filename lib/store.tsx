@@ -1307,6 +1307,8 @@ export interface InvoicePayment {
   bankAccountId?: string
   journalEntryId?: string
   recordedBy: string
+  /** Money a supplier paid back on a supplier credit note (comes in, not out). */
+  supplierRefund?: boolean
   /** Set on entries in Invoice.voidedPayments (lib/accounting/payment-reversal.ts). */
   reversedAt?: string
   reversedBy?: string
@@ -15678,19 +15680,33 @@ const storeCtx: AppState = {
       // note here means the paperwork needs Finance's attention, but must
       // never be reported as done when it silently wasn't.
       if (creditNote) {
-        const finalCreditPreview: Invoice = {
-          ...creditNote,
-          amountPaid: -appliedTotal,
-          notes: applications.length
-            ? `${creditNote.notes}\nApplied to ${applications.map(a => a.billRef).join(', ')}`
-            : creditNote.notes,
-        }
+        // Created unused; each use on a bill is then recorded by the server
+        // (supplier-credit apply), which updates the bill and the credit
+        // together. Setting the bill's paid amount from here never reached
+        // the server: the invoice update route ignores paid amounts.
+        const finalCreditPreview: Invoice = { ...creditNote, amountPaid: 0 }
         try {
           const res = await fetch('/api/invoices', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...finalCreditPreview, isCreditNote: true }),
           })
+          if (res.ok) {
+            const created = await res.json().catch(() => null) as { id?: string } | null
+            const serverCreditId = created?.id || creditNote.id
+            const failed: string[] = []
+            for (const a of applications) {
+              const applied = await fetch(`/api/invoices/${serverCreditId}/supplier-credit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'apply', billId: a.billId, amount: a.amount }),
+              }).then(r => r.ok).catch(() => false)
+              if (!applied) failed.push(a.billRef)
+            }
+            if (failed.length) {
+              showToast(`Credit ${creditNote.ref} was created but could not be used on ${failed.join(', ')} — use it from Finance → Supplier credits`, 'error')
+            }
+          }
           if (!res.ok) {
             const payload = await res.json().catch(() => null)
             showToast(
@@ -15750,7 +15766,9 @@ const storeCtx: AppState = {
               notes: `${inv.notes || ''}\nCredit ${creditNote!.ref} applied: ${fmtKes(application.amount)} (return ${ret.ref})`.trim(),
             }
           }
-          sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) })
+          // Draft bills changed by the return are saved here; a credit's use on
+          // a confirmed bill was already recorded by the server above.
+          if (deductions) sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) })
           return inv
         })
         if (creditNote) {

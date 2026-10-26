@@ -34,3 +34,10 @@ describe('supplier credit notes', () => {
     expect(invoicePaymentStatus({ ...bill, amountPaid: 0 })).toBe('not_paid')
   })
 })
+
+describe('supplier credit refunds', () => {
+  it('counts refunds on the credit note itself', () => {
+    const credit = { id: 'c2', ref: 'VCN/2026/0009', type: 'vendor_bill', status: 'posted', total: -23000, amountPaid: -23000, payments: [{ amount: 23000, method: 'bank_transfer', supplierRefund: true }] }
+    expect(vendorCreditSummary(credit, [credit])).toMatchObject({ amount: 23000, applied: 23000, remaining: 0, refunded: 23000 })
+  })
+})

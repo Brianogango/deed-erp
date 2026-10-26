@@ -97,6 +97,8 @@ import AnalyticBudgetsTab from './accounting/AnalyticBudgetsTab'
 import GeneralLedgerTab from './accounting/GeneralLedgerTab'
 import PartnerLedgerTab from './accounting/PartnerLedgerTab'
 import CustomerCreditsTab from './accounting/CustomerCreditsTab'
+import SupplierCreditsTab from '@/components/modules/accounting/SupplierCreditsTab'
+import { isVendorCreditNote } from '@/lib/finance/vendor-credit-note'
 import RefundsTab from './accounting/RefundsTab'
 import Cheques from '@/components/finance/Cheques'
 import { userCan } from '@/lib/auth/can'
@@ -126,6 +128,7 @@ type MainTab =
   | 'dashboard'
   | 'invoices'
   | 'bills'
+  | 'supplier_credits'
   | 'journals'
   | 'refunds'
   | 'credits'
@@ -173,6 +176,7 @@ const FINANCE_SECTION_TABS: Record<FinanceSection, Array<{ id: MainTab; label: s
   ],
   money_out: [
     { id: 'bills', label: 'Vendor bills' },
+    { id: 'supplier_credits', label: 'Supplier credits' },
     { id: 'recurring_bills', label: 'Recurring bills' },
     { id: 'agent_commissions', label: 'Agent commissions' },
   ],
@@ -866,6 +870,9 @@ function AccountingContent() {
 
     for (const i of all) {
       const refLooksLikeBill = String(i.ref ?? '').toUpperCase().startsWith('BILL')
+      // Supplier credit notes (negative, VCN/…) are not bills: they have
+      // their own tab and do not count in what we owe on bills.
+      if (isVendorCreditNote(i)) continue
       if (i.type === 'vendor_bill' || refLooksLikeBill) {
         vend.push(i)
         if (isOpenInvoice(i)) outAP += invoiceResidual(i)
@@ -962,6 +969,7 @@ function AccountingContent() {
       subtitle: `${vendorBills.length} records · ${fmtKes(outstandingAP)} outstanding`,
     },
     credits: { title: 'Customer credits', subtitle: 'Credit balances and applications' },
+    supplier_credits: { title: 'Supplier credits', subtitle: 'What suppliers owe back: use on a bill or record their refund' },
     credit_applications: { title: 'Credit account applications', subtitle: 'Corporate credit terms: documents, credit check and approval' },
     commissions: { title: 'Salespeople', subtitle: 'Commission statements and payment status' },
     recurring_bills: { title: 'Recurring bills', subtitle: 'Rent, internet, electricity: bills that come every period' },
@@ -1917,6 +1925,8 @@ function AccountingContent() {
             </div>
           ) : tab === 'refunds' ? (
             <div className="finance-subview finance-subview--refunds"><RefundsTab /></div>
+          ) : tab === 'supplier_credits' ? (
+            <div className="finance-subview finance-subview--credits"><SupplierCreditsTab /></div>
           ) : tab === 'credits' ? (
             <div className="finance-subview finance-subview--credits"><CustomerCreditsTab /></div>
           ) : tab === 'credit_applications' ? (

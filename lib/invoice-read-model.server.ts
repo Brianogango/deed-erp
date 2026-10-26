@@ -72,7 +72,10 @@ function paymentsOf(inv: DbInvoice) {
       id: p.id,
       date: day(p.paidAt),
       amount,
-      method: String(p.paymentMethod),
+      // Supplier credit uses / refunds are stored on the enum's nearest member
+      // ('credit', 'bank_transfer'…); the note keeps what they really are.
+      method: /method:vendor_credit\b/.test(String(p.notes ?? '')) ? 'vendor_credit' : String(p.paymentMethod),
+      ...(/method:vendor_refund\b/.test(String(p.notes ?? '')) ? { supplierRefund: true } : {}),
       ...(p.reference ? { reference: p.reference } : {}),
       // The column only holds real bank_accounts ids; a payment into a built-in
       // or later-added account ('absa', 'ncba', …) keeps its id in the notes.

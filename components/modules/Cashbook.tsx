@@ -201,6 +201,23 @@ export function buildCashbookEntries(
   // without any cash movement, so they never belong in the cashbook.
   invoices.filter(i => i.type === 'vendor_bill' && (i.payments?.length ?? 0) > 0).forEach(inv => {
     inv.payments!.filter(payment => payment.method !== 'vendor_credit').forEach(payment => {
+      // A supplier paying back a credit note is money in.
+      if (payment.supplierRefund) {
+        entries.push({
+          id: `bill-refund-${inv.id}-${payment.id}`,
+          date: payment.date,
+          ref: payment.reference || inv.ref,
+          description: `Supplier refund — ${inv.partnerName} (${inv.ref})`,
+          category: getCOACategory('vendor_bill', accounts),
+          bankAccountId: payment.bankAccountId || posBank((payment.method === 'mpesa' || payment.method === 'card' || payment.method === 'cash') ? payment.method : 'card'),
+          debit: 0,
+          credit: payment.amount,
+          sourceType: 'vendor_bill',
+          sourceId: inv.id,
+          recordedBy: payment.recordedBy || 'Finance',
+        })
+        return
+      }
       const bought = billCategory(inv.lines ?? [], payment.amount)
       entries.push({
         id: `bill-pay-${inv.id}-${payment.id}`,

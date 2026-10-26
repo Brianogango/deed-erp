@@ -12,7 +12,7 @@ type Doc = {
   total: number
   amountPaid: number
   notes?: string
-  payments?: ReadonlyArray<{ amount: number; method?: string; reference?: string }>
+  payments?: ReadonlyArray<{ amount: number; method?: string; reference?: string; supplierRefund?: boolean }>
 }
 
 export type VendorCreditUse = { billId: string | null; billRef: string; amount: number }
@@ -25,6 +25,8 @@ export type VendorCreditSummary = {
   /** What the supplier still owes us. */
   remaining: number
   usedOn: VendorCreditUse[]
+  /** Paid back by the supplier. */
+  refunded: number
 }
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -53,5 +55,13 @@ export function vendorCreditSummary(credit: Doc, bills: ReadonlyArray<Doc>): Ven
       usedOn.push({ billId: bill?.id ?? null, billRef: ref, amount: refs.length === 1 ? applied : 0 })
     }
   }
-  return { amount, applied, remaining: round(Math.max(0, amount - applied)), usedOn }
+  const refunded = round((credit.payments ?? [])
+    .filter(p => p.supplierRefund)
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0))
+  return { amount, applied, remaining: round(Math.max(0, amount - applied)), usedOn, refunded }
+}
+
+/** What is left of a supplier credit (stored row: negative total, amountPaid ≤ 0). */
+export function creditOpenAmount(credit: { totalAmount: unknown; amountPaid: unknown }): number {
+  return Math.round((Math.abs(Number(credit.totalAmount)) - Math.abs(Number(credit.amountPaid))) * 100) / 100
 }
