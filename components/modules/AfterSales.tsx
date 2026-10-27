@@ -5,7 +5,7 @@ import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
-import { Badge, Modal, ModuleSkeleton, useMounted, ModuleHeader, TabBar } from '@/components/ui'
+import { Badge, Field, Input, Modal, ModuleSkeleton, Select, Textarea, useMounted, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import {
@@ -884,102 +884,132 @@ function AfterSalesContent() {
       )}
 
       {/* ── Create RMA Modal ──────────────────────────────────────────────── */}
-      {showCreateRMA && (
-        <div className="modal-overlay" onClick={() => setShowCreateRMA(false)}>
-          <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-t1">New Return Request</h3>
-              <button onClick={() => setShowCreateRMA(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
-            </div>
+      {showCreateRMA && (() => {
+        const canSubmit = Boolean(matchedSO && rmaReason.trim() && rmaLines.length > 0)
+        const soldLines = matchedSO?.lines ?? []
+        return (
+          <Modal
+            title="New return request"
+            subtitle="Record what the customer is bringing back and why"
+            onClose={() => setShowCreateRMA(false)}
+            width={640}
+            variant="enterprise"
+            footer={
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" className="btn-outline text-xs" onClick={() => setShowCreateRMA(false)}>Cancel</button>
+                <button type="button" className="btn-primary text-xs" disabled={!canSubmit} onClick={submitRMA}>
+                  Submit return
+                </button>
+              </div>
+            }
+          >
+            <div className="flex flex-col gap-4">
+              <Field
+                label="Sale order, POS sale or invoice"
+                required
+                hint={matchedSO || rmaSORef.trim() ? undefined : 'Type the document number exactly, e.g. SO/0045, POS/0001 or INV/2026/0021'}
+                error={rmaSORef.trim() && !matchedSO ? 'No sale order, POS sale or invoice has this number' : undefined}
+              >
+                <Input
+                  value={rmaSORef}
+                  onChange={setRmaSORef}
+                  placeholder="e.g. SO/0045, POS/0001, INV/2026/0021"
+                  autoFocus
+                />
+              </Field>
 
-            <div className="space-y-3">
-              {/* Source document lookup — sale order, POS order, or invoice */}
-              <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Sale Order / POS / Invoice Reference *</label>
-                <input aria-label="Sale order, POS, or invoice reference" className="form-input w-full text-[12px]" placeholder="e.g. SO/0045, POS/0001, INV/2026/0021"
-                  value={rmaSORef} onChange={e => setRmaSORef(e.target.value)} />
-                {rmaSORef && !matchedSO && <p className="text-[10px] text-red-600 mt-1">No sale order, POS sale, or invoice found with this reference</p>}
-                {matchedSO && (
-                  <div className="mt-1 px-3 py-2 rounded-lg text-[11px]" style={{ background: 'var(--success-bg)', border: '1px solid #A7F3D0' }}>
-                    ✓ {matchedSO.customerName} · {fmtDate(matchedSO.date)} · {fmtKes(matchedSO.total)}
+              {matchedSO && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="m-0 truncate text-xs font-bold text-[var(--text-1)]">{matchedSO.customerName}</p>
+                    <p className="m-0 text-[11px] text-[var(--text-3)]">
+                      {fmtDate(matchedSO.date)} · {soldLines.length} item{soldLines.length === 1 ? '' : 's'} sold
+                    </p>
                   </div>
-                )}
-              </div>
+                  <span className="whitespace-nowrap font-mono text-xs font-bold text-[var(--text-1)]">{fmtKes(matchedSO.total)}</span>
+                </div>
+              )}
 
-              <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Return Reason *</label>
-                <textarea aria-label="Return reason" className="form-input w-full text-[12px]" rows={2}
+              <Field label="Reason for the return" required>
+                <Textarea
+                  value={rmaReason}
+                  onChange={setRmaReason}
+                  rows={3}
                   placeholder="Describe why the customer is returning the item(s)…"
-                  value={rmaReason} onChange={e => setRmaReason(e.target.value)} />
-              </div>
+                />
+              </Field>
 
-              {/* Line items */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[11px] font-semibold text-t2">Return Items *</label>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-3)]">
+                    Items being returned <span className="text-[var(--danger)]">*</span>
+                  </span>
                   {matchedSO && (
-                    <button onClick={addRMALine}
-                      style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, border: '1px solid #A8D4E8', background: '#E8F3FA', color: 'var(--navy-dark)', cursor: 'pointer' }}>
-                      + Add Item
-                    </button>
+                    <button type="button" className="btn-outline text-[11px] py-1 px-2.5" onClick={addRMALine}>+ Add item</button>
                   )}
                 </div>
-                <div className="space-y-2">
-                  {rmaLines.map((line, i) => {
-                    const product = products.find(p => p.id === line.productId)
-                    return (
-                    <div key={i} className="rounded-lg p-3 space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[9px] text-t3 block mb-0.5">Product *</label>
-                          <select aria-label={`Product for return item ${i + 1}`} className="form-input w-full text-[11px]"
-                            value={line.productId}
-                            onChange={e => {
-                              const p = products.find(p => p.id === e.target.value)
-                              setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, productId: e.target.value, productName: p?.name ?? '', serialIds: [] } : l))
-                            }}>
-                            <option value="">Select product…</option>
-                            {(matchedSO?.lines ?? []).map(sl => (
-                              <option key={sl.productId} value={sl.productId}>{sl.productName}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[9px] text-t3 block mb-0.5">Condition *</label>
-                          <select aria-label={`Condition for return item ${i + 1}`} className="form-input w-full text-[11px]"
-                            value={line.condition}
-                            onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, condition: e.target.value as ReturnOrderLine['condition'] } : l))}>
-                            <option value="" disabled>Select…</option>
-                            <option value="good">Good</option>
-                            <option value="damaged">Damaged</option>
-                            <option value="defective">Defective</option>
-                          </select>
-                        </div>
+
+                {rmaLines.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-[var(--border)] px-3 py-5 text-center text-[11px] text-[var(--text-3)]">
+                    {matchedSO
+                      ? 'Add each product the customer is returning.'
+                      : 'Enter the sale document above to choose the items being returned.'}
+                  </div>
+                )}
+
+                {rmaLines.map((line, i) => {
+                  const product = products.find(p => p.id === line.productId)
+                  const update = (patch: Partial<typeof line>) => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, ...patch } : l))
+                  return (
+                    <div key={i} className="rounded-lg border border-[var(--border-lt)] bg-white p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-[var(--text-2)]">Item {i + 1}</span>
+                        <button
+                          type="button"
+                          className="btn-ghost text-[11px] py-0.5 px-2 text-[var(--danger)]"
+                          onClick={() => setRmaLines(prev => prev.filter((_, j) => j !== i))}
+                        >
+                          Remove
+                        </button>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[9px] text-t3 block mb-0.5">Qty *</label>
-                          <input
-                            aria-label={`Qty for return item ${i + 1}`}
-                            className="form-input w-full text-[11px]"
-                            type="number"
-                            min={1}
-                            value={line.qty}
-                            onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="Product" required>
+                          <Select
+                            value={line.productId}
+                            onChange={v => {
+                              const p = products.find(x => x.id === v)
+                              update({ productId: v, productName: p?.name ?? soldLines.find(sl => sl.productId === v)?.productName ?? '', serialIds: [] })
+                            }}
+                            options={[
+                              { value: '', label: 'Select product…' },
+                              ...soldLines.map(sl => ({ value: sl.productId, label: sl.productName })),
+                            ]}
                           />
-                        </div>
-                        <div>
-                          <label className="text-[9px] text-t3 block mb-0.5">Item Reason</label>
-                          <input aria-label={`Reason for return item ${i + 1}`} className="form-input w-full text-[11px]" placeholder="e.g. Screen cracked"
-                            value={line.reason}
-                            onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, reason: e.target.value } : l))} />
-                        </div>
+                        </Field>
+                        <Field label="Condition" required>
+                          <Select
+                            value={line.condition}
+                            onChange={v => update({ condition: v as ReturnOrderLine['condition'] })}
+                            options={[
+                              { value: '', label: 'Select…' },
+                              { value: 'good', label: 'Good' },
+                              { value: 'damaged', label: 'Damaged' },
+                              { value: 'defective', label: 'Defective' },
+                            ]}
+                          />
+                        </Field>
+                        <Field label="Quantity" required>
+                          <Input type="number" value={String(line.qty)} onChange={v => update({ qty: v })} />
+                        </Field>
+                        <Field label="Item reason" hint="Optional">
+                          <Input value={line.reason} onChange={v => update({ reason: v })} placeholder="e.g. Screen cracked" />
+                        </Field>
                       </div>
                       {product?.requiresSerial && line.productId && (
-                        <div>
-                          <label className="text-[9px] text-t3 block mb-1">
+                        <div className="mt-3">
+                          <span className="mb-1 block text-[11px] font-semibold text-[var(--text-2)]">
                             Returned serials ({line.serialIds.length}/{Number(line.qty) || 1})
-                          </label>
+                          </span>
                           <SerialReturnPicker
                             productId={line.productId}
                             selectedIds={line.serialIds}
@@ -993,32 +1023,14 @@ function AfterSalesContent() {
                           />
                         </div>
                       )}
-                      <button onClick={() => setRmaLines(prev => prev.filter((_, j) => j !== i))}
-                        style={{ fontSize: 10, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                        Remove
-                      </button>
                     </div>
-                    )
-                  })}
-                  {rmaLines.length === 0 && matchedSO && (
-                    <p className="text-[11px] text-t3 text-center py-2">Click "+ Add Item" to add return lines</p>
-                  )}
-                </div>
+                  )
+                })}
               </div>
             </div>
-
-            <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowCreateRMA(false)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4"
-                disabled={!matchedSO || !rmaReason.trim() || rmaLines.length === 0}
-                style={{ opacity: (!matchedSO || !rmaReason.trim() || rmaLines.length === 0) ? 0.5 : 1 }}
-                onClick={submitRMA}>
-                Submit Return
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </Modal>
+        )
+      })()}
 
       {/* ── Process Return Modal ──────────────────────────────────────────── */}
       {showProcess && processRMA && (
