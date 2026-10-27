@@ -28,7 +28,6 @@ export type PaymentReversalInfo = {
 /** Methods that move no cash: their reversal belongs with the credit or deposit, not here. */
 export function reversalBlockedForMethod(notes: string | null | undefined): string | null {
   const raw = /method:([a-z_]+)/i.exec(String(notes ?? ''))?.[1]?.toLowerCase()
-  if (raw === 'customer_credit') return 'This payment applied a customer credit — reverse it from the credit note instead'
   if (raw === 'deposit_apply') return 'This payment applied a deposit — reverse it from the deposit instead'
   return null
 }
@@ -121,4 +120,45 @@ export function keepReversedPaymentsOff(current: unknown, incoming: unknown): un
       voidedPayments: knownVoided.length >= voided.length ? knownVoided : voided,
     }
   })
+}
+
+type CreditRow = Record<string, any>
+
+/**
+ * Give a reversed customer-credit application back to the credits it used.
+ * The payment names the credits it drew on (reference "CC/0001, CC/0002");
+ * each credit's latest live application to the invoice is marked reversed and
+ * its amount returned to the balance, until the payment's amount is covered.
+ * `restored` below `amount` means the applications could not be found.
+ */
+export function restoreCustomerCredits(
+  credits: CreditRow[],
+  params: { invoiceId: string; refs: string[]; amount: number; reason: string; at: string; by: string },
+): { credits: CreditRow[]; restored: number } {
+  let remaining = Math.round(params.amount * 100) / 100
+  const wanted = new Set(params.refs.map(r => r.trim()).filter(Boolean))
+  const next = credits.map(credit => {
+    if (remaining <= 0 || !wanted.has(String(credit?.ref ?? ''))) return credit
+    const apps: CreditRow[] = Array.isArray(credit.applications) ? credit.applications.map((a: CreditRow) => ({ ...a })) : []
+    let back = 0
+    for (let i = apps.length - 1; i >= 0 && remaining > 0; i--) {
+      const app = apps[i]
+      if (app.invoiceId !== params.invoiceId || app.reversedAt) continue
+      const take = Math.min(Number(app.amount) || 0, remaining)
+      if (take <= 0) continue
+      apps[i] = { ...app, reversedAt: params.at, reversedBy: params.by, reverseReason: params.reason }
+      back += take
+      remaining = Math.round((remaining - take) * 100) / 100
+    }
+    if (back <= 0) return credit
+    const amount = Number(credit.amount) || 0
+    const balance = Math.min(amount, Math.round((Number(credit.balance || 0) + back) * 100) / 100)
+    return {
+      ...credit,
+      applications: apps,
+      balance,
+      status: credit.status === 'void' ? 'void' : balance >= amount ? 'available' : balance > 0 ? 'partially_used' : 'used',
+    }
+  })
+  return { credits: next, restored: Math.round((params.amount - remaining) * 100) / 100 }
 }

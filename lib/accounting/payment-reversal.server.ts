@@ -7,6 +7,7 @@ import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import {
   applyReversalToInvoices,
+  restoreCustomerCredits,
   reversalBlockedForMethod,
   reversalJournalForStore,
   type PaymentReversalInfo,
@@ -63,6 +64,19 @@ export async function reverseInvoicePayment(params: {
     if (matched) throw httpError('This payment is matched to a bank statement line — unmatch it in bank reconciliation first', 409)
   }
   const isVendorCreditUse = /method:vendor_credit\b/.test(String(payment.notes ?? ''))
+  // A customer credit applied to an invoice: its balance must come back. The
+  // credits live in the store, so check before touching the ledger that the
+  // applications this payment made can be found.
+  const isCustomerCreditUse = /method:customer_credit\b/.test(String(payment.notes ?? ''))
+  const creditRefs = String(payment.externalReference || payment.reference || '').split(',').map(r => r.trim()).filter(Boolean)
+  if (isCustomerCreditUse) {
+    const { deed_customerCredits } = await loadAppStateForWrite(['deed_customerCredits'])
+    const credits = Array.isArray(deed_customerCredits) ? deed_customerCredits as Array<Record<string, unknown>> : []
+    const check = restoreCustomerCredits(credits, { invoiceId: params.invoiceId, refs: creditRefs, amount: Number(payment.amount), reason, at: new Date().toISOString(), by: params.actor.name })
+    if (check.restored < Number(payment.amount) - 0.005) {
+      throw httpError(`Could not find where ${creditRefs.join(', ') || 'the customer credit'} was used on this invoice — nothing was reversed`, 409)
+    }
+  }
   const now = new Date()
   const lock = await checkFiscalLock(now)
   if (!lock.ok) throw httpError(lock.error, lock.status)
@@ -169,6 +183,21 @@ export async function reverseInvoicePayment(params: {
     method: String(payment.paymentMethod),
     paidAt: payment.paidAt.toISOString(),
   }
+  if (isCustomerCreditUse) {
+    try {
+      await withAppStateKeyLock('deed_customerCredits', async () => {
+        const state = await loadAppStateForWrite(['deed_customerCredits'])
+        const credits = Array.isArray(state.deed_customerCredits) ? state.deed_customerCredits as Array<Record<string, unknown>> : []
+        const { credits: next } = restoreCustomerCredits(credits, {
+          invoiceId: params.invoiceId, refs: creditRefs, amount: result.amount, reason, at: now.toISOString(), by: params.actor.name,
+        })
+        await saveStoreKeys({ deed_customerCredits: JSON.stringify(next) })
+      })
+    } catch (err) {
+      console.error('[payment-reversal] customer credit balance update failed:', err)
+    }
+  }
+
   try {
     await withAppStateKeyLock('deed_invoices', async () => {
       const state = await loadAppStateForWrite(['deed_invoices', 'deed_journalEntries'])

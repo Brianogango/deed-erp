@@ -54,8 +54,8 @@ describe('payment reversal — invoice screen copy', () => {
     expect(reversalJournalForStore([...journals, rev], 'JRN/PAY/INV/2026/0100/pay-1', rev.ref, 'x', info.reversedAt)).toBeNull()
   })
 
-  it('leaves credit and deposit applications to their own reversal', () => {
-    expect(reversalBlockedForMethod('method:customer_credit')).toMatch(/credit note/)
+  it('leaves deposit applications to their own reversal; customer credits reverse here', () => {
+    expect(reversalBlockedForMethod('method:customer_credit')).toBeNull()
     expect(reversalBlockedForMethod('idempotency:x · method:deposit_apply')).toMatch(/deposit/)
     expect(reversalBlockedForMethod('idempotency:abc')).toBeNull()
   })

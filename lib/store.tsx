@@ -1402,6 +1402,10 @@ interface CustomerCredit {
     amount: number
     date: string
     appliedBy: string
+    /** Set when the payment that applied it was reversed: the amount is back on the balance. */
+    reversedAt?: string
+    reversedBy?: string
+    reverseReason?: string
   }[]
 }
 
