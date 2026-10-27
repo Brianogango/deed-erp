@@ -6,7 +6,7 @@ import {
   KilimallSettlementLine, KilimallDispatch, fmtKes, fmtDate,
 } from '@/lib/store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
+import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar, ModuleHeader, SearchPicker } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -453,6 +453,15 @@ function KilimallContent() {
     ? serials.filter(s => s.status === 'available' && s.productId === shipProductId)
     : []
   const sellableProducts = products.filter(p => p.canBeSold && p.isActive)
+  // Substitutes: products with a serial ready to ship first, then A–Z.
+  const availableSerialCount = new Map<string, number>()
+  for (const s of serials) {
+    if (s.status === 'available') availableSerialCount.set(s.productId, (availableSerialCount.get(s.productId) ?? 0) + 1)
+  }
+  const substituteOptions = sellableProducts
+    .filter(p => p.id !== dispatchOrder?.productId)
+    .sort((a, b) => Number((availableSerialCount.get(b.id) ?? 0) > 0) - Number((availableSerialCount.get(a.id) ?? 0) > 0)
+      || String(a.name).localeCompare(String(b.name)))
 
   const resetDispatchForm = () => {
     setDispatchOrderId(null)
@@ -773,21 +782,41 @@ function KilimallContent() {
 
                 {useSubstitution && (
                   <>
-                    <Field label="Ship product" required hint="Stock and serial come from this product">
-                      <Select
-                        value={substituteProductId}
-                        onChange={v => {
-                          setSubstituteProductId(v)
+                    <div>
+                      <SearchPicker
+                        label="Ship product *"
+                        placeholder="Search product, SKU or barcode…"
+                        items={substituteOptions}
+                        onSelect={p => {
+                          if (p.id === substituteProductId) return
+                          setSubstituteProductId(p.id)
                           setDispatchSerial('')
                         }}
-                        options={[
-                          { value: '', label: 'Select product…' },
-                          ...sellableProducts
-                            .filter(p => p.id !== dispatchOrder.productId)
-                            .map(p => ({ value: p.id, label: p.name })),
-                        ]}
+                        formatSelected={p => p.name}
+                        selectedLabel={sellableProducts.find(p => p.id === substituteProductId)?.name}
+                        searchText={p => [p.sku, p.barcode, p.category].filter(Boolean).join(' ')}
+                        emptyText="No sellable product matches"
+                        renderItem={p => {
+                          const available = availableSerialCount.get(p.id) ?? 0
+                          return (
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center text-[10px] font-bold text-primary-600 flex-shrink-0">{p.name?.slice(0, 2).toUpperCase()}</div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-xs truncate">{p.name}</p>
+                                <p className="text-[10px] text-[var(--text-4)] truncate">
+                                  {[p.sku, p.category, fmtKes(p.salePrice)].filter(Boolean).join(' · ')}
+                                  {' · '}
+                                  <span style={{ color: available > 0 ? 'var(--success)' : 'var(--text-4)' }}>
+                                    {available > 0 ? `${available} serial${available === 1 ? '' : 's'} available` : 'no serials available'}
+                                  </span>
+                                </p>
+                              </div>
+                            </div>
+                          )
+                        }}
                       />
-                    </Field>
+                      <p className="text-[11px] text-t3 mt-1">Stock and serial come from this product</p>
+                    </div>
                     <Field label="Substitution reason" hint="Optional">
                       <Input
                         value={substitutionReason}
