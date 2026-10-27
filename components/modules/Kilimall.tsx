@@ -40,7 +40,7 @@ function KilimallContent() {
 
   const {
     kilimallOrders, kilimallDispatches, kilimallSettlements,
-    createKilimallOrder, updateKilimallOrder,
+    createKilimallOrder, updateKilimallOrder, returnKilimallOrder,
     confirmKilimallDispatch, createKilimallSettlement,
     updateKilimallSettlement, reconcileKilimallSettlement, matchKilimallSettlementLine,
     products, serials, setModule, showToast, currentUserId, users,
@@ -88,6 +88,33 @@ function KilimallContent() {
   const viewOrder = tab === 'orders' && detailId
     ? kilimallOrders.find(o => o.id === detailId) ?? null
     : null
+  // ── Returns ──────────────────────────────────────────────────────────────────
+  const [returnOrderId, setReturnOrderId] = useState<string | null>(null)
+  const [returnForm, setReturnForm] = useState<{ condition: string; outcome: string; reason: string }>({ condition: '', outcome: '', reason: '' })
+  const [returning, setReturning] = useState(false)
+  const returnOrder = returnOrderId ? kilimallOrders.find(o => o.id === returnOrderId) ?? null : null
+  const openReturn = (id: string) => {
+    setReturnForm({ condition: '', outcome: '', reason: '' })
+    setReturnOrderId(id)
+  }
+  const submitReturn = async () => {
+    if (!returnOrder || returning) return
+    if (!returnForm.condition || !returnForm.outcome || !returnForm.reason.trim()) {
+      showToast('Choose the condition and outcome, and give a reason', 'error'); return
+    }
+    setReturning(true)
+    try {
+      const ok = await returnKilimallOrder(returnOrder.id, {
+        condition: returnForm.condition as 'good' | 'damaged' | 'faulty',
+        outcome: returnForm.outcome as 'refund' | 'exchange',
+        reason: returnForm.reason.trim(),
+      })
+      if (ok) setReturnOrderId(null)
+    } finally {
+      setReturning(false)
+    }
+  }
+
   const [newOrder, setNewOrder] = useState({
     kilimallRef: '', orderDate: '',
     customerName: '', productId: '', productName: '', qty: '',
@@ -410,36 +437,97 @@ function KilimallContent() {
     },
   ]
 
-  const returnedOrders = kilimallOrders.filter(o => o.status === 'returned')
-  const returnedColumns: ColumnDef<KilimallOrder>[] = [
+  // Out with customers: can still come back.
+  const returnableOrders = kilimallOrders.filter(o => o.status === 'dispatched' || o.status === 'delivered')
+  const returnableColumns: ColumnDef<KilimallOrder>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
       render: o => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{o.ref}</span>,
       exportValue: o => o.ref,
     },
     {
-      key: 'kilimallRef', label: 'Kilimall ref', priority: 2, width: '120px',
+      key: 'kilimallRef', label: 'Kilimall ref', priority: 2, width: '130px',
       render: o => <span className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>,
       exportValue: o => o.kilimallRef,
     },
     {
-      key: 'product', label: 'Product', priority: 1, width: '1.4fr',
-      render: o => <span className="text-[11px]">{o.productName}</span>,
-      exportValue: o => o.productName,
-    },
-    {
-      key: 'total', label: 'Total', align: 'right' as const, priority: 1, width: '100px',
-      render: o => <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>,
-      exportValue: o => o.total,
-    },
-    {
-      key: 'rma', label: 'RMA linked', priority: 1, width: '100px',
+      key: 'device', label: 'Shipped device', priority: 1, width: '1.6fr',
       render: o => (
-        <span className="text-[10px]" style={{ color: o.rmaId ? 'var(--success)' : 'var(--danger)' }}>
-          {o.rmaId ? `✓ ${o.rmaId}` : 'No RMA'}
+        <span className="text-[11px]">
+          {o.fulfilledProductName || o.productName}
+          {o.serialNumber ? <span className="block font-mono text-[10px] text-t3">{o.serialNumber}</span> : null}
         </span>
       ),
-      exportValue: o => o.rmaId || '',
+      exportValue: o => `${o.fulfilledProductName || o.productName} ${o.serialNumber ?? ''}`.trim(),
+    },
+    {
+      key: 'status', label: 'Status', priority: 2, width: '90px',
+      render: o => <span className="text-[11px] capitalize">{o.status}</span>,
+      exportValue: o => o.status,
+    },
+    {
+      key: 'action', label: '', priority: 1, width: '120px', align: 'right' as const,
+      render: o => (
+        <button type="button" className="btn-outline text-[11px] py-1 px-2.5" onClick={e => { e.stopPropagation(); openReturn(o.id) }}>
+          Record return
+        </button>
+      ),
+      exportValue: () => '',
+    },
+  ]
+
+  type ReturnRow = NonNullable<KilimallOrder['returns']>[number] & { id: string; orderId: string; orderRef: string; kilimallRef: string; total: number }
+  const returnHistory: ReturnRow[] = kilimallOrders
+    .flatMap(o => (o.returns ?? []).map((r, i) => ({ ...r, id: `${o.id}:${i}`, orderId: o.id, orderRef: o.ref, kilimallRef: o.kilimallRef, total: o.total })))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+  const CONDITION_LABEL: Record<string, string> = { good: 'Good', damaged: 'Damaged', faulty: 'Faulty' }
+  const returnHistoryColumns: ColumnDef<ReturnRow>[] = [
+    {
+      key: 'date', label: 'Date', priority: 2, width: '100px',
+      render: r => <span className="text-[11px]">{fmtDate(r.date)}</span>,
+      exportValue: r => r.date,
+    },
+    {
+      key: 'order', label: 'Order', priority: 1, width: '130px',
+      render: r => (
+        <span className="text-[11px]">
+          <span className="font-mono font-semibold" style={{ color: 'var(--navy)' }}>{r.orderRef}</span>
+          <span className="block font-mono text-[10px] text-t3">{r.kilimallRef}</span>
+        </span>
+      ),
+      exportValue: r => `${r.orderRef} / ${r.kilimallRef}`,
+    },
+    {
+      key: 'device', label: 'Device back', priority: 1, width: '1.5fr',
+      render: r => (
+        <span className="text-[11px]">
+          {r.productName}
+          {r.serialNumber ? <span className="block font-mono text-[10px] text-t3">{r.serialNumber}</span> : null}
+        </span>
+      ),
+      exportValue: r => `${r.productName} ${r.serialNumber ?? ''}`.trim(),
+    },
+    {
+      key: 'condition', label: 'Condition', priority: 2, width: '90px',
+      render: r => <span className="text-[11px]" style={{ color: r.condition === 'good' ? 'var(--success)' : 'var(--warning)' }}>{CONDITION_LABEL[r.condition] ?? r.condition}</span>,
+      exportValue: r => r.condition,
+    },
+    {
+      key: 'outcome', label: 'Outcome', priority: 1, width: '110px',
+      render: r => <span className="text-[11px]">{r.outcome === 'exchange' ? 'Exchange' : 'Refund'}</span>,
+      exportValue: r => r.outcome,
+    },
+    {
+      key: 'reason', label: 'Reason', priority: 3, width: '1.4fr',
+      render: r => <span className="text-[11px] text-t2">{r.reason}</span>,
+      exportValue: r => r.reason,
+    },
+    {
+      key: 'money', label: 'Money', priority: 2, width: '1.2fr',
+      render: r => r.paidInSettlementRef
+        ? <span className="text-[10px]" style={{ color: 'var(--warning)' }}>Paid in {r.paidInSettlementRef} — expect {fmtKes(r.total)} deducted</span>
+        : <span className="text-[10px] text-t3">Not yet paid by Kilimall</span>,
+      exportValue: r => r.paidInSettlementRef ? `Deduction expected (${r.paidInSettlementRef})` : 'Not yet paid',
     },
   ]
 
@@ -1084,25 +1172,36 @@ function KilimallContent() {
           RETURNS
       ════════════════════════════════════════════════════════════════════════ */}
       {tab === 'returns' && (
-        <div className="card p-6 flex flex-col items-center gap-4">
-          <span style={{ fontSize: 40, color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faRotateLeft} /></span>
-          <p className="text-sm font-semibold text-t1">Kilimall Returns → RMA</p>
-          <p className="text-[11px] text-t3 text-center max-w-sm">
-            All Kilimall returns must be processed through the After-Sales RMA module.
-            Mark the order as returned here, then create an RMA for exchange or refund processing.
-          </p>
-          <div className="flex gap-3">
-            <button className="btn-primary" onClick={() => { setModule('after_sales'); router.push('/after_sales'); }}>Open After-Sales →</button>
+        <div className="flex flex-col gap-4">
+          <div className="card p-4">
+            <p className="m-0 text-sm font-semibold text-t1">When a Kilimall order comes back</p>
+            <ul className="m-0 mt-2 grid gap-1 pl-4 text-[11px] text-t2 list-disc">
+              <li>The device goes back to the warehouse as <b>Returned</b>, and stock and cost of sales are corrected. Inspect it, then release it in Inventory to sell it again.</li>
+              <li><b>Refund:</b> the order ends as Returned and its settlement line reads Returned. If Kilimall had already paid it, expect them to deduct it in a later settlement.</li>
+              <li><b>Exchange:</b> the order goes back to Pending Dispatch — ship the replacement from the Dispatch tab.</li>
+            </ul>
           </div>
-          <div className="card w-full p-4 mt-2 overflow-hidden">
-            <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-2">Returned Orders</p>
+          <div className="card w-full p-4 overflow-hidden">
+            <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-2">Out with customers ({returnableOrders.length})</p>
+            <DataTable
+              tableId="kilimall-returnable"
+              columns={returnableColumns}
+              rows={returnableOrders}
+              rowKey={o => o.id}
+              emptyMessage="No dispatched or delivered orders"
+              exportTitle="Kilimall orders out with customers"
+              exportFilename="kilimall-out-with-customers"
+            />
+          </div>
+          <div className="card w-full p-4 overflow-hidden">
+            <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-2">Returns recorded ({returnHistory.length})</p>
             <DataTable
               tableId="kilimall-returns"
-              columns={returnedColumns}
-              rows={returnedOrders}
-              rowKey={o => o.id}
+              columns={returnHistoryColumns}
+              rows={returnHistory}
+              rowKey={r => r.id}
               hideSearch
-              emptyMessage="No returned orders"
+              emptyMessage="No returns recorded yet"
               exportTitle="Kilimall Returns"
               exportFilename="kilimall-returns"
             />
@@ -1328,6 +1427,16 @@ function KilimallContent() {
               </div>
             ))}
           </div>
+          {(viewOrder.returns?.length ?? 0) > 0 && (
+            <div className="mt-3 rounded-lg border border-[var(--border-lt)] p-2.5 text-[11px]">
+              <p className="m-0 mb-1 font-semibold text-t2">Returns</p>
+              {viewOrder.returns!.map((r, k) => (
+                <p key={k} className="m-0 text-t3">
+                  {fmtDate(r.date)} · {r.serialNumber || r.productName} · {r.condition} · {r.outcome === 'exchange' ? 'exchange' : 'refund'} — {r.reason}
+                </p>
+              ))}
+            </div>
+          )}
           <div className="flex items-center justify-between mt-2">
             <span className="text-[11px] px-2.5 py-1 rounded font-semibold capitalize"
               style={{ background: STATUS_COLOR[viewOrder.status] + '20', color: STATUS_COLOR[viewOrder.status] }}>
@@ -1339,14 +1448,89 @@ function KilimallContent() {
                 showToast('Order marked as delivered')
               }}>Mark Delivered</button>
             )}
-            {viewOrder.status === 'delivered' && (
+            {(viewOrder.status === 'dispatched' || viewOrder.status === 'delivered') && (
               <button className="btn-outline text-[11px]" style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                onClick={() => {
-                  updateKilimallOrder(viewOrder.id, { status: 'returned' })
-                  showToast('Order marked as returned — create RMA in After-Sales')
-                }}>Mark Returned</button>
+                onClick={() => { const id = viewOrder.id; setDetailId(null); openReturn(id) }}>Record return</button>
             )}
           </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Record a return */}
+      {returnOrder && (
+        <Modal
+          title={`Return — ${returnOrder.ref}`}
+          subtitle={`Kilimall ref ${returnOrder.kilimallRef}`}
+          onClose={() => { if (!returning) setReturnOrderId(null) }}
+          width={560}
+          variant="enterprise"
+          footer={
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" className="btn-outline text-xs" disabled={returning} onClick={() => setReturnOrderId(null)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary text-xs"
+                disabled={returning || !returnForm.condition || !returnForm.outcome || !returnForm.reason.trim()}
+                onClick={() => void submitReturn()}
+              >
+                {returning ? 'Recording…' : 'Record return'}
+              </button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <div className="rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2.5">
+              <p className="m-0 text-xs font-bold text-[var(--text-1)]">{returnOrder.fulfilledProductName || returnOrder.productName}</p>
+              <p className="m-0 text-[11px] text-[var(--text-3)]">
+                {returnOrder.serialNumber ? <>Serial <span className="font-mono">{returnOrder.serialNumber}</span> · </> : null}
+                {fmtKes(returnOrder.total)} · {returnOrder.status}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Condition it came back in" required>
+                <Select
+                  value={returnForm.condition}
+                  onChange={v => setReturnForm(f => ({ ...f, condition: v }))}
+                  options={[
+                    { value: '', label: 'Select…' },
+                    { value: 'good', label: 'Good — as sent' },
+                    { value: 'damaged', label: 'Damaged' },
+                    { value: 'faulty', label: 'Faulty' },
+                  ]}
+                />
+              </Field>
+              <Field label="Outcome" required>
+                <Select
+                  value={returnForm.outcome}
+                  onChange={v => setReturnForm(f => ({ ...f, outcome: v }))}
+                  options={[
+                    { value: '', label: 'Select…' },
+                    { value: 'refund', label: 'Refund — order ends here' },
+                    { value: 'exchange', label: 'Exchange — ship a replacement' },
+                  ]}
+                />
+              </Field>
+            </div>
+            <Field label="Why the customer returned it" required>
+              <Textarea
+                value={returnForm.reason}
+                onChange={v => setReturnForm(f => ({ ...f, reason: v }))}
+                rows={3}
+                placeholder="e.g. Customer changed their mind; screen flickers…"
+              />
+            </Field>
+            <ul className="m-0 grid gap-1 pl-4 text-[11px] text-[var(--text-3)] list-disc">
+              <li>The device goes back to the warehouse as Returned and stock is corrected. Inspect it, then release it in Inventory to sell it again.</li>
+              {returnForm.outcome === 'exchange'
+                ? <li>The order goes back to Pending Dispatch — ship the replacement from the Dispatch tab.</li>
+                : <li>The order ends as Returned; its settlement line will read Returned.</li>}
+            </ul>
+            {returnOrder.settlementRef && returnForm.outcome !== 'exchange' && (
+              <p className="m-0 rounded-lg px-3 py-2 text-[11px]" style={{ background: 'var(--warning-bg, #FFF7ED)', color: 'var(--warning)' }}>
+                Kilimall already paid this order in {returnOrder.settlementRef}. Expect them to deduct {fmtKes(returnOrder.total)} in a later settlement.
+              </p>
+            )}
           </div>
         </Modal>
       )}

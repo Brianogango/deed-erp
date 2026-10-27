@@ -324,6 +324,7 @@ import { loadFullRecord } from '@/lib/full-record'
 import { awaitRouteHydration, awaitStoreDownloads, downloadedThisSession, keysChangedSinceRead, noteStoreChanges, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
 import { formatKeDate, formatKeDateTime, formatKeInteger, installIntlFormatCache } from '@/lib/intl-cache'
 import { keepContainedRows, keepUnchangedRows } from '@/lib/same-content'
+import type { KilimallReturnEntry, KilimallReturnInput } from '@/lib/kilimall/kilimall-return'
 import { contactFromPersonInput, deriveContactPersons } from '@/lib/contact-person-derive'
 import {
   applyCustomerToInvoice,
@@ -2161,6 +2162,8 @@ export interface KilimallOrder {
   settlementRef?: string
   rmaId?: string
   notes?: string
+  /** Each time the order came back (refund or exchange). */
+  returns?: KilimallReturnEntry[]
   createdDate: string; createdBy: string
 }
 
@@ -3502,6 +3505,8 @@ interface AppState {
   kilimallSettlements: KilimallSettlement[]
   createKilimallOrder: (p: Omit<KilimallOrder, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => Promise<KilimallOrder | null>
   updateKilimallOrder: (id: string, p: Partial<KilimallOrder>) => void
+  /** A Kilimall order came back: device to the warehouse (awaiting inspection), cost reversed; refund or exchange. */
+  returnKilimallOrder: (id: string, input: KilimallReturnInput) => Promise<boolean>
   confirmKilimallDispatch: (
     orderId: string,
     serialId: string,
@@ -4508,6 +4513,7 @@ type CommerceStoreState = Pick<AppState,
   | 'setModule'
   | 'showToast'
   | 'updateKilimallOrder'
+  | 'returnKilimallOrder'
   | 'updateKilimallSettlement'
   | 'updateProduct'
 >
@@ -7794,6 +7800,7 @@ function StoreProvider({
     setModule: (...args: Parameters<AppState['setModule']>) => storeCtxRef.current!.setModule(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     updateKilimallOrder: (...args: Parameters<AppState['updateKilimallOrder']>) => storeCtxRef.current!.updateKilimallOrder(...args),
+    returnKilimallOrder: (...args: Parameters<AppState['returnKilimallOrder']>) => storeCtxRef.current!.returnKilimallOrder(...args),
     updateKilimallSettlement: (...args: Parameters<AppState['updateKilimallSettlement']>) => storeCtxRef.current!.updateKilimallSettlement(...args),
     updateProduct: (...args: Parameters<AppState['updateProduct']>) => storeCtxRef.current!.updateProduct(...args),
   }), [])
@@ -8142,6 +8149,33 @@ const storeCtx: AppState = {
       return order
     },
     updateKilimallOrder: (id, p) => setKilimallOrders(prev => prev.map(o => o.id === id ? { ...o, ...p } : o)),
+    returnKilimallOrder: async (id, input) => {
+      try {
+        const res = await fetch(`/api/kilimall/orders/${encodeURIComponent(id)}/return`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        })
+        const data = await res.json().catch(() => null) as { error?: string; order?: KilimallOrder } | null
+        if (!res.ok || !data?.order) {
+          showToast(data?.error || 'Could not record the return', 'error')
+          return false
+        }
+        // The server changed the order and the stock: take its copies.
+        const keys = ['deed_kilimallOrders', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_products']
+        noteStoreChanges(Object.fromEntries(keys.map(k => [k, new Date().toISOString()])))
+        void fetchAndApplyStoreKeys({ keys, etagStorageKey: 'deed_kilimall_return' })
+        const o = data.order
+        showToast(input.outcome === 'exchange'
+          ? `${o.ref} returned — back in Pending Dispatch to ship a replacement`
+          : `${o.ref} returned — device is in the warehouse awaiting inspection`)
+        addAuditLog('kilimall_return', o.ref, `Kilimall return (${input.outcome}, ${input.condition}): ${input.reason}`)
+        return true
+      } catch {
+        showToast('Could not record the return. Check your connection and try again.', 'error')
+        return false
+      }
+    },
     confirmKilimallDispatch: async (orderId, serialId, serialNumber, opts) => {
       const user = currentUser()
       if (!user || !['director', 'inventory_officer', 'kilimall_officer'].includes(user.role)) {
