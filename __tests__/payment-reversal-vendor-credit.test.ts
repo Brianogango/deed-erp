@@ -7,6 +7,8 @@ const m = vi.hoisted(() => ({
   payment: null as any,
   journals: [] as any[],
   journalUpdates: [] as any[],
+  depositApps: [] as any[],
+  deposits: new Map<string, any>(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -16,6 +18,7 @@ vi.mock('@/lib/server-store', () => ({
   withAppStateKeyLock: (_k: string, fn: () => unknown) => fn(),
   loadAppStateForWrite: async () => ({ deed_invoices: [], deed_journalEntries: [] }),
   saveStoreKeys: async () => {},
+  notifyStoreKeysChanged: async () => {},
 }))
 vi.mock('@/lib/accounting/journal-service', () => ({
   createJournalEntryInTx: vi.fn(async (_tx: unknown, data: any) => { m.journals.push(data); return { id: 'rev-1' } }),
@@ -27,6 +30,14 @@ const tx = {
     update: async ({ data }: any) => Object.assign(m.payment, data),
   },
   paymentAllocation: { updateMany: async () => ({}) },
+  depositApplication: {
+    findMany: async ({ where }: any) => m.depositApps.filter(a => a.paymentId === where.paymentId && a.status === where.status),
+    update: async ({ where, data }: any) => Object.assign(m.depositApps.find(a => a.id === where.id), data),
+  },
+  deposit: {
+    findUnique: async ({ where }: any) => m.deposits.get(where.id) ?? null,
+    update: async ({ where, data }: any) => Object.assign(m.deposits.get(where.id), data),
+  },
   invoice: {
     findUnique: async ({ where }: any) => m.invoices.get(where.id) ?? null,
     findFirst: async ({ where }: any) => [...m.invoices.values()].find((i: Inv) => i.invoiceNumber === where.invoiceNumber && i.totalAmount < 0) ?? null,
@@ -41,6 +52,7 @@ const tx = {
 vi.mock('@/lib/prisma', () => ({
   default: {
     payment: { findUnique: async () => m.payment },
+    depositApplication: { findMany: async ({ where }: any) => m.depositApps.filter(a => a.paymentId === where.paymentId && a.status === where.status) },
     bankReconciliationMatch: { findFirst: async () => null },
     $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx),
   },
@@ -54,6 +66,8 @@ beforeEach(() => {
   m.invoices = new Map()
   m.journals = []
   m.journalUpdates = []
+  m.depositApps = []
+  m.deposits = new Map()
 })
 
 describe('restoredAmountPaid', () => {
@@ -109,5 +123,38 @@ describe('reversing a supplier refund', () => {
     await reverseInvoicePayment({ invoiceId: 'vcn', paymentId: 'pay-2', reason: 'bounced', actor })
     expect(m.invoices.get('vcn').amountPaid).toBe(-3000)
     expect(m.journals).toHaveLength(1)
+  })
+})
+
+describe('reversing a deposit applied to an invoice', () => {
+  beforeEach(() => {
+    m.invoices.set('inv', { id: 'inv', invoiceNumber: 'INV/0300', amountPaid: 20000, totalAmount: 50000, clientId: 'cus', notes: null })
+    m.deposits.set('dep', { id: 'dep', status: 'completed', balance: 0, completedAt: new Date() })
+    m.depositApps = [{ id: 'da-1', depositId: 'dep', paymentId: 'pay-3', status: 'applied' }]
+    m.payment = {
+      id: 'pay-3', invoiceId: 'inv', amount: 20000, isVoided: false, partnerId: 'cus',
+      notes: 'Applied customer deposit DEP/0007', reference: 'DEP/DEP/0007', externalReference: 'DEP/DEP/0007',
+      journalId: 'j-dep', reconciliationStatus: 'not_applicable', paymentMethod: 'credit', paidAt: new Date(),
+      allocations: [{ invoiceId: 'inv', amount: 20000 }],
+    }
+  })
+
+  it('reverses the use, reopens the deposit and reverses the application journal', async () => {
+    await reverseInvoicePayment({ invoiceId: 'inv', paymentId: 'pay-3', reason: 'wrong invoice', actor })
+    expect(m.invoices.get('inv').amountPaid).toBe(0)
+    expect(m.depositApps[0].status).toBe('reversed')
+    expect(m.deposits.get('dep')).toMatchObject({ status: 'fully_paid', completedAt: null })
+    expect(m.journals).toHaveLength(1)
+  })
+
+  it('allows an older record tagged deposit_apply once its deposit use is found', async () => {
+    m.payment.notes = 'method:deposit_apply'
+    await expect(reverseInvoicePayment({ invoiceId: 'inv', paymentId: 'pay-3', reason: 'wrong invoice', actor })).resolves.toBeTruthy()
+  })
+
+  it('still refuses a browser-made deposit record with no deposit use', async () => {
+    m.payment.notes = 'method:deposit_apply'
+    m.depositApps = []
+    await expect(reverseInvoicePayment({ invoiceId: 'inv', paymentId: 'pay-3', reason: 'wrong invoice', actor })).rejects.toThrow(/deposit/)
   })
 })

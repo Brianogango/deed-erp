@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
-import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
+import { loadAppStateForWrite, notifyStoreKeysChanged, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import {
   applyReversalToInvoices,
   restoreCustomerCredits,
@@ -54,7 +54,11 @@ export async function reverseInvoicePayment(params: {
   const onInvoice = payment && (payment.invoiceId === params.invoiceId || payment.allocations.some(a => a.invoiceId === params.invoiceId))
   if (!payment || !onInvoice) throw httpError('Payment not found on this invoice', 404)
   if (payment.isVoided) throw httpError('This payment was already reversed', 409)
-  const blocked = reversalBlockedForMethod(payment.notes)
+  // A deposit applied by the server (deposit_applications row): reversed
+  // here, and the deposit gets the amount back. Only older browser-made
+  // records with no such row stay refused.
+  const depositUses = await prisma.depositApplication.findMany({ where: { paymentId: payment.id, status: 'applied' }, select: { id: true } })
+  const blocked = depositUses.length && /method:deposit_apply\b/.test(String(payment.notes ?? '')) ? null : reversalBlockedForMethod(payment.notes)
   if (blocked) throw httpError(blocked, 409)
   if (payment.reconciliationStatus === 'reconciled') {
     throw httpError('This payment is matched to a bank statement line — unmatch it in bank reconciliation first', 409)
@@ -127,6 +131,23 @@ export async function reverseInvoicePayment(params: {
       amountPaidByInvoice[credit.id] = paid
     }
 
+    // A customer deposit applied to the invoice: the use is reversed (the
+    // reversed journal below puts the liability back) and the deposit is
+    // open again — to apply to the right invoice or to refund.
+    const reopenedDeposits: string[] = []
+    const uses = await tx.depositApplication.findMany({ where: { paymentId: fresh.id, status: 'applied' } })
+    for (const use of uses) {
+      await tx.depositApplication.update({ where: { id: use.id }, data: { status: 'reversed' } })
+      const deposit = await tx.deposit.findUnique({ where: { id: use.depositId }, select: { id: true, status: true, balance: true } })
+      if (deposit?.status === 'completed') {
+        await tx.deposit.update({
+          where: { id: deposit.id },
+          data: { status: Number(deposit.balance) <= 0 ? 'fully_paid' : 'partially_paid', completedAt: null },
+        })
+      }
+      if (deposit) reopenedDeposits.push(deposit.id)
+    }
+
     let journal: { originalRef: string; revRef: string } | null = null
     // Applying a credit posted nothing of its own: its journalId is the credit
     // note's journal. Reversing that would undo the whole credit note.
@@ -170,7 +191,7 @@ export async function reverseInvoicePayment(params: {
       oldValues: { amount: Number(fresh.amount), invoiceIds, isVoided: false },
       newValues: { isVoided: true, reason, amountPaidByInvoice, reversalJournal: journal?.revRef ?? null },
     })
-    return { amount: Number(fresh.amount), amountPaidByInvoice, journal }
+    return { amount: Number(fresh.amount), amountPaidByInvoice, journal, reopenedDeposits }
   }, { isolationLevel: 'Serializable' })
 
   // Screen copies: the invoice owes the money again; the cashbook stops counting it.
@@ -183,6 +204,10 @@ export async function reverseInvoicePayment(params: {
     method: String(payment.paymentMethod),
     paidAt: payment.paidAt.toISOString(),
   }
+  if (result.reopenedDeposits.length) {
+    await notifyStoreKeysChanged(['deed_deposits']).catch(() => null)
+  }
+
   if (isCustomerCreditUse) {
     try {
       await withAppStateKeyLock('deed_customerCredits', async () => {
