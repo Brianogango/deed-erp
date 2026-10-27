@@ -14,6 +14,17 @@ import {
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
+/**
+ * amountPaid after taking a reversed payment off. A credit note carries a
+ * negative total and records what was used or refunded as a negative
+ * amountPaid, so its figure moves back up towards 0, never past it.
+ */
+export function restoredAmountPaid(totalAmount: number, amountPaid: number, removed: number): number {
+  return totalAmount < 0
+    ? round2(Math.min(0, amountPaid + removed))
+    : round2(Math.max(0, amountPaid - removed))
+}
+
 function httpError(message: string, status: number) {
   const err = new Error(message)
   ;(err as Error & { status?: number }).status = status
@@ -51,6 +62,7 @@ export async function reverseInvoicePayment(params: {
     const matched = await prisma.bankReconciliationMatch.findFirst({ where: { journalEntryId: payment.journalId, reversedAt: null }, select: { id: true } })
     if (matched) throw httpError('This payment is matched to a bank statement line — unmatch it in bank reconciliation first', 409)
   }
+  const isVendorCreditUse = /method:vendor_credit\b/.test(String(payment.notes ?? ''))
   const now = new Date()
   const lock = await checkFiscalLock(now)
   if (!lock.ok) throw httpError(lock.error, lock.status)
@@ -72,15 +84,39 @@ export async function reverseInvoicePayment(params: {
       // (migrated / older invoices) and would undercount what was paid.
       const removed = fresh.allocations.filter(a => a.invoiceId === invoiceId).reduce((s, a) => s + Number(a.amount), 0)
         || (fresh.allocations.length === 0 && fresh.invoiceId === invoiceId ? Number(fresh.amount) : 0)
-      const inv = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { id: true, amountPaid: true } })
+      const inv = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { id: true, amountPaid: true, totalAmount: true } })
       if (!inv) continue
-      const paid = round2(Math.max(0, Number(inv.amountPaid) - removed))
+      const paid = restoredAmountPaid(Number(inv.totalAmount), Number(inv.amountPaid), removed)
       await tx.invoice.update({ where: { id: invoiceId }, data: { amountPaid: paid } })
       amountPaidByInvoice[invoiceId] = paid
     }
 
+    // A supplier credit applied to a bill: the amount goes back onto the
+    // credit note (open to use again or to be refunded).
+    if (isVendorCreditUse) {
+      const creditRef = String(fresh.externalReference || fresh.reference || '').trim()
+      const credit = creditRef
+        ? await tx.invoice.findFirst({
+          where: { invoiceNumber: creditRef, clientId: fresh.partnerId ?? undefined, totalAmount: { lt: 0 } },
+          select: { id: true, amountPaid: true, totalAmount: true, notes: true },
+        })
+        : null
+      if (!credit) throw httpError(`Credit note ${creditRef || '(unknown)'} not found — cannot give the amount back to it`, 409)
+      const paid = restoredAmountPaid(Number(credit.totalAmount), Number(credit.amountPaid), Number(fresh.amount))
+      await tx.invoice.update({
+        where: { id: credit.id },
+        data: {
+          amountPaid: paid,
+          notes: [credit.notes, `Use reversed (${Number(fresh.amount).toLocaleString('en-KE')}): ${reason}`].filter(Boolean).join('\n').slice(0, 5000),
+        },
+      })
+      amountPaidByInvoice[credit.id] = paid
+    }
+
     let journal: { originalRef: string; revRef: string } | null = null
-    if (fresh.journalId) {
+    // Applying a credit posted nothing of its own: its journalId is the credit
+    // note's journal. Reversing that would undo the whole credit note.
+    if (fresh.journalId && !isVendorCreditUse) {
       const original = await tx.journalEntry.findUnique({ where: { id: fresh.journalId }, include: { lines: true, journal: { select: { code: true } } } })
       if (original && !original.isReversed) {
         const revRef = `REV/${original.ref}`.slice(0, 80)
