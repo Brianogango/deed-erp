@@ -6,6 +6,7 @@ import {
   KilimallSettlementLine, KilimallDispatch, fmtKes, fmtDate,
 } from '@/lib/store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { isLegacyReturned } from '@/lib/kilimall/kilimall-return'
 import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar, ModuleHeader, SearchPicker } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -438,7 +439,9 @@ function KilimallContent() {
   ]
 
   // Out with customers: can still come back.
-  const returnableOrders = kilimallOrders.filter(o => o.status === 'dispatched' || o.status === 'delivered')
+  // Also orders marked returned before returns were recorded: their device
+  // was never taken back into stock.
+  const returnableOrders = kilimallOrders.filter(o => o.status === 'dispatched' || o.status === 'delivered' || isLegacyReturned(o))
   const returnableColumns: ColumnDef<KilimallOrder>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
@@ -461,9 +464,11 @@ function KilimallContent() {
       exportValue: o => `${o.fulfilledProductName || o.productName} ${o.serialNumber ?? ''}`.trim(),
     },
     {
-      key: 'status', label: 'Status', priority: 2, width: '90px',
-      render: o => <span className="text-[11px] capitalize">{o.status}</span>,
-      exportValue: o => o.status,
+      key: 'status', label: 'Status', priority: 2, width: '1fr',
+      render: o => isLegacyReturned(o)
+        ? <span className="text-[11px]" style={{ color: 'var(--danger)' }}>Marked returned — device not taken back yet</span>
+        : <span className="text-[11px] capitalize">{o.status}</span>,
+      exportValue: o => isLegacyReturned(o) ? 'returned (stock not corrected)' : o.status,
     },
     {
       key: 'action', label: '', priority: 1, width: '120px', align: 'right' as const,
@@ -1182,7 +1187,7 @@ function KilimallContent() {
             </ul>
           </div>
           <div className="card w-full p-4 overflow-hidden">
-            <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-2">Out with customers ({returnableOrders.length})</p>
+            <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-2">Out with customers, or not yet taken back ({returnableOrders.length})</p>
             <DataTable
               tableId="kilimall-returnable"
               columns={returnableColumns}
@@ -1448,7 +1453,7 @@ function KilimallContent() {
                 showToast('Order marked as delivered')
               }}>Mark Delivered</button>
             )}
-            {(viewOrder.status === 'dispatched' || viewOrder.status === 'delivered') && (
+            {(viewOrder.status === 'dispatched' || viewOrder.status === 'delivered' || isLegacyReturned(viewOrder)) && (
               <button className="btn-outline text-[11px]" style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
                 onClick={() => { const id = viewOrder.id; setDetailId(null); openReturn(id) }}>Record return</button>
             )}

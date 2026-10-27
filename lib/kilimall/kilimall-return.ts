@@ -28,6 +28,14 @@ export type KilimallReturnEntry = {
 
 type Order = Record<string, any>
 
+/**
+ * Marked "returned" before returns were recorded: only the label changed, the
+ * device was never taken back into stock. Such an order can be recorded once.
+ */
+export function isLegacyReturned(order: Order | null | undefined): boolean {
+  return String(order?.status) === 'returned' && !(Array.isArray(order?.returns) && order!.returns.length > 0)
+}
+
 const CONDITIONS = new Set(['good', 'damaged', 'faulty'])
 const OUTCOMES = new Set(['refund', 'exchange'])
 
@@ -38,7 +46,7 @@ export function kilimallReturnPlan(
 ):
   | { ok: true; order: Order; entry: KilimallReturnEntry; returnRef: string; productId: string; productName: string; serialId?: string }
   | { ok: false; error: string } {
-  if (!['dispatched', 'delivered'].includes(String(order?.status))) {
+  if (!['dispatched', 'delivered'].includes(String(order?.status)) && !isLegacyReturned(order)) {
     return { ok: false, error: 'Only a dispatched or delivered order can be returned.' }
   }
   const condition = String(input.condition ?? '') as KilimallReturnCondition

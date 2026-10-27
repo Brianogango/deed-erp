@@ -38,6 +38,16 @@ export async function POST(req: NextRequest, { params }: Params) {
       const plan = kilimallReturnPlan(orders[idx], body, { by: user.name || user.username, at: new Date().toISOString() })
       if (!plan.ok) return NextResponse.json({ error: plan.error }, { status: 422 })
 
+      // The device must still be out with the customer: one that is already
+      // back in stock (put back by hand) would be counted twice.
+      if (plan.serialId) {
+        const { deed_serials } = await loadAppStateForWrite(['deed_serials'])
+        const serial = (Array.isArray(deed_serials) ? deed_serials as Array<Record<string, any>> : []).find(s => s?.id === plan.serialId)
+        if (serial && serial.status !== 'sold') {
+          return NextResponse.json({ error: `Serial ${serial.serial ?? plan.serialId} is already back in stock (${serial.status}). Nothing to take back.` }, { status: 422 })
+        }
+      }
+
       const stock = await applyCustomerReturnStockMutation({
         returnRef: plan.returnRef,
         lines: [{ productId: plan.productId, productName: plan.productName, qty: 1, serialIds: plan.serialId ? [plan.serialId] : undefined }],

@@ -42,9 +42,16 @@ describe('kilimallReturnPlan', () => {
 
   it('refuses orders not out with the customer, and incomplete input', () => {
     expect(kilimallReturnPlan(order({ status: 'pending' }), input, meta).ok).toBe(false)
-    expect(kilimallReturnPlan(order({ status: 'returned' }), input, meta).ok).toBe(false)
+    expect(kilimallReturnPlan(order({ status: 'returned', returns: [{}] }), input, meta).ok).toBe(false)
     expect(kilimallReturnPlan(order(), { ...input, reason: ' ' }, meta).ok).toBe(false)
     expect(kilimallReturnPlan(order(), { ...input, condition: 'x' as any }, meta).ok).toBe(false)
+  })
+
+  it('accepts an order marked returned the old way (label only), once', () => {
+    const plan = kilimallReturnPlan(order({ status: 'returned' }), input, meta)
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(kilimallReturnPlan(plan.order, input, meta).ok).toBe(false)
   })
 
   it('numbers a second return after an exchange', () => {
@@ -58,6 +65,7 @@ describe('kilimallReturnPlan', () => {
 
 const m = vi.hoisted(() => ({
   orders: [] as any[],
+  serials: [] as any[],
   saved: [] as any[],
   stock: vi.fn(),
   valuation: vi.fn(),
@@ -68,7 +76,7 @@ vi.mock('@/lib/auth/api', () => ({
 }))
 vi.mock('@/lib/server-store', () => ({
   withAppStateKeyLock: (_k: string, fn: () => unknown) => fn(),
-  loadAppStateForWrite: async () => ({ deed_kilimallOrders: m.orders }),
+  loadAppStateForWrite: async (keys: string[]) => (keys.includes('deed_serials') ? { deed_serials: m.serials } : { deed_kilimallOrders: m.orders }),
   saveStoreKeys: async (e: Record<string, string>) => { m.saved.push(e); m.orders = JSON.parse(e.deed_kilimallOrders) },
 }))
 vi.mock('@/lib/inventory/stock-transactions', () => ({ applyCustomerReturnStockMutation: m.stock }))
@@ -82,6 +90,7 @@ const call = (body: unknown) => POST(new Request('http://x', { method: 'POST', b
 describe('POST /api/kilimall/orders/[id]/return', () => {
   beforeEach(() => {
     m.orders = [order()]
+    m.serials = [{ id: 's-1', serial: 'SN1', status: 'sold' }]
     m.saved = []
     m.stock.mockReset().mockResolvedValue({ ok: true, moves: [] })
     m.valuation.mockReset().mockResolvedValue({ ok: true })
@@ -103,6 +112,22 @@ describe('POST /api/kilimall/orders/[id]/return', () => {
     const res = await call(input)
     expect(res.status).toBe(422)
     expect(m.stock).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses when the serial is already back in stock', async () => {
+    m.serials = [{ id: 's-1', serial: 'SN1', status: 'available' }]
+    const res = await call(input)
+    expect(res.status).toBe(422)
+    expect(m.stock).not.toHaveBeenCalled()
+    expect(m.saved).toHaveLength(0)
+  })
+
+  it('takes back the device of an order marked returned the old way', async () => {
+    m.orders = [order({ status: 'returned' })]
+    const res = await call(input)
+    expect(res.status).toBe(200)
+    expect(m.stock).toHaveBeenCalledTimes(1)
+    expect(m.orders[0].returns).toHaveLength(1)
   })
 
   it('leaves the order unchanged when the stock step fails', async () => {
