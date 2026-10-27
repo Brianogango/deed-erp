@@ -213,6 +213,11 @@ export default function RepairDetailView() {
   // forever without the job ever advancing.
   const awaitingAssignedTech = startableNow && !isMyRepair
   const otherTechWorking = r.status === 'in_repair' && !isMyRepair
+  // Once the client has approved, editing the quote is a correction (still
+  // offered in the Quote tab), never the job's next step. It used to become
+  // the pulsing main action whenever nothing else applied — e.g. for the
+  // technician once their own repair reached QC, which someone else must do.
+  const quoteAlreadyApproved = ['approved', 'awaiting_parts', 'in_repair', 'qc'].includes(r.status)
   const technicianLabel = r.assignedTechnicianName || 'the assigned technician'
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
@@ -220,6 +225,7 @@ export default function RepairDetailView() {
     && (['director', 'technical_lead'].includes(currentRole)
     || (!!currentUser && isRepairTechActor(currentUser) && !isMyRepair))
     && !pendingOutsourceJob
+  const waitingForOthersQc = r.status === 'qc' && !canPerformQA
   const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status) && !pendingOutsourceJob
   const isDirector  = currentRole === 'director'
   const isDeliveryManager = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
@@ -381,7 +387,10 @@ export default function RepairDetailView() {
     : canQuote && !r.quote ? 'Generate a repair quote'
     : awaitingAssignedTech ? `Quote approved — waiting for ${technicianLabel} to start the repair`
     : otherTechWorking ? `${technicianLabel} is working on this repair`
-    : canQuote && r.quote ? 'Update or re-send the quote to move forward'
+    : waitingForOthersQc ? (isMyRepair
+      ? 'Repair complete — waiting for another technician or the technical lead to run QC'
+      : 'Repair complete — waiting for QC')
+    : canQuote && r.quote && !quoteAlreadyApproved ? 'Update or re-send the quote to move forward'
     : canCloseJob  ? 'Close the job after collection'
     : canMarkCollected ? 'Record pickup — mark collected when the device is handed over'
     : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'
@@ -404,8 +413,9 @@ export default function RepairDetailView() {
     canMarkCollected,
     canCloseJob,
     canDiagnose,
-    canUpdateDiagnosis,
-    canQuote: canQuote && !awaitingAssignedTech && !otherTechWorking,
+    // Corrections after approval stay in their tabs, never the main action.
+    canUpdateDiagnosis: canUpdateDiagnosis && !quoteAlreadyApproved,
+    canQuote: canQuote && !awaitingAssignedTech && !otherTechWorking && !quoteAlreadyApproved,
     canAssign,
     quoteDeclinedReopenable: isQuoteDeclinedReopenable(r.status),
     noCharge,
