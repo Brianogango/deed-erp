@@ -16634,6 +16634,28 @@ body:has(.settings-workspace) [role='dialog'] > div {
 
 
 /* Repair workspace — Deed responsive operations system */
+/* The repair record's header (back button, title, actions) is sticky. The
+   page shell's overflow:hidden made this wrapper the sticky header's scroll
+   container — one that never scrolls — so the header scrolled away with the
+   page. clip still trims sideways overflow without creating a scroll
+   container, so the header sticks to the main scrolling area. */
+.mod-page.repair-workspace--detail {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+/* Stick flush under the top bar: the scrolling <main> has p-2 / md:p-2.5 /
+   lg:p-3 padding, and content showed through that strip above the header. */
+@media (min-width: 640px) {
+  .mod-page.repair-workspace--detail .repair-detail__header { top: -0.5rem; background: var(--repair-surface); }
+}
+@media (min-width: 768px) {
+  .mod-page.repair-workspace--detail .repair-detail__header { top: -0.625rem; }
+}
+@media (min-width: 1024px) {
+  .mod-page.repair-workspace--detail .repair-detail__header { top: -0.75rem; }
+}
+
 .repair-workspace {
   --repair-navy: #061b4f;
   --repair-cyan: #00a8d6;
