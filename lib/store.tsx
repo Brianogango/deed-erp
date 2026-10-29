@@ -1169,6 +1169,9 @@ export interface RefurbishmentJob {
   completedDate?: string
   transferDate?: string
   underWarranty?: boolean
+  /** Cost taken off the books when written off (reversed exactly on restore). Unset: written off before this was booked. */
+  writeOffCost?: number
+  writeOffValuationRef?: string
 }
 
 export interface SaleOrderItem {
@@ -3889,7 +3892,10 @@ interface AppState {
   notifyTechPartAvailable: (jobId: string, partId: string) => void    // lead tech → stamps notified date
   markRefurbishmentReady: (jobId: string) => void
   transferToSell: (jobId: string) => void
-  writeOffRefurbishmentJob: (jobId: string, reason: string) => void
+  /** Server write-off: device leaves stock and its cost is booked as a write-off. False if it failed. */
+  writeOffRefurbishmentJob: (jobId: string, reason: string) => Promise<boolean>
+  /** Bring a written-off device back: stock and the write-off booking are reversed. */
+  restoreRefurbishmentJob: (jobId: string) => Promise<boolean>
 
   // HR users & auth
   login: (username: string, password: string) => Promise<boolean>
@@ -4606,6 +4612,7 @@ type OperationsStoreState = Pick<AppState,
   | 'verifyReleaseItem'
   | 'voidRelease'
   | 'writeOffRefurbishmentJob'
+  | 'restoreRefurbishmentJob'
 >
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -7897,6 +7904,7 @@ function StoreProvider({
     verifyReleaseItem: (...args: Parameters<AppState['verifyReleaseItem']>) => storeCtxRef.current!.verifyReleaseItem(...args),
     voidRelease: (...args: Parameters<AppState['voidRelease']>) => storeCtxRef.current!.voidRelease(...args),
     writeOffRefurbishmentJob: (...args: Parameters<AppState['writeOffRefurbishmentJob']>) => storeCtxRef.current!.writeOffRefurbishmentJob(...args),
+    restoreRefurbishmentJob: (...args: Parameters<AppState['restoreRefurbishmentJob']>) => storeCtxRef.current!.restoreRefurbishmentJob(...args),
   }), [])
 
   // Wire cross-cutting deps (currentUser/users/showToast/addAuditLog/pushNotif/
@@ -16134,9 +16142,27 @@ const storeCtx: AppState = {
       }
       showToast(`${job.serialNumber} sent for retest — pass it in Inventory › Warehouse › Inbound to make it sellable`)
     },
-    writeOffRefurbishmentJob: (jobId, reason) => {
+    writeOffRefurbishmentJob: async (jobId, reason) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
-      if (!job) return
+      if (!job) return false
+      // The server writes the device off: out of stock, and its cost booked
+      // as a write-off expense instead of staying in inventory.
+      let cost = 0
+      let valuationRef: string | undefined
+      try {
+        const res = await fetch('/api/inventory/serial-write-off', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serialId: job.serialId, action: 'write_off', reference: job.ref, reason }),
+        })
+        const data = await res.json().catch(() => null) as { error?: string; cost?: number; valuationRef?: string } | null
+        if (!res.ok) { showToast(data?.error || 'Could not write the device off', 'error'); return false }
+        cost = Number(data?.cost) || 0
+        valuationRef = data?.valuationRef
+      } catch {
+        showToast('Could not write the device off. Check your connection and try again.', 'error')
+        return false
+      }
       // Parts taken from stock for this machine and not fitted go back to the
       // warehouse; they used to stay out of stock for good.
       const returned = job.partsNeeded.filter(p => p.productId && p.status !== 'used' && refurbPartStockTaken(p))
@@ -16148,13 +16174,60 @@ const storeCtx: AppState = {
         status: 'written_off',
         techNotes: (j.techNotes ? j.techNotes + '\n' : '') + `Written off: ${reason}`,
         completedDate: now(),
+        writeOffCost: cost,
+        writeOffValuationRef: valuationRef,
         partsNeeded: j.partsNeeded.map(pt => returnedIds.has(pt.id)
           ? { ...pt, status: 'needed' as const, stockTaken: false, allocatedDate: undefined, allocatedByName: undefined, notifiedTechDate: undefined, notes: [pt.notes, 'Returned to stock on write-off'].filter(Boolean).join(' · ') }
           : pt),
       }))
-      showToast(returned.length
-        ? `${job.serialNumber} written off — ${returned.length} unused part${returned.length > 1 ? 's' : ''} returned to stock`
-        : `${job.serialNumber} written off`)
+      addAuditLog('refurb_write_off', job.ref, `Written off ${job.serialNumber}${cost ? ` (KES ${cost.toLocaleString('en-KE')} to write-off expense)` : ''}: ${reason}`)
+      showToast([
+        `${job.serialNumber} written off`,
+        cost ? `KES ${cost.toLocaleString('en-KE')} booked as a write-off` : '',
+        returned.length ? `${returned.length} unused part${returned.length > 1 ? 's' : ''} returned to stock` : '',
+      ].filter(Boolean).join(' — '))
+      return true
+    },
+    restoreRefurbishmentJob: async (jobId) => {
+      const job = refurbishmentJobs.find(j => j.id === jobId)
+      if (!job || job.status !== 'written_off') return false
+      try {
+        const res = await fetch('/api/inventory/serial-write-off', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            serialId: job.serialId,
+            action: 'restore',
+            reference: job.ref,
+            reason: 'Brought back to refurbishment',
+            // Only what this write-off took off the books is put back.
+            ...(job.writeOffCost ? { unitCost: job.writeOffCost } : {}),
+            restoreTo: { status: 'refurbishment', location: 'repair_unit' },
+          }),
+        })
+        const data = await res.json().catch(() => null) as { error?: string } | null
+        if (!res.ok) { showToast(data?.error || 'Could not bring the device back', 'error'); return false }
+      } catch {
+        showToast('Could not bring the device back. Check your connection and try again.', 'error')
+        return false
+      }
+      setSerials(p => p.map(s => s.id !== job.serialId ? s : { ...s, status: 'refurbishment', location: 'repair_unit' }))
+      // Back to its technician when it had one: a queued job with a
+      // technician set could not be started (Start needs "assigned").
+      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
+        ...j,
+        status: j.assignedTechnicianId ? 'assigned' : 'queued',
+        completedDate: undefined,
+        writeOffCost: undefined,
+        writeOffValuationRef: undefined,
+        techNotes: (j.techNotes ? j.techNotes + '\n' : '') + `Restored from write-off on ${new Date().toLocaleDateString('en-GB')}`,
+      }))
+      addAuditLog('refurb_restore', job.ref, `Restored ${job.serialNumber} from write-off${job.writeOffCost ? ` (KES ${job.writeOffCost.toLocaleString('en-KE')} write-off reversed)` : ''}`)
+      showToast([
+        job.assignedTechnicianName ? `Device restored — back with ${job.assignedTechnicianName}` : 'Device restored to queue',
+        job.writeOffCost ? `KES ${job.writeOffCost.toLocaleString('en-KE')} write-off reversed` : '',
+      ].filter(Boolean).join(' — '))
+      return true
     },
 
     // ── Stock Transfers ────────────────────────────────────────────────────────

@@ -1625,6 +1625,73 @@ export async function applyCustomerReturnStockMutation(params: {
 }
 
 /**
+ * Write one serial-tracked unit off (it cannot be repaired), or bring a
+ * written-off unit back. Write-off: the serial is marked written off where it
+ * is and product on-hand drops by one. Restore: the serial goes back to
+ * `restoreTo` (status and location) and on-hand rises by one. Either way a
+ * stock move is recorded. The value side (write-off expense ↔ inventory) is
+ * posted by the caller.
+ */
+export async function applySerialWriteOffMutation(params: {
+  serialId: string
+  reference: string
+  reason: string
+  action: 'write_off' | 'restore'
+  restoreTo?: { status: string; location: string }
+  userId?: string
+  /** False when restoring a unit written off before on-hand was adjusted for it (nothing to add back). */
+  adjustOnHand?: boolean
+}): Promise<{ ok: true; productId: string; productName: string; serial: string } | { ok: false; error: string; status?: number }> {
+  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_stockMoves'])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+  const idx = serials.findIndex(s => s.id === params.serialId)
+  if (idx < 0) return { ok: false, error: 'Serial not found', status: 404 }
+  const serial = { ...serials[idx] }
+  const productId = String(serial.productId || '')
+  const productName = String((serial as any).productName || products.find(p => p.id === productId)?.name || 'Device')
+
+  if (params.action === 'write_off') {
+    const label = String(serial.serial ?? params.serialId)
+    if (serial.status === 'written_off') return { ok: false, error: `${label} is already written off`, status: 409 }
+    if (serial.status === 'sold') return { ok: false, error: `${label} is sold — it cannot be written off`, status: 409 }
+    serial.status = 'written_off'
+  } else {
+    if (serial.status !== 'written_off') return { ok: false, error: `${String(serial.serial ?? params.serialId)} is not written off`, status: 409 }
+    serial.status = (params.restoreTo?.status ?? 'refurbishment') as BlobSerial['status']
+    serial.location = (params.restoreTo?.location ?? 'repair_unit') as BlobSerial['location']
+  }
+  serials[idx] = serial
+
+  const delta = params.adjustOnHand === false ? 0 : params.action === 'write_off' ? -1 : 1
+  const pIdx = products.findIndex(p => p.id === productId)
+  if (pIdx >= 0 && delta) products[pIdx] = { ...products[pIdx], stockQty: Math.max(0, Number(products[pIdx].stockQty ?? 0) + delta) }
+  const move: BlobStockMove = {
+    id: randomUUID(),
+    type: params.action === 'write_off' ? 'out' : 'in',
+    productId,
+    productName,
+    qty: 1,
+    reason: params.action === 'write_off' ? `Written off: ${params.reason}` : `Write-off reversed: ${params.reason}`,
+    fromLocation: params.action === 'write_off' ? serial.location : 'written_off',
+    toLocation: params.action === 'write_off' ? 'written_off' : serial.location,
+    serialNumbers: [String(serial.serial ?? params.serialId)],
+    date: nowIso(),
+    userId: params.userId ?? 'system',
+    documentRef: params.reference,
+  } as BlobStockMove
+
+  if (delta) await bumpPrismaOnHand(new Map([[productId, delta]]))
+  await saveStoreKeys({
+    ...(delta ? { deed_products: JSON.stringify(products) } : {}),
+    deed_serials: JSON.stringify(serials),
+    deed_stockMoves: JSON.stringify([move, ...stockMoves]),
+  })
+  return { ok: true, productId, productName, serial: String(serial.serial ?? params.serialId) }
+}
+
+/**
  * Vendor RTV — deduct on-hand / mark serials returned@vendor.
  */
 export async function applyVendorReturnStockMutation(params: {

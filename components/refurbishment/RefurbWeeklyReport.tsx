@@ -88,13 +88,14 @@ export function RefurbWeeklyReport({
     { key: 'ref', label: 'Ref', priority: 1, width: '90px', render: c => refCell(c.ref), exportValue: c => c.ref },
     { key: 'device', label: 'Device', priority: 1, width: '1.5fr', render: deviceCell, exportValue: c => `${c.productName} (${c.serialNumber})` },
     { key: 'tech', label: 'Technician', priority: 2, width: '1fr', render: c => <span className="text-xs">{c.assignedTechnicianName || '—'}</span>, exportValue: c => c.assignedTechnicianName || '' },
+    { key: 'loss', label: 'Value written off', align: 'right' as const, priority: 2, width: '130px', render: c => <span className="text-xs">{c.writeOffCost ? kes(c.writeOffCost) : '—'}</span>, exportValue: c => c.writeOffCost ?? '' },
     { key: 'reason', label: 'Reason', priority: 1, width: '2fr', render: c => <span className="text-xs text-t2">{/Written off: (.*)$/m.exec(c.techNotes ?? '')?.[1] ?? '—'}</span>, exportValue: c => /Written off: (.*)$/m.exec(c.techNotes ?? '')?.[1] ?? '' },
   ]
 
   const tiles: Array<[string, string | number, string?]> = [
     ['Completed', t.completed, 'var(--success)'],
     ['Sent for retest', t.sentForRetest],
-    ['Written off', t.writtenOff, t.writtenOff ? 'var(--danger)' : undefined],
+    ['Written off', t.writeOffValue ? `${t.writtenOff} · ${kes(t.writeOffValue)}` : t.writtenOff, t.writtenOff ? 'var(--danger)' : undefined],
     ['Received', t.received],
     [report.isCurrentWeek ? 'Pending now' : 'Open at week end', t.pending, 'var(--warning)'],
     ['Avg days to complete', num(t.avgDaysToComplete)],

@@ -953,6 +953,12 @@ export async function processStockAdjustment(params: {
   userId?: string
   postJournal?: boolean
   unitCost?: number
+  /**
+   * Stock added back: credit the write-off expense instead of the inventory
+   * variance account — undoing a write-off (a machine brought back), so the
+   * loss it booked is reversed rather than shown as a gain elsewhere.
+   */
+  reversesWriteOff?: boolean
 }) {
   const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
   if (qty <= 0) throw new Error('Adjustment qty must be positive')
@@ -1043,14 +1049,21 @@ export async function processStockAdjustment(params: {
     const { inventoryLabel } = await resolveStockAccounts(params.productId)
     await persistStockJournal({
       ref: stockValuationJournalRef('adjustment_add', params.reference || '', params.productId),
-      description: `Stock gain ${applied.qty} @ ${unitCost}`,
+      description: params.reversesWriteOff
+        ? `Write-off reversed ${applied.qty} @ ${unitCost}`
+        : `Stock gain ${applied.qty} @ ${unitCost}`,
       sourceType: 'stock_adjustment',
       sourceId: params.reference || params.productId,
       createdById: params.userId,
-      lines: [
-        { accountLabel: inventoryLabel, label: 'Inventory gain', debit: applied.totalCost, credit: 0 },
-        { accountLabel: ADJUSTMENT_LABEL, label: 'Inventory variance', debit: 0, credit: applied.totalCost },
-      ],
+      lines: params.reversesWriteOff
+        ? [
+            { accountLabel: inventoryLabel, label: 'Inventory restored', debit: applied.totalCost, credit: 0 },
+            { accountLabel: WRITE_OFF_LABEL, label: 'Write-off reversed', debit: 0, credit: applied.totalCost },
+          ]
+        : [
+            { accountLabel: inventoryLabel, label: 'Inventory gain', debit: applied.totalCost, credit: 0 },
+            { accountLabel: ADJUSTMENT_LABEL, label: 'Inventory variance', debit: 0, credit: applied.totalCost },
+          ],
       ledger: {
         productId: params.productId,
         quantity: applied.qty,

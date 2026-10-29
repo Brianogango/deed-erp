@@ -15,7 +15,7 @@ function table(title: string, head: string[], rows: string[][], empty: string): 
 export function refurbWeeklyReportHtml(r: RefurbWeeklyReport, generatedBy: string): string {
   const t = r.totals
   const tiles = [
-    ['Completed', t.completed], ['Sent for retest', t.sentForRetest], ['Written off', t.writtenOff],
+    ['Completed', t.completed], ['Sent for retest', t.sentForRetest], ['Written off', t.writeOffValue ? `${t.writtenOff} · ${kes(t.writeOffValue)}` : t.writtenOff],
     ['Received', t.received], [r.isCurrentWeek ? 'Pending now' : 'Open at week end', t.pending],
     ['Avg days to complete', num(t.avgDaysToComplete)], ['Parts cost (completed)', kes(t.partsCostCompleted)],
   ]
@@ -44,8 +44,8 @@ ${table(r.isCurrentWeek ? 'Pending' : 'Open at the end of the week', ['Ref', 'De
 ${table('Technicians', ['Technician', 'Completed', 'Written off', 'Still open', 'Avg days'],
     r.technicians.map(x => [esc(x.name), String(x.completed), String(x.writtenOff), String(x.open), num(x.avgDays)]),
     'No assigned work')}
-${table('Written off', ['Ref', 'Device', 'Serial', 'Technician', 'Reason'],
-    r.writtenOff.map(w => [esc(w.ref), esc(w.productName), `<span class="mono">${esc(w.serialNumber)}</span>`, esc(w.assignedTechnicianName || '—'), esc(/Written off: (.*)$/m.exec(w.techNotes ?? '')?.[1] ?? '—')]),
+${table('Written off', ['Ref', 'Device', 'Serial', 'Technician', 'Value written off', 'Reason'],
+    r.writtenOff.map(w => [esc(w.ref), esc(w.productName), `<span class="mono">${esc(w.serialNumber)}</span>`, esc(w.assignedTechnicianName || '—'), w.writeOffCost ? kes(w.writeOffCost) : '—', esc(/Written off: (.*)$/m.exec(w.techNotes ?? '')?.[1] ?? '—')]),
     'Nothing written off')}
 ${table('Received this week', ['Ref', 'Device', 'Serial', 'Issue'],
     r.received.map(j => [esc(j.ref), esc(j.productName), `<span class="mono">${esc(j.serialNumber)}</span>`, esc(j.intakeIssueDescription || '—')]),

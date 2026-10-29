@@ -63,7 +63,7 @@ function RefurbishmentContent() {
     assignRefurbishmentJob, updateRefurbishmentJob,
     addRefurbishmentPart, updateRefurbishmentPart, removeRefurbishmentPart,
     requestPartFromInventory, allocateRefurbPart, notifyTechPartAvailable,
-    markRefurbishmentReady, transferToSell, writeOffRefurbishmentJob,
+    markRefurbishmentReady, transferToSell, writeOffRefurbishmentJob, restoreRefurbishmentJob,
     updateSerial,
     showToast,
   } = useOperationsStore()
@@ -150,7 +150,8 @@ function RefurbishmentContent() {
   const canAddParts  = (j: RefurbishmentJob) => ['assigned', 'in_progress'].includes(j.status) && (j.assignedTechnicianId === currentUserId || isLeadTech)
   const canMarkReady = (j: RefurbishmentJob) => j.status === 'in_progress' && (j.assignedTechnicianId === currentUserId || isLeadTech)
   const canTransfer  = (j: RefurbishmentJob) => j.status === 'ready' && isLeadTech
-  const canWriteOff  = (j: RefurbishmentJob) => ['assigned', 'in_progress'].includes(j.status) && (j.assignedTechnicianId === currentUserId || isLeadTech)
+  // A write-off is a loss booked to the accounts: the lead decides it.
+  const canWriteOff  = (j: RefurbishmentJob) => ['assigned', 'in_progress'].includes(j.status) && isLeadTech
 
   const statusCounts = useMemo(() => {
     const counts: Partial<Record<RefurbStatus | 'all', number>> = { all: refurbishmentJobs.length }
@@ -246,13 +247,12 @@ function RefurbishmentContent() {
               {job.status === 'written_off' && isLeadTech && (
                 <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
                   style={{ background: '#ECFDF5', color: 'var(--success-text)', border: '1px solid #A7F3D0', cursor: 'pointer' }}
-                  onClick={() => setPendingConfirm({ msg: 'Restore this device to the refurbishment queue?', action: () => {
-                    // Back to its technician when it had one: a queued job with a
-                    // technician set could not be started (Start needs "assigned").
-                    updateRefurbishmentJob(job.id, { status: job.assignedTechnicianId ? 'assigned' : 'queued', completedDate: undefined })
-                    updateSerial(job.serialId, { status: 'refurbishment', location: 'repair_unit' })
-                    showToast(job.assignedTechnicianName ? `Device restored — back with ${job.assignedTechnicianName}` : 'Device restored to queue')
-                  } })}>
+                  onClick={() => setPendingConfirm({
+                    msg: job.writeOffCost
+                      ? `Bring this device back? It returns to stock and the KES ${job.writeOffCost.toLocaleString('en-KE')} write-off is reversed.`
+                      : 'Bring this device back to refurbishment? It returns to stock.',
+                    action: () => { void restoreRefurbishmentJob(job.id) },
+                  })}>
                   <Fa icon={faRotate} className="mr-1.5" />Restore to queue
                 </button>
               )}
@@ -309,6 +309,9 @@ function RefurbishmentContent() {
                 <p className="text-xs italic text-amber-500 font-medium inline-flex items-center gap-1"><Fa icon={faTriangleExclamation} aria-hidden="true" /> Not yet assigned</p>
               )}
               {job.startedDate && <p className="text-[11px] text-t3">Started: <span className="text-t2 font-medium">{fmtDate(job.startedDate)}</span></p>}
+              {job.status === 'written_off' && (
+                <p className="text-[11px] text-t3">Written off: <span className="text-t2 font-medium">{job.writeOffCost ? `${fmtKes(job.writeOffCost)} booked as a loss` : 'before write-offs were booked — no amount'}</span></p>
+              )}
               {job.completedDate && <p className="text-[11px] text-t3">Completed: <span className="text-t2 font-medium">{fmtDate(job.completedDate)}</span></p>}
               {job.transferDate  && <p className="text-[11px] text-t3">Transferred: <span className="text-t2 font-medium">{fmtDate(job.transferDate)}</span></p>}
             </div>
@@ -663,9 +666,11 @@ function RefurbishmentContent() {
               <button className="btn-primary" style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}
                 onClick={() => {
                   if (!writeOffReason.trim()) { showToast('Enter a reason', 'error'); return }
-                  writeOffRefurbishmentJob(job.id, writeOffReason)
-                  setShowWriteOffModal(false)
-                  setActiveId(null)
+                  void writeOffRefurbishmentJob(job.id, writeOffReason.trim()).then(ok => {
+                    if (!ok) return
+                    setShowWriteOffModal(false)
+                    setActiveId(null)
+                  })
                 }}>Write Off</button>
             </div>
           </Modal>
