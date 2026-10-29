@@ -12,7 +12,9 @@ import {
   resolveRefurbInstallAction,
 } from '@/lib/refurbishment/apply-upgrade-specs'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
-import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
+import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader, TabBar } from '@/components/ui'
+import { RefurbWeeklyReport } from '@/components/refurbishment/RefurbWeeklyReport'
+import { refurbWeekStart } from '@/lib/refurbishment/weekly-report'
 import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
@@ -83,6 +85,10 @@ function RefurbishmentContent() {
     setFilterStatusValue(value, { queryPatch: { page: null } })
   const [jobSearch, setJobSearchValue] = useUrlUiState('q', '')
   const setJobSearch = (value: string) => setJobSearchValue(value, { queryPatch: { page: null } })
+  const [viewValue, setViewValue] = useUrlUiState('view', 'jobs')
+  const view: 'jobs' | 'report' = viewValue === 'report' ? 'report' : 'jobs'
+  const [reportWeekValue, setReportWeek] = useUrlUiState('week', '')
+  const reportWeek = /^\d{4}-\d{2}-\d{2}$/.test(reportWeekValue) ? refurbWeekStart(`${reportWeekValue}T12:00:00.000Z`) : refurbWeekStart(new Date())
   const [pageValue, setPageValue] = useUrlUiState('page', '1')
   const page = Math.max(1, Number.parseInt(pageValue, 10) || 1)
   const setPage = (value: number) => setPageValue(String(Math.max(1, value)))
@@ -114,15 +120,19 @@ function RefurbishmentContent() {
       .filter(j => j.status !== 'transferred' && j.status !== 'written_off')
       .map(j => j.serialId)
   )
+  // Machines waiting for refurbishment with no open job. A written-off or
+  // sold machine left in the repair unit is not one: written-off devices
+  // used to come back here as "no job created yet".
   const orphanedSerials = useMemo(() =>
     serials.filter(s =>
-      (s.status === 'refurbishment' || s.location === 'repair_unit') &&
+      (s.status === 'refurbishment' || (s.location === 'repair_unit' && s.status === 'available')) &&
       !activeJobSerialIds.has(s.id)
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [serials, refurbishmentJobs]
   )
-  const withIssuesSerials = useMemo(() => serials.filter(s => s.location === 'shop'), [serials])
+  // "With Issues" stock still in our hands (the location is called shop).
+  const withIssuesSerials = useMemo(() => serials.filter(s => s.location === 'shop' && ['available', 'returned'].includes(s.status)), [serials])
 
   const filtered = useMemo(() => {
     const list = filterStatus === 'all'
@@ -236,7 +246,13 @@ function RefurbishmentContent() {
               {job.status === 'written_off' && isLeadTech && (
                 <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
                   style={{ background: '#ECFDF5', color: 'var(--success-text)', border: '1px solid #A7F3D0', cursor: 'pointer' }}
-                  onClick={() => setPendingConfirm({ msg: 'Restore this device to the refurbishment queue?', action: () => { updateRefurbishmentJob(job.id, { status: 'queued', completedDate: undefined }); updateSerial(job.serialId, { status: 'refurbishment', location: 'repair_unit' }); showToast('Device restored to queue') } })}>
+                  onClick={() => setPendingConfirm({ msg: 'Restore this device to the refurbishment queue?', action: () => {
+                    // Back to its technician when it had one: a queued job with a
+                    // technician set could not be started (Start needs "assigned").
+                    updateRefurbishmentJob(job.id, { status: job.assignedTechnicianId ? 'assigned' : 'queued', completedDate: undefined })
+                    updateSerial(job.serialId, { status: 'refurbishment', location: 'repair_unit' })
+                    showToast(job.assignedTechnicianName ? `Device restored — back with ${job.assignedTechnicianName}` : 'Device restored to queue')
+                  } })}>
                   <Fa icon={faRotate} className="mr-1.5" />Restore to queue
                 </button>
               )}
@@ -292,6 +308,7 @@ function RefurbishmentContent() {
               ) : (
                 <p className="text-xs italic text-amber-500 font-medium inline-flex items-center gap-1"><Fa icon={faTriangleExclamation} aria-hidden="true" /> Not yet assigned</p>
               )}
+              {job.startedDate && <p className="text-[11px] text-t3">Started: <span className="text-t2 font-medium">{fmtDate(job.startedDate)}</span></p>}
               {job.completedDate && <p className="text-[11px] text-t3">Completed: <span className="text-t2 font-medium">{fmtDate(job.completedDate)}</span></p>}
               {job.transferDate  && <p className="text-[11px] text-t3">Transferred: <span className="text-t2 font-medium">{fmtDate(job.transferDate)}</span></p>}
             </div>
@@ -669,7 +686,24 @@ function RefurbishmentContent() {
         count={refurbishmentJobs.length}
         color="#8B5CF6"
       />
-
+      <TabBar
+        tabs={[{ id: 'jobs', label: 'Jobs' }, { id: 'report', label: 'Weekly report' }]}
+        active={view}
+        onChange={id => setViewValue(id === 'report' ? 'report' : 'jobs')}
+        ariaLabel="Refurbishment sections"
+      />
+      {view === 'report' ? (
+        <div className="mod-body p-3 sm:p-4">
+          <RefurbWeeklyReport
+            jobs={refurbishmentJobs}
+            weekStart={reportWeek}
+            onWeekChange={setReportWeek}
+            onOpenJob={id => setActiveId(id)}
+            generatedBy={currentUser?.name ?? 'ERP'}
+            onPrintBlocked={() => showToast('Allow pop-ups for this site to print the report', 'error')}
+          />
+        </div>
+      ) : (
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
         {/* Parts inbox */}
@@ -902,6 +936,7 @@ function RefurbishmentContent() {
           />
         </div>
       </div>
+      )}
 
       {/* ── Bulk Send Modal ── */}
       {showBulkSendModal && (

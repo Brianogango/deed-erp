@@ -324,6 +324,7 @@ import { loadFullRecord } from '@/lib/full-record'
 import { awaitRouteHydration, awaitStoreDownloads, downloadedThisSession, keysChangedSinceRead, noteStoreChanges, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
 import { formatKeDate, formatKeDateTime, formatKeInteger, installIntlFormatCache } from '@/lib/intl-cache'
 import { keepContainedRows, keepUnchangedRows } from '@/lib/same-content'
+import { refurbPartStockTaken } from '@/lib/refurbishment/refurb-parts'
 import type { KilimallReturnEntry, KilimallReturnInput } from '@/lib/kilimall/kilimall-return'
 import { contactFromPersonInput, deriveContactPersons } from '@/lib/contact-person-derive'
 import {
@@ -1139,6 +1140,8 @@ export interface RefurbPart {
   notes?: string
   /** How this RAM/SSD was fitted. Battery/keyboard leave this unset. */
   installAction?: 'add' | 'swap'
+  /** The part was taken out of warehouse stock for this job (older rows: allocatedDate is set). */
+  stockTaken?: boolean
 }
 
 export interface RefurbishmentJob {
@@ -1159,6 +1162,8 @@ export interface RefurbishmentJob {
   assignedTechnicianId?: string
   assignedTechnicianName?: string
   assignedDate?: string
+  /** When the technician pressed Start. */
+  startedDate?: string
   techNotes?: string   // technician's running notes / diagnosis
   partsNeeded: RefurbPart[]
   completedDate?: string
@@ -7391,6 +7396,34 @@ function StoreProvider({
   }
 
   const currentUser = () => currentUserId ? users.find(u => u.id === currentUserId) ?? null : null
+
+  // ── Refurbishment parts and warehouse stock ─────────────────────────────────
+  /** Good stock of a part in the warehouse (not With Issues, not in the repair unit). */
+  const refurbWarehouseQty = (productId: string) => {
+    const prod = prodRef.current.find(p => p.id === productId)
+    return calcStockByLocation(prod, serialRef.current, bulkStock, productId).warehouse
+  }
+  /** Take a refurbishment part out of warehouse stock. False (with a message) when there is not enough there. */
+  const takeRefurbPartFromWarehouse = (job: RefurbishmentJob, part: RefurbPart, byName: string): boolean => {
+    if (!part.productId) return false
+    const prod = prodRef.current.find(p => p.id === part.productId)
+    const available = refurbWarehouseQty(part.productId)
+    if (available < part.qty) {
+      showToast(`Not enough ${prod?.name ?? part.partName} in the warehouse: ${available} there, ${part.qty} needed. Order it or receive the PO first.`, 'error')
+      return false
+    }
+    setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: Math.max(0, x.stockQty - part.qty) } : x))
+    setBulkStock(prev => upsertBulkStock(prev, part.productId!, 'warehouse', -part.qty))
+    addMove(part.productId, part.partName, part.qty, 'out', `Refurb ${job.ref} — part taken by ${byName}`, job.ref, 'warehouse', 'repair_unit', [])
+    return true
+  }
+  /** Put a part that was taken for a job and never fitted back into the warehouse. */
+  const returnRefurbPartToWarehouse = (job: RefurbishmentJob, part: RefurbPart) => {
+    if (!part.productId) return
+    setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: x.stockQty + part.qty } : x))
+    setBulkStock(prev => upsertBulkStock(prev, part.productId!, 'warehouse', part.qty))
+    addMove(part.productId, part.partName, part.qty, 'in', `Refurb ${job.ref} — unused part returned`, job.ref, 'repair_unit', 'warehouse', [])
+  }
 
   const addAuditLog = (action: string, documentRef: string, details: string, opts?: { sessionOnly?: boolean }) => {
     const actor = currentUser()?.username || 'system'
@@ -15926,13 +15959,28 @@ const storeCtx: AppState = {
       showToast(`Job assigned to ${techName}`)
     },
     updateRefurbishmentJob: (jobId, patch) => {
-      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, ...patch, ...(patch.status === 'in_progress' && !j.assignedTechnicianId ? {} : {}) }))
+      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
+        ...j,
+        ...patch,
+        ...(patch.status === 'in_progress' && !j.startedDate ? { startedDate: now() } : {}),
+      }))
     },
     addRefurbishmentPart: (jobId, part) => {
       const newPart: RefurbPart = { ...part, id: uid() }
       setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, partsNeeded: [...j.partsNeeded, newPart] }))
     },
     updateRefurbishmentPart: (jobId, partId, patch) => {
+      // Fitting a part that never left stock (ordered and received on a PO,
+      // then flagged ready): it comes out of the warehouse now. It used to be
+      // marked used while staying in stock.
+      if (patch.status === 'used') {
+        const job = refurbishmentJobs.find(j => j.id === jobId)
+        const part = job?.partsNeeded.find(pt => pt.id === partId)
+        if (job && part && part.productId && !refurbPartStockTaken(part)) {
+          if (!takeRefurbPartFromWarehouse(job, part, currentUser()?.name ?? 'Technician')) return
+          patch = { ...patch, stockTaken: true }
+        }
+      }
       setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, partsNeeded: j.partsNeeded.map(pt => pt.id !== partId ? pt : { ...pt, ...patch }) }))
     },
     removeRefurbishmentPart: (jobId, partId) => {
@@ -15944,19 +15992,13 @@ const storeCtx: AppState = {
       const part = job?.partsNeeded.find(p => p.id === partId)
       if (!job || !part || !part.productId) { showToast('Part must be linked to an inventory product first', 'error'); return }
       const prod = prodRef.current.find(p => p.id === part.productId)
-      const inStock = prod ? prod.stockQty : 0
-      if (inStock >= part.qty) {
-        // Available — auto-allocate immediately
-        setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: Math.max(0, x.stockQty - part.qty) } : x))
-        setBulkStock(prev => {
-          const locs = calcStockByLocation(prod, serialRef.current, prev, part.productId!)
-          const src: LocationId = locs.shop >= part.qty ? 'shop' : 'warehouse'
-          return upsertBulkStock(prev, part.productId!, src, -part.qty)
-        })
-        addMove(part.productId, part.partName, part.qty, 'out', `Refurb ${job.ref} — part allocated`, job.ref, 'warehouse', 'repair_unit', [])
+      // Only good stock in the warehouse counts: the product's total also
+      // holds units With Issues and in the repair unit.
+      if (refurbWarehouseQty(part.productId) >= part.qty) {
+        if (!takeRefurbPartFromWarehouse(job, part, 'Auto (stock available)')) return
         setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
           ...j, partsNeeded: j.partsNeeded.map(pt => pt.id !== partId ? pt : {
-            ...pt, status: 'allocated', allocatedDate: now(), allocatedByName: 'Auto (stock available)', requestedDate: now(),
+            ...pt, status: 'allocated', allocatedDate: now(), allocatedByName: 'Auto (stock available)', requestedDate: now(), stockTaken: true,
           })
         }))
         showToast(`Part allocated from stock — ${prod?.name ?? part.partName} × ${part.qty}`)
@@ -15988,18 +16030,10 @@ const storeCtx: AppState = {
       const job  = refurbishmentJobs.find(j => j.id === jobId)
       const part = job?.partsNeeded.find(p => p.id === partId)
       if (!job || !part || !part.productId) { showToast('No linked product — cannot allocate from inventory', 'error'); return }
-      const prod = prodRef.current.find(p => p.id === part.productId)
-      if (!prod || prod.stockQty < part.qty) { showToast(`Insufficient stock: ${prod?.stockQty ?? 0} available, ${part.qty} needed. Create a PO instead.`, 'error'); return }
-      setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: Math.max(0, x.stockQty - part.qty) } : x))
-      setBulkStock(prev => {
-        const locs = calcStockByLocation(prod, serialRef.current, prev, part.productId!)
-        const src: LocationId = locs.shop >= part.qty ? 'shop' : 'warehouse'
-        return upsertBulkStock(prev, part.productId!, src, -part.qty)
-      })
-      addMove(part.productId, part.partName, part.qty, 'out', `Refurb ${job.ref} — part allocated by ${user.name}`, job.ref, 'warehouse', 'repair_unit', [])
+      if (!takeRefurbPartFromWarehouse(job, part, user.name)) return
       setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
         ...j, partsNeeded: j.partsNeeded.map(pt => pt.id !== partId ? pt : {
-          ...pt, status: 'allocated', allocatedDate: now(), allocatedByName: user.name,
+          ...pt, status: 'allocated', allocatedDate: now(), allocatedByName: user.name, stockTaken: true,
         })
       }))
       showToast(`Part allocated from stock by ${user.name}`)
@@ -16033,6 +16067,17 @@ const storeCtx: AppState = {
     markRefurbishmentReady: (jobId) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
       if (!job) return
+      // A machine is not ready while parts are still on their way, or were
+      // taken for it and never fitted (mark them used, or remove them).
+      const waiting = job.partsNeeded.filter(p => p.status === 'requested' || p.status === 'ordered')
+      const unfitted = job.partsNeeded.filter(p => p.status === 'allocated' || p.status === 'received')
+      if (waiting.length || unfitted.length) {
+        const list = (ps: RefurbPart[]) => ps.map(p => p.partName).join(', ')
+        showToast(waiting.length
+          ? `Still waiting for parts: ${list(waiting)}. Remove them if they are no longer needed.`
+          : `Mark the fitted parts as used first: ${list(unfitted)} (or remove them).`, 'error')
+        return
+      }
       const serial = serialRef.current.find(s => s.id === job.serialId)
       const upgrade = refurbishmentSellingNamePatch({
         job,
@@ -16092,9 +16137,24 @@ const storeCtx: AppState = {
     writeOffRefurbishmentJob: (jobId, reason) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
       if (!job) return
+      // Parts taken from stock for this machine and not fitted go back to the
+      // warehouse; they used to stay out of stock for good.
+      const returned = job.partsNeeded.filter(p => p.productId && p.status !== 'used' && refurbPartStockTaken(p))
+      for (const p of returned) returnRefurbPartToWarehouse(job, p)
+      const returnedIds = new Set(returned.map(p => p.id))
       setSerials(p => p.map(s => s.id !== job.serialId ? s : { ...s, status: 'written_off' }))
-      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, status: 'written_off', techNotes: (j.techNotes ? j.techNotes + '\n' : '') + `Written off: ${reason}`, completedDate: now() }))
-      showToast(`${job.serialNumber} written off`)
+      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
+        ...j,
+        status: 'written_off',
+        techNotes: (j.techNotes ? j.techNotes + '\n' : '') + `Written off: ${reason}`,
+        completedDate: now(),
+        partsNeeded: j.partsNeeded.map(pt => returnedIds.has(pt.id)
+          ? { ...pt, status: 'needed' as const, stockTaken: false, allocatedDate: undefined, allocatedByName: undefined, notifiedTechDate: undefined, notes: [pt.notes, 'Returned to stock on write-off'].filter(Boolean).join(' · ') }
+          : pt),
+      }))
+      showToast(returned.length
+        ? `${job.serialNumber} written off — ${returned.length} unused part${returned.length > 1 ? 's' : ''} returned to stock`
+        : `${job.serialNumber} written off`)
     },
 
     // ── Stock Transfers ────────────────────────────────────────────────────────
