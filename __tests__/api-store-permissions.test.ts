@@ -789,6 +789,18 @@ describe('GET /api/store — HR, finance and rider secrets (security audit)', ()
     expect(director.deed_riders[0].idNumber).toBe('12345678')
   })
 
+  it('an office save of riders keeps the link token (full and changed-rows writes)', async () => {
+    mockLoadAppState.mockImplementation(async () => ({ deed_riders: riders }))
+    mockGetSession.mockResolvedValue(directorSession)
+    const row = { id: 'rd1', name: 'Edited', hasPortalLink: true, idNumber: '12345678' }
+    for (const body of [{ deed_riders: JSON.stringify([row]) }, { _delta: { deed_riders: { upsert: [row], remove: [] } } }]) {
+      mockSaveStoreKeys.mockClear()
+      expect((await STORE_POST(postReq(body))).status).toBe(200)
+      const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_riders)
+      expect(saved[0]).toMatchObject({ name: 'Edited', portalToken: 'secret-token' })
+    }
+  })
+
   it('GET /api/store/[key] redacts riders the same way', async () => {
     mockLoadAppState.mockResolvedValue({ deed_riders: riders })
     mockGetSession.mockResolvedValue(salesSession)

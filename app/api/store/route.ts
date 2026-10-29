@@ -457,12 +457,6 @@ export async function POST(request: Request) {
         entries[key] = JSON.stringify(mergeSaleOrdersStoreWrite(serverState[key], incoming))
         continue
       }
-      if ((key === 'deed_deliveryJobs' || key === 'deed_riders') && entries[key]) {
-        let incoming: unknown
-        try { incoming = JSON.parse(entries[key]) } catch { continue }
-        entries[key] = JSON.stringify(mergeDeliveryStoreWrite(key, serverState[key], incoming))
-        continue
-      }
       if (key === 'deed_repairs_v2' && entries[key]) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
@@ -503,6 +497,15 @@ export async function POST(request: Request) {
         }
       }
     }
+  }
+
+  // Rider link tokens and rider-side job updates are set by the server only.
+  // Runs for every batch — these keys are not in the protected set above.
+  for (const key of ['deed_deliveryJobs', 'deed_riders'] as const) {
+    if (!entries[key]) continue
+    let incoming: unknown
+    try { incoming = JSON.parse(entries[key]) } catch { continue }
+    entries[key] = JSON.stringify(mergeDeliveryStoreWrite(key, serverState[key], incoming))
   }
 
   // Keep the live till attached when a stale tab syncs an older session blob.
