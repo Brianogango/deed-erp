@@ -959,9 +959,18 @@ export async function processStockAdjustment(params: {
    * loss it booked is reversed rather than shown as a gain elsewhere.
    */
   reversesWriteOff?: boolean
+  /**
+   * The expense a stock reduction is booked to (default: inventory
+   * write-off 6306) — e.g. parts consumed on a repair. A reversal
+   * (reversesWriteOff) credits the same account.
+   */
+  expenseAccountLabel?: string
+  /** Line text for that expense, e.g. "Parts consumed". */
+  expenseLineText?: string
 }) {
   const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
   if (qty <= 0) throw new Error('Adjustment qty must be positive')
+  const expenseLabel = params.expenseAccountLabel || WRITE_OFF_LABEL
 
   if (params.type === 'subtract') {
     const { inventoryLabel } = await resolveStockAccounts(params.productId)
@@ -972,9 +981,9 @@ export async function processStockAdjustment(params: {
       reference: params.reference,
       userId: params.userId,
       postJournal: params.postJournal,
-      journalDescription: `Stock write-off ${qty}`,
+      journalDescription: `${params.expenseLineText || 'Stock write-off'} ${qty}`,
       journalLines: (totalCost) => [
-        { accountLabel: WRITE_OFF_LABEL, label: 'Stock write-off', debit: totalCost, credit: 0 },
+        { accountLabel: expenseLabel, label: params.expenseLineText || 'Stock write-off', debit: totalCost, credit: 0 },
         { accountLabel: inventoryLabel, label: 'Inventory reduction', debit: 0, credit: totalCost },
       ],
     })
@@ -1058,7 +1067,7 @@ export async function processStockAdjustment(params: {
       lines: params.reversesWriteOff
         ? [
             { accountLabel: inventoryLabel, label: 'Inventory restored', debit: applied.totalCost, credit: 0 },
-            { accountLabel: WRITE_OFF_LABEL, label: 'Write-off reversed', debit: 0, credit: applied.totalCost },
+            { accountLabel: expenseLabel, label: `${params.expenseLineText || 'Write-off'} reversed`, debit: 0, credit: applied.totalCost },
           ]
         : [
             { accountLabel: inventoryLabel, label: 'Inventory gain', debit: applied.totalCost, credit: 0 },

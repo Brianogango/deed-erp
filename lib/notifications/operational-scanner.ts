@@ -1090,7 +1090,7 @@ async function scanDirectorBrief() {
 
   const list = (v: unknown): any[] => (Array.isArray(v) ? v : [])
   const checkouts = list(blob.deed_stockCheckouts)
-  const outstanding = (c: any) => Math.max(0, money(c.qty) - money(c.consumedQty) - money(c.returnedQty) - money(c.exceptionQty))
+  const outstanding = (c: any) => Math.max(0, money(c.qty) - money(c.consumedQty) - money(c.returnedQty) - money(c.exceptionQty) - money(c.missingQty))
   let notDelivered: ReturnType<typeof findInvoicedNotDelivered> = []
   try {
     notDelivered = findInvoicedNotDelivered({

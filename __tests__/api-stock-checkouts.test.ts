@@ -4,12 +4,19 @@ import { NextRequest } from 'next/server'
 const h = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   user: { id: 'u-tech', role: 'technical_lead', name: 'Tech' },
+  valuations: [] as any[],
 }))
 
 vi.mock('server-only', () => ({}))
 vi.mock('@/lib/auth/server', () => ({ getServerSession: vi.fn(async () => ({ user: h.user })) }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn(async () => undefined) }))
 vi.mock('@/lib/notifications/business-events', () => ({ notifyStockCheckout: vi.fn(async () => undefined) }))
+vi.mock('@/lib/inventory/valuation-hooks', () => ({
+  postAdjustmentValuation: vi.fn(async (p: any) => {
+    h.valuations.push(p)
+    return { ok: true, result: { totalCost: p.type === 'subtract' ? p.qty * 30000 : p.qty * (p.unitCost ?? 0) } }
+  }),
+}))
 vi.mock('@/lib/server-store', () => {
   const read = async (keys: string[]) => Object.fromEntries(keys.map(k => [k, h.state[k]]))
   return {
@@ -27,6 +34,7 @@ import { GET, POST } from '@/app/api/inventory/stock-checkouts/route'
 const post = async (body: unknown) => (await POST(new NextRequest('http://x/api/inventory/stock-checkouts', { method: 'POST', body: JSON.stringify(body) })))!
 
 beforeEach(() => {
+  h.valuations = []
   h.user = { id: 'u-tech', role: 'technical_lead', name: 'Tech' }
   h.state = {
     deed_products: [{ id: 'p-845', name: 'HP EliteBook 845 G7', sku: '845', requiresSerial: true, stockQty: 4 }],
@@ -116,5 +124,52 @@ describe('return to stock after a checkout is closed', () => {
     expect((await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })).status).toBe(403)
     h.user = { id: 'u-dir', role: 'director', name: 'Director' }
     expect((await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })).status).toBe(409)
+  })
+
+  it('expenses consumed stock by purpose and reverses it on return', async () => {
+    const id = await issue(['s-free'])
+    await post({ action: 'close', id, outcome: 'consumed', qty: 1, serialIds: ['s-free'] })
+    expect(h.valuations).toHaveLength(1)
+    expect(h.valuations[0]).toMatchObject({ type: 'subtract', qty: 1, productId: 'p-845' })
+    expect(h.valuations[0].expenseAccountLabel).toContain('6599')
+    expect(checkout(id).bookings).toMatchObject([{ outcome: 'consumed', qty: 1, unitCost: 30000, code: '6599', reversedQty: 0 }])
+
+    await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })
+    expect(h.valuations[1]).toMatchObject({ type: 'add', qty: 1, unitCost: 30000, reversesWriteOff: true })
+    expect(h.valuations[1].expenseAccountLabel).toContain('6599')
+    expect(checkout(id).bookings[0].reversedQty).toBe(1)
+  })
+
+  it('books missing stock as a write-off and brings it back', async () => {
+    const id = await issue(['s-free'])
+    expect((await post({ action: 'close', id, outcome: 'missing', qty: 1, serialIds: ['s-free'] })).status).toBe(200)
+    expect(checkout(id)).toMatchObject({ status: 'completed', missingQty: 1 })
+    expect(serial('s-free')).toMatchObject({ status: 'written_off', location: 'employee' })
+    expect(h.valuations[0].expenseAccountLabel).toContain('6306')
+
+    expect((await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })).status).toBe(200)
+    expect(checkout(id)).toMatchObject({ missingQty: 0, returnedQty: 1 })
+    expect(serial('s-free')).toMatchObject({ location: 'warehouse', status: 'available' })
+    expect(h.valuations[1]).toMatchObject({ type: 'add', reversesWriteOff: true })
+    expect(h.valuations[1].expenseAccountLabel).toContain('6306')
+  })
+
+  it('moves no value for damaged or returned units', async () => {
+    const id = await issue(['s-free'])
+    await post({ action: 'close', id, outcome: 'exception', qty: 1, serialIds: ['s-free'] })
+    await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })
+    expect(h.valuations).toHaveLength(0)
+  })
+
+  it('returns a legacy consumed closing without touching value', async () => {
+    const id = await issue(['s-free'])
+    await post({ action: 'close', id, outcome: 'consumed', qty: 1, serialIds: ['s-free'] })
+    const row = checkout(id)
+    delete row.bookings
+    delete row.serialOutcomes
+    h.valuations = []
+    expect((await post({ action: 'return_closed', id, qty: 1, serialIds: ['s-free'] })).status).toBe(200)
+    expect(h.valuations).toHaveLength(0)
+    expect(checkout(id)).toMatchObject({ consumedQty: 0, returnedQty: 1 })
   })
 })

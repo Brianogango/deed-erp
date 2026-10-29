@@ -294,6 +294,9 @@ export async function postAdjustmentValuation(params: {
   userId?: string
   /** Adding back a written-off unit: reverse the write-off expense (see processStockAdjustment). */
   reversesWriteOff?: boolean
+  /** Expense account for a reduction (default 6306 write-off); a reversal credits it. */
+  expenseAccountLabel?: string
+  expenseLineText?: string
 }) {
   if (!(await isAutomatedValuationEnabled())) {
     return { ok: false as const, reason: 'valuation_disabled' }
@@ -308,6 +311,8 @@ export async function postAdjustmentValuation(params: {
       unitCost: params.unitCost,
       postJournal: true,
       reversesWriteOff: params.reversesWriteOff,
+      expenseAccountLabel: params.expenseAccountLabel,
+      expenseLineText: params.expenseLineText,
     })
     return { ok: true as const, result }
   } catch (err) {

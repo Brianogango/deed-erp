@@ -7,6 +7,9 @@ import { upsertBulkStock, type BulkStockLevel } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { notifyStockCheckout } from '@/lib/notifications/business-events'
+import { postAdjustmentValuation } from '@/lib/inventory/valuation-hooks'
+import { formatAccountLabel } from '@/lib/product-accounts'
+import { checkoutExpenseFor, reverseCheckoutBookings, type CheckoutBooking, type CheckoutBookedOutcome } from '@/lib/inventory/checkout-accounting'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +21,8 @@ const SOURCE_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit', 'pen
 const GONE = new Set(['sold', 'written_off', 'scrapped', 'returned_to_vendor'])
 
 type CheckoutStatus = 'pending' | 'approved' | 'issued' | 'partially_closed' | 'completed' | 'rejected' | 'cancelled'
-type Outcome = 'consumed' | 'returned' | 'exception'
+/** exception = damaged: still ours, set aside. missing = lost: booked as a write-off. */
+type Outcome = 'consumed' | 'returned' | 'exception' | 'missing'
 type ProductRow = { id: string; name?: string; sku?: string; stockQty?: number; requiresSerial?: boolean; trackingMethod?: string; isActive?: boolean }
 type SerialRow = { id: string; serial: string; productId: string; productName?: string; location?: string; status?: string; saleOrderId?: string }
 type BulkRow = BulkStockLevel
@@ -30,17 +34,62 @@ type Checkout = {
   expectedReturnDate: string; notes: string; requestedBy: string; requestedByName: string; requestedAt: string
   approvedBy?: string; approvedAt?: string; issuedBy?: string; issuedAt?: string; rejectionReason?: string
   consumedQty: number; returnedQty: number; exceptionQty: number; closureNotes?: string; closedAt?: string
+  missingQty?: number
+  /** Closings that took value out of inventory (consumed → purpose expense, missing → write-off). */
+  bookings?: CheckoutBooking[]
+  /** How each serial was closed, so a later return reverses the right booking. */
+  serialOutcomes?: Record<string, Outcome>
 }
 
 const list = <T,>(value: unknown): T[] => Array.isArray(value) ? value as T[] : []
 const sessionName = (user: { name?: string | null; email?: string | null; id: string }) => user.name || user.email || user.id
 const isSerialized = (p: ProductRow) => Boolean(p.requiresSerial || p.trackingMethod === 'SERIAL')
 const nextRef = (rows: Checkout[]) => `CHK-${String(rows.reduce((n, r) => Math.max(n, Number(r.ref?.split('-').pop()) || 0), 0) + 1).padStart(5, '0')}`
-const outstanding = (r: Checkout) => r.qty - r.consumedQty - r.returnedQty - r.exceptionQty
+const outstanding = (r: Checkout) => r.qty - r.consumedQty - r.returnedQty - r.exceptionQty - (Number(r.missingQty) || 0)
 const isSourceLocation = (location: string): location is LocationId =>
   SOURCE_LOCATIONS.some(candidate => candidate === location)
 
 type ClosedCheckout = Checkout & { closedSerialIds?: string[]; returnedAfterClose?: number }
+
+/** Take closed units' cost out of inventory into the outcome's expense. The booking, or null if nothing was valued. */
+async function bookCheckoutClosing(row: Checkout, outcome: CheckoutBookedOutcome, qty: number, userId: string, at: string): Promise<CheckoutBooking | null> {
+  const expense = checkoutExpenseFor(outcome, row.purpose)
+  const valuation = await postAdjustmentValuation({
+    adjustmentRef: `${row.ref} ${outcome} ${Date.now()}`,
+    productId: row.productId,
+    type: 'subtract',
+    qty,
+    userId,
+    expenseAccountLabel: formatAccountLabel(expense.code, []),
+    expenseLineText: `${expense.text} · ${row.ref}`,
+  }).catch(() => null) as { ok?: boolean; result?: { totalCost?: number } } | null
+  const total = Number(valuation?.result?.totalCost) || 0
+  if (total <= 0) return null
+  return { outcome, qty, unitCost: Math.round(total / qty * 100) / 100, code: expense.code, text: expense.text, reversedQty: 0, at }
+}
+
+/** Units brought back: put the value those closings took out back into inventory, off the same expense. */
+async function reverseCheckoutClosing(row: Checkout, outcome: CheckoutBookedOutcome, qty: number, userId: string): Promise<number> {
+  if (qty <= 0) return 0
+  const { bookings, reversals } = reverseCheckoutBookings(row.bookings ?? [], outcome, qty)
+  row.bookings = bookings
+  let value = 0
+  for (const r of reversals) {
+    await postAdjustmentValuation({
+      adjustmentRef: `${row.ref} ${outcome} back ${Date.now()}`,
+      productId: row.productId,
+      type: 'add',
+      qty: r.qty,
+      unitCost: r.unitCost,
+      reversesWriteOff: true,
+      userId,
+      expenseAccountLabel: formatAccountLabel(r.code, []),
+      expenseLineText: `${r.text} · ${row.ref}`,
+    }).catch(() => null)
+    value += r.qty * r.unitCost
+  }
+  return Math.round(value * 100) / 100
+}
 
 /**
  * A unit closed as consumed (written off with the holder) or as an exception
@@ -54,7 +103,7 @@ function returnableSerialIds(row: ClosedCheckout, serials: SerialRow[]): string[
   const byId = new Map(serials.map(s => [s.id, s]))
   return (row.closedSerialIds || []).filter(id => row.serialIds.includes(id) && (consumedSerial(byId.get(id)) || exceptionSerial(byId.get(id))))
 }
-const returnableQty = (row: Checkout) => Math.max(0, (Number(row.consumedQty) || 0) + (Number(row.exceptionQty) || 0))
+const returnableQty = (row: Checkout) => Math.max(0, (Number(row.consumedQty) || 0) + (Number(row.missingQty) || 0) + (Number(row.exceptionQty) || 0))
 
 async function auth(approve = false) {
   const session = await getServerSession()
@@ -166,7 +215,7 @@ export async function POST(request: NextRequest) {
         if (!['issued', 'partially_closed'].includes(row.status)) return NextResponse.json({ error: 'Only issued checkouts can be closed' }, { status: 409 })
         const outcome = String(body.outcome || '') as Outcome
         const qty = Math.floor(Number(body.qty) || 0)
-        if (!['consumed', 'returned', 'exception'].includes(outcome) || qty < 1 || qty > outstanding(row)) return NextResponse.json({ error: 'Enter a valid outcome and quantity within the outstanding balance' }, { status: 422 })
+        if (!['consumed', 'returned', 'exception', 'missing'].includes(outcome) || qty < 1 || qty > outstanding(row)) return NextResponse.json({ error: 'Enter a valid outcome and quantity within the outstanding balance' }, { status: 422 })
         const product = products.find(p => p.id === row.productId)
         const outcomeSerialIds = Array.isArray(body.serialIds) ? body.serialIds.map(String) : []
         const alreadyClosed = new Set((row as Checkout & { closedSerialIds?: string[] }).closedSerialIds || [])
@@ -176,6 +225,7 @@ export async function POST(request: NextRequest) {
           serials = serials.map(s => ids.has(s.id) ? { ...s, location: outcome === 'returned' ? row.sourceLocation : outcome === 'exception' ? 'quarantine' : 'employee', // A unit held for an order goes back to being held for it.
             status: outcome === 'returned' ? (s.saleOrderId ? 'assigned' : 'available') : outcome === 'exception' ? 'under_repair' : 'written_off' } : s)
           ;(row as Checkout & { closedSerialIds?: string[] }).closedSerialIds = [...alreadyClosed, ...outcomeSerialIds]
+          row.serialOutcomes = { ...(row.serialOutcomes ?? {}), ...Object.fromEntries(outcomeSerialIds.map(id => [id, outcome])) }
         }
         if (outcome === 'returned') {
           if (!product || !isSerialized(product)) bulk = upsertBulkStock(bulk, row.productId, row.sourceLocation, qty)
@@ -183,6 +233,12 @@ export async function POST(request: NextRequest) {
           moves.unshift({ id: randomUUID(), type: 'return', productId: row.productId, productName: row.productName, qty, reason: `Checkout return · ${row.ref}`, fromLocation: 'employee', toLocation: row.sourceLocation, serialNumbers: serials.filter(s => outcomeSerialIds.includes(s.id)).map(s => s.serial), date: now.slice(0, 10), userId: access.session.user.id, documentRef: row.ref })
         }
         row.consumedQty += outcome === 'consumed' ? qty : 0; row.returnedQty += outcome === 'returned' ? qty : 0; row.exceptionQty += outcome === 'exception' ? qty : 0
+        row.missingQty = (Number(row.missingQty) || 0) + (outcome === 'missing' ? qty : 0)
+        // Consumed or missing: the stock is gone, so its cost leaves inventory.
+        if (outcome === 'consumed' || outcome === 'missing') {
+          const booking = await bookCheckoutClosing(row, outcome, qty, access.session.user.id, now)
+          if (booking) row.bookings = [...(row.bookings ?? []), booking]
+        }
         row.closureNotes = [row.closureNotes, String(body.notes || '')].filter(Boolean).join('\n'); row.closedAt = outstanding(row) === 0 ? now : undefined; row.status = outstanding(row) === 0 ? 'completed' : 'partially_closed'
       } else if (action === 'return_closed') {
         // Bring back units that were closed as consumed or as an exception.
@@ -191,6 +247,7 @@ export async function POST(request: NextRequest) {
         if (!product) return NextResponse.json({ error: 'Product no longer exists' }, { status: 409 })
         const qty = Math.floor(Number(body.qty) || 0)
         let fromConsumed = 0
+        let fromMissing = 0
         let fromException = 0
         let returnedSerialNumbers: string[] = []
         if (isSerialized(product)) {
@@ -200,27 +257,35 @@ export async function POST(request: NextRequest) {
           const ids = new Set(wanted)
           for (const unit of serials) {
             if (!ids.has(unit.id)) continue
-            if (consumedSerial(unit)) fromConsumed++
+            // Closed before outcomes were kept per serial: written off with the holder = consumed.
+            const closedAs = row.serialOutcomes?.[unit.id] ?? (consumedSerial(unit) ? 'consumed' : 'exception')
+            if (closedAs === 'missing') fromMissing++
+            else if (closedAs === 'consumed') fromConsumed++
             else fromException++
           }
           returnedSerialNumbers = serials.filter(unit => ids.has(unit.id)).map(unit => unit.serial)
           serials = serials.map(unit => ids.has(unit.id) ? { ...unit, location: row.sourceLocation, status: unit.saleOrderId ? 'assigned' : 'available' } : unit)
         } else {
           if (qty < 1 || qty > returnableQty(row)) return NextResponse.json({ error: `Enter a quantity between 1 and ${returnableQty(row)}` }, { status: 422 })
-          // Consumed units first, then exceptions.
+          // Consumed units first, then missing, then damaged.
           fromConsumed = Math.min(qty, Number(row.consumedQty) || 0)
-          fromException = qty - fromConsumed
+          fromMissing = Math.min(qty - fromConsumed, Number(row.missingQty) || 0)
+          fromException = qty - fromConsumed - fromMissing
           bulk = upsertBulkStock(bulk, row.productId, row.sourceLocation, qty)
         }
-        if (fromConsumed > (Number(row.consumedQty) || 0) || fromException > (Number(row.exceptionQty) || 0)) return NextResponse.json({ error: 'That is more than was closed as consumed or exception' }, { status: 409 })
+        if (fromConsumed > (Number(row.consumedQty) || 0) || fromMissing > (Number(row.missingQty) || 0) || fromException > (Number(row.exceptionQty) || 0)) return NextResponse.json({ error: 'That is more than was closed as consumed, missing or damaged' }, { status: 409 })
         const pi = products.findIndex(p => p.id === row.productId); if (pi >= 0) products[pi] = { ...products[pi], stockQty: Number(products[pi].stockQty || 0) + qty }
         row.consumedQty -= fromConsumed
+        row.missingQty = (Number(row.missingQty) || 0) - fromMissing
         row.exceptionQty -= fromException
+        // What those closings took off the books goes back into inventory.
+        const valueBack = await reverseCheckoutClosing(row, 'consumed', fromConsumed, access.session.user.id)
+          + await reverseCheckoutClosing(row, 'missing', fromMissing, access.session.user.id)
         row.returnedQty += qty
         ;(row as ClosedCheckout).returnedAfterClose = ((row as ClosedCheckout).returnedAfterClose || 0) + qty
         const note = String(body.notes || '').trim()
-        row.closureNotes = [row.closureNotes, `Returned to stock after closing: ${qty} unit(s) by ${sessionName(access.session.user)} on ${now.slice(0, 10)}${note ? ` — ${note}` : ''}`].filter(Boolean).join('\n')
-        moves.unshift({ id: randomUUID(), type: 'return', productId: row.productId, productName: row.productName, qty, reason: `Checkout return after close · ${row.ref}`, fromLocation: fromException && !fromConsumed ? 'quarantine' : 'employee', toLocation: row.sourceLocation, serialNumbers: returnedSerialNumbers, date: now.slice(0, 10), userId: access.session.user.id, documentRef: row.ref })
+        row.closureNotes = [row.closureNotes, `Returned to stock after closing: ${qty} unit(s) by ${sessionName(access.session.user)} on ${now.slice(0, 10)}${valueBack ? ` (KES ${valueBack.toLocaleString('en-KE')} back in inventory)` : ''}${note ? ` — ${note}` : ''}`].filter(Boolean).join('\n')
+        moves.unshift({ id: randomUUID(), type: 'return', productId: row.productId, productName: row.productName, qty, reason: `Checkout return after close · ${row.ref}`, fromLocation: fromException && !fromConsumed && !fromMissing ? 'quarantine' : 'employee', toLocation: row.sourceLocation, serialNumbers: returnedSerialNumbers, date: now.slice(0, 10), userId: access.session.user.id, documentRef: row.ref })
       } else return NextResponse.json({ error: 'Invalid checkout action' }, { status: 400 })
       rows[index] = row
     }
