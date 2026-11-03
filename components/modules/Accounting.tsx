@@ -903,7 +903,8 @@ function AccountingContent() {
       const payState = invoicePaymentStatus(i)
       let pass = false
       if (invFilter === 'all') pass = true
-      else if (invFilter === 'unpaid') pass = docState === 'posted' && payState === 'not_paid'
+      // Not paid = a balance is still due, so partly paid documents count too.
+      else if (invFilter === 'unpaid') pass = docState === 'posted' && (payState === 'not_paid' || payState === 'partially_paid')
       else if (invFilter === 'partially_paid') pass = payState === 'partially_paid'
       else if (invFilter === 'overdue') pass = isInvoiceOverdue(i)
       else if (invFilter === 'paid') pass = payState === 'paid'
