@@ -1,5 +1,6 @@
 'use client'
 import { normalizeClientRole } from '@/lib/auth/access'
+import { kraPinWarning } from '@/lib/contacts/kra-pin'
 
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
@@ -214,6 +215,7 @@ export default function ContactFormModal({
       email: form.email,
       phone: form.phone,
       mobile: form.mobile,
+      vatNumber: form.vatNumber,
       address: form.address,
       city: form.city,
       country: form.country,
@@ -265,7 +267,6 @@ export default function ContactFormModal({
         payload.registrationNumber = undefined
         payload.industry = undefined
         payload.postalAddress = undefined
-        payload.vatNumber = undefined
         payload.bankName = undefined
         payload.bankAccount = undefined
         payload.bankBranch = undefined
@@ -361,7 +362,7 @@ export default function ContactFormModal({
             <Field label="Email">
               <Input value={form.email} onChange={f('email')} type="email" placeholder="info@company.com" maxLength={100} />
             </Field>
-            <Field label="KRA PIN">
+            <Field label="KRA PIN" hint={kraPinWarning(form.vatNumber, 'company') ?? undefined}>
               <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. P051130572W" />
             </Field>
             <Field label="Industry">
@@ -456,7 +457,7 @@ export default function ContactFormModal({
                     <Field label="Trading Name">
                       <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="Business name (if different)" />
                     </Field>
-                    <Field label="KRA PIN" hint="Shown on invoices and tax documents">
+                    <Field label="KRA PIN" hint={kraPinWarning(form.vatNumber, 'company') ?? 'Shown on invoices and tax documents'}>
                       <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. P051234567X" />
                     </Field>
                     <Field label="Currency" hint="Defaults to your base currency">
@@ -473,6 +474,9 @@ export default function ContactFormModal({
                   <>
                     <Field label="National ID / Passport Number" hint="For identification where required">
                       <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="National ID or passport number" />
+                    </Field>
+                    <Field label="KRA PIN" hint={kraPinWarning(form.vatNumber, 'individual') ?? 'Optional — shown on invoices and tax documents'}>
+                      <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. A012345678B" />
                     </Field>
                     <Field label="Payment terms" required={canSetCreditTerms} id="contact-paymentTermsDays" error={fieldErrors.paymentTermsDays} hint={canSetCreditTerms ? 'Used when this individual buys on account' : creditTermsHint}>
                       <Select disabled={!canSetCreditTerms} value={paymentTermsValue} onChange={v => f('paymentTermsDays')(v === '' ? undefined : Number(v))} options={paymentTermsOptions} />
