@@ -6,7 +6,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 export const dynamic = 'force-dynamic'
 
 // Disciplinary records are sensitive: HR (director, admin officer) only.
-const ROLES = ['director', 'admin_officer']
+const ROLES = ['director']
 const RECORD_TYPES = ['verbal_warning', 'written_warning', 'final_warning', 'suspension', 'commendation', 'other'] as const
 
 const toClient = (r: { id: string; employeeId: string; recordType: string; incidentDate: Date; description: string; actionTaken: string | null; issuedByName: string | null; createdAt: Date }) => ({

@@ -6,7 +6,7 @@ import { CpanelError, cleanMailboxName, cpanelConfig, createMailbox, generateMai
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'admin_officer']
+const ROLES = ['director']
 
 /** Whether cPanel is configured, and the suggested mailbox name for this employee. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {

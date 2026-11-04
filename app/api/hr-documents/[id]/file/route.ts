@@ -8,7 +8,7 @@ import { loadAppState } from '@/lib/server-store'
 export const dynamic = 'force-dynamic'
 
 // Contracts, IDs and permits: HR writes. Visibility is read from the document record.
-const HR_ROLES = ['director', 'admin_officer']
+const HR_ROLES = ['director']
 const MAX_BYTES = 4 * 1024 * 1024
 const ALLOWED = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 const UUIDISH = /^[A-Za-z0-9_-]{8,64}$/

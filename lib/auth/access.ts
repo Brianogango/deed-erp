@@ -129,10 +129,10 @@ export const isDirector         = (role?: string | null) => normalizeClientRole(
 // Leave decisions are intentionally broader than general HR administration:
 // finance and technical leads may decide leave through the dedicated API, while
 // employee/payroll administration remains limited to director/admin officer.
-export const HR_MANAGER_ROLES: readonly UserRole[] = ['director', 'admin_officer']
+// Admin Officer has no HR rights: only their own leave, payslips and documents.
+export const HR_MANAGER_ROLES: readonly UserRole[] = ['director']
 export const LEAVE_APPROVER_ROLES: readonly UserRole[] = [
   'director',
-  'admin_officer',
   'finance_officer',
   'technical_lead',
 ]

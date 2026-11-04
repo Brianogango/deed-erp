@@ -2,7 +2,7 @@ import 'server-only'
 import prisma from '@/lib/prisma'
 import type { Goal } from '@/lib/hr/appraisals'
 
-export const HR_ROLES = ['director', 'admin_officer']
+export const HR_ROLES = ['director']
 
 type Row = Awaited<ReturnType<typeof loadRows>>[number]
 

@@ -7,7 +7,7 @@ import { toClientRequest, adjustBalance, getBalance } from '@/lib/hr/leave-store
 import { leaveDaysForRange, type StoreLeaveType } from '@/lib/leave-utils'
 import { publishLeaveCancelled, publishLeaveDecision } from '@/lib/notifications/hr-events'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
+const WRITE_ROLES = ['director', 'finance_officer', 'technical_lead']
 
 // Approve / reject / cancel a leave request. Balance counters are recomputed
 // server-side from the transition — the client no longer supplies balances.

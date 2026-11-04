@@ -14,6 +14,8 @@ type StoreWritePolicy = {
 
 const DIRECTOR = ['director', 'admin', 'super_admin'] as const
 const ADMIN = [...DIRECTOR, 'admin_officer'] as const
+// HR records: Director only (Admin Officer has no HR rights).
+const HR = DIRECTOR
 const FINANCE = [...ADMIN, 'finance', 'finance_officer'] as const
 const SALES = [...FINANCE, 'sales', 'sales_rep', 'kilimall', 'kilimall_officer', 'technical_lead', 'lead_tech'] as const
 const INVENTORY = [...ADMIN, 'inventory', 'inventory_officer', 'technical_lead', 'lead_tech'] as const
@@ -44,20 +46,20 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
   deed_profileImages: policy(ALL_OPERATIONAL),
 
   deed_departments: policy(ADMIN, ['hr', 'settings']),
-  deed_contracts: policy(ADMIN, ['hr']),
+  deed_contracts: policy(HR, ['hr']),
   deed_customerContracts: policy([...ADMIN, 'sales_rep'], ['crm', 'sales']),
-  deed_hrDocuments: policy(ADMIN, ['hr', 'my_documents']),
+  deed_hrDocuments: policy(HR, ['hr', 'my_documents']),
   deed_workflowApprovals: policy(FINANCE, ['sales', 'accounting']),
-  deed_employeeAssets: policy(ADMIN, ['hr']),
-  deed_leaveBalances: policy(ADMIN, ['hr']),
-  deed_leaveRequests: policy([...ADMIN, 'technical_lead'], ['hr', 'leave']),
-  deed_salaryAdvances: policy(ADMIN, ['hr']),
-  deed_jobPostings: policy(ADMIN, ['hr']),
-  deed_candidates: policy(ADMIN, ['hr']),
-  deed_trainingPrograms: policy(ADMIN, ['hr']),
-  deed_employeeTrainings: policy(ADMIN, ['hr']),
+  deed_employeeAssets: policy(HR, ['hr']),
+  deed_leaveBalances: policy(HR, ['hr']),
+  deed_leaveRequests: policy([...HR, 'technical_lead'], ['hr', 'leave']),
+  deed_salaryAdvances: policy(HR, ['hr']),
+  deed_jobPostings: policy(HR, ['hr']),
+  deed_candidates: policy(HR, ['hr']),
+  deed_trainingPrograms: policy(HR, ['hr']),
+  deed_employeeTrainings: policy(HR, ['hr']),
   deed_hr_sops: policy(ADMIN, ['hr', 'sops']),
-  deed_hr_perf_targets: policy(ADMIN, ['hr']),
+  deed_hr_perf_targets: policy(HR, ['hr']),
 
   deed_products: policy(INVENTORY, ['inventory']),
   deed_productPriceHistory: policy(INVENTORY, ['inventory']),

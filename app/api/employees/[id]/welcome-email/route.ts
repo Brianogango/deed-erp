@@ -7,7 +7,7 @@ import { buildWelcomeEmail } from '@/lib/hr/welcome-email'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'admin_officer']
+const ROLES = ['director']
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** Sends the new-hire welcome email to the employee's personal address (falling back to the work address). */

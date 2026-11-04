@@ -8,7 +8,7 @@ import { labelForRole } from '@/lib/accounting/coa-roles'
 import prisma from '@/lib/prisma'
 import { notifyPayrollApproved, notifyPayrollPosted, notifyPayrollSubmitted } from '@/lib/notifications/business-events'
 
-const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
+const WRITE_ROLES = ['director', 'finance_officer']
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft: ['pending_approval'],

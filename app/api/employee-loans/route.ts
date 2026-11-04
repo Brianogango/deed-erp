@@ -9,7 +9,7 @@ import { cashAccountRoleForBankId, labelForRole } from '@/lib/accounting/coa-rol
 
 export const dynamic = 'force-dynamic'
 
-const READ_ROLES = ['director', 'admin_officer', 'finance_officer']
+const READ_ROLES = ['director', 'finance_officer']
 const WRITE_ROLES = ['director', 'finance_officer']
 const money = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100
 

@@ -6640,7 +6640,7 @@ function StoreProvider({
     // Leave lists belong on HR. Polling them on every screen re-fetched
     // employees/balances while the user was on Sales or Finance.
     let leaveInterval: ReturnType<typeof setInterval> | undefined
-    const canPollLeave = ['director', 'admin_officer'].includes(initialUser.role)
+    const canPollLeave = ['director'].includes(initialUser.role)
     const startLeavePoll = (nextPath: string) => {
       if (!canPollLeave || !nextPath.startsWith('/hr') || leaveInterval) return
       leaveInterval = setInterval(fetchLeave, 60_000)

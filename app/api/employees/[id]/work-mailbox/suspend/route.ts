@@ -6,7 +6,7 @@ import { CpanelError, cpanelConfig, suspendMailbox } from '@/lib/integrations/cp
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'admin_officer']
+const ROLES = ['director']
 
 /** Blocks sign-in to the employee's work mailbox on exit. The mailbox and its mail are kept. */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {

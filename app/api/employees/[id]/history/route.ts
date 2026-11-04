@@ -4,7 +4,7 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'admin_officer', 'finance_officer']
+const ROLES = ['director', 'finance_officer']
 const ACTIONS = ['create_employee', 'change_employee_salary', 'exit_employee']
 
 /** Salary and status changes for one employee, newest first, from the audit log. */

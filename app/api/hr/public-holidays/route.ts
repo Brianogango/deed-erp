@@ -4,7 +4,7 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 
 export const dynamic = 'force-dynamic'
 
-const HR_ROLES = ['director', 'admin_officer']
+const HR_ROLES = ['director']
 const toClient = (h: { id: string; holidayDate: Date; name: string }) => ({ id: h.id, date: h.holidayDate.toISOString().slice(0, 10), name: h.name })
 
 /** Holidays HR has added on top of the built-in Kenyan list. Any signed-in user can read them (leave day counts need them). */

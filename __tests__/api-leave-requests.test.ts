@@ -36,7 +36,9 @@ vi.mock('@/lib/notifications/hr-events', () => ({
 import { POST } from '@/app/api/leave-requests/route'
 
 const techSession = { user: { id: 'u-tech', name: 'Tech', username: 'tech', role: 'technician' } }
-const hrSession = { user: { id: 'u-hr', name: 'HR', username: 'hr', role: 'admin_officer' } }
+const hrSession = { user: { id: 'u-hr', name: 'HR', username: 'hr', role: 'director' } }
+// Admin Officer has no HR rights: their leave is self-service only.
+const adminOfficerSession = { user: { id: 'u-ao', name: 'AO', username: 'ao', role: 'admin_officer' } }
 
 function postReq(body: unknown): Request {
   return new Request('http://localhost/api/leave-requests', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } })
@@ -226,6 +228,13 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
     const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
     expect(created.status).toBe('approved')
     expect(Number(created.daysRequested)).toBe(1)
+  })
+
+  it('Admin Officer cannot book approved leave for someone else', async () => {
+    mockGetSession.mockResolvedValue(adminOfficerSession)
+    const res = await POST(postReq({ employeeId: 'emp-x', employeeName: 'X', leaveType: 'annual', days: 1, startDate: '2026-08-01', endDate: '2026-08-01', status: 'approved' }))
+    const created = mockPrisma.leaveRequest.create.mock.calls[0]?.[0]?.data
+    expect(res.status === 200 ? created?.status : 'refused').not.toBe('approved')
   })
 
   it('rejects an HR booking that exceeds remaining balance', async () => {

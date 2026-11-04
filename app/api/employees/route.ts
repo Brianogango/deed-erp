@@ -5,7 +5,7 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 import { hasPermission } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
-const WRITE_ROLES = ['director', 'admin_officer']
+const WRITE_ROLES = ['director']
 
 const DEPARTMENT_NAMES = [
   'HR',

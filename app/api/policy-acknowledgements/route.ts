@@ -5,7 +5,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
 
-const HR_ROLES = ['director', 'admin_officer']
+const HR_ROLES = ['director']
 
 const toClient = (a: { id: string; employeeId: string; policyId: string; policyTitle: string; policyVersion: string; acknowledgedAt: Date }) => ({
   id: a.id, employeeId: a.employeeId, policyId: a.policyId, policyTitle: a.policyTitle,

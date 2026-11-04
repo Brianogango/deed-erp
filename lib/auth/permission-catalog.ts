@@ -137,7 +137,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     id: 'delivery',
     label: 'Delivery',
     module: 'delivery',
-    items: [action('manageDeliveries', 'delivery', 'Create and validate deliveries')],
+    items: [action('manageDeliveries', 'delivery', 'Create and validate deliveries'), action('manageRiderPay', 'delivery', 'See and settle rider weekly pay', { sensitive: true })],
   },
   {
     id: 'repair',

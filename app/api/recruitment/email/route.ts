@@ -8,7 +8,7 @@ import { buildOfferLetterPdf } from '@/lib/hr/offer-letter'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'admin_officer']
+const ROLES = ['director']
 const KINDS: CandidateMailKind[] = ['interview_invite', 'rejection', 'offer']
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max)

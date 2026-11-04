@@ -6,7 +6,7 @@ import prisma from '@/lib/prisma'
 import { isLeaveTypeAllowedForGender, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import type { LeaveBalance } from '@/lib/store'
 
-const WRITE_ROLES = ['director', 'admin_officer']
+const WRITE_ROLES = ['director']
 
 /**
  * PUT /api/leave-requests/balances

@@ -4,7 +4,7 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'admin_officer', 'finance_officer']
+const ROLES = ['director', 'finance_officer']
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const r2 = (n: number) => Math.round(n * 100) / 100
 

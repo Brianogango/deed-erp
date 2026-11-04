@@ -108,10 +108,10 @@ describe('dashboard role + per-user module gating', () => {
   })
 
   it('aligns leave approval visibility with all dedicated API approver roles', () => {
-    for (const role of ['director', 'admin_officer', 'finance_officer', 'technical_lead']) {
+    for (const role of ['director', 'finance_officer', 'technical_lead']) {
       expect(dashboardSectionsForUser(user(role, ['hr'])).leaveApprovals, role).toBe(true)
     }
-    for (const role of ['sales_rep', 'inventory_officer', 'kilimall_officer', 'technician']) {
+    for (const role of ['admin_officer', 'sales_rep', 'inventory_officer', 'kilimall_officer', 'technician']) {
       expect(dashboardSectionsForUser(user(role, ['hr'])).leaveApprovals, role).toBe(false)
     }
     expect(dashboardSectionsForUser(user('director', ['dashboard'])).leaveApprovals).toBe(false)
@@ -197,9 +197,9 @@ describe('navigation defaults', () => {
 })
 
 describe('HR client/server role alignment', () => {
-  it('limits general HR management to director and admin officer', () => {
+  it('limits general HR management to director', () => {
     expect(canManageHRRole('director')).toBe(true)
-    expect(canManageHRRole('admin_officer')).toBe(true)
+    expect(canManageHRRole('admin_officer')).toBe(false)
     expect(canManageHRRole('finance_officer')).toBe(false)
     expect(canManageHRRole('technical_lead')).toBe(false)
   })
@@ -207,7 +207,6 @@ describe('HR client/server role alignment', () => {
   it('keeps leave decisions available to the dedicated API role set', () => {
     expect(USER_ROLES.filter(canApproveLeaveRole)).toEqual([
       'director',
-      'admin_officer',
       'finance_officer',
       'technical_lead',
     ])

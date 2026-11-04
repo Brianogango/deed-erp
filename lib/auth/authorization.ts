@@ -103,7 +103,7 @@ const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionAction> = {
   deed_payrollRuns: 'managePayroll',
   deed_payslips: 'managePayroll',
   deed_salaryAdvances: 'manageHR',
-  deed_riderWeeklyPays: 'manageHR',
+  deed_riderWeeklyPays: 'manageRiderPay',
   deed_leaveRequests: 'viewHrRecords',
   deed_leaveBalances: 'viewHrRecords',
   deed_hrDocuments: 'viewHrRecords',

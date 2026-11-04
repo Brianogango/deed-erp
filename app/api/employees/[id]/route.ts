@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
+const WRITE_ROLES = ['director', 'finance_officer']
 
 const DEPARTMENT_NAMES = [
   'HR',

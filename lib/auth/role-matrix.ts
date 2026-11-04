@@ -9,13 +9,15 @@ export const ROLE_MATRIX = {
   manageUsers:               ['director'] as UserRole[],
   viewUsers:                 ['director', 'admin_officer'] as UserRole[],
   manageHR:                  [...HR_MANAGER_ROLES] as UserRole[],
+  // Rider weekly pay belongs to delivery admin, not HR.
+  manageRiderPay:            ['director', 'admin_officer'] as UserRole[],
   approveLeave:              [...LEAVE_APPROVER_ROLES] as UserRole[],
   approvePayroll:            ['director', 'finance_officer'] as UserRole[],
   // Read access to HR records (leave, HR documents, employee full profiles).
   // Includes technical_lead so leads can review their technicians' leave.
-  viewHrRecords:             ['director', 'admin_officer', 'finance_officer', 'technical_lead'] as UserRole[],
+  viewHrRecords:             ['director', 'finance_officer', 'technical_lead'] as UserRole[],
   // Read access to full employee compensation/PII (salary, bank, national ID).
-  viewEmployeeSensitive:     ['director', 'admin_officer', 'finance_officer'] as UserRole[],
+  viewEmployeeSensitive:     ['director', 'finance_officer'] as UserRole[],
   manageInventoryApprovals:  ['director', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],
   // Validate purchase receipts / GRNs — stock-affecting; keep tight.
   // technical_lead intentionally excluded (ops oversight ≠ stock receipt authority).
@@ -67,7 +69,7 @@ export const ROLE_MATRIX = {
   manageCompanyProperty:     ['director', 'admin_officer'] as UserRole[],
   viewCompanyProperty:       ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   // Payroll runs and payslips — matches the payroll API role set.
-  managePayroll:             ['director', 'admin_officer', 'finance_officer'] as UserRole[],
+  managePayroll:             ['director', 'finance_officer'] as UserRole[],
   // Device reconfiguration work orders
   viewReconfiguration:       ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'sales_rep', 'technical_lead', 'technician', 'kilimall_officer'] as UserRole[],
   createReconfiguration:     ['director', 'admin_officer', 'sales_rep', 'technical_lead', 'kilimall_officer'] as UserRole[],

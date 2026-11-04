@@ -131,7 +131,7 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'hr.payroll.approved': POLICY(['in_app', 'push'], 'attention', { recipientRoles: ['finance_officer'] }),
   'hr.payslip.ready': POLICY(['in_app', 'push'], 'success'),
   'hr.salary.paid': POLICY(['in_app', 'push', 'sms'], 'success'),
-  'hr.contract.expiring': POLICY(['in_app'], 'warning', { recipientRoles: ['admin_officer'], cooldownHours: 168 }),
+  'hr.contract.expiring': POLICY(['in_app'], 'warning', { recipientRoles: ['director'], cooldownHours: 168 }),
 
   // ── Aftersales ──────────────────────────────────────────────────────────
   'aftersales.warranty.expiring': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true, cooldownHours: 168 }),

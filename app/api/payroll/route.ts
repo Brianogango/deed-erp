@@ -4,7 +4,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { runToClient, payslipToClient, createRunFromClient } from '@/lib/hr/payroll-store'
 
-const PAYROLL_ROLES = ['director', 'admin_officer', 'finance_officer']
+const PAYROLL_ROLES = ['director', 'finance_officer']
 
 export async function GET() {
   return withApiErrorHandling(async () => {

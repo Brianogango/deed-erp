@@ -5,7 +5,7 @@ import { loadPayslipDetail } from '@/lib/hr/payroll-reports.server'
 
 export const dynamic = 'force-dynamic'
 
-const PAYROLL_ROLES = ['director', 'admin_officer', 'finance_officer']
+const PAYROLL_ROLES = ['director', 'finance_officer']
 
 /** Full payslip breakdown. HR/finance see any; an employee sees only their own published payslip. */
 export async function GET(_request: Request, { params }: { params: Promise<{ payslipId: string }> }) {

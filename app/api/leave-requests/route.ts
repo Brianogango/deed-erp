@@ -7,7 +7,7 @@ import { EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, leaveDaysForRange, r
 import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBalance } from '@/lib/hr/leave-store'
 import { publishLeaveApplied, publishLeaveBooked } from '@/lib/notifications/hr-events'
 
-const HR_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
+const HR_ROLES = ['director', 'finance_officer', 'technical_lead']
 
 // The next sequential LV/NNNN reference based on what is already persisted.
 // Client-generated refs come from per-browser localStorage counters, so two

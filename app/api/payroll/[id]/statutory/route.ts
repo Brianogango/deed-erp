@@ -4,7 +4,7 @@ import { loadStatutoryReport } from '@/lib/hr/payroll-reports.server'
 
 export const dynamic = 'force-dynamic'
 
-const PAYROLL_ROLES = ['director', 'admin_officer', 'finance_officer']
+const PAYROLL_ROLES = ['director', 'finance_officer']
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

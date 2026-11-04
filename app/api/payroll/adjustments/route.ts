@@ -5,7 +5,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'admin_officer', 'finance_officer']
+const ROLES = ['director', 'finance_officer']
 const KINDS = ['earning', 'deduction', 'benefit_in_kind', 'insurance_premium'] as const
 const MAX_AMOUNT = 10_000_000
 
