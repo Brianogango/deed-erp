@@ -15,7 +15,7 @@ export const ROLE_MATRIX = {
   approvePayroll:            ['director', 'finance_officer'] as UserRole[],
   // Read access to HR records (leave, HR documents, employee full profiles).
   // Includes technical_lead so leads can review their technicians' leave.
-  viewHrRecords:             ['director', 'finance_officer', 'technical_lead'] as UserRole[],
+  viewHrRecords:             ['director', 'finance_officer'] as UserRole[],
   // Read access to full employee compensation/PII (salary, bank, national ID).
   viewEmployeeSensitive:     ['director', 'finance_officer'] as UserRole[],
   manageInventoryApprovals:  ['director', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],

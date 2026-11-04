@@ -66,8 +66,7 @@ export default function HRLeaveTab() {
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin     = currentUser?.role === 'director'
   const isFinance   = currentUser?.role === 'finance_officer'
-  const isLeadTech  = currentUser?.role === 'technical_lead'
-  const canViewTeamHR = isAdmin || isFinance || isLeadTech
+  const canViewTeamHR = isAdmin || isFinance
   const { holidays, reload: reloadHolidays, version: holidayVersion } = usePublicHolidays()
 
   const [decideId, setDecideId] = useState<string | null>(null)
@@ -91,11 +90,6 @@ export default function HRLeaveTab() {
     // Own requests are decided by someone else, whatever the caller's role.
     if (myEmployee && req.employeeId === myEmployee.id) return false
     if (isAdmin || isFinance) return true
-    if (isLeadTech) {
-      const emp = employees.find(e => e.id === req.employeeId)
-      const u   = users.find(u => u.id === emp?.userId)
-      return u?.role === 'technician'
-    }
     return false
   }
 

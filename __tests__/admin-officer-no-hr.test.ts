@@ -20,3 +20,12 @@ describe('Admin Officer has no HR rights', () => {
     expect(canWriteStoreKey({ ...ao, role: 'director' }, 'deed_leaveRequests')).toBe(true)
   })
 })
+
+describe('Technical Lead has no leave rights', () => {
+  const lead = { id: 'u-tl', role: 'technical_lead', modules: ['hr', 'leave', 'repair'] } as any
+  it('cannot see or decide team leave', () => {
+    expect(hasPermission(lead, 'approveLeave')).toBe(false)
+    expect(hasPermission(lead, 'viewHrRecords')).toBe(false)
+    expect(canWriteStoreKey(lead, 'deed_leaveRequests')).toBe(false)
+  })
+})

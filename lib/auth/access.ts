@@ -126,15 +126,12 @@ export const formatRoleLabel = (role: string | null | undefined) => {
 // Convenience role-group helpers used across modules.
 export const isDirector         = (role?: string | null) => normalizeClientRole(role) === 'director'
 // Keep client-side HR controls aligned with the server permission matrix.
-// Leave decisions are intentionally broader than general HR administration:
-// finance and technical leads may decide leave through the dedicated API, while
-// employee/payroll administration remains limited to director/admin officer.
-// Admin Officer has no HR rights: only their own leave, payslips and documents.
+// HR is run by the Director; leave can also be decided by Finance.
+// Admin Officer and Technical Lead have self-service only.
 export const HR_MANAGER_ROLES: readonly UserRole[] = ['director']
 export const LEAVE_APPROVER_ROLES: readonly UserRole[] = [
   'director',
   'finance_officer',
-  'technical_lead',
 ]
 
 export const canManageHRRole = (role?: string | null) =>

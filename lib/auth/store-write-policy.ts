@@ -52,7 +52,7 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
   deed_workflowApprovals: policy(FINANCE, ['sales', 'accounting']),
   deed_employeeAssets: policy(HR, ['hr']),
   deed_leaveBalances: policy(HR, ['hr']),
-  deed_leaveRequests: policy([...HR, 'technical_lead'], ['hr', 'leave']),
+  deed_leaveRequests: policy(HR, ['hr', 'leave']),
   deed_salaryAdvances: policy(HR, ['hr']),
   deed_jobPostings: policy(HR, ['hr']),
   deed_candidates: policy(HR, ['hr']),
