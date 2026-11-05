@@ -2,12 +2,15 @@ import 'server-only'
 import { checkToolPermission } from './permissions'
 import { writeAiAuditLog } from './audit'
 import { getTool } from './tools'
-import type { ToolContext } from './types'
+import { isConfirmPreview, type ToolContext } from './types'
+import { signPendingAction } from './pending-actions'
 
 interface RunToolOutcome {
   allowed: boolean
   output?: unknown
   error?: string
+  /** Signed card token when the tool previewed a write. Never shown to the model. */
+  confirmToken?: string
 }
 
 // Single choke point every tool call passes through: permission check,
@@ -65,7 +68,10 @@ export async function runTool(
       durationMs: Date.now() - started,
       ipAddress: ctx.ipAddress,
     })
-    return { allowed: true, output }
+    const confirmToken = tool.confirm && isConfirmPreview(output)
+      ? signPendingAction({ tool: tool.name, input: output.input, userId: ctx.user.id, conversationId: ctx.conversationId })
+      : undefined
+    return { allowed: true, output, confirmToken }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Tool execution failed'
     await writeAiAuditLog({

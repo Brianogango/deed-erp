@@ -4,6 +4,9 @@ import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import type { ToolDefinition } from '../types'
 
+/** Quotes, drafts and cancelled orders are not sales. */
+const NOT_SALES = ['quotation', 'quotation_sent', 'sent', 'draft', 'cancelled', 'canceled', 'cancel', 'void', 'voided', 'expired', 'rejected']
+
 const inputSchema = z.object({
   fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -28,9 +31,13 @@ export const summarizeSalesTool: ToolDefinition = {
   run: async (ctx, rawInput) => {
     const { fromDate, toDate } = inputSchema.parse(rawInput)
 
+    // Confirmed sales only; sales reps see their own orders.
+    const ownOnly = ctx.user.role === 'sales_rep'
     const orders = await prisma.saleOrder.findMany({
       where: {
         orderDate: { gte: new Date(fromDate), lte: new Date(`${toDate}T23:59:59`) },
+        status: { notIn: NOT_SALES },
+        ...(ownOnly ? { OR: [{ createdById: ctx.user.id }, { salespersonId: ctx.user.id }] } : {}),
       },
       include: { items: { include: { product: { select: { name: true } } } } },
     })
@@ -51,7 +58,7 @@ export const summarizeSalesTool: ToolDefinition = {
       .map(([name, value]) => ({ name, value: value.toFixed(2) }))
 
     return {
-      scope: 'all_orders',
+      scope: ownOnly ? 'your_orders' : 'all_confirmed_orders',
       fromDate,
       toDate,
       orderCount: orders.length,

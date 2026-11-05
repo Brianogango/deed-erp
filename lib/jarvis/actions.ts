@@ -24,6 +24,26 @@ export type DiaActionCard =
       draftQuote: Record<string, unknown>
     }
   | {
+      type: 'confirm_action'
+      tool: string
+      title: string
+      lines: Array<{ label: string; value: string }>
+      warnings?: string[]
+      token: string
+    }
+  | {
+      type: 'report'
+      title: string
+      period?: { from: string; to: string }
+      filters: Record<string, string>
+      columns: string[]
+      rows: Array<Record<string, string | number | null>>
+      totals: Record<string, string | number | null>
+      rowCount: number
+      truncated?: boolean
+      note?: string
+    }
+  | {
       type: 'import_leads'
       imported: number
       skipped: number
@@ -44,6 +64,36 @@ export function extractDiaActions(toolCalls: ToolCallRecord[]): DiaActionCard[] 
     if (!tc.allowed || tc.error) continue
     const out = asRecord(tc.output)
     if (!out) continue
+
+    if (tc.confirmToken && out.needsConfirmation === true) {
+      actions.push({
+        type: 'confirm_action',
+        tool: tc.toolName,
+        title: String(out.title ?? tc.toolName),
+        lines: Array.isArray(out.lines)
+          ? (out.lines as Array<Record<string, unknown>>).map(l => ({ label: String(l.label ?? ''), value: String(l.value ?? '') }))
+          : [],
+        warnings: Array.isArray(out.warnings) ? out.warnings.map(String) : undefined,
+        token: tc.confirmToken,
+      })
+      continue
+    }
+
+    if (tc.toolName === 'run_report' && out.ok === true && Array.isArray(out.columns) && Array.isArray(out.rows)) {
+      actions.push({
+        type: 'report',
+        title: String(out.title ?? 'Report'),
+        period: asRecord(out.period) as { from: string; to: string } | undefined,
+        filters: (asRecord(out.filters) ?? {}) as Record<string, string>,
+        columns: out.columns.map(String),
+        rows: out.rows as Array<Record<string, string | number | null>>,
+        totals: (asRecord(out.totals) ?? {}) as Record<string, string | number | null>,
+        rowCount: Number(out.rowCount) || 0,
+        truncated: out.truncated === true,
+        note: typeof out.note === 'string' ? out.note : undefined,
+      })
+      continue
+    }
 
     if (tc.toolName === 'draft_message') {
       const draft = asRecord(out.draftMessage) ?? out

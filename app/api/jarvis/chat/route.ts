@@ -4,6 +4,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { runChatTurn, type ChatTurnMessage } from '@/lib/jarvis/chat-engine'
 import { isDiaMode, type DiaMode } from '@/lib/jarvis/modes'
+import { parseDiaAttachments } from '@/lib/jarvis/attachments'
 
 function getIP(req: NextRequest): string | null {
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -31,7 +32,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const message: string = String(body.message ?? '').trim()
+    const parsedAttachments = parseDiaAttachments(body.attachments)
+    if (!parsedAttachments.ok) {
+      return NextResponse.json({ error: parsedAttachments.error }, { status: 400 })
+    }
+    const attachments = parsedAttachments.attachments
+    const typed: string = String(body.message ?? '').trim()
+    const message: string = typed || (attachments.length ? 'Read the attached document and tell me what it is and what you can do with it.' : '')
     if (!message) {
       return NextResponse.json({ error: 'message is required' }, { status: 400 })
     }
@@ -64,19 +71,27 @@ export async function POST(request: NextRequest) {
       conversationId = created.id
     }
 
-    const priorMessages = await prisma.aiMessage.findMany({
+    // The most recent messages, oldest first (taking the first N in date
+    // order dropped the latest context in long conversations).
+    const priorMessages = (await prisma.aiMessage.findMany({
       where: { conversationId, role: { in: ['user', 'assistant'] } },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: MAX_HISTORY_MESSAGES,
-    })
+    })).reverse()
+    // The conversation must open with the user's turn.
+    while (priorMessages.length && priorMessages[0].role !== 'user') priorMessages.shift()
 
     const history: ChatTurnMessage[] = priorMessages.map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }))
 
+    // Files are read in this turn only; the message keeps their names.
+    const storedMessage = attachments.length
+      ? `${message}\n[Attached: ${attachments.map(a => a.name).join(', ')}]`
+      : message
     await prisma.aiMessage.create({
-      data: { conversationId, role: 'user', content: message },
+      data: { conversationId, role: 'user', content: storedMessage },
     })
 
     const result = await runChatTurn({
@@ -85,6 +100,7 @@ export async function POST(request: NextRequest) {
       ipAddress: getIP(request),
       history,
       userMessage: message,
+      attachments,
       mode,
       pageContext,
     })
@@ -97,7 +113,7 @@ export async function POST(request: NextRequest) {
         citedSources: result.sources.length > 0
           ? (result.sources as any)
           : result.toolCalls.length > 0
-            ? (result.toolCalls as any)
+            ? (result.toolCalls.map(({ confirmToken: _token, ...tc }) => tc) as any)
             : undefined,
       },
     })

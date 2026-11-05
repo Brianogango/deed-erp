@@ -127,7 +127,13 @@ export function createGeminiJarvisProvider(): JarvisLlmProvider {
 
       const contents: Content[] = [
         ...historyToContents(args.history),
-        { role: 'user', parts: [{ text: args.userMessage }] },
+        {
+          role: 'user',
+          parts: [
+            ...(args.attachments ?? []).map(a => ({ inlineData: { mimeType: a.mediaType, data: a.data } })),
+            { text: args.userMessage },
+          ],
+        },
       ]
 
       const toolCalls: JarvisToolLoopResult['toolCalls'] = []

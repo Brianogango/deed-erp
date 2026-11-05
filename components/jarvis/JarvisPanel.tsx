@@ -80,6 +80,175 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+type PendingFile = { id: string; name: string; mediaType: string; data: string; size: number }
+
+const ATTACH_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,application/pdf'
+const MAX_FILES = 4
+const MAX_PDF_BYTES = 7 * 1024 * 1024
+
+function readAsBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+/** Photos are shrunk to 1600px JPEG: plenty for reading text, small to send. */
+async function photoToJpeg(file: File): Promise<{ data: string; size: number }> {
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = () => reject(new Error('Could not open the photo'))
+      el.src = url
+    })
+    const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Could not open the photo')
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+    if (!blob) throw new Error('Could not open the photo')
+    return { data: await readAsBase64(blob), size: blob.size }
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+function ConfirmActionCard({
+  action,
+}: {
+  action: Extract<DiaActionCard, { type: 'confirm_action' }>
+}) {
+  const [state, setState] = useState<'idle' | 'saving' | 'done' | 'dismissed'>('idle')
+  const [result, setResult] = useState<{ message: string; href?: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function confirm() {
+    setState('saving')
+    setError(null)
+    try {
+      const res = await fetch('/api/jarvis/actions/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: action.token }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.ok === false) {
+        setError(data.error || data.message || 'Could not save')
+        setState(res.status === 409 ? 'done' : 'idle')
+        return
+      }
+      setResult({ message: data.message, href: data.href })
+      setState('done')
+    } catch {
+      setError('Could not reach the server. Try again.')
+      setState('idle')
+    }
+  }
+
+  if (state === 'dismissed') {
+    return <p className="text-[10px] text-[var(--text-4)]">{action.title} — cancelled, nothing saved.</p>
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--primary)] bg-[var(--bg-card)] p-2 space-y-1.5">
+      <p className="text-[11px] font-semibold text-[var(--text-1)]">{action.title}</p>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[10px]">
+        {action.lines.map((l, i) => (
+          <div key={i} className="contents">
+            <dt className="text-[var(--text-4)]">{l.label}</dt>
+            <dd className="text-[var(--text-2)] text-right tabular-nums">{l.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {action.warnings?.map((w, i) => (
+        <p key={i} className="rounded-md bg-[var(--warning-bg)] px-2 py-1 text-[10px] text-[var(--warning-text)]">{w}</p>
+      ))}
+      {error && <p className="text-[10px] text-[var(--danger-text)]">{error}</p>}
+      {state === 'done' && result ? (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-semibold text-[var(--success-text)]">✓ {result.message}</p>
+          {result.href && <a href={result.href} className="btn-secondary px-2 py-1 text-[10px] shrink-0">Open</a>}
+        </div>
+      ) : state !== 'done' && (
+        <div className="flex gap-1.5">
+          <button type="button" className="btn-primary px-2 py-1 text-[10px]" disabled={state === 'saving'} onClick={() => void confirm()}>
+            {state === 'saving' ? 'Saving…' : 'Confirm'}
+          </button>
+          <button type="button" className="btn-secondary px-2 py-1 text-[10px]" disabled={state === 'saving'} onClick={() => setState('dismissed')}>
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function cellText(v: string | number | null | undefined): string {
+  if (v == null) return '—'
+  return typeof v === 'number' ? v.toLocaleString('en-KE', { maximumFractionDigits: 2 }) : v
+}
+
+function ReportCard({ action, onCopied }: { action: Extract<DiaActionCard, { type: 'report' }>; onCopied: (label: string) => void }) {
+  const csv = () => {
+    const q = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    return [action.columns, ...action.rows.map(r => action.columns.map(c => r[c])), action.columns.map(c => action.totals[c])]
+      .map(row => row.map(q).join(',')).join('\n')
+  }
+  return (
+    <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-2 space-y-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--text-1)]">{action.title}</p>
+          <p className="text-[10px] text-[var(--text-4)]">
+            {action.period ? `${action.period.from} to ${action.period.to}` : 'As of now'}
+            {Object.entries(action.filters).map(([k, v]) => ` · ${k}: ${v}`).join('')}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-secondary px-2 py-1 text-[10px] shrink-0"
+          onClick={async () => onCopied((await copyText(csv())) ? 'Report copied — paste into Excel or Sheets' : 'Copy failed')}
+        >
+          Copy
+        </button>
+      </div>
+      <div className="max-h-72 overflow-auto rounded-lg border border-[var(--border-lt)]">
+        <table className="w-full text-[10px] tabular-nums">
+          <thead className="sticky top-0 bg-[var(--bg-surface)]">
+            <tr>{action.columns.map((c, i) => <th key={c} className={`px-2 py-1 font-semibold text-[var(--text-3)] whitespace-nowrap ${i === 0 ? 'text-left' : 'text-right'}`}>{c}</th>)}</tr>
+          </thead>
+          <tbody>
+            {action.rows.map((r, ri) => (
+              <tr key={ri} className="border-t border-[var(--border-lt)]">
+                {action.columns.map((c, i) => <td key={c} className={`px-2 py-1 text-[var(--text-2)] ${i === 0 ? 'text-left' : 'text-right whitespace-nowrap'}`}>{cellText(r[c])}</td>)}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="sticky bottom-0 bg-[var(--bg-surface)]">
+            <tr className="border-t border-[var(--border)]">
+              {action.columns.map((c, i) => <td key={c} className={`px-2 py-1 font-bold text-[var(--text-1)] ${i === 0 ? 'text-left' : 'text-right whitespace-nowrap'}`}>{cellText(action.totals[c])}</td>)}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {(action.truncated || action.note) && (
+        <p className="text-[10px] text-[var(--text-4)]">
+          {action.truncated ? `Showing ${action.rows.length} of ${action.rowCount} rows; totals cover all. ` : ''}{action.note}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function ActionCards({
   actions,
   onCopied,
@@ -93,6 +262,12 @@ function ActionCards({
     <div className="mt-2 space-y-2">
       <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-4)]">Actions</p>
       {actions.map((action, i) => {
+        if (action.type === 'confirm_action') {
+          return <ConfirmActionCard key={action.token} action={action} />
+        }
+        if (action.type === 'report') {
+          return <ReportCard key={i} action={action} onCopied={onCopied} />
+        }
         if (action.type === 'draft_message') {
           const payload = action.subject
             ? `Subject: ${action.subject}\n\n${action.body}`
@@ -199,6 +374,8 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
   const [error, setError] = useState<string | null>(null)
   const [statusNote, setStatusNote] = useState<string | null>(null)
   const [voiceSupported, setVoiceSupported] = useState(false)
+  const [files, setFiles] = useState<PendingFile[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const speakRepliesRef = useRef(speakReplies)
@@ -260,13 +437,16 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
 
   async function sendMessage(overrideText?: string) {
     const text = (overrideText ?? input).trim()
-    if (!text || sending) return
+    const attached = files
+    if ((!text && !attached.length) || sending) return
     setError(null)
     setStatusNote(null)
     setInput('')
+    setFiles([])
     setSending(true)
 
-    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: 'user', content: text }
+    const shown = attached.length ? `${text}${text ? '\n' : ''}📎 ${attached.map(f => f.name).join(', ')}` : text
+    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: 'user', content: shown }
     setMessages(prev => [...prev, userMsg])
 
     try {
@@ -276,6 +456,7 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
         body: JSON.stringify({
           conversationId,
           message: text,
+          attachments: attached.map(f => ({ name: f.name, mediaType: f.mediaType, data: f.data })),
           mode: modeRef.current,
           pageContext,
         }),
@@ -355,6 +536,32 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
     }
   }
 
+  async function addFiles(list: FileList | null) {
+    if (!list?.length) return
+    setError(null)
+    const room = MAX_FILES - files.length
+    if (room <= 0) { setError(`Attach up to ${MAX_FILES} files at a time.`); return }
+    const picked = Array.from(list).slice(0, room)
+    const next: PendingFile[] = []
+    for (const file of picked) {
+      try {
+        if (file.type === 'application/pdf') {
+          if (file.size > MAX_PDF_BYTES) { setError(`${file.name} is over 7 MB.`); continue }
+          next.push({ id: `${file.name}-${Date.now()}-${next.length}`, name: file.name, mediaType: 'application/pdf', data: await readAsBase64(file), size: file.size })
+        } else if (file.type.startsWith('image/')) {
+          const jpeg = await photoToJpeg(file)
+          next.push({ id: `${file.name}-${Date.now()}-${next.length}`, name: file.name, mediaType: 'image/jpeg', data: jpeg.data, size: jpeg.size })
+        } else {
+          setError('Only photos and PDFs can be attached.')
+        }
+      } catch {
+        setError(`Could not read ${file.name}.`)
+      }
+    }
+    if (list.length > room) setError(`Only ${MAX_FILES} files at a time — the rest were left out.`)
+    setFiles(prev => [...prev, ...next])
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -365,6 +572,7 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
   function startNewChat() {
     setConversationId(null)
     setMessages([])
+    setFiles([])
     setError(null)
     setStatusNote(null)
   }
@@ -596,7 +804,35 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
           {mode === 'voice' && listening && (
             <p className="text-[10px] font-semibold text-[var(--danger)]">Listening…</p>
           )}
+          {files.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {files.map(f => (
+                <span key={f.id} className="inline-flex items-center gap-1 rounded-md border border-[var(--border-lt)] bg-[var(--bg-surface)] px-2 py-0.5 text-[10px] text-[var(--text-2)]">
+                  {f.mediaType === 'application/pdf' ? 'PDF' : 'Photo'} · {f.name.length > 28 ? `${f.name.slice(0, 25)}…` : f.name}
+                  <button type="button" className="text-[var(--text-4)] hover:text-[var(--danger)]" aria-label={`Remove ${f.name}`} onClick={() => setFiles(prev => prev.filter(x => x.id !== f.id))}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ATTACH_ACCEPT}
+            multiple
+            className="hidden"
+            onChange={e => { void addFiles(e.target.files); e.target.value = '' }}
+          />
           <div className="flex items-end gap-2">
+            <button
+              type="button"
+              className="btn-secondary px-3 py-2 text-xs"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || files.length >= MAX_FILES}
+              aria-label="Attach a photo or PDF"
+              title="Attach a photo or PDF (invoice, receipt, quote, business card) for DIA to read"
+            >
+              Attach
+            </button>
             <textarea
               className="form-input flex-1 resize-none text-xs"
               rows={2}
@@ -627,7 +863,7 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
             <button
               className="btn-primary px-3 py-2 text-xs disabled:opacity-50"
               onClick={() => void sendMessage()}
-              disabled={sending || !input.trim()}
+              disabled={sending || (!input.trim() && !files.length)}
             >
               Send
             </button>

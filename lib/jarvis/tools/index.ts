@@ -17,6 +17,11 @@ import { draftMessageTool } from './draft-message'
 import { searchDocumentsTool } from './search-documents'
 import { summarizeSalesLeadsTool } from './summarize-sales-leads'
 import { importSalesInboxLeadsTool } from './import-sales-inbox-leads'
+import { searchVendorsTool } from './search-vendors'
+import { createContactTool } from './create-contact'
+import { createProductTool } from './create-product'
+import { createPurchaseOrderTool } from './create-purchase-order'
+import { runReportTool } from './run-report'
 
 const REGISTRY: ToolDefinition[] = [
   searchCustomersTool,
@@ -35,6 +40,11 @@ const REGISTRY: ToolDefinition[] = [
   searchDocumentsTool,
   summarizeSalesLeadsTool,
   importSalesInboxLeadsTool,
+  searchVendorsTool,
+  createContactTool,
+  createProductTool,
+  createPurchaseOrderTool,
+  runReportTool,
 ]
 
 const BY_NAME = new Map(REGISTRY.map(t => [t.name, t]))

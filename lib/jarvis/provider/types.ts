@@ -21,10 +21,18 @@ export interface JarvisToolDef {
   inputSchema: Record<string, unknown>
 }
 
+/** A photo or PDF the user attached to this turn (base64, no data: prefix). */
+export interface JarvisAttachment {
+  name: string
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'application/pdf'
+  data: string
+}
+
 export interface JarvisToolLoopArgs {
   system: string
   history: ChatTurnMessage[]
   userMessage: string
+  attachments?: JarvisAttachment[]
   tools: JarvisToolDef[]
   maxRounds: number
   maxTokens: number

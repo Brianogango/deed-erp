@@ -12,7 +12,7 @@ const inputSchema = z.object({
 export const searchCustomersTool: ToolDefinition = {
   name: 'search_customers',
   description:
-    'Search existing ERP customers/companies by name, phone, email, or client number. Read-only.',
+    'Search existing contacts (customers and vendors) by name, phone, email, or client number. Read-only. Use before creating a contact or quotation.',
   inputSchema: {
     type: 'object',
     properties: {

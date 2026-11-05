@@ -13,6 +13,7 @@ import {
   type AnswerSource,
 } from './knowledge'
 import type { JarvisToolDef } from './provider'
+import type { JarvisAttachment } from './provider/types'
 import { extractDiaActions, type DiaActionCard } from './actions'
 import type { DiaMode, DiaPageContext } from './modes'
 
@@ -27,6 +28,8 @@ export interface ToolCallRecord {
   allowed: boolean
   output?: unknown
   error?: string
+  /** Server-side only: the signed token behind a confirmation card. */
+  confirmToken?: string
 }
 
 interface ChatTurnResult {
@@ -59,10 +62,11 @@ export async function runChatTurn(params: {
   ipAddress: string | null
   history: ChatTurnMessage[]
   userMessage: string
+  attachments?: JarvisAttachment[]
   mode?: DiaMode | null
   pageContext?: DiaPageContext | null
 }): Promise<ChatTurnResult> {
-  const { user, conversationId, ipAddress, history, userMessage, mode, pageContext } = params
+  const { user, conversationId, ipAddress, history, userMessage, attachments, mode, pageContext } = params
 
   const allowedNames = allowedToolNamesForRole(user.role)
   const tools = toolsForRole(allowedNames)
@@ -82,10 +86,13 @@ export async function runChatTurn(params: {
     : userMessage
 
   const { primary, fallback } = getJarvisProvidersWithFallback()
+  // Card tokens in call order; providers record tool calls in the same order.
+  let confirmTokens: Array<string | undefined> = []
   const loopArgs = {
     system,
     history,
     userMessage: augmentedMessage,
+    attachments,
     tools,
     maxRounds: JARVIS_MAX_TOOL_ROUNDS,
     maxTokens: JARVIS_MAX_TOKENS,
@@ -95,6 +102,7 @@ export async function runChatTurn(params: {
         conversationId,
         ipAddress,
       })
+      confirmTokens.push(outcome.confirmToken)
       return {
         allowed: outcome.allowed,
         output: outcome.output,
@@ -112,13 +120,14 @@ export async function runChatTurn(params: {
   } catch (err) {
     if (fallback && isProviderOverloadError(err)) {
       console.warn(`[jarvis] primary provider overloaded (${err instanceof Error ? err.message : err}) — falling back`)
+      confirmTokens = []
       result = await fallback.runToolLoop(loopArgs)
     } else {
       throw err
     }
   }
 
-  const toolCalls: ToolCallRecord[] = result.toolCalls
+  const toolCalls: ToolCallRecord[] = result.toolCalls.map((tc, i) => ({ ...tc, confirmToken: confirmTokens[i] }))
   const sources = buildAnswerSources(passages, toolCalls)
   const actions = extractDiaActions(toolCalls)
 
