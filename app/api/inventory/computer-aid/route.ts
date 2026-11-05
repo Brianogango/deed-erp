@@ -283,7 +283,10 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'One or more selected serials are no longer available at the source location' }, { status: 409 })
         }
         const selectedIds = new Set(selected.map(row => row.id))
-        serials = serials.map(row => selectedIds.has(row.id) ? { ...row, location: destLocation } : row)
+        // Back in the warehouse a unit is ordinary stock, free to sell.
+        serials = serials.map(row => !selectedIds.has(row.id) ? row
+          : action === 'return' ? { ...row, location: destLocation, status: 'available' }
+            : { ...row, location: destLocation })
         serialIds = selected.map(row => row.id)
         serialNumbers = selected.map(row => row.serial)
       } else {

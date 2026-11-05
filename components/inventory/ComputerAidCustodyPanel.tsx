@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
 
-type Action = 'direct_entry' | 'transfer_in' | 'collection' | 'issue'
+type Action = 'direct_entry' | 'transfer_in' | 'collection' | 'issue' | 'return'
 type Product = { id: string; name: string; sku: string; requiresSerial: boolean }
 type Serial = { id: string; serial: string; productId: string; productName: string; location: string }
 type Movement = { id: string; ref: string; action: Action; date: string; productName: string; qty: number; destination?: string; collectorName?: string; exceptionType?: string; project?: string }
@@ -11,9 +11,9 @@ type Data = { summary: { inCustody: number; collected: number; exceptions: numbe
 
 const EMPTY: Data = { summary: { inCustody: 0, collected: 0, exceptions: 0 }, products: [], serials: [], custodySerials: [], custodyBulk: [], movements: [] }
 const fresh = () => ({ productId: '', qty: '', serialNumbers: '', serialIds: [] as string[], date: '', project: '', source: '', deliveryRef: '', condition: '', specifications: '', storageBin: '', receivedBy: '', computerAidContact: '', collectorName: '', collectorId: '', collectorPhone: '', vehicleDetails: '', destination: '', releasedBy: '', exceptionType: '', responsiblePerson: '', resolution: '', notes: '', supportingDocumentName: '' })
-const TITLES: Record<Action, string> = { direct_entry: 'Add Computer Aid stock', transfer_in: 'Transfer from Warehouse', collection: 'Record Computer Aid collection', issue: 'Report Computer Aid stock issue' }
-const LABELS: Record<Action, string> = { direct_entry: 'Add stock', transfer_in: 'Transfer stock', collection: 'Confirm collection', issue: 'Record issue' }
-const movementLabel = (a: Action) => ({ direct_entry: 'Direct entry → custody', transfer_in: 'Warehouse → custody', collection: 'Custody → collected', issue: 'Custody → with issues' })[a]
+const TITLES: Record<Action, string> = { direct_entry: 'Add Computer Aid stock', transfer_in: 'Transfer from Warehouse', return: 'Transfer to Warehouse', collection: 'Record Computer Aid collection', issue: 'Report Computer Aid stock issue' }
+const LABELS: Record<Action, string> = { direct_entry: 'Add stock', transfer_in: 'Transfer stock', return: 'Transfer to warehouse', collection: 'Confirm collection', issue: 'Record issue' }
+const movementLabel = (a: Action) => ({ direct_entry: 'Direct entry → custody', transfer_in: 'Warehouse → custody', return: 'Custody → warehouse (for sale)', collection: 'Custody → collected', issue: 'Custody → with issues' })[a]
 
 export default function ComputerAidCustodyPanel() {
   const [data, setData] = useState<Data>(EMPTY)
@@ -40,6 +40,14 @@ export default function ComputerAidCustodyPanel() {
 
   const product = data.products.find(p => p.id === form.productId)
   const source = action === 'transfer_in' ? 'warehouse' : 'computer_aid'
+  const isTransfer = action === 'transfer_in' || action === 'return'
+  // Back to the warehouse: only products Computer Aid custody actually holds.
+  const custodyQty = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const s of data.custodySerials) if (s.location === 'computer_aid') m.set(s.productId, (m.get(s.productId) ?? 0) + 1)
+    for (const b of data.custodyBulk) if (b.location === 'computer_aid') m.set(b.productId, (m.get(b.productId) ?? 0) + Number(b.qty || 0))
+    return m
+  }, [data.custodySerials, data.custodyBulk])
   const eligible = useMemo(() => data.serials.filter(s => s.productId === form.productId && s.location === source), [data.serials, form.productId, source])
   const patch = (key: keyof ReturnType<typeof fresh>, value: string | string[]) => setForm(v => ({ ...v, [key]: value }))
   const open = (next: Action) => {
@@ -51,9 +59,10 @@ export default function ComputerAidCustodyPanel() {
   }
   const filteredProducts = useMemo(() => {
     const query = productSearch.trim().toLowerCase()
-    if (!query) return data.products
-    return data.products.filter(p => `${p.name} ${p.sku}`.toLowerCase().includes(query))
-  }, [data.products, productSearch])
+    const pool = action === 'return' ? data.products.filter(p => (custodyQty.get(p.id) ?? 0) > 0) : data.products
+    if (!query) return pool
+    return pool.filter(p => `${p.name} ${p.sku}`.toLowerCase().includes(query))
+  }, [data.products, productSearch, action, custodyQty])
   const toggleTransferProduct = (productId: string) => setTransferItems(items => {
     if (items[productId]) {
       const next = { ...items }
@@ -68,11 +77,11 @@ export default function ComputerAidCustodyPanel() {
 
   const submit = async () => {
     if (!action) return
-    if (action === 'transfer_in') {
+    if (isTransfer) {
       const selected = Object.entries(transferItems)
       if (!selected.length) return setError('Select at least one product')
       if (!form.date) return setError('Select the movement date')
-      if (!form.condition.trim()) return setError('Enter the condition')
+      if (action === 'transfer_in' && !form.condition.trim()) return setError('Enter the condition')
       for (const [productId, item] of selected) {
         const selectedProduct = data.products.find(p => p.id === productId)
         if (selectedProduct?.requiresSerial && !item.serialIds.length) return setError(`Select serial numbers for ${selectedProduct.name}`)
@@ -116,6 +125,7 @@ export default function ComputerAidCustodyPanel() {
       <div className="flex flex-wrap gap-2">
         <button className="btn-secondary text-[11px] px-3 py-2" onClick={() => open('direct_entry')}>Add stock</button>
         <button className="btn-secondary text-[11px] px-3 py-2" onClick={() => open('transfer_in')}>Transfer from Warehouse</button>
+        <button className="btn-secondary text-[11px] px-3 py-2" onClick={() => open('return')}>Transfer to Warehouse</button>
         <button className="btn-primary text-[11px] px-3 py-2" onClick={() => open('collection')}>Record collection</button>
         <button className="btn-secondary text-[11px] px-3 py-2" onClick={() => open('issue')}>Report issue</button>
         <button className="btn-secondary text-[11px] px-3 py-2" onClick={() => setHistory(true)}>Movement history</button>
@@ -133,7 +143,8 @@ export default function ComputerAidCustodyPanel() {
 
     {action && <Modal title={TITLES[action]} subtitle="Computer Aid custody stock" onClose={() => setAction(null)} width={760}><div className="space-y-4">
       {error && <div role="alert" className="p-3 rounded-lg bg-red-50 border border-red-100 text-xs text-red-700">{error}</div>}
-      {action === 'transfer_in' ? (
+      {action === 'return' && <p className="text-[11px] text-text-2 m-0">Units move from Computer Aid custody to the Warehouse as available stock, ready to sell.</p>}
+      {isTransfer ? (
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Products" required hint={`${Object.keys(transferItems).length} selected`}>
@@ -142,9 +153,9 @@ export default function ComputerAidCustodyPanel() {
                 <div className="custody-product-picker__list">
                   {filteredProducts.map(p => <label key={p.id}>
                     <input type="checkbox" checked={Boolean(transferItems[p.id])} onChange={() => toggleTransferProduct(p.id)} />
-                    <span><strong>{p.name}</strong><small>{p.sku || 'No SKU'}{p.requiresSerial ? ' · Serial tracked' : ''}</small></span>
+                    <span><strong>{p.name}</strong><small>{p.sku || 'No SKU'}{p.requiresSerial ? ' · Serial tracked' : ''}{action === 'return' ? ` · ${custodyQty.get(p.id) ?? 0} at Computer Aid` : ''}</small></span>
                   </label>)}
-                  {!filteredProducts.length && <p>No matching products.</p>}
+                  {!filteredProducts.length && <p>{action === 'return' && !productSearch ? 'Nothing is held at Computer Aid.' : 'No matching products.'}</p>}
                 </div>
               </div>
             </Field>
@@ -153,15 +164,15 @@ export default function ComputerAidCustodyPanel() {
           {Object.entries(transferItems).map(([productId, item]) => {
             const rowProduct = data.products.find(p => p.id === productId)
             if (!rowProduct) return null
-            const rowSerials = data.serials.filter(s => s.productId === productId && s.location === 'warehouse')
+            const rowSerials = data.serials.filter(s => s.productId === productId && s.location === source)
             return <div key={productId} className="custody-transfer-row">
               <div><strong>{rowProduct.name}</strong><small>{rowProduct.sku || 'No SKU'}</small></div>
               {rowProduct.requiresSerial ? (
                 <div className="custody-transfer-serials">
                   {rowSerials.map(serial => <label key={serial.id}><input type="checkbox" checked={item.serialIds.includes(serial.id)} onChange={() => patchTransferItem(productId, { serialIds: item.serialIds.includes(serial.id) ? item.serialIds.filter(id => id !== serial.id) : [...item.serialIds, serial.id] })} /><span>{serial.serial}</span></label>)}
-                  {!rowSerials.length && <small>No warehouse serials available.</small>}
+                  {!rowSerials.length && <small>{action === 'return' ? 'No serials at Computer Aid.' : 'No warehouse serials available.'}</small>}
                 </div>
-              ) : <Input type="number" value={item.qty} onChange={qty => patchTransferItem(productId, { qty })} />}
+              ) : <Input type="number" value={item.qty} onChange={qty => patchTransferItem(productId, { qty })} placeholder={action === 'return' ? `Up to ${custodyQty.get(productId) ?? 0}` : undefined} />}
               <button type="button" aria-label={`Remove ${rowProduct.name}`} onClick={() => toggleTransferProduct(productId)}>×</button>
             </div>
           })}
@@ -173,7 +184,7 @@ export default function ComputerAidCustodyPanel() {
       {(action === 'direct_entry' || action === 'transfer_in') && <><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Computer Aid project / programme"><Input value={form.project} onChange={v => patch('project', v)} /></Field><Field label="Supplier / source"><Input value={form.source} onChange={v => patch('source', v)} /></Field><Field label="Delivery note / reference"><Input value={form.deliveryRef} onChange={v => patch('deliveryRef', v)} /></Field><Field label="Condition" required><Input value={form.condition} onChange={v => patch('condition', v)} /></Field><Field label="Storage location / bin"><Input value={form.storageBin} onChange={v => patch('storageBin', v)} /></Field><Field label="Received by"><Input value={form.receivedBy} onChange={v => patch('receivedBy', v)} /></Field><Field label="Computer Aid contact"><Input value={form.computerAidContact} onChange={v => patch('computerAidContact', v)} /></Field><Field label="Supporting document"><input type="file" className="form-input w-full" onChange={e => patch('supportingDocumentName', e.target.files?.[0]?.name || '')} /></Field></div><Field label="Specifications"><Textarea value={form.specifications} onChange={v => patch('specifications', v)} rows={2} /></Field></>}
       {action === 'collection' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Collector's name" required><Input value={form.collectorName} onChange={v => patch('collectorName', v)} /></Field><Field label="Collector ID"><Input value={form.collectorId} onChange={v => patch('collectorId', v)} /></Field><Field label="Collector phone"><Input value={form.collectorPhone} onChange={v => patch('collectorPhone', v)} /></Field><Field label="Vehicle / dispatch details"><Input value={form.vehicleDetails} onChange={v => patch('vehicleDetails', v)} /></Field><Field label="Destination / beneficiary project" required><Input value={form.destination} onChange={v => patch('destination', v)} /></Field><Field label="Released by" required><Input value={form.releasedBy} onChange={v => patch('releasedBy', v)} /></Field></div>}
       {action === 'issue' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Exception type" required><Select value={form.exceptionType} onChange={v => patch('exceptionType', v)} options={[{ value: '', label: 'Select exception…' }, { value: 'damaged', label: 'Damaged' }, { value: 'missing', label: 'Missing' }, { value: 'rejected', label: 'Rejected' }, { value: 'wrong_allocation', label: 'Wrong allocation' }, { value: 'other', label: 'Other' }]} /></Field><Field label="Responsible person"><Input value={form.responsiblePerson} onChange={v => patch('responsiblePerson', v)} /></Field><Field label="Resolution / next action"><Input value={form.resolution} onChange={v => patch('resolution', v)} /></Field></div>}
-      <Field label="Notes"><Textarea value={form.notes} onChange={v => patch('notes', v)} rows={3} /></Field><p className="text-[11px] text-text-3">This creates a custody movement only—no sale, invoice, revenue or delivery.</p><div className="flex justify-end gap-2"><button className="btn-secondary px-5" onClick={() => setAction(null)}>Cancel</button><button className="btn-primary px-6" disabled={saving} onClick={() => void submit()}>{saving ? 'Saving…' : LABELS[action]}</button></div>
+      <Field label="Notes"><Textarea value={form.notes} onChange={v => patch('notes', v)} rows={3} /></Field><p className="text-[11px] text-text-3">{action === 'return' ? 'This moves stock only — no sale, invoice or revenue. The units become sellable from the Warehouse.' : 'This creates a custody movement only—no sale, invoice, revenue or delivery.'}</p><div className="flex justify-end gap-2"><button className="btn-secondary px-5" onClick={() => setAction(null)}>Cancel</button><button className="btn-primary px-6" disabled={saving} onClick={() => void submit()}>{saving ? 'Saving…' : LABELS[action]}</button></div>
     </div></Modal>}
     {history && <Modal title="Computer Aid movement history" subtitle="Permanent custody trail" onClose={() => setHistory(false)} width={980}><div className="overflow-x-auto"><table className="erp-table"><thead><tr className="border-b border-border-lt text-left text-text-3"><th className="px-3 py-2.5">Date</th><th className="px-3 py-2.5">Reference</th><th className="px-3 py-2.5">Movement</th><th className="px-3 py-2.5">Product</th><th className="px-3 py-2.5 text-right">Qty</th><th className="px-3 py-2.5">Destination / detail</th></tr></thead><tbody>{data.movements.map(m => <tr key={m.id} className="border-b border-border-lt"><td className="px-3 py-3">{m.date}</td><td className="px-3 py-3 font-mono font-semibold">{m.ref}</td><td className="px-3 py-3">{movementLabel(m.action)}</td><td className="px-3 py-3">{m.productName}</td><td className="px-3 py-3 text-right">{m.qty}</td><td className="px-3 py-3">{m.destination || m.collectorName || m.exceptionType || m.project || '—'}</td></tr>)}{!data.movements.length && <tr><td colSpan={6} className="px-3 py-10 text-center text-text-3">No movements recorded.</td></tr>}</tbody></table></div></Modal>}
   </section>
