@@ -17,6 +17,7 @@ import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
+import { PAID_TO_RIDER, paidDirectToRider, riderFeeAccount, riderPayForJob } from '@/lib/delivery/rider-direct-pay'
 import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
@@ -1711,6 +1712,12 @@ export interface DeliveryJob {
   recipientName?: string
   /** Money the customer paid the rider on delivery. */
   cashCollected?: { amount: number; method: 'cash' | 'mpesa'; reference?: string; at: string }
+  /**
+   * The customer paid the rider the delivery charge themselves (the rider
+   * keeps it): it settles that much of the invoice and comes off the rider's
+   * pay for this trip. See lib/delivery/rider-direct-pay.ts.
+   */
+  customerPaidRider?: { amount: number; method: 'cash' | 'mpesa'; reference?: string; at: string; by: string; invoiceId?: string; invoiceRef?: string }
   /** When the rider last changed this job from their link. */
   riderUpdatedAt?: string
   /** Stops in order (drop off / collect / exchange). Jobs without stops are one stop. See lib/delivery/trip.ts. */
@@ -3057,9 +3064,11 @@ const buildInvoicePaymentJournal = (
   bankAccountId?: string,
   paymentDate?: string,
   paymentId?: string,
+  /** Account the receipt is debited to instead of a bank (paid to rider: rider-fee expense). */
+  debitAccountLabel?: string,
 ): JournalEntry => {
-  const actualBankId = bankAccountIdForMethod(method, bankAccountId)
-  const bankAccount = bankAccountLabel(actualBankId, method)
+  const actualBankId = debitAccountLabel ? undefined : bankAccountIdForMethod(method, bankAccountId)
+  const bankAccount = debitAccountLabel ?? bankAccountLabel(actualBankId, method)
   const isVendorPayment = inv.type === 'vendor_bill'
   const lines = isVendorPayment
     ? [
@@ -3597,6 +3606,8 @@ interface AppState {
   updateDeliveryJob: (id: string, p: Partial<DeliveryJob>) => void
   deleteDeliveryJob: (id: string) => void
   assignRiderToJob: (jobId: string, riderId: string, riderFee?: number) => void
+  /** The customer paid the rider the delivery charge directly: settle it on the invoice and net it off the rider's pay. */
+  recordCustomerPaidRider: (jobId: string, input: { amount: number; method: 'cash' | 'mpesa'; reference?: string }) => Promise<boolean>
   /**
    * Create a sales_delivery rider job from a customer invoice.
    * When deliveryFee > 0, always appends a Delivery charge line on the invoice
@@ -4522,6 +4533,7 @@ type DeliveryStoreState = Pick<AppState,
   | 'addRider'
   | 'advanceJobStatus'
   | 'assignRiderToJob'
+  | 'recordCustomerPaidRider'
   | 'createDeliveryJob'
   | 'deleteDeliveryJob'
   | 'generateWeeklyPay'
@@ -7898,6 +7910,7 @@ function StoreProvider({
     addRider: (...args: Parameters<AppState['addRider']>) => storeCtxRef.current!.addRider(...args),
     advanceJobStatus: (...args: Parameters<AppState['advanceJobStatus']>) => storeCtxRef.current!.advanceJobStatus(...args),
     assignRiderToJob: (...args: Parameters<AppState['assignRiderToJob']>) => storeCtxRef.current!.assignRiderToJob(...args),
+    recordCustomerPaidRider: (...args: Parameters<AppState['recordCustomerPaidRider']>) => storeCtxRef.current!.recordCustomerPaidRider(...args),
     createDeliveryJob: (...args: Parameters<AppState['createDeliveryJob']>) => storeCtxRef.current!.createDeliveryJob(...args),
     deleteDeliveryJob: (...args: Parameters<AppState['deleteDeliveryJob']>) => storeCtxRef.current!.deleteDeliveryJob(...args),
     generateWeeklyPay: (...args: Parameters<AppState['generateWeeklyPay']>) => storeCtxRef.current!.generateWeeklyPay(...args),
@@ -14833,7 +14846,9 @@ const storeCtx: AppState = {
       if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return false }
       const capped = Math.min(amount, balance)
       const paymentId = crypto.randomUUID()
-      const journal = buildInvoicePaymentJournal(inv, capped, method, bankAccountId, paymentDate, paymentId)
+      const paidToRider = method === PAID_TO_RIDER && inv.type !== 'vendor_bill'
+      const journal = buildInvoicePaymentJournal(inv, capped, method, bankAccountId, paymentDate, paymentId,
+        paidToRider ? riderFeeAccount(accounts.map(a => a.code)).label : undefined)
       if (journalEntries.some(j => j.ref === journal.ref)) {
         showToast('This payment journal was already posted', 'info'); return false
       }
@@ -14844,7 +14859,7 @@ const storeCtx: AppState = {
         amount: capped,
         method: method || 'cash',
         reference: reference || undefined,
-        bankAccountId: bankAccountIdForMethod(method, bankAccountId),
+        bankAccountId: paidToRider ? undefined : bankAccountIdForMethod(method, bankAccountId),
         recordedBy: actor?.name || 'Finance',
       }
       const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
@@ -21172,12 +21187,18 @@ const storeCtx: AppState = {
       // Check for duplicate
       const existing = riderWeeklyPays.find(p => p.riderId === riderId && p.weekStart === weekStart)
       if (existing) { showToast('Weekly pay already generated for this period', 'info'); return null }
-      const total = weekJobs.reduce((s, j) => s + j.riderFee, 0)
+      // A trip the customer paid the rider for directly counts at the fee less that.
+      const gross = weekJobs.reduce((s, j) => s + j.riderFee, 0)
+      const paidByCustomers = weekJobs.reduce((s, j) => s + paidDirectToRider(j), 0)
+      const total = Math.round(weekJobs.reduce((s, j) => s + riderPayForJob(j), 0) * 100) / 100
+      if (total < 0) { showToast(`${rider.name} was paid KES ${Math.abs(total).toLocaleString('en-KE')} more by customers than their fees this week — settle it with them before generating pay`, 'error'); return null }
       const pay: RiderWeeklyPay = {
         id: uid(), ref: riderPayRef(), riderId, riderName: rider.name,
         weekStart, weekEnd, jobIds: weekJobs.map(j => j.id),
         deliveryCount: weekJobs.length, ratePerDelivery: rider.ratePerDelivery,
-        totalAmount: total, status: 'pending', notes: '', createdAt: new Date().toISOString(),
+        totalAmount: total, status: 'pending',
+        notes: paidByCustomers > 0 ? `Fees KES ${gross.toLocaleString('en-KE')} less KES ${paidByCustomers.toLocaleString('en-KE')} customers paid the rider directly` : '',
+        createdAt: new Date().toISOString(),
       }
       setRiderWeeklyPays(p => [pay, ...p])
       showToast(`Pay of ${total.toLocaleString('en-KE', { style: 'currency', currency: 'KES' })} generated for ${rider.name}`)
@@ -21200,7 +21221,10 @@ const storeCtx: AppState = {
           id: uid(),
           // One line for the week's actual fees: trips can carry their own fee,
           // so count × standard rate need not equal the total.
-          description: `Rider delivery fees — week of ${pay.weekStart} (${pay.deliveryCount} deliver${pay.deliveryCount === 1 ? 'y' : 'ies'})`,
+          description: `Rider delivery fees — week of ${pay.weekStart} (${pay.deliveryCount} deliver${pay.deliveryCount === 1 ? 'y' : 'ies'})${pay.notes ? ` — ${pay.notes}` : ''}`,
+          // Rider fees are a delivery expense, not stock purchases (a bill line
+          // with no account used to land in 6101 Purchases).
+          accountCode: riderFeeAccount(accounts.map(a => a.code)).code,
           qty: 1,
           unitPrice: pay.totalAmount,
           taxRate: 0,
@@ -21221,6 +21245,42 @@ const storeCtx: AppState = {
           : p
       ))
       showToast(`Draft bill raised for ${pay.riderName} — Finance confirms and pays it`)
+    },
+
+    recordCustomerPaidRider: async (jobId, input) => {
+      const job = deliveryJobs.find(j => j.id === jobId)
+      if (!job) return false
+      const amount = Math.round((Number(input.amount) || 0) * 100) / 100
+      if (!(amount > 0)) { showToast('Enter the amount the customer paid the rider', 'error'); return false }
+      if (!job.riderId) { showToast('Assign the rider first', 'error'); return false }
+      if (job.customerPaidRider) { showToast(`Already recorded: the customer paid ${job.riderName ?? 'the rider'} ${fmtKes(job.customerPaidRider.amount)}`, 'info'); return false }
+      const inPay = riderWeeklyPays.find(p => (p.jobIds ?? []).includes(job.id))
+      if (inPay) { showToast(`${job.ref} is already in rider pay ${inPay.ref} — take it off the rider's next pay instead`, 'error'); return false }
+      // The invoice this trip was charged on: its own, or the repair's.
+      const repair = job.repairOrderId ? repairs.find(r => r.id === job.repairOrderId) : undefined
+      const invoiceId = job.invoiceId || (repair as { invoiceId?: string } | undefined)?.invoiceId
+      const inv = invoiceId ? invRef.current.find(i => i.id === invoiceId) : undefined
+      let paidOnInvoice = 0
+      if (inv) {
+        if (invoiceDocState(inv.status) !== 'posted') { showToast(`Post ${inv.ref} first, then record what the customer paid the rider`, 'error'); return false }
+        const balance = Math.round((inv.total - inv.amountPaid) * 100) / 100
+        paidOnInvoice = Math.min(amount, Math.max(0, balance))
+        if (paidOnInvoice > 0) {
+          const ok = await storeCtxRef.current!.registerPayment(inv.id, paidOnInvoice, PAID_TO_RIDER, undefined,
+            `Paid to rider ${job.riderName ?? ''} (${job.ref})${input.reference ? ` · ${input.reference}` : ''}`.trim(), now())
+          if (!ok) return false
+        }
+      }
+      const user = currentUser()
+      const record = { amount, method: input.method, reference: input.reference?.trim() || undefined, at: new Date().toISOString(), by: user?.name ?? 'staff', ...(inv ? { invoiceId: inv.id, invoiceRef: inv.ref } : {}) }
+      setDeliveryJobs(p => p.map(j => j.id !== jobId ? j : { ...j, customerPaidRider: record }))
+      addAuditLog('delivery_customer_paid_rider', job.ref, `Customer paid ${job.riderName ?? 'rider'} ${fmtKes(amount)} directly${inv ? ` — ${fmtKes(paidOnInvoice)} settled on ${inv.ref}` : ''}; rider pay for this trip now ${fmtKes(riderPayForJob({ ...job, customerPaidRider: record }))}`)
+      showToast([
+        `${fmtKes(amount)} paid to ${job.riderName ?? 'the rider'} recorded`,
+        inv ? (paidOnInvoice > 0 ? `${fmtKes(paidOnInvoice)} settled on ${inv.ref}` : `${inv.ref} had nothing left to settle`) : '',
+        `rider pay for ${job.ref}: ${fmtKes(riderPayForJob({ ...job, customerPaidRider: record }))}`,
+      ].filter(Boolean).join(' — '))
+      return true
     },
 
     // ── Delivery & Fulfillment ───────────────────────────────────────────────

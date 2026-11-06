@@ -40,6 +40,8 @@ export type JobLike = {
   repairOrderRef?: string
   recipientName?: string
   cashCollected?: { amount: number; method: 'cash' | 'mpesa'; reference?: string; at: string }
+  /** The customer paid the rider the delivery charge themselves (comes off the rider's pay). */
+  customerPaidRider?: { amount: number }
   /** When the rider last changed this job from their link. */
   riderUpdatedAt?: string
   stops?: Stop[]
@@ -153,7 +155,8 @@ export function onRiderLink(job: Pick<JobLike, 'scheduledDate'> & { createdAt?: 
   return !day || day >= start
 }
 
-export type RiderWeek = { weekStart: string; trips: number; earned: number; cashCollected: number; paid: boolean }
+/** earned: all trip fees; paidByCustomers: of that, what customers paid the rider directly (not paid again by us). */
+export type RiderWeek = { weekStart: string; trips: number; earned: number; paidByCustomers: number; cashCollected: number; paid: boolean }
 
 /** Trips by week, newest first: delivered jobs, what they earned, cash collected, and whether the week was paid. */
 export function riderWeeks(riderId: string, jobs: JobLike[], pays: PayLike[], weeks = 8, now = new Date().toISOString()): RiderWeek[] {
@@ -165,7 +168,7 @@ export function riderWeeks(riderId: string, jobs: JobLike[], pays: PayLike[], we
     d.setUTCDate(d.getUTCDate() - i * 7)
     const key = d.toISOString().slice(0, 10)
     if (key < firstWeek) break
-    out.set(key, { weekStart: key, trips: 0, earned: 0, cashCollected: 0, paid: false })
+    out.set(key, { weekStart: key, trips: 0, earned: 0, paidByCustomers: 0, cashCollected: 0, paid: false })
   }
   for (const job of jobs) {
     if (!onRiderLink(job as JobLike & { createdAt?: string })) continue
@@ -174,6 +177,7 @@ export function riderWeeks(riderId: string, jobs: JobLike[], pays: PayLike[], we
     if (!w) continue
     w.trips += 1
     w.earned += Number(job.riderFee) || 0
+    w.paidByCustomers += Number(job.customerPaidRider?.amount) || 0
     w.cashCollected += tripCashTotal(job as TripJob)
   }
   for (const pay of pays) {

@@ -15,6 +15,7 @@ import { labelForRole } from '@/lib/accounting/coa-roles'
 import { BankAccountRefError, cashLabelForBankAccount } from '@/lib/accounting/bank-cash-account.server'
 import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
+import { PAID_TO_RIDER, RIDER_FEE_ACCOUNTS, riderFeeAccount } from '@/lib/delivery/rider-direct-pay'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -154,14 +155,21 @@ export async function POST(
     // through to petty cash below and the receipt debits 2211, overstating
     // cash and leaving 3313 untouched.
     const isCreditApplication = method === 'customer_credit' && !isBill
-    let cashAccountLabel = isCreditApplication
+    // The customer paid the rider the delivery charge: it settles the
+    // receivable against the rider-fee expense (the rider's pay is reduced by
+    // the same amount), and no cash reaches a till or bank.
+    const isPaidToRider = method === PAID_TO_RIDER && !isBill
+    const riderAccount = isPaidToRider
+      ? riderFeeAccount((await prisma.accountCode.findMany({ where: { code: { in: RIDER_FEE_ACCOUNTS.map(a => a.code) }, isActive: true }, select: { code: true } })).map(a => a.code))
+      : null
+    let cashAccountLabel = riderAccount ? riderAccount.label : isCreditApplication
       ? labelForRole('customer_credits')
       : method === 'bank_transfer'
         ? labelForRole('bank_absa')
         : labelForRole('cash_mobile')
     // A credit application is never re-pointed at a bank GL, whatever the
     // caller sent as bankAccountId.
-    if (!isCreditApplication && bankAccountId) {
+    if (!isCreditApplication && !isPaidToRider && bankAccountId) {
       try {
         cashAccountLabel = await cashLabelForBankAccount(prisma, bankAccountId)
       } catch (err) {
@@ -194,7 +202,7 @@ export async function POST(
       journal: paymentId => ({
         ref: `JRN/PAY/${invoice.invoiceNumber}/${paymentId}`.slice(0, 80),
         // A credit application belongs in the general journal, not a cash book.
-        journalCode: isCreditApplication
+        journalCode: isCreditApplication || isPaidToRider
           ? 'MISC'
           : method === 'cash' || method === 'mpesa' ? 'CSH' : 'BNK',
         date: paymentDate,

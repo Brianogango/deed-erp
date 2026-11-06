@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client'
 
+import { CustomerPaidRiderModal } from '@/components/delivery/CustomerPaidRiderModal'
 import { useState, useMemo, useEffect } from 'react'
 import {
   useDeliveryStore, fmtKes, fmtDate,
@@ -599,6 +600,7 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
   const [feeTarget, setFeeTarget] = useState<DeliveryJob | null>(null)
   const [failTarget, setFailTarget] = useState<DeliveryJob | null>(null)
   const [checkInTarget, setCheckInTarget] = useState<DeliveryJob | null>(null)
+  const [paidRiderTarget, setPaidRiderTarget] = useState<DeliveryJob | null>(null)
   const [followUpTarget, setFollowUpTarget] = useState<{ job: DeliveryJob; itemId: string } | null>(null)
   const [stopsTarget, setStopsTarget] = useState<DeliveryJob | null>(null)
   // A trip action saved on the server: take its copy as-is.
@@ -732,6 +734,16 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
             <p className="text-[9px] font-semibold" style={{ color: 'var(--warning-text)' }}>
               Rider collected {fmtKes(job.cashCollected.amount)} {job.cashCollected.method === 'mpesa' ? `by M-Pesa ${job.cashCollected.reference ?? ''}` : 'in cash'}
             </p>
+          )}
+          {job.customerPaidRider ? (
+            <p className="text-[9px] font-semibold" style={{ color: 'var(--success-text)' }}>
+              Customer paid rider {fmtKes(job.customerPaidRider.amount)} directly{job.customerPaidRider.invoiceRef ? ` · settled on ${job.customerPaidRider.invoiceRef}` : ''} · off rider pay
+            </p>
+          ) : job.riderId && !['cancelled', 'failed'].includes(job.status) && (
+            <button type="button" className="text-[9px] font-semibold underline-offset-2 hover:underline" style={{ color: 'var(--navy)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              onClick={e => { e.stopPropagation(); setPaidRiderTarget(job) }}>
+              Customer paid the rider directly?
+            </button>
           )}
         </div>
       ),
@@ -1044,6 +1056,9 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
       )}
       {checkInTarget && (
         <CheckInModal job={checkInTarget} onDone={applyServerJob} onClose={() => setCheckInTarget(null)} />
+      )}
+      {paidRiderTarget && (
+        <CustomerPaidRiderModal job={paidRiderTarget} onClose={() => setPaidRiderTarget(null)} />
       )}
       {followUpTarget && (
         <FollowUpModal job={followUpTarget.job} itemId={followUpTarget.itemId} onDone={applyServerJob} onClose={() => setFollowUpTarget(null)} />

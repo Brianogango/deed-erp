@@ -53,9 +53,9 @@ describe('trips by week', () => {
     ], [{ riderId: 'r1', weekStart: '2026-10-19', status: 'paid' }], 3, '2026-11-04T09:00:00Z')
     // Weeks start at the rider link's first week (19 Oct): earlier weeks are not listed.
     expect(weeks).toEqual([
-      { weekStart: '2026-11-02', trips: 0, earned: 0, cashCollected: 0, paid: false },
-      { weekStart: '2026-10-26', trips: 0, earned: 0, cashCollected: 0, paid: false },
-      { weekStart: '2026-10-19', trips: 2, earned: 600, cashCollected: 1000, paid: true },
+      { weekStart: '2026-11-02', trips: 0, earned: 0, paidByCustomers: 0, cashCollected: 0, paid: false },
+      { weekStart: '2026-10-26', trips: 0, earned: 0, paidByCustomers: 0, cashCollected: 0, paid: false },
+      { weekStart: '2026-10-19', trips: 2, earned: 600, paidByCustomers: 0, cashCollected: 1000, paid: true },
     ])
   })
 

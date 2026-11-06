@@ -81,6 +81,8 @@ const PAYMENT_METHOD_ALIASES: Record<string, string> = {
   credit_note: 'credit',
   deposit_apply: 'credit',
   deposit: 'credit',
+  // Customer paid the rider the delivery charge (lib/delivery/rider-direct-pay.ts): no cash.
+  paid_to_rider: 'credit',
   mobile_money: 'mpesa',
   m_pesa: 'mpesa',
   mpesa_stk: 'mpesa',

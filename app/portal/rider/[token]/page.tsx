@@ -26,7 +26,7 @@ type Job = {
   carrying: Array<{ id: string; description: string; serial: string; qty: number; direction: 'out' | 'in'; stopAddress: string }>
   stopsFinished: boolean; backAtShopAt?: string
 }
-type Week = { weekStart: string; trips: number; earned: number; cashCollected: number; paid: boolean }
+type Week = { weekStart: string; trips: number; earned: number; paidByCustomers?: number; cashCollected: number; paid: boolean }
 type View = { rider: { name: string; vehicle: string; rate: number }; open: Job[]; recent: Job[]; weeks: Week[] }
 
 const kes = (n: number) => `KES ${Number(n || 0).toLocaleString('en-KE')}`
@@ -401,7 +401,7 @@ export default function RiderPage() {
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-2xl bg-white p-3 shadow-sm"><p className="text-xs text-slate-500">Open jobs</p><p className="text-xl font-bold text-slate-900">{view.open.length}</p></div>
               <div className="rounded-2xl bg-white p-3 shadow-sm"><p className="text-xs text-slate-500">Trips this week</p><p className="text-xl font-bold text-slate-900">{thisWeek?.trips ?? 0}</p></div>
-              <div className="rounded-2xl bg-white p-3 shadow-sm"><p className="text-xs text-slate-500">Earned this week</p><p className="text-base font-bold text-emerald-700">{kes(thisWeek?.earned ?? 0)}</p></div>
+              <div className="rounded-2xl bg-white p-3 shadow-sm"><p className="text-xs text-slate-500">Earned this week</p><p className="text-base font-bold text-emerald-700">{kes(thisWeek?.earned ?? 0)}</p>{(thisWeek?.paidByCustomers ?? 0) > 0 && <p className="text-[11px] text-slate-500">{kes(thisWeek!.paidByCustomers!)} paid to you by customers · {kes(thisWeek!.earned - thisWeek!.paidByCustomers!)} from Deed</p>}</div>
             </div>
 
             <div className="grid grid-cols-2 rounded-xl bg-white p-1 shadow-sm">

@@ -52,6 +52,7 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     invoice: { findUnique: mockFindUnique, update: mockUpdateInvoice },
     payment: { findFirst: mockFindFirst },
+    accountCode: { findMany: vi.fn(async () => [{ code: '6519' }]) },
   },
 }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn(), writeFinancialAuditInTx: vi.fn() }))
@@ -226,5 +227,16 @@ describe('POST /api/invoices/[id]/payments — supplier bills', () => {
     await POST(payReq({ amount: 600, paymentMethod: 'customer_credit' }), { params: Promise.resolve({ id: 'inv-1' }) })
     const journal = (mockRecordPayment.mock.calls[0][0] as any).journal('pay-1')
     expect(journal.lines.some((l: any) => l.accountLabel.startsWith('3313'))).toBe(false)
+  })
+
+  it('a delivery charge the customer paid the rider settles the receivable against the rider-fee expense', async () => {
+    mockFindUnique.mockResolvedValue(invoiceWithStatus('approved'))
+    const res = await POST(payReq({ amount: 300, paymentMethod: 'paid_to_rider', bankAccountId: 'ba-1' }), { params: Promise.resolve({ id: 'inv-1' }) })
+    expect(res.status).toBe(200)
+    const call = mockRecordPayment.mock.calls[0][0]
+    const journal = call.journal('pay-1')
+    expect(journal.journalCode).toBe('MISC')
+    const lines = journal.lines.map((l: any) => [l.accountLabel.split(' ')[0], l.debit, l.credit])
+    expect(lines).toEqual([['6519', 300, 0], ['1800', 0, 300]])
   })
 })

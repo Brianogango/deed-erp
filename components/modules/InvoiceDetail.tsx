@@ -1,6 +1,8 @@
 'use client'
 
 import JobTrail from '@/components/erp/JobTrail'
+import { CustomerPaidRiderModal } from '@/components/delivery/CustomerPaidRiderModal'
+import type { DeliveryJob } from '@/lib/store'
 import { addChequeToRegister, chequeDirectionForDoc, chequeLinkedType } from '@/lib/cheques/cheque-link'
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -272,6 +274,7 @@ export default function InvoiceDetail() {
     if (phone) setPayPhone(phone)
   }, [showPayModal, contacts, invoice?.partnerId])
 
+  const [paidRiderJob, setPaidRiderJob] = useState<DeliveryJob | null>(null)
   if (!mounted) return <ModuleSkeleton />
 
   if (!invoice && !lookupReady) return <ModuleSkeleton />
@@ -1142,6 +1145,15 @@ export default function InvoiceDetail() {
                   Rider fee: {fmtKes(linkedDeliveryJob.riderFee)}
                   {linkedDeliveryJob.deliveryFee ? ` · Charge: ${fmtKes(linkedDeliveryJob.deliveryFee)}` : ''}
                 </p>
+                {linkedDeliveryJob.customerPaidRider ? (
+                  <p className="invoice-detail__info-muted">
+                    Customer paid the rider {fmtKes(linkedDeliveryJob.customerPaidRider.amount)} directly — settled here, off the rider’s pay
+                  </p>
+                ) : linkedDeliveryJob.riderId && !['cancelled', 'failed'].includes(linkedDeliveryJob.status) && (
+                  <button type="button" className="invoice-detail__link-btn" onClick={() => setPaidRiderJob(linkedDeliveryJob)}>
+                    Customer paid the rider directly?
+                  </button>
+                )}
                 <button
                   type="button"
                   className="invoice-detail__link-btn"
@@ -1455,6 +1467,8 @@ export default function InvoiceDetail() {
           </div>
         </Modal>
       )}
+
+      {paidRiderJob && <CustomerPaidRiderModal job={paidRiderJob} onClose={() => setPaidRiderJob(null)} />}
 
       {showDeliveryModal && (
         <ScheduleInvoiceDeliveryModal
