@@ -7,7 +7,7 @@ describe('customer paid the rider directly', () => {
   it('nets it off the trip pay', () => {
     expect(riderPayForJob({ riderFee: 400 })).toBe(400)
     expect(riderPayForJob({ riderFee: 400, customerPaidRider: { amount: 300 } })).toBe(100)
-    expect(riderPayForJob({ riderFee: 300, customerPaidRider: { amount: 500 } })).toBe(-200)
+    expect(riderPayForJob({ riderFee: 300, customerPaidRider: { amount: 500 } })).toBe(0) // the extra is the rider's to keep
     expect(paidDirectToRider({ riderFee: 300 })).toBe(0)
   })
 

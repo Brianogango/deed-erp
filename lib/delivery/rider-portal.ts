@@ -6,6 +6,7 @@
  * a customer paid them, and sees their trips and pay by week.
  */
 import crypto from 'node:crypto'
+import { feeCoveredByCustomer } from './rider-direct-pay'
 import { carriedItems, hasStops, jobStops, stopProgress, tripCashTotal, type Stop, type TripJob } from './trip'
 
 export type RiderLike = {
@@ -182,7 +183,7 @@ export function riderWeeks(riderId: string, jobs: JobLike[], pays: PayLike[], we
     if (!w) continue
     w.trips += 1
     w.earned += Number(job.riderFee) || 0
-    w.paidByCustomers += Number(job.customerPaidRider?.amount) || 0
+    w.paidByCustomers += feeCoveredByCustomer(job)
     w.cashCollected += tripCashTotal(job as TripJob)
   }
   for (const pay of pays) {

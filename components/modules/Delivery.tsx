@@ -2,6 +2,7 @@
 'use client'
 
 import { CustomerPaidRiderModal } from '@/components/delivery/CustomerPaidRiderModal'
+import { OldPaidRiderFix } from '@/components/delivery/OldPaidRiderFix'
 import { useState, useMemo, useEffect } from 'react'
 import {
   useDeliveryStore, fmtKes, fmtDate,
@@ -24,6 +25,7 @@ import { useUrlQueryState, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRe
 import {
   CheckInModal, draftsToStops, EditStopsModal, emptyItem, emptyStop, FollowUpModal, StopsEditor, TripSummary, type StopDraft,
 } from '@/components/modules/delivery/TripParts'
+import { paidRiderBooksText } from '@/lib/delivery/rider-direct-pay'
 import { carriedItems, hasStops, jobStops, openFollowUps, STOP_KIND_LABELS, stopsFinished } from '@/lib/delivery/trip'
 
 // ── Print Components ───────────────────────────────────────────────────────────
@@ -590,8 +592,9 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
   const {
     deliveryJobs, riders, repairs, saleOrders, recordCustomerPaidRider,
     createDeliveryJob, assignRiderToJob, updateDeliveryJob, advanceJobStatus, deleteDeliveryJob,
-    showToast, companySettings,
+    showToast, companySettings, users, currentUserId,
   } = useDeliveryStore()
+  const canFixBooks = ['director', 'finance_officer'].includes(users?.find(u => u.id === currentUserId)?.role ?? '')
 
   const [printJob, setPrintJob] = useState<DeliveryJob | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -737,15 +740,12 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
           )}
           {job.customerPaidRider ? (
             <p className="text-[9px] font-semibold" style={{ color: 'var(--success-text)' }}>
-              Customer paid rider {fmtKes(job.customerPaidRider.amount)} directly{job.customerPaidRider.pending ? '' : job.customerPaidRider.invoiceRef ? ` · settled on ${job.customerPaidRider.invoiceRef}` : ''} · off rider pay
+              Customer paid rider {fmtKes(job.customerPaidRider.amount)} directly · {paidRiderBooksText(job.customerPaidRider)}
               {job.customerPaidRider.pending && (
-                <>
-                  <span className="block" style={{ color: 'var(--warning-text)' }}>Not settled on the invoice: {job.customerPaidRider.pending}</span>
-                  <button type="button" className="underline-offset-2 hover:underline" style={{ color: 'var(--navy)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                    onClick={e => { e.stopPropagation(); void recordCustomerPaidRider(job.id, { amount: job.customerPaidRider!.amount, method: job.customerPaidRider!.method }) }}>
-                    Settle on the invoice now
-                  </button>
-                </>
+                <button type="button" className="block underline-offset-2 hover:underline" style={{ color: 'var(--navy)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  onClick={e => { e.stopPropagation(); void recordCustomerPaidRider(job.id, { amount: job.customerPaidRider!.amount, method: job.customerPaidRider!.method }) }}>
+                  Take it off the invoice now
+                </button>
               )}
             </p>
           ) : job.riderId && !['cancelled', 'failed'].includes(job.status) && (
@@ -883,6 +883,7 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
 
   return (
     <div className="delivery-jobs-view">
+      <OldPaidRiderFix jobs={deliveryJobs} canFix={canFixBooks} />
       <div className="delivery-kpi-strip" aria-label="Delivery overview">
         {([
           ['Pending', stats.pending, 'Ready to dispatch'],

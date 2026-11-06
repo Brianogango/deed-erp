@@ -19,8 +19,8 @@ type Params = { params: Promise<{ token: string; jobId: string }> }
  *    | { action: 'back_at_shop' }
  *    | { action: 'paid_my_fee', paidMyFee }
  * 'delivered' and 'stop_done' may also carry paidMyFee: { amount, method, reference? }
- * — the customer paid the rider the delivery charge directly. It settles that
- * much of the invoice and comes off the rider's pay, automatically.
+ * — the customer paid the rider the delivery charge directly. It comes off the
+ * invoice (credit note once posted) and off the rider's pay, automatically.
  */
 export const POST = guardPortalRoute('rider-update', 300, async (req: NextRequest, { params }: Params) => {
   const { token, jobId } = await params
@@ -37,14 +37,14 @@ export const POST = guardPortalRoute('rider-update', 300, async (req: NextReques
     if (problem) return NextResponse.json({ error: problem }, { status: 400, headers: noStore })
   }
   if (body.action === 'paid_my_fee') {
-    const done = await applyCustomerPaidRider(String(jobId), paidMyFee!, { by: rider.name, maxSettle: paidMyFee!.amount, capToCharge: true })
+    const done = await applyCustomerPaidRider(String(jobId), paidMyFee!, { by: rider.name, capToCharge: true })
     if (!done.ok) return NextResponse.json({ error: done.error }, { status: done.status, headers: noStore })
     return NextResponse.json({ job: riderJobView(done.job as any) }, { headers: noStore })
   }
   /** After the trip update is saved: record the fee and settle the invoice. */
   const recordFee = async (job: any) => {
     if (!paidMyFee || job.customerPaidRider) return job
-    const done = await applyCustomerPaidRider(String(jobId), paidMyFee, { by: rider.name, maxSettle: paidMyFee.amount, capToCharge: true })
+    const done = await applyCustomerPaidRider(String(jobId), paidMyFee, { by: rider.name, capToCharge: true })
     return done.ok ? done.job : job
   }
   const cashOf = (c: any) => c && Number(c.amount) > 0

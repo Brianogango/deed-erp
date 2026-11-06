@@ -28,7 +28,7 @@ export async function createCustomerCreditNote(input: {
       include: { items: true, client: true },
     })
     if (!invoice) throw new Error('Invoice not found')
-    if (!['approved','invoiced','dispatched','delivered'].includes(String(invoice.status))) {
+    if (!['approved','invoiced','dispatched','delivered','paid','partially_paid'].includes(String(invoice.status))) {
       throw new Error('Credit notes require a posted invoice')
     }
 

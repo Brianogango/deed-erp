@@ -1,6 +1,7 @@
 'use client'
 
 import JobTrail from '@/components/erp/JobTrail'
+import { paidRiderBooksText } from '@/lib/delivery/rider-direct-pay'
 import { CustomerPaidRiderModal } from '@/components/delivery/CustomerPaidRiderModal'
 import type { DeliveryJob } from '@/lib/store'
 import { addChequeToRegister, chequeDirectionForDoc, chequeLinkedType } from '@/lib/cheques/cheque-link'
@@ -1147,12 +1148,12 @@ export default function InvoiceDetail() {
                 </p>
                 {linkedDeliveryJob.customerPaidRider ? (
                   <p className="invoice-detail__info-muted">
-                    Customer paid the rider {fmtKes(linkedDeliveryJob.customerPaidRider.amount)} directly — {linkedDeliveryJob.customerPaidRider.pending ? `not settled here yet (${linkedDeliveryJob.customerPaidRider.pending})` : 'settled here'}, off the rider’s pay
+                    Customer paid the rider {fmtKes(linkedDeliveryJob.customerPaidRider.amount)} directly — {paidRiderBooksText(linkedDeliveryJob.customerPaidRider)}
                   </p>
                 ) : null}
                 {linkedDeliveryJob.customerPaidRider?.pending ? (
                   <button type="button" className="invoice-detail__link-btn" onClick={() => void recordCustomerPaidRider(linkedDeliveryJob.id, { amount: linkedDeliveryJob.customerPaidRider!.amount, method: linkedDeliveryJob.customerPaidRider!.method })}>
-                    Settle on this invoice now
+                    Take it off the invoice now
                   </button>
                 ) : linkedDeliveryJob.customerPaidRider ? null : linkedDeliveryJob.riderId && !['cancelled', 'failed'].includes(linkedDeliveryJob.status) ? (
                   <button type="button" className="invoice-detail__link-btn" onClick={() => setPaidRiderJob(linkedDeliveryJob)}>
