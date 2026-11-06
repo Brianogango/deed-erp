@@ -115,6 +115,34 @@ const MODULE_SHORTCUTS: Array<{ id: string; title: string; subtitle: string; hre
   { id: 'mod-settings', title: 'Settings', subtitle: 'System configuration and users', href: '/settings', module: 'settings', aliases: ['settings', 'configuration', 'users'] },
 ]
 
+/** Records per type, so one long list (products) cannot push the rest out. */
+const PER_TYPE = 6
+
+/**
+ * How well a record matches: every word typed must appear somewhere in its
+ * fields, in any order ("840 g3 hp" finds "HP EliteBook 840 G3"). An exact
+ * reference beats a prefix, which beats a match anywhere. 0 = no match.
+ */
+function matchScore(query: string, primary: unknown, ...others: unknown[]): number {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) return 0
+  const main = String(primary ?? '').toLowerCase()
+  const all = [main, ...others.map(v => String(v ?? '').toLowerCase())].join(' ')
+  if (!words.every(w => all.includes(w))) return 0
+  const q = words.join(' ')
+  if (main === q) return 4
+  if (main.startsWith(q)) return 3
+  if (main.includes(q)) return 2
+  return 1
+}
+
+/** Phone numbers match on their digits, whatever the spacing or +254. */
+function phoneMatches(query: string, phone: unknown): boolean {
+  const q = query.replace(/\D/g, '')
+  const d = String(phone ?? '').replace(/\D/g, '')
+  return q.length >= 6 && d.length >= 6 && d.endsWith(q.slice(-9))
+}
+
 function highlight(text: string, query: string): React.ReactNode {
   if (!query.trim()) return text
   const idx = text.toLowerCase().indexOf(query.toLowerCase())
@@ -125,7 +153,7 @@ function highlight(text: string, query: string): React.ReactNode {
 export default function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter()
   const { contacts, products, invoices, repairs, purchaseOrders, quotes, expenses, currentUser } = useApp()
-  const { employees } = useHrStore()
+  const { employees, departments } = useHrStore()
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -219,100 +247,105 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
     if (!canSearchRecords) return out.slice(0, 30)
 
+    const scored: Array<SearchResult & { score: number }> = []
+    const add = (score: number, r: SearchResult) => { if (score > 0) scored.push({ ...r, score }) }
+    const kes = (n: number) => `KES ${Math.round(n || 0).toLocaleString('en-KE')}`
+
     if (allowedModules.has('contacts')) {
       ;(contacts || []).forEach(c => {
-        if (c.name?.toLowerCase().includes(q) || c.phone?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q)) {
-          out.push({
-            id: c.id,
-            type: 'contact',
-            title: c.name,
-            subtitle: [c.phone, c.email].filter(Boolean).join(' · '),
-            badge: c.isCustomer && c.isVendor ? 'Both' : c.isCustomer ? 'Customer' : 'Vendor',
-            badgeColor: c.isCustomer ? '#10B981' : '#F59E0B',
-            href: `/contacts?id=${encodeURIComponent(c.id)}`,
-            module: 'contacts',
-          })
-        }
+        const score = Math.max(matchScore(q, c.name, c.email, c.city), phoneMatches(q, c.phone) ? 3 : 0)
+        add(score, {
+          id: c.id,
+          type: 'contact',
+          title: c.name,
+          subtitle: [c.phone, c.email].filter(Boolean).join(' · '),
+          badge: c.isCustomer && c.isVendor ? 'Both' : c.isCustomer ? 'Customer' : 'Vendor',
+          badgeColor: c.isCustomer ? '#10B981' : '#F59E0B',
+          href: `/contacts?id=${encodeURIComponent(c.id)}`,
+          module: 'contacts',
+        })
       })
     }
 
     if (allowedModules.has('inventory')) {
       ;(products || []).forEach(p => {
-        if (p.name?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q)) {
-          out.push({
-            id: p.id,
-            type: 'product',
-            title: p.name,
-            subtitle: `${p.category} · SKU: ${p.sku || '—'} · Stock: ${p.stockQty ?? 0}`,
-            badge: p.stockQty <= 0 ? 'Out of Stock' : p.stockQty <= (p.minStock ?? 3) ? 'Low Stock' : undefined,
-            badgeColor: '#EF4444',
-            href: '/inventory',
-            module: 'inventory',
-          })
-        }
+        const score = Math.max(matchScore(q, p.name, p.category), matchScore(q, p.sku) ? matchScore(q, p.sku) + 1 : 0)
+        add(score, {
+          id: p.id,
+          type: 'product',
+          title: p.name,
+          subtitle: [p.category, p.sku ? `SKU ${p.sku}` : '', `Stock ${p.stockQty ?? 0}`].filter(Boolean).join(' · '),
+          badge: p.stockQty <= 0 ? 'Out of Stock' : p.stockQty <= (p.minStock ?? 3) ? 'Low Stock' : undefined,
+          badgeColor: '#EF4444',
+          // Opens the catalog filtered to this product, not the Inventory home.
+          href: `/inventory?tab=product_catalog&catalogQ=${encodeURIComponent(p.sku || p.name)}`,
+          module: 'inventory',
+        })
       })
     }
 
     if (allowedModules.has('accounting')) {
-      ;(invoices || []).filter(i => i.type === 'customer_invoice').forEach(inv => {
-        if (inv.ref?.toLowerCase().includes(q) || inv.partnerName?.toLowerCase().includes(q)) {
-          const payState = invoicePaymentStatus(inv)
-          out.push({
-            id: inv.id,
-            type: 'invoice',
-            title: displayDocRef(inv.ref),
-            subtitle: `${inv.partnerName} · KSh ${Math.round(inv.total || 0).toLocaleString()}`,
-            badge: invoiceDocState(inv.status) === 'posted' ? PAYMENT_STATUS_LABELS[payState] : invoiceDocState(inv.status),
-            badgeColor: payState === 'paid' ? '#10B981' : isInvoiceOverdue(inv) ? '#EF4444' : '#F59E0B',
-            href: financeInvoicePath(inv.id),
-            module: 'accounting',
-          })
-        }
+      ;(invoices || []).forEach(inv => {
+        const bill = inv.type === 'vendor_bill'
+        const payState = invoicePaymentStatus(inv)
+        add(matchScore(q, inv.ref, inv.partnerName), {
+          id: inv.id,
+          type: 'invoice',
+          title: displayDocRef(inv.ref),
+          subtitle: `${bill ? 'Bill' : 'Invoice'} · ${inv.partnerName} · ${kes(inv.total)}`,
+          badge: invoiceDocState(inv.status) === 'posted' ? PAYMENT_STATUS_LABELS[payState] : invoiceDocState(inv.status),
+          badgeColor: payState === 'paid' ? '#10B981' : isInvoiceOverdue(inv) ? '#EF4444' : '#F59E0B',
+          href: financeInvoicePath(inv.id),
+          module: 'accounting',
+        })
       })
     }
 
     if (allowedModules.has('repair')) {
       ;(repairs || []).forEach(r => {
-        if (r.ref?.toLowerCase().includes(q) || r.customerName?.toLowerCase().includes(q) || r.productName?.toLowerCase().includes(q)) {
-          out.push({ id: r.id, type: 'repair', title: r.ref, subtitle: `${r.customerName} · ${r.productName}`, badge: r.status?.replace(/_/g, ' '), badgeColor: '#F59E0B', href: `/repairs?id=${r.id}`, module: 'repair' })
-        }
+        const score = Math.max(matchScore(q, r.ref, r.customerName, r.productName, r.serialNumber), phoneMatches(q, r.customerPhone) ? 3 : 0)
+        add(score, { id: r.id, type: 'repair', title: r.ref, subtitle: [r.customerName, r.productName, r.serialNumber ? `SN ${r.serialNumber}` : ''].filter(Boolean).join(' · '), badge: r.status?.replace(/_/g, ' '), badgeColor: '#F59E0B', href: `/repairs?id=${r.id}`, module: 'repair' })
       })
     }
 
     if (allowedModules.has('purchase')) {
       ;(purchaseOrders || []).forEach(po => {
-        if (po.ref?.toLowerCase().includes(q) || po.vendorName?.toLowerCase().includes(q)) {
-          out.push({ id: po.id, type: 'purchase', title: po.ref, subtitle: `${po.vendorName} · KSh ${Math.round(po.total || 0).toLocaleString()}`, badge: po.status, badgeColor: po.status === 'received' ? '#10B981' : '#3B82F6', href: `/purchases?id=${encodeURIComponent(po.id)}`, module: 'purchase' })
-        }
+        add(matchScore(q, po.ref, po.vendorName), { id: po.id, type: 'purchase', title: po.ref, subtitle: `${po.vendorName} · ${kes(po.total)}`, badge: po.status, badgeColor: po.status === 'received' ? '#10B981' : '#3B82F6', href: `/purchases?id=${encodeURIComponent(po.id)}`, module: 'purchase' })
       })
     }
 
     if (allowedModules.has('sales')) {
       ;(quotes || []).forEach(q2 => {
-        if (q2.quoteNumber?.toLowerCase().includes(q) || q2.client?.name?.toLowerCase().includes(q)) {
-          out.push({ id: q2.id, type: 'quote', title: q2.quoteNumber, subtitle: `${q2.client?.name ?? ''} · KSh ${Math.round(q2.totalAmount || 0).toLocaleString()}`, badge: q2.status, badgeColor: q2.status === 'accepted' ? '#10B981' : '#06B6D4', href: `/sales?id=${encodeURIComponent(q2.id)}`, module: 'sales' })
-        }
+        const number = q2.quoteNumber || q2.ref
+        add(matchScore(q, number, q2.companyName), { id: q2.id, type: 'quote', title: number, subtitle: `${q2.companyName ?? ''} · ${kes(q2.totalAmount ?? q2.total)}`, badge: q2.status, badgeColor: q2.status === 'accepted' ? '#10B981' : '#06B6D4', href: `/sales?id=${encodeURIComponent(q2.id)}`, module: 'sales' })
       })
     }
 
     if (allowedModules.has('hr')) {
+      const deptName = (id?: string) => (departments || []).find(d => d.id === id)?.name ?? ''
       ;(employees || []).forEach(emp => {
-        if (emp.fullName?.toLowerCase().includes(q) || emp.jobTitle?.toLowerCase().includes(q) || emp.departmentId?.toLowerCase().includes(q)) {
-          out.push({ id: emp.id, type: 'employee', title: emp.fullName, subtitle: `${emp.jobTitle ?? ''} · ${emp.departmentId ?? ''}`, href: '/hr', module: 'hr' })
-        }
+        add(matchScore(q, emp.fullName, emp.jobTitle, deptName(emp.departmentId), emp.employeeNo), { id: emp.id, type: 'employee', title: emp.fullName, subtitle: [emp.jobTitle, deptName(emp.departmentId)].filter(Boolean).join(' · '), href: '/hr', module: 'hr' })
       })
     }
 
     if (allowedModules.has('expenses')) {
       ;(expenses || []).forEach(exp => {
-        if (exp.description?.toLowerCase().includes(q) || exp.submittedByName?.toLowerCase().includes(q)) {
-          out.push({ id: exp.id, type: 'expense', title: exp.description || 'Expense', subtitle: `${exp.submittedByName} · KSh ${Math.round(exp.amount || 0).toLocaleString()}`, badge: exp.status, badgeColor: exp.status === 'approved' ? '#10B981' : '#F59E0B', href: '/expenses', module: 'expenses' })
-        }
+        add(matchScore(q, exp.description, exp.submittedByName), { id: exp.id, type: 'expense', title: exp.description || 'Expense', subtitle: `${exp.submittedByName} · ${kes(exp.amount)}`, badge: exp.status, badgeColor: exp.status === 'approved' ? '#10B981' : '#F59E0B', href: '/expenses', module: 'expenses' })
       })
     }
 
-    return out.slice(0, 30)
-  }, [query, contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses, currentUser?.modules, currentUser?.role])
+    // Best matches first within each type, and a few per type.
+    const perType = new Map<string, number>()
+    for (const r of scored.sort((a, b) => b.score - a.score)) {
+      const n = perType.get(r.type) ?? 0
+      if (n >= PER_TYPE) continue
+      perType.set(r.type, n + 1)
+      const { score: _score, ...result } = r
+      out.push(result)
+    }
+
+    return out
+  }, [query, contacts, products, invoices, repairs, purchaseOrders, quotes, employees, departments, expenses, currentUser?.modules, currentUser?.role])
 
   const mergedResults = useMemo(() => {
     const seen = new Set(results.map(r => `${r.type}:${r.id}`))
@@ -333,7 +366,11 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
   const navigate = useCallback((result: SearchResult) => {
     trackUxEvent('search_navigate', { resultType: result.type, module: result.module, href: result.href, recordId: result.id })
     onClose()
+    const samePage = typeof window !== 'undefined' && new URL(result.href, window.location.origin).pathname === window.location.pathname
     router.push(result.href)
+    // Screens that read their tab and filters from the address on load
+    // (Inventory) only re-read it on popstate: nudge them when we stay on the page.
+    if (samePage) window.setTimeout(() => window.dispatchEvent(new PopStateEvent('popstate')), 60)
   }, [router, onClose])
 
   useEffect(() => {
@@ -371,7 +408,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[var(--border)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[var(--text-4)] shrink-0" aria-hidden="true"><circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-          <input ref={inputRef} aria-label="Search records, commands, and modules" role="combobox" aria-autocomplete="list" aria-controls="global-search-results" aria-expanded={mergedResults.length > 0} aria-activedescendant={flatResults[activeIdx] ? `global-search-result-${activeIdx}` : undefined} type="text" value={query} onChange={e => { setQuery(e.target.value); setActiveIdx(0) }} placeholder="Search records, run commands, or jump to modules…" className="flex-1 bg-transparent text-[var(--text-1)] placeholder:text-[var(--text-4)] text-sm font-medium outline-none" />
+          <input ref={inputRef} aria-label="Search records, commands, and modules" role="combobox" aria-autocomplete="list" aria-controls="global-search-results" aria-expanded={mergedResults.length > 0} aria-activedescendant={flatResults[activeIdx] ? `global-search-result-${activeIdx}` : undefined} type="text" value={query} onChange={e => { setQuery(e.target.value); setActiveIdx(0) }} placeholder="Search records, run commands, or jump to modules…" className="flex-1 min-w-0 bg-transparent text-[var(--text-1)] placeholder:text-[var(--text-4)] text-sm font-medium outline-none" style={{ border: 'none', boxShadow: 'none', padding: 0, outline: 'none', borderRadius: 0 }} />
           {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')} className="text-[var(--text-4)] hover:text-[var(--text-2)] text-lg leading-none transition-colors">×</button>}
           <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[10px] font-bold text-[var(--text-4)]">ESC</kbd>
         </div>

@@ -7,7 +7,7 @@ import { searchRecords } from '@/lib/universal-search'
 
 export const dynamic = 'force-dynamic'
 
-const KEYS = ['deed_repairs_v2', 'deed_saleOrders', 'deed_invoices', 'deed_serials', 'deed_contacts', 'deed_deliveries', 'deed_purchaseOrders']
+const KEYS = ['deed_repairs_v2', 'deed_saleOrders', 'deed_invoices', 'deed_serials', 'deed_contacts', 'deed_deliveries', 'deed_purchaseOrders', 'deed_products']
 
 /**
  * GET /api/search?q=… — every collection the person may read, whatever page
@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     contacts: list('deed_contacts'),
     deliveries: list('deed_deliveries'),
     purchaseOrders: list('deed_purchaseOrders'),
+    products: list('deed_products'),
   }, q, id => financeInvoicePath(id))
 
   return NextResponse.json({ results }, { headers: { 'Cache-Control': 'no-store' } })

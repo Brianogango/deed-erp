@@ -42,4 +42,11 @@ describe('searching everything', () => {
     expect(find('a')).toEqual([])
     expect(find('678').some(h => h.type === 'contact')).toBe(false)
   })
+
+  it('matches words in any order, and device links filter the stock list', () => {
+    expect(find('840 jane').map(h => [h.type, h.id])).toEqual([['repair', 'r1']])
+    const inStock = find('5cd3147ppx')[0]
+    expect(inStock.href).toContain('warehouseQ=5CD3147PPX')
+    expect(inStock.href).not.toMatch(/[?&]q=/)
+  })
 })

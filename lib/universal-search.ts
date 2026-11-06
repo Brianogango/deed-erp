@@ -31,6 +31,8 @@ type SearchSources = {
   contacts?: Row[]
   deliveries?: Row[]
   purchaseOrders?: Row[]
+  /** Only to name the product of a device whose row lacks it. */
+  products?: Row[]
 }
 
 const PER_TYPE = 6
@@ -52,14 +54,25 @@ export function searchRecords(sources: SearchSources, rawQuery: string, invoiceH
   const qDigits = digits(q)
   // A phone search needs enough digits not to match every number.
   const phoneMatch = (v: unknown) => qDigits.length >= 6 && digits(v).endsWith(qDigits.slice(-9))
-  const text = (...vals: unknown[]) => vals.some(v => lower(v).includes(q))
+  // Every word typed must appear, in any order: "840 g3 acme" finds Acme's 840 G3 repair.
+  const words = q.split(/\s+/).filter(Boolean)
+  const text = (...vals: unknown[]) => {
+    const all = vals.map(lower).join(' ')
+    return words.every(w => all.includes(w))
+  }
   const ref = (...vals: unknown[]) => vals.some(v => v && compact(v).includes(qCompact))
+  // Exact reference first, then a prefix, then the rest.
+  const rank = (value: unknown) => {
+    const v = compact(value)
+    return v === qCompact ? 0 : v.startsWith(qCompact) ? 1 : 2
+  }
+  const productName = new Map((sources.products ?? []).map(p => [String(p.id), String(p.name ?? '')]))
 
   const out: SearchHit[] = []
-  const take = (hits: SearchHit[]) => out.push(...hits.slice(0, PER_TYPE))
+  const take = (hits: SearchHit[]) => out.push(...hits.sort((a, b) => rank(a.title) - rank(b.title)).slice(0, PER_TYPE))
 
   take((sources.repairs ?? [])
-    .filter(r => ref(r.ref) || text(r.customerName, r.productName) || ref(r.serialNumber) || phoneMatch(r.customerPhone))
+    .filter(r => ref(r.ref) || text(r.customerName, r.productName, r.serialNumber) || ref(r.serialNumber) || phoneMatch(r.customerPhone))
     .map(r => ({
       type: 'repair' as const, id: r.id, title: r.ref,
       subtitle: [r.customerName, r.productName, r.serialNumber ? `SN ${r.serialNumber}` : ''].filter(Boolean).join(' · '),
@@ -73,11 +86,15 @@ export function searchRecords(sources: SearchSources, rawQuery: string, invoiceH
       const loc = String(s.location ?? '')
       const href = s.status === 'sold' && s.saleOrderId ? `/sales?id=${encodeURIComponent(s.saleOrderId)}`
         : s.repairId ? `/repairs?id=${encodeURIComponent(s.repairId)}`
-          : STAGE_TAB[loc] ? `/inventory?tab=warehouse_view&location=${STAGE_TAB[loc]}&q=${encodeURIComponent(s.serial)}`
-            : `/inventory?q=${encodeURIComponent(s.serial)}`
+          // Inventory filters the stock list by warehouseQ (it never read q).
+          // Ready for Sale lists only available units; anything else opens
+          // the device's history (the page its label's QR code opens).
+          : STAGE_TAB[loc] && !(loc === 'warehouse' && s.status !== 'available')
+            ? `/inventory?tab=warehouse_view&location=${STAGE_TAB[loc]}&warehouseQ=${encodeURIComponent(s.serial)}`
+            : `/inventory?tab=reports&serial=${encodeURIComponent(s.serial)}`
       return {
         type: 'serial' as const, id: s.id, title: s.serial,
-        subtitle: [s.productName, s.status === 'sold' ? 'sold' : stockStageLabel(loc)].filter(Boolean).join(' · '),
+        subtitle: [s.productName || productName.get(String(s.productId)), s.status === 'sold' ? 'sold' : stockStageLabel(loc)].filter(Boolean).join(' · '),
         badge: s.status === 'sold' ? 'sold' : String(s.status ?? ''),
         href,
       }
@@ -93,7 +110,7 @@ export function searchRecords(sources: SearchSources, rawQuery: string, invoiceH
     })))
 
   take((sources.saleOrders ?? [])
-    .filter(o => ref(o.ref, o.orderNumber) || text(o.customerName))
+    .filter(o => ref(o.ref, o.orderNumber, o.customerRef) || text(o.customerName, o.customerRef))
     .map(o => ({
       type: 'sale_order' as const, id: o.id, title: o.ref ?? o.orderNumber,
       subtitle: `${o.customerName ?? ''} · KES ${Math.round(Number(o.total ?? 0)).toLocaleString('en-KE')}`,
