@@ -16,6 +16,7 @@ import { allocateDocNumber, allocateDocNumberSync } from '@/lib/doc-numbers'
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
+import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
@@ -1114,6 +1115,15 @@ export interface SerialNumber {
   /** Customer machine registered on a screen (buyback, exchange, donation-in, rma …) and by whom. */
   intakeSource?: string
   intakeByName?: string
+  /** Came in without a readable serial: `serial` is the intake tag (UNK-…) until identified. */
+  identityPending?: boolean
+  /** The sticker tag it came in with; kept after the real serial is found. */
+  intakeTag?: string
+  /** What this unit cost to take in (trade-in price, or its share of the stock it came from). */
+  intakeCost?: number
+  identifiedDate?: string
+  /** It was sold by us before and came back; the order it went out on. */
+  previousSaleOrderId?: string
 }
 
 // Refurbishment job — unit received with issues, needs work before going to sales floor
@@ -1172,6 +1182,26 @@ export interface RefurbishmentJob {
   /** Cost taken off the books when written off (reversed exactly on restore). Unset: written off before this was booked. */
   writeOffCost?: number
   writeOffValuationRef?: string
+  /** No readable serial at intake; Ready and retest wait for identification. */
+  identityPending?: boolean
+  intakeTag?: string
+  intakeCost?: number
+  intakeSource?: 'trade_in' | 'stock' | 'unrecorded' | 'receipt'
+  intakeSourceRef?: string
+  identifiedDate?: string
+  /** Not repairable and stripped: the parts kept went to stock. */
+  outcome?: 'harvested'
+  harvestedParts?: Array<{ productId: string; productName: string; qty: number; unitValue: number }>
+  /** Cost the harvested parts carried into stock (the rest is in writeOffCost). */
+  harvestPartsValue?: number
+}
+
+export type TaggedIntakeInput = {
+  productId: string
+  units: Array<{ cost?: number | null; note?: string; issue: string }>
+  /** Taken from quantity stock of another product; omit for machines never on record. */
+  from?: { productId: string; location: LocationId }
+  reference?: string
 }
 
 export interface SaleOrderItem {
@@ -3896,6 +3926,12 @@ interface AppState {
   writeOffRefurbishmentJob: (jobId: string, reason: string) => Promise<boolean>
   /** Bring a written-off device back: stock and the write-off booking are reversed. */
   restoreRefurbishmentJob: (jobId: string) => Promise<boolean>
+  /** Machines with no readable serial: tagged (UNK-…) and queued for refurbishment. Returns the tags. */
+  intakeTaggedMachines: (input: TaggedIntakeInput) => Promise<string[] | null>
+  /** Record a tagged machine's real serial (and model / specs). */
+  identifyRefurbUnit: (jobId: string, input: { serial: string; productId?: string; specs?: string }) => Promise<boolean>
+  /** Not repairable: strip it; kept parts go to stock carrying part of its cost. */
+  harvestRefurbishmentJob: (jobId: string, reason: string, parts: Array<{ productId: string; qty: number; unitValue: number }>) => Promise<boolean>
 
   // HR users & auth
   login: (username: string, password: string) => Promise<boolean>
@@ -4105,7 +4141,7 @@ interface AppState {
   registerCustomerReturnSerial: (
     productId: string,
     serialText: string,
-    opts?: { saleOrderId?: string; source?: string },
+    opts?: { saleOrderId?: string; source?: string; identityPending?: boolean },
   ) => SerialNumber | null
 
   // Donations
@@ -4613,6 +4649,9 @@ type OperationsStoreState = Pick<AppState,
   | 'voidRelease'
   | 'writeOffRefurbishmentJob'
   | 'restoreRefurbishmentJob'
+  | 'intakeTaggedMachines'
+  | 'identifyRefurbUnit'
+  | 'harvestRefurbishmentJob'
 >
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -7424,6 +7463,44 @@ function StoreProvider({
     addMove(part.productId, part.partName, part.qty, 'out', `Refurb ${job.ref} — part taken by ${byName}`, job.ref, 'warehouse', 'repair_unit', [])
     return true
   }
+  /**
+   * Trade-in machines that need work go straight to Refurbishment with a job:
+   * tagged ones (serial unknown) always, and ones taken in as "poor". They
+   * used to be marked refurbishment with no job, and no screen showed them.
+   */
+  const openTradeInRefurbJobs = (units: Array<{ serialId: string; issue: string; cost?: number; sourceRef: string }>) => {
+    const open = new Set(refurbishmentJobs.filter(j => j.status !== 'transferred' && j.status !== 'written_off').map(j => j.serialId))
+    const jobs: RefurbishmentJob[] = []
+    for (const u of units) {
+      const ser = serialRef.current.find(s => s.id === u.serialId)
+      if (!ser || open.has(ser.id)) continue
+      open.add(ser.id)
+      const tagged = awaitingIdentification(ser)
+      const prod = prodRef.current.find(p => p.id === ser.productId)
+      jobs.push({
+        id: uid(), ref: seq('REF', 'refurb'),
+        status: 'queued',
+        serialId: ser.id, serialNumber: ser.serial,
+        productId: ser.productId, productName: ser.productName,
+        specs: ser.specs || (tagged ? '' : prod?.description),
+        specsAtIntake: ser.specs || (tagged ? '' : prod?.description || ''),
+        intakeDate: new Date().toISOString(),
+        intakeIssueDescription: u.issue,
+        partsNeeded: [],
+        intakeSource: 'trade_in',
+        intakeSourceRef: u.sourceRef,
+        ...(u.cost != null ? { intakeCost: u.cost } : {}),
+        ...(tagged ? { identityPending: true, intakeTag: ser.intakeTag || ser.serial } : {}),
+      })
+    }
+    if (!jobs.length) return 0
+    const ids = new Set(jobs.map(j => j.serialId))
+    const costs = new Map(units.map(u => [u.serialId, u.cost]))
+    setSerials(p => p.map(s => !ids.has(s.id) ? s : { ...s, location: 'repair_unit', status: 'refurbishment', ...(costs.get(s.id) != null ? { intakeCost: costs.get(s.id) } : {}) }))
+    setRefurbishmentJobs(p => [...p, ...jobs])
+    return jobs.length
+  }
+
   /** Put a part that was taken for a job and never fitted back into the warehouse. */
   const returnRefurbPartToWarehouse = (job: RefurbishmentJob, part: RefurbPart) => {
     if (!part.productId) return
@@ -7905,6 +7982,9 @@ function StoreProvider({
     voidRelease: (...args: Parameters<AppState['voidRelease']>) => storeCtxRef.current!.voidRelease(...args),
     writeOffRefurbishmentJob: (...args: Parameters<AppState['writeOffRefurbishmentJob']>) => storeCtxRef.current!.writeOffRefurbishmentJob(...args),
     restoreRefurbishmentJob: (...args: Parameters<AppState['restoreRefurbishmentJob']>) => storeCtxRef.current!.restoreRefurbishmentJob(...args),
+    intakeTaggedMachines: (...args: Parameters<AppState['intakeTaggedMachines']>) => storeCtxRef.current!.intakeTaggedMachines(...args),
+    identifyRefurbUnit: (...args: Parameters<AppState['identifyRefurbUnit']>) => storeCtxRef.current!.identifyRefurbUnit(...args),
+    harvestRefurbishmentJob: (...args: Parameters<AppState['harvestRefurbishmentJob']>) => storeCtxRef.current!.harvestRefurbishmentJob(...args),
   }), [])
 
   // Wire cross-cutting deps (currentUser/users/showToast/addAuditLog/pushNotif/
@@ -16075,6 +16155,9 @@ const storeCtx: AppState = {
     markRefurbishmentReady: (jobId) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
       if (!job) return
+      if (job.identityPending || awaitingIdentification(serialRef.current.find(s => s.id === job.serialId))) {
+        showToast(`Identify ${job.serialNumber} first: record its real serial and model.`, 'error'); return
+      }
       // A machine is not ready while parts are still on their way, or were
       // taken for it and never fitted (mark them used, or remove them).
       const waiting = job.partsNeeded.filter(p => p.status === 'requested' || p.status === 'ordered')
@@ -16112,6 +16195,9 @@ const storeCtx: AppState = {
     transferToSell: (jobId) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
       if (!job) return
+      if (job.identityPending || awaitingIdentification(serialRef.current.find(s => s.id === job.serialId))) {
+        showToast(`Identify ${job.serialNumber} first: record its real serial and model.`, 'error'); return
+      }
       const serial = serialRef.current.find(s => s.id === job.serialId)
       const intake = typeof job.specsAtIntake === 'string'
         ? job.specsAtIntake
@@ -16191,6 +16277,7 @@ const storeCtx: AppState = {
     restoreRefurbishmentJob: async (jobId) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
       if (!job || job.status !== 'written_off') return false
+      if (job.outcome === 'harvested') { showToast('A machine stripped for parts cannot be brought back.', 'error'); return false }
       try {
         const res = await fetch('/api/inventory/serial-write-off', {
           method: 'POST',
@@ -16226,6 +16313,128 @@ const storeCtx: AppState = {
       showToast([
         job.assignedTechnicianName ? `Device restored — back with ${job.assignedTechnicianName}` : 'Device restored to queue',
         job.writeOffCost ? `KES ${job.writeOffCost.toLocaleString('en-KE')} write-off reversed` : '',
+      ].filter(Boolean).join(' — '))
+      return true
+    },
+
+    intakeTaggedMachines: async (input) => {
+      try {
+        const res = await fetch('/api/refurbishment/intake', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId: input.productId, units: input.units.map(u => ({ cost: u.cost, note: u.note })), from: input.from, reference: input.reference }),
+        })
+        const data = await res.json().catch(() => null) as { error?: string; serials?: SerialNumber[]; costs?: number[] } | null
+        if (!res.ok || !data?.serials) { showToast(data?.error || 'Could not take the machines in', 'error'); return null }
+        const created = data.serials
+        setSerials(p => [...p.filter(s => !created.some(c => c.id === s.id)), ...created])
+        const source: RefurbishmentJob['intakeSource'] = input.from ? 'stock' : 'unrecorded'
+        const jobs: RefurbishmentJob[] = created.map((ser, i) => ({
+          id: uid(), ref: seq('REF', 'refurb'),
+          status: 'queued',
+          serialId: ser.id, serialNumber: ser.serial,
+          productId: ser.productId, productName: ser.productName,
+          specs: '', specsAtIntake: '',
+          intakeDate: new Date().toISOString(),
+          intakeIssueDescription: input.units[i]?.issue || 'Not identified — dead or too damaged to read',
+          partsNeeded: [],
+          identityPending: true,
+          intakeTag: ser.serial,
+          intakeCost: data.costs?.[i],
+          intakeSource: source,
+          intakeSourceRef: input.reference,
+        }))
+        setRefurbishmentJobs(p => [...p, ...jobs])
+        addAuditLog('refurb_tagged_intake', input.reference || jobs[0]?.ref || '', `Took in ${created.length} machine(s) without serial: ${created.map(c => c.serial).join(', ')}`)
+        showToast(`${created.length} machine${created.length === 1 ? '' : 's'} tagged and queued: ${created[0].serial}${created.length > 1 ? ` … ${created[created.length - 1].serial}` : ''}. Print the stickers.`)
+        return created.map(c => c.serial)
+      } catch {
+        showToast('Could not take the machines in. Check your connection and try again.', 'error')
+        return null
+      }
+    },
+
+    identifyRefurbUnit: async (jobId, input) => {
+      const job = refurbishmentJobs.find(j => j.id === jobId)
+      if (!job) return false
+      try {
+        const res = await fetch('/api/refurbishment/identify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serialId: job.serialId, ...input }),
+        })
+        const data = await res.json().catch(() => null) as { error?: string; serial?: SerialNumber; removedSerialId?: string; history?: { saleOrderId?: string; soldDate?: string; status: string } } | null
+        if (!res.ok || !data?.serial) { showToast(data?.error || 'Could not record the serial', 'error'); return false }
+        const ser = data.serial
+        setSerials(p => {
+          const rest = p.filter(s => s.id !== data.removedSerialId && s.id !== ser.id)
+          return [...rest, ser]
+        })
+        const backBefore = data.history
+          ? ` We had this machine before (${data.history.status}${data.history.soldDate ? `, ${String(data.history.soldDate).slice(0, 10)}` : ''}) — its history is kept.`
+          : ''
+        setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
+          ...j,
+          serialId: ser.id,
+          serialNumber: ser.serial,
+          productId: ser.productId,
+          productName: ser.productName,
+          ...(ser.specs ? { specs: ser.specs, specsAtIntake: ser.specs } : {}),
+          identityPending: false,
+          identifiedDate: now(),
+          techNotes: (j.techNotes ? j.techNotes + '\n' : '') + `Identified: tag ${j.intakeTag || j.serialNumber} is ${ser.serial} (${ser.productName}).${backBefore}`,
+        }))
+        addAuditLog('refurb_identify', job.ref, `Tag ${job.intakeTag || job.serialNumber} identified as ${ser.serial} · ${ser.productName}`)
+        showToast(`${job.intakeTag || job.serialNumber} is ${ser.serial}.${backBefore} Reprint the label.`)
+        return true
+      } catch {
+        showToast('Could not record the serial. Check your connection and try again.', 'error')
+        return false
+      }
+    },
+
+    harvestRefurbishmentJob: async (jobId, reason, parts) => {
+      const job = refurbishmentJobs.find(j => j.id === jobId)
+      if (!job) return false
+      let data: { error?: string; machineCost?: number; partsValue?: number; parts?: NonNullable<RefurbishmentJob['harvestedParts']>; valuationRef?: string } | null = null
+      try {
+        const res = await fetch('/api/refurbishment/harvest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serialId: job.serialId, reference: job.ref, reason, parts }),
+        })
+        data = await res.json().catch(() => null)
+        if (!res.ok) { showToast(data?.error || 'Could not record the parts', 'error'); return false }
+      } catch {
+        showToast('Could not record the parts. Check your connection and try again.', 'error')
+        return false
+      }
+      const machineCost = Number(data?.machineCost) || 0
+      const partsValue = Number(data?.partsValue) || 0
+      const kept = data?.parts ?? []
+      // Parts taken from stock for it and never fitted go back, as on a write-off.
+      const returned = job.partsNeeded.filter(p => p.productId && p.status !== 'used' && refurbPartStockTaken(p))
+      for (const p of returned) returnRefurbPartToWarehouse(job, p)
+      const returnedIds = new Set(returned.map(p => p.id))
+      setSerials(p => p.map(s => s.id !== job.serialId ? s : { ...s, status: 'written_off' }))
+      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
+        ...j,
+        status: 'written_off',
+        outcome: 'harvested',
+        harvestedParts: kept,
+        harvestPartsValue: partsValue,
+        writeOffCost: Math.max(0, Math.round((machineCost - partsValue) * 100) / 100),
+        writeOffValuationRef: data?.valuationRef,
+        completedDate: now(),
+        techNotes: (j.techNotes ? j.techNotes + '\n' : '') + `Harvested for parts: ${reason}. Kept: ${kept.map(k => `${k.qty}× ${k.productName}`).join(', ')}`,
+        partsNeeded: j.partsNeeded.map(pt => returnedIds.has(pt.id)
+          ? { ...pt, status: 'needed' as const, stockTaken: false, allocatedDate: undefined, allocatedByName: undefined, notifiedTechDate: undefined, notes: [pt.notes, 'Returned to stock when harvested'].filter(Boolean).join(' · ') }
+          : pt),
+      }))
+      addAuditLog('refurb_harvest', job.ref, `Harvested ${job.serialNumber}: ${kept.map(k => `${k.qty}× ${k.productName}`).join(', ')} (KES ${partsValue.toLocaleString('en-KE')} of KES ${machineCost.toLocaleString('en-KE')} kept in stock)`)
+      showToast([
+        `${job.serialNumber} stripped — ${kept.reduce((s, k) => s + k.qty, 0)} part(s) in stock`,
+        machineCost ? `KES ${partsValue.toLocaleString('en-KE')} kept as parts, KES ${Math.max(0, machineCost - partsValue).toLocaleString('en-KE')} written off` : '',
       ].filter(Boolean).join(' — '))
       return true
     },
@@ -22111,6 +22320,8 @@ const storeCtx: AppState = {
         // then found (My work → trade-in machines with no trade-in).
         intakeSource: opts?.source ?? 'trade-in',
         intakeByName: currentUser()?.name,
+        // Serial unknown: the text is an intake tag until the bench finds it.
+        ...(opts?.identityPending ? { identityPending: true, intakeTag: serial, barcode: serial } : {}),
       }
       setSerials(p => [...p, newSerial])
       sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
@@ -22279,10 +22490,20 @@ const storeCtx: AppState = {
         }
         addMove(line.productId, line.productName, line.qty, 'in', `Buy-back ${bb.ref}`, bb.ref, 'customer', bb.destinationLocation, line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
       })
+      const toRefurb = openTradeInRefurbJobs(bb.lines.flatMap(line => line.serialIds
+        .filter(sid => line.condition === 'poor' || awaitingIdentification(serialRef.current.find(s => s.id === sid)))
+        .map(sid => ({
+          serialId: sid,
+          cost: line.unitPrice,
+          sourceRef: bb.ref,
+          issue: awaitingIdentification(serialRef.current.find(s => s.id === sid))
+            ? `Trade-in ${bb.ref} (${bb.customerName}) — serial unknown, not yet identified${line.notes ? `: ${line.notes}` : ''}`
+            : `Trade-in ${bb.ref} (${bb.customerName}) in poor condition${line.notes ? `: ${line.notes}` : ''}`,
+        }))))
       setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'stocked', stockedDate: now(), stockedByName: user.name } : b))
-      addAuditLog('buyback_stock', bb.ref, `Stocked buy-back ${bb.ref} for ${bb.customerName}`)
+      addAuditLog('buyback_stock', bb.ref, `Stocked buy-back ${bb.ref} for ${bb.customerName}${toRefurb ? ` — ${toRefurb} to refurbishment` : ''}`)
       cancelWarrantiesForTradeIn(bb.lines.flatMap(l => l.serialIds), bb.ref, `Bought back from ${bb.customerName} (${bb.ref})`)
-      showToast(`${bb.ref} stocked — inventory updated`)
+      showToast(`${bb.ref} stocked — inventory updated${toRefurb ? `; ${toRefurb} machine${toRefurb === 1 ? '' : 's'} sent to Refurbishment` : ''}`)
     },
 
     deleteBuyBack: (id) => {
@@ -22380,8 +22601,14 @@ const storeCtx: AppState = {
           addMove(line.productId, line.productName, line.qty, 'out', `Donation out ${don.ref}`, don.ref, don.location, 'customer', line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
         }
       })
+      // Donated machines with no readable serial go to Refurbishment to be identified.
+      const toRefurb = don.type === 'in'
+        ? openTradeInRefurbJobs(don.lines.flatMap(line => line.serialIds
+          .filter(sid => awaitingIdentification(serialRef.current.find(s => s.id === sid)))
+          .map(sid => ({ serialId: sid, cost: 0, sourceRef: don.ref, issue: `Donated in ${don.ref} (${don.party}) — serial unknown, not yet identified` }))))
+        : 0
       setDonations(p => p.map(d => d.id === id ? { ...d, status: 'confirmed', confirmedByName: user.name, confirmedDate: now() } : d))
-      showToast(`Donation ${don.ref} confirmed — stock updated`)
+      showToast(`Donation ${don.ref} confirmed — stock updated${toRefurb ? `; ${toRefurb} sent to Refurbishment` : ''}`)
     },
 
     deleteDonation: (id) => {
@@ -22478,6 +22705,12 @@ const storeCtx: AppState = {
         }
         addMove(line.productId, line.productName, line.qty, 'in', `Exchange return ${exc.ref}`, exc.ref, 'customer', returnLocation, line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
       })
+
+      // Machines handed in with no readable serial go to Refurbishment to be identified.
+      const excToRefurb = openTradeInRefurbJobs(exc.returnLines.flatMap(line => line.serialIds
+        .filter(sid => awaitingIdentification(serialRef.current.find(s => s.id === sid)))
+        .map(sid => ({ serialId: sid, cost: line.unitPrice, sourceRef: exc.ref, issue: `Exchange ${exc.ref} (${exc.customerName}) — serial unknown, not yet identified` }))))
+      if (excToRefurb) addAuditLog('exchange_refurb', exc.ref, `${excToRefurb} machine(s) without serial sent to Refurbishment`)
 
       // New items → out to customer
       exc.newLines.forEach(line => {

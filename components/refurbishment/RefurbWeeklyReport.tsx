@@ -12,6 +12,7 @@ import {
   type PendingRow,
   type ReportJob,
   type TechRow,
+  writeOffReason,
 } from '@/lib/refurbishment/weekly-report'
 import { printRefurbWeeklyReport } from '@/lib/refurbishment/weekly-report-print'
 
@@ -89,7 +90,7 @@ export function RefurbWeeklyReport({
     { key: 'device', label: 'Device', priority: 1, width: '1.5fr', render: deviceCell, exportValue: c => `${c.productName} (${c.serialNumber})` },
     { key: 'tech', label: 'Technician', priority: 2, width: '1fr', render: c => <span className="text-xs">{c.assignedTechnicianName || '—'}</span>, exportValue: c => c.assignedTechnicianName || '' },
     { key: 'loss', label: 'Value written off', align: 'right' as const, priority: 2, width: '130px', render: c => <span className="text-xs">{c.writeOffCost ? kes(c.writeOffCost) : '—'}</span>, exportValue: c => c.writeOffCost ?? '' },
-    { key: 'reason', label: 'Reason', priority: 1, width: '2fr', render: c => <span className="text-xs text-t2">{/Written off: (.*)$/m.exec(c.techNotes ?? '')?.[1] ?? '—'}</span>, exportValue: c => /Written off: (.*)$/m.exec(c.techNotes ?? '')?.[1] ?? '' },
+    { key: 'reason', label: 'Reason', priority: 1, width: '2fr', render: c => <span className="text-xs text-t2">{writeOffReason(c) || '—'}</span>, exportValue: c => writeOffReason(c) },
   ]
 
   const tiles: Array<[string, string | number, string?]> = [
@@ -98,6 +99,8 @@ export function RefurbWeeklyReport({
     ['Written off', t.writeOffValue ? `${t.writtenOff} · ${kes(t.writeOffValue)}` : t.writtenOff, t.writtenOff ? 'var(--danger)' : undefined],
     ['Received', t.received],
     [report.isCurrentWeek ? 'Pending now' : 'Open at week end', t.pending, 'var(--warning)'],
+    ...(t.awaitingIdentification ? [['Awaiting identification', t.awaitingIdentification, 'var(--warning)'] as [string, number, string]] : []),
+    ...(t.harvested ? [['Harvested for parts', t.harvestPartsValue ? `${t.harvested} · ${kes(t.harvestPartsValue)} kept` : t.harvested] as [string, string | number]] : []),
     ['Avg days to complete', num(t.avgDaysToComplete)],
     ['Parts cost (completed)', t.partsCostCompleted ? kes(t.partsCostCompleted) : '—'],
   ]

@@ -780,7 +780,7 @@ export async function resolvePrismaProductIdForStock(
   }
 }
 
-async function bumpPrismaOnHand(deltas: Map<string, number>) {
+export async function bumpPrismaOnHand(deltas: Map<string, number>) {
   if (deltas.size === 0) return
   const state = await loadAppState(['deed_products'])
   const blobProducts = Array.isArray(state.deed_products)

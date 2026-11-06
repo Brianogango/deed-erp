@@ -14,6 +14,9 @@ import {
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
 import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader, TabBar } from '@/components/ui'
 import { RefurbWeeklyReport } from '@/components/refurbishment/RefurbWeeklyReport'
+import { TaggedIntakeModal } from '@/components/refurbishment/TaggedIntakeModal'
+import { IdentifyUnitModal } from '@/components/refurbishment/IdentifyUnitModal'
+import { HarvestPartsModal } from '@/components/refurbishment/HarvestPartsModal'
 import { refurbWeekStart } from '@/lib/refurbishment/weekly-report'
 import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -22,7 +25,7 @@ import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlReco
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
   faArrowRight, faBan, faChevronLeft, faBoxOpen, faPencil, faTrash,
-  faBell, faTriangleExclamation, faCheck,
+  faBell, faTriangleExclamation, faCheck, faMagnifyingGlass, faScrewdriverWrench,
 } from '@fortawesome/free-solid-svg-icons'
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -98,6 +101,9 @@ function RefurbishmentContent() {
   const [showPartModal, setShowPartModal]           = useState(false)
   const [showWriteOffModal, setShowWriteOffModal]   = useState(false)
   const [showCreateJobModal, setShowCreateJobModal] = useState(false)
+  const [showTaggedIntake, setShowTaggedIntake]     = useState(false)
+  const [showIdentify, setShowIdentify]             = useState(false)
+  const [showHarvest, setShowHarvest]               = useState(false)
   const [createJobSerial, setCreateJobSerial]       = useState<SerialNumber | null>(null)
   const [createJobIssue, setCreateJobIssue]         = useState('')
   const [editPartId, setEditPartId]                 = useState<string | null>(null)
@@ -152,6 +158,9 @@ function RefurbishmentContent() {
   const canTransfer  = (j: RefurbishmentJob) => j.status === 'ready' && isLeadTech
   // A write-off is a loss booked to the accounts: the lead decides it.
   const canWriteOff  = (j: RefurbishmentJob) => ['assigned', 'in_progress'].includes(j.status) && isLeadTech
+  // The technician on the job (or the lead) records the serial once it reads.
+  const canIdentify  = (j: RefurbishmentJob) => !!j.identityPending && !['transferred', 'written_off'].includes(j.status) && (j.assignedTechnicianId === currentUserId || isLeadTech)
+  const canTagIntake = ['director', 'technical_lead', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
 
   const statusCounts = useMemo(() => {
     const counts: Partial<Record<RefurbStatus | 'all', number>> = { all: refurbishmentJobs.length }
@@ -227,12 +236,17 @@ function RefurbishmentContent() {
                   <Fa icon={faPencil} className="mr-1.5" />Notes
                 </button>
               )}
-              {canMarkReady(job) && (
+              {canIdentify(job) && (
+                <PrimaryActionButton icon={<Fa icon={faMagnifyingGlass} />} onClick={() => setShowIdentify(true)} hideLabelOnMobile={false}>
+                  Identify
+                </PrimaryActionButton>
+              )}
+              {canMarkReady(job) && !job.identityPending && (
                 <PrimaryActionButton icon={<Fa icon={faCheckCircle} />} onClick={() => markRefurbishmentReady(job.id)} hideLabelOnMobile={false}>
                   Mark ready
                 </PrimaryActionButton>
               )}
-              {canTransfer(job) && (
+              {canTransfer(job) && !job.identityPending && (
                 <PrimaryActionButton icon={<Fa icon={faArrowRight} />} onClick={() => transferToSell(job.id)} hideLabelOnMobile={false}>
                   Send for retest
                 </PrimaryActionButton>
@@ -244,7 +258,14 @@ function RefurbishmentContent() {
                   <Fa icon={faBan} className="mr-1.5" />Write off
                 </button>
               )}
-              {job.status === 'written_off' && isLeadTech && (
+              {canWriteOff(job) && (
+                <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                  style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid #FCD34D', cursor: 'pointer' }}
+                  onClick={() => setShowHarvest(true)}>
+                  <Fa icon={faScrewdriverWrench} className="mr-1.5" />Harvest parts
+                </button>
+              )}
+              {job.status === 'written_off' && job.outcome !== 'harvested' && isLeadTech && (
                 <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
                   style={{ background: '#ECFDF5', color: 'var(--success-text)', border: '1px solid #A7F3D0', cursor: 'pointer' }}
                   onClick={() => setPendingConfirm({
@@ -277,16 +298,32 @@ function RefurbishmentContent() {
             </div>
           )}
 
+          {job.identityPending && !['transferred', 'written_off'].includes(job.status) && (
+            <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: 'var(--warning-bg)', border: '1px solid #FCD34D' }}>
+              <Fa icon={faTriangleExclamation} className="mt-0.5" aria-hidden="true" />
+              <div>
+                <p className="text-xs font-bold" style={{ color: 'var(--warning-text)' }}>Not identified yet — tag {job.intakeTag || job.serialNumber}</p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--warning-text)' }}>
+                  Once it boots or the sticker is found, record the real serial and model. It cannot be marked ready until then. If it cannot be repaired, harvest its parts or write it off.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Info grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Device */}
             <div className="card p-4 space-y-2">
               <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Device</p>
               <p className="text-sm font-semibold text-t1">{job.productName}</p>
-              <p className="font-mono text-xs text-t3">S/N: {job.serialNumber}</p>
+              <p className="font-mono text-xs text-t3">{job.identityPending ? 'Tag' : 'S/N'}: {job.serialNumber}</p>
+              {!job.identityPending && job.intakeTag && job.intakeTag !== job.serialNumber && <p className="font-mono text-[11px] text-t3">Tag: {job.intakeTag}</p>}
               {job.specs && <p className="text-xs text-t3">{job.specs}</p>}
               <div className="pt-1 space-y-0.5">
                 <p className="text-[11px] text-t3">Intake: <span className="text-t2 font-medium">{fmtDate(job.intakeDate)}</span></p>
+                {job.intakeSource && <p className="text-[11px] text-t3">From: <span className="text-t2 font-medium">{{ trade_in: 'Trade-in', stock: 'Stock without serials', unrecorded: 'Not on record', receipt: 'Purchase receipt' }[job.intakeSource]}{job.intakeSourceRef ? ` · ${job.intakeSourceRef}` : ''}</span></p>}
+                {job.intakeCost != null && <p className="text-[11px] text-t3">Intake cost: <span className="text-t2 font-medium">{fmtKes(job.intakeCost)}</span></p>}
+                {job.identifiedDate && <p className="text-[11px] text-t3">Identified: <span className="text-t2 font-medium">{fmtDate(job.identifiedDate)}</span></p>}
                 {job.receiptRef && <p className="text-[11px] text-t3">Receipt: <span className="text-t2 font-medium">{job.receiptRef}</span></p>}
               </div>
             </div>
@@ -310,7 +347,14 @@ function RefurbishmentContent() {
               )}
               {job.startedDate && <p className="text-[11px] text-t3">Started: <span className="text-t2 font-medium">{fmtDate(job.startedDate)}</span></p>}
               {job.status === 'written_off' && (
+                job.outcome === 'harvested' ? (
+                  <div className="text-[11px] text-t3 space-y-0.5">
+                    <p>Harvested for parts: <span className="text-t2 font-medium">{(job.harvestedParts ?? []).map(p => `${p.qty}× ${p.productName}`).join(', ') || '—'}</span></p>
+                    <p>Kept in stock as parts: <span className="text-t2 font-medium">{fmtKes(job.harvestPartsValue ?? 0)}</span> · written off: <span className="text-t2 font-medium">{fmtKes(job.writeOffCost ?? 0)}</span></p>
+                  </div>
+                ) : (
                 <p className="text-[11px] text-t3">Written off: <span className="text-t2 font-medium">{job.writeOffCost ? `${fmtKes(job.writeOffCost)} booked as a loss` : 'before write-offs were booked — no amount'}</span></p>
+                )
               )}
               {job.completedDate && <p className="text-[11px] text-t3">Completed: <span className="text-t2 font-medium">{fmtDate(job.completedDate)}</span></p>}
               {job.transferDate  && <p className="text-[11px] text-t3">Transferred: <span className="text-t2 font-medium">{fmtDate(job.transferDate)}</span></p>}
@@ -675,6 +719,8 @@ function RefurbishmentContent() {
             </div>
           </Modal>
         )}
+        {showIdentify && <IdentifyUnitModal job={job} onClose={() => setShowIdentify(false)} />}
+        {showHarvest && <HarvestPartsModal job={job} onClose={() => setShowHarvest(false)} onDone={() => { setShowHarvest(false); setActiveId(null) }} />}
       </div>
     )
   }
@@ -862,6 +908,15 @@ function RefurbishmentContent() {
           </div>
         )}
 
+        {canTagIntake && (
+          <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl px-4 py-2.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
+            <p className="text-[11px] text-t3 m-0">Dead or unreadable machines with no serial or specs? Tag them in, and find the serial on the bench.</p>
+            <button className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setShowTaggedIntake(true)}>
+              <Fa icon={faPlus} className="mr-1.5" />Add machines without serial
+            </button>
+          </div>
+        )}
+
         {/* Jobs table */}
         <div className="card overflow-hidden">
           <DataTable
@@ -877,7 +932,11 @@ function RefurbishmentContent() {
                 render: (j: RefurbishmentJob) => (
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-t1 erp-truncate" title={j.productName}>{j.productName}</p>
-                    <p className="font-mono text-[10px] text-t3 erp-truncate" title={j.serialNumber}>S/N {j.serialNumber}</p>
+                    <p className="font-mono text-[10px] text-t3 erp-truncate" title={j.serialNumber}>
+                      {j.identityPending ? 'Tag' : 'S/N'} {j.serialNumber}
+                      {j.identityPending && !['transferred', 'written_off'].includes(j.status) && <span className="ml-1.5 font-sans font-semibold rounded px-1" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>Unidentified</span>}
+                      {j.outcome === 'harvested' && <span className="ml-1.5 font-sans font-semibold rounded px-1" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>Harvested</span>}
+                    </p>
                   </div>
                 ),
                 accessor: (j: RefurbishmentJob) => `${j.productName} ${j.serialNumber}`,
@@ -942,6 +1001,8 @@ function RefurbishmentContent() {
         </div>
       </div>
       )}
+
+      {showTaggedIntake && <TaggedIntakeModal onClose={() => setShowTaggedIntake(false)} />}
 
       {/* ── Bulk Send Modal ── */}
       {showBulkSendModal && (

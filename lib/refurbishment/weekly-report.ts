@@ -24,6 +24,21 @@ export type ReportJob = {
   partsNeeded: Part[]
   /** Cost booked as a loss when written off. */
   writeOffCost?: number
+  /** Came in with a tag, real serial not yet recorded. */
+  identityPending?: boolean
+  outcome?: 'harvested'
+  harvestedParts?: Array<{ productName: string; qty: number }>
+  harvestPartsValue?: number
+}
+
+/** Why it was written off, for the report: the reason, or the parts kept. */
+export function writeOffReason(job: Pick<ReportJob, 'techNotes' | 'outcome' | 'harvestedParts'>): string {
+  if (job.outcome === 'harvested') {
+    const parts = (job.harvestedParts ?? []).map(p => `${p.qty}× ${p.productName}`).join(', ')
+    const why = /Harvested for parts: ([^.\n]*)/.exec(job.techNotes ?? '')?.[1]
+    return `Harvested for parts${parts ? ` (${parts})` : ''}${why ? ` — ${why}` : ''}`
+  }
+  return /Written off: (.*)$/m.exec(job.techNotes ?? '')?.[1] ?? ''
 }
 
 const EAT_MS = 3 * 3600_000
@@ -71,6 +86,7 @@ export const partsWaiting = (job: Pick<ReportJob, 'partsNeeded'>) =>
 /** Where an open job stands, in words. */
 export function pendingStage(job: ReportJob): string {
   if (job.status === 'queued') return job.assignedTechnicianName ? 'Queued (restored)' : 'Waiting for a technician'
+  if (job.identityPending) return 'Waiting for identification'
   if (partsWaiting(job).length) return 'Waiting for parts'
   if (job.status === 'assigned') return 'Assigned — not started'
   if (job.status === 'in_progress') return 'In progress'
@@ -94,7 +110,7 @@ export type RefurbWeeklyReport = {
   pending: PendingRow[]
   pendingByStage: Array<{ stage: string; count: number }>
   technicians: TechRow[]
-  totals: { received: number; completed: number; sentForRetest: number; writtenOff: number; pending: number; partsCostCompleted: number; avgDaysToComplete: number | null; writeOffValue: number }
+  totals: { received: number; completed: number; sentForRetest: number; writtenOff: number; pending: number; partsCostCompleted: number; avgDaysToComplete: number | null; writeOffValue: number; awaitingIdentification: number; harvested: number; harvestPartsValue: number }
 }
 
 export function buildRefurbWeeklyReport(jobs: ReportJob[], weekStart: string, now: Date = new Date()): RefurbWeeklyReport {
@@ -173,6 +189,9 @@ export function buildRefurbWeeklyReport(jobs: ReportJob[], weekStart: string, no
       pending: pending.length,
       partsCostCompleted: completed.reduce((s, c) => s + c.cost, 0),
       writeOffValue: Math.round(writtenOff.reduce((s, w) => s + (Number(w.writeOffCost) || 0), 0)),
+      awaitingIdentification: pending.filter(p => p.identityPending).length,
+      harvested: writtenOff.filter(w => w.outcome === 'harvested').length,
+      harvestPartsValue: Math.round(writtenOff.reduce((s, w) => s + (w.outcome === 'harvested' ? Number(w.harvestPartsValue) || 0 : 0), 0)),
       avgDaysToComplete: doneDays.length ? Math.round(doneDays.reduce((a, b) => a + b, 0) / doneDays.length * 10) / 10 : null,
     },
   }

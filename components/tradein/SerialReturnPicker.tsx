@@ -8,6 +8,7 @@ import {
   isStockOutEligible,
   scoreCustomerReturnSerial,
 } from '@/lib/tradein-serial-intake'
+import { nextIntakeTags } from '@/lib/refurbishment/unidentified'
 
 type SerialMode = 'customer_return' | 'stock_out'
 
@@ -84,6 +85,13 @@ export function SerialReturnPicker({
     } finally {
       setRegistering(false)
     }
+  }
+
+  /** Dead or unreadable machine: register it under an intake tag; Refurbishment finds the real serial. */
+  function registerTagged() {
+    const [tag] = nextIntakeTags(serials, 1)
+    const created = registerCustomerReturnSerial(productId, tag, { saleOrderId, source: intakeSource, identityPending: true })
+    if (created && !selectedIds.includes(created.id)) onAdd(created.id)
   }
 
   return (
@@ -185,6 +193,14 @@ export function SerialReturnPicker({
             >
               {registering ? '…' : 'Add'}
             </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+            <button type="button" className="btn-secondary text-[10px] px-3" onClick={registerTagged}>
+              Serial unknown — tag it
+            </button>
+            <span style={{ fontSize: 10, color: 'var(--text-4)' }}>
+              Dead or unreadable: it gets a tag (UNK-…) and goes to Refurbishment, where the serial is found.
+            </span>
           </div>
         </div>
       )}
