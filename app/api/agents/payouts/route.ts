@@ -21,11 +21,13 @@ export async function POST(request: Request) {
     const method = String(body.method ?? '')
     const reference = String(body.reference ?? '').trim().slice(0, 80)
     const paidAt = String(body.paidAt ?? '').slice(0, 10)
+    const bankAccountId = body.bankAccountId ? String(body.bankAccountId).trim().slice(0, 80) : undefined
     const bankAccountCode = body.bankAccountCode ? String(body.bankAccountCode).trim() : undefined
     if (!agentId) return NextResponse.json({ error: 'Choose an agent' }, { status: 422 })
     if (!commissionIds.length) return NextResponse.json({ error: 'Choose the commission lines to pay' }, { status: 422 })
     if (!METHODS.has(method)) return NextResponse.json({ error: 'Payment method must be M-Pesa, bank or cash' }, { status: 422 })
     if (!/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) return NextResponse.json({ error: 'Payment date is required' }, { status: 422 })
+    if (!bankAccountId && !bankAccountCode) return NextResponse.json({ error: 'Choose the account the payout was paid from' }, { status: 422 })
     if (method === 'mpesa' && !reference) return NextResponse.json({ error: 'Enter the M-Pesa transaction code' }, { status: 422 })
     const payout = await recordAgentPayout({
       agentId,
@@ -33,6 +35,7 @@ export async function POST(request: Request) {
       method: method as 'mpesa' | 'bank' | 'cash',
       reference,
       paidAt,
+      bankAccountId,
       bankAccountCode,
       paidBy: { id: actor.id, name: actor.name || actor.username },
     })

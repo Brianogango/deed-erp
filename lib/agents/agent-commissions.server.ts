@@ -109,14 +109,31 @@ export async function syncAgentCommissions(): Promise<{ rows: AgentCommission[];
   })
 }
 
-async function payoutAccountLabel(method: AgentPayout['method'], bankAccountCode?: string): Promise<string> {
-  if (!bankAccountCode) return labelForRole(method === 'bank' ? 'bank_absa' : 'cash_mobile')
-  const account = await prisma.accountCode.findUnique({ where: { code: bankAccountCode }, select: { code: true, name: true, accountType: true, isActive: true } })
-  if (!account || !account.isActive || account.accountType !== 'asset') {
-    const err = new Error(`Account ${bankAccountCode} is not an active bank/cash account`)
+/**
+ * The ledger account the payout left from. How it was sent (M-Pesa, bank
+ * transfer, cash) says nothing about which account paid it — M-Pesa can come
+ * from a bank account — so the account is always chosen: one of the
+ * business's bank/cash accounts (Finance → Bank accounts), or, for older
+ * callers, an asset account code.
+ */
+async function payoutAccountLabel(bankAccountId?: string, bankAccountCode?: string): Promise<string> {
+  const refuse = (message: string) => {
+    const err = new Error(message)
     ;(err as Error & { status?: number }).status = 422
-    throw err
+    return err
   }
+  if (bankAccountId) {
+    const { cashLabelForBankAccount, BankAccountRefError } = await import('@/lib/accounting/bank-cash-account.server')
+    try {
+      return await cashLabelForBankAccount(prisma, bankAccountId)
+    } catch (err) {
+      if (err instanceof BankAccountRefError) throw refuse(err.message)
+      throw err
+    }
+  }
+  if (!bankAccountCode) throw refuse('Choose the account the payout was paid from')
+  const account = await prisma.accountCode.findUnique({ where: { code: bankAccountCode }, select: { code: true, name: true, accountType: true, isActive: true } })
+  if (!account || !account.isActive || account.accountType !== 'asset') throw refuse(`Account ${bankAccountCode} is not an active bank/cash account`)
   return `${account.code} - ${account.name}`
 }
 
@@ -127,6 +144,7 @@ export async function recordAgentPayout(params: {
   method: AgentPayout['method']
   reference: string
   paidAt: string
+  bankAccountId?: string
   bankAccountCode?: string
   paidBy: { id: string; name: string }
 }): Promise<AgentPayout> {
@@ -147,10 +165,10 @@ export async function recordAgentPayout(params: {
     const ref = `AGP/${String(payouts.length + 1).padStart(4, '0')}`
     const journalRef = `JRN/${ref}`
     await ensureTemplateAccounts(plan.withholdingTax > 0 ? ['3314', '3307'] : ['3314'])
-    const bankLabel = await payoutAccountLabel(params.method, params.bankAccountCode)
+    const bankLabel = await payoutAccountLabel(params.bankAccountId, params.bankAccountCode)
     await createJournalEntry({
       ref: journalRef,
-      journalCode: params.method === 'bank' ? 'BNK' : 'CSH',
+      journalCode: /petty|cash in hand|mobile money|m-?pesa/i.test(bankLabel) ? 'CSH' : 'BNK',
       date: params.paidAt,
       description: `Agent payout ${ref} — ${agentName}${params.reference ? ` (${params.reference})` : ''}`,
       sourceType: 'agent_payout',
@@ -173,6 +191,7 @@ export async function recordAgentPayout(params: {
       paidAt: params.paidAt,
       paidBy: params.paidBy.name,
       journalRef,
+      paidFrom: bankLabel,
     }
     const paidIds = new Set(payout.commissionIds)
     const now = new Date().toISOString()

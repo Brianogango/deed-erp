@@ -79,6 +79,8 @@ export type AgentPayout = {
   paidAt: string
   paidBy: string
   journalRef: string
+  /** Ledger account it was paid from, e.g. "2205 - Equity Bank". */
+  paidFrom?: string
 }
 
 export type AgentSettings = { withholdingEnabled: boolean; withholdingRate: number }

@@ -1955,9 +1955,9 @@ function AccountingContent() {
                   limited={!canManageFullFinance}
                   showToast={showToast}
                   contacts={contacts}
-                  moneyAccounts={accounts
-                    .filter(a => a.isActive && a.type === 'asset' && ['Cash at Bank', 'Cash in Hand'].includes(a.group))
-                    .map(a => ({ code: a.code, name: a.name }))}
+                  moneyAccounts={bankAccounts
+                    .filter(a => a.active !== false)
+                    .map(a => ({ id: a.id, name: a.name, bankName: a.bankName }))}
                 />
               ) : (
                 <p className="p-6 text-xs text-text-3">Agent commissions are handled by the Director, Finance Officer and Admin Officer.</p>

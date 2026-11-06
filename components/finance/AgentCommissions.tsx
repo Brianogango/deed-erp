@@ -7,7 +7,8 @@ import { AGENT_TAG, type AgentCommission, type AgentPayout, type AgentSettings }
 type Agent = { id: string; name: string; phone: string | null; email: string | null; kraPin: string | null }
 type Overview = { agents: Agent[]; commissions: AgentCommission[]; payouts: AgentPayout[]; settings: AgentSettings }
 type ContactLike = { id: string; name: string; phone?: string; tags?: string[] }
-type MoneyAccount = { code: string; name: string }
+/** One of the business's bank/cash accounts (Finance → Bank accounts). */
+type MoneyAccount = { id: string; name: string; bankName?: string }
 type Toast = (msg: string, type?: 'error' | 'success' | 'info') => void
 
 const STATUS_LABEL: Record<AgentCommission['status'], string> = {
@@ -56,7 +57,8 @@ export default function AgentCommissions({
   const [method, setMethod] = useState<AgentPayout['method']>('mpesa')
   const [reference, setReference] = useState('')
   const [paidAt, setPaidAt] = useState(today())
-  const [accountCode, setAccountCode] = useState('')
+  const [accountId, setAccountId] = useState(() => { try { return localStorage.getItem('deed.agentPayout.account') ?? '' } catch { return '' } })
+  const chosenAccount = moneyAccounts.find(a => a.id === accountId)
   const [showAdd, setShowAdd] = useState(false)
   const [newAgent, setNewAgent] = useState({ name: '', phone: '', kraPin: '' })
   const [rateInput, setRateInput] = useState('')
@@ -204,10 +206,12 @@ export default function AgentCommissions({
 
   const pay = async () => {
     if (!chosen.length) { showToast('Tick the commission lines to pay', 'error'); return }
+    if (!chosenAccount) { showToast('Choose the account the payout was paid from', 'error'); return }
     if (method === 'mpesa' && !reference.trim()) { showToast('Enter the M-Pesa transaction code', 'error'); return }
     const agent = agentRows.find(a => a.id === agentId)
     const whtLine = wht > 0 ? `\nWithholding tax ${fmtKes(wht)} kept for KRA.` : ''
-    if (!window.confirm(`Pay ${agent?.name ?? 'agent'} ${fmtKes(net)} by ${METHOD_LABEL[method]}?${whtLine}`)) return
+    if (!window.confirm(`Pay ${agent?.name ?? 'agent'} ${fmtKes(net)} by ${METHOD_LABEL[method]} from ${chosenAccount.name}?${whtLine}`)) return
+    try { localStorage.setItem('deed.agentPayout.account', chosenAccount.id) } catch { /* convenience only */ }
     setBusy(true)
     try {
       const out = await readJson<{ payout: AgentPayout }>(await fetch('/api/agents/payouts', {
@@ -219,7 +223,7 @@ export default function AgentCommissions({
           method,
           reference: reference.trim(),
           paidAt,
-          bankAccountCode: accountCode || undefined,
+          bankAccountId: chosenAccount.id,
         }),
       }))
       showToast(`Payout ${out.payout.ref} recorded — ${fmtKes(out.payout.net)}`, 'success')
@@ -232,8 +236,6 @@ export default function AgentCommissions({
       setBusy(false)
     }
   }
-
-  const defaultAccountLabel = method === 'bank' ? '2201 - ABSA Bank (default)' : '2211 - Petty Cash / Mobile Money (default)'
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
@@ -426,11 +428,11 @@ export default function AgentCommissions({
                 onChange={e => setReference(e.target.value.toUpperCase())}
               />
               <input className="form-input text-xs" type="date" aria-label="Payment date" value={paidAt} onChange={e => setPaidAt(e.target.value)} />
-              <select className="form-input text-xs" aria-label="Pay from account" value={accountCode} onChange={e => setAccountCode(e.target.value)}>
-                <option value="">{defaultAccountLabel}</option>
-                {moneyAccounts.map(a => <option key={a.code} value={a.code}>{a.code} - {a.name}</option>)}
+              <select className="form-input text-xs" aria-label="Paid from account" value={chosenAccount ? accountId : ''} onChange={e => setAccountId(e.target.value)}>
+                <option value="">{moneyAccounts.length ? 'Paid from which account?' : 'No bank/cash accounts — add one in Bank accounts'}</option>
+                {moneyAccounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.bankName && a.bankName !== a.name ? ` · ${a.bankName}` : ''}</option>)}
               </select>
-              <button type="button" className="btn-primary text-[11px]" disabled={busy || chosen.length === 0 || gross <= 0} onClick={() => void pay()}>
+              <button type="button" className="btn-primary text-[11px]" disabled={busy || chosen.length === 0 || gross <= 0 || !chosenAccount} onClick={() => void pay()}>
                 {busy ? 'Saving…' : `Pay ${fmtKes(Math.max(0, net))}`}
               </button>
               <p className="text-[11px] text-text-3 sm:col-span-5">
@@ -460,7 +462,7 @@ export default function AgentCommissions({
                     <tr key={p.id}>
                       <td className="py-1 pr-3 font-mono">{p.ref}</td>
                       <td className="py-1 pr-3">{p.paidAt}</td>
-                      <td className="py-1 pr-3">{METHOD_LABEL[p.method]}{p.reference ? ` · ${p.reference}` : ''}</td>
+                      <td className="py-1 pr-3">{METHOD_LABEL[p.method]}{p.reference ? ` · ${p.reference}` : ''}{p.paidFrom ? <span className="block text-text-3">from {p.paidFrom}</span> : null}</td>
                       <td className="py-1 pr-3 text-right">{fmtKes(p.gross)}</td>
                       <td className="py-1 pr-3 text-right">{fmtKes(p.withholdingTax)}</td>
                       <td className="py-1 pr-3 text-right font-bold">{fmtKes(p.net)}</td>

@@ -35,6 +35,11 @@ vi.mock('@/lib/accounting/journal-service', () => ({
     h.journals.push(entry)
   }),
 }))
+vi.mock('@/lib/accounting/bank-cash-account.server', () => ({
+  BankAccountRefError: class extends Error {},
+  // The business's bank/cash accounts: an M-Pesa till, a bank account and petty cash.
+  cashLabelForBankAccount: vi.fn(async (_db: unknown, id: string) => ({ mpesa: '2211 - Petty Cash / Mobile Money', equity: '2205 - Equity Bank', cash: '2211 - Petty Cash / Mobile Money' } as Record<string, string>)[id] ?? '2201 - ABSA Bank'),
+}))
 vi.mock('@/lib/accounting/ensure-template-accounts', () => ({ ensureTemplateAccounts: vi.fn(async () => undefined) }))
 vi.mock('@/lib/accounting/coa-roles', () => ({
   labelForRole: (role: string) => (role === 'bank_absa' ? '2201 - ABSA Bank' : '2211 - Petty Cash / Mobile Money'),
@@ -114,7 +119,7 @@ describe('agent commissions API', () => {
   it('pays due lines by M-Pesa: Dr payable, Cr mobile money, lines marked paid', async () => {
     ;(h.state.deed_invoices as any[])[0].amountPaid = 50000
     await GET()
-    const res = await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'mpesa', reference: 'SJK12AB', paidAt: '2026-10-05' }))
+    const res = await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'mpesa', reference: 'SJK12AB', paidAt: '2026-10-05', bankAccountId: 'mpesa' }))
     expect(res.status).toBe(201)
     const { payout } = await res.json()
     expect(payout).toMatchObject({ ref: 'AGP/0001', gross: 2000, withholdingTax: 0, net: 2000, paidBy: 'Finance' })
@@ -124,14 +129,14 @@ describe('agent commissions API', () => {
     expect(debitOf(journal, '2211')).toBe(-2000)
     expect((h.state.deed_agentCommissions as any[])[0].status).toBe('paid')
 
-    const again = await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'mpesa', reference: 'SJK12AC', paidAt: '2026-10-05' }))
+    const again = await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'mpesa', reference: 'SJK12AC', paidAt: '2026-10-05', bankAccountId: 'mpesa' }))
     expect(again.status).toBe(409)
   })
 
   it('withholds tax when switched on', async () => {
     expect((await PUT(json({ withholdingEnabled: true, withholdingRate: 5 }, 'PUT'))).status).toBe(200)
     ;(h.state.deed_invoices as any[])[0].amountPaid = 50000
-    const res = await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'bank', reference: 'TRF1', paidAt: '2026-10-05' }))
+    const res = await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'bank', reference: 'TRF1', paidAt: '2026-10-05', bankAccountId: 'absa' }))
     const { payout } = await res.json()
     expect(payout).toMatchObject({ gross: 2000, withholdingTax: 100, net: 1900 })
     const journal = h.journals.find(j => j.ref === 'JRN/AGP/0001')!
@@ -140,14 +145,27 @@ describe('agent commissions API', () => {
     expect(debitOf(journal, '3307')).toBe(-100)
   })
 
-  it('requires the M-Pesa code', async () => {
-    const res = await PAY(json({ agentId: 'agent-1', commissionIds: ['x'], method: 'mpesa', reference: '', paidAt: '2026-10-05' }))
+  it('requires the M-Pesa code, and the account it was paid from', async () => {
+    const res = await PAY(json({ agentId: 'agent-1', commissionIds: ['x'], method: 'mpesa', reference: '', paidAt: '2026-10-05', bankAccountId: 'mpesa' }))
     expect(res.status).toBe(422)
+    const noAccount = await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'mpesa', reference: 'SJK1', paidAt: '2026-10-05' }))
+    expect(noAccount.status).toBe(422)
+    expect((await noAccount.json()).error).toMatch(/paid from/)
+  })
+
+  it('M-Pesa sent from a bank account posts to that bank', async () => {
+    ;(h.state.deed_invoices as any[])[0].amountPaid = 50000
+    const res = await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'mpesa', reference: 'SJK9', paidAt: '2026-10-05', bankAccountId: 'equity' }))
+    const { payout } = await res.json()
+    expect(payout.paidFrom).toBe('2205 - Equity Bank')
+    const journal = h.journals.find(j => j.ref === 'JRN/AGP/0001')!
+    expect(journal.journalCode).toBe('BNK')
+    expect(debitOf(journal, '2205')).toBe(-2000)
   })
 
   it('a refund after payout is recovered from the next payout', async () => {
     ;(h.state.deed_invoices as any[])[0].amountPaid = 50000
-    await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'cash', reference: '', paidAt: '2026-10-05' }))
+    await PAY(json({ agentId: 'agent-1', commissionIds: ['sale_order:so-1'], method: 'cash', reference: '', paidAt: '2026-10-05', bankAccountId: 'cash' }))
     ;(h.state.deed_invoices as any[]).push({ id: 'cn-1', isCreditNote: true, sourceInvoiceId: 'inv-1', total: -50000, status: 'posted' })
     const body = await (await GET()).json()
     const clawback = body.commissions.find((r: any) => r.amount < 0)
@@ -196,7 +214,7 @@ describe('manual agent commission bills', () => {
     // The sales sync leaves it alone, and it is paid like any other line.
     const body = await (await GET()).json()
     expect(body.commissions.find((r: any) => r.id === 'AGB/0001').status).toBe('due')
-    const paid = await PAY(json({ agentId: 'agent-1', commissionIds: ['AGB/0001'], method: 'cash', reference: '', paidAt: '2026-10-06' }))
+    const paid = await PAY(json({ agentId: 'agent-1', commissionIds: ['AGB/0001'], method: 'cash', reference: '', paidAt: '2026-10-06', bankAccountId: 'cash' }))
     expect((await paid.json()).payout.gross).toBe(3500)
     expect((await CANCEL_BILL(new Request('http://localhost/api/agents/commissions?id=AGB%2F0001', { method: 'DELETE' }))).status).toBe(409)
   })
