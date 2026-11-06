@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cleanPortalText, guardPortalRoute } from '@/lib/portal/portal-guard.server'
-import { hasRiderSession, needPin, noStore, riderForToken, updateDeliveryJob } from '@/lib/delivery/rider-portal.server'
+import { hasRiderSession, loadRiderData, needPin, noStore, riderForToken, updateDeliveryJob } from '@/lib/delivery/rider-portal.server'
 import { applyRiderAction, riderJobView, type RiderAction } from '@/lib/delivery/rider-portal'
 import { applyStopAction, UNPLANNED_REASON_LABELS, type StopAction, type UnplannedReason } from '@/lib/delivery/trip'
 import { markRepairDeliveredByRider } from '@/lib/delivery/repair-delivered.server'
+import { applyCustomerPaidRider, type PaidRiderInput } from '@/lib/delivery/rider-direct-pay.server'
 
 export const dynamic = 'force-dynamic'
 type Params = { params: Promise<{ token: string; jobId: string }> }
@@ -16,6 +17,10 @@ type Params = { params: Promise<{ token: string; jobId: string }> }
  *    | { action: 'stop_failed', stopId, reason }
  *    | { action: 'add_item', stopId, id, description, serial?, qty?, reason, note?, billOnInvoice? }
  *    | { action: 'back_at_shop' }
+ *    | { action: 'paid_my_fee', paidMyFee }
+ * 'delivered' and 'stop_done' may also carry paidMyFee: { amount, method, reference? }
+ * — the customer paid the rider the delivery charge directly. It settles that
+ * much of the invoice and comes off the rider's pay, automatically.
  */
 export const POST = guardPortalRoute('rider-update', 300, async (req: NextRequest, { params }: Params) => {
   const { token, jobId } = await params
@@ -24,6 +29,24 @@ export const POST = guardPortalRoute('rider-update', 300, async (req: NextReques
   if (!hasRiderSession(req, rider)) return needPin(rider)
 
   const body = await req.json().catch(() => ({})) as Record<string, any>
+  const paidMyFee: PaidRiderInput | undefined = body.paidMyFee && Number(body.paidMyFee.amount) > 0
+    ? { amount: Math.round(Number(body.paidMyFee.amount) * 100) / 100, method: body.paidMyFee.method === 'mpesa' ? 'mpesa' : 'cash', reference: cleanPortalText(body.paidMyFee.reference, 40) }
+    : undefined
+  if (paidMyFee || body.action === 'paid_my_fee') {
+    const problem = await checkPaidMyFee(String(jobId), rider.id, paidMyFee)
+    if (problem) return NextResponse.json({ error: problem }, { status: 400, headers: noStore })
+  }
+  if (body.action === 'paid_my_fee') {
+    const done = await applyCustomerPaidRider(String(jobId), paidMyFee!, { by: rider.name, maxSettle: paidMyFee!.amount, capToCharge: true })
+    if (!done.ok) return NextResponse.json({ error: done.error }, { status: done.status, headers: noStore })
+    return NextResponse.json({ job: riderJobView(done.job as any) }, { headers: noStore })
+  }
+  /** After the trip update is saved: record the fee and settle the invoice. */
+  const recordFee = async (job: any) => {
+    if (!paidMyFee || job.customerPaidRider) return job
+    const done = await applyCustomerPaidRider(String(jobId), paidMyFee, { by: rider.name, maxSettle: paidMyFee.amount, capToCharge: true })
+    return done.ok ? done.job : job
+  }
   const cashOf = (c: any) => c && Number(c.amount) > 0
     ? { amount: Number(c.amount), method: c.method === 'mpesa' ? 'mpesa' as const : 'cash' as const, reference: cleanPortalText(c.reference, 40) }
     : undefined
@@ -49,7 +72,7 @@ export const POST = guardPortalRoute('rider-update', 300, async (req: NextReques
     const result = await updateDeliveryJob(String(jobId), job => applyStopAction(job as any, rider.id, input) as any)
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status === 404 ? 409 : result.status, headers: noStore })
     await afterRiderUpdate(rider.name, result.before as any, result.job as any, input)
-    return NextResponse.json({ job: riderJobView(result.job) }, { headers: noStore })
+    return NextResponse.json({ job: riderJobView(await recordFee(result.job)) }, { headers: noStore })
   }
 
   let input: RiderAction
@@ -70,8 +93,23 @@ export const POST = guardPortalRoute('rider-update', 300, async (req: NextReques
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status === 404 ? 409 : result.status, headers: noStore })
 
   await afterRiderUpdate(rider.name, result.before as any, result.job as any, input)
-  return NextResponse.json({ job: riderJobView(result.job) }, { headers: noStore })
+  return NextResponse.json({ job: riderJobView(await recordFee(result.job)) }, { headers: noStore })
 })
+
+/** Why the rider cannot record a direct fee payment on this trip, or null. */
+async function checkPaidMyFee(jobId: string, riderId: string, fee: PaidRiderInput | undefined): Promise<string | null> {
+  if (!fee) return 'Enter the amount the customer paid you'
+  const { jobs, pays } = await loadRiderData()
+  const job = jobs.find(j => j.id === jobId) as Record<string, any> | undefined
+  if (!job || job.riderId !== riderId) return 'This trip is not yours'
+  if (job.customerPaidRider) return null // already recorded; the update goes ahead without it
+  if (job.status === 'cancelled' || job.status === 'failed') return 'This trip was not delivered'
+  if (pays.some(p => (p.jobIds ?? []).includes(jobId))) return 'This trip is already in a pay run — tell the office'
+  const charge = Number(job.deliveryFee) > 0 ? Number(job.deliveryFee) : Number(job.riderFee) || 0
+  if (!(charge > 0)) return 'This trip has no delivery charge — tell the office'
+  if (fee.amount > charge + 0.005) return `The delivery charge for this trip is KES ${charge.toLocaleString('en-KE')} — enter that or less`
+  return null
+}
 
 const kes = (n: number) => `KES ${n.toLocaleString('en-KE')}`
 

@@ -20,6 +20,7 @@ type Job = {
   pickupAddress: string; deliveryAddress: string
   scheduledDate: string; pickedUpAt?: string; deliveredAt?: string
   notes: string; document: string; fee: number
+  deliveryCharge: number; paidMyFee?: { amount: number }
   recipientName?: string; failureReason?: string
   cashCollected?: Cash; cashTotal: number
   stops: Stop[]; hasStops: boolean; progress: { done: number; total: number }
@@ -107,8 +108,10 @@ function ItemLine({ item }: { item: Item }) {
   )
 }
 
-function StopCard({ jobId, stop, index, isNext, canAct, onUpdate }: {
+function StopCard({ jobId, stop, index, isNext, canAct, onUpdate, feeCharge, feeRecorded }: {
   jobId: string; stop: Stop; index: number; isNext: boolean; canAct: boolean; onUpdate: Update
+  /** The trip's delivery charge, and whether the customer already paid it to the rider. */
+  feeCharge: number; feeRecorded: boolean
 }) {
   const [mode, setMode] = useState<'idle' | 'done' | 'fail' | 'add'>('idle')
   const [recipient, setRecipient] = useState('')
@@ -117,6 +120,10 @@ function StopCard({ jobId, stop, index, isNext, canAct, onUpdate }: {
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<'cash' | 'mpesa'>('cash')
   const [reference, setReference] = useState('')
+  const [feePaid, setFeePaid] = useState(false)
+  const [feeAmount, setFeeAmount] = useState(feeCharge > 0 ? String(feeCharge) : '')
+  const [feeMethod, setFeeMethod] = useState<'cash' | 'mpesa'>('cash')
+  const [feeRef, setFeeRef] = useState('')
   const [reason, setReason] = useState('')
   const [what, setWhat] = useState('')
   const [serial, setSerial] = useState('')
@@ -202,7 +209,7 @@ function StopCard({ jobId, stop, index, isNext, canAct, onUpdate }: {
           </label>
           <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
             <input type="checkbox" className="h-5 w-5" checked={paid} onChange={e => setPaid(e.target.checked)} />
-            The customer paid me
+            The customer paid me for the order
           </label>
           {paid && (
             <div className="space-y-2">
@@ -220,13 +227,39 @@ function StopCard({ jobId, stop, index, isNext, canAct, onUpdate }: {
               )}
             </div>
           )}
+          {!feeRecorded && feeCharge > 0 && (
+            <>
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input type="checkbox" className="h-5 w-5" checked={feePaid} onChange={e => setFeePaid(e.target.checked)} />
+                The customer paid me my delivery fee (I keep it)
+              </label>
+              {feePaid && (
+                <div className="space-y-2">
+                  <input className={input} inputMode="decimal" value={feeAmount} onChange={e => setFeeAmount(e.target.value.replace(/[^\d.]/g, ''))} placeholder="Amount (KES)" />
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['cash', 'mpesa'] as const).map(m => (
+                      <button key={m} type="button" onClick={() => setFeeMethod(m)}
+                        className={`rounded-xl border px-3 py-2.5 text-sm font-semibold ${feeMethod === m ? 'border-[#1B2762] bg-[#1B2762] text-white' : 'border-slate-300 bg-white text-slate-700'}`}>
+                        {m === 'cash' ? 'Cash' : 'M-Pesa to me'}
+                      </button>
+                    ))}
+                  </div>
+                  {feeMethod === 'mpesa' && (
+                    <input className={input} value={feeRef} onChange={e => setFeeRef(e.target.value.toUpperCase())} placeholder="M-Pesa code" autoCapitalize="characters" />
+                  )}
+                  <p className="text-xs text-slate-600">It comes off what Deed pays you for this trip (delivery charge {kes(feeCharge)}).</p>
+                </div>
+              )}
+            </>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <button className={`${btn} border border-slate-300 bg-white text-slate-700`} disabled={busy} onClick={() => setMode('idle')}>Back</button>
-            <button className={`${btn} bg-emerald-600 text-white`} disabled={busy || recipient.trim().length < 2 || (paid && !(Number(amount) > 0))}
+            <button className={`${btn} bg-emerald-600 text-white`} disabled={busy || recipient.trim().length < 2 || (paid && !(Number(amount) > 0)) || (feePaid && !(Number(feeAmount) > 0 && Number(feeAmount) <= feeCharge))}
               onClick={() => void send({
                 action: 'stop_done', recipientName: recipient,
                 items: Object.fromEntries(planned.map(i => [i.id, missing[i.id] ? 'not_done' : 'done'])),
                 cash: paid ? { amount: Number(amount), method, reference } : undefined,
+                paidMyFee: feePaid && !feeRecorded ? { amount: Number(feeAmount), method: feeMethod, reference: feeRef } : undefined,
               })}>
               {busy ? 'Saving…' : 'Confirm'}
             </button>
@@ -305,7 +338,7 @@ function JobCard({ job, onUpdate }: { job: Job; onUpdate: Update }) {
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{job.ref}{job.document ? ` · ${job.document}` : ''}</p>
           <p className="mt-0.5 text-lg font-bold text-slate-900">{job.customerName || 'Customer'}</p>
           <p className="text-sm text-slate-500">
-            {fmtDay(job.scheduledDate)} · your fee {kes(job.fee)}{job.stops.length > 1 ? ` · ${job.progress.done} of ${job.progress.total} stops` : ''}
+            {fmtDay(job.scheduledDate)} · your fee {kes(job.fee)}{job.paidMyFee ? ` · customer paid you ${kes(job.paidMyFee.amount)}` : ''}{job.stops.length > 1 ? ` · ${job.progress.done} of ${job.progress.total} stops` : ''}
           </p>
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${returning ? 'bg-sky-100 text-sky-800' : job.status === 'in_transit' ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-700'}`}>
@@ -329,7 +362,8 @@ function JobCard({ job, onUpdate }: { job: Job; onUpdate: Update }) {
 
       <div className="mt-3 space-y-2">
         {job.stops.map((s, i) => (
-          <StopCard key={s.id} jobId={job.id} stop={s} index={i} isNext={i === nextIdx} canAct={job.status === 'in_transit'} onUpdate={onUpdate} />
+          <StopCard key={s.id} jobId={job.id} stop={s} index={i} isNext={i === nextIdx} canAct={job.status === 'in_transit'} onUpdate={onUpdate}
+            feeCharge={job.deliveryCharge ?? 0} feeRecorded={!!job.paidMyFee} />
         ))}
       </div>
 

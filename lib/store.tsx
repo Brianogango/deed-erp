@@ -1717,7 +1717,7 @@ export interface DeliveryJob {
    * keeps it): it settles that much of the invoice and comes off the rider's
    * pay for this trip. See lib/delivery/rider-direct-pay.ts.
    */
-  customerPaidRider?: { amount: number; method: 'cash' | 'mpesa'; reference?: string; at: string; by: string; invoiceId?: string; invoiceRef?: string }
+  customerPaidRider?: { amount: number; method: 'cash' | 'mpesa'; reference?: string; at: string; by: string; invoiceId?: string; invoiceRef?: string; settled?: number; pending?: string }
   /** When the rider last changed this job from their link. */
   riderUpdatedAt?: string
   /** Stops in order (drop off / collect / exchange). Jobs without stops are one stop. See lib/delivery/trip.ts. */
@@ -21251,35 +21251,30 @@ const storeCtx: AppState = {
       const job = deliveryJobs.find(j => j.id === jobId)
       if (!job) return false
       const amount = Math.round((Number(input.amount) || 0) * 100) / 100
-      if (!(amount > 0)) { showToast('Enter the amount the customer paid the rider', 'error'); return false }
+      const settleOnly = Boolean(job.customerPaidRider?.pending)
+      if (!settleOnly && !(amount > 0)) { showToast('Enter the amount the customer paid the rider', 'error'); return false }
       if (!job.riderId) { showToast('Assign the rider first', 'error'); return false }
-      if (job.customerPaidRider) { showToast(`Already recorded: the customer paid ${job.riderName ?? 'the rider'} ${fmtKes(job.customerPaidRider.amount)}`, 'info'); return false }
-      const inPay = riderWeeklyPays.find(p => (p.jobIds ?? []).includes(job.id))
-      if (inPay) { showToast(`${job.ref} is already in rider pay ${inPay.ref} — take it off the rider's next pay instead`, 'error'); return false }
-      // The invoice this trip was charged on: its own, or the repair's.
-      const repair = job.repairOrderId ? repairs.find(r => r.id === job.repairOrderId) : undefined
-      const invoiceId = job.invoiceId || (repair as { invoiceId?: string } | undefined)?.invoiceId
-      const inv = invoiceId ? invRef.current.find(i => i.id === invoiceId) : undefined
-      let paidOnInvoice = 0
-      if (inv) {
-        if (invoiceDocState(inv.status) !== 'posted') { showToast(`Post ${inv.ref} first, then record what the customer paid the rider`, 'error'); return false }
-        const balance = Math.round((inv.total - inv.amountPaid) * 100) / 100
-        paidOnInvoice = Math.min(amount, Math.max(0, balance))
-        if (paidOnInvoice > 0) {
-          const ok = await storeCtxRef.current!.registerPayment(inv.id, paidOnInvoice, PAID_TO_RIDER, undefined,
-            `Paid to rider ${job.riderName ?? ''} (${job.ref})${input.reference ? ` · ${input.reference}` : ''}`.trim(), now())
-          if (!ok) return false
-        }
-      }
-      const user = currentUser()
-      const record = { amount, method: input.method, reference: input.reference?.trim() || undefined, at: new Date().toISOString(), by: user?.name ?? 'staff', ...(inv ? { invoiceId: inv.id, invoiceRef: inv.ref } : {}) }
+      if (job.customerPaidRider && !settleOnly) { showToast(`Already recorded: the customer paid ${job.riderName ?? 'the rider'} ${fmtKes(job.customerPaidRider.amount)}`, 'info'); return false }
+      // Recorded and settled on the server — the same path as the rider's own link.
+      const res = await fetch(`/api/delivery-jobs/${encodeURIComponent(jobId)}/paid-to-rider`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settleOnly ? { action: 'settle' } : { amount, method: input.method, reference: input.reference?.trim() || undefined }),
+      }).catch(() => null)
+      const out = res ? await res.json().catch(() => ({})) : {}
+      if (!res?.ok || !out.job) { showToast(out.error || 'Could not save. Try again.', 'error'); return false }
+      const saved = out.job as DeliveryJob
+      const record = saved.customerPaidRider
       setDeliveryJobs(p => p.map(j => j.id !== jobId ? j : { ...j, customerPaidRider: record }))
-      addAuditLog('delivery_customer_paid_rider', job.ref, `Customer paid ${job.riderName ?? 'rider'} ${fmtKes(amount)} directly${inv ? ` — ${fmtKes(paidOnInvoice)} settled on ${inv.ref}` : ''}; rider pay for this trip now ${fmtKes(riderPayForJob({ ...job, customerPaidRider: record }))}`)
+      if (record?.invoiceId && typeof out.invoiceAmountPaid === 'number') {
+        setInvoices(p => p.map(i => i.id !== record.invoiceId || i.amountPaid >= out.invoiceAmountPaid ? i : { ...i, amountPaid: out.invoiceAmountPaid }))
+      }
+      const settled = Number(record?.settled) || 0
+      addAuditLog('delivery_customer_paid_rider', job.ref, `Customer paid ${job.riderName ?? 'rider'} ${fmtKes(record?.amount ?? amount)} directly${settled > 0 ? ` — ${fmtKes(settled)} settled on ${record?.invoiceRef}` : ''}; rider pay for this trip now ${fmtKes(riderPayForJob({ ...job, customerPaidRider: record }))}`)
       showToast([
-        `${fmtKes(amount)} paid to ${job.riderName ?? 'the rider'} recorded`,
-        inv ? (paidOnInvoice > 0 ? `${fmtKes(paidOnInvoice)} settled on ${inv.ref}` : `${inv.ref} had nothing left to settle`) : '',
+        `${fmtKes(record?.amount ?? amount)} paid to ${job.riderName ?? 'the rider'} recorded`,
+        settled > 0 ? `${fmtKes(settled)} settled on ${record?.invoiceRef}` : record?.pending ? `not settled: ${record.pending}` : '',
         `rider pay for ${job.ref}: ${fmtKes(riderPayForJob({ ...job, customerPaidRider: record }))}`,
-      ].filter(Boolean).join(' — '))
+      ].filter(Boolean).join(' — '), settled > 0 || !record?.pending ? 'success' : 'info')
       return true
     },
 

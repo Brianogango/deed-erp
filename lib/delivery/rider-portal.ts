@@ -33,6 +33,8 @@ export type JobLike = {
   pickedUpAt?: string
   deliveredAt?: string
   riderFee?: number
+  /** What the customer was charged for delivery. */
+  deliveryFee?: number
   notes?: string
   failureReason?: string
   saleOrderRef?: string
@@ -41,7 +43,7 @@ export type JobLike = {
   recipientName?: string
   cashCollected?: { amount: number; method: 'cash' | 'mpesa'; reference?: string; at: string }
   /** The customer paid the rider the delivery charge themselves (comes off the rider's pay). */
-  customerPaidRider?: { amount: number }
+  customerPaidRider?: { amount: number; method?: string; settled?: number; invoiceRef?: string }
   /** When the rider last changed this job from their link. */
   riderUpdatedAt?: string
   stops?: Stop[]
@@ -119,6 +121,9 @@ export function riderJobView(job: JobLike) {
     notes: open ? (job.notes ?? '') : '',
     document: job.saleOrderRef || job.invoiceRef || job.repairOrderRef || '',
     fee: Number(job.riderFee) || 0,
+    /** The most the customer may have paid the rider for delivery. */
+    deliveryCharge: Number(job.deliveryFee) > 0 ? Number(job.deliveryFee) : Number(job.riderFee) || 0,
+    paidMyFee: job.customerPaidRider ? { amount: Number(job.customerPaidRider.amount) || 0 } : undefined,
     recipientName: job.recipientName,
     failureReason: job.failureReason,
     cashCollected: job.cashCollected,

@@ -105,7 +105,7 @@ export default function InvoiceDetail() {
     scheduleInvoiceDelivery,
   } = useFinanceStore()
 
-  const { deliveryJobs, riders } = useDeliveryStore()
+  const { deliveryJobs, riders, recordCustomerPaidRider } = useDeliveryStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const canManageFinance = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
@@ -1147,13 +1147,18 @@ export default function InvoiceDetail() {
                 </p>
                 {linkedDeliveryJob.customerPaidRider ? (
                   <p className="invoice-detail__info-muted">
-                    Customer paid the rider {fmtKes(linkedDeliveryJob.customerPaidRider.amount)} directly — settled here, off the rider’s pay
+                    Customer paid the rider {fmtKes(linkedDeliveryJob.customerPaidRider.amount)} directly — {linkedDeliveryJob.customerPaidRider.pending ? `not settled here yet (${linkedDeliveryJob.customerPaidRider.pending})` : 'settled here'}, off the rider’s pay
                   </p>
-                ) : linkedDeliveryJob.riderId && !['cancelled', 'failed'].includes(linkedDeliveryJob.status) && (
+                ) : null}
+                {linkedDeliveryJob.customerPaidRider?.pending ? (
+                  <button type="button" className="invoice-detail__link-btn" onClick={() => void recordCustomerPaidRider(linkedDeliveryJob.id, { amount: linkedDeliveryJob.customerPaidRider!.amount, method: linkedDeliveryJob.customerPaidRider!.method })}>
+                    Settle on this invoice now
+                  </button>
+                ) : linkedDeliveryJob.customerPaidRider ? null : linkedDeliveryJob.riderId && !['cancelled', 'failed'].includes(linkedDeliveryJob.status) ? (
                   <button type="button" className="invoice-detail__link-btn" onClick={() => setPaidRiderJob(linkedDeliveryJob)}>
                     Customer paid the rider directly?
                   </button>
-                )}
+                ) : null}
                 <button
                   type="button"
                   className="invoice-detail__link-btn"
