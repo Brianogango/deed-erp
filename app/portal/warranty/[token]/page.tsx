@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import QRCode from 'qrcode'
-import { WARRANTY_INTRO, warrantyTerms } from '@/lib/warranty/e-warranty'
+import { WARRANTY_INTRO, WARRANTY_SUPPORT_PHONE, warrantyTerms } from '@/lib/warranty/e-warranty'
 
 type Data = {
   warranty: {
@@ -40,8 +40,8 @@ export default function WarrantyCertificatePage() {
     QRCode.toDataURL(window.location.href.split(/[?#]/)[0], { margin: 1, width: 220 }).then(setQr).catch(() => {})
   }, [token])
 
-  if (error) return <main className="min-h-[100dvh] bg-slate-100 p-6"><p className="mx-auto max-w-md rounded-2xl bg-white p-5 text-sm text-rose-700 shadow-sm">{error}</p></main>
-  if (!data) return <main className="min-h-[100dvh] bg-slate-100 p-6"><p className="mx-auto max-w-md text-sm text-slate-500">Loading your warranty…</p></main>
+  if (error) return <main className="h-[100dvh] overflow-y-auto bg-slate-100 p-6"><p className="mx-auto max-w-md rounded-2xl bg-white p-5 text-sm text-rose-700 shadow-sm">{error}</p></main>
+  if (!data) return <main className="h-[100dvh] overflow-y-auto bg-slate-100 p-6"><p className="mx-auto max-w-md text-sm text-slate-500">Loading your warranty…</p></main>
 
   const w = data.warranty
   // Contacts from company settings, else as printed on the paper certificate.
@@ -50,7 +50,8 @@ export default function WarrantyCertificatePage() {
     name: data.company.name || 'Deed Technologies',
     address: data.company.address || 'Sanlam House, Kenyatta Avenue, 1st Floor, Suite No. 103',
     city: data.company.address ? data.company.city : '',
-    phone: data.company.phone || '(+254) 0113 407 964',
+    // Warranty claims go to the warranty support line.
+    phone: WARRANTY_SUPPORT_PHONE,
     website: data.company.website || 'www.deed.africa',
   }
   const period = `${w.months} month${w.months === 1 ? '' : 's'}`
@@ -58,8 +59,8 @@ export default function WarrantyCertificatePage() {
   const phoneDigits = String(c.phone ?? '').replace(/\D/g, '').replace(/^0/, '254')
 
   return (
-    <main className="min-h-[100dvh] overflow-y-auto bg-slate-100 px-3 py-5 print:bg-white print:p-0">
-      <style>{`@media print { @page { size: A4; margin: 8mm } html, body, main { background: #fff !important; min-height: 0 !important; padding: 0 !important; overflow: visible !important } .no-print { display: none !important } .cert { box-shadow: none !important; border: none !important; padding: 0 !important; font-size: 7.7pt !important; line-height: 1.28 !important; max-width: none !important } .cert section { margin-bottom: 4pt !important } .cert li { margin-top: 1pt !important } .cert h1 { font-size: 12pt !important } .cert .text-xs, .cert .text-sm { font-size: 7.4pt !important } .cert img.h-14 { height: 38pt !important } .cert .h-28 { height: 66pt !important; width: 66pt !important } }`}</style>
+    <main className="h-[100dvh] overflow-y-auto overscroll-contain bg-slate-100 px-3 py-5 print:h-auto print:overflow-visible print:bg-white print:p-0">
+      <style>{`@media print { @page { size: A4; margin: 8mm } html, body, main { background: #fff !important; min-height: 0 !important; height: auto !important; padding: 0 !important; overflow: visible !important } .no-print { display: none !important } .cert { box-shadow: none !important; border: none !important; padding: 0 !important; font-size: 7.7pt !important; line-height: 1.28 !important; max-width: none !important } .cert section { margin-bottom: 4pt !important } .cert li { margin-top: 1pt !important } .cert h1 { font-size: 12pt !important } .cert .text-xs, .cert .text-sm { font-size: 7.4pt !important } .cert img.h-14 { height: 38pt !important } .cert .h-28 { height: 66pt !important; width: 66pt !important } }`}</style>
 
       <div className="no-print mx-auto mb-3 flex max-w-[860px] flex-wrap items-center justify-between gap-2">
         <span className={`rounded-full border px-3 py-1 text-sm font-bold ${st.cls}`}>
@@ -135,7 +136,7 @@ export default function WarrantyCertificatePage() {
           </p>
           <p className="text-right text-xs font-semibold text-slate-700">
             {[c.address, c.city].filter(Boolean).join(', ')}
-            {c.phone && <><br />C: {c.phone}</>}
+            {c.phone && <><br />Warranty support: {c.phone}</>}
             {c.website && <><br />W: {String(c.website).replace(/^https?:\/\//, '')}</>}
           </p>
         </footer>

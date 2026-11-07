@@ -123,7 +123,10 @@ export function maskedName(name: string): string {
 export const warrantyPath = (token: string) => `/portal/warranty/${encodeURIComponent(token)}`
 
 /** Deed Technologies Limited Warranty, as printed on the paper certificate. */
-export const WARRANTY_INTRO = 'This Limited Warranty (referred to as the “Warranty”) is provided by Deed Technologies (referred to as the “Seller”) to the original purchaser (referred to as the “Buyer”) of a refurbished computer/laptop (referred to as the “Product”).'
+/** Warranty support line, shown on every certificate (call / WhatsApp). */
+export const WARRANTY_SUPPORT_PHONE = '0113 704 451'
+
+export const WARRANTY_INTRO = 'This Limited Warranty (referred to as the “Warranty”) is provided by Deed Technologies (referred to as the “Seller”) to the original purchaser (referred to as the “Buyer”) of a new or refurbished computer/laptop (referred to as the “Product”).'
 
 export function warrantyTerms(period: string): Array<{ title: string; intro?: string; items: Array<{ label?: string; text: string }> }> {
   return [
