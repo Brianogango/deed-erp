@@ -44,10 +44,10 @@ export default function WarrantyCheckPage() {
   const supportDigits = WARRANTY_SUPPORT_PHONE.replace(/\D/g, '').replace(/^0/, '254')
   const claimText = `Hello, I would like to make a warranty claim. Warranty ${w.ref}, ${w.productName}, serial ${w.serialNumber}. The problem is: `
   const tone = w.state === 'valid'
-    ? { box: 'bg-emerald-600', label: 'Covered', line: `Valid until ${longDate(w.endDate)}`, sub: `${left} day${left === 1 ? '' : 's'} of cover left` }
+    ? { box: 'bg-[#00AEEF] text-[#20164D]', label: 'Covered', line: `Valid until ${longDate(w.endDate)}`, sub: `${left} day${left === 1 ? '' : 's'} of cover left` }
     : w.state === 'expired'
-      ? { box: 'bg-slate-600', label: 'Not covered', line: `Expired on ${longDate(w.endDate)}`, sub: 'Repairs are charged as normal' }
-      : { box: 'bg-rose-600', label: 'Not covered', line: 'This warranty is void', sub: 'Contact support if you think this is wrong' }
+      ? { box: 'bg-slate-600 text-white', label: 'Not covered', line: `Expired on ${longDate(w.endDate)}`, sub: 'Repairs are charged as normal' }
+      : { box: 'bg-rose-600 text-white', label: 'Not covered', line: 'This warranty is void', sub: 'Contact support if you think this is wrong' }
 
   return (
     <main className={shell}>
@@ -61,7 +61,7 @@ export default function WarrantyCheckPage() {
           </div>
         </header>
 
-        <section className={`rounded-2xl p-5 text-white shadow-sm ${tone.box}`} aria-live="polite">
+        <section className={`rounded-2xl p-5 shadow-sm ${tone.box}`} aria-live="polite">
           <p className="text-sm font-semibold uppercase tracking-wide opacity-90">{tone.label}</p>
           <p className="mt-1 text-2xl font-extrabold">{tone.line}</p>
           <p className="mt-1 text-sm opacity-90">{tone.sub}</p>
@@ -70,7 +70,7 @@ export default function WarrantyCheckPage() {
         <section className="rounded-2xl bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500">Check it matches the machine</p>
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-            <dt className="text-slate-500">Model</dt><dd className="font-semibold text-slate-900">{w.productName}</dd>
+            <dt className="text-slate-500">Model</dt><dd className="line-clamp-3 font-semibold text-slate-900" title={w.productName}>{w.productName}</dd>
             <dt className="text-slate-500">Serial</dt><dd className="font-mono font-bold text-slate-900">{w.serialNumber}</dd>
             <dt className="text-slate-500">Purchased</dt><dd className="text-slate-900">{longDate(w.startDate)}</dd>
             <dt className="text-slate-500">Cover</dt><dd className="text-slate-900">{w.months} month{w.months === 1 ? '' : 's'}</dd>
@@ -78,12 +78,12 @@ export default function WarrantyCheckPage() {
         </section>
 
         {staff && (
-          <a className="block rounded-xl bg-[#1B2762] px-4 py-3.5 text-center text-base font-bold text-white" href={`/repairs?warrantyRepair=${encodeURIComponent(staff.warrantyId)}`}>
+          <a className="block rounded-xl bg-[#20164D] px-4 py-3.5 text-center text-base font-bold text-white" href={`/repairs?warrantyRepair=${encodeURIComponent(staff.warrantyId)}`}>
             Start warranty repair
           </a>
         )}
         {w.state === 'valid' && (
-          <a className="block rounded-xl bg-emerald-600 px-4 py-3.5 text-center text-base font-bold text-white" target="_blank" rel="noreferrer"
+          <a className="block rounded-xl bg-[#00AEEF] px-4 py-3.5 text-center text-base font-bold text-[#20164D]" target="_blank" rel="noreferrer"
             href={`https://wa.me/${supportDigits}?text=${encodeURIComponent(claimText)}`}>
             Make a warranty claim
           </a>

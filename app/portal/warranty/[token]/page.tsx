@@ -15,7 +15,7 @@ type Data = {
 
 const longDate = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 const STATE = {
-  valid: { label: 'Valid', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+  valid: { label: 'Valid', cls: 'bg-[#E0F6FD] text-[#20164D] border-[#00AEEF]' },
   expired: { label: 'Expired', cls: 'bg-slate-100 text-slate-700 border-slate-300' },
   void: { label: 'Void', cls: 'bg-rose-100 text-rose-700 border-rose-300' },
 }
@@ -74,25 +74,25 @@ export default function WarrantyCertificatePage() {
               Contact support
             </a>
           )}
-          <button className="rounded-xl bg-[#1B2762] px-3 py-2 text-sm font-semibold text-white" onClick={() => window.print()}>Download PDF</button>
+          <button className="rounded-xl bg-[#20164D] px-3 py-2 text-sm font-semibold text-white" onClick={() => window.print()}>Download PDF</button>
         </div>
       </div>
 
       <article className="cert mx-auto max-w-[860px] rounded-2xl border border-slate-200 bg-white p-5 text-[12.5px] leading-snug text-slate-900 shadow-sm sm:p-8">
         <header className="flex items-center gap-4">
-          <span className="h-px flex-1 bg-[#1B2762]" />
+          <span className="h-px flex-1 bg-[#20164D]" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/deed-logo.png" alt={c.name || 'Deed Technologies'} className="h-14 w-auto" />
-          <span className="h-px flex-1 bg-[#1B2762]" />
+          <span className="h-px flex-1 bg-[#20164D]" />
         </header>
 
         <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="text-lg font-extrabold text-[#1B2762]">Limited Warranty Certificate</h1>
+          <h1 className="text-lg font-extrabold text-[#20164D]">Limited Warranty Certificate</h1>
           <p className="font-mono text-sm font-bold text-rose-700">{w.ref}</p>
         </div>
         <p className="mt-2 font-semibold">{WARRANTY_INTRO}</p>
 
-        <section className="mt-3 grid gap-3 rounded-xl border border-[#1B2762]/20 bg-slate-50 p-3 sm:grid-cols-[1fr_auto]">
+        <section className="mt-3 grid gap-3 rounded-xl border border-[#20164D]/20 bg-slate-50 p-3 sm:grid-cols-[1fr_auto]">
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             <dt className="text-slate-500">Product model</dt><dd className="font-semibold">{w.productName}</dd>
             <dt className="text-slate-500">Product serial number</dt><dd className="font-mono font-semibold">{w.serialNumber}</dd>
@@ -130,7 +130,7 @@ export default function WarrantyCertificatePage() {
           ))}
         </div>
 
-        <footer className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-[#1B2762]/30 pt-3">
+        <footer className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-[#20164D]/30 pt-3">
           <p className="text-xs text-slate-600">
             Issued electronically by {c.name || 'Deed Technologies'} on {longDate(w.startDate)} — no signature needed.<br />
             Scan the code above to check it is still valid.
