@@ -234,11 +234,12 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
     doc.setFillColor(...primary).rect(0, 0, pageW(doc), 5, 'F')
     doc.setFillColor(...secondary).rect(0, 8, pageW(doc) * .68, 2, 'F')
   } else if (layout === 'bubble') {
-    doc.setFillColor(...primary).circle(pageW(doc) + 8, -5, 58, 'F')
-    doc.setFillColor(...secondary).circle(pageW(doc) - 68, -15, 23, 'F')
+    // Kept in the top corner, clear of the company details under it.
+    doc.setFillColor(...primary).circle(pageW(doc) + 20, -30, 48, 'F')
+    doc.setFillColor(...secondary).circle(pageW(doc) - 75, -12, 18, 'F')
   } else if (layout === 'wave') {
-    doc.setFillColor(...primary).ellipse(pageW(doc) - 70, -28, 150, 72, 'F')
-    doc.setFillColor(...secondary).ellipse(pageW(doc) - 18, -22, 112, 52, 'F')
+    doc.setFillColor(...primary).ellipse(pageW(doc) - 70, -40, 150, 54, 'F')
+    doc.setFillColor(...secondary).ellipse(pageW(doc) - 18, -30, 112, 42, 'F')
   } else if (layout === 'folder') {
     doc.setFillColor(...primary).rect(0, 0, pageW(doc) * .43, 84, 'F')
     doc.setFillColor(...secondary).rect(pageW(doc) * .43, 0, pageW(doc) * .57, 84, 'F')
@@ -363,39 +364,19 @@ export function buildDeedDocumentPdf(
   }
   doc.text(input.title.toUpperCase(), MARGIN + (layout === 'bold' ? 10 : 0), y)
 
-  y += 24
+  y += layout === 'bold' ? 32 : 24
   doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...NAVY)
   doc.text(input.ref, MARGIN, y)
   // Dates are presented once in the document metadata block below. The former
   // top-right date repeated Due Date / Valid Until and created conflicting facts.
   y += 28
-  const leftX = MARGIN + 10
-  const splitX = MARGIN + 232
-  const rightX = splitX + 18
-  if (layout === 'boxed' || layout === 'bubble' || layout === 'folder') {
-    doc.setFillColor(...(layout === 'bubble' ? [242, 249, 249] as [number, number, number] : SOFT))
-    doc.setDrawColor(...accent).setLineWidth(.55).roundedRect(MARGIN, y - 10, contentW(doc), 112, layout === 'bubble' ? 12 : 3, layout === 'bubble' ? 12 : 3, 'FD')
-  }
-  writeLabel(doc, customerLabel, leftX, y)
-  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...INK)
-  doc.text(input.customerName || '—', leftX, y + 17, { maxWidth: 195 })
-  let partyY = y + 32
-  const partyLines = [
-    input.attention ? `Attention: ${input.attention}` : '',
-    input.customerAddress || '',
-    input.customerCountry || '',
-    input.customerPhone ? `Phone: ${input.customerPhone}` : '',
-    input.customerEmail ? `Email: ${input.customerEmail}` : '',
-    input.customerTaxId ? `PIN: ${input.customerTaxId}` : '',
-  ].filter(Boolean)
-  partyLines.slice(0, 6).forEach(value => {
-    const wrapped = doc.splitTextToSize(value, 195) as string[]
-    writeValue(doc, wrapped.slice(0, 2).join('\n'), leftX, partyY, { maxWidth: 195 })
-    partyY += Math.max(12, wrapped.slice(0, 2).length * 10)
-  })
-
-  doc.setDrawColor(...BORDER).setLineWidth(.5)
-  doc.line(splitX, y - 5, splitX, Math.max(y + 92, partyY + 3))
+  const boxed = layout === 'boxed' || layout === 'bubble' || layout === 'folder'
+  // Party block starts on the page margin (in line with the title and the
+  // table); inside a box it is padded.
+  const leftX = boxed ? MARGIN + 10 : MARGIN
+  const splitX = MARGIN + 240
+  const rightX = splitX + 16
+  const partyW = splitX - leftX - 14
   const meta: Array<[string, string]> = [
     ['Issue date', fmtDate(input.date)],
     ...(input.sourceRef ? [['Source document', input.sourceRef] as [string, string]] : []),
@@ -404,8 +385,53 @@ export function buildDeedDocumentPdf(
     ...(input.salesperson ? [['Salesperson', input.salesperson] as [string, string]] : []),
     ...(showAmounts ? [['Currency', currency] as [string, string]] : []),
   ]
-  meta.forEach((entry, index) => drawMetaRow(doc, entry[0], entry[1], rightX, y + index * 18, 92))
-  y = Math.max(partyY + 14, y + Math.max(94, meta.length * 18 + 14))
+
+  // Measure everything first: a long name or address wraps, and the lines
+  // under it move down instead of printing on top of it.
+  const NAME_LH = 12
+  const VALUE_LH = 10.5
+  doc.setFont('helvetica', 'bold').setFontSize(10)
+  const nameLines = (doc.splitTextToSize(input.customerName || '—', partyW) as string[]).slice(0, 3)
+  doc.setFont('helvetica', 'normal').setFontSize(8.3)
+  const partyBlocks = [
+    input.attention ? `Attention: ${input.attention}` : '',
+    input.customerAddress || '',
+    input.customerCountry || '',
+    input.customerPhone ? `Phone: ${input.customerPhone}` : '',
+    input.customerEmail ? `Email: ${input.customerEmail}` : '',
+    input.customerTaxId ? `PIN: ${input.customerTaxId}` : '',
+  ].filter(Boolean).map(value => (doc.splitTextToSize(value, partyW) as string[]).slice(0, 3))
+  const metaValueW = right(doc) - (rightX + 92)
+  const metaBlocks = meta.map(([label, value]) => ({ label, lines: (doc.splitTextToSize(value || '—', metaValueW) as string[]).slice(0, 2) }))
+  const partyH = 17 + nameLines.length * NAME_LH + 3 + partyBlocks.reduce((h, lines) => h + lines.length * VALUE_LH + 2, 0)
+  const metaH = metaBlocks.reduce((h, m) => h + Math.max(18, m.lines.length * VALUE_LH + 8), 0)
+  const blockH = Math.max(partyH, metaH, 60)
+
+  if (boxed) {
+    doc.setFillColor(...(layout === 'bubble' ? [242, 249, 249] as [number, number, number] : SOFT))
+    doc.setDrawColor(...accent).setLineWidth(.55).roundedRect(MARGIN, y - 12, contentW(doc), blockH + 18, layout === 'bubble' ? 12 : 3, layout === 'bubble' ? 12 : 3, 'FD')
+  }
+  writeLabel(doc, customerLabel, leftX, y)
+  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...INK)
+  nameLines.forEach((text, i) => doc.text(text, leftX, y + 17 + i * NAME_LH))
+  let partyY = y + 17 + nameLines.length * NAME_LH + 3
+  partyBlocks.forEach(lines => {
+    doc.setFont('helvetica', 'normal').setFontSize(8.3).setTextColor(...INK)
+    lines.forEach((text, i) => doc.text(text, leftX, partyY + i * VALUE_LH))
+    partyY += lines.length * VALUE_LH + 2
+  })
+
+  doc.setDrawColor(...BORDER).setLineWidth(.5)
+  doc.line(splitX, y - 6, splitX, y + blockH - 6)
+  let metaY = y
+  metaBlocks.forEach(m => {
+    doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...MUTED)
+    doc.text(m.label, rightX, metaY)
+    doc.setFont('helvetica', 'normal').setFontSize(8.3).setTextColor(...INK)
+    m.lines.forEach((text, i) => doc.text(text, rightX + 92, metaY + i * VALUE_LH))
+    metaY += Math.max(18, m.lines.length * VALUE_LH + 8)
+  })
+  y += blockH + (boxed ? 14 : 8)
 
   const commercialHead = [['#', 'DESCRIPTION', 'QTY', 'UNIT', `UNIT PRICE (${currency})`, 'VAT', `AMOUNT (${currency})`]]
   const deliveryHead = [['#', 'ITEM DESCRIPTION', 'QTY', 'SERIAL / IMEI', 'SPECS', 'CONDITION']]
@@ -483,6 +509,14 @@ export function buildDeedDocumentPdf(
           5: { cellWidth: 38, halign: 'center' },
           6: { cellWidth: 86, halign: 'right' },
         },
+    // Headings line up with their column: text left, numbers right, short codes centred.
+    didParseCell: data => {
+      if (data.section !== 'head') return
+      const col = data.column.index
+      data.cell.styles.halign = delivery
+        ? (col === 0 || col === 2 || col === 5 ? 'center' : 'left')
+        : (col === 1 ? 'left' : col === 4 || col === 6 ? 'right' : 'center')
+    },
     didDrawPage: data => {
       if (data.pageNumber > 1) drawLetterhead(doc, company, `${input.title.toUpperCase()} · ${input.ref}`)
     },
