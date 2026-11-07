@@ -1,6 +1,8 @@
 // @ts-nocheck
 'use client'
-import { Suspense, useState, useMemo } from 'react'
+import { Suspense, useState, useMemo, useEffect } from 'react'
+import { EWarrantyActions } from '@/components/aftersales/EWarrantyActions'
+import { announceIssuedWarranties } from '@/lib/store'
 import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
@@ -66,6 +68,26 @@ function AfterSalesContent() {
     releaseSerialToStock, cancelWarranty,
     showToast,
   } = useAfterSalesStore()
+
+  // Issue any warranty still missing for a serial-numbered machine sold
+  // (deliveries, POS, Kilimall — past sales included). Safe to repeat.
+  const [syncingWarranties, setSyncingWarranties] = useState(false)
+  const syncWarranties = async (announceNone = false) => {
+    setSyncingWarranties(true)
+    try {
+      const res = await fetch('/api/warranties/sync', { method: 'POST' })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) { if (announceNone) showToast(out.error || 'Could not check for new warranties', 'error'); return }
+      announceIssuedWarranties(out)
+      if (out.issued > 0) showToast(`${out.issued} warrant${out.issued === 1 ? 'y' : 'ies'} issued for serial-numbered sales`)
+      else if (announceNone) showToast('Every serial-numbered sale already has its warranty', 'info')
+    } catch {
+      if (announceNone) showToast('Could not check for new warranties', 'error')
+    } finally {
+      setSyncingWarranties(false)
+    }
+  }
+  useEffect(() => { void syncWarranties() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentUser = users.find(u => u.id === currentUserId)
   const canCancelWarranty = ['director', 'admin_officer', 'technical_lead', 'finance_officer'].includes(String(currentUser?.role ?? ''))
@@ -327,6 +349,14 @@ function AfterSalesContent() {
               Cancel warranty
             </button>
           )}
+        </div>
+
+        <div className="card p-3 text-[12px] flex flex-col gap-2">
+          <div>
+            <p className="font-semibold text-t1">E-warranty certificate</p>
+            <p className="text-t3 text-[11px]">The customer’s certificate with Deed’s warranty terms and a QR code to check it. Open it, download it as a PDF, or send the link — nothing is sent automatically.</p>
+          </div>
+          <EWarrantyActions warranty={w} />
         </div>
 
         {w.status === 'cancelled' && (
@@ -618,6 +648,11 @@ function AfterSalesContent() {
       exportValue: w => WARRANTY_STATUS_META[w.status].label,
     },
     {
+      key: 'ewarranty', label: 'E-warranty', priority: 1, width: '220px',
+      render: w => <EWarrantyActions warranty={w} compact />,
+      exportValue: () => '',
+    },
+    {
       key: 'duration', label: 'Duration', priority: 2, width: '100px',
       render: w => <span className="text-xs text-t3">{formatWarrantyDuration(w.months)}</span>,
       exportValue: w => w.months,
@@ -659,6 +694,7 @@ function AfterSalesContent() {
         <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? 'var(--danger)' : days <= 30 ? 'var(--warning-text)' : 'var(--success)', marginTop: 2 }}>
           {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
         </p>
+        <div className="mt-2"><EWarrantyActions warranty={w} compact /></div>
       </div>
     )
   }
@@ -761,6 +797,10 @@ function AfterSalesContent() {
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreateRMA} hideLabelOnMobile={false}>
             New return
           </PrimaryActionButton>
+        ) : tab === 'warranties' ? (
+          <button type="button" className="btn-outline text-[11px]" disabled={syncingWarranties} onClick={() => void syncWarranties(true)}>
+            {syncingWarranties ? 'Checking…' : 'Issue missing warranties'}
+          </button>
         ) : undefined}
       />
 
@@ -827,7 +867,7 @@ function AfterSalesContent() {
               ]}
               onClearFilters={() => patchListUi({ warrantyQ: null, warrantyStatus: null, warrantyPage: null })}
               hideColumnFilters
-              emptyMessage={warranties.length === 0 ? 'No warranties yet — they are created automatically when a delivery is validated.' : 'No warranties match the filter.'}
+              emptyMessage={warranties.length === 0 ? 'No warranties yet — every serial-numbered sale (delivery, POS, Kilimall) gets one automatically.' : 'No warranties match the filter.'}
               onRowClick={w => setDetailId(w.id)}
               renderCard={warrantyCard}
               exportTitle="Warranties List"

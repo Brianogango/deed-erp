@@ -34,6 +34,8 @@ const PUBLIC_PATH_PREFIXES = [
   // Credit applications: the client's own link (unguessable token, rate limited).
   '/api/portal/credit',
   '/api/portal/rider',
+  // E-warranty certificates: signed link, read only.
+  '/api/portal/warranty',
   // Provider status callbacks authenticate themselves (Twilio signature, Telerivet secret, …).
   '/api/webhooks/notifications',
   // High-fidelity Sales UX review pack (demo data only — no production writes)

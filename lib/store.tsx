@@ -2196,6 +2196,11 @@ export interface Warranty {
   cancelledReason?: string
   /** Buy-back or exchange that ended it (BBK/… / EXC/…). */
   cancelledByRef?: string
+  /** Where it was sold (issued on the server, lib/warranty/e-warranty.ts). */
+  source?: 'delivery' | 'pos' | 'kilimall'
+  sourceKey?: string
+  issuedAt?: string
+  specs?: string
 }
 
 // ── Kilimall ──────────────────────────────────────────────────────────────────
@@ -4700,6 +4705,24 @@ export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
   return `${prefix}/${String(next).padStart(4, '0')}`
 }
 
+/**
+ * Ask the server to issue the warranties for machines just sold. It reads the
+ * saved sale, so it runs once the save has had time to reach the server, and
+ * again a little later in case it had not. Safe to repeat.
+ */
+let warrantySyncTimers: ReturnType<typeof setTimeout>[] = []
+/** Hand warranties the server just issued to open screens (merged by id). */
+export function announceIssuedWarranties(out: { added?: unknown[] } | null | undefined) {
+  if (typeof window === 'undefined' || !Array.isArray(out?.added) || !out.added.length) return
+  window.dispatchEvent(new CustomEvent('deed:warranties-issued', { detail: out.added }))
+}
+export function requestWarrantySync() {
+  if (typeof window === 'undefined') return
+  warrantySyncTimers.forEach(clearTimeout)
+  const run = () => { void fetch('/api/warranties/sync', { method: 'POST' }).then(r => r.json()).then(announceIssuedWarranties).catch(() => {}) }
+  warrantySyncTimers = [setTimeout(run, 8_000), setTimeout(run, 45_000)]
+}
+
 /** Repairs whose invoice is being created right now (see createInvoiceFromRepair). */
 const repairInvoiceInFlight = new Map<string, Promise<Invoice | null>>()
 
@@ -6557,6 +6580,18 @@ function StoreProvider({
 
   // Inventory
   const [warranties, setWarranties]         = useLS('deed_warranties', seedWarranties)
+  useEffect(() => {
+    const onIssued = (e: Event) => {
+      const rows = (e as CustomEvent<Warranty[]>).detail ?? []
+      setWarranties(prev => {
+        const have = new Set(prev.map(w => w.id))
+        const fresh = rows.filter(w => w && !have.has(w.id))
+        return fresh.length ? [...prev, ...fresh] : prev
+      })
+    }
+    window.addEventListener('deed:warranties-issued', onIssued)
+    return () => window.removeEventListener('deed:warranties-issued', onIssued)
+  }, [setWarranties])
   const [bulkStock, setBulkStock]           = useLS<BulkStockLevel[]>('deed_bulkStock', seedBulkStock)
   const [openingStockPosted, setOpeningStockPosted] = useLS<boolean>('deed_openingStockPosted', false)
   
@@ -8425,6 +8460,7 @@ const storeCtx: AppState = {
         ? `Dispatched ${order.ref} — shipped ${shipProductName} (ordered ${order.productName})`
         : `Dispatched ${order.ref} — serial ${serialNumber}`
       showToast(toastMsg)
+      requestWarrantySync()
       addAuditLog(
         'kilimall_dispatch',
         dispatch.id,
@@ -13926,7 +13962,7 @@ const storeCtx: AppState = {
             const serial = serialRef.current.find(s => s.id === sid)
             const months = resolveWarrantyMonths(prod.warrantyMonths, systemSettings.invDefaultWarrantyMonths)
             const war: Warranty = {
-              id: uid(), ref: seq('WAR', 'war'),
+              id: uid(), ref: '',
               customerId: del.customerId, customerName: del.customerName,
               productId: l.productId, productName: l.productName,
               serialId: sid, serialNumber: serial?.serial ?? '',
@@ -13938,7 +13974,8 @@ const storeCtx: AppState = {
           }
         })
       })
-      if (newWarranties.length > 0) setWarranties(p => [...p, ...newWarranties])
+      // Issued on the server from what was sold (lib/warranty/e-warranty.ts), with their e-warranty links.
+      if (newWarranties.length > 0) requestWarrantySync()
       setStockReservations(prev => prev.map(r => {
         if ((r.deliveryId ? r.deliveryId !== deliveryId : r.referenceId !== so.id) || r.status !== 'reserved') return r
         const deliveredLine = doneLines.find(line => line.productId === r.productId)
@@ -20633,6 +20670,7 @@ const storeCtx: AppState = {
       // Persist the till ticket before the invoice so a later crash still leaves
       // Transaction History intact. Server union-merge is the source of truth.
       setPosOrders(p => [order, ...p])
+      if (order.lines.some(l => l.serialId)) requestWarrantySync()
       try {
         const recorded = await fetch('/api/pos/record-order', {
           method: 'POST',
@@ -21409,7 +21447,7 @@ const storeCtx: AppState = {
               if (serial) {
                 const months = resolveWarrantyMonths(product.warrantyMonths, systemSettings.invDefaultWarrantyMonths)
                 newWarranties.push({
-                  id: uid(), ref: seq('WAR', 'war'),
+                  id: uid(), ref: '',
                   customerId: delivery.customerId, customerName: delivery.customerName,
                   productId: line.productId, productName: line.productName,
                   serialId: serial.id, serialNumber: serial.serial,
@@ -21440,7 +21478,8 @@ const storeCtx: AppState = {
       })
 
       if (newWarranties.length > 0) {
-        setWarranties(prev => [...prev, ...newWarranties])
+        // Issued on the server from what was sold (lib/warranty/e-warranty.ts).
+        requestWarrantySync()
       }
 
       // Update delivery
