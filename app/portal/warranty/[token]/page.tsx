@@ -104,10 +104,10 @@ export default function WarrantyCertificatePage() {
             <dt className="text-slate-500">Status</dt><dd><span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${st.cls}`}>{st.label}</span></dd>
           </dl>
           {qr && (
-            <figure className="hidden justify-self-center text-center print:block">
+            <figure className="justify-self-center text-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr} alt="Scan to check this warranty" className="h-28 w-28" />
-              <figcaption className="text-[10px] text-slate-500">Scan to check</figcaption>
+              <figcaption className="text-[10px] text-slate-500">Scan to check cover</figcaption>
             </figure>
           )}
         </section>
@@ -133,7 +133,7 @@ export default function WarrantyCertificatePage() {
         <footer className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-[#1B2762]/30 pt-3">
           <p className="text-xs text-slate-600">
             Issued electronically by {c.name || 'Deed Technologies'} on {longDate(w.startDate)} — no signature needed.<br />
-            <span className="hidden print:inline">Scan the code above to check it is still valid.</span>
+            Scan the code above to check it is still valid.
           </p>
           <p className="text-right text-xs font-semibold text-slate-700">
             {[c.address, c.city].filter(Boolean).join(', ')}
