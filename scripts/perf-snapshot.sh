@@ -42,7 +42,12 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{
       "up="+Math.round((Date.now()-e.pm_uptime)/60000)+"min", "mem="+Math.round((p.monit?.memory||0)/1048576)+"MB", "cpu="+(p.monit?.cpu??"?")+"%"].join("  "))
   }}catch(err){console.log("could not read pm2 jlist:",err.message)}})'
 
-LOGS=$(ls /home/"$APP_USER"/.pm2/logs/"$PM2_APP"-*.log 2>/dev/null)
+# PM2 keeps logs under its home (here /var/www/deed-erp/.pm2), not always /home/<user>/.pm2.
+PM2_LOG_DIRS="$APP_DIR/.pm2/logs /home/$APP_USER/.pm2/logs"
+LOGS=$(for d in $PM2_LOG_DIRS; do ls "$d"/"$PM2_APP"-*.log 2>/dev/null; done)
+echo "-- Log files: ${LOGS:-none found}"
+echo; echo "-- Why cached lists were rebuilt / slow cache hits, last 40"
+grep -hE "read-model-cache\]|slow overlay phase" $LOGS 2>/dev/null | tail -40 | cut -c1-300
 echo; echo "-- Slow screen-data loads (server-store), last 40"
 grep -h "slow overlay phase" $LOGS 2>/dev/null | tail -40
 echo; echo "-- How often (count of slow loads in the logs)"
@@ -57,7 +62,7 @@ echo; echo "-- Most frequent errors / warnings (last 5000 log lines, numbers rem
 for f in $LOGS; do tail -5000 "$f"; done 2>/dev/null | grep -iE "error|warn|timeout|ECONN|P10|P20|heap|memory" \
   | sed -E 's/[0-9a-f]{8}-[0-9a-f-]{27}/<id>/g; s/[0-9]+/N/g' | cut -c1-180 | sort | uniq -c | sort -rn | head -25
 echo; echo "-- Worker restarts / memory limit hits"
-grep -hiE "max_memory_restart|exceeds|restarting|exited with code|SIGKILL|heap out of memory" /home/"$APP_USER"/.pm2/pm2.log 2>/dev/null | tail -15
+grep -hiE "max_memory_restart|exceeds|restarting|exited with code|SIGKILL|heap out of memory" "$APP_DIR"/.pm2/pm2.log /home/"$APP_USER"/.pm2/pm2.log 2>/dev/null | tail -15
 
 section "3. Response times (from this server, no login)"
 for path in /login /api/version; do
