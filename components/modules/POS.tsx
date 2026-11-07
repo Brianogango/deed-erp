@@ -27,6 +27,10 @@ import {
   resolvePosReceiptCustomer,
 } from '@/lib/pos-receipt-print'
 import { fetchMpesaStatus, sendMpesaStk, waitForMpesaStk } from '@/lib/mpesa/client'
+import QRCode from 'qrcode'
+import { issuePosWarranties, type LinkedWarranty } from '@/lib/warranty/client'
+import { PosWarrantyActions } from '@/components/pos/PosWarrantyActions'
+import { WARRANTY_SUPPORT_PHONE } from '@/lib/warranty/e-warranty'
 import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
 
 const POS_MOBILE_PAGE_SIZE = 6
@@ -50,6 +54,18 @@ function ReceiptPrintView({
 }) {
   const [logoSrc, setLogoSrc] = useState<string | null>(null)
   const buyerName = resolvePosReceiptCustomer(order, invoices)
+  // Warranties for the machines on this sale, issued now so the slip prints
+  // with the receipt. null = still getting them (the print waits, at most a few seconds).
+  const [warranties, setWarranties] = useState<Array<LinkedWarranty & { qr: string }> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const giveUp = setTimeout(() => { if (!cancelled) setWarranties(w => w ?? []) }, 4000)
+    void issuePosWarranties(order).then(async list => {
+      const withQr = await Promise.all(list.map(async w => ({ ...w, qr: await QRCode.toDataURL(w.checkUrl, { margin: 0, width: 220, errorCorrectionLevel: 'M' }).catch(() => '') })))
+      if (!cancelled) setWarranties(withQr)
+    })
+    return () => { cancelled = true; clearTimeout(giveUp) }
+  }, [order.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false
@@ -61,7 +77,7 @@ function ReceiptPrintView({
   }, [companySettings?.logoUrl])
 
   useEffect(() => {
-    if (!logoSrc) return
+    if (!logoSrc || warranties === null) return
     const handleAfterPrint = () => {
       onDone()
       window.removeEventListener('afterprint', handleAfterPrint)
@@ -72,7 +88,7 @@ function ReceiptPrintView({
       clearTimeout(timer)
       window.removeEventListener('afterprint', handleAfterPrint)
     }
-  }, [logoSrc, onDone])
+  }, [logoSrc, warranties, onDone])
 
   return (
     <div
@@ -171,6 +187,24 @@ function ReceiptPrintView({
           </div>
         ) : null}
       </div>
+      {warranties && warranties.length > 0 && (
+        <div className="pt-3 mb-4" style={{ borderTop: '1px dashed var(--border)' }}>
+          <p className="font-bold text-center mb-2">WARRANTY</p>
+          {warranties.map(w => (
+            <div key={w.id} className="flex gap-2 items-start mb-3" style={{ breakInside: 'avoid' }}>
+              {w.qr ? <img src={w.qr} alt="" className="receipt-warranty-qr" style={{ width: 84, height: 84, flex: '0 0 84px' }} /> : null}
+              <div style={{ minWidth: 0 }}>
+                <p className="font-bold">{w.ref}</p>
+                <p className="text-[10px]" style={{ wordBreak: 'break-word' }}>{w.productName.length > 70 ? `${w.productName.slice(0, 70)}…` : w.productName}</p>
+                <p className="text-[10px] font-mono">SN: {w.serialNumber}</p>
+                <p className="font-bold text-[11px]">Valid until {fmtDate(w.endDate)}</p>
+              </div>
+            </div>
+          ))}
+          <p className="text-[10px] text-center">Scan to check cover, see the terms or make a claim.</p>
+          <p className="text-[10px] text-center">Warranty support: {WARRANTY_SUPPORT_PHONE}</p>
+        </div>
+      )}
       <div className="text-center pt-4" style={{ borderTop: '1px dashed var(--border)' }}>
         {order.pointsEarned ? (
           <p className="font-semibold mb-2">+{order.pointsEarned} Loyalty Points Earned!</p>
@@ -178,7 +212,7 @@ function ReceiptPrintView({
         <p>{companySettings.invoiceFooter || 'Thank you for your business!'}</p>
       </div>
       <div className="no-print-area text-center mt-6">
-        <p className="text-xs text-t3">Printing receipt...</p>
+        <p className="text-xs text-t3">{warranties === null ? 'Preparing the warranty…' : 'Printing receipt...'}</p>
         <button className="btn-outline mt-2" onClick={onDone}>Cancel / Done</button>
       </div>
       <style>{`
@@ -232,6 +266,12 @@ function ReceiptPrintView({
             print-color-adjust: exact !important;
             -webkit-print-color-adjust: exact !important;
             color-adjust: exact !important;
+          }
+          .print-receipt-container img.receipt-warranty-qr {
+            width: 22mm !important;
+            height: 22mm !important;
+            max-width: 22mm !important;
+            flex: 0 0 22mm !important;
           }
           .no-print-area,
           .no-print-area * {
@@ -1134,6 +1174,7 @@ export default function PointOfSale() {
             <Modal title="Order Complete" subtitle="Transaction successful" width={480} onClose={() => setReceiptOrder(null)}>
               {/* Receipt content is now in ReceiptPrintView, we can just show a summary here */}
               <div className="pos-payment-success"><div className="pos-payment-success-icon" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{(isPosBankPayment(receiptOrder.payment) ? 'BANK' : receiptOrder.payment.toUpperCase())} Payment Received</p>{receiptOrder.paymentReference ? <p className="text-xs text-t3 mt-1">Ref: {receiptOrder.paymentReference}</p> : null}<p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: 'var(--navy)' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
+              <PosWarrantyActions order={receiptOrder} />
               <div className="pos-payment-success-actions">
                 <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}><Fa icon={faPrint} /> Print Receipt</button>
                 <button className="btn-primary min-h-[40px] flex-1 sm:flex-none" onClick={() => { setReceiptOrder(null); setCartOpen(false); scanRef.current?.focus() }}>New Order</button>

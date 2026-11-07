@@ -2,6 +2,7 @@
 
 import JobTrail from '@/components/erp/JobTrail'
 import { paidRiderBooksText } from '@/lib/delivery/rider-direct-pay'
+import { DocumentWarranties } from '@/components/aftersales/DocumentWarranties'
 import { CustomerPaidRiderModal } from '@/components/delivery/CustomerPaidRiderModal'
 import type { DeliveryJob } from '@/lib/store'
 import { addChequeToRegister, chequeDirectionForDoc, chequeLinkedType } from '@/lib/cheques/cheque-link'
@@ -1189,6 +1190,8 @@ export default function InvoiceDetail() {
               <p className="invoice-detail__info-muted">No delivery job linked.</p>
             )}
           </article>
+
+          {invoice.type === 'customer_invoice' && <DocumentWarranties invoiceId={invoice.id} />}
 
           <article className="invoice-detail__info-card">
             <header className="invoice-detail__info-head">

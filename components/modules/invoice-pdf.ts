@@ -10,6 +10,15 @@ import {
   type DocumentPaymentDetails,
 } from '@/lib/document-payment-details'
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
+import { fetchDocumentWarranties } from '@/lib/warranty/client'
+
+/** Warranty lines for a customer invoice (machines sold on it). None for bills or drafts. */
+async function withWarranties(inv: Invoice, input: CommercialPdfInput): Promise<CommercialPdfInput> {
+  if (inv.type !== 'customer_invoice' || invoiceDocState(inv.status) !== 'posted') return input
+  const list = await fetchDocumentWarranties({ invoiceId: inv.id })
+  if (!list.length) return input
+  return { ...input, warranties: list.map(w => ({ ref: w.ref, productName: w.productName, serialNumber: w.serialNumber, endDate: w.endDate, months: w.months, url: w.checkUrl })) }
+}
 
 /** Map an invoice onto the shared Odoo-style PDF input. */
 function invoicePdfInput(
@@ -92,7 +101,7 @@ export async function downloadInvoicePdf(
   bankAccounts: BankAccount[],
   paymentDetails?: Partial<DocumentPaymentDetails> | null,
 ) {
-  const input = invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts)
+  const input = await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts))
   await downloadCommercialPdf(input, companySettings, bankAccounts, `${input.title} - ${input.ref}.pdf`)
 }
 
@@ -105,7 +114,7 @@ export async function invoicePdfBase64(
   bankAccounts: BankAccount[],
   paymentDetails?: Partial<DocumentPaymentDetails> | null,
 ): Promise<{ pdfBase64: string; pdfFilename: string }> {
-  const input = invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts)
+  const input = await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts))
   const doc = await buildCommercialPdf(input, companySettings, bankAccounts)
   const dataUri = doc.output('datauristring')
   return {

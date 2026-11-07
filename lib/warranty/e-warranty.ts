@@ -185,3 +185,36 @@ export function warrantyShareMessage(w: Pick<WarrantyRow, 'customerName' | 'prod
   const until = new Date(`${day(w.endDate)}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   return `Hello${first && first !== 'Walk-in' ? ` ${first}` : ''}, here is your Deed Technologies e-warranty ${w.ref} for your ${w.productName} (serial ${w.serialNumber}), valid until ${until}: ${url}`
 }
+
+/** A warranty as a sale document shows it: enough for a receipt line, an invoice line and a QR. */
+export type DocWarranty = {
+  id: string; ref: string; customerId: string; customerName: string
+  productName: string; serialNumber: string; startDate: string; endDate: string; months: number
+  status: WarrantyRow['status']
+  /** Certificate link (path); the QR opens `${path}/check`. */
+  path: string
+}
+
+/**
+ * The warranties a sale document carries: by where they were issued (the
+ * POS sale, the sale order's deliveries) and by the serials on its lines.
+ * Cancelled ones are left out.
+ */
+export function warrantiesForDocument(
+  warranties: WarrantyRow[],
+  doc: { posOrderIds?: string[]; deliveryIds?: string[]; saleOrderRefs?: string[]; serialNumbers?: string[]; serialIds?: string[] },
+): WarrantyRow[] {
+  const pos = new Set((doc.posOrderIds ?? []).map(id => `pos:${id}`))
+  const dels = new Set(doc.deliveryIds ?? [])
+  const refs = new Set((doc.saleOrderRefs ?? []).filter(Boolean))
+  const sns = new Set((doc.serialNumbers ?? []).map(s => String(s).trim().toLowerCase()).filter(Boolean))
+  const sids = new Set(doc.serialIds ?? [])
+  const seen = new Set<string>()
+  return warranties.filter(w => {
+    if (w.status === 'cancelled' || seen.has(w.id)) return false
+    const hit = pos.has(sourceKeyOf(w)) || (w.deliveryId && dels.has(w.deliveryId)) || (w.saleOrderRef && refs.has(w.saleOrderRef))
+      || sids.has(w.serialId) || sns.has(String(w.serialNumber).trim().toLowerCase())
+    if (hit) seen.add(w.id)
+    return Boolean(hit)
+  })
+}

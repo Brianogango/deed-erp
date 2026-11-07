@@ -75,6 +75,8 @@ export interface CommercialPdfInput {
    * When set, overrides the default first-bank + company M-Pesa block.
    */
   paymentDetailLines?: string[]
+  /** Machines sold under warranty (invoices): a line and QR each. */
+  warranties?: DeedPdfInput['warranties']
 }
 
 /** The company settings and logo in the shape the PDF builders take. */
@@ -145,6 +147,7 @@ export async function buildCommercialPdf(
     showPaymentDetails: input.showPaymentDetails,
     showSignature: input.showSignature,
     paymentDetailLines: input.paymentDetailLines,
+    warranties: input.warranties,
   }
 
   return buildDeedDocumentPdf(

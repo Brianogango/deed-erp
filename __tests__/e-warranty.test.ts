@@ -15,7 +15,8 @@ vi.mock('@/lib/server-store', () => {
 })
 
 import { maskedName, nextWarrantyRefs, warrantiesToIssue, warrantyState, warrantyTerms } from '@/lib/warranty/e-warranty'
-import { syncWarranties, warrantyByToken, warrantyToken } from '@/lib/warranty/e-warranty.server'
+import { documentWarranties, issueWarrantiesForSale, syncWarranties, warrantyByToken, warrantyToken } from '@/lib/warranty/e-warranty.server'
+import { buildDeedDocumentPdf } from '@/lib/deed-document-pdf'
 
 const serials = [
   { id: 's1', serial: '5CG111', productId: 'p1', status: 'sold', soldDate: '2026-10-01T10:00:00Z', specs: 'i5, 8GB' },
@@ -94,5 +95,49 @@ describe('server', () => {
     expect((await warrantyByToken(token))?.ref).toBe('WAR/0010')
     expect(await warrantyByToken('w-old.forgedsignature000000000')).toBeNull()
     expect(await warrantyByToken(token.replace('w-old', 'w-other'))).toBeNull()
+  })
+})
+
+describe('warranty at the point of sale', () => {
+  beforeEach(() => {
+    h.state = {
+      deed_warranties: [],
+      deed_serials: [{ id: 'n1', serial: 'NEW111', productId: 'p1', status: 'available' }, { id: 'n2', serial: 'GONE', productId: 'p1', status: 'written_off' }],
+      deed_products: products, deed_systemSettings: {},
+      deed_posOrders: [], deed_deliveries: [], deed_saleOrders: [],
+    }
+  })
+
+  it('a POS sale gets its warranty at once, even before the serial is saved as sold', async () => {
+    const out = await issueWarrantiesForSale({ source: 'pos', id: 'pos9', ref: 'POS/0009', date: '2026-11-07', customerName: 'Jane Doe',
+      lines: [{ serialId: 'n1', productId: 'p1', productName: 'HP EliteBook 840 G5' }, { serialId: 'n2', productId: 'p1' }] })
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ ref: 'WAR/0001', serialNumber: 'NEW111', endDate: '2027-05-07', months: 6 })
+    expect(out[0].path).toMatch(/^\/portal\/warranty\/.+\..+/)
+    // Printing the receipt again does not issue a second one.
+    expect(await issueWarrantiesForSale({ source: 'pos', id: 'pos9', ref: 'POS/0009', lines: [{ serialId: 'n1', productId: 'p1' }] })).toHaveLength(1)
+    expect(h.state.deed_warranties).toHaveLength(1)
+  })
+
+  it('an invoice finds the warranties of its POS sale, its sale order and its serials', async () => {
+    h.state.deed_warranties = [
+      { id: 'a', ref: 'WAR/0001', serialId: 'n1', serialNumber: 'NEW111', sourceKey: 'pos:pos9', deliveryId: '', saleOrderRef: 'POS/0009', status: 'active', startDate: '2026-11-07', endDate: '2027-05-07', months: 6 },
+      { id: 'b', ref: 'WAR/0002', serialId: 'x', serialNumber: 'SO222', deliveryId: 'd1', saleOrderRef: 'SO/0001', status: 'active', startDate: '2026-11-01', endDate: '2027-05-01', months: 6 },
+      { id: 'c', ref: 'WAR/0003', serialId: 'y', serialNumber: 'OLD', deliveryId: 'd1', saleOrderRef: 'SO/0001', status: 'cancelled', startDate: '2026-11-01', endDate: '2027-05-01', months: 6 },
+    ]
+    h.state.deed_posOrders = [{ id: 'pos9', invoiceId: 'inv-pos' }]
+    h.state.deed_deliveries = [{ id: 'd1', saleOrderId: 'so1' }]
+    h.state.deed_saleOrders = [{ id: 'so1', ref: 'SO/0001' }]
+    h.state.deed_invoices = [{ id: 'inv-pos', lines: [] }, { id: 'inv-so', saleOrderId: 'so1', lines: [] }]
+    expect((await documentWarranties({ invoiceId: 'inv-pos' })).map(w => w.ref)).toEqual(['WAR/0001'])
+    expect((await documentWarranties({ invoiceId: 'inv-so' })).map(w => w.ref)).toEqual(['WAR/0002'])
+  })
+
+  it('the invoice PDF carries a warranty section', () => {
+    const doc = buildDeedDocumentPdf({ title: 'Invoice', ref: 'INV/1', customerName: 'Jane', lines: [{ description: 'Laptop', qty: 1, unitPrice: 1, subtotal: 1 }], subtotal: 1, taxTotal: 0, total: 1,
+      warranties: [{ ref: 'WAR/0001', productName: 'HP EliteBook 840 G5', serialNumber: 'NEW111', endDate: '2027-05-07', months: 6, url: 'https://erp.example/portal/warranty/a.b/check' }] } as any, { name: 'Deed', currency: 'KES' } as any)
+    const text = Buffer.from(doc.output('arraybuffer')).toString('latin1')
+    expect(text).toContain('WAR/0001')
+    expect(text).toContain('Valid until')
   })
 })

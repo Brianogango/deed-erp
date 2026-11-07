@@ -5,6 +5,7 @@
  */
 
 import { jsPDF } from 'jspdf'
+import QRCode from 'qrcode'
 import autoTable from 'jspdf-autotable'
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
 import {
@@ -98,6 +99,18 @@ export interface DeedPdfInput {
   showReceiptAcknowledgement?: boolean
   extraPaymentLines?: string[]
   paymentDetailLines?: string[]
+  /** Machines sold under warranty: a line each with a QR to the live check. */
+  warranties?: DeedPdfWarranty[]
+}
+
+export interface DeedPdfWarranty {
+  ref: string
+  productName: string
+  serialNumber: string
+  endDate: string
+  months?: number
+  /** Opened by the QR: the warranty check page. */
+  url: string
 }
 
 const MARGIN = 34
@@ -309,6 +322,60 @@ function drawMetaRow(doc: jsPDF, label: string, value: string, x: number, y: num
   doc.text(label, x, y)
   doc.setFont('helvetica', 'normal').setFontSize(8.3).setTextColor(...INK)
   doc.text(value || '—', x + labelW, y, { maxWidth: 175 })
+}
+
+/** A QR code drawn as squares (no image, works the same in the browser and on the server). */
+function drawQr(doc: jsPDF, text: string, x: number, y: number, size: number) {
+  try {
+    const qr = QRCode.create(text, { errorCorrectionLevel: 'M' })
+    const n = qr.modules.size
+    const cell = size / n
+    doc.setFillColor(255, 255, 255).rect(x, y, size, size, 'F')
+    doc.setFillColor(0, 0, 0)
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) if (qr.modules.get(r, c)) doc.rect(x + c * cell, y + r * cell, cell + 0.05, cell + 0.05, 'F')
+    }
+  } catch {
+    // No QR rather than no document.
+  }
+}
+
+const WARRANTY_SUPPORT_LINE = 'Warranty support: 0113 704 451'
+
+/** The warranty lines under the totals: QR, number, machine, serial, valid until. */
+function drawWarranties(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, startY: number): number {
+  const list = (input.warranties ?? []).filter(w => w && w.url)
+  if (!list.length) return startY
+  const cols = list.length > 1 ? 2 : 1
+  const colW = contentW(doc) / cols
+  const rowH = 64
+  let y = ensureRoom(doc, company, input, startY, 30 + rowH)
+  line(doc, MARGIN, y, right(doc), BORDER, .55)
+  writeLabel(doc, list.length > 1 ? 'Warranties' : 'Warranty', MARGIN, y + 16)
+  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+  doc.text('Scan a code to check cover, see the full terms or make a claim.', MARGIN + 70, y + 16)
+  y += 26
+  list.forEach((w, i) => {
+    const col = i % cols
+    if (col === 0 && i > 0) y += rowH
+    if (col === 0) y = ensureRoom(doc, company, input, y, rowH)
+    const x = MARGIN + col * colW
+    const qr = 54
+    drawQr(doc, w.url, x, y, qr)
+    const tx = x + qr + 8
+    const tw = colW - qr - 16
+    const until = fmtDate(w.endDate)
+    doc.setFont('helvetica', 'bold').setFontSize(8.2).setTextColor(...INK)
+    doc.text(`${w.ref}${w.months ? ` · ${w.months} month${w.months === 1 ? '' : 's'}` : ''}`, tx, y + 11)
+    doc.setFont('helvetica', 'normal').setFontSize(7.4).setTextColor(...INK)
+    doc.text((doc.splitTextToSize(w.productName || '', tw) as string[])[0] ?? '', tx, y + 23)
+    doc.text(`Serial: ${w.serialNumber}`, tx, y + 34)
+    doc.setFont('helvetica', 'bold').text(`Valid until ${until}`, tx, y + 45)
+  })
+  y += rowH
+  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+  doc.text(WARRANTY_SUPPORT_LINE, MARGIN, y)
+  return y + 10
 }
 
 function defaultPaymentLines(input: DeedPdfInput, company: DeedPdfCompany, banks: DeedPdfBank[]) {
@@ -571,6 +638,8 @@ export function buildDeedDocumentPdf(
     doc.text(wrapped, MARGIN, y + 27)
     y += wrapped.length * 10 + 38
   }
+
+  y = drawWarranties(doc, company, input, y)
 
   if (input.showPaymentDetails ?? (showAmounts && kind !== 'quotation' && kind !== 'sales-order')) {
     const payment = defaultPaymentLines(input, company, bankAccounts)

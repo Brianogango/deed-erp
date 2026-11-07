@@ -6,7 +6,7 @@ import { warrantyShareMessage } from '@/lib/warranty/e-warranty'
 import { whatsappPhoneDigits } from '@/lib/whatsapp-share'
 
 /** Staff: the customer's e-warranty — open, download, copy the link or send it on WhatsApp. Nothing is sent automatically. */
-export function EWarrantyActions({ warranty, compact = false }: { warranty: Warranty; compact?: boolean }) {
+export function EWarrantyActions({ warranty, compact = false }: { warranty: Pick<Warranty, 'id' | 'ref' | 'customerId' | 'customerName' | 'productName' | 'serialNumber' | 'endDate'>; compact?: boolean }) {
   const { contacts, showToast } = useApp()
   const [busy, setBusy] = useState(false)
 
