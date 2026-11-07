@@ -67,6 +67,18 @@ function RepairContent() {
     showEditDetailsModal, setShowEditDetailsModal,
     showStopDiagnosisModal, setShowStopDiagnosisModal
   } = useRepair()
+  // Opened from a scanned e-warranty (/repairs?warrantyRepair=<id>): start a
+  // warranty repair with that warranty's customer and machine filled in.
+  const [warrantyPrefill, setWarrantyPrefill] = useState<string | null>(null)
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('warrantyRepair')
+    if (!id) return
+    setWarrantyPrefill(id)
+    setView('intake')
+    const url = new URL(window.location.href)
+    url.searchParams.delete('warrantyRepair')
+    window.history.replaceState(window.history.state, '', url.toString())
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const canCreateIntake = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
 
   return (
@@ -108,7 +120,11 @@ function RepairContent() {
       )}
 
       {view === 'intake' && (
-        <RepairIntake onCancel={() => setView('list')} onSuccess={(id) => { setActiveId(id); setView('detail') }} />
+        <RepairIntake
+          warrantyId={warrantyPrefill ?? undefined}
+          onCancel={() => { setWarrantyPrefill(null); setView('list') }}
+          onSuccess={(id) => { setWarrantyPrefill(null); setActiveId(id); setView('detail') }}
+        />
       )}
 
       {detailPanel === 'detail' && activeRepair && <RepairDetailView />}

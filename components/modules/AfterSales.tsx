@@ -2,6 +2,7 @@
 'use client'
 import { Suspense, useState, useMemo, useEffect } from 'react'
 import { EWarrantyActions } from '@/components/aftersales/EWarrantyActions'
+import { WarrantyRepairs } from '@/components/aftersales/WarrantyRepairs'
 import { announceIssuedWarranties } from '@/lib/store'
 import {
   useAfterSalesStore, fmtKes, fmtDate,
@@ -354,10 +355,12 @@ function AfterSalesContent() {
         <div className="card p-3 text-[12px] flex flex-col gap-2">
           <div>
             <p className="font-semibold text-t1">E-warranty certificate</p>
-            <p className="text-t3 text-[11px]">The customer’s certificate with Deed’s warranty terms and a QR code to check it. Open it, download it as a PDF, or send the link — nothing is sent automatically.</p>
+            <p className="text-t3 text-[11px]">The customer’s certificate with Deed’s warranty terms. The printed / PDF copy has a QR code that opens a live check. Open it, download it as a PDF, or send the link — nothing is sent automatically.</p>
           </div>
           <EWarrantyActions warranty={w} />
         </div>
+
+        <WarrantyRepairs warrantyId={w.id} />
 
         {w.status === 'cancelled' && (
           <div className="card p-3 text-[12px]" style={{ background: '#F8FAFC', borderColor: '#CBD5E1' }}>

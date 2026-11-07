@@ -77,7 +77,7 @@ const DEVICE_TYPES = [
   { id: 'other',   label: 'Other',   icon: '🔧' },
 ]
 
-export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: (id: string) => void }) {
+export default function RepairIntake({ onCancel, onSuccess, warrantyId }: { onCancel: () => void; onSuccess: (id: string) => void; warrantyId?: string }) {
   const {
     repairs, contacts, contactPersons, warranties, systemSettings,
     createRepair, createContactPerson, showToast, currentUserId,
@@ -236,6 +236,34 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   }
 
   // ── Warranty + duplicate via serial ───────────────────────────────────────
+  // Started from a scanned e-warranty: fill in its customer and machine once.
+  const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null)
+  useEffect(() => {
+    if (!warrantyId || prefilledFrom === warrantyId) return
+    const w = warranties.find(x => x.id === warrantyId)
+    if (!w) return
+    setPrefilledFrom(warrantyId)
+    const contact = contacts.find(c => c.id === w.customerId)
+    if (contact?.type === 'company') {
+      setClientType('company')
+      setSelectedCompany(contact as (typeof companies)[0])
+      setSelectedPersonId(defaultContactPerson(contactPersons, contact.id)?.id ?? '')
+    } else {
+      setClientType('individual')
+      setIndv({ name: contact?.name ?? (w.customerName === 'Walk-in customer' ? '' : w.customerName), phone: contact?.phone ?? '', email: contact?.email ?? '', id: contact?.id ?? '' })
+    }
+    const [brand, ...model] = String(w.productName || '').trim().split(/\s+/)
+    setDevice(p => ({
+      ...p,
+      deviceType: p.deviceType || 'laptop',
+      brand: brand || p.brand,
+      model: model.join(' ') || p.model,
+      serial: w.serialNumber,
+      intakeChannel: p.intakeChannel || 'walk_in',
+      issueDesc: p.issueDesc || `Warranty claim — ${w.ref}. Fault: `,
+    }))
+  }, [warrantyId, warranties, contacts, contactPersons, prefilledFrom])
+
   const warrantyDecision = resolveRepairWarranty(warranties, device.serial, {
     serialException: device.serialWarrantyException,
     clientCausedDamage: device.clientCausedDamage,
