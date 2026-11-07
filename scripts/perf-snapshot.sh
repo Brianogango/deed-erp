@@ -47,6 +47,12 @@ echo; echo "-- Slow screen-data loads (server-store), last 40"
 grep -h "slow overlay phase" $LOGS 2>/dev/null | tail -40
 echo; echo "-- How often (count of slow loads in the logs)"
 grep -h "slow overlay phase" $LOGS 2>/dev/null | wc -l
+echo; echo "-- Slow screen loads (/api/store), last 40: total time, size, which lists, time per step"
+grep -h "\[store\] slow GET" $LOGS 2>/dev/null | tail -40 | cut -c1-400
+echo; echo "-- Which lists are in the slow loads most often"
+grep -h "\[store\] slow GET" $LOGS 2>/dev/null | sed -nE 's/.*loaded=([^ ]+).*/\1/p' | tr ',' '\n' | sort | uniq -c | sort -rn | head -15
+echo; echo "-- Slow loads per hour, last 24 hours of log"
+grep -h "\[store\] slow GET" $LOGS 2>/dev/null | grep -oE "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}" | uniq -c | tail -24
 echo; echo "-- Most frequent errors / warnings (last 5000 log lines, numbers removed so similar lines group)"
 for f in $LOGS; do tail -5000 "$f"; done 2>/dev/null | grep -iE "error|warn|timeout|ECONN|P10|P20|heap|memory" \
   | sed -E 's/[0-9a-f]{8}-[0-9a-f-]{27}/<id>/g; s/[0-9]+/N/g' | cut -c1-180 | sort | uniq -c | sort -rn | head -25
