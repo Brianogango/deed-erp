@@ -63,9 +63,10 @@ export async function loadScreenSaleOrders(screenCopy: unknown): Promise<Row[]> 
       fingerprint = `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
       return fingerprint
     },
-    // The last two parts (client names, the frozen copy) touch every order;
-    // while they are unchanged only changed orders are re-read.
-    () => buildScreenSaleOrders(screenCopy, fingerprint.split('|').slice(-2).join('|')),
+    // The frozen copy touches every order; while it is unchanged only changed
+    // orders are re-read. The customer is in each order's signature: a new or
+    // renamed customer used to re-read every order.
+    () => buildScreenSaleOrders(screenCopy, fingerprint.split('|').slice(-1).join('|')),
   )
 }
 
@@ -89,8 +90,9 @@ async function orderSignatures(): Promise<Array<{ id: string; sig: string }>> {
          dm AS (SELECT l."B" AS sale_order_id, string_agg(d.id::text || ':' || d.status || ':' || d.created_at::text, ',' ORDER BY d.id) AS s
                 FROM "_DeliveryNoteSaleOrders" l JOIN delivery_notes d ON d.id = l."A" GROUP BY l."B")
     SELECT o.id::text AS id,
-           md5(o::text || '#' || coalesce(it.s, '') || '#' || coalesce(inv.s, '') || '#' || coalesce(dn.s, '') || '#' || coalesce(dm.s, '')) AS sig
+           md5(o::text || '#' || coalesce(c::text, '') || '#' || coalesce(it.s, '') || '#' || coalesce(inv.s, '') || '#' || coalesce(dn.s, '') || '#' || coalesce(dm.s, '')) AS sig
     FROM sale_orders o
+    LEFT JOIN clients c ON c.id = o.client_id
     LEFT JOIN it ON it.sale_order_id = o.id
     LEFT JOIN inv ON inv.sale_order_id = o.id
     LEFT JOIN dn ON dn.sale_order_id = o.id

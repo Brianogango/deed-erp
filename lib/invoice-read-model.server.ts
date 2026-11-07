@@ -190,16 +190,21 @@ export async function loadScreenInvoices(screenCopy: unknown): Promise<Row[]> {
       fingerprint = `${rows[0]?.fp ?? ''}|copy:${copy.length}:${String(copy[0]?.id ?? '')}:${String(copy[copy.length - 1]?.id ?? '')}`
       return fingerprint
     },
-    // The last three parts (user names, client names, the frozen copy) touch
-    // every row; while they are unchanged only changed documents are re-read.
+    // User names and the frozen copy touch every row; while they are
+    // unchanged only changed documents are re-read. Client names are in each
+    // document's signature instead: adding or renaming a customer (often)
+    // used to re-read every invoice (~1 s on production, per worker).
     // Counted from the end: concat_ws skips an empty table's part.
-    () => buildScreenInvoices(screenCopy, fingerprint.split('|').slice(-3).join('|')),
+    () => {
+      const parts = fingerprint.split('|')
+      return buildScreenInvoices(screenCopy, [parts[parts.length - 3], parts[parts.length - 1]].join('|'))
+    },
   )
 }
 
 /**
- * One hash per document over its own row, its lines, its payments and its
- * allocations (with their payments), in list order. Whole rows are hashed so
+ * One hash per document over its own row, its customer's name, its lines,
+ * its payments and its allocations (with their payments), in list order. Whole rows are hashed so
  * any column change counts, without listing columns here.
  */
 async function documentSignatures(): Promise<Array<{ id: string; sig: string }>> {
@@ -209,8 +214,9 @@ async function documentSignatures(): Promise<Array<{ id: string; sig: string }>>
          al AS (SELECT a.invoice_id, string_agg(a::text || p::text, ',' ORDER BY a.id) AS s
                 FROM payment_allocations a JOIN payments p ON p.id = a.payment_id GROUP BY a.invoice_id)
     SELECT i.id::text AS id,
-           md5(i::text || '#' || coalesce(it.s, '') || '#' || coalesce(pa.s, '') || '#' || coalesce(al.s, '')) AS sig
+           md5(i::text || '#' || coalesce(c.name, '') || '#' || coalesce(it.s, '') || '#' || coalesce(pa.s, '') || '#' || coalesce(al.s, '')) AS sig
     FROM invoices i
+    LEFT JOIN clients c ON c.id = i.client_id
     LEFT JOIN it ON it.invoice_id = i.id
     LEFT JOIN pa ON pa.invoice_id = i.id
     LEFT JOIN al ON al.invoice_id = i.id

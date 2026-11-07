@@ -62,13 +62,21 @@ describe('invoice list: only changed documents are re-read', () => {
     expect(mockPrisma.invoice.findMany.mock.calls.at(-1)?.[0].where).toEqual({ id: { in: ['c'] } })
   })
 
-  it('re-reads everything when user or client names change', async () => {
+  it('a renamed customer re-reads only that customer\'s documents', async () => {
     await loadScreenInvoices([])
     db.a = row('a', { client: { name: 'Renamed' } })
     state.fp = 'a|b|c|d|users|clients2'
+    state.sigs = [{ id: 'a', sig: 'a-renamed' }, { id: 'b', sig: 'b1' }] // the name is in each document's signature
     const list = await loadScreenInvoices([])
-    expect(mockPrisma.invoice.findMany.mock.calls.at(-1)?.[0].where).toBeUndefined()
+    expect(mockPrisma.invoice.findMany.mock.calls.at(-1)?.[0].where).toEqual({ id: { in: ['a'] } })
     expect(list[0].partnerName).toBe('Renamed')
+  })
+
+  it('re-reads everything when user names change', async () => {
+    await loadScreenInvoices([])
+    state.fp = 'a|b|c|d|users2|clients'
+    await loadScreenInvoices([])
+    expect(mockPrisma.invoice.findMany.mock.calls.at(-1)?.[0].where).toBeUndefined()
   })
 
   it('never serves the old form of a changed document that disappeared before it was read', async () => {

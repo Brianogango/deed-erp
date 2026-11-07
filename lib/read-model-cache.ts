@@ -92,7 +92,22 @@ export async function cachedByFingerprint<T>(
   if (!fp) return build()
   const fpMs = Date.now() - t0
   const hit = cache.get(name)
-  if (hit && hit.fingerprint === fp && Date.now() - hit.builtAt < MAX_AGE_MS) {
+  // Unchanged but past its age limit: answer with the stored list now and
+  // rebuild behind it. The age limit only guards against changes the check
+  // cannot see, so nobody needs to wait for it — the journals' 10-minute
+  // refresh used to hold a screen load for ~1.3 s.
+  if (hit && hit.fingerprint === fp && Date.now() - hit.builtAt >= MAX_AGE_MS && !inFlight.has(name)) {
+    const refresh = build().then(value => {
+      if (cache.get(name) === hit) cache.set(name, { fingerprint: fp, value: copyOf(value), builtAt: Date.now() })
+      return cache.get(name)!.value
+    })
+    inFlight.set(name, { fingerprint: fp, promise: refresh })
+    refresh
+      .catch(err => { if (process.env.NODE_ENV !== 'test') console.warn(`[read-model-cache] background refresh of ${name} failed:`, err instanceof Error ? err.message : err) })
+      .finally(() => { if (inFlight.get(name)?.promise === refresh) inFlight.delete(name) })
+    return (shared() ? hit.value : copyOf(hit.value)) as T
+  }
+  if (hit && hit.fingerprint === fp && (Date.now() - hit.builtAt < MAX_AGE_MS || inFlight.has(name))) {
     const value = (shared() ? hit.value : copyOf(hit.value)) as T
     const total = Date.now() - t0
     if (total >= 150 && process.env.NODE_ENV !== 'test') {
