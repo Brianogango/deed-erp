@@ -1446,6 +1446,10 @@ function PurchaseContent() {
                     selectedLabel={newVendorName}
                     formatSelected={v => v.name}
                     onSelect={v => { setNewVendorId(v.id); setNewVendorName(v.name) }}
+                    // Not in the list: create it with the name already typed,
+                    // and it is selected on this RFQ when saved.
+                    onCreateNew={q => openNewVendorForm(q)}
+                    createNewLabels={{ title: 'Create vendor', subtitle: 'Not in the list? Add it now — it is selected here when saved' }}
                     renderItem={v => (
                       <div>
                         <p className="font-medium text-xs text-t1">{v.name}</p>

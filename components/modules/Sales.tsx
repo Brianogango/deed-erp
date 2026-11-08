@@ -44,6 +44,7 @@ import SerialMultiSelect from '@/components/SerialMultiSelect'
 import { hasModuleAccess, canCreateCustomerInvoiceFromSO } from '@/lib/auth/access'
 import {
   useSalesStore,
+  useApp,
   SaleOrder,
   fmtDate,
   LOCATIONS,
@@ -51,6 +52,8 @@ import {
   docSeq,
   resolveProductAccounts,
 } from '@/lib/store'
+import { canCreateProductFromSales, hasExactProduct, similarProducts } from '@/lib/sales/similar-products'
+import { QuickProductModal } from '@/components/sales/QuickProductModal'
 import {
   Badge,
   Modal,
@@ -4081,9 +4084,20 @@ function NewQuotationForm({
   )
   const getFilteredProducts = (search: string) =>
     products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku ?? '').toLowerCase().includes(search.toLowerCase()))
+  // Create a product from the quote line (roles that may create products).
+  const { users: appUsers, currentUserId: appUserId } = useApp()
+  const canCreateProduct = canCreateProductFromSales(appUsers.find(u => u.id === appUserId)?.role)
+  const [quickProduct, setQuickProduct] = useState<{ lineId: string; name: string } | null>(null)
 
   return (
     <div>
+      {quickProduct && (
+        <QuickProductModal
+          initialName={quickProduct.name}
+          onClose={() => setQuickProduct(null)}
+          onCreated={p => { selectProductForDraftLine(quickProduct.lineId, p); setProductSearch(prev => ({ ...prev, [quickProduct.lineId]: '' })) }}
+        />
+      )}
       <div className="sales-proto-page-header">
         <div className="sales-proto-header-copy">
           <button type="button" className="sp-btn sp-btn-ghost sales-back-button" aria-label="Back to quotations" onClick={onCancel}>
@@ -4370,9 +4384,28 @@ function NewQuotationForm({
                                   value={productSearch[line.id] ?? ''} onChange={e => setProductSearch(prev => ({ ...prev, [line.id]: e.target.value }))} />
                               </div>
                               <div className="max-h-48 overflow-y-auto">
-                                {filteredProds.length === 0 ? (
-                                  <p className="px-3 py-2 text-xs text-[var(--sp-text-3)]">No products found</p>
-                                ) : (
+                                {filteredProds.length === 0 ? (() => {
+                                  const typed = (productSearch[line.id] ?? '').trim()
+                                  const close = typed ? similarProducts(products, typed) : []
+                                  return (
+                                    <>
+                                      <p className="px-3 py-2 text-xs text-[var(--sp-text-3)]">
+                                        {typed ? `No product named “${typed}”.` : 'No products found'}
+                                        {close.length > 0 ? ' Did you mean:' : ''}
+                                      </p>
+                                      {close.map(p => (
+                                        <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-[var(--sp-accent-soft)] transition-colors"
+                                          onClick={() => { selectProductForDraftLine(line.id, p); setProductSearch(prev => ({ ...prev, [line.id]: '' })); setProductDropdownOpen(null) }}>
+                                          <p className="text-xs font-semibold text-[var(--sp-text)]">{p.name}</p>
+                                          <p className="text-[10px] text-[var(--sp-text-3)]">{p.category} · {salesKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
+                                        </button>
+                                      ))}
+                                      {typed && !canCreateProduct && (
+                                        <p className="px-3 py-2 text-[10px] text-[var(--sp-text-3)]">Not in the catalogue — ask Inventory or an admin to add it.</p>
+                                      )}
+                                    </>
+                                  )
+                                })() : (
                                   filteredProds.map(p => (
                                     <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-[var(--sp-accent-soft)] transition-colors"
                                       onClick={() => { selectProductForDraftLine(line.id, p); setProductSearch(prev => ({ ...prev, [line.id]: '' })); setProductDropdownOpen(null) }}>
@@ -4382,6 +4415,13 @@ function NewQuotationForm({
                                   ))
                                 )}
                               </div>
+                              {canCreateProduct && (productSearch[line.id] ?? '').trim() && !hasExactProduct(products, productSearch[line.id] ?? '') && (
+                                <button type="button" className="w-full text-left px-3 py-2 text-xs font-semibold border-t border-[var(--sp-border)] hover:bg-[var(--sp-accent-soft)]"
+                                  style={{ color: 'var(--navy)' }}
+                                  onClick={() => { setQuickProduct({ lineId: line.id, name: (productSearch[line.id] ?? '').trim() }); setProductDropdownOpen(null) }}>
+                                  + Create product “{(productSearch[line.id] ?? '').trim()}”
+                                </button>
+                              )}
                             </div>
                           )}
                         </td>
