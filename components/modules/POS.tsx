@@ -191,17 +191,16 @@ function ReceiptPrintView({
         <div className="pt-3 mb-4" style={{ borderTop: '1px dashed var(--border)' }}>
           <p className="font-bold text-center mb-2">WARRANTY</p>
           {warranties.map(w => (
-            <div key={w.id} className="flex gap-2 items-start mb-3" style={{ breakInside: 'avoid' }}>
-              {w.qr ? <img src={w.qr} alt="" className="receipt-warranty-qr" style={{ width: 84, height: 84, flex: '0 0 84px' }} /> : null}
-              <div style={{ minWidth: 0 }}>
-                <p className="font-bold">{w.ref}</p>
-                <p className="text-[10px]" style={{ wordBreak: 'break-word' }}>{w.productName.length > 70 ? `${w.productName.slice(0, 70)}…` : w.productName}</p>
-                <p className="text-[10px] font-mono">SN: {w.serialNumber}</p>
-                <p className="font-bold text-[11px]">Valid until {fmtDate(w.endDate)}</p>
-              </div>
+            // The machine and serial are in the items above; the slip only adds
+            // the code, the number to quote and when cover ends. With several
+            // machines the serial says which code is which.
+            <div key={w.id} className="text-center mb-3" style={{ breakInside: 'avoid' }}>
+              {w.qr ? <img src={w.qr} alt="" className="receipt-warranty-qr" style={{ width: 96, height: 96, margin: '0 auto' }} /> : null}
+              <p className="font-bold mt-1">{w.ref} · Valid until {fmtDate(w.endDate)}</p>
+              {warranties.length > 1 && <p className="text-[10px] font-mono">SN: {w.serialNumber}</p>}
             </div>
           ))}
-          <p className="text-[10px] text-center">Scan to check cover, see the terms or make a claim.</p>
+          <p className="text-[10px] text-center">Scan to check cover or make a claim.</p>
           <p className="text-[10px] text-center">Warranty support: {WARRANTY_SUPPORT_PHONE}</p>
         </div>
       )}
@@ -268,10 +267,10 @@ function ReceiptPrintView({
             color-adjust: exact !important;
           }
           .print-receipt-container img.receipt-warranty-qr {
-            width: 22mm !important;
-            height: 22mm !important;
-            max-width: 22mm !important;
-            flex: 0 0 22mm !important;
+            width: 26mm !important;
+            height: 26mm !important;
+            max-width: 26mm !important;
+            margin: 0 auto !important;
           }
           .no-print-area,
           .no-print-area * {
