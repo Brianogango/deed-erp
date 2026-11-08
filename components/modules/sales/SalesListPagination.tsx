@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const
-const DEFAULT_PAGE_SIZE = 10
+const DEFAULT_PAGE_SIZE = 50
 
 function positiveInt(value: string | null, fallback: number) {
   const parsed = Number.parseInt(value ?? '', 10)

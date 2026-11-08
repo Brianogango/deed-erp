@@ -38,7 +38,7 @@ export default function EnterprisePagination({
   showPageSizeSelector = true,
 }: EnterprisePaginationProps) {
   const safeTotal = Math.max(0, Math.floor(Number(total) || 0))
-  const safePerPage = Math.max(1, Math.floor(Number(perPage) || 10))
+  const safePerPage = Math.max(1, Math.floor(Number(perPage) || 50))
   const totalPages = Math.max(1, Math.ceil(safeTotal / safePerPage))
   const safePage = Math.min(Math.max(1, Math.floor(Number(page) || 1)), totalPages)
   const options = useMemo(

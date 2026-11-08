@@ -48,13 +48,15 @@ function estimateTableMinWidth(
   return 0
 }
 
+/** Lists show 50 rows a page. */
+export const STANDARD_PAGE_SIZE = 50
+
 function operationalPageSize(requested: number) {
-  const safe = Math.max(1, Math.floor(Number(requested) || 10))
-  // Preserve intentionally small dashboard widgets and large analytical pages.
+  const safe = Math.max(1, Math.floor(Number(requested) || STANDARD_PAGE_SIZE))
+  // Small dashboard widgets (under 10) and long analytical pages (over 50)
+  // keep their size; every operational list shows 50 a page.
   if (safe < 10 || safe > 50) return safe
-  // Large operational lists now follow the Sales contract by default.
-  if (!DEFAULT_PAGE_SIZE_OPTIONS.includes(safe as (typeof DEFAULT_PAGE_SIZE_OPTIONS)[number])) return 10
-  return safe
+  return STANDARD_PAGE_SIZE
 }
 
 interface DataTableProps<T> {
@@ -161,7 +163,7 @@ export default function DataTable<T>({
   searchValue,
   onSearchChange,
   clientSearch = true,
-  perPage = 10,
+  perPage = STANDARD_PAGE_SIZE,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   showPageSizeSelector = true,
   page: pageProp,
@@ -243,7 +245,7 @@ export default function DataTable<T>({
     onPageChange?.(nextPage)
   }
   const changePageSize = (next: number) => {
-    setPageSize(Math.max(1, Math.floor(Number(next)) || 10))
+    setPageSize(Math.max(1, Math.floor(Number(next)) || STANDARD_PAGE_SIZE))
     goToPage(1)
   }
 

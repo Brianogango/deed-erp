@@ -16,7 +16,7 @@ import {
   faFlag, faPrint,
 } from '@fortawesome/free-solid-svg-icons'
 
-const ITEMS_PER_PAGE = 15
+const ITEMS_PER_PAGE = 50
 
 // Brand tokens
 const CYAN  = '#00AEEF'
