@@ -191,13 +191,12 @@ function ReceiptPrintView({
         <div className="pt-3 mb-4" style={{ borderTop: '1px dashed var(--border)' }}>
           <p className="font-bold text-center mb-2">WARRANTY</p>
           {warranties.map(w => (
-            // The machine and serial are in the items above; the slip only adds
-            // the code, the number to quote and when cover ends. With several
-            // machines the serial says which code is which.
+            // Just the code: the machine and serial are in the items above, and
+            // the check page shows the number and cover. With several machines
+            // the serial says which code is which.
             <div key={w.id} className="text-center mb-3" style={{ breakInside: 'avoid' }}>
               {w.qr ? <img src={w.qr} alt="" className="receipt-warranty-qr" style={{ width: 96, height: 96, margin: '0 auto' }} /> : null}
-              <p className="font-bold mt-1">{w.ref} · Valid until {fmtDate(w.endDate)}</p>
-              {warranties.length > 1 && <p className="text-[10px] font-mono">SN: {w.serialNumber}</p>}
+              {warranties.length > 1 && <p className="text-[10px] font-mono mt-1">SN: {w.serialNumber}</p>}
             </div>
           ))}
           <p className="text-[10px] text-center">Scan to check cover or make a claim.</p>

@@ -137,7 +137,7 @@ describe('warranty at the point of sale', () => {
     const doc = buildDeedDocumentPdf({ title: 'Invoice', ref: 'INV/1', customerName: 'Jane', lines: [{ description: 'Laptop', qty: 1, unitPrice: 1, subtotal: 1 }], subtotal: 1, taxTotal: 0, total: 1,
       warranties: [{ ref: 'WAR/0001', productName: 'HP EliteBook 840 G5', serialNumber: 'NEW111', endDate: '2027-05-07', months: 6, url: 'https://erp.example/portal/warranty/a.b/check' }] } as any, { name: 'Deed', currency: 'KES' } as any)
     const text = Buffer.from(doc.output('arraybuffer')).toString('latin1')
-    expect(text).toContain('WAR/0001')
-    expect(text).toContain('Valid until')
+    expect(text).toContain('Scan to check cover or make a claim')
+    expect(text).not.toContain('Valid until') // just the code: the check page has the details
   })
 })

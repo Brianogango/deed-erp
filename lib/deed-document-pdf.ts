@@ -342,40 +342,38 @@ function drawQr(doc: jsPDF, text: string, x: number, y: number, size: number) {
 
 const WARRANTY_SUPPORT_LINE = 'Warranty support: 0113 704 451'
 
-/** The warranty lines under the totals: QR, number, machine, serial, valid until. */
+/**
+ * Warranty codes under the totals: one QR per machine, in a row. The items
+ * above already name the machines; the code opens the live check (number,
+ * cover, claim). With several machines each code has its serial under it.
+ */
 function drawWarranties(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, startY: number): number {
   const list = (input.warranties ?? []).filter(w => w && w.url)
   if (!list.length) return startY
-  const cols = list.length > 1 ? 2 : 1
-  const colW = contentW(doc) / cols
-  const rowH = 64
-  let y = ensureRoom(doc, company, input, startY, 30 + rowH)
+  const qr = 58
+  const gap = 22
+  const caption = list.length > 1 ? 11 : 0
+  const perRow = Math.max(1, Math.floor((contentW(doc) + gap) / (qr + gap)))
+  const rows = Math.ceil(list.length / perRow)
+  let y = ensureRoom(doc, company, input, startY, 28 + qr + caption)
   line(doc, MARGIN, y, right(doc), BORDER, .55)
   writeLabel(doc, list.length > 1 ? 'Warranties' : 'Warranty', MARGIN, y + 16)
   doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
-  doc.text('Scan a code to check cover, see the full terms or make a claim.', MARGIN + 70, y + 16)
-  y += 26
-  list.forEach((w, i) => {
-    const col = i % cols
-    if (col === 0 && i > 0) y += rowH
-    if (col === 0) y = ensureRoom(doc, company, input, y, rowH)
-    const x = MARGIN + col * colW
-    const qr = 54
-    drawQr(doc, w.url, x, y, qr)
-    const tx = x + qr + 8
-    const tw = colW - qr - 16
-    const until = fmtDate(w.endDate)
-    doc.setFont('helvetica', 'bold').setFontSize(8.2).setTextColor(...INK)
-    doc.text(`${w.ref}${w.months ? ` · ${w.months} month${w.months === 1 ? '' : 's'}` : ''}`, tx, y + 11)
-    doc.setFont('helvetica', 'normal').setFontSize(7.4).setTextColor(...INK)
-    doc.text((doc.splitTextToSize(w.productName || '', tw) as string[])[0] ?? '', tx, y + 23)
-    doc.text(`Serial: ${w.serialNumber}`, tx, y + 34)
-    doc.setFont('helvetica', 'bold').text(`Valid until ${until}`, tx, y + 45)
-  })
-  y += rowH
-  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
-  doc.text(WARRANTY_SUPPORT_LINE, MARGIN, y)
-  return y + 10
+  doc.text(`Scan to check cover or make a claim. ${WARRANTY_SUPPORT_LINE}`, MARGIN + 70, y + 16)
+  y += 24
+  for (let r = 0; r < rows; r++) {
+    if (r > 0) y = ensureRoom(doc, company, input, y, qr + caption + 8)
+    list.slice(r * perRow, (r + 1) * perRow).forEach((w, i) => {
+      const x = MARGIN + i * (qr + gap)
+      drawQr(doc, w.url, x, y, qr)
+      if (caption) {
+        doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(...INK)
+        doc.text((doc.splitTextToSize(w.serialNumber, qr + gap - 4) as string[])[0] ?? '', x + qr / 2, y + qr + 8, { align: 'center' })
+      }
+    })
+    y += qr + caption + 8
+  }
+  return y + 4
 }
 
 function defaultPaymentLines(input: DeedPdfInput, company: DeedPdfCompany, banks: DeedPdfBank[]) {
