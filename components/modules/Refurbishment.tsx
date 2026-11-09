@@ -1,8 +1,9 @@
 'use client'
 
-import { Suspense, useState, useMemo } from 'react'
+import { Suspense, useState, useMemo, useEffect, useRef } from 'react'
 import { useOperationsStore, fmtDate as fmtD } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
+import { useRouteDataReady } from '@/lib/route-data-ready'
 import { assignableTechnicians } from '@/lib/repair/assignable-technicians'
 import { RefurbInstallActionField, refurbFitSlotForForm } from '@/components/refurbishment/RefurbInstallActionField'
 import {
@@ -12,7 +13,8 @@ import {
   resolveRefurbInstallAction,
 } from '@/lib/refurbishment/apply-upgrade-specs'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
-import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader, TabBar } from '@/components/ui'
+import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader, TabBar, SearchPicker } from '@/components/ui'
+import { refurbNextStep, refurbFlowProgress, REFURB_FLOW_STEPS } from '@/lib/refurbishment/next-step'
 import { RefurbWeeklyReport } from '@/components/refurbishment/RefurbWeeklyReport'
 import { TaggedIntakeModal } from '@/components/refurbishment/TaggedIntakeModal'
 import { IdentifyUnitModal } from '@/components/refurbishment/IdentifyUnitModal'
@@ -69,11 +71,24 @@ function RefurbishmentContent() {
     markRefurbishmentReady, transferToSell, writeOffRefurbishmentJob, restoreRefurbishmentJob,
     updateSerial,
     showToast,
+    fixRefurbJobNumbers,
   } = useOperationsStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const isLeadTech  = ['technical_lead', 'director'].includes(currentUser?.role ?? '')
   const canAssignJobs = currentUser?.role === 'technical_lead'
+
+  // Job numbers used to be counted per browser, so several jobs share
+  // REF/0001. A lead opening this screen gives the repeats (and any job
+  // still on a temporary number) a real server number, once.
+  const routeReady = useRouteDataReady('/refurbishment')
+  const numbersFixed = useRef(false)
+  useEffect(() => {
+    if (!isLeadTech || !routeReady || numbersFixed.current || !refurbishmentJobs.length) return
+    numbersFixed.current = true
+    const n = fixRefurbJobNumbers()
+    if (n > 0) showToast(`Giving ${n} job${n === 1 ? '' : 's'} a unique number`, 'info')
+  }, [isLeadTech, routeReady, refurbishmentJobs.length, fixRefurbJobNumbers, showToast])
   const employees = useHrStore(s => s.employees)
   const techs       = assignableTechnicians(users, employees)
 
@@ -113,6 +128,8 @@ function RefurbishmentContent() {
   const [bulkIssueDesc, setBulkIssueDesc]         = useState('')
 
   const [notesText, setNotesText]           = useState('')
+  const [issuesText, setIssuesText]         = useState('')
+  const [requestNow, setRequestNow]         = useState(true)
   const [writeOffReason, setWriteOffReason] = useState('')
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
   const [partForm, setPartForm] = useState<Omit<RefurbPart, 'id' | 'qty'> & { qty: number | '' }>({
@@ -232,8 +249,8 @@ function RefurbishmentContent() {
               {canLogNotes(job) && (
                 <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
                   style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border-lt)', cursor: 'pointer' }}
-                  onClick={() => { setNotesText(job.techNotes ?? ''); setShowNotesModal(true) }}>
-                  <Fa icon={faPencil} className="mr-1.5" />Notes
+                  onClick={() => { setNotesText(job.techNotes ?? ''); setIssuesText(job.issuesFound ?? ''); setShowNotesModal(true) }}>
+                  <Fa icon={faPencil} className="mr-1.5" />Issues & notes
                 </button>
               )}
               {canIdentify(job) && (
@@ -297,6 +314,49 @@ function RefurbishmentContent() {
               </div>
             </div>
           )}
+
+          {(() => {
+            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs })
+            if (next.key === 'none') return null
+            const reached = refurbFlowProgress(job)
+            return (
+              <div className="card p-4 space-y-3">
+                <ol className="flex flex-wrap items-center gap-1.5 text-[11px]" aria-label="Job progress">
+                  {REFURB_FLOW_STEPS.map((label, i) => (
+                    <li key={label} className="inline-flex items-center gap-1.5">
+                      {i > 0 && <span aria-hidden="true" className="text-t3">→</span>}
+                      <span className="rounded-full px-2 py-0.5 font-semibold" style={i <= reached
+                        ? { background: '#E0F6FD', color: '#20164D', border: '1px solid #00AEEF' }
+                        : { background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border-lt)' }}>
+                        {i <= reached && <Fa icon={faCheck} className="mr-1" aria-hidden="true" />}{label}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-t1">Next: {next.title}</p>
+                    <p className="text-[11px] text-t3">{next.detail}</p>
+                  </div>
+                  {next.mine && next.key === 'record_issues' && (
+                    <button className="btn-primary text-xs py-1.5" onClick={() => { setNotesText(job.techNotes ?? ''); setIssuesText(job.issuesFound ?? ''); setShowNotesModal(true) }}>Record issues</button>
+                  )}
+                  {next.mine && next.key === 'start' && (
+                    <button className="btn-primary text-xs py-1.5" onClick={() => updateRefurbishmentJob(job.id, { status: 'in_progress' })}>Start refurb</button>
+                  )}
+                  {next.mine && next.key === 'assign' && (
+                    <button className="btn-primary text-xs py-1.5" onClick={() => setShowAssignModal(true)}>Assign</button>
+                  )}
+                  {next.mine && next.key === 'identify' && (
+                    <button className="btn-primary text-xs py-1.5" onClick={() => setShowIdentify(true)}>Identify</button>
+                  )}
+                  {next.mine && next.key === 'mark_ready' && (
+                    <button className="btn-primary text-xs py-1.5" onClick={() => markRefurbishmentReady(job.id)}>Mark ready</button>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
 
           {job.identityPending && !['transferred', 'written_off'].includes(job.status) && (
             <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: 'var(--warning-bg)', border: '1px solid #FCD34D' }}>
@@ -379,8 +439,21 @@ function RefurbishmentContent() {
 
           {/* Issue & Notes */}
           <div className="card p-4 space-y-3">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Issue Description</p>
-            <p className="text-sm text-t1">{job.intakeIssueDescription}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Issues found</p>
+              {canLogNotes(job) && (
+                <button className="text-[11px] font-semibold" style={{ color: 'var(--info-text)' }}
+                  onClick={() => { setNotesText(job.techNotes ?? ''); setIssuesText(job.issuesFound ?? ''); setShowNotesModal(true) }}>
+                  {job.issuesFound ? 'Edit' : 'Record issues'}
+                </button>
+              )}
+            </div>
+            {job.issuesFound
+              ? <p className="text-sm text-t1 whitespace-pre-line">{job.issuesFound}</p>
+              : <p className="text-xs italic text-t3">{job.assignedTechnicianName ? `Waiting for ${job.assignedTechnicianName} to record what is wrong.` : 'Recorded by the technician once the job is assigned.'}</p>}
+            {job.intakeIssueDescription && !/^Not identified/.test(job.intakeIssueDescription) && (
+              <p className="text-[11px] text-t3">Noted at intake: {job.intakeIssueDescription}</p>
+            )}
             {job.techNotes && (
               <>
                 <div style={{ borderTop: '1px solid var(--bg-muted)', paddingTop: 12 }}>
@@ -395,15 +468,16 @@ function RefurbishmentContent() {
           <div className="card overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3"
               style={{ borderBottom: '1px solid var(--bg-muted)' }}>
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Parts Needed</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Parts & components needed</p>
               {canAddParts(job) && (
                 <button className="btn-primary text-xs py-1"
                   onClick={() => {
                     setEditPartId(null)
                     setPartForm({ partName: '', qty: '', estimatedCost: 0, status: 'needed', notes: '', installAction: undefined })
+                    setRequestNow(true)
                     setShowPartModal(true)
                   }}>
-                  <Fa icon={faPlus} className="mr-1" />Add Part
+                  <Fa icon={faPlus} className="mr-1" />Add part
                 </button>
               )}
             </div>
@@ -570,18 +644,26 @@ function RefurbishmentContent() {
 
         {/* ── Notes Modal ── */}
         {showNotesModal && (
-          <Modal title="Technician Notes" onClose={() => setShowNotesModal(false)} width={480}>
-            <Field label="Notes / Findings">
-              <Textarea value={notesText} onChange={setNotesText} rows={6}
-                placeholder="Describe findings, work done, or diagnosis…" />
-            </Field>
+          <Modal title="Issues & notes" subtitle={`${job.ref} · ${job.productName}`} onClose={() => setShowNotesModal(false)} width={520}>
+            <div className="space-y-3">
+              <Field label="Issues found" required hint="What is wrong with the machine, one per line">
+                <Textarea value={issuesText} onChange={setIssuesText} rows={4}
+                  placeholder={'e.g. No display — backlight\nBattery holds no charge\nKeyboard: keys E and R dead'} />
+              </Field>
+              <Field label="Work notes (optional)">
+                <Textarea value={notesText} onChange={setNotesText} rows={3}
+                  placeholder="Tests done, work carried out…" />
+              </Field>
+              <p className="text-[11px] text-t3">Next, add the parts and components it needs under Parts needed — they go to stores as requests.</p>
+            </div>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowNotesModal(false)}>Cancel</button>
               <button className="btn-primary" onClick={() => {
-                updateRefurbishmentJob(job.id, { techNotes: notesText })
+                if (!issuesText.trim()) { showToast('Record at least one issue found', 'error'); return }
+                updateRefurbishmentJob(job.id, { issuesFound: issuesText.trim(), techNotes: notesText })
                 setShowNotesModal(false)
-                showToast('Notes saved')
-              }}>Save Notes</button>
+                showToast('Issues saved')
+              }}>Save</button>
             </div>
           </Modal>
         )}
@@ -591,34 +673,46 @@ function RefurbishmentContent() {
           const linkedProd = partForm.productId ? products.find(x => x.id === partForm.productId) : null
           return (
             <Modal title={editPartId ? 'Edit Part' : 'Add Part'} onClose={() => setShowPartModal(false)} width={440}>
-              <Field label="Link to Inventory Product (optional)">
-                <div className="flex gap-2 items-center">
-                  <select className="form-select flex-1"
-                    value={partForm.productId ?? ''}
-                    onChange={e => {
-                      const prod = products.find(x => x.id === e.target.value)
-                      const nextName = prod ? prod.name : partForm.partName
-                      const slot = refurbFitSlotForForm({ partName: nextName, productId: e.target.value || undefined, products })
-                      setPartForm(p => ({
-                        ...p,
-                        productId: e.target.value || undefined,
-                        partName: nextName,
-                        estimatedCost: prod ? prod.costPrice : p.estimatedCost,
-                        installAction: slot ? (p.installAction || defaultRefurbInstallAction(slot)) : undefined,
-                      }))
-                    }}>
-                    <option value="">— No link (freeform) —</option>
-                    {products.filter(x => x.isActive).map(x => (
-                      <option key={x.id} value={x.id}>{x.name} (stock: {x.stockQty})</option>
-                    ))}
-                  </select>
-                  {linkedProd && (
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: linkedProd.stockQty >= Number(partForm.qty) ? 'var(--success-bg)' : 'var(--danger-bg)', color: linkedProd.stockQty >= Number(partForm.qty) ? 'var(--success-text)' : '#991B1B' }}>
-                      <span className="inline-flex items-center gap-1">{linkedProd.stockQty >= Number(partForm.qty) ? <><Fa icon={faCheck} aria-hidden="true" /> {linkedProd.stockQty} in stock</> : <><Fa icon={faTriangleExclamation} aria-hidden="true" /> Only {linkedProd.stockQty}</>}</span>
-                    </span>
+              <div className="space-y-1">
+                <SearchPicker
+                  label="Find it in inventory"
+                  placeholder="Search parts: RAM 8GB, battery 840 G5, SSD…"
+                  items={products.filter(x => x.isActive)}
+                  selectedLabel={linkedProd ? linkedProd.name : undefined}
+                  formatSelected={x => x.name}
+                  onSelect={prod => {
+                    const slot = refurbFitSlotForForm({ partName: prod.name, productId: prod.id, products })
+                    setPartForm(p => ({
+                      ...p,
+                      productId: prod.id,
+                      partName: prod.name,
+                      estimatedCost: prod.costPrice,
+                      installAction: slot ? (p.installAction || defaultRefurbInstallAction(slot)) : undefined,
+                    }))
+                  }}
+                  renderItem={x => (
+                    <div className="flex items-center justify-between gap-2 w-full">
+                      <span className="text-xs text-t1 truncate">{x.name}{x.sku ? <span className="text-t3"> · {x.sku}</span> : null}</span>
+                      <span className="text-[10px] text-t3 whitespace-nowrap">{x.stockQty} in stock</span>
+                    </div>
+                  )}
+                  emptyText="Not in inventory — it is added by this name, unlinked"
+                  // What is typed becomes the part name until an item is chosen.
+                  onQueryChange={q => setPartForm(p => (p.productId ? p : { ...p, partName: q }))}
+                />
+                <div className="flex items-center gap-2 flex-wrap">
+                  {linkedProd ? (
+                    <>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: linkedProd.stockQty >= Number(partForm.qty || 1) ? 'var(--success-bg)' : 'var(--danger-bg)', color: linkedProd.stockQty >= Number(partForm.qty || 1) ? 'var(--success-text)' : '#991B1B' }}>
+                        <span className="inline-flex items-center gap-1">{linkedProd.stockQty >= Number(partForm.qty || 1) ? <><Fa icon={faCheck} aria-hidden="true" /> {linkedProd.stockQty} in stock</> : <><Fa icon={faTriangleExclamation} aria-hidden="true" /> Only {linkedProd.stockQty} in stock — the lead will order it</>}</span>
+                      </span>
+                      <button type="button" className="text-[10px] text-t3 underline" onClick={() => setPartForm(p => ({ ...p, productId: undefined }))}>Unlink</button>
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-t3">Not linked — stores cannot pull it until it is linked to an inventory item.</span>
                   )}
                 </div>
-              </Field>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Part Name *">
                   <input className="form-input" value={partForm.partName}
@@ -665,6 +759,12 @@ function RefurbishmentContent() {
                   />
                 )
               })()}
+              {!editPartId && (
+                <label className="flex items-center gap-2 text-xs text-t2 mt-2">
+                  <input type="checkbox" checked={requestNow && !!partForm.productId} disabled={!partForm.productId} onChange={e => setRequestNow(e.target.checked)} />
+                  Request it from stores now {partForm.productId ? '' : '(link it to an inventory item first)'}
+                </label>
+              )}
               <div className="flex gap-2 justify-end mt-4">
                 <button className="btn-outline" onClick={() => setShowPartModal(false)}>Cancel</button>
                 <button className="btn-primary" onClick={() => {
@@ -680,10 +780,10 @@ function RefurbishmentContent() {
                   if (editPartId) {
                     updateRefurbishmentPart(job.id, editPartId, payload)
                   } else {
-                    addRefurbishmentPart(job.id, payload)
+                    addRefurbishmentPart(job.id, payload, { request: requestNow && !!payload.productId })
                   }
                   setShowPartModal(false)
-                }}>Save Part</button>
+                }}>{!editPartId && requestNow && partForm.productId ? 'Add & request' : 'Save part'}</button>
               </div>
             </Modal>
           )

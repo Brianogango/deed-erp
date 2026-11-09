@@ -53,6 +53,8 @@ export type DocKind =
   | 'kilimall_order'
   | 'kilimall_dispatch'
   | 'kilimall_settlement'
+  /** Refurbishment jobs (REF/NNNN), yearless. */
+  | 'refurbishment'
 
 // Quotations exist both as CRM quotes and as quotation-state sale orders;
 // they share the QUO prefix and therefore one sequence.
@@ -84,6 +86,7 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   kilimall_order: 'KO',
   kilimall_dispatch: 'KD',
   kilimall_settlement: 'KS',
+  refurbishment: 'REF',
 }
 
 const PREFIX = DOC_PREFIX
@@ -267,6 +270,8 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
         return maxYearlessSeq('deed_kilimallDispatches', prefix)
       case 'kilimall_settlement':
         return maxYearlessSeq('deed_kilimallSettlements', prefix)
+      case 'refurbishment':
+        return maxYearlessSeq('deed_refurbishmentJobs', prefix)
       default:
         return 0
     }
@@ -284,7 +289,7 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   await ensureCounterTable()
   const now = new Date().toISOString()
   const year = new Date().getFullYear()
-  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : kind === 'outsource' ? 'out_seq' : kind === 'outsource_payment' ? 'opay_seq' : kind === 'rider_pay' ? 'rwp_seq' : kind === 'expense' ? 'exp_seq' : kind === 'opportunity' ? 'opp_seq' : kind === 'contract' ? 'ctr_seq' : kind === 'purchase_return' ? 'ret_seq' : kind === 'kilimall_order' ? 'ko_seq' : kind === 'kilimall_dispatch' ? 'kd_seq' : kind === 'kilimall_settlement' ? 'ks_seq' : `${PREFIX[kind]}_${year}`
+  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : kind === 'outsource' ? 'out_seq' : kind === 'outsource_payment' ? 'opay_seq' : kind === 'rider_pay' ? 'rwp_seq' : kind === 'expense' ? 'exp_seq' : kind === 'opportunity' ? 'opp_seq' : kind === 'contract' ? 'ctr_seq' : kind === 'purchase_return' ? 'ret_seq' : kind === 'kilimall_order' ? 'ko_seq' : kind === 'kilimall_dispatch' ? 'kd_seq' : kind === 'kilimall_settlement' ? 'ks_seq' : kind === 'refurbishment' ? 'ref_seq' : `${PREFIX[kind]}_${year}`
 
   // Fast path: counter row exists — atomic increment.
   const updated = await sql`
@@ -313,6 +318,6 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   if (kind === 'client') return `CLT-${String(nextValue).padStart(5, '0')}`
   if (kind === 'pos') return `POS/${String(nextValue).padStart(4, '0')}`
   if (kind === 'delivery_job') return `DJB/${String(nextValue).padStart(4, '0')}`
-  if (kind === 'outsource' || kind === 'outsource_payment' || kind === 'rider_pay' || kind === 'expense' || kind === 'opportunity' || kind === 'contract' || kind === 'purchase_return' || kind === 'kilimall_order' || kind === 'kilimall_dispatch' || kind === 'kilimall_settlement') return `${PREFIX[kind]}/${String(nextValue).padStart(4, '0')}`
+  if (kind === 'outsource' || kind === 'outsource_payment' || kind === 'rider_pay' || kind === 'expense' || kind === 'opportunity' || kind === 'contract' || kind === 'purchase_return' || kind === 'kilimall_order' || kind === 'kilimall_dispatch' || kind === 'kilimall_settlement' || kind === 'refurbishment') return `${PREFIX[kind]}/${String(nextValue).padStart(4, '0')}`
   return `${PREFIX[kind]}/${year}/${String(nextValue).padStart(4, '0')}`
 }

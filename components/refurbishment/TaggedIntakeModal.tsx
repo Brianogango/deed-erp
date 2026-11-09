@@ -22,7 +22,6 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
   const [sourceLocation, setSourceLocation] = useState<LocationId | ''>('')
   const [fileAs, setFileAs] = useState<PlaceholderKind | 'known'>('laptop')
   const [knownProductId, setKnownProductId] = useState('')
-  const [issue, setIssue] = useState('')
   const [units, setUnits] = useState<Unit[]>([{ cost: '', note: '' }])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -68,7 +67,8 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
       }
       const made = await intakeTaggedMachines({
         productId,
-        units: units.map(u => ({ cost: u.cost.trim() ? Number(u.cost) : null, note: u.note.trim() || undefined, issue: issue.trim() || 'Not identified — dead or too damaged to read' })),
+        // What is wrong is the assigned technician's to record on the job.
+        units: units.map(u => ({ cost: u.cost.trim() ? Number(u.cost) : null, note: u.note.trim() || undefined, issue: '' })),
         from: where === 'stock' ? { productId: sourceProductId, location: sourceLocation as LocationId } : undefined,
         reference: `REFURB-IN ${new Date().toISOString().slice(0, 10)}`,
       })
@@ -134,13 +134,11 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
             </Field>
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-3 items-end">
           <Field label="How many" required>
             <Input type="number" value={String(units.length)} onChange={setCount} />
           </Field>
-          <Field label="What's wrong (all of them)">
-            <Input value={issue} onChange={setIssue} placeholder="e.g. No power, cracked screen" />
-          </Field>
+          <p className="text-[11px] text-t3 pb-2">No need to say what is wrong here: the technician assigned to each machine records the issues found and asks for the parts it needs.</p>
         </div>
         <div>
           <p className="text-[11px] font-semibold text-t2 mb-1">Each machine</p>

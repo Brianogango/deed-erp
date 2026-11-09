@@ -1175,6 +1175,8 @@ export interface RefurbishmentJob {
   assignedDate?: string
   /** When the technician pressed Start. */
   startedDate?: string
+  /** What the assigned technician found wrong (the diagnosis). Intake no longer asks for it. */
+  issuesFound?: string
   techNotes?: string   // technician's running notes / diagnosis
   partsNeeded: RefurbPart[]
   completedDate?: string
@@ -3938,11 +3940,12 @@ interface AppState {
   // Refurbishment
   createRefurbishmentJob: (serialId: string, issueDescription: string) => void
   assignRefurbishmentJob: (jobId: string, techId: string, techName: string) => void
-  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'status' | 'completedDate'>>) => void
-  addRefurbishmentPart: (jobId: string, part: Omit<RefurbPart, 'id'>) => void
+  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'issuesFound' | 'status' | 'completedDate'>>) => void
+  /** `request`: ask stores for it straight away (taken from stock, or the lead is alerted). */
+  addRefurbishmentPart: (jobId: string, part: Omit<RefurbPart, 'id'>, opts?: { request?: boolean }) => void
   updateRefurbishmentPart: (jobId: string, partId: string, patch: Partial<RefurbPart>) => void
   removeRefurbishmentPart: (jobId: string, partId: string) => void
-  requestPartFromInventory: (jobId: string, partId: string) => void   // tech → checks stock; allocates or alerts lead
+  requestPartFromInventory: (jobId: string, partId: string, part?: RefurbPart) => void   // tech → checks stock; allocates or alerts lead
   allocateRefurbPart: (jobId: string, partId: string) => void         // lead tech → deducts stock, marks allocated
   notifyTechPartAvailable: (jobId: string, partId: string) => void    // lead tech → stamps notified date
   markRefurbishmentReady: (jobId: string) => void
@@ -3952,6 +3955,8 @@ interface AppState {
   /** Bring a written-off device back: stock and the write-off booking are reversed. */
   restoreRefurbishmentJob: (jobId: string) => Promise<boolean>
   /** Machines with no readable serial: tagged (UNK-…) and queued for refurbishment. Returns the tags. */
+  /** Give server numbers to jobs with a duplicate or temporary REF number. Returns how many. */
+  fixRefurbJobNumbers: () => number
   intakeTaggedMachines: (input: TaggedIntakeInput) => Promise<string[] | null>
   /** Record a tagged machine's real serial (and model / specs). */
   identifyRefurbUnit: (jobId: string, input: { serial: string; productId?: string; specs?: string }) => Promise<boolean>
@@ -4676,6 +4681,7 @@ type OperationsStoreState = Pick<AppState,
   | 'writeOffRefurbishmentJob'
   | 'restoreRefurbishmentJob'
   | 'intakeTaggedMachines'
+  | 'fixRefurbJobNumbers'
   | 'identifyRefurbUnit'
   | 'harvestRefurbishmentJob'
 >
@@ -7524,6 +7530,33 @@ function StoreProvider({
    * tagged ones (serial unknown) always, and ones taken in as "poor". They
    * used to be marked refurbishment with no job, and no screen showed them.
    */
+  /**
+   * Refurbishment job numbers come from the server (REF/NNNN). They used to be
+   * counted in each browser, so every browser started again at REF/0001. A
+   * new job gets a temporary, clash-free number and its real one a moment
+   * later.
+   */
+  const numberRefurbJobs = (ids: string[]) => {
+    if (!ids.length || typeof window === 'undefined') return
+    void (async () => {
+      for (const id of ids) {
+        const ref = await allocateDocNumber('refurbishment').catch(() => null)
+        if (!ref || !/^REF\/\d+$/.test(ref)) continue
+        setRefurbishmentJobs(p => p.map(j => j.id === id ? { ...j, ref } : j))
+      }
+    })()
+  }
+  /** Jobs whose number another job already has, or still a temporary one. */
+  const refurbJobsNeedingNumbers = (jobs: RefurbishmentJob[]): string[] => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    const byAge = [...jobs].sort((a, b) => String(a.intakeDate).localeCompare(String(b.intakeDate)))
+    for (const j of byAge) {
+      if (!/^REF\/\d+$/.test(j.ref) || seen.has(j.ref)) out.push(j.id)
+      else seen.add(j.ref)
+    }
+    return out
+  }
   const openTradeInRefurbJobs = (units: Array<{ serialId: string; issue: string; cost?: number; sourceRef: string }>) => {
     const open = new Set(refurbishmentJobs.filter(j => j.status !== 'transferred' && j.status !== 'written_off').map(j => j.serialId))
     const jobs: RefurbishmentJob[] = []
@@ -7534,7 +7567,7 @@ function StoreProvider({
       const tagged = awaitingIdentification(ser)
       const prod = prodRef.current.find(p => p.id === ser.productId)
       jobs.push({
-        id: uid(), ref: seq('REF', 'refurb'),
+        id: uid(), ref: allocateDocNumberSync('REF'),
         status: 'queued',
         serialId: ser.id, serialNumber: ser.serial,
         productId: ser.productId, productName: ser.productName,
@@ -7554,6 +7587,7 @@ function StoreProvider({
     const costs = new Map(units.map(u => [u.serialId, u.cost]))
     setSerials(p => p.map(s => !ids.has(s.id) ? s : { ...s, location: 'repair_unit', status: 'refurbishment', ...(costs.get(s.id) != null ? { intakeCost: costs.get(s.id) } : {}) }))
     setRefurbishmentJobs(p => [...p, ...jobs])
+    numberRefurbJobs(jobs.map(j => j.id))
     return jobs.length
   }
 
@@ -8039,6 +8073,7 @@ function StoreProvider({
     voidRelease: (...args: Parameters<AppState['voidRelease']>) => storeCtxRef.current!.voidRelease(...args),
     writeOffRefurbishmentJob: (...args: Parameters<AppState['writeOffRefurbishmentJob']>) => storeCtxRef.current!.writeOffRefurbishmentJob(...args),
     restoreRefurbishmentJob: (...args: Parameters<AppState['restoreRefurbishmentJob']>) => storeCtxRef.current!.restoreRefurbishmentJob(...args),
+    fixRefurbJobNumbers: () => storeCtxRef.current!.fixRefurbJobNumbers(),
     intakeTaggedMachines: (...args: Parameters<AppState['intakeTaggedMachines']>) => storeCtxRef.current!.intakeTaggedMachines(...args),
     identifyRefurbUnit: (...args: Parameters<AppState['identifyRefurbUnit']>) => storeCtxRef.current!.identifyRefurbUnit(...args),
     harvestRefurbishmentJob: (...args: Parameters<AppState['harvestRefurbishmentJob']>) => storeCtxRef.current!.harvestRefurbishmentJob(...args),
@@ -15469,7 +15504,7 @@ const storeCtx: AppState = {
               deviceConfig: prodRef.current.find(p => p.id === line.productId)?.deviceConfig,
             })
             newRefurbJobs.push({
-              id: uid(), ref: seq('REF', 'refurb'),
+              id: uid(), ref: allocateDocNumberSync('REF'),
               status: 'queued',
               serialId: newSerial.id, serialNumber: s,
               productId: line.productId, productName: line.productName,
@@ -15527,7 +15562,10 @@ const storeCtx: AppState = {
         const fresh = newSerials.filter(s => !have.has(s.id))
         return fresh.length ? [...p, ...fresh] : p
       })
-      if (newRefurbJobs.length > 0) setRefurbishmentJobs(p => [...p, ...newRefurbJobs])
+      if (newRefurbJobs.length > 0) {
+        setRefurbishmentJobs(p => [...p, ...newRefurbJobs])
+        numberRefurbJobs(newRefurbJobs.map(j => j.id))
+      }
 
       // Update receipt status
       setReceipts(p => {
@@ -16069,7 +16107,7 @@ const storeCtx: AppState = {
       if (!ser) { showToast('Serial not found', 'error'); return }
       const prod = prodRef.current.find(p => p.id === ser.productId)
       const job: RefurbishmentJob = {
-        id: uid(), ref: seq('REF', 'refurb'),
+        id: uid(), ref: allocateDocNumberSync('REF'),
         status: 'queued',
         serialId, serialNumber: ser.serial,
         productId: ser.productId, productName: ser.productName,
@@ -16082,7 +16120,8 @@ const storeCtx: AppState = {
       // Move serial to repair_unit with refurbishment status
       setSerials(p => p.map(s => s.id === serialId ? { ...s, location: 'repair_unit', status: 'refurbishment' } : s))
       setRefurbishmentJobs(p => [...p, job])
-      showToast(`Refurbishment job ${job.ref} created`)
+      numberRefurbJobs([job.id])
+      showToast('Refurbishment job created')
     },
     assignRefurbishmentJob: (jobId, techId, techName) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
@@ -16114,9 +16153,11 @@ const storeCtx: AppState = {
         ...(patch.status === 'in_progress' && !j.startedDate ? { startedDate: now() } : {}),
       }))
     },
-    addRefurbishmentPart: (jobId, part) => {
+    addRefurbishmentPart: (jobId, part, opts) => {
       const newPart: RefurbPart = { ...part, id: uid() }
       setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, partsNeeded: [...j.partsNeeded, newPart] }))
+      // The part is not in this render's job list yet, so it is passed along.
+      if (opts?.request && newPart.productId) storeCtx.requestPartFromInventory(jobId, newPart.id, newPart)
     },
     updateRefurbishmentPart: (jobId, partId, patch) => {
       // Fitting a part that never left stock (ordered and received on a PO,
@@ -16136,9 +16177,9 @@ const storeCtx: AppState = {
       setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, partsNeeded: j.partsNeeded.filter(pt => pt.id !== partId) }))
     },
 
-    requestPartFromInventory: (jobId, partId) => {
+    requestPartFromInventory: (jobId, partId, given) => {
       const job  = refurbishmentJobs.find(j => j.id === jobId)
-      const part = job?.partsNeeded.find(p => p.id === partId)
+      const part = given ?? job?.partsNeeded.find(p => p.id === partId)
       if (!job || !part || !part.productId) { showToast('Part must be linked to an inventory product first', 'error'); return }
       const prod = prodRef.current.find(p => p.id === part.productId)
       // Only good stock in the warehouse counts: the product's total also
@@ -16378,6 +16419,11 @@ const storeCtx: AppState = {
       return true
     },
 
+    fixRefurbJobNumbers: () => {
+      const ids = refurbJobsNeedingNumbers(refurbishmentJobs)
+      numberRefurbJobs(ids)
+      return ids.length
+    },
     intakeTaggedMachines: async (input) => {
       try {
         const res = await fetch('/api/refurbishment/intake', {
@@ -16391,13 +16437,14 @@ const storeCtx: AppState = {
         setSerials(p => [...p.filter(s => !created.some(c => c.id === s.id)), ...created])
         const source: RefurbishmentJob['intakeSource'] = input.from ? 'stock' : 'unrecorded'
         const jobs: RefurbishmentJob[] = created.map((ser, i) => ({
-          id: uid(), ref: seq('REF', 'refurb'),
+          id: uid(), ref: allocateDocNumberSync('REF'),
           status: 'queued',
           serialId: ser.id, serialNumber: ser.serial,
           productId: ser.productId, productName: ser.productName,
           specs: '', specsAtIntake: '',
           intakeDate: new Date().toISOString(),
-          intakeIssueDescription: input.units[i]?.issue || 'Not identified — dead or too damaged to read',
+          // The technician records what is wrong once they open it up.
+          intakeIssueDescription: input.units[i]?.issue || '',
           partsNeeded: [],
           identityPending: true,
           intakeTag: ser.serial,
@@ -16406,6 +16453,7 @@ const storeCtx: AppState = {
           intakeSourceRef: input.reference,
         }))
         setRefurbishmentJobs(p => [...p, ...jobs])
+        numberRefurbJobs(jobs.map(j => j.id))
         addAuditLog('refurb_tagged_intake', input.reference || jobs[0]?.ref || '', `Took in ${created.length} machine(s) without serial: ${created.map(c => c.serial).join(', ')}`)
         showToast(`${created.length} machine${created.length === 1 ? '' : 's'} tagged and queued: ${created[0].serial}${created.length > 1 ? ` … ${created[created.length - 1].serial}` : ''}. Print the stickers.`)
         return created.map(c => c.serial)
