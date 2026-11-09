@@ -134,6 +134,11 @@
     padding: 8px !important;
   }
 
+  /* The chat panel is a full-screen sheet on a phone, not a modal card. */
+  [role='dialog'].chat-dock {
+    padding: 0 !important;
+  }
+
   [role='dialog'] > div {
     border-radius: 12px !important;
   }

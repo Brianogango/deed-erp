@@ -14,6 +14,7 @@ import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { trackUxEvent } from '@/lib/ux-telemetry'
 
 const GlobalSearch = dynamic(() => import('./GlobalSearch'), { ssr: false })
+const ChatDock = dynamic(() => import('@/components/chat/ChatDock'), { ssr: false })
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -1606,6 +1607,9 @@ export default function Topbar() {
               {syncBadge.label}
             </div>
           )}
+
+          {/* Internal chat */}
+          <ChatDock currentUserId={currentUserId} showToast={showToast} />
 
           {/* Notifications Bell */}
           <div className="relative">
