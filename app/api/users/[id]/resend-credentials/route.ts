@@ -59,8 +59,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         user.passwordHash,
       )
       throw Object.assign(
-        new Error('Credential delivery failed; password reset was rolled back. Fix HR email delivery and retry.'),
-        { status: 503 },
+        new Error('The new login details could not be emailed, so the password was not changed. Check the email address and the HR mailbox email settings, then try again.'),
+        { status: 503, expose: true },
       )
     }
 

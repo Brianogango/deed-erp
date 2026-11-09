@@ -55,8 +55,10 @@ export const withApiErrorHandling = async <T>(handler: () => Promise<T>) => {
 
     // For client errors (4xx), return the specific message so the caller can act on it.
     // For server errors (5xx), return a generic message — never expose Prisma internals.
+    // A message written for the user (`expose: true`) is shown whatever the status.
+    const exposed = typeof error === 'object' && error !== null && (error as { expose?: unknown }).expose === true
     const message =
-      status < 500
+      status < 500 || exposed
         ? (error instanceof Error ? error.message : 'Bad request')
         : 'Internal server error'
 

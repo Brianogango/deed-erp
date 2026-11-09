@@ -45,6 +45,15 @@ export async function GET() {
   })
 }
 
+/** The mail server's reason for a failed send, for the admin's message. */
+function deliveryReason(delivery: unknown): string {
+  const raw = (delivery as { results?: unknown; error?: unknown })?.results
+  const results = (Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? Object.values(raw) : []) as Array<{ success?: boolean; error?: unknown }>
+  const failed = results.find(r => r && r.success === false)
+  const error = String(failed?.error ?? (delivery as { error?: unknown })?.error ?? '').trim().slice(0, 160)
+  return error ? ` (mail server said: ${error})` : ''
+}
+
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const actor = await requirePermission('manageUsers')
@@ -93,7 +102,13 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await hashPassword(temporaryPassword)
-    const user = await createAuthUser(input, passwordHash)
+    const user = await createAuthUser(input, passwordHash).catch((error: unknown) => {
+      // Two people cannot share a login email or username.
+      if ((error as { code?: string })?.code === '23505') {
+        throw Object.assign(new Error(`Another user account already uses ${input.email} or the username ${username}. Change the employee's email in HR, or edit that account instead.`), { status: 409 })
+      }
+      throw error
+    })
 
     const credentialDelivery = await sendMultiChannelMessage({
       purpose: 'credentials',
@@ -117,8 +132,8 @@ export async function POST(request: Request) {
       // with an undisclosed password.
       await deleteAuthUser(user.id)
       throw Object.assign(
-        new Error('Credential delivery failed; account creation was rolled back. Fix HR email delivery and retry.'),
-        { status: 503 },
+        new Error(`The login details could not be emailed to ${user.email}, so the account was not created${deliveryReason(credentialDelivery)}. Check the employee's email address in HR and the HR mailbox email settings, then try again.`),
+        { status: 503, expose: true },
       )
     }
 
