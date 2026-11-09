@@ -31334,10 +31334,13 @@ button, [role="button"], [role="tab"] {
 /* iOS Safari zooms the page when an input under 16px takes focus. Fix the
    cause (type size) on touch devices instead of disabling zoom. */
 @media (pointer: coarse), (max-width: 767px) {
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-  select,
-  textarea {
-    font-size: 16px !important; /* outranks the mobile `text-[11px]` utility overrides — iOS zoom is a functional bug */
+  /* The :not(#…) adds ID weight so no screen's own class rule can win:
+     the quote / invoice line fields were forced to 13px by a more specific
+     !important rule, so iPhones zoomed and the page jumped on every tap. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(#ios-zoom-guard),
+  select:not(#ios-zoom-guard),
+  textarea:not(#ios-zoom-guard) {
+    font-size: 16px !important; /* iOS zoom is a functional bug */
   }
 }
 
