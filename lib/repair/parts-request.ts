@@ -48,7 +48,11 @@ export type PartsRequest = {
   receivedDate?: string
 }
 
+/** Repairs and refurbishment jobs share the queue (lib/refurbishment/parts-request.ts). */
+export type PartsRequestKind = 'repair' | 'refurb'
+
 export type RepairForParts = {
+  kind?: PartsRequestKind
   id: string
   ref: string
   status: string
@@ -60,6 +64,7 @@ export type RepairForParts = {
 export type PartsStep = 'adjust_then_order' | 'awaiting_delivery' | 'mark_arrived'
 
 export type PartsQueueRow = {
+  kind: PartsRequestKind
   repairId: string
   repairRef: string
   device: string
@@ -108,6 +113,7 @@ export function partsQueue(repairs: RepairForParts[], today: string): PartsQueue
         arrivalOffered = true
       }
       rows.push({
+        kind: repair.kind ?? 'repair',
         repairId: repair.id,
         repairRef: repair.ref,
         device: repair.productName ?? '',
@@ -192,8 +198,8 @@ export function requestAfterPurchaseOrder(request: PartsRequest, po: { id: strin
 }
 
 /** The note on the count correction, so the ledger says why stock went down. */
-export function countCorrectionNote(repairRef: string, request: Pick<PartsRequest, 'requestedByName'>): string {
-  return `Not on the shelf — ${request.requestedByName} requested it for repair ${repairRef} and it could not be found`
+export function countCorrectionNote(repairRef: string, request: Pick<PartsRequest, 'requestedByName'>, kind: PartsRequestKind = 'repair'): string {
+  return `Not on the shelf — ${request.requestedByName} requested it for ${kind === 'refurb' ? 'refurbishment' : 'repair'} ${repairRef} and it could not be found`
 }
 
 /** The purchase order's note: which repair it is for, so the GRN clerk knows. */

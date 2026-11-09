@@ -529,13 +529,22 @@ export default function POFormView() {
           />
         </div>
 
-        {/* Repair procurement link banner */}
-        {activePO.repairRef && (
+        {/* Parts request link banner — a repair, or a refurbishment part */}
+        {(activePO.repairRef || activePO.refurbJobRef) && (
           <div className="card p-3 flex items-center gap-2.5" style={{ background: 'color-mix(in srgb, var(--accent) 8%, var(--bg-card))', borderColor: 'color-mix(in srgb, var(--accent) 30%, transparent)' }}>
             <span className="text-base text-t3" aria-hidden="true"><Fa icon={faWrench} /></span>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-t1">Repair procurement — {activePO.repairRef}</p>
-              <p className="text-[10px] text-t3">Auto-created from a parts request on repair {activePO.repairRef}. Assign a vendor below, then process normally through Purchase → GRN → Validate to auto-resume the repair.</p>
+              {activePO.repairRef ? (
+                <>
+                  <p className="text-[11px] font-semibold text-t1">Repair procurement — {activePO.repairRef}</p>
+                  <p className="text-[10px] text-t3">Auto-created from a parts request on repair {activePO.repairRef}. Assign a vendor below, then process normally through Purchase → GRN → Validate to auto-resume the repair.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] font-semibold text-t1">Refurbishment part — {activePO.refurbJobRef}</p>
+                  <p className="text-[10px] text-t3">Raised from a parts request on refurbishment job {activePO.refurbJobRef}. Validating the GRN marks the part received on the job and tells the technician.</p>
+                </>
+              )}
             </div>
             {!activePO.vendorId && (
               <span className="badge badge-amber text-[9px] whitespace-nowrap">Vendor needed</span>

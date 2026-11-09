@@ -286,7 +286,8 @@ import { isSellableSerial } from '@/lib/inventory/sellable-stock'
 import { reportingFetch } from '@/lib/save-failure'
 import { allocateReceiptToPoLines, billedQtyByPoLine } from '@/lib/purchase/receipt-allocation'
 import { reissueAfterClientDecision, reissueBlocker, reissueOnRevision, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
-import { countCorrectionBlocker, countCorrectionNote, partsOrderNote, purchaseOrderBlocker, requestAfterCountCheck, requestAfterPurchaseOrder, type PartsRequest } from '@/lib/repair/parts-request'
+import { countCorrectionBlocker, countCorrectionNote, partsOrderNote, purchaseOrderBlocker, requestAfterCountCheck, requestAfterPurchaseOrder, type PartsRequest, type PartsRequestKind } from '@/lib/repair/parts-request'
+import { refurbPartAfterRequest, refurbPartRequest, refurbPartsOrderNote } from '@/lib/refurbishment/parts-request'
 import { executeRepairConsolidation, mergedSaleOrderFromPlan } from '@/lib/repair/consolidation-execute'
 import { findSaleOrderForRepair, findSalesQuoteForRepair, isDiagnosisFeeOnlyLines } from '@/lib/repair/sale-order-link'
 import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
@@ -1148,6 +1149,13 @@ export interface RefurbPart {
   allocatedByName?: string
   notifiedTechDate?: string   // when lead tech flagged it ready for the tech
   poId?: string               // linked purchase order (if ordered)
+  poRef?: string
+  orderedDate?: string
+  receivedDate?: string
+  requestedByName?: string
+  /** Parts queue: count corrections raised for it, and products whose count was checked. */
+  adjustmentRefs?: string[]
+  countCheckedProductIds?: string[]
   notes?: string
   /** How this RAM/SSD was fitted. Battery/keyboard leave this unset. */
   installAction?: 'add' | 'swap'
@@ -1790,6 +1798,8 @@ export interface PurchaseOrder {
   approvalRequestIds?: string[]
   // Repair procurement link — set when auto-created from a repair procurement request
   repairId?: string; repairRef?: string; procurementRequestId?: string
+  // Refurbishment part link — receiving the order marks that part received
+  refurbJobId?: string; refurbJobRef?: string; refurbPartId?: string
 }
 
 // Receipt (Goods Receipt Note) — created when PO is received
@@ -3913,7 +3923,7 @@ interface AppState {
   allocateDocRef: (prefix: string) => Promise<string>
 
   // Purchase Orders
-  createPO: (vendorId: string, vendorName: string, initial?: Partial<Pick<PurchaseOrder, 'lines' | 'expectedDate' | 'notes' | 'repairId' | 'repairRef' | 'procurementRequestId'>>, forcedRef?: string) => Promise<PurchaseOrder>
+  createPO: (vendorId: string, vendorName: string, initial?: Partial<Pick<PurchaseOrder, 'lines' | 'expectedDate' | 'notes' | 'repairId' | 'repairRef' | 'procurementRequestId' | 'refurbJobId' | 'refurbJobRef' | 'refurbPartId'>>, forcedRef?: string) => Promise<PurchaseOrder>
   updatePO: (id: string, p: Partial<PurchaseOrder>) => void
   addPOLine: (poId: string, product: Product, qty: number, unitPrice: number, taxRate?: number) => void
   removePOLine: (poId: string, lineId: string) => void
@@ -4059,8 +4069,9 @@ interface AppState {
   
   // Parts Procurement
   requestProcurement: (repairId: string, items: any[], urgency: string, notes: string) => void
-  correctPartsCount: (repairId: string, requestId: string, line: { itemIndex: number; productId: string; productName: string; qtyMissing: number }) => boolean
-  raisePartsPurchaseOrder: (repairId: string, requestId: string, vendorId: string, vendorName: string, lines: { itemIndex: number; productId: string; productName: string; qty: number; unitPrice: number }[]) => Promise<PurchaseOrder | null>
+  /** `kind` 'refurb': repairId is the refurbishment job, requestId the part. */
+  correctPartsCount: (repairId: string, requestId: string, line: { itemIndex: number; productId: string; productName: string; qtyMissing: number }, kind?: PartsRequestKind) => boolean
+  raisePartsPurchaseOrder: (repairId: string, requestId: string, vendorId: string, vendorName: string, lines: { itemIndex: number; productId: string; productName: string; qty: number; unitPrice: number }[], kind?: PartsRequestKind) => Promise<PurchaseOrder | null>
   appendRepairHistory: (repairId: string, entry: { status: string; date: string; note?: string; by?: string }) => void
   
   // Quote Management
@@ -7526,6 +7537,46 @@ function StoreProvider({
     setBulkStock(prev => upsertBulkStock(prev, part.productId!, 'warehouse', -part.qty))
     addMove(part.productId, part.partName, part.qty, 'out', `Refurb ${job.ref} — part taken by ${byName}`, job.ref, 'warehouse', 'repair_unit', [])
     return true
+  }
+  /**
+   * A parts-queue request wherever it is kept: a repair's procurement request,
+   * or a refurbishment part (one request per part). `write` applies the
+   * desk's change back to that record.
+   */
+  type QueueRequest = {
+    ref: string
+    technicianId?: string
+    request: PartsRequest
+    write: (fn: (req: PartsRequest) => PartsRequest) => void
+  } & ({ kind: 'refurb'; job: RefurbishmentJob; part: RefurbPart } | { kind: 'repair'; repair: Repair })
+  const partsQueueRequest = (kind: PartsRequestKind, ownerId: string, requestId: string): QueueRequest | null => {
+    if (kind === 'refurb') {
+      const job = refurbishmentJobs.find(j => j.id === ownerId)
+      const part = job?.partsNeeded.find(pt => pt.id === requestId)
+      const request = job && part ? refurbPartRequest(job, part) : null
+      if (!job || !part || !request) return null
+      return {
+        kind, job, part, request, ref: job.ref, technicianId: job.assignedTechnicianId,
+        write: fn => setRefurbishmentJobs(prev => prev.map(j => j.id !== ownerId ? j : {
+          ...j,
+          partsNeeded: j.partsNeeded.map(pt => {
+            if (pt.id !== requestId) return pt
+            const req = refurbPartRequest(j, pt)
+            return req ? refurbPartAfterRequest(pt, fn(req)) : pt
+          }),
+        })),
+      }
+    }
+    const repair = repairsRef.current.find(r => r.id === ownerId)
+    const request = repair?.procurementRequests?.find(r => r.id === requestId)
+    if (!repair || !request) return null
+    return {
+      kind, repair, request: request as PartsRequest, ref: repair.ref, technicianId: repair.assignedTechnicianId,
+      write: fn => setRepairs(prev => prev.map(r => r.id !== ownerId ? r : {
+        ...r,
+        procurementRequests: (r.procurementRequests ?? []).map(req => req.id === requestId ? fn(req as PartsRequest) as typeof req : req),
+      })),
+    }
   }
   /**
    * Trade-in machines that need work go straight to Refurbishment with a job:
@@ -15214,6 +15265,7 @@ const storeCtx: AppState = {
         lines: initialLines, ...calcPO(initialLines), notes: initial.notes ?? '', receiptIds: [],
         // Repair link: receiving the order on a GRN resumes the repair.
         ...(initial.repairId ? { repairId: initial.repairId, repairRef: initial.repairRef, procurementRequestId: initial.procurementRequestId } : {}),
+        ...(initial.refurbJobId ? { refurbJobId: initial.refurbJobId, refurbJobRef: initial.refurbJobRef, refurbPartId: initial.refurbPartId } : {}),
       }
       setPurchaseOrders(p => [po, ...p]); addAuditLog('create_po', po.ref, `Draft purchase order created for vendor ${vendorName}`)
       showToast(`${po.ref} created`);
@@ -15672,6 +15724,18 @@ const storeCtx: AppState = {
         } else {
           showToast(`Stock received · use "Create Bill" to generate the vendor invoice`)
         }
+      } else if (po.refurbPartId) {
+        // A refurbishment part: the server marks it received and tells the
+        // technician (this screen does not load refurbishment jobs).
+        showToast(`Stock received · ${po.refurbJobRef ?? 'refurbishment job'} — technician told the part is in`)
+        void fetch('/api/refurbishment/parts-received', {
+          method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ poId: po.id, receiptRef: receipt.ref }),
+        }).then(res => res.ok ? res.json() : null).then((data: { job?: RefurbishmentJob } | null) => {
+          const job = data?.job
+          // Where jobs are loaded, show the change at once.
+          if (job) setRefurbishmentJobs(prev => prev.some(j => j.id === job.id) ? prev.map(j => j.id === job.id ? job : j) : prev)
+        }).catch(() => {})
       } else {
         showToast(followUpReceipt ? `Stock received · ${followUpReceipt.ref} created for remaining items` : `Stock received · use "Create Bill" to generate the vendor invoice`)
       }
@@ -16201,10 +16265,10 @@ const storeCtx: AppState = {
         }))
         showToast(`Part allocated from stock — ${prod?.name ?? part.partName} × ${part.qty}`)
       } else {
-        // Not enough stock — flag to lead tech
+        // Not enough stock: the desk orders it (Inventory › Parts requests); the job carries on.
         setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
           ...j, partsNeeded: j.partsNeeded.map(pt => pt.id !== partId ? pt : {
-            ...pt, status: 'requested', requestedDate: now(),
+            ...pt, status: 'requested', requestedDate: now(), requestedByName: currentUser()?.name,
           })
         }))
         notifyUsers({
@@ -16212,7 +16276,7 @@ const storeCtx: AppState = {
           recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], currentUserId),
           type: 'repair',
           title: 'Part requested for refurb job',
-          body: `${job.ref} — ${part.partName} × ${part.qty} (out of stock)`,
+          body: `${job.ref} — ${part.partName} × ${part.qty} (out of stock). Order it in Inventory › Parts requests.`,
           module: 'refurbishment',
           path: '?tab=refurb',
           icon: '🔧',
@@ -19556,41 +19620,35 @@ const storeCtx: AppState = {
     // Parts queue step 1: the technician could not find a part the system says
     // is in the warehouse, so the count is wrong. Correct it down (pending
     // approval like every adjustment) before anything is ordered.
-    correctPartsCount: (repairId, requestId, line) => {
-      const repair = repairsRef.current.find(r => r.id === repairId)
-      const request = repair?.procurementRequests?.find(r => r.id === requestId)
-      if (!repair || !request) { showToast('Parts request not found', 'error'); return false }
+    correctPartsCount: (repairId, requestId, line, kind = 'repair') => {
+      const found = partsQueueRequest(kind, repairId, requestId)
+      if (!found) { showToast('Parts request not found', 'error'); return false }
       const systemQty = calcStockByLocation(prodRef.current.find(p => p.id === line.productId), serialRef.current, bulkStock, line.productId).warehouse
       const blocker = countCorrectionBlocker(systemQty, line.qtyMissing)
       if (blocker) { showToast(blocker, 'error'); return false }
       let adj: StockAdjustment
       try {
-        adj = storeCtxRef.current!.createAdjustment(line.productId, line.productName, 'subtract', line.qtyMissing, 'count_correction', countCorrectionNote(repair.ref, request))
+        adj = storeCtxRef.current!.createAdjustment(line.productId, line.productName, 'subtract', line.qtyMissing, 'count_correction', countCorrectionNote(found.ref, found.request, kind))
       } catch {
         return false
       }
-      setRepairs(prev => prev.map(r => r.id !== repairId ? r : {
-        ...r,
-        procurementRequests: (r.procurementRequests ?? []).map(req => {
-          if (req.id !== requestId) return req
-          const items = req.items.map((it, i) => i === line.itemIndex ? { ...it, productId: line.productId, productName: line.productName } : it)
-          return requestAfterCountCheck({ ...req, items } as PartsRequest, line.productId, adj.ref) as typeof req
-        }),
-      }))
-      addAuditLog('parts_count_correction', repair.ref, `${adj.ref}: ${line.qtyMissing} × ${line.productName} not on the shelf`)
+      found.write(req => {
+        const items = req.items.map((it, i) => i === line.itemIndex ? { ...it, productId: line.productId, productName: line.productName } : it)
+        return requestAfterCountCheck({ ...req, items }, line.productId, adj.ref)
+      })
+      addAuditLog('parts_count_correction', found.ref, `${adj.ref}: ${line.qtyMissing} × ${line.productName} not on the shelf`)
       return true
     },
 
     // Parts queue step 2: the part is not in stock, so it is bought. The draft
     // order carries the repair; receiving it on a GRN resumes the repair.
-    raisePartsPurchaseOrder: async (repairId, requestId, vendorId, vendorName, lines) => {
+    raisePartsPurchaseOrder: async (repairId, requestId, vendorId, vendorName, lines, kind = 'repair') => {
       if (!canManageProcurement(currentUser())) { showToast('Only Inventory or Admin can create Purchase Orders', 'error'); return null }
-      const repair = repairsRef.current.find(r => r.id === repairId)
-      const request = repair?.procurementRequests?.find(r => r.id === requestId)
-      if (!repair || !request) { showToast('Parts request not found', 'error'); return null }
+      const found = partsQueueRequest(kind, repairId, requestId)
+      if (!found) { showToast('Parts request not found', 'error'); return null }
       const systemQtyFor = (productId: string) =>
         calcStockByLocation(prodRef.current.find(p => p.id === productId), serialRef.current, bulkStock, productId).warehouse
-      const blocker = purchaseOrderBlocker(request as PartsRequest, vendorId, lines, systemQtyFor)
+      const blocker = purchaseOrderBlocker(found.request, vendorId, lines, systemQtyFor)
       if (blocker) { showToast(blocker, 'error'); return null }
       const poLines: POLine[] = lines.map(l => {
         const product = prodRef.current.find(p => p.id === l.productId)
@@ -19603,33 +19661,32 @@ const storeCtx: AppState = {
           accountCode: product ? resolveProductAccounts(product).costAccountCode : undefined,
         }
       })
-      const po = await storeCtxRef.current!.createPO(vendorId, vendorName, {
-        lines: poLines,
-        notes: partsOrderNote(repair, request as PartsRequest),
-        repairId: repair.id, repairRef: repair.ref, procurementRequestId: request.id,
-      })
+      // The order carries its job, so receiving it reaches the right record.
+      const po = await storeCtxRef.current!.createPO(vendorId, vendorName, found.kind === 'refurb'
+        ? { lines: poLines, notes: refurbPartsOrderNote(found.job, found.part), refurbJobId: found.job.id, refurbJobRef: found.job.ref, refurbPartId: found.part.id }
+        : { lines: poLines, notes: partsOrderNote(found.repair, found.request), repairId: found.repair.id, repairRef: found.repair.ref, procurementRequestId: found.request.id })
       if (!po?.id) return null
       const byIndex = new Map(lines.map(l => [l.itemIndex, l]))
-      setRepairs(prev => prev.map(r => r.id !== repairId ? r : {
-        ...r,
-        procurementRequests: (r.procurementRequests ?? []).map(req => {
-          if (req.id !== requestId) return req
-          const items = req.items.map((it, i) => {
-            const l = byIndex.get(i)
-            return l ? { ...it, productId: l.productId, productName: l.productName } : it
-          })
-          return requestAfterPurchaseOrder({ ...req, items } as PartsRequest, po, now()) as typeof req
-        }),
-      }))
-      addAuditLog('parts_purchase_order', repair.ref, `${po.ref} raised to ${vendorName} for parts request`)
-      if (repair.assignedTechnicianId) {
+      found.write(req => {
+        const items = req.items.map((it, i) => {
+          const l = byIndex.get(i)
+          return l ? { ...it, productId: l.productId, productName: l.productName } : it
+        })
+        return requestAfterPurchaseOrder({ ...req, items }, po, now())
+      })
+      addAuditLog('parts_purchase_order', found.ref, `${po.ref} raised to ${vendorName} for parts request`)
+      if (found.technicianId) {
         notifyUsers({
-          recipients: [repair.assignedTechnicianId],
+          recipients: [found.technicianId],
           type: 'repair',
-          title: `Parts ordered for ${repair.ref}`,
-          body: `${po.ref} to ${vendorName}. The repair resumes when the order is received.`,
-          module: 'repair', path: `?id=${repair.id}`, icon: '🛒',
-          entityKey: `repair:${repair.id}:procurement:${request.id}:ordered`,
+          title: `Parts ordered for ${found.ref}`,
+          body: found.kind === 'refurb'
+            ? `${found.part.partName} on ${po.ref} to ${vendorName}. You will be told when it is received — carry on with the rest.`
+            : `${po.ref} to ${vendorName}. The repair resumes when the order is received.`,
+          module: found.kind === 'refurb' ? 'refurbishment' : 'repair',
+          path: found.kind === 'refurb' ? '?tab=refurb' : `?id=${found.repair.id}`,
+          icon: '🛒',
+          entityKey: `${found.kind}:${repairId}:procurement:${requestId}:ordered`,
           excludeUserId: currentUserId,
         })
       }

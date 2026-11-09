@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Field, Input, Modal, SearchPicker } from '@/components/ui'
 import { useInventoryStore, useRepairStore } from '@/lib/store'
 import {
@@ -8,9 +8,11 @@ import {
   countCorrectionBlocker, needsCountCorrection, partsQueue,
   type PartsQueueRow, type PartsRequest,
 } from '@/lib/repair/parts-request'
+import { refurbJobsForPartsQueue } from '@/lib/refurbishment/parts-request'
 
 /**
- * Parts technicians asked for, and what the desk does next.
+ * Parts technicians asked for — on repairs and on refurbishment jobs — and
+ * what the desk does next.
  *
  * A request means the part could not be found on the shelf. So: if the system
  * still shows it in the warehouse, correct the count first (a stock
@@ -34,15 +36,38 @@ const URGENCY: Record<string, string> = {
 const today = () => new Date().toISOString().slice(0, 10)
 
 export default function PartsRequestsPanel() {
-  const { repairs, products, contacts, users, currentUserId, markPartsArrived, correctPartsCount, raisePartsPurchaseOrder } = useRepairStore()
+  const { repairs, refurbishmentJobs, products, contacts, users, currentUserId, markPartsArrived, correctPartsCount, raisePartsPurchaseOrder } = useRepairStore()
   const { getStockByLocation, stockAdjustments } = useInventoryStore()
   const role = String(users.find(u => u.id === currentUserId)?.role ?? '')
   const canAdjust = PARTS_ADJUST_ROLES.includes(role) || role === 'inventory'
   const canOrder = PARTS_ORDER_ROLES.includes(role) || role === 'inventory'
   const canArrive = PARTS_ARRIVED_ROLES.includes(role)
 
-  const rows = useMemo(() => partsQueue(repairs as never, today()), [repairs])
-  const vendors = useMemo(() => contacts.filter(c => c.isVendor).map(c => ({ id: c.id, name: c.name })), [contacts])
+  const rows = useMemo(
+    () => partsQueue([...(repairs as never[]), ...refurbJobsForPartsQueue(refurbishmentJobs ?? [])], today()),
+    [repairs, refurbishmentJobs],
+  )
+  // Inventory does not load contacts, so the vendor list comes from the
+  // contacts API when the store has none (it used to be empty here).
+  const storeVendors = useMemo(() => contacts.filter(c => c.isVendor).map(c => ({ id: c.id, name: c.name })), [contacts])
+  const [apiVendors, setApiVendors] = useState<Array<{ id: string; name: string }>>([])
+  useEffect(() => {
+    if (storeVendors.length) return
+    let cancelled = false
+    void (async () => {
+      const found: Array<{ id: string; name: string }> = []
+      for (let page = 1; page <= 20; page++) {
+        const res = await fetch(`/api/contacts?type=vendor&limit=100&page=${page}`, { credentials: 'include' }).catch(() => null)
+        const data = res?.ok ? await res.json().catch(() => null) as { items?: Array<{ id: string; name: string }>; total?: number } | null : null
+        const items = data?.items ?? []
+        found.push(...items.map(c => ({ id: c.id, name: c.name })))
+        if (!items.length || found.length >= Number(data?.total ?? 0)) break
+      }
+      if (!cancelled) setApiVendors(found)
+    })()
+    return () => { cancelled = true }
+  }, [storeVendors.length])
+  const vendors = storeVendors.length ? storeVendors : apiVendors
   const productOptions = useMemo(() => products.filter(p => p.isActive !== false).map(p => ({ id: p.id, name: p.name, sku: p.sku ?? '' })), [products])
   const warehouseQty = (productId: string) => (productId ? Number(getStockByLocation(productId)?.warehouse ?? 0) : 0)
 
@@ -77,12 +102,12 @@ export default function PartsRequestsPanel() {
       if (dialog.kind === 'adjust') {
         const ok = correctPartsCount(dialog.row.repairId, dialog.row.request.id, {
           itemIndex: adjust.itemIndex, productId: adjust.productId, productName: adjust.productName, qtyMissing: Number(adjust.qtyMissing),
-        })
+        }, dialog.row.kind)
         if (ok) setDialog(null)
       } else {
         const po = await raisePartsPurchaseOrder(dialog.row.repairId, dialog.row.request.id, vendor.id, vendor.name, lines.map(l => ({
           itemIndex: l.itemIndex, productId: l.productId, productName: l.productName, qty: Number(l.qty), unitPrice: Number(l.unitPrice),
-        })))
+        })), dialog.row.kind)
         if (po) setDialog(null)
       }
     } finally {
@@ -96,10 +121,10 @@ export default function PartsRequestsPanel() {
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="min-w-0">
-        <h3 className="m-0 text-[13px] font-black text-[var(--text-1)]">Parts requests from repairs</h3>
+        <h3 className="m-0 text-[13px] font-black text-[var(--text-1)]">Parts requests from repairs and refurbishment</h3>
         <p className="m-0 mt-0.5 max-w-2xl text-[11px] leading-relaxed text-[var(--text-3)]">
           A technician asks for a part when it is not on the shelf. <strong>1.</strong> If the system still shows it in the warehouse, correct the count.{' '}
-          <strong>2.</strong> Raise a purchase order — receiving it puts the repair back to work. <strong>3.</strong> Otherwise mark the parts arrived.
+          <strong>2.</strong> Raise a purchase order — receiving it puts the repair back to work, or tells the refurbishment technician the part is in. <strong>3.</strong> Otherwise mark the parts arrived.
         </p>
       </div>
 
@@ -113,10 +138,11 @@ export default function PartsRequestsPanel() {
             const { request } = row
             const uncheckedStock = request.items.some(item => needsCountCorrection(request, item.productId, warehouseQty(item.productId)))
             return (
-              <div key={`${row.repairId}:${request.id}`} className="flex flex-wrap items-start justify-between gap-3 bg-[var(--bg-card)] px-3 py-2.5">
+              <div key={`${row.kind}:${row.repairId}:${request.id}`} className="flex flex-wrap items-start justify-between gap-3 bg-[var(--bg-card)] px-3 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="m-0 text-[12px] font-bold text-[var(--text-1)]">
                     <span className="font-mono">{row.repairRef}</span>
+                    {row.kind === 'refurb' ? <span className="ml-2 rounded-full border border-[var(--border-lt)] bg-[var(--bg-muted)] px-2 py-0.5 text-[10px] font-bold text-[var(--text-2)]">Refurbishment</span> : null}
                     {row.device ? <span className="ml-2 font-semibold text-[var(--text-2)]">{row.device}</span> : null}
                     <span className={`ml-2 rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${URGENCY[request.urgency] ?? URGENCY.normal}`}>{request.urgency || 'normal'}</span>
                   </p>
@@ -147,7 +173,7 @@ export default function PartsRequestsPanel() {
                   {row.step === 'awaiting_delivery' && (
                     <p className="m-0 mt-1 text-[11px] text-[var(--text-2)]">
                       Ordered on <span className="font-mono font-semibold">{request.orderReference}</span>{request.orderedDate ? ` on ${String(request.orderedDate).slice(0, 10)}` : ''}.
-                      {' '}Confirm it and receive it on the GRN in Purchase — the repair resumes by itself.
+                      {' '}Confirm it and receive it on the GRN in Purchase — {row.kind === 'refurb' ? 'the technician is told the part is in.' : 'the repair resumes by itself.'}
                     </p>
                   )}
                   {row.step === 'mark_arrived' && (
@@ -248,7 +274,9 @@ export default function PartsRequestsPanel() {
             <div className="flex flex-col gap-3">
               <p className="m-0 text-[11px] leading-relaxed text-[var(--text-2)]">
                 This raises a <strong>draft purchase order</strong> linked to {dialog.row.repairRef}. Confirm it in Purchase; when it is received on the GRN,
-                the parts are reserved for the repair and the technician is told.
+                {dialog.row.kind === 'refurb'
+                  ? ' the part is marked received on the job and the technician is told. It leaves stock when they mark it used.'
+                  : ' the parts are reserved for the repair and the technician is told.'}
               </p>
               <SearchPicker
                 label="Vendor"

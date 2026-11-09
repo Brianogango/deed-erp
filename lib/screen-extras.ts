@@ -27,6 +27,7 @@ export const QUOTE_EXTRA_KEYS = [
 export const PO_EXTRA_KEYS = [
   'receiptIds', 'billId', 'approvalStatus', 'approvalRequestIds',
   'repairId', 'repairRef', 'procurementRequestId',
+  'refurbJobId', 'refurbJobRef', 'refurbPartId',
 ] as const
 
 export const PO_LINE_EXTRA_KEYS = ['importedSerials', 'specs'] as const

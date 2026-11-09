@@ -884,7 +884,7 @@ function RefurbishmentContent() {
         {/* Parts inbox */}
         {(() => {
           const pendingParts = refurbishmentJobs.flatMap(j =>
-            j.partsNeeded.filter(p => p.status === 'requested').map(p => ({ job: j, part: p }))
+            j.partsNeeded.filter(p => p.status === 'requested' || p.status === 'ordered').map(p => ({ job: j, part: p }))
           )
           if (pendingParts.length === 0) return null
           return (
@@ -893,7 +893,7 @@ function RefurbishmentContent() {
                 style={{ background: 'var(--info-bg)', borderBottom: '1px solid #BFDBFE' }}>
                 <Fa icon={faBell} className="text-sm" aria-hidden="true" />
                 <p className="text-xs font-bold" style={{ color: 'var(--info-text)' }}>
-                  {pendingParts.length} part request{pendingParts.length > 1 ? 's' : ''} pending
+                  {pendingParts.length} part{pendingParts.length > 1 ? 's' : ''} waiting — the jobs carry on; ordering is in Inventory › Parts requests
                 </p>
               </div>
               <div className="bg-white flex flex-col divide-y divide-primary-50">
@@ -902,7 +902,10 @@ function RefurbishmentContent() {
                   return (
                     <div key={`${j.id}-${p.id}`} className="flex items-center gap-3 px-4 py-2.5 text-xs">
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-t1">{p.partName} × {p.qty}</p>
+                        <p className="font-semibold text-t1">
+                          {p.partName} × {p.qty}
+                          {p.status === 'ordered' && <span className="ml-1.5 font-normal text-t3">· ordered{p.poRef ? ` on ${p.poRef}` : ''} — the technician is told when it is received</span>}
+                        </p>
                         <p className="text-t3">
                           Job: <span className="font-medium cursor-pointer" style={{ color: 'var(--navy)' }} onClick={() => setActiveId(j.id)}>{j.ref}</span>
                           {' · '}{j.productName}
@@ -910,15 +913,14 @@ function RefurbishmentContent() {
                         </p>
                       </div>
                       <div className="flex gap-1.5 flex-shrink-0">
-                        {isLeadTech && prod && prod.stockQty >= p.qty && (
+                        {isLeadTech && p.status === 'requested' && prod && prod.stockQty >= p.qty && (
                           <button style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #6EE7B7', cursor: 'pointer' }}
                             onClick={() => allocateRefurbPart(j.id, p.id)}>Allocate from Stock</button>
                         )}
-                        {isLeadTech && (
-                          <button style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#EDE9FE', color: '#5B21B6', border: '1px solid #C4B5FD', cursor: 'pointer' }}
-                            onClick={() => { updateRefurbishmentPart(j.id, p.id, { status: 'ordered' }); showToast(`Part marked ordered — create a PO: ${p.partName}`, 'info') }}>
-                            Mark Ordered
-                          </button>
+                        {p.status === 'requested' && (
+                          <a href="/inventory?tab=parts_requests" style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#EDE9FE', color: '#5B21B6', border: '1px solid #C4B5FD', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                            Order in Inventory
+                          </a>
                         )}
                         <button style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border-lt)', cursor: 'pointer' }}
                           onClick={() => setActiveId(j.id)}>View</button>

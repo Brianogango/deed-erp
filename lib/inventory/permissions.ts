@@ -14,7 +14,7 @@ type InventoryRole =
   | 'technician'
   | string
 
-const RECEIPT_VALIDATORS: InventoryRole[] = [
+export const RECEIPT_VALIDATORS: InventoryRole[] = [
   'director',
   'admin_officer',
   'inventory_officer',
