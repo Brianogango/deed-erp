@@ -5,6 +5,8 @@ import { rememberServerBaseline } from '@/lib/store-baseline'
 import { sameContent } from '@/lib/same-content'
 import { claimStoreDownload, holdsStoreCopy, keysNeedingDownload, noteStoreHeld, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
 import { cacheCollectionsNow, readCachedCollections } from '@/lib/browser-collection-cache'
+import { serverBaselineFor } from '@/lib/store-baseline'
+import { applyRowDelta, type RowDelta } from '@/lib/store-row-delta'
 
 const ARRAY_STORE_KEYS = /^(deed_repairs_v2|deed_products|deed_invoices|deed_saleOrders|deed_contacts|deed_employees|deed_expenses|deed_purchaseOrders|deed_stockTransfers|deed_serials|deed_accounts|deed_posOrders|deed_deliveries|deed_journalEntries|deed_leaveRequests|deed_opportunities|deed_companies|deed_quotes|deed_holdovers|deed_companyAssets|deed_deposits|deed_buyBacks|deed_warranties|deed_outsourceJobs|deed_outsourceVendors|deed_outsourcePayments|deed_bankAccounts|deed_receipts|deed_customerCredits|deed_workflowApprovals|deed_contracts|deed_customerContracts|deed_employeeAssets|deed_kilimallOrders|deed_payrollRuns)$/
 
@@ -180,6 +182,9 @@ export async function fetchAndApplyStoreKeys(opts: {
     })
     if (!res.ok) return 'error' as const
     const state = await res.json() as Record<string, unknown>
+    // Changed rows only: patch the server copy this browser holds. A key that
+    // cannot be patched is downloaded whole straight after.
+    const unpatched = await applyRowDeltas(state)
     const applied = applyHydratedStoreState(state)
     noteStoreRead(keys, res.headers.get('x-store-read-at'))
     const serverVersions = (state.versions && typeof state.versions === 'object' ? state.versions : {}) as Record<string, string>
@@ -192,6 +197,11 @@ export async function fetchAndApplyStoreKeys(opts: {
       if (serverVersions[key] && (stored || keysAreCached([key]))) nextVersions[key] = serverVersions[key]
     }
     writeKeyVersions(nextVersions, keys.filter(key => !unchanged.includes(key) && !(key in nextVersions)))
+    if (unpatched.length) {
+      // Without a version claimed, the server sends these whole.
+      writeKeyVersions({}, unpatched)
+      await fetchAndApplyStoreKeys({ keys: unpatched, etagStorageKey, signal })
+    }
     return unchanged.length === keys.length ? 'not-modified' as const : 'applied' as const
   })()
   const result = await trackStoreDownload(keys, download)
@@ -216,4 +226,29 @@ function writeKeyVersions(set: Record<string, string>, drop: string[]) {
   const next = { ...readKeyVersions(), ...set }
   for (const key of drop) delete next[key]
   try { window.localStorage.setItem(KEY_VERSIONS_LS, JSON.stringify(next)) } catch { /* optional */ }
+}
+
+/**
+ * Turn each `deltas[key]` of a store response into the full list, built on
+ * the server copy this browser holds (lib/store-row-delta.ts). Returns the
+ * keys it could not patch — no clean server copy (unsaved edits without a
+ * baseline), or a patch that does not fit — which must be downloaded whole.
+ */
+async function applyRowDeltas(state: Record<string, unknown>): Promise<string[]> {
+  const deltas = state.deltas && typeof state.deltas === 'object' ? state.deltas as Record<string, RowDelta> : null
+  delete state.deltas
+  if (!deltas) return []
+  const failed: string[] = []
+  const dirty = readDirtyStoreKeys()
+  for (const [key, delta] of Object.entries(deltas)) {
+    let base: string | null | undefined = serverBaselineFor(key)
+    if (base === undefined && !dirty.has(key)) {
+      try { base = window.localStorage.getItem(key) } catch { base = null }
+      if (!base) base = (await readCachedCollections([key]).catch(() => ({} as Record<string, string>)))[key]
+    }
+    const rows = base ? applyRowDelta(base, delta) : null
+    if (rows) state[key] = rows
+    else failed.push(key)
+  }
+  return failed
 }

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rowDeltaFor } from '@/lib/store-row-delta.server'
+import type { RowDelta } from '@/lib/store-row-delta'
 import { withSharedReadModels } from '@/lib/read-model-cache'
 import { compressedJson } from '@/lib/http/compressed-json'
 import { getServerSession } from '@/lib/auth/server'
@@ -190,18 +192,29 @@ export async function GET(request: NextRequest) {
     if (SLIM_RULES[key]) state[key] = slimCollection(key, state[key]) as typeof state[string]
   }
   mark('filter')
+  // Changed rows only: a browser holding an earlier version of a long list we
+  // served gets what changed since, not the whole list (lib/store-row-delta.ts).
+  const deltas: Record<string, RowDelta> = {}
+  if (keyVersions) {
+    for (const key of Object.keys(state)) {
+      const delta = rowDeltaFor(key, state[key], keyVersions[key], have?.[key])
+      if (delta) { deltas[key] = delta; delete state[key] }
+    }
+  }
+  mark('delta')
   // Clients already ignore non-deed_ keys when hydrating; expose version for If-Match writes.
   const payload = {
     ...state,
     ...(version ? { version } : {}),
     ...(keyVersions ? { versions: keyVersions, unchanged } : {}),
+    ...(Object.keys(deltas).length ? { deltas } : {}),
   }
   const json = JSON.stringify(payload)
   mark('json')
   const totalMs = Date.now() - t0
   recordHttpMetric({ path: '/api/store', status: 200, ms: totalMs })
   if (totalMs >= 700 && process.env.NODE_ENV !== 'test') {
-    console.warn(`[store] slow GET ${totalMs}ms ${Math.round(json.length / 1024)}KB loaded=${toLoad.join(',') || '-'} unchanged=${unchanged.length}: ${spans.map(([n, ms]) => `${n} ${ms}`).join(', ')}`)
+    console.warn(`[store] slow GET ${totalMs}ms ${Math.round(json.length / 1024)}KB loaded=${toLoad.join(',') || '-'} unchanged=${unchanged.length} deltas=${Object.keys(deltas).join(',') || '-'}: ${spans.map(([n, ms]) => `${n} ${ms}`).join(', ')}`)
   }
   return compressedJson(request, json, {
     headers: {
