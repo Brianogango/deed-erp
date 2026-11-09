@@ -20,6 +20,7 @@ import { PrimaryActionButton, SecondaryActionMenu, TablePageLayout, OperationalS
 import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faMagnifyingGlass } from '@/components/icons'
 import { printProductLabels } from '@/lib/product-label'
 import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
+import { TaggedIntakeModal } from '@/components/refurbishment/TaggedIntakeModal'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
@@ -295,8 +296,10 @@ function InventoryContent() {
   const [openingImportErrors, setOpeningImportErrors] = useState<string[]>([])
 
   // Refurbishment send-to state (warehouse safety modal)
-  const [showNewRefurb, setShowNewRefurb] = useState(false)
-  const [refurbSerial, setRefurbSerial] = useState<{ id: string; serial: string; productName: string } | null>(null)
+  // Machines on their way to Refurbishment (one, or several picked in With Issues).
+  const [refurbUnits, setRefurbUnits] = useState<Array<(typeof serials)[number]>>([])
+  const [issueSel, setIssueSel] = useState<Set<string>>(new Set())
+  const [showMachineIntake, setShowMachineIntake] = useState(false)
   const [refurbIssueDesc, setRefurbIssueDesc] = useState('')
   const [warehouseSearch, setWarehouseSearch] = useUrlUiState('warehouseQ', '')
   const [warehouseLocation, setWarehouseLocation] = useUrlUiState('location', 'warehouse')
@@ -1459,10 +1462,9 @@ function InventoryContent() {
           })
         }
 
-        function requestSendForRefurbishment(s: (typeof serials)[number]) {
-          setRefurbSerial({ id: s.id, serial: s.serial, productName: s.productName })
+        function requestSendForRefurbishment(s: (typeof serials)[number] | Array<(typeof serials)[number]>) {
+          setRefurbUnits(Array.isArray(s) ? s : [s])
           setRefurbIssueDesc('')
-          setShowNewRefurb(true)
         }
 
         const Section = ({ title, icon, tone = 'navy', count, countLabel, children, emptyText }: {
@@ -1522,14 +1524,23 @@ function InventoryContent() {
           title,
           meta,
           actions,
+          leading,
         }: {
           title: string
           meta: React.ReactNode
           actions?: React.ReactNode
+          leading?: React.ReactNode
         }) => (
           <div className="inventory-warehouse-row w-full min-w-0 text-left">
             <div className="inventory-warehouse-row__meta min-w-0 flex-1 text-left">
-              <p className="text-[12px] font-bold text-text-1 truncate" title={title}>{title}</p>
+              {leading ? (
+                <div className="flex min-w-0 items-center gap-2">
+                  {leading}
+                  <p className="min-w-0 text-[12px] font-bold text-text-1 truncate" title={title}>{title}</p>
+                </div>
+              ) : (
+                <p className="text-[12px] font-bold text-text-1 truncate" title={title}>{title}</p>
+              )}
               {meta}
             </div>
             {actions ? (
@@ -1789,8 +1800,43 @@ function InventoryContent() {
                   </div>
                   )
                 })()}
-                {activeWarehouseLocation === 'issues' && (
+                {activeWarehouseLocation === 'issues' && (() => {
+                  const unit = (s: (typeof serials)[number]) => s as (typeof serials)[number] & { assetId?: string; intakeIssue?: string; identityPending?: boolean }
+                  const picked = filteredIssuesSerials.filter(s => issueSel.has(s.id))
+                  const toPrint = picked.length ? picked : filteredIssuesSerials
+                  const allPicked = filteredIssuesSerials.length > 0 && picked.length === filteredIssuesSerials.length
+                  return (
                   <div className="w-full min-w-0">
+                    <div className="mb-3 flex flex-col gap-2 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[12px] font-extrabold text-text-1">Add machines with issues</p>
+                        <p className="text-[11px] text-text-3">One by one or from Excel (Model, Serial, Asset ID, Issues, Cost). Each gets an asset ID sticker; send them to Refurbishment when ready.</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {filteredIssuesSerials.length > 0 && (
+                          <label className="flex items-center gap-1.5 text-[11px] font-medium text-text-2 cursor-pointer select-none">
+                            <input type="checkbox" checked={allPicked}
+                              onChange={e => setIssueSel(e.target.checked ? new Set(filteredIssuesSerials.map(s => s.id)) : new Set())} />
+                            Select all
+                          </label>
+                        )}
+                        {picked.length > 0 && (
+                          <button type="button" className="btn-secondary text-[11px]" onClick={() => requestSendForRefurbishment(picked)}>
+                            Send {picked.length} to Refurbishment
+                          </button>
+                        )}
+                        {toPrint.length > 0 && (
+                          <button type="button" className="btn-secondary text-[11px]" onClick={() => { void printLabelsForSerialUnits({ serials: toPrint, products }) }}>
+                            <Fa icon={faPrint} /> Print {picked.length ? picked.length : 'all'} label{toPrint.length === 1 ? '' : 's'}
+                          </button>
+                        )}
+                        {canTransfer && (
+                          <button type="button" className="btn-primary text-[11px]" onClick={() => setShowMachineIntake(true)}>
+                            Add machines
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <Section title="With Issues" icon={<Fa icon={faTriangleExclamation} />} tone="warning"
                     count={issuesCount}
                     emptyText={q ? 'No With Issues stock matches this search' : 'No machines with issues'}>
@@ -1798,7 +1844,24 @@ function InventoryContent() {
                     <WarehouseRow
                     key={s.id}
                     title={s.productName}
-                    meta={<p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">{s.serial}</p>}
+                    leading={(
+                      <input type="checkbox" className="shrink-0" aria-label={`Select ${unit(s).assetId || s.serial}`}
+                        checked={issueSel.has(s.id)}
+                        onChange={e => setIssueSel(prev => {
+                          const next = new Set(prev)
+                          if (e.target.checked) next.add(s.id); else next.delete(s.id)
+                          return next
+                        })} />
+                    )}
+                    meta={(
+                      <>
+                        <p className="font-mono text-[11px] text-text-2 tabular-nums mt-0.5">
+                          {unit(s).assetId ? <span className="font-semibold text-text-1">{unit(s).assetId}</span> : null}
+                          {unit(s).assetId ? (unit(s).identityPending ? ' · no serial yet' : s.serial !== unit(s).assetId ? ` · S/N ${s.serial}` : '') : s.serial}
+                        </p>
+                        {unit(s).intakeIssue ? <p className="text-[10px] text-text-3 mt-0.5 truncate" title={unit(s).intakeIssue}>{unit(s).intakeIssue}</p> : null}
+                      </>
+                    )}
                     actions={(
                     <>
                     <ActionBtn
@@ -1815,6 +1878,11 @@ function InventoryContent() {
                     id: 'send-refurb',
                     label: 'Send for Refurbishment',
                     onClick: () => requestSendForRefurbishment(s),
+                    },
+                    {
+                    id: 'print-label',
+                    label: 'Print label',
+                    onClick: () => { void printLabelsForSerialUnits({ serials: [s], products }) },
                     },
                     ]}
                     />
@@ -1836,7 +1904,8 @@ function InventoryContent() {
                     ))}
                     </Section>
                   </div>
-                )}
+                  )
+                })()}
                 {activeWarehouseLocation === 'testing' && (
                   <div className="w-full min-w-0">
                     <div className="mb-3 flex flex-col gap-2 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -4118,52 +4187,55 @@ function InventoryContent() {
         />
       )}
 
-      {showNewRefurb && refurbSerial && (
-        <Modal
-          title="Send for Refurbishment"
-          onClose={() => { setShowNewRefurb(false); setRefurbSerial(null); setRefurbIssueDesc('') }}
-          width={440}
-        >
-          <div className="rounded-lg p-3 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-            <p className="text-xs font-semibold text-t1">{refurbSerial.productName}</p>
-            <p className="font-mono text-[11px] text-t3">S/N: {refurbSerial.serial}</p>
+      {refurbUnits.length > 0 && (() => {
+        const n = refurbUnits.length
+        const info = (u: (typeof serials)[number]) => u as (typeof serials)[number] & { assetId?: string; intakeIssue?: string }
+        // Machines leaving sellable stock need a reason; With Issues ones keep their own and the technician adds what they find.
+        const needsReason = refurbUnits.some(u => u.location !== 'shop' && !info(u).intakeIssue)
+        const close = () => { setRefurbUnits([]); setRefurbIssueDesc('') }
+        return (
+        <Modal title={n === 1 ? 'Send for Refurbishment' : `Send ${n} machines for Refurbishment`} onClose={close} width={460}>
+          <div className="rounded-lg p-3 mb-3 flex flex-col gap-1.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)', maxHeight: 180, overflowY: 'auto' }}>
+            {refurbUnits.map(u => (
+              <div key={u.id} className="min-w-0">
+                <p className="text-xs font-semibold text-t1 truncate">{u.productName}</p>
+                <p className="font-mono text-[11px] text-t3 truncate">
+                  {info(u).assetId ? `${info(u).assetId} · ` : ''}S/N: {u.serial}{info(u).intakeIssue ? ` · ${info(u).intakeIssue}` : ''}
+                </p>
+              </div>
+            ))}
           </div>
           <p className="text-[11px] text-text-3 mb-3">
-            This creates a refurbishment job and moves the unit out of sellable stock. Cancel if you pressed this by mistake.
+            This creates {n === 1 ? 'a refurbishment job' : `${n} refurbishment jobs`} and moves {n === 1 ? 'the unit' : 'them'} out of stock. Cancel if you pressed this by mistake.
           </p>
-          <Field label="Issue description *">
+          <Field label={needsReason ? 'Issue description *' : 'Issue (optional)'}>
             <Textarea
               value={refurbIssueDesc}
               onChange={setRefurbIssueDesc}
               rows={3}
-              placeholder="Describe the problem — e.g. cracked screen, battery failure…"
+              placeholder={needsReason ? 'Describe the problem — e.g. cracked screen, battery failure…' : "Leave blank to keep each machine's own issues"}
             />
           </Field>
           <div className="flex gap-2 justify-end mt-4">
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={() => { setShowNewRefurb(false); setRefurbSerial(null); setRefurbIssueDesc('') }}
-            >
-              Cancel
-            </button>
+            <button type="button" className="btn-outline" onClick={close}>Cancel</button>
             <button
               type="button"
               className="btn-primary"
               onClick={() => {
-                if (!refurbIssueDesc.trim()) { showToast('Enter an issue description', 'error'); return }
-                createRefurbishmentJob(refurbSerial.id, refurbIssueDesc.trim())
-                setShowNewRefurb(false)
-                setRefurbSerial(null)
-                setRefurbIssueDesc('')
-                showToast('Sent to refurbishment')
+                if (needsReason && !refurbIssueDesc.trim()) { showToast('Enter an issue description', 'error'); return }
+                refurbUnits.forEach(u => createRefurbishmentJob(u.id, refurbIssueDesc.trim(), { silent: true }))
+                setIssueSel(new Set())
+                close()
+                showToast(n === 1 ? 'Sent to refurbishment' : `${n} machines sent to refurbishment`)
               }}
             >
               Confirm send
             </button>
           </div>
         </Modal>
-      )}
+        )
+      })()}
+      {showMachineIntake && <TaggedIntakeModal onClose={() => setShowMachineIntake(false)} />}
       </div>{/* mod-body */}
     </div>
   )

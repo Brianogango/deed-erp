@@ -16,7 +16,6 @@ import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@
 import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader, TabBar, SearchPicker } from '@/components/ui'
 import { refurbNextStep, refurbFlowProgress, REFURB_FLOW_STEPS } from '@/lib/refurbishment/next-step'
 import { RefurbWeeklyReport } from '@/components/refurbishment/RefurbWeeklyReport'
-import { TaggedIntakeModal } from '@/components/refurbishment/TaggedIntakeModal'
 import { IdentifyUnitModal } from '@/components/refurbishment/IdentifyUnitModal'
 import { HarvestPartsModal } from '@/components/refurbishment/HarvestPartsModal'
 import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
@@ -117,7 +116,6 @@ function RefurbishmentContent() {
   const [showPartModal, setShowPartModal]           = useState(false)
   const [showWriteOffModal, setShowWriteOffModal]   = useState(false)
   const [showCreateJobModal, setShowCreateJobModal] = useState(false)
-  const [showTaggedIntake, setShowTaggedIntake]     = useState(false)
   const [showIdentify, setShowIdentify]             = useState(false)
   const [showHarvest, setShowHarvest]               = useState(false)
   const [createJobSerial, setCreateJobSerial]       = useState<SerialNumber | null>(null)
@@ -193,7 +191,6 @@ function RefurbishmentContent() {
   const canWriteOff  = (j: RefurbishmentJob) => ['assigned', 'in_progress'].includes(j.status) && isLeadTech
   // The technician on the job (or the lead) records the serial once it reads.
   const canIdentify  = (j: RefurbishmentJob) => !!j.identityPending && !['transferred', 'written_off'].includes(j.status) && (j.assignedTechnicianId === currentUserId || isLeadTech)
-  const canTagIntake = ['director', 'technical_lead', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
 
   const statusCounts = useMemo(() => {
     const counts: Partial<Record<RefurbStatus | 'all', number>> = { all: refurbishmentJobs.length }
@@ -946,10 +943,6 @@ function RefurbishmentContent() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button className="btn-secondary text-[11px] py-1 px-3"
-                  onClick={() => printStickers(selectedIssueIds.size ? withIssuesSerials.filter(s => selectedIssueIds.has(s.id)) : withIssuesSerials)}>
-                  <Fa icon={faPrint} className="mr-1.5" />Print {selectedIssueIds.size ? selectedIssueIds.size : 'all'} label{selectedIssueIds.size === 1 ? '' : 's'}
-                </button>
               {isLeadTech && (
                 <>
                   <label className="flex items-center gap-1.5 text-[11px] font-medium cursor-pointer select-none" style={{ color: 'var(--warning-text)' }}>
@@ -1045,15 +1038,6 @@ function RefurbishmentContent() {
           </div>
         )}
 
-        {canTagIntake && (
-          <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl px-4 py-2.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-            <p className="text-[11px] text-t3 m-0">Machines for repair — one by one or from Excel (Model, Serial, Asset ID, Issues, Cost). They land in With Issues with an asset ID sticker.</p>
-            <button className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setShowTaggedIntake(true)}>
-              <Fa icon={faPlus} className="mr-1.5" />Add machines
-            </button>
-          </div>
-        )}
-
         {/* Jobs table */}
         <div className="card overflow-hidden">
           <DataTable
@@ -1140,7 +1124,6 @@ function RefurbishmentContent() {
       </div>
       )}
 
-      {showTaggedIntake && <TaggedIntakeModal onClose={() => setShowTaggedIntake(false)} />}
 
       {/* ── Bulk Send Modal ── */}
       {showBulkSendModal && (
