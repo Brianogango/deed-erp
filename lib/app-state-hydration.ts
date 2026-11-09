@@ -29,11 +29,12 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   // must re-hydrate from the server instead of leaving an old local cache in
   // place.
   // Invoice-based figures (revenue, cash position, finance alerts, invoiced
-  // not delivered) come from /api/dashboard/invoice-figures, so the invoice
-  // list, journals, bank accounts and statement lines are not loaded here.
+  // not delivered) come from /api/dashboard/invoice-figures, and sale orders
+  // as lean rows from /api/dashboard/sale-orders, so the invoice and
+  // sale-order lists, journals, bank accounts and statement lines are not
+  // loaded here.
   '/': [
     'deed_products',
-    'deed_saleOrders',
     'deed_repairs_v2',
     'deed_expenses',
     'deed_deposits',

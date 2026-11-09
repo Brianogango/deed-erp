@@ -9,7 +9,6 @@ describe('dashboard app-state hydration contract', () => {
 
     expect(keys).toEqual(expect.arrayContaining([
       'deed_products',
-      'deed_saleOrders',
       'deed_repairs_v2',
       'deed_expenses',
       'deed_deposits',
@@ -29,11 +28,12 @@ describe('dashboard app-state hydration contract', () => {
 
   it('reads invoice-based figures from the server instead of the invoice list', () => {
     const keys = appStateKeysForRoute('/')
-    for (const key of ['deed_invoices', 'deed_journalEntries', 'deed_bankAccounts', 'deed_bankStatementLines']) {
+    for (const key of ['deed_invoices', 'deed_saleOrders', 'deed_journalEntries', 'deed_bankAccounts', 'deed_bankStatementLines']) {
       expect(keys).not.toContain(key)
     }
     const dashboard = readFileSync(join(process.cwd(), 'components/modules/Dashboard.tsx'), 'utf8')
     expect(dashboard).toContain('/api/dashboard/invoice-figures')
+    expect(dashboard).toContain('useDashboardSaleOrders()')
   })
 
   it('exports useStoreHydrated because Dashboard gates KPIs on it', () => {

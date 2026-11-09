@@ -1,6 +1,7 @@
 'use client'
 import { Suspense, useMemo, useState, useEffect } from 'react'
 import { useSalesStore, fmtKes, fmtDate } from '@/lib/store'
+import { useDashboardSaleOrders } from '@/hooks/useDashboardSaleOrders'
 import { ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { visibleDashboardRepUsers, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
@@ -84,7 +85,8 @@ export default function RepPerformance() {
 }
 
 function RepPerformanceContent() {
-  const { saleOrders, posOrders, users, currentUserId, sops } = useSalesStore()
+  const { posOrders, users, currentUserId, sops } = useSalesStore()
+  const saleOrders = useDashboardSaleOrders()
 
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])

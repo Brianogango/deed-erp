@@ -1,6 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { useSalesStore, fmtKes, fmtDate, type SaleOrder } from '@/lib/store'
+import { useDashboardSaleOrders } from '@/hooks/useDashboardSaleOrders'
 import { visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
 import { saleOrderInvoiceStatus, SALE_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { DataTable, type ColumnDef } from '@/components/data-table'
@@ -30,7 +31,8 @@ function fmtMonthFull(key: string) {
 const CHART_COLORS = ['#1B2762', '#00B0D7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444', '#6B7280']
 
 export default function SalesDashboard() {
-  const { saleOrders, posOrders, users, currentUserId } = useSalesStore()
+  const { posOrders, users, currentUserId } = useSalesStore()
+  const saleOrders = useDashboardSaleOrders()
   const currentUser = users.find(user => user.id === currentUserId) ?? null
   const visibleOrders = useMemo(
     () => visibleDashboardSalesOrders(currentUser, saleOrders),

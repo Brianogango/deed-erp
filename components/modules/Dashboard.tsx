@@ -25,6 +25,7 @@ import {
 
 import { useApp, useStoreHydrated, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
+import { useDashboardSaleOrders } from '@/hooks/useDashboardSaleOrders'
 import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
 import { useRouteDataReady } from '@/lib/route-data-ready'
 import { formatRoleLabel } from '@/lib/auth/access'
@@ -210,8 +211,9 @@ export function Dashboard() {
       date: now.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Nairobi' }),
     })
   }, [])
+  // Lean rows from the server: the dashboard does not load the sale-order list.
+  const saleOrders = useDashboardSaleOrders()
   const {
-    saleOrders,
     products,
     repairs,
     purchaseOrders,

@@ -68,7 +68,6 @@ describe('appStateKeysForRoute', () => {
   it('keeps the dashboard payload aligned with Operations / Finance KPI inputs', () => {
     const keys = appStateKeysForRoute('/')
     expect(keys).toEqual(expect.arrayContaining([
-      'deed_saleOrders',
       'deed_serials',
       'deed_bulkStock',
       'deed_posOrders',
@@ -82,7 +81,7 @@ describe('appStateKeysForRoute', () => {
       'deed_refurbishmentJobs',
     ]))
     // Invoice-based figures come from /api/dashboard/invoice-figures.
-    for (const key of ['deed_invoices', 'deed_journalEntries', 'deed_bankAccounts', 'deed_bankStatementLines']) {
+    for (const key of ['deed_invoices', 'deed_saleOrders', 'deed_journalEntries', 'deed_bankAccounts', 'deed_bankStatementLines']) {
       expect(keys).not.toContain(key)
     }
     expect(keys).not.toContain('deed_stockReservations')
@@ -93,7 +92,6 @@ describe('appStateKeysForRoute', () => {
     const dashCritical = criticalAppStateKeysForRoute('/')
     const dashDeferred = deferredAppStateKeysForRoute('/')
     expect(dashCritical).toEqual(expect.arrayContaining([
-      'deed_saleOrders',
       'deed_products',
       'deed_repairs_v2',
     ]))
