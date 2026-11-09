@@ -5,8 +5,8 @@ import { withSharedReadModels } from '@/lib/read-model-cache'
 import { compressedJson } from '@/lib/http/compressed-json'
 import { getServerSession } from '@/lib/auth/server'
 import {
-  CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
-  CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite, redactStoreValueForUser,
+  CLIENT_IMMUTABLE_STORE_KEYS,
+  CONTENT_FILTERED_STORE_KEYS, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, getAppStateVersion, getAppStateKeyVersions, frozenTableFingerprints } from '@/lib/server-store'
@@ -26,7 +26,8 @@ import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
 import { recordHttpMetric } from '@/lib/http-metrics'
 import { guardCollectionWrite } from '@/lib/store-bulk-delete-guard'
 import { applyCollectionDelta, isCollectionDelta, type CollectionDelta } from '@/lib/store-delta'
-import { SLIM_RULES, restoreSlimRows, slimCollection } from '@/lib/store-slim'
+import { SLIM_RULES, restoreSlimRows } from '@/lib/store-slim'
+import { filterStateForViewer } from '@/lib/store-viewer-state.server'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -184,21 +185,11 @@ export async function GET(request: NextRequest) {
   ])
   if (browserJournals) (state as Record<string, unknown>).deed_journalEntries = browserJournals
   mark('load')
-  // Strip permission-gated and collaborative keys the caller isn't allowed to read.
-  for (const key of Object.keys(state)) {
-    if (!canReadStoreKey(session.user, key)) delete state[key]
-  }
-  // Content-filtered financial ledgers: each role receives only its slice
-  // (repair-linked invoices for workshop roles, own expense claims, ...).
-  for (const key of Object.keys(state)) {
-    if (CONTENT_FILTERED_STORE_KEYS.has(key)) state[key] = filterStoreValueForRole(session.user, key, state[key]) as typeof state[string]
-    state[key] = redactStoreValueForUser(session.user, key, state[key]) as typeof state[string]
-  }
-  // Slim lists: finished records without their heavy, display-only fields
-  // (lib/store-slim.ts). The full row comes from /api/store/record on open.
-  for (const key of Object.keys(state)) {
-    if (SLIM_RULES[key]) state[key] = slimCollection(key, state[key]) as typeof state[string]
-  }
+  // Keys the caller may not read removed, financial ledgers cut to their
+  // slice (repair-linked invoices for workshop roles, own expense claims, ...),
+  // finished records slimmed (lib/store-slim.ts; the full row comes from
+  // /api/store/record on open). Shared with server-side screen figures.
+  filterStateForViewer(session.user, state as Record<string, unknown>)
   mark('filter')
   // Changed rows only: a browser holding an earlier version of a long list we
   // served gets what changed since, not the whole list (lib/store-row-delta.ts).
