@@ -36,3 +36,5 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   deleted_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages (conversation_id, created_at);
+
+CREATE TABLE IF NOT EXISTS chat_presence (user_id TEXT PRIMARY KEY, last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now());

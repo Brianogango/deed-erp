@@ -32,6 +32,8 @@ export type ChatConversation = {
   createdBy: string
   memberIds: string[]
   admins: string[]
+  /** When each member last read the conversation (read ticks). */
+  readAt: Record<string, string>
   lastMessageAt: string
   lastMessage: { senderId: string; preview: string; createdAt: string } | null
   unread: number
@@ -77,6 +79,8 @@ export function ensureChatTables(): Promise<void> {
         deleted_at TIMESTAMPTZ
       )`
     await sql`CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages (conversation_id, created_at)`
+    // Last time each person had the chat connection open ("online" / "last seen").
+    await sql`CREATE TABLE IF NOT EXISTS chat_presence (user_id TEXT PRIMARY KEY, last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now())`
   })().catch(err => { ready = null; throw err })
   return ready
 }
@@ -115,7 +119,7 @@ export async function listConversations(userId: string): Promise<ChatConversatio
   await ensureChatTables()
   const { rows } = await sql`
     SELECT c.id, c.kind, c.name, c.created_by, c.last_message_at,
-      (SELECT json_agg(json_build_object('id', mm.user_id, 'role', mm.role)) FROM chat_members mm WHERE mm.conversation_id = c.id) AS members,
+      (SELECT json_agg(json_build_object('id', mm.user_id, 'role', mm.role, 'readAt', mm.last_read_at)) FROM chat_members mm WHERE mm.conversation_id = c.id) AS members,
       (SELECT json_build_object('senderId', lm.sender_id, 'body', lm.body, 'deleted', lm.deleted_at IS NOT NULL,
               'hasFile', lm.attachment IS NOT NULL, 'hasRecord', lm.record IS NOT NULL, 'createdAt', lm.created_at)
          FROM chat_messages lm WHERE lm.conversation_id = c.id ORDER BY lm.created_at DESC LIMIT 1) AS last,
@@ -127,7 +131,7 @@ export async function listConversations(userId: string): Promise<ChatConversatio
     ORDER BY c.last_message_at DESC
     LIMIT 200`
   return rows.map(r => {
-    const members = (Array.isArray(r.members) ? r.members : []) as Array<{ id: string; role: string }>
+    const members = (Array.isArray(r.members) ? r.members : []) as Array<{ id: string; role: string; readAt: string | null }>
     const last = r.last as null | { senderId: string; body: string; deleted: boolean; hasFile: boolean; hasRecord: boolean; createdAt: string }
     const preview = !last ? '' : last.deleted ? 'Message deleted' : last.body?.trim() ? last.body.trim().slice(0, 120) : last.hasFile ? '📎 File' : last.hasRecord ? '🔗 Linked record' : ''
     return {
@@ -137,6 +141,7 @@ export async function listConversations(userId: string): Promise<ChatConversatio
       createdBy: String(r.created_by),
       memberIds: members.map(m => String(m.id)),
       admins: members.filter(m => m.role === 'admin').map(m => String(m.id)),
+      readAt: Object.fromEntries(members.filter(m => m.readAt).map(m => [String(m.id), iso(m.readAt)])),
       lastMessageAt: iso(r.last_message_at),
       lastMessage: last ? { senderId: String(last.senderId), preview, createdAt: iso(last.createdAt) } : null,
       unread: Number(r.unread) || 0,
@@ -277,7 +282,30 @@ export async function markRead(userId: string, conversationId: string): Promise<
       AND EXISTS (SELECT 1 FROM chat_messages m WHERE m.conversation_id = ${conversationId} AND m.sender_id <> ${userId}
                   AND m.created_at > coalesce(chat_members.last_read_at, chat_members.joined_at - interval '1 second'))
     RETURNING user_id`
-  if (rows.length) await notifyMembers([userId])
+  // Everyone in it: the senders' ticks turn blue.
+  if (rows.length) await notifyMembers(await memberIdsOf(conversationId))
+}
+
+/** "Typing…" to the other members — sent live, never stored. */
+export async function notifyTyping(userId: string, conversationId: string): Promise<void> {
+  await requireMember(conversationId, userId)
+  for (const to of await memberIdsOf(conversationId)) {
+    if (to === userId) continue
+    await sql`SELECT pg_notify('deed_chat_changed', ${JSON.stringify({ to, kind: 'typing', conversationId, from: userId })})`.catch(() => null)
+  }
+}
+
+export async function touchPresence(userId: string): Promise<void> {
+  await ensureChatTables()
+  await sql`INSERT INTO chat_presence (user_id, last_seen_at) VALUES (${userId}, now())
+    ON CONFLICT (user_id) DO UPDATE SET last_seen_at = now()`
+}
+
+/** Last seen per user (only those who have opened the chat). */
+export async function presenceMap(): Promise<Record<string, string>> {
+  await ensureChatTables()
+  const { rows } = await sql`SELECT user_id, last_seen_at FROM chat_presence`
+  return Object.fromEntries(rows.map(r => [String(r.user_id), iso(r.last_seen_at)]))
 }
 
 /** Delete one's own message (the text, link and file are removed; "Message deleted" stays). */

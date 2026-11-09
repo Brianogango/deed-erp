@@ -1,11 +1,14 @@
 import 'server-only'
 
-// Chat changes for a user (new message, read, group change), announced with
-// pg_notify('deed_chat_changed', userId) by lib/chat/chat.server.ts. Same
-// pattern as lib/notifications/realtime.ts.
+// Chat events for a user, announced by lib/chat/chat.server.ts with
+// pg_notify('deed_chat_changed', payload): a plain user id for "something
+// changed" (new message, read, group change), or JSON
+// {"to": userId, "kind": "typing", "conversationId", "from"}. Same pattern as
+// lib/notifications/realtime.ts.
 import { Client } from 'pg'
 
-type Listener = { userId: string; fn: () => void }
+export type ChatEvent = { kind: 'changed' } | { kind: 'typing'; conversationId: string; from: string }
+type Listener = { userId: string; fn: (event: ChatEvent) => void }
 type State = {
   listeners: Set<Listener>
   client: Client | null
@@ -21,10 +24,24 @@ const state = g.__chatNotify ?? (g.__chatNotify = {
   reconnectDelayMs: 1000,
 })
 
+function parse(payload: string): { to: string; event: ChatEvent } {
+  if (payload.startsWith('{')) {
+    try {
+      const p = JSON.parse(payload) as { to?: string; kind?: string; conversationId?: string; from?: string }
+      if (p.kind === 'typing' && p.to && p.conversationId && p.from) {
+        return { to: String(p.to), event: { kind: 'typing', conversationId: String(p.conversationId), from: String(p.from) } }
+      }
+      return { to: String(p.to ?? ''), event: { kind: 'changed' } }
+    } catch { /* a plain id below */ }
+  }
+  return { to: payload, event: { kind: 'changed' } }
+}
+
 function fanOut(payload?: string) {
+  const { to, event } = parse(payload ?? '')
   for (const listener of state.listeners) {
-    if (payload && payload !== listener.userId) continue
-    try { listener.fn() } catch {}
+    if (to && to !== listener.userId) continue
+    try { listener.fn(event) } catch {}
   }
 }
 
@@ -61,7 +78,7 @@ async function connect() {
   }
 }
 
-export function subscribeChatChanges(userId: string, fn: () => void) {
+export function subscribeChatChanges(userId: string, fn: (event: ChatEvent) => void) {
   const listener = { userId, fn }
   state.listeners.add(listener)
   void connect()

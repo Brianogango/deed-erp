@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { getRequiredSession } from '@/lib/auth/api'
-import { subscribeChatChanges } from '@/lib/chat/realtime.server'
+import { subscribeChatChanges, type ChatEvent } from '@/lib/chat/realtime.server'
+import { touchPresence } from '@/lib/chat/chat.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,19 +16,22 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream({
     start(controller) {
-      const send = () => {
-        try { controller.enqueue(enc.encode('event: chat\ndata: {"changed":true}\n\n')) } catch {}
+      const write = (text: string) => { try { controller.enqueue(enc.encode(text)) } catch {} }
+      const send = (event: ChatEvent = { kind: 'changed' }) => {
+        if (event.kind === 'typing') write(`event: typing\ndata: ${JSON.stringify({ conversationId: event.conversationId, from: event.from })}\n\n`)
+        else write('event: chat\ndata: {"changed":true}\n\n')
       }
-      const ping = () => {
-        try { controller.enqueue(enc.encode(': ping\n\n')) } catch {}
-      }
+      // An open chat stream is "online"; the ping keeps last seen fresh.
+      const ping = () => { write(': ping\n\n'); void touchPresence(session.user.id).catch(() => {}) }
 
-      try { controller.enqueue(enc.encode('event: ready\ndata: {}\n\n')) } catch {}
+      write('event: ready\ndata: {}\n\n')
+      void touchPresence(session.user.id).catch(() => {})
       const unsubscribe = subscribeChatChanges(session.user.id, send)
-      const fallback = setInterval(send, 30_000)
+      const fallback = setInterval(() => send(), 30_000)
       const pingId = setInterval(ping, 20_000)
 
       request.signal.addEventListener('abort', () => {
+        void touchPresence(session.user.id).catch(() => {})
         unsubscribe()
         clearInterval(fallback)
         clearInterval(pingId)

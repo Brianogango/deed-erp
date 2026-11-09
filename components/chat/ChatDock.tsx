@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation'
  * /api/chat/stream; everything else is the /api/chat routes.
  */
 
-type Person = { id: string; name: string; role: string }
+type Person = { id: string; name: string; role: string; lastSeenAt?: string | null }
 type RecordLink = { type: string; id: string; title: string; subtitle?: string; href: string }
 type Message = {
   id: string; conversationId: string; senderId: string; body: string
@@ -22,6 +22,7 @@ type Message = {
 type Conversation = {
   id: string; kind: 'direct' | 'group'; name: string | null; createdBy: string
   memberIds: string[]; admins: string[]; lastMessageAt: string
+  readAt?: Record<string, string>
   lastMessage: { senderId: string; preview: string; createdAt: string } | null
   unread: number
 }
@@ -41,6 +42,21 @@ const timeLabel = (iso: string) => {
   return day === today
     ? d.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' })
     : d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', timeZone: 'Africa/Nairobi' })
+}
+/** Online while the chat stream pings (every 20 s); otherwise "last seen …". */
+const ONLINE_MS = 70_000
+function presenceLabel(lastSeenAt: string | null | undefined): string {
+  if (!lastSeenAt) return ''
+  const t = new Date(lastSeenAt).getTime()
+  if (!Number.isFinite(t)) return ''
+  if (Date.now() - t < ONLINE_MS) return 'online'
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' })
+  const yesterday = new Date(Date.now() - 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' })
+  const day = new Date(t).toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' })
+  const time = new Date(t).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' })
+  if (day === today) return `last seen today at ${time}`
+  if (day === yesterday) return `last seen yesterday at ${time}`
+  return `last seen ${new Date(t).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', timeZone: 'Africa/Nairobi' })}`
 }
 const sizeLabel = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
@@ -69,6 +85,9 @@ export default function ChatDock({ currentUserId, showToast }: { currentUserId: 
   const [messages, setMessages] = useState<Message[]>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [mounted, setMounted] = useState(false)
+  // Who is typing where: conversation → person → until when.
+  const [typing, setTyping] = useState<Record<string, Record<string, number>>>({})
+  const [, setTick] = useState(0)
   const seenLast = useRef<Map<string, string>>(new Map())
   const firstLoad = useRef(true)
   const openRef = useRef(open)
@@ -155,12 +174,56 @@ export default function ChatDock({ currentUserId, showToast }: { currentUserId: 
       const v = viewRef.current
       if (openRef.current && v.screen === 'chat') void loadMessagesRef.current(v.id, 'new')
     }
+    const onTyping = (e: MessageEvent) => {
+      try {
+        const { conversationId, from } = JSON.parse(e.data) as { conversationId: string; from: string }
+        if (!conversationId || !from || from === currentUserId) return
+        setTyping(prev => ({ ...prev, [conversationId]: { ...(prev[conversationId] ?? {}), [from]: Date.now() + 5000 } }))
+        // Someone typing is online.
+        setPeople(prev => prev.map(p => (p.id === from ? { ...p, lastSeenAt: new Date().toISOString() } : p)))
+      } catch { /* ignore */ }
+    }
     source.addEventListener('chat', refresh)
+    source.addEventListener('typing', onTyping as EventListener)
     window.addEventListener('focus', refresh)
-    return () => { source.close(); window.removeEventListener('focus', refresh) }
+    // Online / last seen moves on without a message: people every minute.
+    const peopleTimer = window.setInterval(() => { void loadPeople() }, 60_000)
+    return () => {
+      source.close()
+      window.removeEventListener('focus', refresh)
+      window.clearInterval(peopleTimer)
+    }
   }, [currentUserId, loadPeople])
 
-  useEffect(() => { if (activeId) void loadMessagesRef.current(activeId, 'all') }, [activeId])
+  // "typing…" fades 5 s after the last signal.
+  const anyTyping = Object.values(typing).some(m => Object.values(m).some(until => until > Date.now()))
+  useEffect(() => {
+    if (!anyTyping) return
+    const t = window.setInterval(() => setTick(n => n + 1), 1000)
+    return () => window.clearInterval(t)
+  }, [anyTyping])
+  // A message from someone ends their "typing…".
+  useEffect(() => {
+    setTyping(prev => {
+      let changed = false
+      const next: typeof prev = {}
+      for (const [cid, m] of Object.entries(prev)) {
+        const last = messages.filter(x => x.conversationId === cid).at(-1)
+        const keep = Object.fromEntries(Object.entries(m).filter(([uid, until]) => until > Date.now() && !(last && last.senderId === uid && Date.now() - new Date(last.createdAt).getTime() < 6000)))
+        if (Object.keys(keep).length !== Object.keys(m).length) changed = true
+        if (Object.keys(keep).length) next[cid] = keep
+      }
+      return changed ? next : prev
+    })
+  }, [messages])
+  const typingIn = useCallback((cid: string) => Object.entries(typing[cid] ?? {}).filter(([, until]) => until > Date.now()).map(([uid]) => uid), [typing])
+  const presenceOf = useCallback((uid: string) => presenceLabel(people.find(p => p.id === uid)?.lastSeenAt), [people])
+
+  useEffect(() => {
+    if (!activeId) return
+    void loadMessagesRef.current(activeId, 'all')
+    void loadPeople() // fresh online / last seen for the header
+  }, [activeId, loadPeople])
 
   // Other screens open a chat with: window.dispatchEvent(new CustomEvent('deed:open-chat', { detail: { userId } }))
   useEffect(() => {
@@ -194,6 +257,8 @@ export default function ChatDock({ currentUserId, showToast }: { currentUserId: 
             titleOf={titleOf}
             nameOf={nameOf}
             currentUserId={currentUserId}
+            typingIn={typingIn}
+            presenceOf={presenceOf}
             onOpen={id => setView({ screen: 'chat', id })}
             onNew={() => setView({ screen: 'new' })}
             onNewGroup={() => setView({ screen: 'group' })}
@@ -230,6 +295,8 @@ export default function ChatDock({ currentUserId, showToast }: { currentUserId: 
             <ChatThread
               conversation={c}
               title={c ? titleOf(c) : 'Chat'}
+              typingNow={typingIn(view.id)}
+              presence={c && c.kind === 'direct' ? presenceOf(c.memberIds.find(id => id !== currentUserId) ?? '') : ''}
               currentUserId={currentUserId}
               nameOf={nameOf}
               messages={messages.filter(m => m.conversationId === view.id)}
@@ -307,7 +374,7 @@ export default function ChatDock({ currentUserId, showToast }: { currentUserId: 
   )
 }
 
-function PanelHeader({ title, sub, onBack, right }: { title: string; sub?: string; onBack?: () => void; right?: React.ReactNode }) {
+function PanelHeader({ title, sub, subTone, onBack, right }: { title: string; sub?: string; subTone?: 'typing' | 'online'; onBack?: () => void; right?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2 border-b border-[var(--border-lt)] px-3 py-2.5" style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}>
       {onBack && (
@@ -317,15 +384,16 @@ function PanelHeader({ title, sub, onBack, right }: { title: string; sub?: strin
       )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold text-[var(--text-1)]">{title}</p>
-        {sub && <p className="truncate text-[11px] text-[var(--text-3)]">{sub}</p>}
+        {sub && <p className={`truncate text-[11px] ${subTone === 'typing' ? 'italic font-semibold' : ''}`} style={{ color: subTone === 'typing' ? '#00AEEF' : subTone === 'online' ? '#16A34A' : 'var(--text-3)' }}>{sub}</p>}
       </div>
       {right}
     </div>
   )
 }
 
-function ConversationList({ conversations, titleOf, nameOf, currentUserId, onOpen, onNew, onNewGroup, onClose }: {
+function ConversationList({ conversations, titleOf, nameOf, currentUserId, typingIn, presenceOf, onOpen, onNew, onNewGroup, onClose }: {
   conversations: Conversation[]; titleOf: (c: Conversation) => string; nameOf: (id: string) => string; currentUserId: string
+  typingIn: (id: string) => string[]; presenceOf: (userId: string) => string
   onOpen: (id: string) => void; onNew: () => void; onNewGroup: () => void; onClose: () => void
 }) {
   const [q, setQ] = useState('')
@@ -354,18 +422,29 @@ function ConversationList({ conversations, titleOf, nameOf, currentUserId, onOpe
         )}
         {shown.map(c => (
           <button key={c.id} type="button" onClick={() => onOpen(c.id)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-muted)]">
-            <Avatar name={titleOf(c)} group={c.kind === 'group'} />
+            <span className="relative flex-shrink-0">
+              <Avatar name={titleOf(c)} group={c.kind === 'group'} />
+              {c.kind === 'direct' && presenceOf(c.memberIds.find(id => id !== currentUserId) ?? '') === 'online' && (
+                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[var(--bg-card)]" style={{ background: '#22C55E' }} aria-label="online" />
+              )}
+            </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline justify-between gap-2">
                 <span className={`truncate text-sm ${c.unread ? 'font-bold text-[var(--text-1)]' : 'font-semibold text-[var(--text-1)]'}`}>{titleOf(c)}</span>
                 {c.lastMessage && <span className="flex-shrink-0 text-[10px] text-[var(--text-3)]">{timeLabel(c.lastMessage.createdAt)}</span>}
               </span>
               <span className="flex items-center justify-between gap-2">
+                {typingIn(c.id).length > 0 ? (
+                  <span className="truncate text-xs font-semibold italic" style={{ color: '#00AEEF' }}>
+                    {c.kind === 'group' ? `${nameOf(typingIn(c.id)[0]).split(' ')[0]} is typing…` : 'typing…'}
+                  </span>
+                ) : (
                 <span className={`truncate text-xs ${c.unread ? 'text-[var(--text-1)]' : 'text-[var(--text-3)]'}`}>
                   {c.lastMessage
                     ? `${c.lastMessage.senderId === currentUserId ? 'You: ' : c.kind === 'group' ? `${nameOf(c.lastMessage.senderId).split(' ')[0]}: ` : ''}${c.lastMessage.preview}`
                     : c.kind === 'group' ? `${c.memberIds.length} people` : 'Say hello'}
                 </span>
+                )}
                 {c.unread > 0 && <span className="flex h-[18px] min-w-[18px] flex-shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-black text-white" style={{ background: '#00AEEF' }}>{c.unread}</span>}
               </span>
             </span>
@@ -483,8 +562,8 @@ function GroupInfo({ conversation, people, currentUserId, onBack, onChange }: {
   )
 }
 
-function ChatThread({ conversation, title, currentUserId, nameOf, messages, loading, onBack, onInfo, onOpenRecord, onSend, onDelete, showToast }: {
-  conversation: Conversation | undefined; title: string; currentUserId: string; nameOf: (id: string) => string
+function ChatThread({ conversation, title, typingNow, presence, currentUserId, nameOf, messages, loading, onBack, onInfo, onOpenRecord, onSend, onDelete, showToast }: {
+  conversation: Conversation | undefined; title: string; typingNow: string[]; presence: string; currentUserId: string; nameOf: (id: string) => string
   messages: Message[]; loading: boolean
   onBack: () => void; onInfo: () => void; onOpenRecord: (href: string) => void
   onSend: (input: { body: string; record: RecordLink | null; file: File | null }) => Promise<void>
@@ -499,8 +578,21 @@ function ChatThread({ conversation, title, currentUserId, nameOf, messages, load
   const bottom = useRef<HTMLDivElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const isGroup = conversation?.kind === 'group'
+  // "I am typing", at most every 3 s while there is text.
+  const lastTypingSent = useRef(0)
+  const signalTyping = () => {
+    if (!conversation || Date.now() - lastTypingSent.current < 3000) return
+    lastTypingSent.current = Date.now()
+    void fetch(`/api/chat/conversations/${conversation.id}/typing`, { method: 'POST' }).catch(() => {})
+  }
+  // ✓ sent, ✓✓ blue once everyone else has read it.
+  const others = (conversation?.memberIds ?? []).filter(id => id !== currentUserId)
+  const readByAll = (createdAt: string) => others.length > 0 && others.every(id => {
+    const at = conversation?.readAt?.[id]
+    return !!at && new Date(at).getTime() >= new Date(createdAt).getTime()
+  })
 
-  useEffect(() => { bottom.current?.scrollIntoView({ block: 'end' }) }, [messages.length])
+  useEffect(() => { bottom.current?.scrollIntoView({ block: 'end' }) }, [messages.length, typingNow.length])
 
   const send = async () => {
     if (sending || (!text.trim() && !record && !file)) return
@@ -519,7 +611,10 @@ function ChatThread({ conversation, title, currentUserId, nameOf, messages, load
     <>
       <PanelHeader
         title={title}
-        sub={isGroup ? `${conversation?.memberIds.length ?? 0} people` : undefined}
+        sub={typingNow.length
+          ? (isGroup ? `${typingNow.map(id => nameOf(id).split(' ')[0]).join(', ')} ${typingNow.length === 1 ? 'is' : 'are'} typing…` : 'typing…')
+          : isGroup ? `${conversation?.memberIds.length ?? 0} people` : presence || undefined}
+        subTone={typingNow.length ? 'typing' : presence === 'online' ? 'online' : undefined}
         onBack={onBack}
         right={isGroup ? <button type="button" className="text-xs font-semibold" style={{ color: 'var(--info-text)' }} onClick={onInfo}>Group</button> : undefined}
       />
@@ -559,6 +654,9 @@ function ChatThread({ conversation, title, currentUserId, nameOf, messages, load
                 </div>
                 <p className={`mt-0.5 flex items-center gap-2 px-1 text-[10px] text-[var(--text-3)] ${mine ? 'justify-end' : ''}`}>
                   {timeLabel(m.createdAt)}
+                  {mine && !m.deleted && (readByAll(m.createdAt)
+                    ? <span aria-label={isGroup ? 'Read by everyone' : 'Read'} title={isGroup ? 'Read by everyone' : 'Read'} style={{ color: '#00AEEF', fontWeight: 700, letterSpacing: -3 }}>✓✓</span>
+                    : <span aria-label="Sent" title="Sent" style={{ fontWeight: 700 }}>✓</span>)}
                   {mine && !m.deleted && (
                     <button type="button" className="opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100" onClick={() => { if (window.confirm('Delete this message for everyone?')) onDelete(m.id) }}>Delete</button>
                   )}
@@ -567,6 +665,13 @@ function ChatThread({ conversation, title, currentUserId, nameOf, messages, load
             </div>
           )
         })}
+        {typingNow.length > 0 && (
+          <div className="flex justify-start" aria-live="polite">
+            <div className="rounded-2xl px-3 py-2 text-xs italic shadow-sm" style={{ background: 'var(--bg-card)', color: 'var(--text-3)', borderBottomLeftRadius: 6 }}>
+              {isGroup ? `${nameOf(typingNow[0]).split(' ')[0]} is typing` : 'typing'}<span className="chat-typing-dots" aria-hidden="true"> …</span>
+            </div>
+          </div>
+        )}
         <div ref={bottom} />
       </div>
       {linking && <RecordSearch onPick={r => { setRecord(r); setLinking(false) }} onClose={() => setLinking(false)} />}
@@ -607,7 +712,7 @@ function ChatThread({ conversation, title, currentUserId, nameOf, messages, load
             placeholder="Message…"
             value={text}
             maxLength={4000}
-            onChange={e => setText(e.target.value)}
+            onChange={e => { setText(e.target.value); if (e.target.value.trim()) signalTyping() }}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() } }}
             style={{ maxHeight: 120 }}
           />
