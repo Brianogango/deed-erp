@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { gunzipSync } from 'node:zlib'
+import { brotliDecompressSync, gunzipSync } from 'node:zlib'
 vi.mock('server-only', () => ({}))
 import { compressedJson } from '@/lib/http/compressed-json'
 
@@ -7,8 +7,15 @@ const big = JSON.stringify({ rows: Array.from({ length: 2000 }, (_, i) => ({ id:
 const req = (enc?: string) => new Request('http://x/api/store', { headers: enc ? { 'accept-encoding': enc } : {} })
 
 describe('compressedJson', () => {
-  it('gzips a large body when the browser accepts gzip', async () => {
-    const res = await compressedJson(req('gzip, deflate, br'), big, { headers: { ETag: '"v1"', Vary: 'x-store-have' } })
+  it('uses brotli when the browser takes it (smaller than gzip)', async () => {
+    const res = await compressedJson(req('gzip, deflate, br'), big, { headers: { ETag: '"v1"' } })
+    expect(res.headers.get('content-encoding')).toBe('br')
+    const body = Buffer.from(await res.arrayBuffer())
+    expect(brotliDecompressSync(body).toString()).toBe(big)
+  })
+
+  it('gzips a large body when the browser accepts gzip only', async () => {
+    const res = await compressedJson(req('gzip, deflate'), big, { headers: { ETag: '"v1"', Vary: 'x-store-have' } })
     expect(res.headers.get('content-encoding')).toBe('gzip')
     expect(res.headers.get('vary')).toBe('x-store-have, Accept-Encoding')
     expect(res.headers.get('etag')).toBe('"v1"')
