@@ -75,13 +75,15 @@ describe('appStateKeysForRoute', () => {
       'deed_payrollRuns',
       // Dashboard reads these collections on first paint — omitting them
       // leaves a stale local cache in place after a deploy.
-      'deed_bankStatementLines',
       'deed_stockTransfers',
       'deed_kilimallOrders',
       'deed_outsourceJobs',
       'deed_refurbishmentJobs',
-      'deed_journalEntries',
     ]))
+    // Invoice-based figures come from /api/dashboard/invoice-figures.
+    for (const key of ['deed_invoices', 'deed_journalEntries', 'deed_bankAccounts', 'deed_bankStatementLines']) {
+      expect(keys).not.toContain(key)
+    }
     expect(keys).not.toContain('deed_stockReservations')
     expect(keys).not.toContain('deed_outboundReleases')
   })
@@ -90,17 +92,14 @@ describe('appStateKeysForRoute', () => {
     const dashCritical = criticalAppStateKeysForRoute('/')
     const dashDeferred = deferredAppStateKeysForRoute('/')
     expect(dashCritical).toEqual(expect.arrayContaining([
-      'deed_invoices',
       'deed_saleOrders',
       'deed_products',
       'deed_repairs_v2',
     ]))
     expect(dashCritical).not.toContain('deed_serials')
-    expect(dashCritical).not.toContain('deed_journalEntries')
     expect(dashDeferred).toEqual(expect.arrayContaining([
       'deed_serials',
-      'deed_journalEntries',
-      'deed_bankStatementLines',
+      'deed_payrollRuns',
     ]))
 
     const financeCritical = criticalAppStateKeysForRoute('/finance')

@@ -28,17 +28,17 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   // consumed by components/modules/Dashboard.tsx: stale or omitted datasets
   // must re-hydrate from the server instead of leaving an old local cache in
   // place.
+  // Invoice-based figures (revenue, cash position, finance alerts, invoiced
+  // not delivered) come from /api/dashboard/invoice-figures, so the invoice
+  // list, journals, bank accounts and statement lines are not loaded here.
   '/': [
     'deed_products',
     'deed_saleOrders',
-    'deed_invoices',
     'deed_repairs_v2',
     'deed_expenses',
     'deed_deposits',
     'deed_contacts',
     'deed_accounts',
-    'deed_bankAccounts',
-    'deed_bankStatementLines',
     'deed_serials',
     'deed_bulkStock',
     'deed_posOrders',
@@ -48,7 +48,6 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
     'deed_kilimallOrders',
     'deed_outsourceJobs',
     'deed_refurbishmentJobs',
-    'deed_journalEntries',
   ],
   '/sales': ['deed_saleOrders', 'deed_quotes', 'deed_products', 'deed_serials', 'deed_invoices', 'deed_deliveries', 'deed_contacts', 'deed_warranties', 'deed_bulkStock', 'deed_stockReservations', 'deed_approvalRequests', 'deed_bankAccounts', 'deed_documentPaymentDetails', 'deed_customerCredits'],
   // CRM needs companies/opportunities/contacts — not the full sales + stock catalogs.
@@ -154,8 +153,6 @@ export function appStateKeysForRoute(pathname: string) {
 const DEFERRED_ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   '/': [
     'deed_serials',
-    'deed_journalEntries',
-    'deed_bankStatementLines',
     'deed_payrollRuns',
     'deed_stockTransfers',
     'deed_kilimallOrders',

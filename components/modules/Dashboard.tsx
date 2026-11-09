@@ -35,19 +35,16 @@ import {
   visibleDashboardRepairs,
   visibleDashboardSalesOrders,
 } from '@/lib/dashboard-priority'
-import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
-import { saleOrderInvoiceStatus, invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, isInvoiceOverdue } from '@/lib/odoo-sales-flow'
+import { saleOrderInvoiceStatus } from '@/lib/odoo-sales-flow'
 import { computeInvoiceStats, type InvoiceStats } from '@/lib/accounting/invoice-stats'
 import { onHandQtyAtStockLocations } from '@/lib/business-logic'
 import { isStockTracked, inferTrackingMethod } from '@/lib/inventory-identifiers'
 import { computeLowStockItems } from '@/lib/kpi-stock'
-import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
 import { isOpenRepairJob } from '@/lib/repair-progress'
 import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
-import { buildCashbookEntries } from '@/components/modules/Cashbook'
 import { Fa } from '@/components/icons'
 import { OnboardingChecklist } from '@/components/erp/OnboardingChecklist'
-import { repairsByInvoice } from '@/lib/repair/repair-invoice-index'
+import type { DashboardInvoiceFigures } from '@/lib/dashboard/invoice-figures'
 
 // Full sales analytics and rep performance (Recharts/tables) — loaded only
 // when their sections are expanded, so the default dashboard stays light.
@@ -215,7 +212,6 @@ export function Dashboard() {
   }, [])
   const {
     saleOrders,
-    invoices,
     products,
     repairs,
     purchaseOrders,
@@ -232,13 +228,9 @@ export function Dashboard() {
     posOrders,
     deposits,
     accounts,
-    journalEntries,
-    bankAccounts,
-    bankStatementLines,
     companySettings,
     serials,
     bulkStock,
-    deliveries,
   } = useApp()
   const { employees, leaveRequests } = useHrStore()
 
@@ -306,9 +298,33 @@ export function Dashboard() {
   }, [])
 
   const financeStats = useMemo(
-    () => serverFinanceStats ?? computeInvoiceStats(invoices as never),
-    [serverFinanceStats, invoices],
+    () => serverFinanceStats ?? computeInvoiceStats([]),
+    [serverFinanceStats],
   )
+
+  // Every other invoice-based figure, worked out on the server
+  // (/api/dashboard/invoice-figures): the dashboard no longer downloads the
+  // invoice list. Refreshed when the tab comes back and every minute.
+  const [invoiceFigures, setInvoiceFigures] = useState<DashboardInvoiceFigures | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const load = () => {
+      if (document.visibilityState === 'hidden') return
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' })
+      fetch(`/api/dashboard/invoice-figures?today=${today}`, { cache: 'no-store' })
+        .then(res => (res.ok ? res.json() : null))
+        .then(data => { if (!cancelled && data && data.sales) setInvoiceFigures(data as DashboardInvoiceFigures) })
+        .catch(() => { /* keeps the last figures */ })
+    }
+    load()
+    const timer = window.setInterval(load, 60_000)
+    document.addEventListener('visibilitychange', load)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', load)
+    }
+  }, [])
 
   const salesStats = useMemo(() => {
     // Odoo stages: Quotation → Quotation Sent → Sales Order, with invoicing
@@ -354,28 +370,17 @@ export function Dashboard() {
     const startOfToday = new Date(currentYear, currentMonth, now.getDate()).getTime()
     const sevenDaysFromNow = startOfToday + 7 * 86400000
     const sevenDaysAgo = startOfToday - 7 * 86400000
-    const visibleOrderIds = new Set(visibleSalesOrders.map(order => order.id))
     const isThisMonth = (value?: string) => {
       const date = new Date(value || '')
       return Number.isFinite(date.getTime()) && date.getFullYear() === currentYear && date.getMonth() === currentMonth
     }
     const currentOrders = visibleSalesOrders.filter(order => isThisMonth(order.date))
-    const currentCustomerInvoices = invoices.filter(invoice =>
-      invoice.type === 'customer_invoice'
-      && !(invoice as any).repairId
-      && invoice.saleOrderId
-      && visibleOrderIds.has(invoice.saleOrderId)
-      && invoiceDocState(invoice.status) === 'posted'
-      && isThisMonth(invoice.date),
-    )
     const quotedOrders = currentOrders.filter(order => order.status === 'quotation' || order.status === 'quotation_sent')
     const confirmedOrders = currentOrders.filter(order => order.status === 'sale')
     const quotedValue = quotedOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
     const confirmedValue = confirmedOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
-    const invoicedValue = currentCustomerInvoices.reduce((sum, invoice) => sum + (Number(invoice.total) || 0), 0)
-    const collectedValue = currentCustomerInvoices.reduce((sum, invoice) => {
-      return sum + Math.min(Number(invoice.total) || 0, Math.max(0, Number(invoice.amountPaid) || 0))
-    }, 0)
+    const invoicedValue = invoiceFigures?.sales.invoicedValue ?? 0
+    const collectedValue = invoiceFigures?.sales.collectedValue ?? 0
     const openPipelineValue = currentOrders
       .filter(order => order.status !== 'cancelled' && !['invoiced', 'upselling'].includes(saleOrderInvoiceStatus(order.status, order.lines || [])))
       .reduce((sum, order) => sum + (Number(order.total) || 0), 0)
@@ -401,33 +406,14 @@ export function Dashboard() {
       if (order.status === 'quotation' || order.status === 'quotation_sent') bucket.quoted += Number(order.total) || 0
       if (order.status === 'sale') bucket.confirmed += Number(order.total) || 0
     }
-    for (const invoice of invoices) {
-      if (
-        invoice.type !== 'customer_invoice'
-        || (invoice as any).repairId
-        || !invoice.saleOrderId
-        || !visibleOrderIds.has(invoice.saleOrderId)
-        || invoiceDocState(invoice.status) !== 'posted'
-      ) continue
-      const date = new Date(invoice.date)
-      const bucket = months.find(month => month.year === date.getFullYear() && month.month === date.getMonth())
-      if (!bucket) continue
-      bucket.collected += Math.min(Number(invoice.total) || 0, Math.max(0, Number(invoice.amountPaid) || 0))
-    }
+    months.forEach((month, index) => { month.collected = invoiceFigures?.sales.monthlyCollected[index] ?? 0 })
     const maxTrendValue = Math.max(...months.flatMap(month => [month.quoted, month.confirmed, month.collected]), 1)
 
-    const invoicedOrderIds = new Set(currentCustomerInvoices.map(invoice => invoice.saleOrderId).filter(Boolean))
-    const paidOrderIds = new Set(
-      currentCustomerInvoices
-        .filter(invoice => invoicePaymentStatus(invoice) === 'paid')
-        .map(invoice => invoice.saleOrderId)
-        .filter(Boolean),
-    )
     const funnel = {
       quotations: quotedOrders.length,
       confirmed: confirmedOrders.length,
-      invoiced: invoicedOrderIds.size,
-      paid: paidOrderIds.size,
+      invoiced: invoiceFigures?.sales.invoicedOrders ?? 0,
+      paid: invoiceFigures?.sales.paidOrders ?? 0,
     }
 
     const repMap = new Map<string, { name: string; quotes: number; won: number; revenue: number }>()
@@ -485,7 +471,7 @@ export function Dashboard() {
       quotedValue, confirmedValue, invoicedValue, collectedValue, openPipelineValue, conversionRate,
       months, maxTrendValue, funnel, repPerformance, topCustomers, quoteActions,
     }
-  }, [invoices, users, visibleSalesOrders])
+  }, [invoiceFigures, users, visibleSalesOrders])
 
   const inventoryStats = useMemo(() => {
     // Same input contract as the Operations/Inventory module: stock-tracked,
@@ -550,37 +536,10 @@ export function Dashboard() {
         repairOutstanding: 0,
       }
     })
-    const currentRepairInvoices: any[] = []
-    // Repairs billed through a sale order or several to one invoice leave the
-    // invoice's own repairId empty; match from the repair's side too.
-    const repairsOnInvoice = repairsByInvoice(visibleRepairs as any[], invoices as any[])
-
-    for (const inv of invoices) {
-      if (inv.type === 'vendor_bill') continue
-      const d = new Date(inv.date)
-      const slot = months.find(month => month.year === d.getFullYear() && month.month === d.getMonth())
-      if (!slot) continue
-
-      const linkedRepairIds = repairsOnInvoice.get(inv.id) ?? []
-      const isVisibleRepairInvoice = linkedRepairIds.length > 0
-      if (isVisibleRepairInvoice) {
-        if (invoiceDocState(inv.status) === 'posted') {
-          const total = Number(inv.total) || 0
-          const collected = Math.min(total, Math.max(0, Number(inv.amountPaid) || 0))
-          slot.repairInvoiced += total
-          slot.repairCollected += collected
-          slot.repairOutstanding += Math.max(0, total - collected)
-          if (slot === months[5]) currentRepairInvoices.push({ ...inv, linkedRepairIds })
-        }
-        if (invoicePaymentStatus(inv) === 'paid') {
-          slot.revenue += Number(inv.total) || 0
-          slot.count++
-        }
-      } else if (invoicePaymentStatus(inv) === 'paid') {
-        slot.salesRevenue += Number(inv.total) || 0
-        slot.salesCount++
-      }
-    }
+    // Invoice totals per month and this month's posted repair invoices come
+    // from the server (lib/dashboard/invoice-figures.ts).
+    months.forEach((month, index) => Object.assign(month, invoiceFigures?.repairs.months[index] ?? {}))
+    const currentRepairInvoices = invoiceFigures?.repairs.currentInvoices ?? []
 
     const repairRevenueThisMonth = months[5].revenue
     const repairRevenueLastMonth = months[4].revenue
@@ -689,7 +648,7 @@ export function Dashboard() {
       recordedCostThisMonth, repairGrossProfitThisMonth,
       serviceRevenue, maxServiceRevenue, technicianPerformance, funnel,
     }
-  }, [invoices, products, visibleRepairs])
+  }, [invoiceFigures, products, visibleRepairs])
 
   const kilimallStats = useMemo(() => ({
     pending: kilimallOrders.filter(o => o.status === 'pending'),
@@ -700,17 +659,10 @@ export function Dashboard() {
 
   // Cash position + finance exceptions (finance roles only — the underlying
   // store keys are empty for everyone else). Shared logic with Accounting.
-  const financeDeskStats = useMemo(() => {
-    if (!canSeeFinance) return null
-    const entries = buildCashbookEntries(
-      { invoices, posOrders, expenses, journalEntries, deposits, bankStatementLines },
-      accounts,
-    )
-    const cashbookTotals = computeCashbookTotals(bankAccounts, entries)
-    const { cashAtBank, cashInHand } = cashPositionFromTotals(cashbookTotals)
-    const alerts = buildFinanceAlerts({ invoices, expenses, payrollRuns, bankStatementLines, bankAccounts, cashbookTotals })
-    return { cashAtBank, cashInHand, alerts }
-  }, [canSeeFinance, invoices, posOrders, expenses, journalEntries, deposits, accounts, bankAccounts, bankStatementLines, payrollRuns])
+  const financeDeskStats = useMemo(
+    () => (canSeeFinance ? invoiceFigures?.financeDesk ?? null : null),
+    [canSeeFinance, invoiceFigures],
+  )
 
   const selfServiceStats = useMemo(() => {
     const myLeave = leaveRequests.filter(l => l.employeeId === currentEmployee?.id)
@@ -861,10 +813,8 @@ export function Dashboard() {
   // P1 — "Needs attention now". Everything here is either overdue, waiting on
   // an approval, or blocking someone. Every entry links to where it is fixed.
   const invoicedNotDelivered = useMemo(
-    () => (canSeeSales || canSeeInventory || canSeeFinance)
-      ? findInvoicedNotDelivered({ saleOrders, invoices, deliveries: deliveries ?? [], products })
-      : [],
-    [canSeeSales, canSeeInventory, canSeeFinance, saleOrders, invoices, deliveries, products],
+    () => (canSeeSales || canSeeInventory || canSeeFinance) ? invoiceFigures?.invoicedNotDelivered ?? [] : [],
+    [canSeeSales, canSeeInventory, canSeeFinance, invoiceFigures],
   )
 
   const focusItems = useMemo(() => {
@@ -954,37 +904,21 @@ export function Dashboard() {
   }, [invoicedNotDelivered, canSeeFinance, canApproveLeave, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits, has])
 
   const executiveSnapshot = useMemo(() => {
-    const now = new Date()
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const startOfYesterday = new Date(startOfToday)
-    startOfYesterday.setDate(startOfYesterday.getDate() - 1)
-    const startOfWeek = new Date(startOfToday)
-    startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7))
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const startOfYear = new Date(now.getFullYear(), 0, 1)
-    const paidCustomerInvoices = invoices.filter(invoice =>
-      invoice.type !== 'vendor_bill' && invoicePaymentStatus(invoice) === 'paid',
-    )
-    const revenueSince = (start: Date, end?: Date) => paidCustomerInvoices.reduce((sum, invoice) => {
-      const date = new Date(invoice.date)
-      if (Number.isNaN(date.getTime()) || date < start || (end && date >= end)) return sum
-      return sum + (Number(invoice.total) || 0)
-    }, 0)
-    const invoicesThisWeek = paidCustomerInvoices.filter(invoice => new Date(invoice.date) >= startOfWeek)
+    const paid = invoiceFigures?.revenue
     const nonCancelledSales = visibleSalesOrders.filter(order => order.status !== 'cancelled')
     const confirmedSales = nonCancelledSales.filter(order => order.status === 'sale' || Boolean(order.confirmedAt))
     const activeSkus = inventoryStats.activeSkus.length
     const repairPool = repairStats.active.length + repairStats.ready.length
 
     return {
-      paidThisWeek: revenueSince(startOfWeek),
-      paidInvoiceCount: invoicesThisWeek.length,
+      paidThisWeek: paid?.week ?? 0,
+      paidInvoiceCount: paid?.paidThisWeekCount ?? 0,
       periods: [
-        { label: 'Today', value: revenueSince(startOfToday) },
-        { label: 'Yesterday', value: revenueSince(startOfYesterday, startOfToday) },
-        { label: 'This week', value: revenueSince(startOfWeek) },
-        { label: 'This month', value: revenueSince(startOfMonth) },
-        { label: 'This year', value: revenueSince(startOfYear) },
+        { label: 'Today', value: paid?.today ?? 0 },
+        { label: 'Yesterday', value: paid?.yesterday ?? 0 },
+        { label: 'This week', value: paid?.week ?? 0 },
+        { label: 'This month', value: paid?.month ?? 0 },
+        { label: 'This year', value: paid?.year ?? 0 },
       ],
       performance: [
         {
@@ -1013,7 +947,7 @@ export function Dashboard() {
         },
       ],
     }
-  }, [invoices, visibleSalesOrders, inventoryStats.activeSkus.length, inventoryStats.lowStockItems.length, repairStats.active.length, repairStats.ready.length, financeStats.revenue, financeStats.outstanding])
+  }, [invoiceFigures, visibleSalesOrders, inventoryStats.activeSkus.length, inventoryStats.lowStockItems.length, repairStats.active.length, repairStats.ready.length, financeStats.revenue, financeStats.outstanding])
 
   const activity = useMemo<ActivityItem[]>(() => {
     const list: ActivityItem[] = []
@@ -1022,7 +956,7 @@ export function Dashboard() {
       .slice(0, n)
 
     if (canSeeFinance) {
-      takeNewest(invoices, 5, i => i.date).forEach(i => list.push({ title: `${i.type === 'vendor_bill' ? 'Bill' : 'Invoice'} ${i.ref}`, sub: `${i.partnerName} · ${fmtKes(i.total)}`, date: i.date, color: '#10B981', icon: <Fa icon={faFileInvoiceDollar} /> }))
+      for (const i of invoiceFigures?.recent ?? []) list.push({ title: `${i.type === 'vendor_bill' ? 'Bill' : 'Invoice'} ${i.ref}`, sub: `${i.partnerName} · ${fmtKes(i.total)}`, date: i.date, color: '#10B981', icon: <Fa icon={faFileInvoiceDollar} /> })
     }
 
     if (canSeeSales) {
@@ -1047,7 +981,7 @@ export function Dashboard() {
     }
 
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8)
-  }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, invoices, visibleSalesOrders, stockTransfers, purchaseOrders, kilimallOrders, visibleRepairs, expenses, currentUserId, has])
+  }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, invoiceFigures, visibleSalesOrders, stockTransfers, purchaseOrders, kilimallOrders, visibleRepairs, expenses, currentUserId, has])
 
   // Gate on the route store GET, not LAST_SYNC_AT: a prior visit can leave a
   // sync timestamp while this route's collections are still in flight.
