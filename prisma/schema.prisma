@@ -1306,6 +1306,7 @@ model PurchaseOrderItem {
   product  Product       @relation(fields: [productId], references: [id])
   grnItems GrnItem[]
 
+  @@index([poId], map: "idx_po_items_po")
   @@map("purchase_order_items")
 }
 
@@ -1617,6 +1618,7 @@ model SaleOrder {
   @@index([versionGroupId], map: "idx_sale_orders_version_group")
   @@index([status], map: "idx_sale_orders_status")
   @@index([salespersonId], map: "idx_sale_orders_salesperson")
+  @@index([createdAt], map: "idx_sale_orders_created")
   @@map("sale_orders")
 }
 
@@ -1724,6 +1726,7 @@ model QuoteItem {
   quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
 
+  @@index([quoteId], map: "idx_quote_items_quote")
   @@map("quote_items")
 }
 
@@ -1826,6 +1829,7 @@ model Invoice {
   @@index([clientId, status], map: "idx_invoices_client_status")
   @@index([status, invoiceDate], map: "idx_invoices_status_date")
   @@index([purchaseOrderId], map: "idx_invoices_purchase_order")
+  @@index([saleOrderId], map: "idx_invoices_sale_order")
   @@map("invoices")
 }
 
@@ -1862,6 +1866,7 @@ model InvoiceItem {
 
 
 
+  @@index([invoiceId], map: "idx_invoice_items_invoice")
   @@map("invoice_items")
 }
 
@@ -1975,6 +1980,7 @@ model CreditNote {
   appliedTo Invoice? @relation("CreditNoteApplied", fields: [appliedToId], references: [id])
   createdBy User     @relation(fields: [createdById], references: [id])
 
+  @@index([invoiceId], map: "idx_credit_notes_invoice")
   @@map("credit_notes")
 }
 
@@ -3692,6 +3698,7 @@ model CreditNoteLine {
   stockReturnRequired Boolean @default(false) @map("stock_return_required")
 
   @@index([creditNoteId], map: "idx_credit_note_line_note")
+  @@index([originalInvoiceItemId], map: "idx_credit_note_lines_item")
   @@map("credit_note_lines")
 }
 
