@@ -1,4 +1,6 @@
 'use client'
+import ProductFormModal from '@/components/inventory/ProductFormModal'
+import { canCreateProductFromSales } from '@/lib/sales/similar-products'
 import { useState } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
@@ -94,6 +96,8 @@ export default function POFormView() {
   } = usePurchase()
 
   const [sendingRfqMail, setSendingRfqMail] = useState(false)
+  const canCreateProduct = canCreateProductFromSales(currentUser?.role)
+  const [creatingProductName, setCreatingProductName] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState<string | null>(null)
   const [showBillModal, setShowBillModal] = useState(false)
   const [billQtys, setBillQtys] = useState<Record<string, string>>({})
@@ -987,11 +991,22 @@ export default function POFormView() {
           </Modal>
         )}
 
+        {creatingProductName !== null && (
+          <ProductFormModal
+            start={{ mode: 'new', name: creatingProductName }}
+            onClose={() => setCreatingProductName(null)}
+            onSaved={p => { setAddProd(p); setAddPrice(Number(p.costPrice) > 0 ? String(p.costPrice) : '') }}
+          />
+        )}
+
         {/* Add product modal */}
         {showAddLine && (
           <Modal title="Add Product" onClose={() => setShowAddLine(false)} width={500}>
             <SearchPicker label="Product *" placeholder="Search purchasable products…" items={purchasableProds}
               onSelect={p => { setAddProd(p); setAddPrice(String(p.costPrice)) }}
+              // Not in the catalog: the Inventory product form, then this line.
+              onCreateNew={canCreateProduct ? q => setCreatingProductName(q.trim()) : undefined}
+              createNewLabels={{ title: '+ Create product', subtitle: 'Opens the product form; it is added here' }}
               renderItem={p => (
                 <div className="flex items-center gap-2">
                   <span className="text-lg">{p.image}</span>

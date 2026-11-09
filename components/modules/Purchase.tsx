@@ -2,8 +2,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
+import { useFinanceStore, type Product, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
+import ProductFormModal from '@/components/inventory/ProductFormModal'
+import { canCreateProductFromSales } from '@/lib/sales/similar-products'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import {
   Fa, faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint,
@@ -324,6 +326,20 @@ function PurchaseContent() {
   )
 
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
+  // Products are created with the Inventory form (ProductFormModal) from a
+  // purchase line too, by the roles that may create products.
+  const canCreateProduct = canCreateProductFromSales(currentUser?.role)
+  const [creatingProduct, setCreatingProduct] = useState<{ lineIndex: number; name: string } | null>(null)
+  const pickRfqLineProduct = (i: number, p: Product) => setNewRfqLines(prev => prev.map((x, j) => j === i ? {
+    ...x,
+    productId: p.id,
+    productName: p.name,
+    description: p.name,
+    // Purchases are priced at cost. With no cost on file the field stays
+    // empty for the buyer to fill — never the selling price.
+    unitPrice: Number(p.costPrice) > 0 ? String(p.costPrice) : '',
+    taxRate: String(p.taxRate ?? 0),
+  } : x))
 
   const stats = useMemo(() => ({
     rfqs:        purchaseOrders.filter(p => p.status === 'draft' || p.status === 'sent').length,
@@ -1422,6 +1438,15 @@ function PurchaseContent() {
 
       </TabContent>
 
+      {/* Product not in the catalog: the Inventory product form, then the RFQ line. */}
+      {creatingProduct && (
+        <ProductFormModal
+          start={{ mode: 'new', name: creatingProduct.name }}
+          onClose={() => setCreatingProduct(null)}
+          onSaved={p => pickRfqLineProduct(creatingProduct.lineIndex, p)}
+        />
+      )}
+
       {/* ── NEW RFQ MODAL ── */}
       {showNewRFQ && (
         <Modal title="New Request for Quotation" subtitle="Create a supplier request with products, quantities and commercial terms" width={980} variant="workspace" onClose={resetRfqForm}>
@@ -1521,17 +1546,10 @@ function PurchaseContent() {
                                   items={purchasableProds}
                                   selectedLabel={line.productName}
                                   formatSelected={p => p.name}
-                                  onSelect={p => setNewRfqLines(prev => prev.map((x, j) => j === i ? {
-                                    ...x,
-                                    productId: p.id,
-                                    productName: p.name,
-                                    description: p.name,
-                                    // Purchases are priced at cost. With no cost on file the
-                                    // field stays empty for the buyer to fill — never the
-                                    // selling price.
-                                    unitPrice: Number(p.costPrice) > 0 ? String(p.costPrice) : '',
-                                    taxRate: String(p.taxRate ?? 0),
-                                  } : x))}
+                                  onSelect={p => pickRfqLineProduct(i, p)}
+                                  // Not in the catalog: the Inventory product form, then this line.
+                                  onCreateNew={canCreateProduct ? q => setCreatingProduct({ lineIndex: i, name: q.trim() }) : undefined}
+                                  createNewLabels={{ title: '+ Create product', subtitle: 'Opens the product form; it goes on this line' }}
                                   renderItem={p => (
                                     <div>
                                       <p className="font-medium text-xs text-t1">{p.name}</p>

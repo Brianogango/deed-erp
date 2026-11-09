@@ -53,7 +53,7 @@ import {
   resolveProductAccounts,
 } from '@/lib/store'
 import { canCreateProductFromSales, hasExactProduct, similarProducts } from '@/lib/sales/similar-products'
-import { QuickProductModal } from '@/components/sales/QuickProductModal'
+import ProductFormModal from '@/components/inventory/ProductFormModal'
 import {
   Badge,
   Modal,
@@ -4092,10 +4092,11 @@ function NewQuotationForm({
   return (
     <div>
       {quickProduct && (
-        <QuickProductModal
-          initialName={quickProduct.name}
+        // The same product form as Inventory; the new product goes on this line.
+        <ProductFormModal
+          start={{ mode: 'new', name: quickProduct.name }}
           onClose={() => setQuickProduct(null)}
-          onCreated={p => { selectProductForDraftLine(quickProduct.lineId, p); setProductSearch(prev => ({ ...prev, [quickProduct.lineId]: '' })) }}
+          onSaved={p => { selectProductForDraftLine(quickProduct.lineId, p); setProductSearch(prev => ({ ...prev, [quickProduct.lineId]: '' })) }}
         />
       )}
       <div className="sales-proto-page-header">
