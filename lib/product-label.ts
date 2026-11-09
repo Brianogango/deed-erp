@@ -1,4 +1,7 @@
-import type { Product } from '@/lib/store'
+import { buildMachineLabelView } from '@/lib/inventory/machine-label'
+import { printMachineLabels } from '@/lib/inventory/machine-label-template'
+import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
+import type { Product, SerialNumber } from '@/lib/store'
 import { parseSpecsString } from '@/lib/reconfiguration/display-name'
 import { catalogBaseName } from '@/lib/reconfiguration/unit-selling-name'
 import { printThermalLabelBatch, type ThermalLabelSpec } from '@/lib/inventory/thermal-label-template'
@@ -91,24 +94,34 @@ export function productThermalSpecs(opts: {
   return [{ label: 'Specification', value: detail || '—' }]
 }
 
-export async function printSerialLabels(items: SerialLabelItem[]): Promise<void> {
+/**
+ * Machine stickers for serial units — the one 58 × 38 mm design
+ * (lib/inventory/machine-label-template.ts). With the store's serials and
+ * products, each unit prints from its record (asset ID issued if it has
+ * none yet); otherwise from the details given here.
+ */
+export async function printSerialLabels(
+  items: SerialLabelItem[],
+  context?: { serials: SerialNumber[]; products: Product[] },
+): Promise<void> {
   if (!items.length) return
-
-  const labels = items.map(item => {
-    const barcodeValue = clean(item.serial) || clean(item.barcode) || clean(item.sku)
-    return {
-      title: labelTitle(item.productName),
-      barcodeValue,
-      caption: clean(item.serial) || barcodeValue,
-      specs: productThermalSpecs({
-        name: item.productName,
-        category: item.category,
-        specsText: item.specs,
-      }),
+  if (context) {
+    const bySerial = new Map(context.serials.map(s => [String(s.serial).trim().toLowerCase(), s]))
+    const rows = items.map(i => bySerial.get(clean(i.serial).toLowerCase())).filter((s): s is SerialNumber => !!s)
+    if (rows.length === items.length) {
+      await printLabelsForSerialUnits({ serials: rows, products: context.products })
+      return
     }
-  })
-
-  printThermalLabelBatch(labels, 'Serial Labels')
+  }
+  printMachineLabels(items.map(item => buildMachineLabelView({
+    productName: item.productName,
+    category: item.category,
+    productType: (item as SerialLabelItem & { productType?: string }).productType,
+    specsText: item.specs,
+    serial: clean(item.serial),
+    barcode: clean(item.barcode) || clean(item.serial) || clean(item.sku),
+    location: 'warehouse',
+  })))
 }
 
 export function printProductLabels(product: Product, qty: number): void {

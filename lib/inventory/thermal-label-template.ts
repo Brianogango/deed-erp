@@ -12,7 +12,7 @@ type ThermalLabelInput = {
 
 const INK = '#000000'
 
-function esc(value: string): string {
+export function esc(value: string): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -20,7 +20,8 @@ function esc(value: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function barcodeDataUrl(value: string): string {
+/** Code 128 barcode as an image (browser only). Shared by every label template. */
+export function barcodeDataUrl(value: string): string {
   if (typeof window === 'undefined' || !value.trim()) return ''
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -286,17 +287,21 @@ const THERMAL_LABEL_CSS = `
 export function printThermalLabelBatch(items: ThermalLabelInput[], documentTitle = 'Labels'): void {
   if (!items.length || typeof window === 'undefined') return
 
+  openLabelPrintWindow(`<div class="thermal-sheet">\n${items.map(thermalLabelHtml).join('\n')}\n</div>`, THERMAL_LABEL_CSS, documentTitle)
+}
+
+/** Opens the labels in a print window and starts printing. Shared by every label template. */
+export function openLabelPrintWindow(bodyHtml: string, css: string, documentTitle: string): void {
+  if (typeof window === 'undefined') return
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <title>${esc(documentTitle)}</title>
-<style>${THERMAL_LABEL_CSS}</style>
+<style>${css}</style>
 </head>
 <body>
-<div class="thermal-sheet">
-${items.map(thermalLabelHtml).join('\n')}
-</div>
+${bodyHtml}
 <script>window.onload = () => { window.print(); }</script>
 </body>
 </html>`

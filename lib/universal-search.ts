@@ -81,7 +81,7 @@ export function searchRecords(sources: SearchSources, rawQuery: string, invoiceH
     })))
 
   take((sources.serials ?? [])
-    .filter(s => ref(s.serial, s.barcode))
+    .filter(s => ref(s.serial, s.barcode, s.assetId))
     .map(s => {
       const loc = String(s.location ?? '')
       const href = s.status === 'sold' && s.saleOrderId ? `/sales?id=${encodeURIComponent(s.saleOrderId)}`

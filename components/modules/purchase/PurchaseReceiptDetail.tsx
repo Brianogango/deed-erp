@@ -74,7 +74,7 @@ export default function PurchaseReceiptDetail() {
         printProductLabels(prod, line.qtyReceived)
       }
     }
-    if (serialItems.length) await printSerialLabels(serialItems)
+    if (serialItems.length) await printSerialLabels(serialItems, { serials, products })
     if (!serialItems.length && lines.every(l => l.qtyReceived === 0)) {
       showToast('Nothing to print on this GRN yet', 'info')
     }

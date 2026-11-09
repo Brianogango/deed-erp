@@ -1,6 +1,7 @@
 'use client'
 import React, { useCallback, useMemo, useState, useRef, useEffect, Suspense } from 'react'
 import { loadXlsx } from '@/lib/xlsx-lazy'
+import { readXlsx } from '@/lib/inventory/read-xlsx'
 import {
   useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account, AdjReason, SerialNumber,
@@ -138,22 +139,6 @@ const MONTH_OPTS = [
   { value: '10', label: 'Oct' }, { value: '11', label: 'Nov' }, { value: '12', label: 'Dec' },
 ]
 
-async function readXlsx(file: File): Promise<any[]> {
-  const XLSX = await loadXlsx()
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = e => {
-      try {
-        const data = new Uint8Array(e.target!.result as ArrayBuffer)
-        const wb = XLSX.read(data, { type: 'array' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        resolve(XLSX.utils.sheet_to_json<any>(ws))
-      } catch (err) { reject(err) }
-    }
-    reader.onerror = reject
-    reader.readAsArrayBuffer(file)
-  })
-}
 
 function col(row: any, ...keys: string[]): string {
   for (const k of keys) {

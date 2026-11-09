@@ -732,7 +732,7 @@ function PurchaseContent() {
         printProductLabels(prod, line.qtyReceived)
       }
     }
-    if (serialItems.length) printSerialLabels(serialItems)
+    if (serialItems.length) void printSerialLabels(serialItems, { serials, products })
   }
 
   const handleValidateReceipt = async () => {

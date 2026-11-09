@@ -282,37 +282,48 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
 }
 
 /**
+ * Reserve `count` numbers on a counter, atomically: returns the last one
+ * (the range is last-count+1 … last). On first use the counter starts after
+ * `seed()` — the highest number already in use. Shared by document numbers
+ * and machine asset IDs (lib/inventory/asset-id.server.ts).
+ */
+export async function reserveCounterValues(counterId: string, count: number, seed: () => Promise<number>): Promise<number> {
+  await ensureCounterTable()
+  const n = Math.max(1, Math.floor(count))
+  const now = new Date().toISOString()
+  // Fast path: counter row exists — atomic increment.
+  const updated = await sql`
+    UPDATE doc_ref_counter
+    SET current_value = current_value + ${n}, updated_at = ${now}
+    WHERE id = ${counterId}
+    RETURNING current_value
+  `
+  let last = updated.rows?.[0]?.current_value as number | undefined
+  if (last === undefined) {
+    // First use: seed from the highest existing number, racing inserts safely.
+    const start = await seed()
+    const inserted = await sql`
+      INSERT INTO doc_ref_counter (id, current_value, updated_at)
+      VALUES (${counterId}, ${start + n}, ${now})
+      ON CONFLICT(id) DO UPDATE SET
+        current_value = GREATEST(doc_ref_counter.current_value, ${start}) + ${n},
+        updated_at = ${now}
+      RETURNING current_value
+    `
+    last = inserted.rows?.[0]?.current_value as number
+  }
+  return Number(last)
+}
+
+/**
  * Get the next unique document number for a kind, e.g. "INV/2026/0042"
  * (or "CLT-00042" for clients). Atomic and safe for concurrent calls.
  */
 export async function getNextDocNumber(kind: DocKind): Promise<string> {
-  await ensureCounterTable()
-  const now = new Date().toISOString()
   const year = new Date().getFullYear()
   const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : kind === 'outsource' ? 'out_seq' : kind === 'outsource_payment' ? 'opay_seq' : kind === 'rider_pay' ? 'rwp_seq' : kind === 'expense' ? 'exp_seq' : kind === 'opportunity' ? 'opp_seq' : kind === 'contract' ? 'ctr_seq' : kind === 'purchase_return' ? 'ret_seq' : kind === 'kilimall_order' ? 'ko_seq' : kind === 'kilimall_dispatch' ? 'kd_seq' : kind === 'kilimall_settlement' ? 'ks_seq' : kind === 'refurbishment' ? 'ref_seq' : `${PREFIX[kind]}_${year}`
 
-  // Fast path: counter row exists — atomic increment.
-  const updated = await sql`
-    UPDATE doc_ref_counter
-    SET current_value = current_value + 1, updated_at = ${now}
-    WHERE id = ${counterId}
-    RETURNING current_value
-  `
-  let nextValue = updated.rows?.[0]?.current_value as number | undefined
-
-  if (nextValue === undefined) {
-    // First use: seed from the highest existing number, racing inserts safely.
-    const seed = await seedFromExisting(kind, year)
-    const inserted = await sql`
-      INSERT INTO doc_ref_counter (id, current_value, updated_at)
-      VALUES (${counterId}, ${seed + 1}, ${now})
-      ON CONFLICT(id) DO UPDATE SET
-        current_value = GREATEST(doc_ref_counter.current_value, ${seed}) + 1,
-        updated_at = ${now}
-      RETURNING current_value
-    `
-    nextValue = inserted.rows?.[0]?.current_value as number
-  }
+  const nextValue = await reserveCounterValues(counterId, 1, () => seedFromExisting(kind, year))
 
   if (!Number.isFinite(nextValue)) throw new Error(`Failed to generate ${kind} number`)
   if (kind === 'client') return `CLT-${String(nextValue).padStart(5, '0')}`

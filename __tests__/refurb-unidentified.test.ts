@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const h = vi.hoisted(() => ({ state: {} as Record<string, any>, valuations: [] as any[], bumps: [] as any[] }))
+const h = vi.hoisted(() => ({ state: {} as Record<string, any>, valuations: [] as any[], bumps: [] as any[], assetSeq: {} as Record<string, number> }))
 
 vi.mock('server-only', () => ({}))
 vi.mock('@/lib/server-store', () => {
@@ -28,6 +28,17 @@ vi.mock('@/lib/inventory/stock-transactions', async () => {
   return { ...real, bumpPrismaOnHand: vi.fn(async (d: Map<string, number>) => { h.bumps.push(Object.fromEntries(d)) }) }
 })
 vi.mock('@/lib/prisma', () => ({ default: { $transaction: vi.fn(async () => undefined) } }))
+// The real counter lives in Postgres; here it just counts up per prefix.
+vi.mock('@/lib/inventory/asset-id.server', async () => {
+  const { assetIdPrefix, formatAssetId } = await vi.importActual<typeof import('@/lib/inventory/asset-id')>('@/lib/inventory/asset-id')
+  return {
+    allocateAssetIds: vi.fn(async (category: string, count: number) => {
+      const prefix = assetIdPrefix(category)
+      h.assetSeq[prefix] = h.assetSeq[prefix] ?? 0
+      return Array.from({ length: count }, () => formatAssetId(prefix, ++h.assetSeq[prefix]))
+    }),
+  }
+})
 
 import { nextIntakeTags, classifySerialMatch, splitUnitCosts, harvestValues, awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { intakeTaggedUnits, identifyTaggedUnit, harvestUnit } from '@/lib/refurbishment/unidentified.server'
@@ -64,11 +75,12 @@ describe('helpers', () => {
 })
 
 beforeEach(() => {
+  h.assetSeq = {}
   h.valuations = []
   h.bumps = []
   h.state = {
     deed_products: [
-      { id: 'p-unk', name: 'Laptop — unidentified', requiresSerial: true, stockQty: 0 },
+      { id: 'p-unk', name: 'Laptop — unidentified', category: 'Laptops', requiresSerial: true, stockQty: 0 },
       { id: 'p-840', name: 'HP EliteBook 840 G5', requiresSerial: true, stockQty: 3 },
       { id: 'p-scrap', name: 'Scrap laptops', requiresSerial: false, stockQty: 5 },
       { id: 'p-ram', name: '8GB DDR4 RAM', requiresSerial: false, stockQty: 0 },
@@ -86,6 +98,9 @@ describe('intake', () => {
     expect(out.serials).toHaveLength(3)
     expect(out.serials[0]).toMatchObject({ identityPending: true, location: 'repair_unit', status: 'refurbishment', productId: 'p-unk' })
     expect(out.serials[0].serial).toMatch(/^UNK-\d{6}-001$/)
+    // Each machine gets its sticker number; the barcode is that number.
+    expect(out.serials.map((s: any) => s.assetId)).toEqual(['LT000001', 'LT000002', 'LT000003'])
+    expect(out.serials[0].barcode).toBe('LT000001')
     expect(out.costs).toEqual([6000, 0, 0]) // stock was worth 6,000 for the 3; one unit priced at 6,000
     expect(h.state.deed_bulkStock[0].qty).toBe(2)
     expect(h.state.deed_products.find((p: any) => p.id === 'p-scrap').stockQty).toBe(2)
@@ -93,6 +108,32 @@ describe('intake', () => {
     expect(h.valuations[0]).toMatchObject({ type: 'subtract', productId: 'p-scrap', qty: 3 })
     expect(h.valuations.filter(v => v.type === 'add')).toHaveLength(1)
     expect(h.bumps[0]).toEqual({ 'p-unk': 3, 'p-scrap': -3 })
+  })
+
+  it('lands lines in With Issues: known serials kept, typed asset IDs kept, the rest numbered', async () => {
+    h.state.deed_serials.push({ id: 's-dt', serial: 'OLD1', productId: 'p-840', status: 'available', location: 'warehouse', assetId: 'DT000005' })
+    const out = await intakeTaggedUnits({
+      userId: 'u', productId: 'p-unk', reference: 'XL', destination: 'with_issues',
+      units: [
+        { serial: '5CG777', productId: 'p-840' },
+        { serial: '5CG555', assetId: 'dt000006', issue: 'No display', cost: 3000, productId: 'p-840' },
+        { issue: 'Dead' },
+      ],
+    }) as any
+    expect(out.ok).toBe(true)
+    // No category on the model: numbered as the laptop it was filed under.
+    expect(out.serials[0]).toMatchObject({ serial: '5CG777', assetId: 'LT000001' })
+    out.serials.shift()
+    expect(out.serials[0]).toMatchObject({ serial: '5CG555', assetId: 'DT000006', barcode: 'DT000006', intakeIssue: 'No display', productId: 'p-840', location: 'shop', status: 'available' })
+    expect(out.serials[0].identityPending).toBeFalsy()
+    expect(out.serials[1]).toMatchObject({ identityPending: true, assetId: 'LT000002', location: 'shop' })
+    expect(out.serials[1].serial).toMatch(/^UNK-/)
+  })
+
+  it('refuses a taken asset ID and a serial already in stock', async () => {
+    h.state.deed_serials.push({ id: 's-dt', serial: 'OLD1', productId: 'p-840', status: 'available', location: 'warehouse', assetId: 'DT000005' })
+    expect(await intakeTaggedUnits({ userId: 'u', productId: 'p-unk', reference: 'X', units: [{ assetId: 'DT000005' }] })).toMatchObject({ ok: false })
+    expect(await intakeTaggedUnits({ userId: 'u', productId: 'p-840', reference: 'X', units: [{ serial: 'OLD1' }] })).toMatchObject({ ok: false })
   })
 
   it('refuses more than the stock holds, and a product without serials', async () => {
@@ -109,7 +150,7 @@ describe('identify', () => {
     h.valuations = []
     const out = await identifyTaggedUnit({ userId: 'u', serialId: tag.id, serial: '5CG123ABC', productId: 'p-840', specs: 'i5, 8GB' }) as any
     expect(out.ok).toBe(true)
-    expect(out.serial).toMatchObject({ serial: '5CG123ABC', intakeTag: tag.serial, barcode: tag.serial, productId: 'p-840', identityPending: false, specs: 'i5, 8GB' })
+    expect(out.serial).toMatchObject({ serial: '5CG123ABC', intakeTag: tag.serial, barcode: tag.assetId, assetId: tag.assetId, productId: 'p-840', identityPending: false, specs: 'i5, 8GB' })
     expect(h.state.deed_products.find((p: any) => p.id === 'p-unk').stockQty).toBe(0)
     expect(h.state.deed_products.find((p: any) => p.id === 'p-840').stockQty).toBe(4)
     expect(h.valuations.map(v => `${v.type}:${v.productId}`)).toEqual(['subtract:p-unk', 'add:p-840'])
@@ -120,7 +161,7 @@ describe('identify', () => {
     const out = await identifyTaggedUnit({ userId: 'u', serialId: tag.id, serial: '5CG999', productId: 'p-840' }) as any
     expect(out.ok).toBe(true)
     expect(out.removedSerialId).toBe(tag.id)
-    expect(out.serial).toMatchObject({ id: 's-old', location: 'repair_unit', status: 'refurbishment', previousSaleOrderId: 'so-1', intakeTag: tag.serial })
+    expect(out.serial).toMatchObject({ id: 's-old', location: 'repair_unit', status: 'refurbishment', previousSaleOrderId: 'so-1', intakeTag: tag.serial, assetId: tag.assetId })
     expect(h.state.deed_serials.find((s: any) => s.id === tag.id)).toBeUndefined()
   })
 

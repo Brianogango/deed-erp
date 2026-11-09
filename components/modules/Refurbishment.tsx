@@ -19,6 +19,7 @@ import { RefurbWeeklyReport } from '@/components/refurbishment/RefurbWeeklyRepor
 import { TaggedIntakeModal } from '@/components/refurbishment/TaggedIntakeModal'
 import { IdentifyUnitModal } from '@/components/refurbishment/IdentifyUnitModal'
 import { HarvestPartsModal } from '@/components/refurbishment/HarvestPartsModal'
+import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { refurbWeekStart } from '@/lib/refurbishment/weekly-report'
 import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -27,7 +28,7 @@ import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlReco
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
   faArrowRight, faBan, faChevronLeft, faBoxOpen, faPencil, faTrash,
-  faBell, faTriangleExclamation, faCheck, faMagnifyingGlass, faScrewdriverWrench,
+  faBell, faTriangleExclamation, faCheck, faMagnifyingGlass, faScrewdriverWrench, faPrint,
 } from '@fortawesome/free-solid-svg-icons'
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -156,6 +157,21 @@ function RefurbishmentContent() {
   )
   // "With Issues" stock still in our hands (the location is called shop).
   const withIssuesSerials = useMemo(() => serials.filter(s => s.location === 'shop' && ['available', 'returned'].includes(s.status)), [serials])
+  // The sticker number follows the machine onto its job.
+  const assetIdBySerialId = useMemo(() => new Map(serials.flatMap(s => {
+    const a = (s as SerialNumber & { assetId?: string }).assetId
+    return a ? [[s.id, a] as const] : []
+  })), [serials])
+  const unitInfo = (s: SerialNumber) => s as SerialNumber & { assetId?: string; intakeIssue?: string; identityPending?: boolean }
+  const printStickers = (list: SerialNumber[], forSale = false) => {
+    if (!list.length) return
+    void printLabelsForSerialUnits({ serials: list, products, forSale })
+  }
+  // One toast for the batch; each machine keeps its own intake issue unless one is given here.
+  const sendToRefurbishment = (list: SerialNumber[], issue: string) => {
+    list.forEach(s => createRefurbishmentJob(s.id, issue, { silent: true }))
+    showToast(`${list.length} machine${list.length === 1 ? '' : 's'} sent to refurbishment`)
+  }
 
   const filtered = useMemo(() => {
     const list = filterStatus === 'all'
@@ -268,6 +284,16 @@ function RefurbishmentContent() {
                   Send for retest
                 </PrimaryActionButton>
               )}
+              {['ready', 'transferred'].includes(job.status) && !job.identityPending && (() => {
+                const unit = serials.find(s => s.id === job.serialId)
+                return unit ? (
+                  <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                    style={{ background: 'var(--bg-muted)', color: 'var(--text-2)', border: '1px solid var(--border-lt)', cursor: 'pointer' }}
+                    onClick={() => printStickers([unit], true)}>
+                    <Fa icon={faPrint} className="mr-1.5" />Print sale label
+                  </button>
+                ) : null
+              })()}
               {canWriteOff(job) && (
                 <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
                   style={{ background: 'var(--danger-bg)', color: '#991B1B', border: '1px solid #FCA5A5', cursor: 'pointer' }}
@@ -376,6 +402,7 @@ function RefurbishmentContent() {
             <div className="card p-4 space-y-2">
               <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Device</p>
               <p className="text-sm font-semibold text-t1">{job.productName}</p>
+              {assetIdBySerialId.get(job.serialId) && <p className="font-mono text-xs font-semibold text-t2">Asset ID: {assetIdBySerialId.get(job.serialId)}</p>}
               <p className="font-mono text-xs text-t3">{job.identityPending ? 'Tag' : 'S/N'}: {job.serialNumber}</p>
               {!job.identityPending && job.intakeTag && job.intakeTag !== job.serialNumber && <p className="font-mono text-[11px] text-t3">Tag: {job.intakeTag}</p>}
               {job.specs && <p className="text-xs text-t3">{job.specs}</p>}
@@ -918,8 +945,13 @@ function RefurbishmentContent() {
                   {withIssuesSerials.length} device{withIssuesSerials.length > 1 ? 's' : ''} with issues — awaiting refurbishment decision
                 </p>
               </div>
+              <div className="flex items-center gap-2">
+                <button className="btn-secondary text-[11px] py-1 px-3"
+                  onClick={() => printStickers(selectedIssueIds.size ? withIssuesSerials.filter(s => selectedIssueIds.has(s.id)) : withIssuesSerials)}>
+                  <Fa icon={faPrint} className="mr-1.5" />Print {selectedIssueIds.size ? selectedIssueIds.size : 'all'} label{selectedIssueIds.size === 1 ? '' : 's'}
+                </button>
               {isLeadTech && (
-                <div className="flex items-center gap-2">
+                <>
                   <label className="flex items-center gap-1.5 text-[11px] font-medium cursor-pointer select-none" style={{ color: 'var(--warning-text)' }}>
                     <input type="checkbox"
                       checked={withIssuesSerials.length > 0 && withIssuesSerials.every(s => selectedIssueIds.has(s.id))}
@@ -934,8 +966,9 @@ function RefurbishmentContent() {
                       <Fa icon={faWrench} className="mr-1.5" />Send {selectedIssueIds.size} to Refurbishment
                     </button>
                   )}
-                </div>
+                </>
               )}
+              </div>
             </div>
             <div className="bg-white grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
               {withIssuesSerials.map(s => {
@@ -953,11 +986,15 @@ function RefurbishmentContent() {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold text-t1 truncate" title={s.productName}>{s.productName}</p>
-                      <p className="font-mono text-[10px] text-t3">{s.serial}</p>
+                      <p className="font-mono text-[10px] text-t3 truncate">
+                        {unitInfo(s).assetId || s.serial}
+                        {unitInfo(s).assetId && !unitInfo(s).identityPending && s.serial !== unitInfo(s).assetId ? ` · S/N ${s.serial}` : ''}
+                      </p>
+                      {unitInfo(s).intakeIssue && <p className="text-[10px] text-t3 truncate" title={unitInfo(s).intakeIssue}>{unitInfo(s).intakeIssue}</p>}
                     </div>
                     {isLeadTech && selectedIssueIds.size === 0 && (
                       <button style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#EA580C', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                        onClick={() => { setCreateJobSerial(s); setCreateJobIssue(''); setShowCreateJobModal(true) }}>
+                        onClick={() => { setCreateJobSerial(s); setCreateJobIssue(unitInfo(s).intakeIssue ?? ''); setShowCreateJobModal(true) }}>
                         Send
                       </button>
                     )}
@@ -1010,9 +1047,9 @@ function RefurbishmentContent() {
 
         {canTagIntake && (
           <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl px-4 py-2.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-            <p className="text-[11px] text-t3 m-0">Dead or unreadable machines with no serial or specs? Tag them in, and find the serial on the bench.</p>
+            <p className="text-[11px] text-t3 m-0">Machines for repair — one by one or from Excel (Model, Serial, Asset ID, Issues, Cost). They land in With Issues with an asset ID sticker.</p>
             <button className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setShowTaggedIntake(true)}>
-              <Fa icon={faPlus} className="mr-1.5" />Add machines without serial
+              <Fa icon={faPlus} className="mr-1.5" />Add machines
             </button>
           </div>
         )}
@@ -1033,13 +1070,14 @@ function RefurbishmentContent() {
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-t1 erp-truncate" title={j.productName}>{j.productName}</p>
                     <p className="font-mono text-[10px] text-t3 erp-truncate" title={j.serialNumber}>
+                      {assetIdBySerialId.get(j.serialId) && <span className="font-semibold text-t2">{assetIdBySerialId.get(j.serialId)} · </span>}
                       {j.identityPending ? 'Tag' : 'S/N'} {j.serialNumber}
                       {j.identityPending && !['transferred', 'written_off'].includes(j.status) && <span className="ml-1.5 font-sans font-semibold rounded px-1" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>Unidentified</span>}
                       {j.outcome === 'harvested' && <span className="ml-1.5 font-sans font-semibold rounded px-1" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>Harvested</span>}
                     </p>
                   </div>
                 ),
-                accessor: (j: RefurbishmentJob) => `${j.productName} ${j.serialNumber}`,
+                accessor: (j: RefurbishmentJob) => `${j.productName} ${j.serialNumber} ${assetIdBySerialId.get(j.serialId) ?? ''}`,
                 exportValue: (j: RefurbishmentJob) => j.productName,
               },
               {
@@ -1113,23 +1151,21 @@ function RefurbishmentContent() {
               <div key={s.id} className="flex items-center gap-2 text-xs">
                 <Fa icon={faBoxOpen} className="text-t3" aria-hidden="true" />
                 <span className="font-semibold text-t1">{s.productName}</span>
-                <span className="font-mono text-t3">{s.serial}</span>
+                <span className="font-mono text-t3">{unitInfo(s).assetId || s.serial}</span>
+                {unitInfo(s).intakeIssue && <span className="text-t3 truncate">· {unitInfo(s).intakeIssue}</span>}
               </div>
             ))}
           </div>
-          <Field label="Issue Description (applied to all selected) *">
+          <Field label="Issue (optional)">
             <Textarea value={bulkIssueDesc} onChange={setBulkIssueDesc} rows={3}
-              placeholder="Describe the shared problem…" />
+              placeholder="Leave blank to keep each machine's own issues — the technician adds what they find" />
           </Field>
           <div className="flex gap-2 justify-end mt-4">
             <button className="btn-outline" onClick={() => setShowBulkSendModal(false)}>Cancel</button>
             <button className="btn-primary" style={{ background: '#EA580C', borderColor: '#EA580C' }}
               onClick={() => {
-                if (!bulkIssueDesc.trim()) { showToast('Enter issue description', 'error'); return }
-                const selected = withIssuesSerials.filter(s => selectedIssueIds.has(s.id))
-                selected.forEach(s => createRefurbishmentJob(s.id, bulkIssueDesc.trim()))
+                sendToRefurbishment(withIssuesSerials.filter(s => selectedIssueIds.has(s.id)), bulkIssueDesc.trim())
                 setSelectedIssueIds(new Set()); setBulkIssueDesc(''); setShowBulkSendModal(false)
-                showToast(`${selected.length} device${selected.length > 1 ? 's' : ''} sent to refurbishment`)
               }}>
               Send to Refurbishment
             </button>
@@ -1142,19 +1178,17 @@ function RefurbishmentContent() {
         <Modal title="Create Refurbishment Job" onClose={() => setShowCreateJobModal(false)} width={440}>
           <div className="rounded-lg p-3 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
             <p className="text-xs font-semibold text-t1">{createJobSerial.productName}</p>
-            <p className="font-mono text-[11px] text-t3">S/N: {createJobSerial.serial}</p>
+            <p className="font-mono text-[11px] text-t3">{unitInfo(createJobSerial).assetId ? `${unitInfo(createJobSerial).assetId} · ` : ''}S/N: {createJobSerial.serial}</p>
           </div>
-          <Field label="Issue Description *">
+          <Field label="Issue (optional)">
             <Textarea value={createJobIssue} onChange={setCreateJobIssue} rows={3}
               placeholder="Describe the problem — e.g. cracked screen, battery failure…" />
           </Field>
           <div className="flex gap-2 justify-end mt-4">
             <button className="btn-outline" onClick={() => setShowCreateJobModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={() => {
-              if (!createJobIssue.trim()) { showToast('Enter issue description', 'error'); return }
               createRefurbishmentJob(createJobSerial.id, createJobIssue.trim())
               setShowCreateJobModal(false)
-              showToast('Refurbishment job created')
             }}>Create Job</button>
           </div>
         </Modal>

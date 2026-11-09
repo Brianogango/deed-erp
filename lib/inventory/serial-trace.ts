@@ -68,6 +68,7 @@ export function findSerialMatches(
   return serials.filter(s =>
     s.serial.toLowerCase().includes(q) ||
     String(s.barcode || '').toLowerCase().includes(q) ||
+    String((s as { assetId?: string }).assetId || '').toLowerCase().includes(q) ||
     s.id.toLowerCase() === q,
   )
 }

@@ -784,7 +784,7 @@ export default function InventoryProductsPanel({
           warehouseFilter={filters.warehouse}
           onClose={() => setSerialProduct(null)}
           onPrintSerials={async items => {
-            await printSerialLabels(items)
+            await printSerialLabels(items, { serials: serials as SerialNumber[], products })
             addAuditLog('labels_print', serialProduct.sku, `Printed ${items.length} serial label(s)`)
           }}
           onDownloadSerials={async items => {

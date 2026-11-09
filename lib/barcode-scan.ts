@@ -102,7 +102,8 @@ type ScanIdentity = {
 /** True when any scan candidate matches barcode, manufacturer serial, or sku. */
 export function identityMatchesScan(identity: ScanIdentity, scan: ParsedScan | string): boolean {
   const parsed = typeof scan === 'string' ? parseScanPayload(scan) : scan
-  const fields = [identity.barcode, identity.serial, identity.sku]
+  // The asset ID (Deed sticker) is the machine's barcode for life.
+  const fields = [identity.barcode, identity.serial, identity.sku, (identity as { assetId?: string | null }).assetId]
   return parsed.candidates.some(candidate => fields.some(field => codesEqual(field, candidate)))
 }
 

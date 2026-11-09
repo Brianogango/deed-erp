@@ -1201,10 +1201,12 @@ export interface RefurbishmentJob {
 
 export type TaggedIntakeInput = {
   productId: string
-  units: Array<{ cost?: number | null; note?: string; issue: string }>
+  units: Array<{ cost?: number | null; note?: string; issue: string; serial?: string; assetId?: string; productId?: string }>
   /** Taken from quantity stock of another product; omit for machines never on record. */
   from?: { productId: string; location: LocationId }
   reference?: string
+  /** With Issues first (sent to Refurbishment later), or straight to the bench (default). */
+  destination?: 'with_issues' | 'refurbishment'
 }
 
 export interface SaleOrderItem {
@@ -3938,7 +3940,7 @@ interface AppState {
   logReturnPickup: (returnId: string, collectedByUserId: string, collectedByName: string, collectedDate: string, pickupNotes?: string) => void
 
   // Refurbishment
-  createRefurbishmentJob: (serialId: string, issueDescription: string) => void
+  createRefurbishmentJob: (serialId: string, issueDescription: string, opts?: { silent?: boolean }) => void
   assignRefurbishmentJob: (jobId: string, techId: string, techName: string) => void
   updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'issuesFound' | 'status' | 'completedDate'>>) => void
   /** `request`: ask stores for it straight away (taken from stock, or the lead is alerted). */
@@ -16102,26 +16104,32 @@ const storeCtx: AppState = {
     },
 
     // ── Refurbishment ──────────────────────────────────────────────────────────
-    createRefurbishmentJob: (serialId, issueDescription) => {
+    createRefurbishmentJob: (serialId, issueDescription, opts) => {
       const ser = serialRef.current.find(s => s.id === serialId)
       if (!ser) { showToast('Serial not found', 'error'); return }
+      const x = ser as SerialNumber & { identityPending?: boolean; intakeTag?: string; intakeCost?: number; intakeIssue?: string }
       const prod = prodRef.current.find(p => p.id === ser.productId)
       const job: RefurbishmentJob = {
         id: uid(), ref: allocateDocNumberSync('REF'),
         status: 'queued',
         serialId, serialNumber: ser.serial,
         productId: ser.productId, productName: ser.productName,
-        specs: ser.specs || prod?.description,
-        specsAtIntake: ser.specs || prod?.description || '',
+        specs: ser.specs || (x.identityPending ? '' : prod?.description),
+        specsAtIntake: ser.specs || (x.identityPending ? '' : prod?.description || ''),
         intakeDate: new Date().toISOString(),
-        intakeIssueDescription: issueDescription,
+        // What was noted when it came in, unless a reason is given now.
+        intakeIssueDescription: issueDescription || x.intakeIssue || '',
         partsNeeded: [],
+        // A machine from With Issues keeps its tag and intake cost on the job.
+        ...(x.identityPending ? { identityPending: true, intakeTag: x.intakeTag || ser.serial } : {}),
+        ...(x.intakeCost != null ? { intakeCost: x.intakeCost } : {}),
+        ...(ser.location === 'shop' ? { intakeSource: 'stock' as const, intakeSourceRef: 'With Issues' } : {}),
       }
       // Move serial to repair_unit with refurbishment status
       setSerials(p => p.map(s => s.id === serialId ? { ...s, location: 'repair_unit', status: 'refurbishment' } : s))
       setRefurbishmentJobs(p => [...p, job])
       numberRefurbJobs([job.id])
-      showToast('Refurbishment job created')
+      if (!opts?.silent) showToast('Refurbishment job created')
     },
     assignRefurbishmentJob: (jobId, techId, techName) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
@@ -16429,12 +16437,18 @@ const storeCtx: AppState = {
         const res = await fetch('/api/refurbishment/intake', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ productId: input.productId, units: input.units.map(u => ({ cost: u.cost, note: u.note })), from: input.from, reference: input.reference }),
+          body: JSON.stringify({ productId: input.productId, units: input.units.map(u => ({ cost: u.cost, note: u.note, issue: u.issue, serial: u.serial, assetId: u.assetId, productId: u.productId })), from: input.from, reference: input.reference, destination: input.destination }),
         })
         const data = await res.json().catch(() => null) as { error?: string; serials?: SerialNumber[]; costs?: number[] } | null
         if (!res.ok || !data?.serials) { showToast(data?.error || 'Could not take the machines in', 'error'); return null }
         const created = data.serials
         setSerials(p => [...p.filter(s => !created.some(c => c.id === s.id)), ...created])
+        const assets = created.map(c => (c as SerialNumber & { assetId?: string }).assetId || c.serial)
+        if (input.destination === 'with_issues') {
+          addAuditLog('with_issues_intake', input.reference || assets[0] || '', `Took in ${created.length} machine(s) With Issues: ${assets.join(', ')}`)
+          showToast(`${created.length} machine${created.length === 1 ? '' : 's'} in With Issues: ${assets[0]}${created.length > 1 ? ` … ${assets[assets.length - 1]}` : ''}. Print the stickers.`)
+          return assets
+        }
         const source: RefurbishmentJob['intakeSource'] = input.from ? 'stock' : 'unrecorded'
         const jobs: RefurbishmentJob[] = created.map((ser, i) => ({
           id: uid(), ref: allocateDocNumberSync('REF'),
@@ -16446,8 +16460,7 @@ const storeCtx: AppState = {
           // The technician records what is wrong once they open it up.
           intakeIssueDescription: input.units[i]?.issue || '',
           partsNeeded: [],
-          identityPending: true,
-          intakeTag: ser.serial,
+          ...((ser as SerialNumber & { identityPending?: boolean }).identityPending ? { identityPending: true, intakeTag: ser.serial } : {}),
           intakeCost: data.costs?.[i],
           intakeSource: source,
           intakeSourceRef: input.reference,
@@ -16455,8 +16468,8 @@ const storeCtx: AppState = {
         setRefurbishmentJobs(p => [...p, ...jobs])
         numberRefurbJobs(jobs.map(j => j.id))
         addAuditLog('refurb_tagged_intake', input.reference || jobs[0]?.ref || '', `Took in ${created.length} machine(s) without serial: ${created.map(c => c.serial).join(', ')}`)
-        showToast(`${created.length} machine${created.length === 1 ? '' : 's'} tagged and queued: ${created[0].serial}${created.length > 1 ? ` … ${created[created.length - 1].serial}` : ''}. Print the stickers.`)
-        return created.map(c => c.serial)
+        showToast(`${created.length} machine${created.length === 1 ? '' : 's'} queued for refurbishment: ${assets[0]}${created.length > 1 ? ` … ${assets[assets.length - 1]}` : ''}. Print the stickers.`)
+        return assets
       } catch {
         showToast('Could not take the machines in. Check your connection and try again.', 'error')
         return null

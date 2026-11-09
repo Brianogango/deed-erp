@@ -7,8 +7,10 @@ import { applySerialWriteOffMutation, bumpPrismaOnHand } from '@/lib/inventory/s
 import { postAdjustmentValuation } from '@/lib/inventory/valuation-hooks'
 import { formatAccountLabel } from '@/lib/product-accounts'
 import { awaitingIdentification, classifySerialMatch, harvestValues, isIntakeTag, nextIntakeTags, splitUnitCosts } from './unidentified'
+import { allocateAssetIds } from '@/lib/inventory/asset-id.server'
+import { isValidAssetId, normalizeAssetId } from '@/lib/inventory/asset-id'
 
-type Product = { id: string; name?: string; sku?: string; stockQty?: number; requiresSerial?: boolean; trackingMethod?: string }
+type Product = { id: string; name?: string; sku?: string; category?: string; stockQty?: number; requiresSerial?: boolean; trackingMethod?: string }
 type Serial = Record<string, any> & { id: string; serial: string; productId: string; status: string; location?: string }
 type Move = Record<string, unknown>
 type Fail = { ok: false; error: string; status: number }
@@ -29,22 +31,41 @@ async function valuationCost(result: unknown): Promise<number> {
   return money(Number(r?.result?.totalCost) || 0)
 }
 
+export type IntakeUnit = {
+  cost?: number | null
+  note?: string
+  /** Manufacturer serial when known; otherwise the machine gets a UNK- tag. */
+  serial?: string
+  /** Deed sticker number already on the machine; otherwise one is issued (LT000124…). */
+  assetId?: string
+  /** What is wrong, as noted at intake (shown on the job; never on the label). */
+  issue?: string
+  /** This machine's model, when the batch mixes models (Excel). */
+  productId?: string
+}
+
 /**
- * Machines into Refurbishment with a tag instead of a serial.
+ * Machines without a (readable) serial or record, in for repair work.
+ * Each gets an asset ID (its sticker for life) and, when the serial is not
+ * known, a UNK- tag. `destination`: "with_issues" holds them in With Issues
+ * (sent to Refurbishment later, one or many); "refurbishment" (the default,
+ * as before) puts them straight on the bench.
  * `from`: they were counted as quantity stock on another product (no serials);
- * that stock comes off and its cost moves onto the tagged units. Without
- * `from` they were never on record; any cost given is added as stock value.
+ * that stock comes off and its cost moves onto the units. Without `from` they
+ * were never on record; any cost given is added as stock value.
  */
 export async function intakeTaggedUnits(params: {
   userId: string
   userName?: string
   productId: string
-  units: Array<{ cost?: number | null; note?: string }>
+  units: IntakeUnit[]
   from?: { productId: string; location: string }
   reference: string
+  destination?: 'with_issues' | 'refurbishment'
 }): Promise<{ ok: true; serials: Serial[]; costs: number[]; sourceCost: number } | Fail> {
   const n = params.units.length
-  if (n < 1 || n > 50) return { ok: false, error: 'Add between 1 and 50 machines at a time', status: 422 }
+  if (n < 1 || n > 200) return { ok: false, error: 'Add between 1 and 200 machines at a time', status: 422 }
+  const toIssues = params.destination === 'with_issues'
   const state = await loadAppStateForWrite(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
   const products = [...((state.deed_products as Product[]) ?? [])]
   let serials = [...((state.deed_serials as Serial[]) ?? [])]
@@ -54,6 +75,37 @@ export async function intakeTaggedUnits(params: {
   const target = products.find(p => p.id === params.productId)
   if (!target) return { ok: false, error: 'Choose the product to file the machines under', status: 422 }
   if (!isSerialized(target)) return { ok: false, error: `${target.name} does not track serial numbers — choose a serial-tracked product (e.g. "Laptop — unidentified")`, status: 422 }
+  if (params.from && params.units.some(u => u.productId && u.productId !== target.id)) {
+    return { ok: false, error: 'Machines taken from stock are filed under one model', status: 422 }
+  }
+  // Each machine's model, serial and sticker — checked before anything changes.
+  const row = (i: number) => (n > 1 ? `Row ${i + 1}: ` : '')
+  const unitTargets: Product[] = []
+  const seenSerials = new Set<string>()
+  const seenAssets = new Set<string>()
+  const usedAssets = new Set(serials.map(s => normalizeAssetId(s.assetId)).filter(Boolean))
+  for (const [i, u] of params.units.entries()) {
+    const p = u.productId ? products.find(x => x.id === u.productId) : target
+    if (!p) return { ok: false, error: `${row(i)}the model was not found`, status: 422 }
+    if (!isSerialized(p)) return { ok: false, error: `${row(i)}${p.name} does not track serial numbers`, status: 422 }
+    unitTargets.push(p)
+    const serial = String(u.serial ?? '').trim()
+    if (serial) {
+      if (serial.length < 3) return { ok: false, error: `${row(i)}serial "${serial}" is too short`, status: 422 }
+      if (seenSerials.has(serial.toLowerCase())) return { ok: false, error: `${row(i)}serial ${serial} is listed twice`, status: 422 }
+      seenSerials.add(serial.toLowerCase())
+      const match = classifySerialMatch(serials, serial, '')
+      if (match.kind === 'in_stock') return { ok: false, error: `${row(i)}serial ${serial} is already in stock (${(match.match as Serial).productName ?? 'another product'})`, status: 409 }
+      if (match.kind === 'returning') return { ok: false, error: `${row(i)}we had serial ${serial} before (${match.match.status}) — take it back through a return or trade-in`, status: 409 }
+    }
+    const asset = normalizeAssetId(u.assetId)
+    if (asset) {
+      if (!isValidAssetId(asset)) return { ok: false, error: `${row(i)}asset ID "${u.assetId}" should be letters then digits, e.g. LT000124`, status: 422 }
+      if (seenAssets.has(asset)) return { ok: false, error: `${row(i)}asset ID ${asset} is listed twice`, status: 422 }
+      if (usedAssets.has(asset)) return { ok: false, error: `${row(i)}asset ID ${asset} is already on another machine`, status: 409 }
+      seenAssets.add(asset)
+    }
+  }
 
   let source: Product | undefined
   if (params.from) {
@@ -75,38 +127,72 @@ export async function intakeTaggedUnits(params: {
   }
   const costs = splitUnitCosts(sourceCost, params.units.map(u => (u.cost == null || u.cost === ('' as unknown) ? null : Number(u.cost))))
 
-  const tags = nextIntakeTags(serials, n)
-  const created: Serial[] = tags.map((tag, i) => ({
-    id: randomUUID(),
-    serial: tag,
-    intakeTag: tag,
-    identityPending: true,
-    productId: target.id,
-    productName: target.name || 'Machine',
-    sku: target.sku,
-    location: 'repair_unit',
-    status: 'refurbishment',
-    receivedDate: now(),
-    barcode: tag,
-    specs: '',
-    intakeSource: 'refurb-intake',
-    intakeByName: params.userName,
-    intakeCost: costs[i],
-    ...(params.units[i].note ? { accessoryNotes: String(params.units[i].note).slice(0, 300) } : {}),
-  }))
+  // Tags only for machines whose serial is not known.
+  const untagged = params.units.filter(u => !String(u.serial ?? '').trim()).length
+  const tagPool = nextIntakeTags(serials, untagged)
+  // Stickers to issue, counted per category (LT…, DK…).
+  const issued = new Map<string, string[]>()
+  for (const [i, u] of params.units.entries()) {
+    if (normalizeAssetId(u.assetId)) continue
+    // A model with no category takes the one it was filed under ("Laptop — unidentified" → LT).
+    const cat = String(unitTargets[i].category || target.category || target.name || '')
+    issued.set(cat, [...(issued.get(cat) ?? []), String(i)])
+  }
+  const assetFor = new Map<number, string>()
+  for (const [cat, idx] of issued) {
+    const ids = await allocateAssetIds(cat, idx.length, serials as Array<{ assetId?: unknown }>)
+    idx.forEach((i, k) => assetFor.set(Number(i), ids[k]))
+  }
+  const location = toIssues ? 'shop' : 'repair_unit'
+  const created: Serial[] = params.units.map((u, i) => {
+    const p = unitTargets[i]
+    const known = String(u.serial ?? '').trim()
+    const tag = known ? undefined : tagPool.shift()!
+    const assetId = normalizeAssetId(u.assetId) || assetFor.get(i)!
+    return {
+      id: randomUUID(),
+      serial: known || tag!,
+      ...(tag ? { intakeTag: tag, identityPending: true } : {}),
+      assetId,
+      productId: p.id,
+      productName: p.name || 'Machine',
+      sku: p.sku,
+      location,
+      status: toIssues ? 'available' : 'refurbishment',
+      receivedDate: now(),
+      // The sticker scans as the asset ID, whatever happens to the serial.
+      barcode: assetId,
+      specs: '',
+      intakeSource: 'refurb-intake',
+      intakeByName: params.userName,
+      intakeCost: costs[i],
+      ...(u.issue ? { intakeIssue: String(u.issue).slice(0, 300) } : {}),
+      ...(u.note ? { accessoryNotes: String(u.note).slice(0, 300) } : {}),
+    }
+  })
+  const tags = created.map(c => String(c.serial))
   serials = [...serials, ...created]
 
-  const deltas = new Map<string, number>([[target.id, n]])
-  const ti = products.findIndex(p => p.id === target.id)
-  products[ti] = { ...products[ti], stockQty: Math.max(0, Number(products[ti].stockQty ?? 0) + n) }
+  const deltas = new Map<string, number>()
+  for (const p of unitTargets) {
+    deltas.set(p.id, (deltas.get(p.id) ?? 0) + 1)
+  }
+  for (const [pid, qty] of deltas) {
+    const ti = products.findIndex(p => p.id === pid)
+    products[ti] = { ...products[ti], stockQty: Math.max(0, Number(products[ti].stockQty ?? 0) + qty) }
+  }
   if (source) {
     bulk = upsertBulkStock(bulk, source.id, params.from!.location as never, -n)
     const si = products.findIndex(p => p.id === source!.id)
     products[si] = { ...products[si], stockQty: Math.max(0, Number(products[si].stockQty ?? 0) - n) }
     deltas.set(source.id, -n)
-    moves.unshift(move({ type: 'out', productId: source.id, productName: source.name, qty: n, reason: `To refurbishment as ${tags[0]}${n > 1 ? `…${tags[n - 1]}` : ''}`, fromLocation: params.from!.location, toLocation: 'repair_unit', serialNumbers: [], userId: params.userId, documentRef: params.reference }))
+    moves.unshift(move({ type: 'out', productId: source.id, productName: source.name, qty: n, reason: `To ${toIssues ? 'With Issues' : 'refurbishment'} as ${tags[0]}${n > 1 ? `…${tags[n - 1]}` : ''}`, fromLocation: params.from!.location, toLocation: location, serialNumbers: [], userId: params.userId, documentRef: params.reference }))
   }
-  moves.unshift(move({ type: 'in', productId: target.id, productName: target.name, qty: n, reason: source ? `Tagged from ${source.name} stock` : 'Machines without serial taken in for refurbishment', fromLocation: source ? params.from!.location : undefined, toLocation: 'repair_unit', serialNumbers: tags, userId: params.userId, documentRef: params.reference }))
+  for (const [pid, qty] of deltas) {
+    const p = products.find(x => x.id === pid)
+    const theirs = created.filter(c => c.productId === pid).map(c => String(c.serial))
+    moves.unshift(move({ type: 'in', productId: pid, productName: p?.name, qty, reason: source ? `Tagged from ${source.name} stock` : toIssues ? 'Machines taken in With Issues' : 'Machines without serial taken in for refurbishment', fromLocation: source ? params.from!.location : undefined, toLocation: location, serialNumbers: theirs, userId: params.userId, documentRef: params.reference }))
+  }
 
   await bumpPrismaOnHand(deltas)
   await saveStoreKeys({
@@ -119,7 +205,7 @@ export async function intakeTaggedUnits(params: {
   for (const [i, s] of created.entries()) {
     if (!(costs[i] > 0)) continue
     await postAdjustmentValuation({
-      adjustmentRef: `${params.reference} ${s.serial}`, productId: target.id, type: 'add', qty: 1, unitCost: costs[i], userId: params.userId,
+      adjustmentRef: `${params.reference} ${s.serial}`, productId: s.productId, type: 'add', qty: 1, unitCost: costs[i], userId: params.userId,
       ...(source ? { reversesWriteOff: true, expenseAccountLabel: ADJUSTMENT(), expenseLineText: `Tagged unit ${s.serial}` } : {}),
     }).catch(() => null)
   }
@@ -169,6 +255,8 @@ export async function identifyTaggedUnit(params: {
     identityPending: false,
     intakeTag: tag,
     barcode: unit.barcode || tag,
+    // The sticker on the machine now wins over an old record's number.
+    ...(unit.assetId ? { assetId: unit.assetId } : {}),
     intakeCost: unit.intakeCost,
     identifiedDate: now(),
     ...(params.specs?.trim() ? { specs: params.specs.trim().slice(0, 500) } : {}),
