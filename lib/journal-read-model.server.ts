@@ -166,3 +166,15 @@ async function buildJournalsIncrementally(): Promise<ScreenJournal[]> {
 export function resetJournalSnapshot(): void {
   lastBuilt = null
 }
+
+/**
+ * The journals a browser keeps: payroll postings and payments only. The
+ * cashbook (cash balances on the dashboard and balance sheet) and the payroll
+ * screen use them; every journal report reads the tables on the server. The
+ * full list (2+ MB) used to go to every finance screen. Read straight from the
+ * table — the full list is never built for a browser load.
+ */
+export async function loadBrowserJournals(): Promise<ReturnType<typeof mapJournalForScreen>[]> {
+  const rows = await loadRows({ OR: [{ sourceType: { in: ['payroll', 'payroll_payment'] } }, { ref: { startsWith: 'JRN/PAYROLL' } }] })
+  return rows.map(mapJournalForScreen)
+}

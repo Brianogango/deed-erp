@@ -517,7 +517,8 @@ function AccountingContent() {
       .catch(() => {})
   }, [mounted, accounts, showToast])
 
-  const [tbSource, setTbSource] = useState<'blob' | 'prisma'>('prisma')
+  // Always the posted ledger on the server: browsers no longer hold every journal.
+  const tbSource = 'prisma' as 'blob' | 'prisma'
   const [plSource, setPlSource] = useState<'blob' | 'prisma'>('prisma')
   const [bsSource, setBsSource] = useState<'blob' | 'prisma'>('prisma')
   const [vatSource, setVatSource] = useState<'blob' | 'prisma'>('prisma')
@@ -2667,15 +2668,6 @@ function AccountingContent() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <select
-                    className="form-select text-[11px] py-1.5"
-                    value={tbSource}
-                    onChange={e => setTbSource(e.target.value as 'blob' | 'prisma')}
-                    aria-label="Trial balance source"
-                  >
-                    <option value="prisma">Official: Prisma (KES posted)</option>
-                    <option value="blob">Legacy: client blob</option>
-                  </select>
                   <span className={`badge ${(tbSource === 'prisma' ? prismaReports.trialBalance?.balanced : Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01) ? 'badge-green' : 'badge-red'}`}>
                     {(tbSource === 'prisma' ? prismaReports.trialBalance?.balanced : Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01) ? 'Balanced' : 'Out of balance'}
                   </span>

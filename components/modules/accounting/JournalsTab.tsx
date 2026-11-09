@@ -21,7 +21,9 @@ export default function JournalsTab() {
   } = useAccounting()
 
   const [sourceValue, setSourceValue] = useUrlUiState('journalBook', 'prisma')
-  const source: 'blob' | 'prisma' = sourceValue === 'blob' ? 'blob' : 'prisma'
+  // Always the posted journals on the server: browsers no longer hold every journal.
+  const source: 'blob' | 'prisma' = 'prisma'
+  void sourceValue
   const setSource = (next: 'blob' | 'prisma') => setSourceValue(next)
   const [journalStatus, setJournalStatus] = useUrlUiState('journalStatus', 'all')
   const [showManual, setShowManual] = useState(false)
@@ -161,16 +163,6 @@ export default function JournalsTab() {
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-        <select
-          className="form-select text-[11px] py-1.5"
-          style={{ width: 160 }}
-          value={source}
-          onChange={e => setSource(e.target.value as 'blob' | 'prisma')}
-          aria-label="Journal data source"
-        >
-          <option value="prisma">Official: Prisma (KES posted)</option>
-          <option value="blob">Legacy: client blob</option>
-        </select>
         <input className="form-input text-[11px] py-1.5" style={{ width: 140 }} type="date"
           value={journalDate} onChange={e => setJournalDate(e.target.value)} />
         <select className="form-select text-[11px] py-1.5" style={{ width: 130 }}

@@ -50,7 +50,9 @@ export default function GeneralLedgerTab() {
   const [accountSearch, setAccountSearch] = useState('')
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [sourceValue, setSourceValue] = useUrlUiState('glBook', 'prisma')
-  const source: 'blob' | 'prisma' = sourceValue === 'blob' ? 'blob' : 'prisma'
+  // Always the posted ledger on the server: browsers no longer hold every journal.
+  const source: 'blob' | 'prisma' = 'prisma'
+  void sourceValue
   const setSource = (next: 'blob' | 'prisma') => setSourceValue(next)
   const [selectedLine, setSelectedLine] = useState<GlRow | null>(null)
   const [prismaLines, setPrismaLines] = useState<GlRow[]>([])
@@ -295,10 +297,6 @@ export default function GeneralLedgerTab() {
             </div>
           )}
         </div>
-        <select className="form-select text-[11px] py-1.5" value={source} onChange={event => setSource(event.target.value as 'blob' | 'prisma')} aria-label="General ledger source">
-          <option value="prisma">Prisma (KES posted)</option>
-          <option value="blob">Client blob</option>
-        </select>
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={event => setGlDateFrom(event.target.value)} title="From Date" />
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateTo} onChange={event => setGlDateTo(event.target.value)} title="To Date" />
         {hasPeriodFilter && (

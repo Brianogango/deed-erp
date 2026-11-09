@@ -174,7 +174,15 @@ export async function GET(request: NextRequest) {
 
   // Read-only: the cached lists are used as they are, not copied. Everything
   // below filters / maps into new arrays and only serializes.
-  const state = toLoad.length ? await withSharedReadModels(() => loadAppState(toLoad)) : {}
+  // Journals: browsers get the payroll ones only (lib/journal-read-model.server.ts
+  // loadBrowserJournals); reports read the full ledger on the server.
+  const wantsJournals = toLoad.includes('deed_journalEntries')
+  const tableKeys = wantsJournals ? toLoad.filter(key => key !== 'deed_journalEntries') : toLoad
+  const [state, browserJournals] = await Promise.all([
+    tableKeys.length ? withSharedReadModels(() => loadAppState(tableKeys)) : Promise.resolve({} as Awaited<ReturnType<typeof loadAppState>>),
+    wantsJournals ? import('@/lib/journal-read-model.server').then(m => m.loadBrowserJournals()) : Promise.resolve(null),
+  ])
+  if (browserJournals) (state as Record<string, unknown>).deed_journalEntries = browserJournals
   mark('load')
   // Strip permission-gated and collaborative keys the caller isn't allowed to read.
   for (const key of Object.keys(state)) {
