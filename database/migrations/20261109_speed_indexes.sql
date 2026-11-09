@@ -3,8 +3,10 @@
 -- readable and writable while each index is built. Safe to run again.
 --
 -- Run on the server as the postgres role (psql runs each statement on its
--- own, which CONCURRENTLY needs):
---   cd /var/www/deed-erp && sudo -u postgres psql -v ON_ERROR_STOP=1 -d deed_erp -f database/migrations/20261109_speed_indexes.sql
+-- own, which CONCURRENTLY needs). postgres cannot read the app folder, so
+-- copy the file out first:
+--   install -m 644 /var/www/deed-erp/database/migrations/20261109_speed_indexes.sql /tmp/speed_indexes.sql
+--   sudo -u postgres psql -v ON_ERROR_STOP=1 -d deed_erp -f /tmp/speed_indexes.sql
 
 -- Every invoice read joins its lines by invoice; this had no index (full scan of all lines).
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_invoice_items_invoice ON invoice_items (invoice_id);
