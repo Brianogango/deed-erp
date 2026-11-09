@@ -22,7 +22,26 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
 
-const cache = new Map<string, { fingerprint: string; value: unknown; builtAt: number }>()
+/**
+ * One store per process. Next.js bundles the startup hook (instrumentation.ts,
+ * which warms these caches) separately from the routes, and each bundle gets
+ * its own copy of this module — so the maps live on globalThis, not in it.
+ */
+type CacheState = {
+  cache: Map<string, { fingerprint: string; value: unknown; builtAt: number }>
+  inFlight: Map<string, { fingerprint: string; promise: Promise<unknown> }>
+  rowBuilds: Map<string, { base: string; sigs: Map<string, string>; rows: Map<string, unknown> }>
+  warnedFingerprint: Set<string>
+}
+const STATE_KEY = Symbol.for('deed.readModelCache')
+const state: CacheState = ((globalThis as Record<symbol, CacheState | undefined>)[STATE_KEY] ??= {
+  cache: new Map(),
+  inFlight: new Map(),
+  rowBuilds: new Map(),
+  warnedFingerprint: new Set(),
+})
+
+const cache = state.cache
 
 /**
  * A stored list is rebuilt after this long even when its fingerprint has not
@@ -58,8 +77,8 @@ function copyOf<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T
   }
 }
-const warnedFingerprint = new Set<string>()
-const inFlight = new Map<string, { fingerprint: string; promise: Promise<unknown> }>()
+const warnedFingerprint = state.warnedFingerprint
+const inFlight = state.inFlight
 
 /** Which parts of a `|`-separated fingerprint changed, e.g. "2,5" — for the log. */
 export function changedParts(previous: string | undefined, next: string): string {
@@ -170,7 +189,7 @@ export function clearReadModelCache(name?: string): void {
  * Row objects are shared between builds: callers must not change them (the
  * list cache around this copies them for callers that might).
  */
-const rowBuilds = new Map<string, { base: string; sigs: Map<string, string>; rows: Map<string, unknown> }>()
+const rowBuilds = state.rowBuilds
 
 export async function incrementalRows<R>(opts: {
   name: string

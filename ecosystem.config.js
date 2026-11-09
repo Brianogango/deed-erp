@@ -5,6 +5,7 @@
 //   sessions are JWTs and all state lives in Postgres / the filesystem.
 // - max_memory_restart: a leaking worker is recycled gracefully instead of
 //   being OOM-killed by the kernel.
+// - wait_ready: a new worker takes traffic only once its caches are built.
 // - `next start` is invoked directly (cluster mode needs a node script, and
 //   `prisma generate` already runs during the build step of the deploy).
 module.exports = {
@@ -19,6 +20,11 @@ module.exports = {
       max_memory_restart: '1536M',
       node_args: '--max-old-space-size=2048',
       kill_timeout: 10000,
+      // A new worker builds its caches first and then signals ready
+      // (instrumentation.ts → lib/warmup.server.ts); during a reload the old
+      // worker keeps serving until then. listen_timeout caps the wait.
+      wait_ready: true,
+      listen_timeout: 90000,
       min_uptime: '30s',
       max_restarts: 50,
       env: {
