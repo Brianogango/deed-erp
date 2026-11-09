@@ -41,7 +41,7 @@ function invoicePdfInput(
     date: inv.date,
     dueLabel: 'Due Date',
     dueDate: inv.dueDate,
-    sourceRef: so?.ref,
+    sourceRef: so?.ref || (inv as Invoice & { saleOrderRef?: string }).saleOrderRef || undefined,
     customerPoNumber: inv.customerPoNumber || undefined,
     customerName: inv.partnerName,
     customerAddress: inv.invoiceAddress || [contact?.address, contact?.city, contact?.country].filter(Boolean).join(', ') || undefined,

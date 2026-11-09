@@ -17,7 +17,9 @@ describe('bootApiGroupsForRoute', () => {
 
   it('matches nested finance invoice routes by prefix', () => {
     const groups = bootApiGroupsForRoute('/finance/invoices/abc')
-    expect(groups).toEqual(expect.arrayContaining(['contacts', 'sales']))
+    expect(groups).toEqual(expect.arrayContaining(['contacts']))
+    // Sale-order number and job trail come with the invoice / from the server.
+    expect(groups).not.toContain('sales')
   })
 
   it('does not boot the catalog on Finance first paint', () => {

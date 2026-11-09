@@ -54,7 +54,9 @@ const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
   // CRM lists idle-prefetch so they do not compete with that payload.
   '/finance': ['payroll'],
   '/accounting': ['payroll'],
-  '/finance/invoices': ['contacts', 'sales'],
+  // Invoices carry their sale order's number and the job trail is built on
+  // the server, so the sale-order list is not booted here.
+  '/finance/invoices': ['contacts'],
   '/pos': ['products', 'contacts'],
   '/delivery': ['contacts'],
   '/aftersales': ['products', 'contacts'],

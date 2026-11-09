@@ -1,11 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { useApp } from '@/lib/store'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import { buildJobTrail, type TrailStart } from '@/lib/job-trail'
 import { rememberRecentRecord } from '@/lib/recent-records'
+import { appStateKeysForRoute } from '@/lib/app-state-hydration'
+
+const TRAIL_KEYS = ['deed_repairs_v2', 'deed_saleOrders', 'deed_invoices']
 
 /**
  * One customer job across modules — Repair → Quote → Sale order → Invoice →
@@ -13,14 +17,35 @@ import { rememberRecentRecord } from '@/lib/recent-records'
  */
 export default function JobTrail({ start }: { start: TrailStart }) {
   const { repairs, saleOrders, quotes, invoices, deliveries, currentUserId } = useApp() as any
-  const trail = useMemo(() => buildJobTrail(start, {
+  // Screens that load repairs, sale orders and invoices (Sales, Repairs) build
+  // the trail here; others (Finance) ask the server, which has the lists.
+  const pathname = usePathname() || '/'
+  const local = useMemo(() => {
+    const keys = appStateKeysForRoute(pathname)
+    return TRAIL_KEYS.every(key => keys.includes(key))
+  }, [pathname])
+  const localTrail = useMemo(() => local ? buildJobTrail(start, {
     repairs: repairs ?? [],
     saleOrders: saleOrders ?? [],
     quotes: quotes ?? [],
     invoices: invoices ?? [],
     deliveries: deliveries ?? [],
     invoiceHref: id => financeInvoicePath(id),
-  }), [start.kind, start.id, repairs, saleOrders, quotes, invoices, deliveries])
+  }) : null, [local, start.kind, start.id, repairs, saleOrders, quotes, invoices, deliveries]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [serverTrail, setServerTrail] = useState<ReturnType<typeof buildJobTrail> | null>(null)
+  // A payment or posting on this invoice asks the server again.
+  const startInvoice = start.kind === 'invoice' ? (invoices ?? []).find((i: any) => i.id === start.id) : null
+  const refreshKey = startInvoice ? `${startInvoice.status}:${startInvoice.amountPaid}` : ''
+  useEffect(() => {
+    if (local) return
+    let cancelled = false
+    fetch(`/api/job-trail?kind=${encodeURIComponent(start.kind)}&id=${encodeURIComponent(start.id)}`, { cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (!cancelled && data && Array.isArray(data.steps)) setServerTrail(data) })
+      .catch(() => { /* no trail shown */ })
+    return () => { cancelled = true }
+  }, [local, start.kind, start.id, refreshKey])
+  const trail = localTrail ?? serverTrail ?? { steps: [], next: null }
 
   // The record this trail sits on goes into the sidebar's Recent list.
   const KIND_FOR: Record<TrailStart['kind'], string> = { repair: 'repair', sale_order: 'sale_order', invoice: 'invoice', delivery: 'delivery' }

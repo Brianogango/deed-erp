@@ -214,9 +214,10 @@ async function documentSignatures(): Promise<Array<{ id: string; sig: string }>>
          al AS (SELECT a.invoice_id, string_agg(a::text || p::text, ',' ORDER BY a.id) AS s
                 FROM payment_allocations a JOIN payments p ON p.id = a.payment_id GROUP BY a.invoice_id)
     SELECT i.id::text AS id,
-           md5(i::text || '#' || coalesce(c.name, '') || '#' || coalesce(it.s, '') || '#' || coalesce(pa.s, '') || '#' || coalesce(al.s, '')) AS sig
+           md5(i::text || '#' || coalesce(c.name, '') || '#' || coalesce(so.order_number, '') || '#' || coalesce(it.s, '') || '#' || coalesce(pa.s, '') || '#' || coalesce(al.s, '')) AS sig
     FROM invoices i
     LEFT JOIN clients c ON c.id = i.client_id
+    LEFT JOIN sale_orders so ON so.id = i.sale_order_id
     LEFT JOIN it ON it.invoice_id = i.id
     LEFT JOIN pa ON pa.invoice_id = i.id
     LEFT JOIN al ON al.invoice_id = i.id
@@ -233,7 +234,18 @@ async function convert(rows: DbInvoice[], screenById: Map<string, Row>): Promise
     ? new Map((await prisma.user.findMany({ where: { id: { in: posterIds } }, select: { id: true, username: true } }))
       .map(u => [u.id, personName(u)]))
     : new Map<string, string>()
-  return new Map(rows.map(inv => [inv.id, toScreenInvoice(inv, screenById.get(inv.id), inv.postedById ? posters.get(inv.postedById) : undefined)]))
+  // The sale order's number travels with the invoice (Source column, PDF), so
+  // finance screens do not need the whole sale-order list for it.
+  const orderIds = [...new Set(rows.map(r => r.saleOrderId).filter((id): id is string => Boolean(id)))]
+  const orderRefs = orderIds.length
+    ? new Map((await prisma.saleOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, orderNumber: true } }))
+      .map(o => [o.id, o.orderNumber]))
+    : new Map<string, string>()
+  return new Map(rows.map(inv => {
+    const row = toScreenInvoice(inv, screenById.get(inv.id), inv.postedById ? posters.get(inv.postedById) : undefined)
+    const saleOrderRef = inv.saleOrderId ? orderRefs.get(inv.saleOrderId) : undefined
+    return [inv.id, saleOrderRef ? { ...row, saleOrderRef } : row]
+  }))
 }
 
 /**

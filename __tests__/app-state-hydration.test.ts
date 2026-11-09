@@ -18,7 +18,8 @@ describe('appStateKeysForRoute', () => {
 
   it('uses longest prefix for nested finance invoice routes', () => {
     const keys = appStateKeysForRoute('/finance/invoices/xyz')
-    expect(keys).toContain('deed_saleOrders')
+    // Invoices carry their sale order's number; the job trail is server-built.
+    expect(keys).not.toContain('deed_saleOrders')
     expect(keys).toContain('deed_deliveryJobs')
     expect(keys).toContain('deed_riders')
     expect(keys).not.toContain('deed_journalEntries')
@@ -112,7 +113,10 @@ describe('appStateKeysForRoute', () => {
     expect(deferredAppStateKeysForRoute('/finance')).toContain('deed_products')
 
     expect(criticalAppStateKeysForRoute('/finance/invoices')).toContain('deed_contacts')
-    expect(criticalAppStateKeysForRoute('/finance/invoices')).toContain('deed_saleOrders')
+    for (const key of ['deed_saleOrders', 'deed_quotes', 'deed_repairs_v2']) {
+      expect(appStateKeysForRoute('/finance')).not.toContain(key)
+      expect(appStateKeysForRoute('/finance/invoices')).not.toContain(key)
+    }
   })
 
   it('hydrates stock moves on operations and inventory', () => {

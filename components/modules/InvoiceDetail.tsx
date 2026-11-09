@@ -324,13 +324,15 @@ export default function InvoiceDetail() {
   const linkedDeliveryJob = findInvoiceDeliveryJob(deliveryJobs, invoice)
   const showScheduleDelivery = canScheduleInvoiceDelivery(invoice, linkedDeliveryJob)
   const companyPickup = [companySettings.name, companySettings.address, companySettings.city].filter(Boolean).join(', ')
-  const linkedSaleOrder = saleOrders.find((order: any) => (
+  // Finance does not load the sale-order list: the invoice carries its sale
+  // order's id and number (saleOrderRef, from the server).
+  const linkedSaleOrder: { id: string; ref?: string } | undefined = saleOrders.find((order: any) => (
     order.id === (invoice as any).saleOrderId
     || order.id === (invoice as any).salesOrderId
     || order.ref === (invoice as any).saleOrderRef
     || order.ref === (invoice as any).salesOrderRef
     || order.ref === (invoice as any).sourceRef
-  ))
+  )) ?? ((invoice as any).saleOrderId ? { id: String((invoice as any).saleOrderId), ref: (invoice as any).saleOrderRef } : undefined)
   const invoiceWorkflowSteps = (() => {
     const isPosted = docState === 'posted'
     const isPartPaid = isPosted && (payState === 'partially_paid' || payState === 'in_payment')

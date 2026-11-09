@@ -78,9 +78,12 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   // them. Deferred so the contact list itself opens as fast as before.
   '/contacts': ['deed_contacts', 'deed_customerCredits', 'deed_saleOrders', 'deed_invoices', 'deed_repairs_v2', 'deed_posOrders', 'deed_serials'],
   '/hr': HR_APP_STATE_KEYS,
-  '/finance': ['deed_saleOrders', 'deed_quotes', 'deed_repairs_v2', 'deed_journalEntries', 'deed_accounts', 'deed_bankAccounts', 'deed_bankRecons', 'deed_bankStatementLines', 'deed_invoices', 'deed_expenses', 'deed_deposits', 'deed_refundPayments', 'deed_posOrders', 'deed_payrollRuns', 'deed_purchaseOrders', 'deed_contacts', 'deed_products', 'deed_deliveries', 'deed_documentPaymentDetails', 'deed_deliveryJobs', 'deed_riders', 'deed_customerCredits'],
+  // Sale orders, quotes and repairs are not loaded here: invoices carry their
+  // sale order's number (saleOrderRef) and the job trail comes from
+  // /api/job-trail.
+  '/finance': ['deed_journalEntries', 'deed_accounts', 'deed_bankAccounts', 'deed_bankRecons', 'deed_bankStatementLines', 'deed_invoices', 'deed_expenses', 'deed_deposits', 'deed_refundPayments', 'deed_posOrders', 'deed_payrollRuns', 'deed_purchaseOrders', 'deed_contacts', 'deed_products', 'deed_deliveries', 'deed_documentPaymentDetails', 'deed_deliveryJobs', 'deed_riders', 'deed_customerCredits'],
   '/accounting': ['deed_journalEntries', 'deed_accounts', 'deed_bankAccounts', 'deed_bankRecons', 'deed_bankStatementLines', 'deed_invoices', 'deed_expenses', 'deed_deposits', 'deed_refundPayments', 'deed_posOrders', 'deed_payrollRuns', 'deed_purchaseOrders', 'deed_contacts', 'deed_products', 'deed_deliveries', 'deed_documentPaymentDetails', 'deed_customerCredits'],
-  '/finance/invoices': ['deed_invoices', 'deed_bankAccounts', 'deed_documentPaymentDetails', 'deed_contacts', 'deed_saleOrders', 'deed_deliveryJobs', 'deed_riders', 'deed_customerCredits'],
+  '/finance/invoices': ['deed_invoices', 'deed_bankAccounts', 'deed_documentPaymentDetails', 'deed_contacts', 'deed_deliveryJobs', 'deed_riders', 'deed_customerCredits'],
   '/pos': ['deed_products', 'deed_serials', 'deed_contacts', 'deed_invoices', 'deed_posOrders', 'deed_posSessionOpen', 'deed_posSessionOpeningCash', 'deed_posSessionId', 'deed_posSessions', 'deed_bulkStock', 'deed_stockReservations', 'deed_journalEntries', 'deed_stockMoves', 'deed_customerCredits'],
   '/delivery': ['deed_riders', 'deed_deliveryJobs', 'deed_riderWeeklyPays', 'deed_invoices', 'deed_contacts'],
   '/aftersales': ['deed_returnOrders', 'deed_refundPayments', 'deed_buyBacks', 'deed_donations', 'deed_clientExchanges', 'deed_warranties', 'deed_contacts', 'deed_invoices', 'deed_saleOrders', 'deed_products', 'deed_serials', 'deed_deliveries', 'deed_outboundReleases', 'deed_customerCredits'],
@@ -160,10 +163,6 @@ const DEFERRED_ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
     'deed_refurbishmentJobs',
   ],
   '/finance': [
-    // Job trail on invoices; not needed for the first paint.
-    'deed_saleOrders',
-    'deed_quotes',
-    'deed_repairs_v2',
     'deed_products',
     'deed_contacts',
     'deed_payrollRuns',
