@@ -55,6 +55,8 @@ export type DocKind =
   | 'kilimall_settlement'
   /** Refurbishment jobs (REF/NNNN), yearless. */
   | 'refurbishment'
+  /** Stock adjustments (ADJ/NNNN), yearless. They were counted per browser, so numbers repeated. */
+  | 'adjustment'
 
 // Quotations exist both as CRM quotes and as quotation-state sale orders;
 // they share the QUO prefix and therefore one sequence.
@@ -87,6 +89,7 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   kilimall_dispatch: 'KD',
   kilimall_settlement: 'KS',
   refurbishment: 'REF',
+  adjustment: 'ADJ',
 }
 
 const PREFIX = DOC_PREFIX
@@ -178,6 +181,25 @@ async function maxRefFromAppStateBlob(
 }
 
 /** Highest sequence among existing documents for this prefix (and year, for per-year kinds). */
+/**
+ * Yearless PREFIX/NNNN numbers for records kept in an app-state collection:
+ * their counter row, and where the numbers already in use live (the seed).
+ */
+const YEARLESS: Partial<Record<DocKind, { counter: string; key: string }>> = {
+  outsource: { counter: 'out_seq', key: 'deed_outsourceJobs' },
+  outsource_payment: { counter: 'opay_seq', key: 'deed_outsourcePayments' },
+  rider_pay: { counter: 'rwp_seq', key: 'deed_riderWeeklyPays' },
+  expense: { counter: 'exp_seq', key: 'deed_expenses' },
+  opportunity: { counter: 'opp_seq', key: 'deed_opportunities' },
+  contract: { counter: 'ctr_seq', key: 'deed_customerContracts' },
+  purchase_return: { counter: 'ret_seq', key: 'deed_purchaseReturns' },
+  kilimall_order: { counter: 'ko_seq', key: 'deed_kilimallOrders' },
+  kilimall_dispatch: { counter: 'kd_seq', key: 'deed_kilimallDispatches' },
+  kilimall_settlement: { counter: 'ks_seq', key: 'deed_kilimallSettlements' },
+  refurbishment: { counter: 'ref_seq', key: 'deed_refurbishmentJobs' },
+  adjustment: { counter: 'adj_seq', key: 'deed_stockAdjustments' },
+}
+
 async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
   try {
     let rows: Record<string, unknown>[]
@@ -186,6 +208,8 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
       return Number(rows?.[0]?.max_num ?? 0)
     }
     const prefix = PREFIX[kind]
+    const yearless = YEARLESS[kind]
+    if (yearless) return maxYearlessSeq(yearless.key, prefix)
     const pattern = `^${prefix}/${year}/[0-9]+$`
     switch (kind) {
       case 'quote':
@@ -247,31 +271,9 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
         return maxRefFromAppStateBlob('deed_buyBacks', i => String(i.ref ?? ''), prefix, year)
       case 'exchange':
         return maxRefFromAppStateBlob('deed_clientExchanges', i => String(i.ref ?? ''), prefix, year)
-      case 'outsource':
-        return maxYearlessSeq('deed_outsourceJobs', prefix)
-      case 'outsource_payment':
-        return maxYearlessSeq('deed_outsourcePayments', prefix)
-      case 'rider_pay':
-        return maxYearlessSeq('deed_riderWeeklyPays', prefix)
-      case 'expense':
-        return maxYearlessSeq('deed_expenses', prefix)
-      case 'opportunity':
-        return maxYearlessSeq('deed_opportunities', prefix)
-      case 'contract':
-        return maxYearlessSeq('deed_customerContracts', prefix)
-      case 'purchase_return':
-        return maxYearlessSeq('deed_purchaseReturns', prefix)
       case 'vendor_credit':
         ({ rows } = await sql`SELECT COALESCE(MAX((substring(invoice_number from '[0-9]+$'))::int), 0) AS max_num FROM invoices WHERE invoice_number ~ ${pattern}`)
         break
-      case 'kilimall_order':
-        return maxYearlessSeq('deed_kilimallOrders', prefix)
-      case 'kilimall_dispatch':
-        return maxYearlessSeq('deed_kilimallDispatches', prefix)
-      case 'kilimall_settlement':
-        return maxYearlessSeq('deed_kilimallSettlements', prefix)
-      case 'refurbishment':
-        return maxYearlessSeq('deed_refurbishmentJobs', prefix)
       default:
         return 0
     }
@@ -321,7 +323,8 @@ export async function reserveCounterValues(counterId: string, count: number, see
  */
 export async function getNextDocNumber(kind: DocKind): Promise<string> {
   const year = new Date().getFullYear()
-  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : kind === 'outsource' ? 'out_seq' : kind === 'outsource_payment' ? 'opay_seq' : kind === 'rider_pay' ? 'rwp_seq' : kind === 'expense' ? 'exp_seq' : kind === 'opportunity' ? 'opp_seq' : kind === 'contract' ? 'ctr_seq' : kind === 'purchase_return' ? 'ret_seq' : kind === 'kilimall_order' ? 'ko_seq' : kind === 'kilimall_dispatch' ? 'kd_seq' : kind === 'kilimall_settlement' ? 'ks_seq' : kind === 'refurbishment' ? 'ref_seq' : `${PREFIX[kind]}_${year}`
+  const yearless = YEARLESS[kind]
+  const counterId = kind === 'client' ? 'client_seq' : kind === 'pos' ? 'pos_seq' : kind === 'delivery_job' ? 'djb_seq' : yearless ? yearless.counter : `${PREFIX[kind]}_${year}`
 
   const nextValue = await reserveCounterValues(counterId, 1, () => seedFromExisting(kind, year))
 
@@ -329,6 +332,6 @@ export async function getNextDocNumber(kind: DocKind): Promise<string> {
   if (kind === 'client') return `CLT-${String(nextValue).padStart(5, '0')}`
   if (kind === 'pos') return `POS/${String(nextValue).padStart(4, '0')}`
   if (kind === 'delivery_job') return `DJB/${String(nextValue).padStart(4, '0')}`
-  if (kind === 'outsource' || kind === 'outsource_payment' || kind === 'rider_pay' || kind === 'expense' || kind === 'opportunity' || kind === 'contract' || kind === 'purchase_return' || kind === 'kilimall_order' || kind === 'kilimall_dispatch' || kind === 'kilimall_settlement' || kind === 'refurbishment') return `${PREFIX[kind]}/${String(nextValue).padStart(4, '0')}`
+  if (yearless) return `${PREFIX[kind]}/${String(nextValue).padStart(4, '0')}`
   return `${PREFIX[kind]}/${year}/${String(nextValue).padStart(4, '0')}`
 }

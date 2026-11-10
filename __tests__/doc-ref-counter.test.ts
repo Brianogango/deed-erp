@@ -38,6 +38,7 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   kilimall_dispatch: 'KD',
   kilimall_settlement: 'KS',
   refurbishment: 'REF',
+  adjustment: 'ADJ',
 }
 
 beforeEach(() => {
@@ -77,6 +78,7 @@ describe('prefixToKind()', () => {
     expect(prefixToKind('KD')).toBe('kilimall_dispatch')
     expect(prefixToKind('KS')).toBe('kilimall_settlement')
     expect(prefixToKind('REF')).toBe('refurbishment')
+    expect(prefixToKind('ADJ')).toBe('adjustment')
   })
 })
 

@@ -13,6 +13,7 @@ export { isPosBankPayment }
 import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosSessionRef, nextPosTicketRef } from '@/lib/pos-orders-merge'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { allocateDocNumber, allocateDocNumberSync } from '@/lib/doc-numbers'
+import { adjustmentsMissingValuation, isProvisionalDocRef, recordsNeedingNumbers } from '@/lib/doc-number-repair'
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
@@ -2853,6 +2854,8 @@ interface StockAdjustment {
   writeOffAccountCode?: string
   requestedBy: string; approvedBy?: string
   date: string; approvedDate?: string
+  /** The number it had before renumbering (it repeated another's); its journals and moves carry it. */
+  formerRef?: string
 }
 
 const canApproveInventoryAction = (user: User | null) =>
@@ -3969,6 +3972,8 @@ interface AppState {
   /** Machines with no readable serial: tagged (UNK-…) and queued for refurbishment. Returns the tags. */
   /** Give server numbers to jobs with a duplicate or temporary REF number. Returns how many. */
   fixRefurbJobNumbers: () => number
+  /** Repeated or stand-in adjustment numbers get server numbers; also lists approved ones whose stock value may not have posted. */
+  fixAdjustmentNumbers: () => { renumbered: number; missingValuation: Array<{ id: string; ref: string; formerRef?: string; productName: string; type: string; qty: number }> }
   intakeTaggedMachines: (input: TaggedIntakeInput) => Promise<string[] | null>
   /** Record a tagged machine's real serial (and model / specs). */
   identifyRefurbUnit: (jobId: string, input: { serial: string; productId?: string; specs?: string }) => Promise<boolean>
@@ -4243,6 +4248,7 @@ type InventoryStoreState = Pick<AppState,
   | 'transferToSell'
   | 'createAdjustment'
   | 'approveAdjustment'
+  | 'fixAdjustmentNumbers'
 >
 
 type SalesStoreState = Pick<AppState,
@@ -7589,27 +7595,46 @@ function StoreProvider({
    * new job gets a temporary, clash-free number and its real one a moment
    * later.
    */
-  const numberRefurbJobs = (ids: string[]) => {
+  /**
+   * Give records their real server numbers, one at a time (PREFIX/NNNN).
+   * Records numbered in the browser used to repeat; see lib/doc-number-repair.ts.
+   */
+  const assignServerNumbers = (kind: string, prefix: string, ids: string[], apply: (id: string, ref: string) => void) => {
     if (!ids.length || typeof window === 'undefined') return
+    const valid = new RegExp(`^${prefix}/\\d+$`)
     void (async () => {
       for (const id of ids) {
-        const ref = await allocateDocNumber('refurbishment').catch(() => null)
-        if (!ref || !/^REF\/\d+$/.test(ref)) continue
-        setRefurbishmentJobs(p => p.map(j => j.id === id ? { ...j, ref } : j))
+        const ref = await allocateDocNumber(kind).catch(() => null)
+        if (ref && valid.test(ref)) apply(id, ref)
       }
     })()
   }
+  const numberRefurbJobs = (ids: string[]) =>
+    assignServerNumbers('refurbishment', 'REF', ids, (id, ref) => setRefurbishmentJobs(p => p.map(j => j.id === id ? { ...j, ref } : j)))
   /** Jobs whose number another job already has, or still a temporary one. */
-  const refurbJobsNeedingNumbers = (jobs: RefurbishmentJob[]): string[] => {
-    const seen = new Set<string>()
-    const out: string[] = []
-    const byAge = [...jobs].sort((a, b) => String(a.intakeDate).localeCompare(String(b.intakeDate)))
-    for (const j of byAge) {
-      if (!/^REF\/\d+$/.test(j.ref) || seen.has(j.ref)) out.push(j.id)
-      else seen.add(j.ref)
-    }
-    return out
+  const refurbJobsNeedingNumbers = (jobs: RefurbishmentJob[]): string[] =>
+    recordsNeedingNumbers(jobs, { dateOf: j => j.intakeDate, isFinal: ref => /^REF\/\d+$/.test(ref) })
+
+  /**
+   * A stock adjustment's real number. A repeated old number is kept as
+   * `formerRef` (its journals and stock moves carry it). A stand-in number is
+   * also replaced where a parts request recorded it.
+   */
+  const applyAdjustmentNumber = (id: string, ref: string) => {
+    const old = adjRef.current.find(a => a.id === id)?.ref
+    setStockAdjustments(p => p.map(a => a.id !== id ? a : {
+      ...a, ref, ...(!a.formerRef && a.ref && !isProvisionalDocRef(a.ref) ? { formerRef: a.ref } : {}),
+    }))
+    if (!old || !isProvisionalDocRef(old)) return
+    const swap = (refs?: string[]) => refs?.map(r => (r === old ? ref : r))
+    setRepairs(p => p.some(r => r.procurementRequests?.some(q => q.adjustmentRefs?.includes(old)))
+      ? p.map(r => ({ ...r, procurementRequests: r.procurementRequests?.map(q => q.adjustmentRefs?.includes(old) ? { ...q, adjustmentRefs: swap(q.adjustmentRefs) } : q) }))
+      : p)
+    setRefurbishmentJobs(p => p.some(j => j.partsNeeded.some(pt => pt.adjustmentRefs?.includes(old)))
+      ? p.map(j => ({ ...j, partsNeeded: j.partsNeeded.map(pt => pt.adjustmentRefs?.includes(old) ? { ...pt, adjustmentRefs: swap(pt.adjustmentRefs) } : pt) }))
+      : p)
   }
+  const numberAdjustments = (ids: string[]) => assignServerNumbers('adjustment', 'ADJ', ids, applyAdjustmentNumber)
   const openTradeInRefurbJobs = (units: Array<{ serialId: string; issue: string; cost?: number; sourceRef: string }>) => {
     const open = new Set(refurbishmentJobs.filter(j => j.status !== 'transferred' && j.status !== 'written_off').map(j => j.serialId))
     const jobs: RefurbishmentJob[] = []
@@ -7829,6 +7854,7 @@ function StoreProvider({
     transferToSell: (...args: Parameters<AppState['transferToSell']>) => storeCtxRef.current!.transferToSell(...args),
     createAdjustment: (...args: Parameters<AppState['createAdjustment']>) => storeCtxRef.current!.createAdjustment(...args),
     approveAdjustment: (...args: Parameters<AppState['approveAdjustment']>) => storeCtxRef.current!.approveAdjustment(...args),
+    fixAdjustmentNumbers: () => storeCtxRef.current!.fixAdjustmentNumbers(),
   }), [])
 
   const salesActions = useMemo(() => ({
@@ -8127,6 +8153,7 @@ function StoreProvider({
     writeOffRefurbishmentJob: (...args: Parameters<AppState['writeOffRefurbishmentJob']>) => storeCtxRef.current!.writeOffRefurbishmentJob(...args),
     restoreRefurbishmentJob: (...args: Parameters<AppState['restoreRefurbishmentJob']>) => storeCtxRef.current!.restoreRefurbishmentJob(...args),
     fixRefurbJobNumbers: () => storeCtxRef.current!.fixRefurbJobNumbers(),
+    fixAdjustmentNumbers: () => storeCtxRef.current!.fixAdjustmentNumbers(),
     intakeTaggedMachines: (...args: Parameters<AppState['intakeTaggedMachines']>) => storeCtxRef.current!.intakeTaggedMachines(...args),
     identifyRefurbUnit: (...args: Parameters<AppState['identifyRefurbUnit']>) => storeCtxRef.current!.identifyRefurbUnit(...args),
     harvestRefurbishmentJob: (...args: Parameters<AppState['harvestRefurbishmentJob']>) => storeCtxRef.current!.harvestRefurbishmentJob(...args),
@@ -16496,6 +16523,13 @@ const storeCtx: AppState = {
       numberRefurbJobs(ids)
       return ids.length
     },
+    fixAdjustmentNumbers: () => {
+      const ids = recordsNeedingNumbers(stockAdjustments, { dateOf: a => a.date })
+      numberAdjustments(ids)
+      const missingValuation = adjustmentsMissingValuation(stockAdjustments)
+        .map(a => ({ id: a.id, ref: a.ref, formerRef: a.formerRef, productName: a.productName, type: a.type, qty: a.qty }))
+      return { renumbered: ids.length, missingValuation }
+    },
     intakeTaggedMachines: async (input) => {
       try {
         const res = await fetch('/api/refurbishment/intake', {
@@ -20964,21 +20998,33 @@ const storeCtx: AppState = {
         throw new Error('Missing stock variance account')
       }
       const adj: StockAdjustment = {
-        id: uid(), ref: seq('ADJ', 'adj'), productId, productName, type, qty, reason, notes,
+        // A stand-in number until the server's arrives a moment later (it
+        // used to be counted per browser, so ADJ/0001 repeated).
+        id: uid(), ref: allocateDocNumberSync('ADJ'), productId, productName, type, qty, reason, notes,
         inventoryAccountCode: resolved?.inventoryAccountCode,
         varianceAccountCode,
         writeOffAccountCode,
         status: 'pending', requestedBy: currentUser()?.name ?? 'Unknown', date: now(),
       }
       setStockAdjustments(p => [adj, ...p])
+      numberAdjustments([adj.id])
       addAuditLog('create_adjustment', adj.ref, `Stock adjustment requested for ${productName}`)
-      showToast(`${adj.ref} submitted for approval`)
+      showToast('Adjustment submitted for approval')
       return adj
     },
     approveAdjustment: async (adjId, approved) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can approve adjustments', 'error'); return }
-      const adj = adjRef.current.find(a => a.id === adjId)
+      let adj = adjRef.current.find(a => a.id === adjId)
       if (!adj) return
+      // Its stock value and journal are posted under its number, and the
+      // valuation skips a number it has seen for this product: so it needs its
+      // own server number first (not a stand-in, not one another adjustment has).
+      if (approved && (isProvisionalDocRef(adj.ref) || adjRef.current.some(a => a.id !== adjId && a.ref === adj!.ref))) {
+        const ref = await allocateDocNumber('adjustment').catch(() => null)
+        if (!ref || !/^ADJ\/\d+$/.test(ref)) { showToast('Could not get a number for this adjustment from the server — try again', 'error'); return }
+        applyAdjustmentNumber(adjId, ref)
+        adj = { ...adj, ref }
+      }
       if (approved) {
         const prod = prodRef.current.find(x => x.id === adj.productId)
         if (prod) {

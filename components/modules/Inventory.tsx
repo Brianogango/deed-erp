@@ -21,6 +21,7 @@ import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamatio
 import { printProductLabels } from '@/lib/product-label'
 import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { TaggedIntakeModal } from '@/components/refurbishment/TaggedIntakeModal'
+import { useRouteDataReady } from '@/lib/route-data-ready'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
@@ -182,7 +183,7 @@ function InventoryContent() {
     refurbishmentJobs, createRefurbishmentJob, transferToSell,
     systemSettings,
     bulkStock,
-    stockAdjustments, createAdjustment, approveAdjustment,
+    stockAdjustments, createAdjustment, approveAdjustment, fixAdjustmentNumbers,
     saleOrders, releaseSerialToStock,
     normalizeInventoryTags,
   } = useInventoryStore()
@@ -665,6 +666,25 @@ function InventoryContent() {
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
   const canRequestAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(currentUser.role)
   const canApproveAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead'].includes(currentUser.role)
+
+  // Adjustment numbers used to be counted per browser, so ADJ/0001 repeated.
+  // An approver opening Adjustments gives the repeats real numbers, once, and
+  // sees the approved ones whose stock value may not have posted.
+  const inventoryDataReady = useRouteDataReady('/inventory')
+  const adjNumbersFixed = useRef(false)
+  const [adjMissingValuationIds, setAdjMissingValuationIds] = useState<string[]>([])
+  // Shown from the live records, so a renumbered one shows its new number.
+  const adjMissingValuation = useMemo(
+    () => stockAdjustments.filter(a => adjMissingValuationIds.includes(a.id)),
+    [stockAdjustments, adjMissingValuationIds],
+  )
+  useEffect(() => {
+    if (tab !== 'adjustments' || !canApproveAdj || !inventoryDataReady || adjNumbersFixed.current || !stockAdjustments.length) return
+    adjNumbersFixed.current = true
+    const out = fixAdjustmentNumbers()
+    setAdjMissingValuationIds(out.missingValuation.map(a => a.id))
+    if (out.renumbered > 0) showToast(`Giving ${out.renumbered} adjustment${out.renumbered === 1 ? '' : 's'} a unique number`, 'info')
+  }, [tab, canApproveAdj, inventoryDataReady, stockAdjustments.length, fixAdjustmentNumbers, showToast])
   const canUpdatePrice = !!currentUser && ['director', 'admin_officer', 'finance_officer', 'inventory_officer'].includes(currentUser.role)
   const canMergeProducts = canArchiveProduct(currentUser?.role)
 
@@ -2883,6 +2903,23 @@ function InventoryContent() {
 
         return (
           <div className="flex flex-col gap-4">
+            {adjMissingValuation.length > 0 && (
+              <div role="status" className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+                <p className="text-[12px] font-extrabold text-amber-900">
+                  {adjMissingValuation.length} approved adjustment{adjMissingValuation.length === 1 ? '' : 's'} may not have posted a stock value
+                </p>
+                <p className="mt-0.5 text-[11px] text-amber-900">
+                  Their stock count moved, but their number repeated an earlier adjustment for the same product, so the stock value and journal were skipped. Check these with your accountant before posting anything.
+                </p>
+                <ul className="mt-1.5 list-none p-0 text-[11px] text-amber-900">
+                  {adjMissingValuation.map(a => (
+                    <li key={a.id} className="font-mono">
+                      {a.ref}{a.formerRef ? ` (was ${a.formerRef})` : ''} · {a.type === 'add' ? '+' : '−'}{a.qty} {a.productName}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {/* KPI row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="card p-3 flex flex-col gap-1">
@@ -2940,8 +2977,14 @@ function InventoryContent() {
                 columns={[
                   {
                     key: 'ref', label: 'Ref', priority: 1, width: '110px',
-                    render: adj => <span className="font-mono text-[11px] font-bold text-primary-700">{adj.ref}</span>,
-                    exportValue: adj => adj.ref,
+                    render: adj => (
+                      <span className="font-mono text-[11px] font-bold text-primary-700">
+                        {adj.ref}
+                        {adj.formerRef ? <span className="block text-[10px] font-normal text-text-3" title="Its old number repeated another adjustment's; its journal and stock moves carry the old number">was {adj.formerRef}</span> : null}
+                      </span>
+                    ),
+                    accessor: adj => `${adj.ref} ${adj.formerRef ?? ''}`,
+                    exportValue: adj => adj.formerRef ? `${adj.ref} (was ${adj.formerRef})` : adj.ref,
                   },
                   {
                     key: 'date', label: 'Date', priority: 2, width: '100px',
