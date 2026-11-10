@@ -39,6 +39,12 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   kilimall_settlement: 'KS',
   refurbishment: 'REF',
   adjustment: 'ADJ',
+  transfer: 'TR',
+  return_order: 'RMA',
+  donation: 'DON',
+  refund_payment: 'RFD',
+  pos_session: 'POSSESS',
+  proforma: 'PFI',
 }
 
 beforeEach(() => {

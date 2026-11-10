@@ -1,5 +1,6 @@
 // @ts-nocheck
 'use client'
+import { FormerRefNote, refWithFormer } from '@/components/erp/FormerRefNote'
 import { Suspense, useState, useMemo, useEffect } from 'react'
 import { EWarrantyActions } from '@/components/aftersales/EWarrantyActions'
 import { WarrantyRepairs } from '@/components/aftersales/WarrantyRepairs'
@@ -705,7 +706,8 @@ function AfterSalesContent() {
   const rmaColumns: ColumnDef<ReturnOrder>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '100px',
-      render: rma => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{rma.ref}</span>,
+      render: rma => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{rma.ref}<FormerRefNote formerRef={rma.formerRef} /></span>,
+      accessor: rma => refWithFormer(rma),
     },
     {
       key: 'customer', label: 'Customer', priority: 1, width: '1fr',

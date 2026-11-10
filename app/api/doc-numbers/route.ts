@@ -31,6 +31,12 @@ const VALID_KINDS = new Set<DocKind>([
   'kilimall_settlement',
   'refurbishment',
   'adjustment',
+  'transfer',
+  'return_order',
+  'donation',
+  'refund_payment',
+  'pos_session',
+  'proforma',
 ])
 
 export async function POST(request: NextRequest) {

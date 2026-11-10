@@ -5,6 +5,7 @@ import { useFinanceStore, fmtDate, fmtKes, type RefundPayment } from '@/lib/stor
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Modal } from '@/components/ui'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
+import NumberCheckNotice from '@/components/accounting/NumberCheckNotice'
 
 const refundMethodLabel = (method: string) => {
   if (method === 'mpesa') return 'M-Pesa'
@@ -93,6 +94,7 @@ export default function RefundsTab() {
 
   return (
     <div className="flex min-h-0 flex-col">
+      <NumberCheckNotice />
       <div className="flex flex-wrap items-center gap-6 border-b px-4 py-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
         <div>
           <p className="mb-0.5 text-[10px] text-t3">Refunds shown</p>

@@ -49,11 +49,11 @@ import {
   fmtDate,
   LOCATIONS,
   SerialNumber,
-  docSeq,
   resolveProductAccounts,
 } from '@/lib/store'
 import { canCreateProductFromSales, hasExactProduct, similarProducts } from '@/lib/sales/similar-products'
 import ProductFormModal from '@/components/inventory/ProductFormModal'
+import { allocateDocNumber } from '@/lib/doc-numbers'
 import {
   Badge,
   Modal,
@@ -1790,7 +1790,10 @@ function SalesContent() {
   const downloadProformaInvoice = async (so: SalesOrderView) => {
     let piRef = so.proformaRef
     if (!piRef) {
-      piRef = docSeq('PFI')
+      // From the server: the browser's own count repeated across browsers.
+      const issued = await allocateDocNumber('proforma').catch(() => null)
+      if (!issued) { showToast('Could not get a pro-forma number from the server — try again', 'error'); return }
+      piRef = issued
       updateSaleOrder(so.id, { proformaRef: piRef })
     }
     try {

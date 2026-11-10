@@ -1,4 +1,5 @@
 'use client'
+import { FormerRefNote, refWithFormer } from '@/components/erp/FormerRefNote'
 import React, { useCallback, useMemo, useState, useRef, useEffect, Suspense } from 'react'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { readXlsx } from '@/lib/inventory/read-xlsx'
@@ -2822,8 +2823,9 @@ function InventoryContent() {
             columns={[
               {
                 key: 'ref', label: 'Ref', priority: 1, width: '120px',
-                render: transfer => <span className="font-mono text-[11px] font-bold text-primary-700">{transfer.ref}</span>,
-                exportValue: transfer => transfer.ref,
+                render: transfer => <span className="font-mono text-[11px] font-bold text-primary-700">{transfer.ref}<FormerRefNote formerRef={transfer.formerRef} /></span>,
+                accessor: transfer => refWithFormer(transfer),
+                exportValue: transfer => refWithFormer(transfer),
               },
               {
                 key: 'from', label: 'From', priority: 1, width: '120px',
@@ -2980,11 +2982,11 @@ function InventoryContent() {
                     render: adj => (
                       <span className="font-mono text-[11px] font-bold text-primary-700">
                         {adj.ref}
-                        {adj.formerRef ? <span className="block text-[10px] font-normal text-text-3" title="Its old number repeated another adjustment's; its journal and stock moves carry the old number">was {adj.formerRef}</span> : null}
+                        <FormerRefNote formerRef={adj.formerRef} />
                       </span>
                     ),
-                    accessor: adj => `${adj.ref} ${adj.formerRef ?? ''}`,
-                    exportValue: adj => adj.formerRef ? `${adj.ref} (was ${adj.formerRef})` : adj.ref,
+                    accessor: adj => refWithFormer(adj),
+                    exportValue: adj => refWithFormer(adj),
                   },
                   {
                     key: 'date', label: 'Date', priority: 2, width: '100px',

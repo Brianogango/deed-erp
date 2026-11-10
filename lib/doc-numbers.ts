@@ -32,6 +32,12 @@ type DocKind =
   | 'kilimall_settlement'
   | 'refurbishment'
   | 'adjustment'
+  | 'transfer'
+  | 'return_order'
+  | 'donation'
+  | 'refund_payment'
+  | 'pos_session'
+  | 'proforma'
 
 const PREFIX_TO_KIND: Record<string, DocKind> = {
   QUO: 'quotation',
@@ -61,6 +67,12 @@ const PREFIX_TO_KIND: Record<string, DocKind> = {
   KS: 'kilimall_settlement',
   REF: 'refurbishment',
   ADJ: 'adjustment',
+  TR: 'transfer',
+  RMA: 'return_order',
+  DON: 'donation',
+  RFD: 'refund_payment',
+  POSSESS: 'pos_session',
+  PFI: 'proforma',
 }
 
 export function prefixToKind(prefix: string): DocKind | undefined {

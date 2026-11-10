@@ -7,8 +7,9 @@
 // Context — they're injected once via setHrContext() rather than imported here, so this
 // store doesn't reach back into lib/store.tsx's StoreProvider.
 import { create } from 'zustand'
+import { allocateDocNumberSync } from '@/lib/doc-numbers'
 import {
-  uid, now, seq, canManageHR, debouncedServerSync,
+  uid, now, canManageHR, debouncedServerSync,
   type Employee, type Department, type LeaveBalance, type LeaveRequest, type HRDocument,
   type JobPosting, type Candidate, type TrainingProgram, type EmployeeTraining,
   type User, type WorkflowApproval,
@@ -279,7 +280,7 @@ export const useHrStore = create<HrState>((set, get) => ({
     const leave: LeaveRequest = {
       ...request,
       id: uid(),
-      ref: seq('LV', 'ret'),
+      ref: allocateDocNumberSync('LV'),
       submittedDate: now(),
       status: isHRBooking ? 'approved' : 'pending_hr',
       submittedByUserId: user.id,
@@ -515,7 +516,7 @@ export const useHrStore = create<HrState>((set, get) => ({
       )
       if (alreadyApplied) continue
       newReqs.push({
-        id: uid(), ref: seq('LV', 'ret'),
+        id: uid(), ref: allocateDocNumberSync('LV'),
         employeeId: emp.id, employeeName: emp.fullName,
         leaveType: 'december_closure',
         startDate, endDate, days,

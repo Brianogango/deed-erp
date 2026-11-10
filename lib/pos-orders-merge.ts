@@ -133,11 +133,6 @@ export function nextPosTicketRef(existingRefs: string[]): string {
   return nextPrefixedRef('POS', existingRefs, 'deed_seq2_pos_ticket')
 }
 
-/** Next POS session number — separate high-water from ticket refs. */
-export function nextPosSessionRef(existingRefs: string[]): string {
-  return nextPrefixedRef('POSSESS', existingRefs, 'deed_seq2_possess')
-}
-
 /**
  * Union store writes so a stale shorter list cannot drop POS tickets.
  * Incoming rows update matching ids; server-only ids are kept; incoming-only

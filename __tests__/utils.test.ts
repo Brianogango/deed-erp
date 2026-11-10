@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { uid, isUUID, now, seq, addDays } from '@/lib/utils'
+import { uid, isUUID, now, addDays } from '@/lib/utils'
 
 describe('uid()', () => {
   it('returns a valid UUID', () => {
@@ -94,17 +94,3 @@ describe('addDays()', () => {
   })
 })
 
-describe('seq()', () => {
-  it('returns "prefix/NNNN" format', () => {
-    expect(seq('INV')).toMatch(/^INV\/\d{4}$/)
-  })
-
-  it('zero-pads to exactly 4 digits', () => {
-    const [, num] = seq('PO').split('/')
-    expect(num).toHaveLength(4)
-  })
-
-  it('uses the provided prefix', () => {
-    expect(seq('DEED')).toMatch(/^DEED\//)
-  })
-})

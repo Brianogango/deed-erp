@@ -57,6 +57,15 @@ export type DocKind =
   | 'refurbishment'
   /** Stock adjustments (ADJ/NNNN), yearless. They were counted per browser, so numbers repeated. */
   | 'adjustment'
+  /** Stock transfers (TR/NNNN), customer returns (RMA/NNNN), donations (DON/NNNN), refund payments (RFD/NNNN) — the same. */
+  | 'transfer'
+  | 'return_order'
+  | 'donation'
+  | 'refund_payment'
+  /** POS till sessions (POSSESS/NNNN): their close journal is JRN/<number>, so a repeat dropped it. */
+  | 'pos_session'
+  /** Pro-forma invoices (PFI/YYYY/NNNN), kept on the sale order; were counted per browser. */
+  | 'proforma'
 
 // Quotations exist both as CRM quotes and as quotation-state sale orders;
 // they share the QUO prefix and therefore one sequence.
@@ -90,6 +99,12 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   kilimall_settlement: 'KS',
   refurbishment: 'REF',
   adjustment: 'ADJ',
+  transfer: 'TR',
+  return_order: 'RMA',
+  donation: 'DON',
+  refund_payment: 'RFD',
+  pos_session: 'POSSESS',
+  proforma: 'PFI',
 }
 
 const PREFIX = DOC_PREFIX
@@ -198,6 +213,11 @@ const YEARLESS: Partial<Record<DocKind, { counter: string; key: string }>> = {
   kilimall_settlement: { counter: 'ks_seq', key: 'deed_kilimallSettlements' },
   refurbishment: { counter: 'ref_seq', key: 'deed_refurbishmentJobs' },
   adjustment: { counter: 'adj_seq', key: 'deed_stockAdjustments' },
+  transfer: { counter: 'tr_seq', key: 'deed_stockTransfers' },
+  return_order: { counter: 'rma_seq', key: 'deed_returnOrders' },
+  donation: { counter: 'don_seq', key: 'deed_donations' },
+  refund_payment: { counter: 'rfd_seq', key: 'deed_refundPayments' },
+  pos_session: { counter: 'possess_seq', key: 'deed_posSessions' },
 }
 
 async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
@@ -226,6 +246,9 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
         break
       case 'sale_order':
         ({ rows } = await sql`SELECT COALESCE(MAX((substring(order_number from '[0-9]+$'))::int), 0) AS max_num FROM sale_orders WHERE order_number ~ ${pattern}`)
+        break
+      case 'proforma':
+        ({ rows } = await sql`SELECT COALESCE(MAX((substring(proforma_ref from '[0-9]+$'))::int), 0) AS max_num FROM sale_orders WHERE proforma_ref ~ ${pattern}`)
         break
       case 'purchase_order':
         return maxRefFromAppStateBlob('deed_purchaseOrders', i => String(i.ref ?? ''), prefix, year)

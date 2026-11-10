@@ -3,7 +3,6 @@ import {
   mergeDirtyPosOrdersBlob,
   mergePosOrdersRemoteState,
   mergePosOrdersStoreWrite,
-  nextPosSessionRef,
   nextPosTicketRef,
 } from '@/lib/pos-orders-merge'
 
@@ -104,8 +103,8 @@ describe('nextPosTicketRef', () => {
     expect(nextPosTicketRef(['POS/0016', 'POSSESS/0020', 'POS/0013'])).toBe('POS/0017')
   })
 
+  // Session numbers come from the server (doc kind pos_session).
   it('does not share a counter with session refs', () => {
-    expect(nextPosSessionRef(['POSSESS/0013', 'POS/0019'])).toBe('POSSESS/0014')
     expect(nextPosTicketRef(['POS/0019', 'POSSESS/0099'])).toBe('POS/0020')
   })
 })

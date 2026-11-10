@@ -10,10 +10,13 @@ import {
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
 export { isPosBankPayment }
-import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosSessionRef, nextPosTicketRef } from '@/lib/pos-orders-merge'
+import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosTicketRef } from '@/lib/pos-orders-merge'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { allocateDocNumber, allocateDocNumberSync } from '@/lib/doc-numbers'
 import { adjustmentsMissingValuation, isProvisionalDocRef, recordsNeedingNumbers } from '@/lib/doc-number-repair'
+import { allocateRepairRef, takenRepairRefs } from '@/lib/repair-ref'
+import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
+import { useRouteDataReady } from '@/lib/route-data-ready'
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
@@ -239,7 +242,7 @@ import { repairOutsourceReadiness, repairHasLoggedDiagnosis } from '@/lib/repair
 import { applyLoggedDiagnosis, type DiagnosisLogRepairPatch } from '@/lib/repair-diagnosis-log'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
 import { evaluateRepairTransition } from '@/lib/repair-transition-policy'
-import { assertFiniteSequenceNext, repairDatesWriteError } from '@/lib/data-validation'
+import { repairDatesWriteError } from '@/lib/data-validation'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 import { EXCHANGE_RETURN_LOCATION } from '@/lib/aftersales/exchange-stock'
 import {
@@ -1825,6 +1828,8 @@ export interface Receipt {
 
 // Stock Transfer between internal locations
 interface StockTransfer {
+  /** Its old number, when that repeated another's (moves and journals carry it). */
+  formerRef?: string
   id: string; ref: string
   fromLocation: LocationId; toLocation: LocationId
   status: 'draft' | 'done'
@@ -2304,6 +2309,8 @@ export interface ReturnOrderLine {
 
 export interface ReturnOrder {
   id: string; ref: string
+  /** Its old number, when that repeated another's (stock moves and valuation carry it). */
+  formerRef?: string
   saleOrderId: string; saleOrderRef: string
   customerId: string; customerName: string
   status: RMAStatus
@@ -2368,6 +2375,8 @@ export interface DonationLine {
 }
 
 export interface Donation {
+  /** Its old number, when that repeated another's (moves and journals carry it). */
+  formerRef?: string
   id: string; ref: string
   type: DonationType
   party: string          // donor name (in) or recipient name (out)
@@ -2441,6 +2450,8 @@ export interface POSOrder {
 }
 
 interface POSSession {
+  /** Its old number, when that repeated another's (its close journal carries it). */
+  formerRef?: string
   id: string
   ref: string
   status: 'open' | 'closed'
@@ -2825,6 +2836,8 @@ export interface JournalEntry {
 export type RefundPaymentMethod = 'cash' | 'mpesa' | 'bank_transfer'
 
 export interface RefundPayment {
+  /** Its old number, when that repeated another's (moves and journals carry it). */
+  formerRef?: string
   id: string
   ref: string
   rmaId: string
@@ -3922,7 +3935,7 @@ interface AppState {
   // Audit logs
   addAuditLog: (action: string, documentRef: string, details: string) => void
 
-  /** Fetch a server-allocated document ref; falls back to local docSeq on failure. */
+  /** Fetch a server-allocated document ref; when the server cannot give one, a stand-in that cannot clash (allocateDocNumberSync). */
   allocateDocRef: (prefix: string) => Promise<string>
 
   // Purchase Orders
@@ -4711,24 +4724,8 @@ export const now = () => new Date().toISOString().slice(0, 10)
 const addDays = (d: string, n: number) => { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10) }
 const addMonths = (d: string, m: number) => { const dt = new Date(d); dt.setMonth(dt.getMonth() + m); return dt.toISOString().slice(0, 10) }
 
-const makeC = () => ({
-  so: 88, inv: 88, po: 39, rep: 0, del: 26, pos: 12, war: 10, rec: 0, tr: 0, ret: 0, adj: 0, rma: 0,
-  opp: 15, quote: 24, activity: 0, outsource: 4, outsource_pay: 1, exp: 5, sop: 3, refurb: 0,
-  djb: 3, rwp: 0, bbk: 0, don: 0, exc: 0, ko: 0, kd: 0, ks: 0, rfd: 0,
-  dep: 0, proc: 0, jrn_rfd: 0, orc: 0, adv: 0,
-})
-let C = makeC()
-export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
-  const lsKey = `deed_seq2_${key}`
-  const stored = typeof window !== 'undefined' ? localStorage.getItem(lsKey) : null
-  const parsed = stored !== null ? parseInt(stored, 10) : NaN
-  const fallback = C[key]
-  const current = Number.isFinite(parsed) ? parsed : (Number.isFinite(fallback) ? fallback : NaN)
-  const next = assertFiniteSequenceNext(current + 1, `${prefix} sequence`)
-  safeLocalStorageSet(lsKey, String(next))
-  C[key] = next
-  return `${prefix}/${String(next).padStart(4, '0')}`
-}
+// Document numbers come from the server (lib/doc-numbers.ts); the per-browser
+// counters that lived here repeated across browsers (ADJ/0001, TR/0001…).
 
 /**
  * Ask the server to issue the warranties for machines just sold. It reads the
@@ -4767,37 +4764,6 @@ async function fetchNextDeliveryRef(): Promise<string | null> {
   } catch {
     return null
   }
-}
-
-// ── Standard document numbering ───────────────────────────────────────────────
-// Commercial documents (QUO, SO, PI, DN, INV, RCT, CN, PO and REC goods
-// receipts) use a separate sequence per document type per calendar year,
-// formatted as PREFIX/YYYY/NNNN. Unlike `seq` above, the next number is
-// derived from the documents already loaded from the server — so every
-// browser continues the same sequence — with a localStorage high-water mark
-// guarding rapid consecutive creates in the same session.
-let docRefSource: (() => Array<string | undefined>) | null = null
-const registerDocRefSource = (fn: () => Array<string | undefined>) => { docRefSource = fn }
-
-export const docSeq = (prefix: string) => {
-  const year = new Date().getFullYear()
-  const re = new RegExp(`^${prefix}/${year}/(\\d+)$`)
-  let max = 0
-  for (const ref of docRefSource?.() ?? []) {
-    const m = ref ? re.exec(ref) : null
-    if (m) {
-      const n = parseInt(m[1], 10)
-      if (Number.isFinite(n) && n > max) max = n
-    }
-  }
-  const lsKey = `deed_docseq_${prefix}_${year}`
-  if (typeof window !== 'undefined') {
-    const stored = parseInt(localStorage.getItem(lsKey) ?? '0', 10)
-    if (Number.isFinite(stored) && stored > max) max = stored
-  }
-  const next = max + 1
-  safeLocalStorageSet(lsKey, String(next))
-  return `${prefix}/${year}/${String(next).padStart(4, '0')}`
 }
 
 // Draft invoices carry a placeholder reference; the official INV/BILL number
@@ -7075,20 +7041,6 @@ function StoreProvider({
   const quotesRef = useRef(quotes); quotesRef.current = quotes
   const paymentsRef = useRef(payments); paymentsRef.current = payments
 
-  // Feed the per-year document sequencer (docSeq) every ref currently in use,
-  // so QUO/SO/PI/DN/INV/RCT/CN/PO numbers continue from the loaded data
-  // instead of a per-browser counter.
-  registerDocRefSource(() => [
-    ...soRef.current.flatMap(s => [s.ref, s.quotationRef, s.proformaRef]),
-    ...quotesRef.current.flatMap((q: any) => [q.ref, q.quoteNumber]),
-    ...invRef.current.map(i => i.ref),
-    ...delRef.current.map(d => d.ref),
-    ...recRef.current.map(r => r.ref),
-    ...paymentsRef.current.map((p: any) => p.receiptNumber),
-    ...poRef.current.map(p => p.ref),
-    ...customerCreditsRef.current.map(c => c.ref),
-  ])
-
   const getProductTrackingMethod = (product: Partial<Product> | null | undefined): TrackingMethod =>
     inferTrackingMethod({
       trackingMethod: product?.trackingMethod,
@@ -7363,7 +7315,7 @@ function StoreProvider({
     if (mode === 'donation') {
       const don: Donation = {
         id: uid(),
-        ref: seq('DON', 'don'),
+        ref: allocateDocNumberSync('DON'),
         type: 'in',
         party: repair.customerName || 'Customer',
         date: at,
@@ -7383,7 +7335,7 @@ function StoreProvider({
         confirmedByName: byName,
         confirmedDate: at,
       }
-      setDonations(p => [don, ...p])
+      setDonations(p => [don, ...p]); numberDonations([don.id])
       if (serialId) {
         setSerials(p => p.map(s => s.id === serialId
           ? {
@@ -7609,6 +7561,23 @@ function StoreProvider({
       }
     })()
   }
+  /** The record with its new number; a real old one is kept as formerRef. */
+  const withServerRef = <T extends { ref: string; formerRef?: string }>(r: T, ref: string): T =>
+    ({ ...r, ref, ...(!r.formerRef && r.ref && !isProvisionalDocRef(r.ref) ? { formerRef: r.ref } : {}) })
+  /**
+   * Before posting stock or value under a record's number: its own number if
+   * it is real and no other record has it, else a new server number (applied
+   * to the record). Null when the server cannot give one.
+   */
+  const ensureUniqueServerRef = async <T extends { id: string; ref: string }>(
+    kind: string, prefix: string, record: T, all: T[], apply: (id: string, ref: string) => void,
+  ): Promise<string | null> => {
+    if (record.ref && !isProvisionalDocRef(record.ref) && !all.some(o => o.id !== record.id && o.ref === record.ref)) return record.ref
+    const ref = await allocateDocNumber(kind).catch(() => null)
+    if (!ref || !new RegExp(`^${prefix}/\\d+$`).test(ref)) return null
+    apply(record.id, ref)
+    return ref
+  }
   const numberRefurbJobs = (ids: string[]) =>
     assignServerNumbers('refurbishment', 'REF', ids, (id, ref) => setRefurbishmentJobs(p => p.map(j => j.id === id ? { ...j, ref } : j)))
   /** Jobs whose number another job already has, or still a temporary one. */
@@ -7622,9 +7591,7 @@ function StoreProvider({
    */
   const applyAdjustmentNumber = (id: string, ref: string) => {
     const old = adjRef.current.find(a => a.id === id)?.ref
-    setStockAdjustments(p => p.map(a => a.id !== id ? a : {
-      ...a, ref, ...(!a.formerRef && a.ref && !isProvisionalDocRef(a.ref) ? { formerRef: a.ref } : {}),
-    }))
+    setStockAdjustments(p => p.map(a => a.id === id ? withServerRef(a, ref) : a))
     if (!old || !isProvisionalDocRef(old)) return
     const swap = (refs?: string[]) => refs?.map(r => (r === old ? ref : r))
     setRepairs(p => p.some(r => r.procurementRequests?.some(q => q.adjustmentRefs?.includes(old)))
@@ -7635,6 +7602,48 @@ function StoreProvider({
       : p)
   }
   const numberAdjustments = (ids: string[]) => assignServerNumbers('adjustment', 'ADJ', ids, applyAdjustmentNumber)
+
+  // Transfers, customer returns, donations and refund payments: the same.
+  const applyTransferNumber = (id: string, ref: string) => setStockTransfers(p => p.map(t => t.id === id ? withServerRef(t, ref) : t))
+  const applyDonationNumber = (id: string, ref: string) => setDonations(p => p.map(d => d.id === id ? withServerRef(d, ref) : d))
+  const applyRefundPaymentNumber = (id: string, ref: string) => setRefundPayments(p => p.map(r => r.id === id ? withServerRef(r, ref) : r))
+  /** A return's number also shows on its refund payments. */
+  const applyReturnNumber = (id: string, ref: string) => {
+    setReturnOrders(p => p.map(r => r.id === id ? withServerRef(r, ref) : r))
+    setRefundPayments(p => p.some(x => x.rmaId === id) ? p.map(x => x.rmaId === id ? { ...x, rmaRef: ref } : x) : p)
+  }
+  const numberTransfers = (ids: string[]) => assignServerNumbers('transfer', 'TR', ids, applyTransferNumber)
+  const numberReturns = (ids: string[]) => assignServerNumbers('return_order', 'RMA', ids, applyReturnNumber)
+  const numberDonations = (ids: string[]) => assignServerNumbers('donation', 'DON', ids, applyDonationNumber)
+  const applyPosSessionNumber = (id: string, ref: string) => setPosSessions(p => p.map(x => x.id === id ? withServerRef(x, ref) : x))
+  const numberPosSessions = (ids: string[]) => assignServerNumbers('pos_session', 'POSSESS', ids, applyPosSessionNumber)
+  const numberRefundPayments = (ids: string[]) => assignServerNumbers('refund_payment', 'RFD', ids, applyRefundPaymentNumber)
+
+  /**
+   * One-time repair, per collection, once its data has loaded on this page:
+   * repeated or stand-in numbers get server numbers (the oldest keeps its
+   * own). Refund payments are money records: their repeats are only listed
+   * (Accounting › Refunds), never renumbered here.
+   */
+  const pagePath = typeof window !== 'undefined' ? (window.location.pathname || '/') : '/'
+  const pageDataReady = useRouteDataReady(pagePath)
+  const docNumbersRepaired = useRef(new Set<string>())
+  useEffect(() => {
+    const user = currentUser()
+    if (!pageDataReady || !user) return
+    const loaded = new Set(appStateKeysForRoute(pagePath))
+    const series: Array<{ key: string; records: Array<{ id: string; ref: string }>; dateOf: (r: never) => string; renumber: (ids: string[]) => void }> = [
+      { key: 'deed_stockTransfers', records: stockTransfers, dateOf: (t: StockTransfer) => t.date, renumber: numberTransfers },
+      { key: 'deed_returnOrders', records: returnOrders, dateOf: (r: ReturnOrder) => r.requestDate, renumber: numberReturns },
+      { key: 'deed_donations', records: donations, dateOf: (d: Donation) => d.date, renumber: numberDonations },
+    ]
+    for (const s of series) {
+      if (!loaded.has(s.key) || !s.records.length || docNumbersRepaired.current.has(s.key) || !canWriteStoreKey(user, s.key)) continue
+      docNumbersRepaired.current.add(s.key)
+      s.renumber(recordsNeedingNumbers(s.records, { dateOf: s.dateOf as (r: { id: string; ref: string }) => string }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageDataReady, pagePath, currentUserId, stockTransfers.length, returnOrders.length, donations.length])
   const openTradeInRefurbJobs = (units: Array<{ serialId: string; issue: string; cost?: number; sourceRef: string }>) => {
     const open = new Set(refurbishmentJobs.filter(j => j.status !== 'transferred' && j.status !== 'written_off').map(j => j.serialId))
     const jobs: RefurbishmentJob[] = []
@@ -9522,14 +9531,12 @@ const storeCtx: AppState = {
       // If allocation fails, the deposit is not partially created.
       const quotationRef = await storeCtxRef.current!.allocateDocRef('QUO')
       const provisionalId = uid()
-      const provisionalRef = seq('DEP', 'dep')
       const response = await fetch('/api/deposits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...depositInput,
           id: provisionalId,
-          ref: provisionalRef,
           initialPayment: paid,
           payMethod,
           payRef,
@@ -10176,7 +10183,8 @@ const storeCtx: AppState = {
 
     initRelease: (p) => {
       const user = currentUser()
-      const ref = seq('ORC', 'orc')
+      // The server gives the real number (it replaces this one in the reply).
+      const ref = allocateDocNumberSync('ORC')
       const release: OutboundRelease = {
         id: uid(), ref,
         invoiceId: p.invoiceId, repairId: p.repairId, deliveryNoteId: p.deliveryNoteId,
@@ -10715,7 +10723,7 @@ const storeCtx: AppState = {
           outstandingAmount: amount,
           deductions: [],
           id: uid(),
-          ref: seq('ADV', 'adv'),
+          ref: allocateDocNumberSync('ADV'), // the server's record carries its own
           requestedDate: now(),
           status: 'pending',
           createdByUserId: user.id,
@@ -10890,7 +10898,7 @@ const storeCtx: AppState = {
         }
         const repair: RepairOrder = {
           id: uid(),
-          ref: seq('REP', 'rep'),
+          ref: allocateRepairRef(takenRepairRefs(repairsRef.current)),
           status: 'received',
           customerId: assignment.employeeId,
           customerName: assignment.employeeName,
@@ -16662,15 +16670,18 @@ const storeCtx: AppState = {
     // ── Stock Transfers ────────────────────────────────────────────────────────
     createTransfer: (from, to, notes = '') => {
       if (!canManageInventoryControl(currentUser())) { showToast('Only inventory-controlled roles can create transfers', 'error'); throw new Error('Unauthorized transfer creation') }
-      const tr: StockTransfer = { id: uid(), ref: seq('TR', 'tr'), fromLocation: from, toLocation: to, status: 'draft', date: now(), lines: [], notes }
-      setStockTransfers(p => [tr, ...p]); showToast(`Transfer ${tr.ref} created`); return tr
+      const tr: StockTransfer = { id: uid(), ref: allocateDocNumberSync('TR'), fromLocation: from, toLocation: to, status: 'draft', date: now(), lines: [], notes }
+      setStockTransfers(p => [tr, ...p]); numberTransfers([tr.id]); showToast('Transfer created'); return tr
     },
     addTransferLine: (transferId, productId, productName, qty, serialIds) => {
       setStockTransfers(p => p.map(t => t.id !== transferId ? t : { ...t, lines: [...t.lines, { productId, productName, qty, serialIds }] }))
     },
     validateTransfer: async (transferId) => {
       if (!canManageInventoryControl(currentUser())) { showToast('Only inventory-controlled roles can validate transfers', 'error'); return }
-      const tr = stockTransfers.find(t => t.id === transferId)!
+      let tr = stockTransfers.find(t => t.id === transferId)!
+      const trRef = await ensureUniqueServerRef('transfer', 'TR', tr, stockTransfers, applyTransferNumber)
+      if (!trRef) { showToast('Could not get a number for this transfer from the server — try again', 'error'); return }
+      tr = { ...tr, ref: trRef }
       try {
         const res = await fetch('/api/inventory/apply-transfer-stock', {
           method: 'POST',
@@ -16731,7 +16742,8 @@ const storeCtx: AppState = {
           return false
         }
       }
-      const ref = seq('TR', 'tr')
+      // Server number first; the stock moves carry it.
+      const ref = await allocateDocNumber('transfer').catch(() => allocateDocNumberSync('TR'))
       const id = uid()
       const line = { productId, productName, qty, serialIds }
       try {
@@ -16762,7 +16774,8 @@ const storeCtx: AppState = {
       }
       const tr: StockTransfer = { id, ref, fromLocation: from, toLocation: to, status: 'done', date: now(), lines: [line], notes }
       setStockTransfers(p => [tr, ...p])
-      showToast(`Transfer ${ref} validated — stock moved to ${LOCATIONS[to].name}`)
+      if (isProvisionalDocRef(ref)) numberTransfers([id])
+      showToast(`Transfer ${isProvisionalDocRef(ref) ? '' : `${ref} `}validated — stock moved to ${LOCATIONS[to].name}`)
       return true
     },
 
@@ -17939,7 +17952,7 @@ const storeCtx: AppState = {
         syncRepairToPortal({ ...repair, status: 'awaiting_parts' }, 'Quote approved — sourcing parts')
 
         if (missingItems.length > 0) {
-          const procRef = seq('PROC', 'proc')
+          const procRef = allocateDocNumberSync('PROC')
           const newProc = {
             id: uid(), ref: procRef, repairId, repairRef: repair.ref,
             requestedBy: repair.assignedTechnicianId ?? repair.createdBy,
@@ -20478,7 +20491,7 @@ const storeCtx: AppState = {
       const user = currentUser()
       const session: POSSession = {
         id: uid(),
-        ref: nextPosSessionRef(posSessions.map(s => s.ref)),
+        ref: allocateDocNumberSync('POSSESS'), // the server's number follows (numberPosSessions)
         status: 'open',
         openedAt: new Date().toISOString(),
         openingCash: Math.max(0, Number(openingCash) || 0),
@@ -20492,6 +20505,7 @@ const storeCtx: AppState = {
       setPosSessions(p => [session, ...p.map(s => (
         s.status === 'open' ? { ...s, status: 'closed' as const, closedAt: new Date().toISOString() } : s
       ))])
+      numberPosSessions([session.id])
       setPosSessionId(session.id)
       setPosSessionOpen(true)
       setPosSessionOpeningCash(session.openingCash)
@@ -20566,7 +20580,10 @@ const storeCtx: AppState = {
         controlLines.push(accountLine(label, `Session bank sales cleared`, 0, amt))
       }
 
-      const sessionRef = openSession?.ref || nextPosSessionRef(posSessions.map(s => s.ref))
+      const sessionRef = openSession?.ref || allocateDocNumberSync('POSSESS')
+      // The ledger keeps one journal per number and skips a repeat: a session
+      // whose number is not yet the server's, or that another session shares,
+      // closes under a journal number that also names the session.
       const claimedIds = new Set(
         orders.filter(o => o.sessionId === 'active').map(o => o.id).filter(Boolean),
       )
@@ -20578,7 +20595,7 @@ const storeCtx: AppState = {
         const credit = controlLines.reduce((a, l) => a + l.credit, 0)
         const journal: JournalEntry = {
           id: uid(),
-          ref: `JRN/${sessionRef}`,
+          ref: !isProvisionalDocRef(sessionRef) && !posSessions.some(s => s.id !== sessionId && s.ref === sessionRef) ? `JRN/${sessionRef}` : `JRN/${sessionRef}/${sessionId}`,
           date: now(),
           source: 'pos_session',
           description: `POS session close ${sessionRef} · sales ${fmtKes(totalSales)} · cash ${fmtKes(totalCash)} · mpesa ${fmtKes(totalMpesa)} · bank ${fmtKes(totalBank)} · variance ${fmtKes(cashDifference)}`,
@@ -20638,7 +20655,7 @@ const storeCtx: AppState = {
         const user = currentUser()
         const repaired: POSSession = {
           id: uid(),
-          ref: nextPosSessionRef(posSessions.map(s => s.ref)),
+          ref: allocateDocNumberSync('POSSESS'),
           status: 'open',
           openedAt: new Date().toISOString(),
           openingCash: posSessionOpeningCash,
@@ -20650,6 +20667,7 @@ const storeCtx: AppState = {
           openedBy: user?.name || user?.username,
         }
         setPosSessions(p => [repaired, ...p])
+        numberPosSessions([repaired.id])
         setPosSessionId(repaired.id)
         sessionId = repaired.id
       }
@@ -21019,10 +21037,9 @@ const storeCtx: AppState = {
       // Its stock value and journal are posted under its number, and the
       // valuation skips a number it has seen for this product: so it needs its
       // own server number first (not a stand-in, not one another adjustment has).
-      if (approved && (isProvisionalDocRef(adj.ref) || adjRef.current.some(a => a.id !== adjId && a.ref === adj!.ref))) {
-        const ref = await allocateDocNumber('adjustment').catch(() => null)
-        if (!ref || !/^ADJ\/\d+$/.test(ref)) { showToast('Could not get a number for this adjustment from the server — try again', 'error'); return }
-        applyAdjustmentNumber(adjId, ref)
+      if (approved) {
+        const ref = await ensureUniqueServerRef('adjustment', 'ADJ', adj, adjRef.current, applyAdjustmentNumber)
+        if (!ref) { showToast('Could not get a number for this adjustment from the server — try again', 'error'); return }
         adj = { ...adj, ref }
       }
       if (approved) {
@@ -22062,12 +22079,13 @@ const storeCtx: AppState = {
         }
       }
       const order: ReturnOrder = {
-        id: uid(), ref: seq('RMA', 'rma'),
+        id: uid(), ref: allocateDocNumberSync('RMA'),
         saleOrderId, saleOrderRef, customerId, customerName,
         status: 'requested', requestDate: now(), reason,
         lines: lines.map(l => ({ ...l, id: uid() })),
       }
       setReturnOrders(p => [order, ...p])
+      numberReturns([order.id])
       showToast(`Return ${order.ref} submitted`)
       return order
     },
@@ -22082,7 +22100,7 @@ const storeCtx: AppState = {
     },
 
     receiveReturn: async (id) => {
-      const ro = returnOrders.find(r => r.id === id)
+      let ro = returnOrders.find(r => r.id === id)
       if (!ro) return
       if (ro.status !== 'approved') { showToast('Approve the return before receiving items', 'error'); return }
       for (const line of ro.lines) {
@@ -22097,6 +22115,11 @@ const storeCtx: AppState = {
           }
         }
       }
+      // Its stock value posts under its number, and the valuation skips a
+      // number + product it has seen: it needs its own server number first.
+      const rmaRef = await ensureUniqueServerRef('return_order', 'RMA', ro, returnOrders, applyReturnNumber)
+      if (!rmaRef) { showToast('Could not get a number for this return from the server — try again', 'error'); return }
+      ro = { ...ro, ref: rmaRef }
 
       try {
         const res = await fetch('/api/inventory/apply-customer-return-stock', {
@@ -22478,9 +22501,13 @@ const storeCtx: AppState = {
         const method = refundPaymentMethod ?? 'cash'
         const refundBankAccountId = bankAccountIdForMethod(method)
         const creditAccount = bankAccountLabel(refundBankAccountId, method)
+        // The ledger keeps one journal per number and skips a repeat, so the
+        // refund journal's number is tied to this payment (it was a per-browser
+        // count, and a repeated one dropped the refund from the books).
+        const refundPaymentId = uid()
         const journal: JournalEntry = {
           id: uid(),
-          ref: seq('JRN/RFD', 'jrn_rfd'),
+          ref: `JRN/RFD/${refundPaymentId}`,
           date: now(),
           source: 'refund',
           description: `Customer refund — ${rma.ref} (${rma.customerName})`,
@@ -22500,8 +22527,8 @@ const storeCtx: AppState = {
         postSystemJournal('rma_refund', journal, message => showToast(message, 'error'))
 
         const payment: RefundPayment = {
-          id: uid(),
-          ref: seq('RFD', 'rfd'),
+          id: refundPaymentId,
+          ref: allocateDocNumberSync('RFD'),
           rmaId: id,
           rmaRef: rma.ref,
           customerName: rma.customerName,
@@ -22515,6 +22542,7 @@ const storeCtx: AppState = {
           createdDate: now(),
         }
         setRefundPayments(p => [payment, ...p])
+        numberRefundPayments([payment.id])
       }
 
       const label = resolution === 'refund' ? 'Refund recorded'
@@ -22636,7 +22664,7 @@ const storeCtx: AppState = {
       if (!allowed.ok) { showToast(allowed.error || 'Cannot record buy-back payment', 'error'); return }
       const payment: RefundPayment = {
         id: uid(),
-        ref: seq('RFD', 'rfd'),
+        ref: allocateDocNumberSync('RFD'),
         rmaId: bb.id,
         rmaRef: bb.ref,
         customerName: bb.customerName,
@@ -22650,6 +22678,7 @@ const storeCtx: AppState = {
         createdDate: now(),
       }
       setRefundPayments(prev => [payment, ...prev])
+      numberRefundPayments([payment.id])
       setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'paid', paymentMethod, paidDate: now() } : b))
       showToast('Payment to customer recorded')
     },
@@ -22666,7 +22695,7 @@ const storeCtx: AppState = {
       try {
         creditRef = await storeCtxRef.current!.allocateDocRef('CN')
       } catch {
-        creditRef = seq('CN', 'inv')
+        creditRef = allocateDocNumberSync('CN')
       }
       const credit: CustomerCredit = {
         id: uid(),
@@ -22801,12 +22830,12 @@ const storeCtx: AppState = {
         }
       }
       const don: Donation = {
-        id: uid(), ref: seq('DON', 'don'),
+        id: uid(), ref: allocateDocNumberSync('DON'),
         type, party, date: now(),
         lines: lines.map(l => ({ ...l, id: uid() })),
         status: 'draft', location, notes,
       }
-      setDonations(p => [don, ...p])
+      setDonations(p => [don, ...p]); numberDonations([don.id])
       showToast(`Donation ${don.ref} created`)
       return don
     },
