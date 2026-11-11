@@ -43,7 +43,7 @@ import {
 import { diagnosisFeeLineBadge, isDiagnosisFeeLine, resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 import { pickRepairPrimaryAction } from '@/lib/repair-handover'
 import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
-import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync, repairBillsFeeOnly } from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
 
@@ -287,11 +287,12 @@ export default function RepairDetailView() {
     ?? invoices.find(i => i.repairId === r.id)
   const linkedSaleOrder    = findSaleOrderForRepair(saleOrders, r)
   const linkedSalesQuote   = findSalesQuoteForRepair(quotes, r)
+  const repairCharges      = buildRepairInvoiceCharges(r, true, companySettings?.vatRate ?? 0)
   const billingSync        = repairBillingNeedsSync({
     salesQuoteStatus: linkedSalesQuote?.status,
     saleOrderStatus: linkedSaleOrder?.status,
     invoice: linkedInvoice,
-    charges: buildRepairInvoiceCharges(r, true, companySettings?.vatRate ?? 0),
+    charges: repairCharges,
   })
   // `unrepairable` is included so the diagnosis fee can still be billed. The
   // device could not be saved, but the diagnosis was done and is chargeable —
@@ -316,6 +317,10 @@ export default function RepairDetailView() {
     && canBillRole
     && billingSync.needed
     && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
+    // A posted invoice that differs from the quote is Finance's correction
+    // (a credit or debit note), not the job's next step: it used to take the
+    // main action with no button, so the device could not be released.
+    && !billingSync.requiresCreditNote
     && !pendingOutsourceJob
   // Fee-only jobs (unrepairable / declined / stopped) bill the diagnosis fee, not the quote.
   const billsFeeOnly = repairBillsFeeOnly(r)
@@ -377,9 +382,7 @@ export default function RepairDetailView() {
         : 'Waiting for Finance or an admin officer to bill the diagnosis fee')
     : canInvoice && r.status === 'unrepairable'
       ? 'Device could not be repaired — bill the diagnosis fee (Finance can add other charges before confirming)'
-    : canInvoice   ? (billingSync.requiresCreditNote
-      ? 'Invoice is posted and no longer matches the quote — Finance must issue a credit or debit note'
-      : billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen
+    : canInvoice   ? (billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen
       ? 'Align the draft invoice with the approved quote'
       : 'Create a draft invoice for Finance review')
     : canPrepareRelease ? (linkedInvoice ? `Invoiced (${linkedInvoice.ref}) — prepare the release so the client can collect` : 'Prepare the release so the client can collect')
@@ -1620,9 +1623,12 @@ export default function RepairDetailView() {
                   {primaryActionId === 'complete' && <ActionBtn onClick={() => markRepairComplete(r.id)} icon={faCheckCircle} label="Mark complete" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
                   {primaryActionId === 'qc' && <ActionBtn onClick={() => setShowQAModal(true)} icon={faStar} label="Perform QC" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
                   {primaryActionId === 'parts_arrived' && <ActionBtn onClick={() => markPartsArrived(r.id)} icon={faBoxOpen} label="Mark parts arrived" color="bg-sky-500 hover:bg-sky-600" shadow="" />}
-                  {primaryActionId === 'invoice' && (billingSync.requiresCreditNote
-                    ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-800">{`${linkedInvoice?.ref ?? 'The invoice'} is posted and cannot be edited. Correct it with a credit or debit note in the Invoice module.`}</p>
-                    : <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={invoiceActionLabel} color="bg-sky-500 hover:bg-sky-600" shadow="" />)}
+                  {primaryActionId === 'invoice' && <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={invoiceActionLabel} color="bg-sky-500 hover:bg-sky-600" shadow="" />}
+                  {billingSync.requiresCreditNote && !noCharge && (
+                    <p role="status" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-800">
+                      {`${linkedInvoice?.ref ?? 'The invoice'} (${fmtKes(Number(linkedInvoice?.total ?? 0))}) is posted and differs from the approved quote (${fmtKes(repairInvoiceChargeTotal(repairCharges))}). The job can still go ahead; Finance corrects the invoice with a credit or debit note in the Invoice module.`}
+                    </p>
+                  )}
                   {primaryActionId === 'invoice' && canBillTogether && (
                     <button
                       type="button"
