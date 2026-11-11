@@ -165,16 +165,28 @@ function quoteCharges(
   })
 }
 
+/** The diagnosis fee line the customer approved on the quote, if any. */
+function quotedDiagnosisFee(repair: RepairInvoiceSource): number {
+  const line = (repair.quote?.lines ?? []).find(l => l && isDiagnosisFeeLine(l) && l.decision !== 'declined')
+  if (!line) return 0
+  return money(line.subtotal) || (money(line.qty) || 1) * money(line.unitPrice ?? line.price)
+}
+
 function diagnosisCharges(repair: RepairInvoiceSource): RepairInvoiceChargeLine[] {
   const feeRepair = {
     ...repair,
     underWarranty: repair.underWarranty ?? undefined,
     billingExempt: repair.billingExempt ?? undefined,
   }
-  if (!shouldChargeDiagnosisFee(feeRepair) || !(repair.diagnosisFee ?? 0)) return []
   if (repair.diagnosisFeeStatus === 'paid' || repair.diagnosisFeePaidAt) return []
   if (repair.diagnosisFeeStatus === 'waived' || repair.diagnosisFeeStatus === 'not_applicable') return []
-  const amount = money(repair.diagnosisFee)
+  // A fee the customer approved on the quote is billed with it, whatever the
+  // fee policy would say for this job (the quote lines leave it out so it is
+  // not billed twice). It used to vanish when the policy did not apply — e.g.
+  // a direct repair — and a matching invoice was reported as out of step.
+  const quoted = quotedDiagnosisFee(repair)
+  if (quoted <= 0 && (!shouldChargeDiagnosisFee(feeRepair) || !(repair.diagnosisFee ?? 0))) return []
+  const amount = quoted > 0 ? quoted : money(repair.diagnosisFee)
   if (amount <= 0) return []
   return [{
     description: repair.diagnosisStopped || isDeclinedRepair(repair)
@@ -246,10 +258,16 @@ export function invoiceMatchesRepairCharges(
   if (!invoice) return false
   const expectedTotal = repairInvoiceChargeTotal(charges)
   if (Math.abs(money(invoice.total) - expectedTotal) > 1) return false
-  const invLines = (invoice.lines ?? []).filter(line => line?.lineType !== 'section')
-  if (invLines.length !== charges.length) return false
+  // Free lines (e.g. "Installation and transfer of data" at 0.00) are left
+  // out of the expected charges, so they are left out here too — counting
+  // them reported a matching invoice as out of step with its quote.
+  const isFree = (row: { qty?: unknown; unitPrice?: unknown; subtotal?: unknown }) =>
+    money(row.subtotal) === 0 && money(row.qty) * money(row.unitPrice) === 0
+  const invLines = (invoice.lines ?? []).filter(line => line?.lineType !== 'section' && !isFree(line))
+  const charged = charges.filter(line => !isFree(line))
+  if (invLines.length !== charged.length) return false
   const invoiceFp = invLines.map(lineFingerprint).sort().join('|')
-  const chargeFp = charges.map(lineFingerprint).sort().join('|')
+  const chargeFp = charged.map(lineFingerprint).sort().join('|')
   return invoiceFp === chargeFp
 }
 
