@@ -118,7 +118,7 @@ describe('POST /api/accounting/system-journals — who may post what', () => {
   })
 
   it('lets an admin officer with the property module capitalise a fixed asset', async () => {
-    mockGetSession.mockResolvedValue(asUser('admin_officer', ['property']))
+    mockGetSession.mockResolvedValue(asUser('admin_officer', ['company_property']))
     expect((await post(body({ kind: 'fixed_asset', ref: 'JRN/AST-CAP/AST-001' }))).status).toBe(201)
   })
 
