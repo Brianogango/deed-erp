@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { serialNumbersInOrder } from '@/lib/inventory/checkout-serials'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { normalizePermissionRole } from '@/lib/auth/authorization'
@@ -136,7 +137,7 @@ export async function GET() {
       // What "Return to stock" may bring back on a closed checkout.
       const product = products.find(p => p.id === row.productId)
       const serialIds = product && isSerialized(product) ? returnableSerialIds(row, serials) : []
-      return { ...row, returnableSerialIds: serialIds, returnableQty: product && isSerialized(product) ? serialIds.length : returnableQty(row) }
+      return { ...row, serialNumbers: serialNumbersInOrder(row.serialIds ?? [], serials, row.serialNumbers), returnableSerialIds: serialIds, returnableQty: product && isSerialized(product) ? serialIds.length : returnableQty(row) }
     })
   return NextResponse.json({
     products: products.map(p => ({ id: p.id, name: p.name, sku: p.sku || '', serialized: isSerialized(p) })),
@@ -185,7 +186,7 @@ export async function POST(request: NextRequest) {
         const reserved = reservedRows.reduce((n, r) => n + outstanding(r), 0)
         if (physical - reserved < qty) return NextResponse.json({ error: `Only ${Math.max(0, physical - reserved)} unreserved unit(s) available` }, { status: 409 })
       }
-      row = { id: randomUUID(), ref: nextRef(rows), status: 'pending', productId: product.id, productName: product.name || 'Product', sku: product.sku || '', qty, serialIds, serialNumbers: serials.filter(s => serialIds.includes(s.id)).map(s => s.serial), sourceLocation, receiverName: String(body.receiverName).trim(), purpose: String(body.purpose).trim(), relatedJob: String(body.relatedJob || ''), deviceRef: String(body.deviceRef || ''), deviceSerial: String(body.deviceSerial || ''), expectedReturnDate: String(body.expectedReturnDate || ''), notes: String(body.notes || ''), requestedBy: access.session.user.id, requestedByName: sessionName(access.session.user), requestedAt: now, consumedQty: 0, returnedQty: 0, exceptionQty: 0 }
+      row = { id: randomUUID(), ref: nextRef(rows), status: 'pending', productId: product.id, productName: product.name || 'Product', sku: product.sku || '', qty, serialIds, serialNumbers: serialNumbersInOrder(serialIds, serials), sourceLocation, receiverName: String(body.receiverName).trim(), purpose: String(body.purpose).trim(), relatedJob: String(body.relatedJob || ''), deviceRef: String(body.deviceRef || ''), deviceSerial: String(body.deviceSerial || ''), expectedReturnDate: String(body.expectedReturnDate || ''), notes: String(body.notes || ''), requestedBy: access.session.user.id, requestedByName: sessionName(access.session.user), requestedAt: now, consumedQty: 0, returnedQty: 0, exceptionQty: 0 }
       rows.unshift(row)
     } else {
       const index = rows.findIndex(r => r.id === String(body.id || ''))
