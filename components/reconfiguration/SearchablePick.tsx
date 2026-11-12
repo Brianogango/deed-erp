@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Fa, faChevronDown } from '@/components/icons'
+import { onVisibleViewportChange, visibleViewportBand } from '@/lib/visible-viewport'
 
 type SearchablePickOption = {
   id: string
@@ -52,8 +53,9 @@ export default function SearchablePick({
   const placeMenu = () => {
     const rect = inputRef.current?.getBoundingClientRect()
     if (!rect) return
-    const spaceBelow = window.innerHeight - rect.bottom - 12
-    const spaceAbove = rect.top - 12
+    const band = visibleViewportBand()
+    const spaceBelow = band.bottom - rect.bottom - 12
+    const spaceAbove = rect.top - band.top - 12
     const openUp = spaceBelow < 220 && spaceAbove > spaceBelow
     const maxHeight = Math.max(160, Math.min(320, openUp ? spaceAbove : spaceBelow))
     setMenuPos({
@@ -90,19 +92,25 @@ export default function SearchablePick({
       if (menuRef.current?.contains(target)) return
       closeMenu()
     }
-    const onResize = () => closeMenu()
+    // Follow the input instead of closing. Closing on resize/scroll meant that on
+    // phones the keyboard opening (resize + scroll-into-view) shut the menu the
+    // moment the field was focused, so nothing could be searched.
+    const follow = () => placeMenu()
     const onScroll = (event: Event) => {
       const target = event.target
-      // Keep the portalled menu open while the user scrolls the options.
+      // Scrolling the options themselves needs no re-measure.
       if (target instanceof Node && menuRef.current?.contains(target)) return
-      closeMenu()
+      const rect = inputRef.current?.getBoundingClientRect()
+      // The field scrolled fully out of view: nothing left to anchor to.
+      if (!rect || rect.bottom < 0 || rect.top > window.innerHeight) { closeMenu(); return }
+      placeMenu()
     }
     document.addEventListener('mousedown', onPointerDown)
-    window.addEventListener('resize', onResize)
+    const stopFollowingViewport = onVisibleViewportChange(follow)
     window.addEventListener('scroll', onScroll, true)
     return () => {
       document.removeEventListener('mousedown', onPointerDown)
-      window.removeEventListener('resize', onResize)
+      stopFollowingViewport()
       window.removeEventListener('scroll', onScroll, true)
     }
   }, [open])
