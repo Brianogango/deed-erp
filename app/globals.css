@@ -32297,3 +32297,262 @@ button, [role="button"], [role="tab"] {
 .invoice-history__changes i { font-style: normal; color: var(--text-4); }
 .invoice-history__changes b { color: var(--text-1); font-weight: 600; overflow-wrap: anywhere; }
 .bill-account-guide__picker { flex: 1 1 280px; min-width: 240px; max-width: 440px; }
+
+/* ── Picker sheet (phones) ──────────────────────────────────────────────────
+   Search-and-pick lists open as a bottom sheet on phones instead of an anchored
+   popover. It follows the visible viewport, so the keyboard never covers the
+   results or closes the picker. Entry/exit share one path (up from / down to the
+   bottom edge) on Apple's sheet curve; drag tracks 1:1 with no transition. */
+.picker-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9600;
+  pointer-events: none;
+}
+.picker-sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(15 23 42 / 0.36);
+  opacity: 0;
+  transition: opacity 280ms ease;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.picker-sheet-root[data-open='true'] .picker-sheet-scrim { opacity: 1; }
+.picker-sheet-root[data-open='false'] .picker-sheet-scrim { pointer-events: none; }
+.picker-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--bg-card, #fff);
+  color: var(--text-1, #0f172a);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -10px 40px rgb(15 23 42 / 0.18), 0 -1px 0 rgb(15 23 42 / 0.06);
+  pointer-events: auto;
+  overscroll-behavior: contain;
+  transition: transform 380ms cubic-bezier(0.32, 0.72, 0, 1), height 220ms ease, bottom 220ms ease;
+  will-change: transform;
+  /* Sales row markup reuses its workbench tokens; the sheet is portalled
+     outside the workbench, so map them onto the app's themed tokens. */
+  --sp-text: var(--text-1, #0f172a);
+  --sp-text-3: var(--text-3, #475569);
+  --sp-border: var(--border-lt, #e2e8f0);
+  --sp-accent-soft: color-mix(in srgb, var(--navy, #20164d) 6%, transparent);
+}
+.picker-sheet.is-dragging { transition: none; }
+.picker-sheet-header {
+  flex-shrink: 0;
+  padding: 6px 16px 8px;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.picker-sheet-grabber {
+  display: block;
+  width: 36px;
+  height: 5px;
+  margin: 0 auto 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-3, #475569) 35%, transparent);
+}
+.picker-sheet-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+}
+.picker-sheet-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--text-1, #0f172a);
+}
+.picker-sheet-done {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 4px;
+  margin-right: -4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--navy, #20164d);
+  background: none;
+  border: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+[data-theme='dark'] .picker-sheet-done { color: var(--primary, #00aeef); }
+.picker-sheet-done:active { opacity: 0.55; }
+.picker-sheet-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.picker-sheet-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border, #cbd5e1);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+/* Search field: 16px so iOS never zooms the page on focus. */
+.picker-sheet .picker-search {
+  flex-shrink: 0;
+  padding: 0 16px 10px;
+}
+.picker-sheet .picker-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--text-3, #475569) 12%, transparent);
+  color: var(--text-1, #0f172a);
+}
+.picker-sheet .picker-search input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary, #00aeef) 60%, transparent);
+  background: var(--bg-card, #fff);
+}
+.picker-sheet .picker-list {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border-lt, #e2e8f0);
+}
+.picker-sheet .picker-option {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-lt, #e2e8f0);
+  -webkit-tap-highlight-color: transparent;
+}
+.picker-sheet .picker-option:active { background: color-mix(in srgb, var(--navy, #20164d) 7%, transparent); }
+.picker-sheet .picker-option > p:first-child { font-size: 15px; line-height: 1.3; }
+.picker-sheet .picker-option > p + p { font-size: 13px; margin-top: 2px; }
+.picker-sheet .picker-note { padding: 12px 16px; font-size: 14px; }
+.picker-sheet .picker-create {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--navy, #20164d);
+}
+[data-theme='dark'] .picker-sheet .picker-create { color: var(--primary, #00aeef); }
+
+@media (prefers-reduced-motion: reduce) {
+  .picker-sheet { transition: opacity 200ms ease; }
+  .picker-sheet-root[data-open='false'] .picker-sheet { opacity: 0; }
+  .picker-sheet-root .picker-sheet { transform: none !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .picker-sheet-scrim { background: rgb(15 23 42 / 0.6); }
+}
+
+/* ── Compact-width shell fixes (phones) ─────────────────────────────────────
+   Found by a 320–430px sweep of every module. */
+@media (max-width: 767px) {
+  /* The topbar title was squeezed to 3–4 letters ("Das", "Con", "Deli") or
+     broke onto two lines, because the DIA pill, chat, bell and account each
+     took ~44px. DIA already has the thumb-reachable floating launcher on
+     phones — one entry point per action — so the pill gives its room back to
+     the title, and the title never wraps. */
+  .app-topbar .app-topbar-clock { display: none; }
+  .app-topbar.app-topbar { gap: 0.375rem; padding-inline: 0.5rem; }
+  .app-topbar .app-topbar-controls { gap: 0.125rem; }
+  .app-topbar .app-topbar-title h1 {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  /* Finance header: the "FINANCE / …" eyebrow was absolutely positioned into
+     top padding that a later compact rule (.mod-header ×4 !important) resets,
+     so it painted over the title. On phones the header is a column: put the
+     eyebrow in the flow so it takes its own room whatever the padding is. */
+  .mod-page.finance-workspace[data-finance-tab] > .mod-header {
+    min-height: 0 !important;
+  }
+  .mod-page.finance-workspace[data-finance-tab] > .mod-header::before {
+    position: static !important;
+    display: block;
+    align-self: stretch;
+    margin-bottom: 0.375rem;
+  }
+}
+
+/* Quotation form on narrow phones (≤380px, e.g. iPhone SE / small Androids).
+   The 30d/60d/90d chips never wrapped, so the "Valid until" date field was
+   crushed to a ~40px sliver; and the side label column left fields ~165px.
+   Let the date field claim a usable width and drop the chips below it, and
+   stack labels above fields where two columns no longer fit. */
+.sales-order-meta-panel--new .sales-valid-until { flex-wrap: wrap; }
+.sales-order-meta-panel--new .sales-valid-until > input { flex: 1 1 9.5rem; }
+@media (pointer: coarse) {
+  .sales-order-meta-panel--new .sales-valid-until__quick button { min-height: 2.75rem; min-width: 2.75rem; }
+}
+@media (max-width: 380px) {
+  .sales-pilot.sales-doc .sp-field.sp-field {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0.25rem;
+  }
+}
+
+/* Primary header actions on phones: PrimaryActionButton hides its label below
+   640px so it can shrink to an icon, but the compact module header then
+   stretches the button across the row anyway — leaving a wide bar that only
+   says "+" (Expenses, Purchases, Kilimall, HR, Sales). Where the button is
+   wide, show the words. Finance keeps its deliberate 40px icon buttons. */
+@media (max-width: 639px) {
+  .mod-page:not(.finance-workspace) > .mod-header .erp-action-btn > span.hidden {
+    display: inline;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .mod-page:not(.finance-workspace) > .mod-header .erp-action-btn { justify-content: center; min-width: 0; }
+}
+@media (max-width: 767px) {
+  /* Sales list: the "New quotation" text was hidden (font-size 0, transparent)
+     behind a "+" glyph meant for a 40px icon button, but later compact rules
+     stretch the button full width — a wide bar saying only "+". The label sits
+     in its own span so it can be sized without fighting those rules. */
+  .sales-pilot.sales-doc .sales-workbench .sales-list-page-header > .sales-proto-actions:not(.sales-proto-actions--dock) .sp-btn-primary.sp-btn-primary {
+    width: 100% !important;
+    padding: 0 1rem !important;
+    place-items: center;
+  }
+  /* The button is forced to display:grid elsewhere, so the leftover "+"
+     pseudo-elements took the first row and pushed the label out of the
+     clipped button. */
+  .sales-pilot.sales-doc .sales-workbench .sales-list-page-header > .sales-proto-actions:not(.sales-proto-actions--dock) .sp-btn-primary.sp-btn-primary::before,
+  .sales-pilot.sales-doc .sales-workbench .sales-list-page-header > .sales-proto-actions:not(.sales-proto-actions--dock) .sp-btn-primary.sp-btn-primary::after {
+    content: none;
+    display: none;
+  }
+  .sales-list-page-header .sales-new-quote-label {
+    color: #fff;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+}

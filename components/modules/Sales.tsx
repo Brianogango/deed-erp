@@ -53,6 +53,8 @@ import {
 } from '@/lib/store'
 import { canCreateProductFromSales, hasExactProduct, similarProducts } from '@/lib/sales/similar-products'
 import ProductFormModal from '@/components/inventory/ProductFormModal'
+import PickerSheet, { COMPACT_PICKER_QUERY, useCompactViewport } from '@/components/ui/PickerSheet'
+import { visibleViewportBand } from '@/lib/visible-viewport'
 import { allocateDocNumber } from '@/lib/doc-numbers'
 import {
   Badge,
@@ -1987,7 +1989,7 @@ function SalesContent() {
                     </div>
                     <div className="sales-proto-actions">
                       <button type="button" className="sp-btn sp-btn-primary" onClick={openNewForm}>
-                        New quotation
+                        <span className="sales-new-quote-label">New quotation</span>
                       </button>
                     </div>
                   </div>
@@ -4048,11 +4050,15 @@ function NewQuotationForm({
   const selectedCustomer = customers.find(c => c.id === newCustomer?.id)
   const paymentTermsDays = quotationPaymentTermsDays(selectedCustomer)
   const customerRef = useRef<HTMLDivElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement | null>(null)
 
+  const compactPicker = useCompactViewport()
+  const productTriggerRef = useRef<HTMLElement | null>(null)
+  const closeProductDropdown = useCallback(() => setProductDropdownOpen(null), [])
   const openProductDropdown = (lineId: string, trigger: HTMLElement) => {
+    productTriggerRef.current = trigger
     const rect = trigger.getBoundingClientRect()
-    const openUp = rect.bottom + 320 > window.innerHeight && rect.top > 340
+    const openUp = rect.bottom + 320 > visibleViewportBand().bottom && rect.top > 340
     setProductDropdownOpen({
       id: lineId,
       top: openUp ? rect.top - 6 : rect.bottom + 6,
@@ -4066,19 +4072,32 @@ function NewQuotationForm({
       if (customerRef.current && !customerRef.current.contains(e.target as Node)) setCustomerDropdownOpen(false)
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setProductDropdownOpen(null)
     }
-    // A fixed-position dropdown would drift on scroll/resize — close it instead
-    // (scrolling within the dropdown's own list keeps it open).
-    const closeDropdown = (e: Event) => {
+    // Keep the fixed-position popover glued to its trigger on scroll/resize.
+    // It used to close instead, which on phones meant the keyboard opening
+    // (a resize + scroll-into-view) dismissed the picker before anyone could type.
+    // The phone sheet is not anchored, so it ignores both.
+    const followTrigger = (e: Event) => {
       if (dropdownRef.current && e.target instanceof Node && dropdownRef.current.contains(e.target)) return
-      setProductDropdownOpen(prev => (prev ? null : prev))
+      setProductDropdownOpen(prev => {
+        if (!prev || window.matchMedia(COMPACT_PICKER_QUERY).matches) return prev
+        const trigger = productTriggerRef.current
+        if (!trigger || !trigger.isConnected) return null
+        const rect = trigger.getBoundingClientRect()
+        // Trigger scrolled fully out of view: nothing left to anchor to.
+        if (rect.bottom < 0 || rect.top > window.innerHeight) return null
+        const openUp = rect.bottom + 320 > visibleViewportBand().bottom && rect.top > 340
+        const top = openUp ? rect.top - 6 : rect.bottom + 6
+        const left = Math.max(8, Math.min(rect.left, window.innerWidth - 296))
+        return prev.top === top && prev.left === left && prev.openUp === openUp ? prev : { ...prev, top, left, openUp }
+      })
     }
     window.addEventListener('mousedown', h)
-    window.addEventListener('scroll', closeDropdown, true)
-    window.addEventListener('resize', closeDropdown)
+    window.addEventListener('scroll', followTrigger, true)
+    window.addEventListener('resize', followTrigger)
     return () => {
       window.removeEventListener('mousedown', h)
-      window.removeEventListener('scroll', closeDropdown, true)
-      window.removeEventListener('resize', closeDropdown)
+      window.removeEventListener('scroll', followTrigger, true)
+      window.removeEventListener('resize', followTrigger)
     }
   }, [])
 
@@ -4087,6 +4106,65 @@ function NewQuotationForm({
   )
   const getFilteredProducts = (search: string) =>
     products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku ?? '').toLowerCase().includes(search.toLowerCase()))
+  // One picker body, two presentations: an anchored popover on desktop, a
+  // bottom sheet on phones (where the keyboard would otherwise cover/close it).
+  const renderProductPickerBody = (lineId: string, inSheet: boolean) => {
+    const search = productSearch[lineId] ?? ''
+    const typed = search.trim()
+    const filteredProds = getFilteredProducts(search)
+    const pick = (p: (typeof products)[number]) => {
+      selectProductForDraftLine(lineId, p)
+      setProductSearch(prev => ({ ...prev, [lineId]: '' }))
+      setProductDropdownOpen(null)
+    }
+    const option = (p: (typeof products)[number]) => (
+      <button key={p.id} type="button" className="picker-option w-full text-left px-3 py-2 hover:bg-[var(--sp-accent-soft)] transition-colors"
+        onClick={() => pick(p)}>
+        <p className="text-xs font-semibold text-[var(--sp-text)]">{p.name}</p>
+        <p className="text-[10px] text-[var(--sp-text-3)]">{p.category} · {salesKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
+      </button>
+    )
+    const close = filteredProds.length === 0 && typed ? similarProducts(products, typed) : []
+    return (
+      <>
+        <div className={inSheet ? 'picker-search' : 'p-2 border-b border-[var(--sp-border)]'}>
+          <input
+            autoFocus={!inSheet}
+            data-sheet-autofocus
+            type="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            aria-label="Search products"
+            placeholder={inSheet ? 'Search name or SKU' : 'Search products…'}
+            className="w-full"
+            value={search}
+            onChange={e => setProductSearch(prev => ({ ...prev, [lineId]: e.target.value }))}
+          />
+        </div>
+        <div className={inSheet ? 'picker-list' : 'max-h-48 overflow-y-auto'}>
+          {filteredProds.length === 0 ? (
+            <>
+              <p className="picker-note px-3 py-2 text-xs text-[var(--sp-text-3)]">
+                {typed ? `No product named “${typed}”.` : 'No products found'}
+                {close.length > 0 ? ' Did you mean:' : ''}
+              </p>
+              {close.map(option)}
+              {typed && !canCreateProduct && (
+                <p className="picker-note px-3 py-2 text-[10px] text-[var(--sp-text-3)]">Not in the catalogue — ask Inventory or an admin to add it.</p>
+              )}
+            </>
+          ) : filteredProds.map(option)}
+        </div>
+        {canCreateProduct && typed && !hasExactProduct(products, search) && (
+          <button type="button" className="picker-create w-full text-left px-3 py-2 text-xs font-semibold border-t border-[var(--sp-border)] hover:bg-[var(--sp-accent-soft)]"
+            style={{ color: 'var(--navy)' }}
+            onClick={() => { setQuickProduct({ lineId, name: typed }); setProductDropdownOpen(null) }}>
+            + Create product “{typed}”
+          </button>
+        )}
+      </>
+    )
+  }
   // Create a product from the quote line (roles that may create products).
   const { users: appUsers, currentUserId: appUserId } = useApp()
   const canCreateProduct = canCreateProductFromSales(appUsers.find(u => u.id === appUserId)?.role)
@@ -4309,7 +4387,6 @@ function NewQuotationForm({
                 </thead>
                 <tbody>
                   {newDraftLines.map((line, lineIndex) => {
-                    const filteredProds = getFilteredProducts(productSearch[line.id] ?? '')
                     const isOpen = productDropdownOpen?.id === line.id
                     const hasInvalidQty = !!line.productId && Number(line.qty) <= 0
                     const moveButtons = (
@@ -4372,7 +4449,7 @@ function NewQuotationForm({
                             <span className="flex-1 truncate min-w-0" title={line.productName || undefined}>{line.productName || <span className="text-[var(--sp-text-3)]">Select product…</span>}</span>
                             <Fa icon={faChevronDown} className={`text-[9px] text-[var(--sp-text-3)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                           </div>
-                          {isOpen && productDropdownOpen && (
+                          {isOpen && productDropdownOpen && !compactPicker && (
                             <div
                               ref={dropdownRef}
                               className="fixed z-[9500] w-72 bg-white border border-[var(--sp-border)] rounded-[6px] shadow-lg overflow-hidden"
@@ -4383,49 +4460,7 @@ function NewQuotationForm({
                                   : { top: productDropdownOpen.top }),
                               }}
                             >
-                              <div className="p-2 border-b border-[var(--sp-border)]">
-                                <input autoFocus type="text" aria-label="Search products" placeholder="Search products…" className="w-full"
-                                  value={productSearch[line.id] ?? ''} onChange={e => setProductSearch(prev => ({ ...prev, [line.id]: e.target.value }))} />
-                              </div>
-                              <div className="max-h-48 overflow-y-auto">
-                                {filteredProds.length === 0 ? (() => {
-                                  const typed = (productSearch[line.id] ?? '').trim()
-                                  const close = typed ? similarProducts(products, typed) : []
-                                  return (
-                                    <>
-                                      <p className="px-3 py-2 text-xs text-[var(--sp-text-3)]">
-                                        {typed ? `No product named “${typed}”.` : 'No products found'}
-                                        {close.length > 0 ? ' Did you mean:' : ''}
-                                      </p>
-                                      {close.map(p => (
-                                        <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-[var(--sp-accent-soft)] transition-colors"
-                                          onClick={() => { selectProductForDraftLine(line.id, p); setProductSearch(prev => ({ ...prev, [line.id]: '' })); setProductDropdownOpen(null) }}>
-                                          <p className="text-xs font-semibold text-[var(--sp-text)]">{p.name}</p>
-                                          <p className="text-[10px] text-[var(--sp-text-3)]">{p.category} · {salesKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
-                                        </button>
-                                      ))}
-                                      {typed && !canCreateProduct && (
-                                        <p className="px-3 py-2 text-[10px] text-[var(--sp-text-3)]">Not in the catalogue — ask Inventory or an admin to add it.</p>
-                                      )}
-                                    </>
-                                  )
-                                })() : (
-                                  filteredProds.map(p => (
-                                    <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-[var(--sp-accent-soft)] transition-colors"
-                                      onClick={() => { selectProductForDraftLine(line.id, p); setProductSearch(prev => ({ ...prev, [line.id]: '' })); setProductDropdownOpen(null) }}>
-                                      <p className="text-xs font-semibold text-[var(--sp-text)]">{p.name}</p>
-                                      <p className="text-[10px] text-[var(--sp-text-3)]">{p.category} · {salesKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
-                                    </button>
-                                  ))
-                                )}
-                              </div>
-                              {canCreateProduct && (productSearch[line.id] ?? '').trim() && !hasExactProduct(products, productSearch[line.id] ?? '') && (
-                                <button type="button" className="w-full text-left px-3 py-2 text-xs font-semibold border-t border-[var(--sp-border)] hover:bg-[var(--sp-accent-soft)]"
-                                  style={{ color: 'var(--navy)' }}
-                                  onClick={() => { setQuickProduct({ lineId: line.id, name: (productSearch[line.id] ?? '').trim() }); setProductDropdownOpen(null) }}>
-                                  + Create product “{(productSearch[line.id] ?? '').trim()}”
-                                </button>
-                              )}
+                              {renderProductPickerBody(line.id, false)}
                             </div>
                           )}
                         </td>
@@ -4473,6 +4508,16 @@ function NewQuotationForm({
                 </tbody>
               </table>
             </div>
+            {compactPicker && (
+              <PickerSheet
+                open={!!productDropdownOpen}
+                onClose={closeProductDropdown}
+                title="Choose product"
+                panelRef={dropdownRef}
+              >
+                {productDropdownOpen ? renderProductPickerBody(productDropdownOpen.id, true) : null}
+              </PickerSheet>
+            )}
             <div className="sp-line-actions">
               <button type="button" onClick={addDraftLine}>Add a line</button>
               <button type="button" onClick={addDraftSection}>Add a section</button>
