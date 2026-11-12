@@ -41,11 +41,13 @@ const policy = (roles: readonly string[], modules?: readonly string[]): StoreWri
  * authorization; this is the outer wholesale-store guard.
  */
 export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = Object.freeze({
-  deed_companySettings: policy(ADMIN, ['settings']),
-  deed_systemSettings: policy(DIRECTOR, ['settings']),
+  // No module named 'settings' exists, so this refused every Admin Officer
+  // edit although Settings opens for them. The role list is the rule.
+  deed_companySettings: policy(ADMIN),
+  deed_systemSettings: policy(DIRECTOR),
   deed_profileImages: policy(ALL_OPERATIONAL),
 
-  deed_departments: policy(ADMIN, ['hr', 'settings']),
+  deed_departments: policy(ADMIN, ['hr']),
   deed_contracts: policy(HR, ['hr']),
   deed_customerContracts: policy([...ADMIN, 'sales_rep'], ['crm', 'sales']),
   deed_hrDocuments: policy(HR, ['hr', 'my_documents']),
@@ -152,7 +154,9 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
   deed_ref_sops: policy(REPAIR, ['sops', 'refurbishment']),
 
   deed_holdovers: policy([...SALES, 'inventory_officer'], ['holdovers']),
-  deed_companyAssets: policy(ADMIN, ['property']),
+  // The module is company_property. 'property' matched no one, so every Admin
+  // Officer save of the register was refused (11 Nov: the whole register lost).
+  deed_companyAssets: policy(ADMIN, ['company_property']),
 })
 
 function normalizedRole(role: unknown): string {
