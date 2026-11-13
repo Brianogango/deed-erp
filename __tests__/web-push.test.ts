@@ -62,6 +62,23 @@ describe('sendWebPush', () => {
     expect(init.body).toBeInstanceOf(Uint8Array)
   })
 
+  it('accepts a private key whose leading zero byte was dropped', async () => {
+    // Find a key that starts with 0x00 so the short form is the same key.
+    let ecdh = crypto.createECDH('prime256v1')
+    let priv = Buffer.alloc(0)
+    for (let i = 0; i < 5000; i++) {
+      ecdh = crypto.createECDH('prime256v1'); ecdh.generateKeys()
+      const full = Buffer.from(ecdh.getPrivateKey('hex').padStart(64, '0'), 'hex')
+      if (full[0] === 0) { priv = full.subarray(1); break }
+    }
+    expect(priv.length).toBe(31)
+    process.env.VAPID_PUBLIC_KEY = b64url(ecdh.getPublicKey())
+    process.env.VAPID_PRIVATE_KEY = b64url(priv)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 201 })))
+    const result = await sendWebPush(browserSubscription(), { title: 'Deed ERP' })
+    expect(result.success).toBe(true)
+  })
+
   it('surfaces gone subscriptions as HTTP 410', async () => {
     const keys = vapidPair()
     process.env.VAPID_PUBLIC_KEY = keys.publicKey

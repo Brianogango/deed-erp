@@ -41,6 +41,12 @@ function buildVapidJwt(endpoint: string, publicKey: Buffer, privateKey: Buffer):
   if (publicKey.length !== 65 || publicKey[0] !== 4) {
     throw new Error('VAPID_PUBLIC_KEY must be an uncompressed P-256 public key')
   }
+  // A P-256 scalar can start with zero bytes, and tools that print it as a
+  // number (Node's ECDH getPrivateKey among them) drop them: 31 bytes is the
+  // same key. Pad it back rather than refusing it.
+  if (privateKey.length > 0 && privateKey.length < 32) {
+    privateKey = Buffer.concat([Buffer.alloc(32 - privateKey.length), privateKey])
+  }
   if (privateKey.length !== 32) {
     throw new Error('VAPID_PRIVATE_KEY must be a 32-byte P-256 private key')
   }
