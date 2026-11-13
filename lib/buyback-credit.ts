@@ -100,3 +100,84 @@ export function buildBuyBackStoreCreditJournalLines(opts: {
     },
   ]
 }
+
+type BuyBackLineLike = { productId: string; productName: string; qty: number; unitPrice: number; condition?: string; serialIds?: string[] }
+
+/**
+ * A cash / M-Pesa / bank payout is a purchase from the customer: a vendor
+ * bill to them, booked to Trade-in Purchases (6114), posted and paid from the
+ * till. It used to record only a refund-list row, so the payout never reached
+ * the books.
+ */
+export function buildBuyBackPayoutBillLines(
+  bb: { ref: string; lines: BuyBackLineLike[] },
+  serialNumberOf: (serialId: string) => string = id => id,
+): Array<{ description: string; qty: number; unitPrice: number; taxRate: number; subtotal: number; productId: string; accountCode: string }> {
+  return bb.lines
+    .filter(l => Number(l.qty) > 0)
+    .map(l => {
+      const serials = (l.serialIds ?? []).map(serialNumberOf).filter(Boolean)
+      const qty = Number(l.qty)
+      const unitPrice = Math.max(0, Number(l.unitPrice) || 0)
+      return {
+        description: `Trade-in ${bb.ref}: ${l.productName}${l.condition ? ` (${l.condition})` : ''}${serials.length ? ` — S/N ${serials.join(', ')}` : ''}`,
+        qty,
+        unitPrice,
+        taxRate: 0,
+        subtotal: qty * unitPrice,
+        productId: l.productId,
+        accountCode: TRADE_IN_PURCHASES_CODE,
+      }
+    })
+}
+
+/**
+ * What a stocked buy-back adds to inventory value: per product, the units and
+ * their trade-in cost (several lines of one product are combined — the
+ * valuation records one entry per buy-back and product). The cost comes out
+ * of Trade-in Purchases (6114) into Inventory, so a machine resold later
+ * carries what we paid for it instead of zero.
+ */
+export function buyBackStockCosts(lines: BuyBackLineLike[]): Array<{ productId: string; qty: number; unitCost: number }> {
+  const byProduct = new Map<string, { qty: number; value: number }>()
+  for (const l of lines) {
+    const qty = Math.max(0, Math.floor(Number(l.qty) || 0))
+    if (!l.productId || qty <= 0) continue
+    const row = byProduct.get(l.productId) ?? { qty: 0, value: 0 }
+    row.qty += qty
+    row.value += qty * Math.max(0, Number(l.unitPrice) || 0)
+    byProduct.set(l.productId, row)
+  }
+  return [...byProduct.entries()].map(([productId, r]) => ({ productId, qty: r.qty, unitCost: Math.round((r.value / r.qty) * 100) / 100 }))
+}
+
+const sameName = (a: unknown, b: unknown) =>
+  String(a ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === String(b ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+
+/**
+ * The product a buy-back line is for. When its product id is gone (a product
+ * that never reached the products table, or one merged away) and exactly one
+ * active product has the line's name, that is the product — the line is
+ * relinked to it. Anything less certain stays unresolved for a person.
+ */
+export function resolveBuyBackProduct<P extends { id: string; name?: string; isActive?: boolean; mergedIntoId?: string }>(
+  line: { productId: string; productName: string },
+  products: P[],
+): P | undefined {
+  const direct = products.find(p => p.id === line.productId)
+  if (direct?.mergedIntoId) return products.find(p => p.id === direct.mergedIntoId) ?? direct
+  if (direct) return direct
+  const named = products.filter(p => p.isActive !== false && sameName(p.name, line.productName))
+  return named.length === 1 ? named[0] : undefined
+}
+
+/**
+ * Buy-backs paid out in cash / M-Pesa / bank before payouts made a bill: the
+ * money left but no journal booked it. Listed for the accountant, not posted.
+ */
+export function buyBacksPaidWithoutBill<T extends { status: string; paymentMethod?: string; billId?: string; creditId?: string }>(list: T[]): T[] {
+  return list.filter(b =>
+    (b.status === 'paid' || b.status === 'stocked')
+    && !!b.paymentMethod && b.paymentMethod !== 'store_credit'
+    && !b.billId && !b.creditId)
+}

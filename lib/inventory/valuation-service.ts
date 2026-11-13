@@ -967,6 +967,13 @@ export async function processStockAdjustment(params: {
   expenseAccountLabel?: string
   /** Line text for that expense, e.g. "Parts consumed". */
   expenseLineText?: string
+  /**
+   * Stock added at a known cost that was booked elsewhere first — e.g. a
+   * trade-in, expensed to Trade-in Purchases when paid: credit that account
+   * instead of the inventory variance, with this line text.
+   */
+  gainAccountLabel?: string
+  gainLineText?: string
 }) {
   const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
   if (qty <= 0) throw new Error('Adjustment qty must be positive')
@@ -1060,7 +1067,9 @@ export async function processStockAdjustment(params: {
       ref: stockValuationJournalRef('adjustment_add', params.reference || '', params.productId),
       description: params.reversesWriteOff
         ? `Write-off reversed ${applied.qty} @ ${unitCost}`
-        : `Stock gain ${applied.qty} @ ${unitCost}`,
+        : params.gainAccountLabel
+          ? `${params.gainLineText || 'Stock in'} ${applied.qty} @ ${unitCost}`
+          : `Stock gain ${applied.qty} @ ${unitCost}`,
       sourceType: 'stock_adjustment',
       sourceId: params.reference || params.productId,
       createdById: params.userId,
@@ -1069,10 +1078,15 @@ export async function processStockAdjustment(params: {
             { accountLabel: inventoryLabel, label: 'Inventory restored', debit: applied.totalCost, credit: 0 },
             { accountLabel: expenseLabel, label: `${params.expenseLineText || 'Write-off'} reversed`, debit: 0, credit: applied.totalCost },
           ]
-        : [
-            { accountLabel: inventoryLabel, label: 'Inventory gain', debit: applied.totalCost, credit: 0 },
-            { accountLabel: ADJUSTMENT_LABEL, label: 'Inventory variance', debit: 0, credit: applied.totalCost },
-          ],
+        : params.gainAccountLabel
+          ? [
+              { accountLabel: inventoryLabel, label: params.gainLineText || 'Stock in', debit: applied.totalCost, credit: 0 },
+              { accountLabel: params.gainAccountLabel, label: params.gainLineText || 'Stock in', debit: 0, credit: applied.totalCost },
+            ]
+          : [
+              { accountLabel: inventoryLabel, label: 'Inventory gain', debit: applied.totalCost, credit: 0 },
+              { accountLabel: ADJUSTMENT_LABEL, label: 'Inventory variance', debit: 0, credit: applied.totalCost },
+            ],
       ledger: {
         productId: params.productId,
         quantity: applied.qty,

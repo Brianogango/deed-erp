@@ -267,6 +267,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const [payMethod, setPayMethod]     = useState('')
   const [creditModal, setCreditModal] = useState<string | null>(null)
   const [crediting, setCrediting]     = useState(false)
+  const [paying, setPaying]           = useState(false)
   const [showBulk, setShowBulk]       = useState(false)
   const [bulkRows, setBulkRows]       = useState<BuyBackBulkRow[]>([])
   const [bulkImporting, setBulkImporting] = useState(false)
@@ -442,19 +443,21 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const settleModals = (
     <>
         {payModal && (
-          <Modal title="Pay customer" onClose={() => setPayModal(null)}>
+          <Modal title="Pay customer" onClose={() => { if (!paying) setPayModal(null) }}>
             <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
-              Cash leaves the till or bank. This buy-back cannot also be added as store credit.
+              Cash leaves the till or bank. A bill to the customer (6114 Trade-in Purchases) is posted and paid. This buy-back cannot also be added as store credit.
             </p>
             <Field label="Payment Method *">
               <Select value={payMethod} onChange={setPayMethod} options={[{ value: '', label: 'Select…' }, ...PAY_OPTS]} />
             </Field>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-              <button className="btn-secondary text-[11px]" onClick={() => setPayModal(null)}>Cancel</button>
-              <button className="btn-primary text-[11px]" onClick={() => {
+              <button className="btn-secondary text-[11px]" disabled={paying} onClick={() => setPayModal(null)}>Cancel</button>
+              <button className="btn-primary text-[11px]" disabled={paying} onClick={async () => {
                 if (!payMethod) { showToast('Select a payment method', 'error'); return }
-                payBuyBack(payModal, payMethod as BuyBack['paymentMethod']); setPayModal(null)
-              }}>Confirm Payment</button>
+                setPaying(true)
+                try { await payBuyBack(payModal, payMethod as BuyBack['paymentMethod']) } finally { setPaying(false) }
+                setPayModal(null)
+              }}>{paying ? 'Paying…' : 'Confirm Payment'}</button>
             </div>
           </Modal>
         )}

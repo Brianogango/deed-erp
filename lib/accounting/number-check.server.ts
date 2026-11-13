@@ -3,6 +3,7 @@ import 'server-only'
 import prisma from '@/lib/prisma'
 import { loadAppState } from '@/lib/server-store'
 import { repeatedRefs, returnsMissingValuation, valuationSkippedByRepeat } from '@/lib/doc-number-repair'
+import { buyBacksPaidWithoutBill } from '@/lib/buyback-credit'
 
 /**
  * What the old per-browser document numbers may have cost the books. Read
@@ -12,10 +13,12 @@ import { repeatedRefs, returnsMissingValuation, valuationSkippedByRepeat } from 
  *   or POS session close that repeated a number may never have reached it.
  * - The valuation skips a return number + product it has seen, so a
  *   repeated return may have moved stock without its value.
+ * - Buy-backs paid in cash / M-Pesa / bank used to record no journal.
  */
 
 type RefundPayment = { id: string; ref: string; rmaRef?: string; customerName?: string; amount?: number; paymentDate?: string; createdDate?: string; journalEntryId?: string }
 type PosSession = { id: string; ref: string; formerRef?: string; status?: string; closedAt?: string; totalSales?: number }
+type BuyBack = { id: string; ref: string; customerName?: string; total?: number; status: string; paymentMethod?: string; paidDate?: string; billId?: string; creditId?: string }
 type ReturnOrder = { id: string; ref: string; formerRef?: string; customerName?: string; receivedDate?: string; lines?: Array<{ productId: string; productName?: string; qty?: number }> }
 
 export type NumberCheck = {
@@ -23,13 +26,15 @@ export type NumberCheck = {
   refundsNotInLedger: Array<{ id: string; ref: string; rmaRef?: string; customerName?: string; amount?: number; date?: string }>
   posSessionsNotInLedger: Array<{ id: string; ref: string; formerRef?: string; closedAt?: string; totalSales?: number }>
   returnsMissingValue: Array<{ id: string; ref: string; formerRef?: string; customerName?: string; products: string[] }>
+  buyBackPayoutsNotBooked: Array<{ id: string; ref: string; customerName?: string; total?: number; paymentMethod?: string; paidDate?: string }>
 }
 
 export async function runNumberCheck(): Promise<NumberCheck> {
-  const state = await loadAppState(['deed_refundPayments', 'deed_posSessions', 'deed_returnOrders'])
+  const state = await loadAppState(['deed_refundPayments', 'deed_posSessions', 'deed_returnOrders', 'deed_buyBacks'])
   const refunds = ((state.deed_refundPayments as RefundPayment[]) ?? []).filter(p => p && p.id)
   const sessions = ((state.deed_posSessions as PosSession[]) ?? []).filter(s => s && s.id)
   const returns = ((state.deed_returnOrders as ReturnOrder[]) ?? []).filter(r => r && r.id)
+  const buyBacks = ((state.deed_buyBacks as BuyBack[]) ?? []).filter(b => b && b.id)
 
   const dateOf = (p: RefundPayment) => p.paymentDate || p.createdDate || ''
   const view = (p: RefundPayment) => ({ id: p.id, ref: p.ref, rmaRef: p.rmaRef, customerName: p.customerName, amount: p.amount, date: dateOf(p) })
@@ -54,6 +59,9 @@ export async function runNumberCheck(): Promise<NumberCheck> {
     returnsMissingValue: returnsMissingValuation(returns.map(r => ({ ...r, lines: r.lines ?? [] }))).map(r => ({
       id: r.id, ref: r.ref, formerRef: r.formerRef, customerName: r.customerName,
       products: (r.lines ?? []).map(l => `${l.qty ?? ''} × ${l.productName ?? l.productId}`.trim()),
+    })),
+    buyBackPayoutsNotBooked: buyBacksPaidWithoutBill(buyBacks).map(b => ({
+      id: b.id, ref: b.ref, customerName: b.customerName, total: b.total, paymentMethod: b.paymentMethod, paidDate: b.paidDate,
     })),
   }
 }

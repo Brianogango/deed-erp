@@ -226,6 +226,8 @@ import {
   buyBackStoreCreditAmount,
   canCreditBuyBack,
   canPayBuyBackCash,
+  buildBuyBackPayoutBillLines,
+  resolveBuyBackProduct,
 } from '@/lib/buyback-credit'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { evaluateCustomerCreditGate, isPayOnReceipt } from '@/lib/customer-credit-gate'
@@ -2361,6 +2363,8 @@ export interface BuyBack {
   /** CustomerCredit created by Add as credit; absent when the customer was paid in cash. */
   creditId?: string
   creditRef?: string
+  /** Cash / M-Pesa / bank payout: the vendor bill (to the customer) that booked and paid it. */
+  billId?: string; billRef?: string
   stockedDate?: string; stockedByName?: string
 }
 
@@ -4192,7 +4196,7 @@ interface AppState {
   createBuyBack: (customerId: string, customerName: string, lines: Omit<BuyBackLine, 'id'>[], destination: LocationId, notes?: string, originalSOId?: string, originalSORef?: string) => BuyBack
   approveBuyBack: (id: string) => void
   /** Cash / M-Pesa / bank payout. Refuses `store_credit` — that path is `creditBuyBack`. */
-  payBuyBack: (id: string, paymentMethod: BuyBack['paymentMethod']) => void
+  payBuyBack: (id: string, paymentMethod: BuyBack['paymentMethod']) => void | Promise<void>
   /** After approve: add the buy-back amount as store credit (3102) instead of paying cash. Marks the BBK paid so stocking can follow. */
   creditBuyBack: (id: string) => void | Promise<void>
   /** Intake serials/qty after either pay or add-as-credit (`status === 'paid'`). */
@@ -22656,31 +22660,66 @@ const storeCtx: AppState = {
       showToast('Buy-back approved')
     },
 
-    // Pay path: cash leaves till/bank. Blocked if already credited or not yet approved.
-    payBuyBack: (id, paymentMethod) => {
+    // Pay path: a vendor bill to the customer (Trade-in Purchases 6114),
+    // posted and paid from the till / M-Pesa / bank. It used to record only a
+    // refund-list row, so the payout never reached the books. A second click
+    // (e.g. by another Finance user, when separation of duties stops the
+    // poster paying) reuses the same bill.
+    payBuyBack: async (id, paymentMethod) => {
       const user = currentUser(); if (!user) return
       const bb = buyBacks.find(b => b.id === id)
       const allowed = canPayBuyBackCash(bb, paymentMethod)
-      if (!allowed.ok) { showToast(allowed.error || 'Cannot record buy-back payment', 'error'); return }
-      const payment: RefundPayment = {
-        id: uid(),
-        ref: allocateDocNumberSync('RFD'),
-        rmaId: bb.id,
-        rmaRef: bb.ref,
-        customerName: bb.customerName,
-        amount: bb.total,
-        paymentMethod: paymentMethod ?? 'cash',
-        bankAccountId: bankAccountIdForMethod(paymentMethod),
-        paymentDate: now(),
-        notes: `Buy-back payout for ${bb.ref}`,
-        journalEntryId: '',
-        createdBy: user.name,
-        createdDate: now(),
+      if (!allowed.ok || !bb) { showToast(allowed.error || 'Cannot record buy-back payment', 'error'); return }
+      if (!canManageFinance(user)) {
+        showToast('Paying out a buy-back posts and pays a bill — ask Finance, an Admin Officer or the Director', 'error'); return
       }
-      setRefundPayments(prev => [payment, ...prev])
-      numberRefundPayments([payment.id])
-      setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'paid', paymentMethod, paidDate: now() } : b))
-      showToast('Payment to customer recorded')
+      const method = paymentMethod ?? 'cash'
+      let bill = bb.billId ? invRef.current.find(i => i.id === bb.billId && i.status !== 'cancelled') : undefined
+      if (!bill) {
+        const lines: InvoiceLine[] = buildBuyBackPayoutBillLines(bb, sid => serialRef.current.find(x => x.id === sid)?.serial ?? sid)
+          .map(l => ({ id: uid(), ...l }))
+        const total = lines.reduce((sum, l) => sum + l.subtotal, 0)
+        const draft: Invoice = {
+          id: uid(),
+          ref: draftInvoiceRef('vendor_bill'),
+          type: 'vendor_bill',
+          status: 'draft',
+          partnerId: bb.customerId,
+          partnerName: bb.customerName,
+          date: now(),
+          dueDate: now(),
+          lines,
+          subtotal: total,
+          taxTotal: 0,
+          total,
+          amountPaid: 0,
+          notes: `Buy-back ${bb.ref} — payout to ${bb.customerName}`,
+        }
+        invRef.current = [draft, ...invRef.current]
+        setInvoices(prev => [draft, ...prev])
+        if (!(await saveInvoiceToServer(draft, msg => showToast(msg, 'error')))) return
+        bill = draft
+        setBuyBacks(p => p.map(b => b.id === id ? { ...b, billId: draft.id } : b))
+      }
+      if (invoiceDocState(bill.status) !== 'posted') {
+        await storeCtxRef.current!.postInvoice(bill.id)
+        bill = invRef.current.find(i => i.id === bill!.id)
+        if (!bill || invoiceDocState(bill.status) !== 'posted') {
+          showToast(`The payout bill for ${bb.ref} was saved but not posted — post it in Purchases › Bills, then press Pay again`, 'error'); return
+        }
+      }
+      const posted = bill
+      setBuyBacks(p => p.map(b => b.id === id ? { ...b, billId: posted.id, billRef: posted.ref } : b))
+      const balance = posted.total - posted.amountPaid
+      if (balance > 0) {
+        const paid = await storeCtxRef.current!.registerPayment(posted.id, balance, method, bankAccountIdForMethod(method), bb.ref, now())
+        if (!paid) {
+          showToast(`${posted.ref} is posted but not paid yet. Pay it here again (another Finance user, if asked) or in Purchases › Bills`, 'error'); return
+        }
+      }
+      setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'paid', paymentMethod, paidDate: now(), billId: posted.id, billRef: posted.ref } : b))
+      addAuditLog('buyback_payout', bb.ref, `Paid out via bill ${posted.ref} (${method}) — ${bb.customerName}`)
+      showToast(`Payment recorded — bill ${posted.ref} posted and paid`)
     },
 
     // Credit path: same KES onto 3102. No RefundPayment, no petty cash. Status stays `paid` so Add to stock still works.
@@ -22749,9 +22788,17 @@ const storeCtx: AppState = {
       const bb = buyBacks.find(b => b.id === id)
       if (!bb) return
       if (bb.status !== 'paid') { showToast('Settle the buy-back (pay or add as credit) before stocking items', 'error'); return }
-      for (const line of bb.lines) {
+      // A line whose product id is gone (never saved to the products table, or
+      // merged away) is relinked to the one active product of that name.
+      const lines = bb.lines.map(line => {
+        const product = resolveBuyBackProduct(line, prodRef.current)
+        return product && product.id !== line.productId ? { ...line, productId: product.id, productName: product.name } : line
+      })
+      for (const line of lines) {
         const product = prodRef.current.find(p => p.id === line.productId)
-        if (!product) { showToast(`Product not found: ${line.productName}`, 'error'); return }
+        if (!product) {
+          showToast(`"${line.productName}" is not in Inventory (it may not have saved, or was merged or deleted). Create or find it in Inventory › Products, then try again.`, 'error'); return
+        }
         if (product.requiresSerial && line.serialIds.length !== line.qty) {
           showToast(`Select ${line.qty} serial number(s) for ${line.productName}`, 'error'); return
         }
@@ -22761,7 +22808,7 @@ const storeCtx: AppState = {
           }
         }
       }
-      bb.lines.forEach(line => {
+      lines.forEach(line => {
         // Restore serials — good/fair → available, poor → refurbishment
         line.serialIds.forEach(sid => {
           setSerials(p => p.map(s => s.id === sid
@@ -22778,7 +22825,7 @@ const storeCtx: AppState = {
         }
         addMove(line.productId, line.productName, line.qty, 'in', `Buy-back ${bb.ref}`, bb.ref, 'customer', bb.destinationLocation, line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
       })
-      const toRefurb = openTradeInRefurbJobs(bb.lines.flatMap(line => line.serialIds
+      const toRefurb = openTradeInRefurbJobs(lines.flatMap(line => line.serialIds
         .filter(sid => line.condition === 'poor' || awaitingIdentification(serialRef.current.find(s => s.id === sid)))
         .map(sid => ({
           serialId: sid,
@@ -22788,9 +22835,16 @@ const storeCtx: AppState = {
             ? `Trade-in ${bb.ref} (${bb.customerName}) — serial unknown, not yet identified${line.notes ? `: ${line.notes}` : ''}`
             : `Trade-in ${bb.ref} (${bb.customerName}) in poor condition${line.notes ? `: ${line.notes}` : ''}`,
         }))))
-      setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'stocked', stockedDate: now(), stockedByName: user.name } : b))
+      setBuyBacks(p => p.map(b => b.id === id ? { ...b, lines, status: 'stocked', stockedDate: now(), stockedByName: user.name } : b))
+      // The machines take their trade-in cost into inventory (Dr Inventory,
+      // Cr Trade-in Purchases); they used to come in at no value.
+      void fetch('/api/inventory/trade-in-valuation', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyBackId: bb.id }),
+      }).then(res => { if (!res.ok) showToast(`${bb.ref} is stocked, but its stock value was not posted — tell Finance`, 'error') })
+        .catch(() => showToast(`${bb.ref} is stocked, but its stock value was not posted — tell Finance`, 'error'))
       addAuditLog('buyback_stock', bb.ref, `Stocked buy-back ${bb.ref} for ${bb.customerName}${toRefurb ? ` — ${toRefurb} to refurbishment` : ''}`)
-      cancelWarrantiesForTradeIn(bb.lines.flatMap(l => l.serialIds), bb.ref, `Bought back from ${bb.customerName} (${bb.ref})`)
+      cancelWarrantiesForTradeIn(lines.flatMap(l => l.serialIds), bb.ref, `Bought back from ${bb.customerName} (${bb.ref})`)
       showToast(`${bb.ref} stocked — inventory updated${toRefurb ? `; ${toRefurb} machine${toRefurb === 1 ? '' : 's'} sent to Refurbishment` : ''}`)
     },
 

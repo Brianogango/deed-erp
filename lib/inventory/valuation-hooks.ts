@@ -349,3 +349,40 @@ export async function postOpeningStockValuation(params: {
   }
   return { ok: true as const, results, warnings: collectWarnings(results) }
 }
+
+/**
+ * A stocked buy-back: each product's units come into inventory at their
+ * trade-in cost, moved out of Trade-in Purchases (6114) where the payout or
+ * store credit booked them. Safe to repeat (one entry per buy-back and product).
+ */
+export async function postTradeInStockValuation(params: {
+  buyBackRef: string
+  lines: Array<{ productId: string; qty: number; unitCost: number }>
+  userId?: string
+}) {
+  if (!(await isAutomatedValuationEnabled())) {
+    return { ok: false as const, reason: 'valuation_disabled', results: [] as unknown[] }
+  }
+  const { TRADE_IN_PURCHASES_ACCOUNT } = await import('@/lib/buyback-credit')
+  const results: unknown[] = []
+  for (const line of params.lines) {
+    if (!line.productId || !(line.qty > 0)) continue
+    try {
+      const result = await processStockAdjustment({
+        productId: line.productId,
+        qty: line.qty,
+        type: 'add',
+        reference: `${params.buyBackRef}/TI`,
+        userId: params.userId,
+        unitCost: line.unitCost,
+        postJournal: true,
+        gainAccountLabel: TRADE_IN_PURCHASES_ACCOUNT,
+        gainLineText: `Trade-in ${params.buyBackRef} into stock`,
+      })
+      results.push({ productId: line.productId, qty: line.qty, result })
+    } catch (err) {
+      results.push({ productId: line.productId, qty: line.qty, error: err instanceof Error ? err.message : 'failed' })
+    }
+  }
+  return { ok: true as const, results }
+}
