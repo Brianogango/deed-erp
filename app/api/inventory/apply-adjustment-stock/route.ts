@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { applyAdjustmentStockMutation } from '@/lib/inventory/stock-transactions'
 import { postAdjustmentValuation } from '@/lib/inventory/valuation-hooks'
+import { canApproveInventory } from '@/lib/inventory/permissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +10,7 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = String(session.user.role)
-  if (!['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(role)) {
+  if (!canApproveInventory(role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

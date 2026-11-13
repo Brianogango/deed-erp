@@ -229,6 +229,7 @@ import {
   buildBuyBackPayoutBillLines,
   resolveBuyBackProduct,
 } from '@/lib/buyback-credit'
+import { canApproveInventory } from '@/lib/inventory/permissions'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { evaluateCustomerCreditGate, isPayOnReceipt } from '@/lib/customer-credit-gate'
 import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
@@ -2875,8 +2876,7 @@ interface StockAdjustment {
   formerRef?: string
 }
 
-const canApproveInventoryAction = (user: User | null) =>
-  !!user && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(user.role)
+const canApproveInventoryAction = (user: User | null) => canApproveInventory(user?.role)
 
 /** GRN / purchase receipt validation — narrower than general inventory approvals. */
 const canValidatePurchaseReceiptAction = (user: User | null) =>
