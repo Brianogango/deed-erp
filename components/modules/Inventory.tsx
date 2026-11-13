@@ -664,10 +664,10 @@ function InventoryContent() {
     if (first) setTab(first as MainTab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, customPermissions, currentUser?.permissions])
-  const canTransfer = !!currentUser && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser.role)
-  const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
-  const canRequestAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(currentUser.role)
   const can = useCan()
+  const canTransfer = can('manageInventoryApprovals')
+  const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
+  const canRequestAdj = can('inventory.stock_requests')
   const canApproveAdj = can('manageInventoryApprovals')
 
   // Adjustment numbers used to be counted per browser, so ADJ/0001 repeated.
@@ -688,7 +688,7 @@ function InventoryContent() {
     setAdjMissingValuationIds(out.missingValuation.map(a => a.id))
     if (out.renumbered > 0) showToast(`Giving ${out.renumbered} adjustment${out.renumbered === 1 ? '' : 's'} a unique number`, 'info')
   }, [tab, canApproveAdj, inventoryDataReady, stockAdjustments.length, fixAdjustmentNumbers, showToast])
-  const canUpdatePrice = !!currentUser && ['director', 'admin_officer', 'finance_officer', 'inventory_officer'].includes(currentUser.role)
+  const canUpdatePrice = can('inventory.prices.update')
   const canMergeProducts = canArchiveProduct(currentUser?.role)
 
   const priceHistoryByProduct = useMemo(() => {

@@ -40,6 +40,7 @@ import {
 import { DIRTY_KEYS_LS } from '@/lib/store'
 import { startVisiblePoll } from '@/lib/visible-poll'
 import { repairModuleView } from '@/lib/repair-workspace-view'
+import { useCan } from '@/hooks/useCan'
 
 const RepairDetailView = dynamic(() => import('./repair/RepairDetailView'), {
   loading: () => <ModuleSkeleton />,
@@ -79,7 +80,8 @@ function RepairContent() {
     url.searchParams.delete('warrantyRepair')
     window.history.replaceState(window.history.state, '', url.toString())
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  const canCreateIntake = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
+  const can = useCan()
+  const canCreateIntake = can('repair.intake.create')
 
   return (
     <div className={`mod-page repair-workspace repair-workspace--${view} h-full min-h-0`}>

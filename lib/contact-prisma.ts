@@ -1,7 +1,7 @@
 import { loadAppState, notifyStoreKeysChanged } from '@/lib/server-store'
 import type { Contact } from '@/lib/store'
 import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
-import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
 
 const CONTACT_STORE_KEY = 'deed_contacts'
 
@@ -390,14 +390,13 @@ export async function upsertContact(
 }
 
 /** Roles that may set a customer's credit limit and payment terms directly. */
-const CREDIT_TERMS_ROLES = new Set(['director', 'finance_officer'])
 
 /**
  * Credit limit and payment terms are granted through a credit application
  * (Contacts → Credit). Other roles' contact saves keep the current values.
  */
 export function withoutCreditTerms(body: ContactInput, role: string | null | undefined): ContactInput {
-  if (CREDIT_TERMS_ROLES.has(canonicalRole(role))) return body
+  if (userCan({ role }, 'sales.contacts.credit_terms')) return body
   const { creditLimit: _limit, paymentTermsDays: _terms, ...rest } = body as ContactInput & Record<string, unknown>
   return rest as ContactInput
 }

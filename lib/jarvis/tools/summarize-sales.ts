@@ -3,6 +3,7 @@ import 'server-only'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import type { ToolDefinition } from '../types'
+import { userCan } from '@/lib/auth/can'
 
 /** Quotes, drafts and cancelled orders are not sales. */
 const NOT_SALES = ['quotation', 'quotation_sent', 'sent', 'draft', 'cancelled', 'canceled', 'cancel', 'void', 'voided', 'expired', 'rejected']
@@ -32,7 +33,7 @@ export const summarizeSalesTool: ToolDefinition = {
     const { fromDate, toDate } = inputSchema.parse(rawInput)
 
     // Confirmed sales only; sales reps see their own orders.
-    const ownOnly = ctx.user.role === 'sales_rep'
+    const ownOnly = !userCan(ctx.user, 'sales.view_all')
     const orders = await prisma.saleOrder.findMany({
       where: {
         orderDate: { gte: new Date(fromDate), lte: new Date(`${toDate}T23:59:59`) },

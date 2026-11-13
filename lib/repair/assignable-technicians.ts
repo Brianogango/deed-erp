@@ -14,7 +14,7 @@
  * users and silently blocked them from assigning.
  */
 export function isRepairAssignerRole(role: string | null | undefined): boolean {
-  return ['technical_lead', 'director'].includes(canonicalRole(role))
+  return userCan({ role }, 'repair.lead')
 }
 
 type TechUser = {
@@ -97,3 +97,4 @@ export function mergeAssignableTechniciansIntoUsers<T extends { id: string }>(
 }
 
 import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'

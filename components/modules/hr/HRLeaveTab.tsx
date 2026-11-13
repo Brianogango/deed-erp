@@ -9,6 +9,7 @@ import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } f
 import { CALENDAR_DAY_TYPES, employeeLeaveTypesFor, isLeaveTypeAllowedForGender, leaveDaysForRange, LEAVE_LABELS, type StoreLeaveType } from '@/lib/leave-utils'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import HRLeaveCalendar, { usePublicHolidays } from './HRLeaveCalendar'
+import { useCan } from '@/hooks/useCan'
 
 // Days are always derived from the date range so a request can never claim
 // more (or fewer) days than the dates cover — maternity/paternity count
@@ -64,9 +65,9 @@ export default function HRLeaveTab() {
   } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin     = currentUser?.role === 'director'
-  const isFinance   = currentUser?.role === 'finance_officer'
-  const canViewTeamHR = isAdmin || isFinance
+  const can = useCan()
+  const isAdmin = can('manageHR')
+  const canViewTeamHR = can('viewHrRecords')
   const { holidays, reload: reloadHolidays, version: holidayVersion } = usePublicHolidays()
 
   const [decideId, setDecideId] = useState<string | null>(null)
@@ -89,7 +90,7 @@ export default function HRLeaveTab() {
   const canDecideLeaveFor = (req: { employeeId: string }) => {
     // Own requests are decided by someone else, whatever the caller's role.
     if (myEmployee && req.employeeId === myEmployee.id) return false
-    if (isAdmin || isFinance) return true
+    if (canViewTeamHR) return true
     return false
   }
 

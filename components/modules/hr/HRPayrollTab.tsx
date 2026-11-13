@@ -12,6 +12,7 @@ import { StatutoryFilesModal, AnnualP9Modal } from './HRStatutoryPanel'
 import { PayrollVarianceModal } from './HRPayrollVariance'
 import { PayrollAdjustmentsPanel, StaffLoansPanel, EmailPayslipsModal } from './HRPayrollExtras'
 import { downloadPayslipPdfFile, openPayslipPdfForPrint } from '@/lib/hr/payslip-pdf'
+import { useCan } from '@/hooks/useCan'
 
 export default function HRPayrollTab() {
   const {
@@ -21,12 +22,13 @@ export default function HRPayrollTab() {
   const { employees, departments } = useHrStore()
 
   const currentUser      = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin          = currentUser?.role === 'director'
-  const isFinance        = currentUser?.role === 'finance_officer'
+  const can = useCan()
+  const isAdmin = can('manageHR')
+  const seesSalaries = can('viewEmployeeSensitive')
   const canManageHR      = isAdmin
-  const canManagePayroll = isAdmin || isFinance
+  const canManagePayroll = can('managePayroll')
   const canApprovePayroll = canManagePayroll
-  const canSeeSalary     = isFinance || !systemSettings.hrRestrictSalaryInfo
+  const canSeeSalary = seesSalaries || !systemSettings.hrRestrictSalaryInfo
   const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowerCase()
   const currentUsername = normalizeUserText(currentUser?.username)
   const currentEmployee = employees.find(employee => {
@@ -41,7 +43,7 @@ export default function HRPayrollTab() {
 
   const maskSensitive = (val?: string) => {
     if (!val) return 'N/A'
-    if (isFinance) return val
+    if (seesSalaries) return val
     if (val.length <= 4) return '****'
     return '*'.repeat(val.length - 4) + val.slice(-4)
   }
@@ -234,7 +236,7 @@ export default function HRPayrollTab() {
             <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
           </button>
         )}
-        {run.status === 'posted' && (isAdmin || isFinance) && (
+        {run.status === 'posted' && canManagePayroll && (
           <button style={{ background: 'var(--bg-muted)', border: 'none', borderRadius: 6, color: 'var(--text-2)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }}
             onClick={e => { e.stopPropagation(); setEmailRun({ id: run.id, ref: run.ref }) }}>
             Email payslips

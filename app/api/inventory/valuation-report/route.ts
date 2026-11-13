@@ -12,7 +12,6 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const role = String(session.user.role)
   if (!userCan(session.user, 'inventory.valuation.view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

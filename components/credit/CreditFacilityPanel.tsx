@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Badge, StatusStepper } from '@/components/ui'
 import { fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
 import {
-  ACTION_ROLES, DECIDED_STATUSES, FINANCE_APPROVAL_LIMIT, MIN_PAID_TRANSACTIONS, STANDARD_TERMS_DAYS, STATUS_LABELS,
+  mayTakeCreditAction, DECIDED_STATUSES, FINANCE_APPROVAL_LIMIT, MIN_PAID_TRANSACTIONS, STANDARD_TERMS_DAYS, STATUS_LABELS,
   TRANSITIONS, type CreditAction, type CreditFacilityStatus,
 } from '@/lib/credit/credit-facility-rules'
 import { BUSINESS_FIELDS, BUSINESS_TYPES, DECLARATION_TEXT, GROUPS, OFFICE_USE_FIELDS, REPRESENTATIVE_FIELDS, type FieldDef, type GroupDef } from '@/lib/credit/credit-form-fields'
@@ -285,7 +285,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
   const actions = useMemo(() => {
     if (!detail) return [] as CreditAction[]
     return (Object.keys(TRANSITIONS) as CreditAction[])
-      .filter(a => (TRANSITIONS[a].from as string[]).includes(detail.status) && ACTION_ROLES[a].includes(r))
+      .filter(a => (TRANSITIONS[a].from as string[]).includes(detail.status) && mayTakeCreditAction(r, a))
       .filter(a => {
         if (a === 'approve') return r === 'director' || (detail.approval?.level === 'finance_officer' && detail.requestedById !== userId)
         if (a === 'recommend') return r !== 'director'

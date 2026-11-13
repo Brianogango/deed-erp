@@ -27,7 +27,7 @@ import {
   customerCreditSourceLabel,
   customerCreditStatusLabel,
 } from '@/lib/customer-credit-view'
-import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
 
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
 type ViewTab   = 'info' | 'financial' | 'credit' | 'persons' | 'history' | 'chatter'
@@ -169,7 +169,7 @@ function ContactsInner() {
   const { contacts, addContact, updateContact,
     saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
-  const canSeeCredit = ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(canonicalRole(currentUser?.role))
+  const canSeeCredit = userCan(currentUser, 'sales.credit_applications')
   const [tabValue, setTabValue] = useUrlQueryState('tab', 'all')
   const tab: FilterTab = ['all', 'companies', 'individuals', 'customers', 'vendors'].includes(tabValue)
     ? tabValue as FilterTab

@@ -5,16 +5,12 @@
  */
 
 import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
+import { userCan } from '@/lib/auth/can'
 
-const FULFILLMENT_TRIM_ROLES = new Set([
-  'director',
-  'admin_officer',
-  'inventory_officer',
-  'technical_lead',
-])
+
 
 export function canTrimFulfillmentQty(role?: string | null): boolean {
-  return !!role && FULFILLMENT_TRIM_ROLES.has(role)
+  return userCan({ role }, 'manageInventoryApprovals')
 }
 
 type TrimLine = {

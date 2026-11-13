@@ -22,6 +22,7 @@ import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { isLeadAssigneeRole } from '@/lib/crm/lead-assignees'
 import { opportunityMatchesOwner } from '@/lib/opportunity-normalization'
+import { userCan } from '@/lib/auth/can'
 
 const ACTIVITY_ICONS: Record<string, IconProp> = {
   call: faPhone,
@@ -334,7 +335,7 @@ function CRMContent() {
   }, [urlOppId, opportunities, activeOppId, view, tab, setActiveOppId, searchParams, setUrlOppId])
 
   // Pipeline metrics — scoped to owner filter
-  const isAdmin = ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')
+  const isAdmin = userCan(currentUser, 'sales.crm.manage')
   // sales_rep always sees only their own; admin can switch between 'me' / 'all' / a specific userId
   const effectiveOwner = !isAdmin ? currentUserId! : (ownerFilter === 'me' ? currentUserId! : ownerFilter)
 
@@ -1266,7 +1267,7 @@ function CRMContent() {
             showToast={showToast}
             salesReps={salesReps}
             currentUserId={currentUserId ?? undefined}
-            canAssign={['director', 'admin_officer'].includes(currentUser?.role ?? '')}
+            canAssign={userCan(currentUser, 'sales.crm.assign')}
             onConverted={(opportunityId, meta) => {
               // Inject the convert response immediately — waiting on SSE left a blank
               // detail view and made the deal look "missing" for the assignee.

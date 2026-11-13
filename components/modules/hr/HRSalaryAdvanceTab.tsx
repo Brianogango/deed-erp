@@ -5,6 +5,7 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Field, Input, Modal, RecordCard, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useCan } from '@/hooks/useCan'
 
 const statusTone: Record<SalaryAdvance['status'], string> = {
   pending: 'pending',
@@ -26,8 +27,9 @@ export default function HRSalaryAdvanceTab() {
   const { employees, departments } = useHrStore()
 
   const currentUser = users.find(user => user.id === currentUserId) ?? null
-  const isApprover = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
-  const isFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const can = useCan()
+  const isApprover = can('managePayroll')
+  const isFinance = isApprover
   const currentUsername = normalizeUserText(currentUser?.username)
   const myEmployee = employees.find(employee => {
     if (!currentUser) return false

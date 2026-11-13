@@ -9,11 +9,13 @@ import { validateFileContent } from '@/lib/file-validation'
 import { sanitizeClientForm } from './credit-form-fields'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import {
-  ACTION_ROLES, DOCUMENT_KINDS, DOCUMENT_RULES, OPEN_STATUSES, STANDARD_TERMS_DAYS,
+  ACTION_PERMISSIONS, mayTakeCreditAction, DOCUMENT_KINDS, DOCUMENT_RULES, OPEN_STATUSES, STANDARD_TERMS_DAYS,
   approvalCheck, canDecide, clientCreditStatus, documentChecklist, nextRef, nextStatus, reviewDueFrom,
   type CreditAction, type CreditFacilityStatus,
 } from './credit-facility-rules'
 import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
+import { isDirector } from '@/lib/auth/roles'
 
 export type Actor = { id: string; name?: string | null; role: string }
 
@@ -165,13 +167,12 @@ export async function createApplication(actor: Actor, input: { clientId: string;
   throw new CreditFacilityError('Could not number the application — try again', 409)
 }
 
-const FINANCE_ROLES = new Set(['finance_officer', 'director'])
 
 /** Edit the form (anyone working the application) or the assessment (finance). */
 export async function updateApplication(actor: Actor, id: string, patch: Record<string, unknown>) {
   const app = await loadApplication(id)
   if (!OPEN_STATUSES.includes(app.status as CreditFacilityStatus)) throw new CreditFacilityError('A decided application can no longer be edited', 409)
-  const finance = FINANCE_ROLES.has(roleOf(actor))
+  const finance = userCan({ role: roleOf(actor) }, 'sales.credit.review')
   const data: Prisma.CreditFacilityApplicationUpdateInput = {}
   if (patch.form && typeof patch.form === 'object') data.form = patch.form as Prisma.InputJsonValue
   if (patch.requestedLimit != null) data.requestedLimit = Math.max(0, Number(patch.requestedLimit) || 0)
@@ -194,8 +195,8 @@ export async function updateApplication(actor: Actor, id: string, patch: Record<
 
 export async function runAction(actor: Actor, id: string, action: CreditAction, body: { note?: string; approvedLimit?: number; approvedTermsDays?: number; conditions?: string }) {
   const role = roleOf(actor)
-  if (!ACTION_ROLES[action]) throw new CreditFacilityError('Unknown action')
-  if (!ACTION_ROLES[action].includes(role)) throw new CreditFacilityError('You are not allowed to do this', 403)
+  if (!ACTION_PERMISSIONS[action]) throw new CreditFacilityError('Unknown action')
+  if (!mayTakeCreditAction(role, action)) throw new CreditFacilityError('You are not allowed to do this', 403)
   const app = await loadApplication(id)
   const to = nextStatus(action, app.status)
   if (!to) throw new CreditFacilityError(`Cannot ${action.replace('_', ' ')} an application that is ${app.status.replace('_', ' ')}`, 409)
@@ -223,7 +224,7 @@ export async function runAction(actor: Actor, id: string, action: CreditAction, 
           ? `The customer has ${paid} paid transaction(s); the payment policy asks for 3 — only a director can approve credit now. Recommend it instead.`
           : 'Limits above KES 100,000 are approved by a director — recommend it instead.', 403)
       }
-      if (app.requestedById === actor.id && role !== 'director') throw new CreditFacilityError('The person who requested the credit cannot approve it', 403)
+      if (app.requestedById === actor.id && !isDirector(role)) throw new CreditFacilityError('The person who requested the credit cannot approve it', 403)
       const decidedAt = new Date()
       data.approvedLimit = limit
       data.approvedTermsDays = terms
@@ -306,7 +307,7 @@ export async function addDocument(actor: Actor | null, id: string, file: { name:
 }
 
 export async function reviewDocument(actor: Actor, id: string, docId: string, patch: { status?: string; expiresOn?: string | null; note?: string | null }) {
-  if (!FINANCE_ROLES.has(roleOf(actor))) throw new CreditFacilityError('Only Finance can verify documents', 403)
+  if (!userCan({ role: roleOf(actor) }, 'sales.credit.review')) throw new CreditFacilityError('Only Finance can verify documents', 403)
   const doc = await prisma.creditFacilityDocument.findFirst({ where: { id: docId, applicationId: id } })
   if (!doc) throw new CreditFacilityError('Document not found', 404)
   const data: Prisma.CreditFacilityDocumentUpdateInput = { reviewedById: actor.id, reviewedAt: new Date() }
@@ -328,7 +329,7 @@ export async function removeDocument(actor: Actor, id: string, docId: string) {
   const app = await loadApplication(id)
   const doc = app.documents.find(d => d.id === docId)
   if (!doc) throw new CreditFacilityError('Document not found', 404)
-  if (doc.status === 'verified' && !FINANCE_ROLES.has(roleOf(actor))) throw new CreditFacilityError('A verified document can only be removed by Finance', 403)
+  if (doc.status === 'verified' && !userCan({ role: roleOf(actor) }, 'sales.credit.review')) throw new CreditFacilityError('A verified document can only be removed by Finance', 403)
   if (!OPEN_STATUSES.includes(app.status as CreditFacilityStatus)) throw new CreditFacilityError('Documents of a decided application are kept', 409)
   // The file is kept in storage; only the link to the application is removed.
   await prisma.creditFacilityDocument.delete({ where: { id: docId } })
@@ -363,7 +364,7 @@ export const portalUrl = (token: string) => `${appBaseUrl()}/portal/credit/${tok
  */
 export async function issuePortalLink(actor: Actor, id: string, opts: { email?: string | null; renew?: boolean } = {}) {
   const role = roleOf(actor)
-  if (!ACTION_ROLES.mark_sent.includes(role)) throw new CreditFacilityError('You are not allowed to do this', 403)
+  if (!mayTakeCreditAction(role, 'mark_sent')) throw new CreditFacilityError('You are not allowed to do this', 403)
   const app = await loadApplication(id)
   if (!CLIENT_EDITABLE.has(app.status)) throw new CreditFacilityError('The client can no longer change this application', 409)
   const live = app.portalToken && app.portalExpiresAt && app.portalExpiresAt > new Date()

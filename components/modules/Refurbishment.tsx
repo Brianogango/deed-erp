@@ -30,6 +30,7 @@ import {
   faArrowRight, faBan, faChevronLeft, faBoxOpen, faPencil, faTrash,
   faBell, faTriangleExclamation, faCheck, faMagnifyingGlass, faScrewdriverWrench, faPrint,
 } from '@fortawesome/free-solid-svg-icons'
+import { useCan } from '@/hooks/useCan'
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_META: Record<RefurbStatus, { label: string; badgeStatus: string; bg: string; color: string; border: string }> = {
@@ -76,8 +77,9 @@ function RefurbishmentContent() {
   } = useOperationsStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const isLeadTech  = ['technical_lead', 'director'].includes(currentUser?.role ?? '')
-  const canAssignJobs = currentUser?.role === 'technical_lead'
+  const can = useCan()
+  const isLeadTech  = can('repair.lead')
+  const canAssignJobs = can('repair.assign')
 
   // Job numbers used to be counted per browser, so several jobs share
   // REF/0001. A lead opening this screen gives the repeats (and any job

@@ -43,7 +43,7 @@ import {
   faUser,
   faUsers,
 } from '@fortawesome/free-solid-svg-icons'
-import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
 
 // Reusable styled action button for modal footers
 function ActionBtn({ onClick, color, shadow, children, disabled }: {
@@ -1026,7 +1026,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
 export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { startRepair, markRepairComplete, createInvoiceFromRepair, invoices, quotes, saleOrders, companySettings, users, currentUserId } = useRepairStore()
   // Only these roles may create invoices on the server.
-  const canBillRole = ['director', 'finance_officer', 'admin_officer'].includes(canonicalRole(users.find(u => u.id === currentUserId)?.role))
+  const canBillRole = userCan(users.find(u => u.id === currentUserId), 'createCustomerInvoiceFromSO')
   const [notes, setNotes] = useState('')
   const noCharge = !!(repair.billingExempt || (repair.underWarranty && repair.warrantyCoverage === 'full'))
   const billingExempt = !!repair.billingExempt

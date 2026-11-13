@@ -4,6 +4,7 @@ import { Badge, PanelHeader, RecordCard } from '@/components/ui'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab, type PrimaryFilterConfig } from '@/components/data-table'
 import type { PurchaseReturn } from '@/lib/store'
 import { Fa, faBox } from '@/components/icons'
+import { userCan } from '@/lib/auth/can'
 
 const REASON_OPTS = [
   { value: 'damaged',      label: 'Damaged goods' },
@@ -28,7 +29,7 @@ export default function PurchaseReturnsTab() {
   } = usePurchase()
   // Matches lib/store.tsx's canManageProcurement — the actual gate behind
   // logReturnPickup. Hidden rather than shown-then-denied for other roles.
-  const canManageProcurement = ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
+  const canManageProcurement = userCan(currentUser, 'manageProcurement')
 
   const uniqueVendors = Array.from(new Map(purchaseReturns.map(r => [r.vendorId, r.vendorName] as [string, string])))
 

@@ -10,6 +10,7 @@ import {
   faBookOpen, faTag, faListOl, faClock, faUser, faUpload, faDownload,
   faFilePdf, faFileWord, faFileImage, faFile, faBuilding, faEye,
 } from '@fortawesome/free-solid-svg-icons'
+import { useCan } from '@/hooks/useCan'
 
 const CYAN = 'var(--accent-cyan)'
 const NAVY = 'var(--navy)'
@@ -130,7 +131,8 @@ function SOPDocumentsContent() {
   const mounted = useMounted()
   const { users, currentUserId } = useHrStore()
   const currentUser = users.find(u => u.id === currentUserId)
-  const canEdit = ['director', 'admin_officer', 'technical_lead'].includes(currentUser?.role ?? '')
+  const can = useCan()
+  const canEdit = can('admin.sops.manage')
 
   const { docs, save } = useSopDocs()
 

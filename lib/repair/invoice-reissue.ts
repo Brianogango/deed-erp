@@ -40,7 +40,6 @@ export type InvoiceReissue = {
   customerCredit?: number
 }
 
-export const INVOICE_REISSUE_ROLES = ['director', 'finance_officer']
 
 /** Store-side invoice states that can still be rewritten in place. */
 function isInvoiceEditableInPlace(status: unknown): boolean {

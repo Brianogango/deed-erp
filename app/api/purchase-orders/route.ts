@@ -4,8 +4,9 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
-import { WRITE_ROLES, mapPOToClient, mapPOItemsForCreate, computePOTotals, resolveVendorClientId, publishPurchaseOrder, PO_WRITABLE_EXTRA_KEYS } from '@/lib/purchase/po-api-shared'
+import { mapPOToClient, mapPOItemsForCreate, computePOTotals, resolveVendorClientId, publishPurchaseOrder, PO_WRITABLE_EXTRA_KEYS } from '@/lib/purchase/po-api-shared'
 import { mergeScreenExtras } from '@/lib/screen-extras'
+import { userCan } from '@/lib/auth/can'
 
 // Purchase orders live in purchase_orders / purchase_order_items; the
 // deed_purchaseOrders screen copy is frozen. Approval and repair-link fields
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) {
+    if (!userCan(session.user, 'managePurchaseOrders')) {
       return NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 })
     }
     const body = await request.json()

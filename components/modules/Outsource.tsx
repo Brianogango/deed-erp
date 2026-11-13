@@ -10,6 +10,7 @@ import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/comp
 import { Fa } from '@/components/icons'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard, faPlus, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
+import { userCan } from '@/lib/auth/can'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ function OutsourceContent() {
   } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = currentUser?.role === 'director'
+  const isAdmin = userCan(currentUser, 'repair.outsource.vendors')
 
   // ── filter state ──
   const queryTab = searchParams.get('tab') as 'jobs' | 'vendors' | null

@@ -73,6 +73,7 @@ import { MyPolicies } from './hr/HRPolicies'
 import HRMyDocuments from './hr/HRMyDocuments'
 import AppraisalsPanel from './hr/HRAppraisals'
 import { documentExpiry } from '@/lib/hr/document-status'
+import { userCan } from '@/lib/auth/can'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS & TYPES
@@ -198,9 +199,8 @@ function HRContent() {
   } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = currentUser?.role === 'director'
-  const isFinance = currentUser?.role === 'finance_officer'
-  const canManageHR = isAdmin || isFinance
+  const isAdmin = userCan(currentUser, 'manageHR')
+  const canManageHR = userCan(currentUser, 'viewHrRecords')
   const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowerCase()
   const currentUsername = normalizeUserText(currentUser?.username)
   const userMatchesEmployee = (employee: typeof employees[number]) => {

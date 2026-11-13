@@ -14,8 +14,6 @@ export const CHEQUE_DIRECTIONS: ChequeDirection[] = ['received', 'given']
 export const CHEQUE_STATUSES: ChequeStatus[] = ['pending', 'deposited', 'cleared', 'bounced', 'cancelled']
 
 /** Roles that can see and work the register (and receive its reminders). */
-export const CHEQUE_ROLES = ['director', 'admin_officer', 'finance_officer'] as const
-
 /** In Kenya a cheque is stale six months after the date written on it. */
 export const CHEQUE_STALE_MONTHS = 6
 

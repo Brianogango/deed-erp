@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRepairStore } from '@/lib/store'
-import { INVOICE_REISSUE_ROLES, reissueBlocker, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
+import { reissueBlocker, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
+import { userCan } from '@/lib/auth/can'
 
 const kes = (n: number) => `KES ${Number(n || 0).toLocaleString('en-KE')}`
 
@@ -21,7 +22,7 @@ export default function InvoiceReissuePanel({ repairId, repairRef, reissue, role
   const [busy, setBusy] = useState(false)
   if (!reissue || reissue.status === 'dropped') return null
 
-  const canReissue = INVOICE_REISSUE_ROLES.includes(role)
+  const canReissue = userCan({ role }, 'repair.invoice.reissue')
   const figures = `${kes(reissue.previousTotal)} → ${kes(reissue.revisedTotal)}`
 
   const run = async () => {

@@ -22,6 +22,7 @@ import TradeIn from './TradeIn'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 import { useUrlQueryState, useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { formatWarrantyDuration } from '@/lib/warranty-period'
+import { userCan } from '@/lib/auth/can'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -92,12 +93,10 @@ function AfterSalesContent() {
   useEffect(() => { void syncWarranties() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const canCancelWarranty = ['director', 'admin_officer', 'technical_lead', 'finance_officer'].includes(String(currentUser?.role ?? ''))
-  const isAdmin     = currentUser?.role === 'director'
-  const isFinance   = currentUser?.role === 'finance_officer'
-  const isInventory = currentUser?.role === 'inventory_officer' || currentUser?.role === 'admin_officer'
+  const canCancelWarranty = userCan(currentUser, 'repair.warranty.cancel')
+  const isInventory = userCan(currentUser, 'sales.aftersales.restock')
   // Inventory officers receive RMA stock; finance/director process money outcomes.
-  const canManage   = isAdmin || isFinance || isInventory
+  const canManage = userCan(currentUser, 'sales.aftersales.returns')
 
   const [tabParam, setTabParam] = useUrlQueryState('tab', 'warranties')
   const tab: Tab = AFTER_SALES_TABS.includes(tabParam as Tab)

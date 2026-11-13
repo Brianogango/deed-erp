@@ -17,6 +17,7 @@ import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 import { StatusBadge } from '@/components/erp'
 import { Fa, faBox, faCheck, faCreditCard, faMoneyBillWave, faTrash, faUpload } from '@/components/icons'
 import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { userCan } from '@/lib/auth/can'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -250,7 +251,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
-  const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
+  const canApprove = userCan(currentUser, 'sales.buyback.approve')
 
   const [showNew, setShowNew] = useState(false)
   const [search, setSearch] = useUrlUiState('buybackQ', '')
@@ -1278,7 +1279,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
-  const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
+  const canApprove = userCan(currentUser, 'sales.buyback.approve')
 
   const [showNew, setShowNew] = useState(false)
   const [customerId, setCustomerId]   = useState('')

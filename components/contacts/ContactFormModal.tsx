@@ -7,7 +7,7 @@ import type { Contact } from '@/lib/store'
 import { useCrmStore } from '@/lib/store'
 import { SlidePanel, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa, faBuilding, faUser } from '@/components/icons'
-import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
 
 function focusFieldControl(fieldId: string) {
   const el = document.getElementById(fieldId)
@@ -96,7 +96,7 @@ export default function ContactFormModal({
     users, currentUserId,
   } = useCrmStore()
   // Credit limit and payment terms are granted by Finance (credit applications).
-  const canSetCreditTerms = ['director', 'finance_officer'].includes(canonicalRole(users.find(u => u.id === currentUserId)?.role))
+  const canSetCreditTerms = userCan(users.find(u => u.id === currentUserId), 'sales.contacts.credit_terms')
   const creditTermsHint = 'Set by Finance through a credit account application (Contacts → Credit)'
   const [form, setForm] = useState<ContactFormValues>(() => ({
     ...initial,

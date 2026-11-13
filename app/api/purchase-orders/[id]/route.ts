@@ -4,10 +4,11 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid } from '@/lib/legacy-compat'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { WRITE_ROLES, mapPOToClient, publishPurchaseOrder, computePOTotals, poLineExtras, PO_WRITABLE_EXTRA_KEYS } from '@/lib/purchase/po-api-shared'
+import { mapPOToClient, publishPurchaseOrder, computePOTotals, poLineExtras, PO_WRITABLE_EXTRA_KEYS } from '@/lib/purchase/po-api-shared'
 import { mergeScreenExtras } from '@/lib/screen-extras'
 import { Prisma } from '@prisma/client'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
+import { userCan } from '@/lib/auth/can'
 
 /** PO statuses that must never be removed from the record (audit FIN-003). */
 const PROTECTED_PO_STATUSES = new Set(['partial', 'received'])
@@ -85,7 +86,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) {
+    if (!userCan(session.user, 'managePurchaseOrders')) {
       return NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 })
     }
     const body = await request.json()
@@ -217,7 +218,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) {
+    if (!userCan(session.user, 'managePurchaseOrders')) {
       return NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 })
     }
 

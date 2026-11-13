@@ -14,6 +14,7 @@ import {
   faInfoCircle,
   faSearch,
 } from '@fortawesome/free-solid-svg-icons'
+import { useCan } from '@/hooks/useCan'
 
 const REFURB_STATUS_META: Record<RefurbStatus, { label: string; tone: string }> = {
   queued:      { label: 'Queued',      tone: 'queued' },
@@ -30,14 +31,14 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
   const { refurbishmentJobs, currentUserId, currentUser } = useRepair()
   const [search, setSearch] = useUrlUiState('q', '')
 
-  const isLeadTech = currentUser?.role === 'technical_lead' || currentUser?.role === 'director'
-  const isAdmin = currentUser?.role === 'director' || currentUser?.role === 'admin_officer'
+  const can = useCan()
+  const seesAll = can('refurbishment.view_all')
   const isRepairTech = !!currentUser && isRepairTechActor(currentUser)
 
   const jobs = useMemo(() => {
     const query = search.trim().toLowerCase()
     return refurbishmentJobs
-      .filter(j => (isLeadTech || isAdmin) ? true : j.assignedTechnicianId === currentUserId)
+      .filter(j => seesAll ? true : j.assignedTechnicianId === currentUserId)
       .filter(j => !['transferred', 'written_off'].includes(j.status))
       .filter(j => {
         if (!query) return true
@@ -45,7 +46,7 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
           .filter(Boolean)
           .some(value => String(value).toLowerCase().includes(query))
       })
-  }, [refurbishmentJobs, isLeadTech, isAdmin, currentUserId, search])
+  }, [refurbishmentJobs, seesAll, currentUserId, search])
 
   const byStatus = useMemo(() => ACTIVE_COLUMNS.reduce<Record<string, typeof jobs>>((acc, status) => {
     acc[status] = jobs.filter(job => job.status === status)

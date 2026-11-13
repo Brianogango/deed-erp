@@ -6,6 +6,7 @@ import { Confirm, ModuleSkeleton, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faCartShopping, faCreditCard, faDownload, faFileLines, faUsers, faWrench, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { useCan } from '@/hooks/useCan'
 
 const CATEGORIES = [
   { id: 'sales' as const,  label: 'Sales',  icon: faCartShopping, bg: 'var(--primary-light)', color: 'var(--primary-dark)', border: '#BFDBFE' },
@@ -20,7 +21,8 @@ export default function MyDocuments() {
 
   const { users, currentUserId, showToast, refSops: sops, addRefSop, updateRefSop, deleteRefSop } = useHrStore()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin     = currentUser?.role === 'director'
+  const can = useCan()
+  const isAdmin = can('manageHR')
 
   const [catFilterValue, setCatFilterValue] = useUrlUiState('category', 'all')
   const catFilter: RefSOPCategory | 'all' = CATEGORIES.some(c => c.id === catFilterValue)

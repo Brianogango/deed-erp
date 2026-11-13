@@ -16,6 +16,7 @@ import {
 } from '@/lib/store'
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { entitlementFor, isLeaveTypeAllowedForGender, noticeDaysGiven, requiredNotice, decemberClosureDays, type StoreLeaveType } from '@/lib/leave-utils'
+import { userCan } from '@/lib/auth/can'
 
 // ─── localStorage + debounced server sync (mirrors lib/store.tsx's useLS) ───────────────
 function readLS<T>(key: string, seedValue: T): T {
@@ -276,7 +277,7 @@ export const useHrStore = create<HrState>((set, get) => ({
     // own leave always goes through the normal approval flow, whoever you are.
     const requestEmp = get().employees.find(e => e.id === request.employeeId)
     const isOwnRequest = requestEmp?.userId === user.id
-    const isHRBooking = ['director', 'admin_officer'].includes(user.role) && !isOwnRequest
+    const isHRBooking = userCan(user, 'approveLeave') && !isOwnRequest
     const leave: LeaveRequest = {
       ...request,
       id: uid(),
@@ -361,13 +362,8 @@ export const useHrStore = create<HrState>((set, get) => ({
       return
     }
 
-    let canApprove = false
-    if (['director', 'admin_officer', 'finance_officer'].includes(user?.role ?? '')) canApprove = true
-    if (user?.role === 'technical_lead') {
-      const targetUser = ctx.users.find(u => u.id === leaveEmp?.userId)
-      if (targetUser?.role === 'technician') canApprove = true
-    }
-    if (!canApprove) { ctx.showToast('Only an Admin or Lead Tech (for Technicians) can approve or reject leave requests', 'error'); return }
+    // The same check the server makes (approveLeave).
+    if (!userCan(user, 'approveLeave')) { ctx.showToast('Only the Director or Finance can approve or reject leave requests', 'error'); return }
 
     const nextStatus: LeaveRequest['status'] = approved ? 'approved' : 'rejected'
     const year = new Date(leave.startDate).getFullYear()
@@ -413,7 +409,7 @@ export const useHrStore = create<HrState>((set, get) => ({
     const req = get().leaveRequests.find(r => r.id === id)
     if (!req) return
     if (req.status === 'rejected' || req.status === 'cancelled') { ctx.showToast('This request is already closed', 'error'); return }
-    const isHR = ['director', 'admin_officer', 'finance_officer'].includes(user?.role ?? '')
+    const isHR = userCan(user, 'approveLeave')
     const isOwn = req.submittedByUserId === user?.id
     if (!isHR && !isOwn) { ctx.showToast('You can only cancel your own leave requests', 'error'); return }
     const year = new Date(req.startDate).getFullYear()

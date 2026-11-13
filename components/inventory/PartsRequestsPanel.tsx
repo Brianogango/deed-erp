@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Field, Input, Modal, SearchPicker } from '@/components/ui'
 import { useInventoryStore, useRepairStore } from '@/lib/store'
 import {
-  PARTS_ADJUST_ROLES, PARTS_ARRIVED_ROLES, PARTS_ORDER_ROLES,
+  
   countCorrectionBlocker, needsCountCorrection, partsQueue,
   type PartsQueueRow, type PartsRequest,
 } from '@/lib/repair/parts-request'
 import { refurbJobsForPartsQueue } from '@/lib/refurbishment/parts-request'
+import { userCan } from '@/lib/auth/can'
 
 /**
  * Parts technicians asked for — on repairs and on refurbishment jobs — and
@@ -38,10 +39,10 @@ const today = () => new Date().toISOString().slice(0, 10)
 export default function PartsRequestsPanel() {
   const { repairs, refurbishmentJobs, products, contacts, users, currentUserId, markPartsArrived, correctPartsCount, raisePartsPurchaseOrder } = useRepairStore()
   const { getStockByLocation, stockAdjustments } = useInventoryStore()
-  const role = String(users.find(u => u.id === currentUserId)?.role ?? '')
-  const canAdjust = PARTS_ADJUST_ROLES.includes(role) || role === 'inventory'
-  const canOrder = PARTS_ORDER_ROLES.includes(role) || role === 'inventory'
-  const canArrive = PARTS_ARRIVED_ROLES.includes(role)
+  const me = users.find(u => u.id === currentUserId)
+  const canAdjust = userCan(me, 'inventory.stock_requests')
+  const canOrder = userCan(me, 'manageProcurement')
+  const canArrive = userCan(me, 'repair.parts.arrived')
 
   const rows = useMemo(
     () => partsQueue([...(repairs as never[]), ...refurbJobsForPartsQueue(refurbishmentJobs ?? [])], today()),

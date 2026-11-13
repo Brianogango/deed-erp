@@ -100,7 +100,6 @@ export async function POST(
   }
 
   // Only directors, admin officers, and technical leads can upload SOP files
-  const role = (session.user as any).role ?? ''
   if (!userCan(session.user, 'admin.sops.manage')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
@@ -158,7 +157,6 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const role = (session.user as any).role ?? ''
   if (!userCan(session.user, 'admin.sops.manage')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

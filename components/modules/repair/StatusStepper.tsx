@@ -6,6 +6,8 @@ import { faUserPlus } from '@fortawesome/free-solid-svg-icons'
 import { useRepair } from './RepairContext'
 import { STEPPER_STEPS, STATUS_LABELS } from '../repair-config'
 import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
+import { isDirector } from '@/lib/auth/roles'
 
 interface HistoryEntry {
   status: string
@@ -72,8 +74,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
     : undefined
 
   const managerRole = canonicalRole(currentUser?.role)
-  const canManageTechnician = managerRole === 'technical_lead'
-    || (managerRole === 'director' && Boolean(systemSettings?.repAdminAssignsJobs))
+  const canManageTechnician = isDirector(managerRole) ? Boolean(systemSettings?.repAdminAssignsJobs) : userCan(currentUser, 'repair.assign')
   const pendingOutsource = Boolean(activeRepair && outsourceJobs?.some(job => job.repairOrderId === activeRepair.id && job.status === 'sent'))
   const assignmentLocked = !activeRepair
     || ASSIGNMENT_LOCKED.includes(currentStatus)

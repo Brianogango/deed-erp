@@ -6,6 +6,7 @@ import { hasModuleAccess } from '@/lib/auth/access'
 import { hasPermission } from '@/lib/auth/authorization'
 import type { PublicUser } from '@/lib/auth/types'
 import type { ToolDefinition } from '../types'
+import { userCan } from '@/lib/auth/can'
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -68,7 +69,7 @@ function grouped(entries: Array<{ key: string; count: number; values: Record<str
 async function salesReport(user: PublicUser, input: Input, limit: number): Promise<Report | Denied> {
   if (!hasModuleAccess(user, 'sales')) return { ok: false, message: 'The sales report needs access to Sales.' }
   const { from, to, label } = range(input)
-  const ownOnly = user.role === 'sales_rep'
+  const ownOnly = !userCan(user, 'sales.view_all')
   const withMargin = hasPermission(user, 'viewPurchaseCost')
   const groupBy = (['customer', 'salesperson', 'product', 'month'] as const).find(g => g === input.groupBy) ?? 'customer'
   const orders = await prisma.saleOrder.findMany({

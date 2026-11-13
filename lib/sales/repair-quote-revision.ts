@@ -13,9 +13,9 @@
  *
  * Pure: the route loads the repair and the blockers and passes them in.
  */
+import { userCan } from '@/lib/auth/can'
 
 /** Staff who may revise any repair's quote; technicians only their own job. */
-const REPAIR_REVISION_STAFF_ROLES = ['director', 'technical_lead', 'admin_officer', 'finance_officer', 'sales_rep']
 
 type RevisionRepair = {
   id: string
@@ -46,7 +46,7 @@ export function repairRevisionAccessError(input: {
   const { repair } = input
   if (!repair) return 'The repair for this quotation was not found'
   if (!isRepairsSaleOrder(repair, input.order)) return 'This sale order does not belong to that repair'
-  if (REPAIR_REVISION_STAFF_ROLES.includes(input.role)) return null
+  if (userCan({ role: input.role }, 'repair.quote.generate')) return null
   if ((input.role === 'technician' || input.actsAsTechnician === true) && repair.assignedTechnicianId && repair.assignedTechnicianId === input.userId) return null
   return 'Only the assigned technician or repair staff can revise this repair quotation'
 }

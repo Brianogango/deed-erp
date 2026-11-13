@@ -16,6 +16,7 @@ import {
 } from '@/components/icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { useOverlayDismiss } from '@/lib/overlay-dismiss'
+import { isDirector } from '@/lib/auth/roles'
 
 interface SearchResult {
   id: string
@@ -226,7 +227,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
     const out: SearchResult[] = []
     const canSearchRecords = q.length >= 2
     const allowedModules = new Set<string>(['dashboard', ...(currentUser?.modules ?? [])])
-    if (currentUser?.role === 'director') allowedModules.add('settings')
+    if (isDirector(currentUser?.role)) allowedModules.add('settings')
     if (hasModuleAccess(currentUser, 'company_property')) allowedModules.add('company_property')
 
     COMMAND_ACTIONS

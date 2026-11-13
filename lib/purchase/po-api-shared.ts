@@ -10,7 +10,6 @@ import { mergeScreenExtras, PO_EXTRA_KEYS, PO_LINE_EXTRA_KEYS, readScreenExtras 
  * only export HTTP handlers + config, so these live here — never in a
  * route.ts (the route type check fails the production build otherwise).
  */
-export const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
 
 /**
  * Screen fields a PO create / edit may set. The receipt and bill links are

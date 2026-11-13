@@ -18,6 +18,7 @@ import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboard
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useCan } from '@/hooks/useCan'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -130,7 +131,8 @@ function ExpensesContent() {
   const { users, currentUserId, expenses, submitExpense, reviewExpense, payExpense, reimburseExpense, showToast, bankAccounts } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isFinance   = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const can = useCan()
+  const isFinance = can('expenses.post')
   const canReviewExpenses = expenses.some(e =>
     e.status === 'submitted' && canUserReviewExpense(currentUser?.role, e.approvalChain),
   ) || isFinance

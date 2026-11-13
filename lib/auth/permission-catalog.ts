@@ -72,6 +72,16 @@ const route = (key: string, group: string, label: string, roles: readonly UserRo
   followsBaseRole: true,
 })
 
+/** An action only the screens (and the store's save step) check: same roles, now named. */
+const screen = (key: string, group: string, label: string, roles: readonly UserRole[]): PermissionDef => ({
+  key,
+  group,
+  label,
+  enforcement: 'screen',
+  builtIn: roles,
+  followsBaseRole: true,
+})
+
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     id: 'accounting',
@@ -111,6 +121,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       route('invoices.payments.reverse', 'accounting', 'Reverse an invoice payment', ['director', 'finance_officer']),
       route('accounting.recurring_bills.manage', 'accounting', 'Manage recurring bills', ['director', 'finance_officer']),
       route('invoices.price_variance', 'accounting', 'Accept a bill price that differs from the order', ['director', 'finance_officer']),
+      // Screen actions (were role lists)
+      screen('accounting.customer_invoices.view', 'accounting', 'See customer invoices', ['director', 'admin_officer', 'finance_officer', 'kilimall_officer', 'sales_rep']),
     ],
   },
   {
@@ -159,6 +171,10 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       route('inventory.serials.edit', 'inventory', 'Edit serial records', ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']),
       route('inventory.stock_moves.edit', 'inventory', 'Record stock moves', ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']),
       route('inventory.pos_stock.apply', 'inventory', 'Take POS sales out of stock', ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'kilimall_officer', 'sales_rep']),
+      // Screen actions (were role lists)
+      screen('inventory.stock_requests', 'inventory', 'Create and validate transfers; request adjustments', ['director', 'finance_officer', 'inventory_officer', 'technical_lead']),
+      screen('inventory.serials.release', 'inventory', 'Release a held serial back to stock', ['director', 'admin_officer', 'inventory_officer']),
+      screen('inventory.prices.update', 'inventory', 'Update product prices', ['director', 'admin_officer', 'finance_officer', 'inventory_officer']),
     ],
   },
   {
@@ -176,6 +192,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       route('purchase.vendor_accounts.manage', 'purchase', 'Manage vendor expense accounts', ['director', 'finance_officer']),
       route('purchase.notify', 'purchase', 'Send procurement notifications by hand', ['director', 'admin_officer', 'technical_lead', 'technician']),
       route('purchase.receipts.edit', 'purchase', 'Create and edit goods receipts', ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']),
+      // Screen actions (were role lists)
+      screen('purchase.orders.revert', 'purchase', 'Move a sent purchase order back to draft', ['director', 'admin_officer']),
     ],
   },
   {
@@ -220,6 +238,24 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       route('sales.pos.backdate', 'sales', 'Post POS journals for another day', ['director', 'finance_officer']),
       route('sales.kilimall.reconcile', 'sales', 'Reconcile Kilimall serials', ['director', 'inventory_officer', 'kilimall_officer']),
       route('sales.credit_applications', 'sales', 'Work on customer credit applications', ['director', 'admin_officer', 'finance_officer', 'sales_rep']),
+      // Screen actions (were role lists)
+      screen('sales.kilimall.orders', 'sales', 'Create Kilimall orders', ['director', 'kilimall_officer', 'sales_rep']),
+      screen('sales.kilimall.dispatch', 'sales', 'Confirm Kilimall dispatches', ['director', 'inventory_officer', 'kilimall_officer']),
+      screen('sales.kilimall.settlements', 'sales', 'Record Kilimall settlements', ['director', 'finance_officer', 'kilimall_officer']),
+      screen('sales.orders.confirm', 'sales', 'Confirm a quotation into a sale order', ['director', 'admin_officer', 'sales_rep']),
+      screen('sales.buyback.approve', 'sales', 'Approve buy-backs', ['director', 'finance_officer']),
+      screen('sales.exchange.approve', 'sales', 'Approve exchanges', ['director', 'finance_officer']),
+      screen('sales.aftersales.returns', 'sales', 'Manage customer returns (RMA)', ['director', 'admin_officer', 'finance_officer', 'inventory_officer']),
+      screen('sales.aftersales.restock', 'sales', 'Put returned serials back into stock', ['director', 'admin_officer', 'inventory_officer']),
+      screen('sales.crm.manage', 'sales', 'Manage CRM for the whole team (all owners, bulk actions)', ['director', 'admin_officer', 'finance_officer']),
+      screen('sales.crm.assign', 'sales', 'Assign leads and opportunities', ['director', 'admin_officer']),
+      screen('sales.contacts.credit_terms', 'sales', 'Set a contact’s credit limit and payment terms', ['director', 'finance_officer']),
+      route('sales.orders.confirm_repair', 'sales', 'Confirm a repair-linked quotation into a sale order', ['director', 'admin_officer', 'finance_officer', 'technical_lead', 'sales_rep']),
+      route('sales.orders.reverse_confirmed', 'sales', 'Cancel or reset a confirmed sale order', ['director', 'admin_officer', 'finance_officer']),
+      route('sales.orders.confirm_unreserved', 'sales', 'Confirm a sale order without reserving stock', ['director', 'inventory_officer']),
+      route('sales.reports.view_all', 'sales', 'See everyone’s sales in sales reports', ['director', 'admin_officer', 'finance_officer']),
+      route('sales.credit.review', 'sales', 'Review, approve, decline or suspend credit applications', ['director', 'finance_officer']),
+      route('sales.credit.revoke', 'sales', 'Reinstate or revoke customer credit', ['director']),
     ],
   },
   {
@@ -277,6 +313,24 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       route('delivery.trip.check_in', 'delivery', 'Check rider trips in', ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']),
       route('delivery.create', 'delivery', 'Create deliveries', ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'sales_rep']),
       route('delivery.edit', 'delivery', 'Edit deliveries', ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead', 'sales_rep']),
+      // Screen actions (were role lists)
+      screen('repair.lead', 'repair', 'Lead decisions on any repair (QC, parts sign-off)', ['director', 'technical_lead']),
+      screen('repair.manage', 'repair', 'Manage the repair workflow (stop at diagnosis, retain, trade-in)', ['director', 'admin_officer', 'technical_lead']),
+      screen('repair.fee.mark_paid', 'repair', 'Mark a diagnosis fee paid', ['director', 'admin_officer', 'finance_officer', 'sales_rep']),
+      screen('repair.fee.waive', 'repair', 'Waive a diagnosis fee', ['director', 'admin_officer', 'finance_officer', 'technical_lead']),
+      screen('repair.quote.generate', 'repair', 'Generate, update or decline a repair quote', ['director', 'admin_officer', 'finance_officer', 'technical_lead', 'sales_rep']),
+      screen('repair.parts.arrived', 'repair', 'Mark repair parts arrived', ['director', 'admin_officer', 'inventory_officer', 'technical_lead']),
+      screen('repair.view_all', 'repair', 'See every repair (not only your own)', ['director', 'admin_officer', 'finance_officer', 'technical_lead']),
+      screen('repair.retained.donate', 'repair', 'Turn a retained device into a donation', ['director', 'admin_officer', 'inventory_officer', 'technical_lead']),
+      screen('repair.warranty.cancel', 'repair', 'Cancel a warranty', ['director', 'admin_officer', 'finance_officer', 'technical_lead']),
+      screen('repair.assign', 'repair', 'Assign technicians to repairs (the Director: when Settings allow it)', ['technical_lead']),
+      screen('repair.close', 'repair', 'Close a delivered repair job', ['director', 'admin_officer', 'finance_officer', 'technical_lead']),
+      screen('repair.progress.update', 'repair', 'Update the progress of any repair', ['director', 'admin_officer', 'finance_officer', 'technical_lead']),
+      screen('repair.warranty.claim', 'repair', 'File a warranty claim from a repair', ['director', 'admin_officer', 'finance_officer']),
+      screen('repair.intake.create', 'repair', 'Book in a new repair', ['director', 'admin_officer']),
+      screen('refurbishment.view_all', 'repair', 'See every refurbishment job (not only your own)', ['director', 'admin_officer', 'technical_lead']),
+      screen('repair.outsource.vendors', 'repair', 'Add and edit outsource vendors', ['director']),
+      route('repair.billing.exempt', 'repair', 'Mark a repair as not billed (warranty, goodwill)', ['director', 'admin_officer', 'finance_officer', 'technical_lead']),
     ],
   },
   {
@@ -320,6 +374,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       // Server routes (were role lists)
       route('hr.employees.finance', 'hr', 'Edit employee pay details, history and final dues', ['director', 'finance_officer']),
       route('hr.documents.finance', 'hr', 'Open HR document files (Finance)', ['finance_officer']),
+      // Screen actions (were role lists)
+      screen('hr.assets.manage', 'hr', 'Assign and receive company equipment for employees', ['director', 'inventory_officer', 'technical_lead']),
     ],
   },
   {
@@ -345,6 +401,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       route('admin.sms', 'admin', 'See and send SMS messages', ['director', 'admin_officer']),
       route('admin.security.view', 'admin', 'See the security overview', ['director', 'admin_officer', 'finance_officer']),
       route('admin.sops.manage', 'admin', 'Upload and remove SOP files', ['director', 'admin_officer', 'technical_lead']),
+      // Screen actions (were role lists)
+      screen('admin.settings.open', 'admin', 'Open Settings', ['director', 'admin_officer', 'finance_officer']),
     ],
   },
 ]

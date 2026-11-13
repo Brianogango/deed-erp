@@ -96,8 +96,7 @@ import { allocateSalesReturn, liveQtyInvoicedBySoLine } from '@/lib/sales/return
  * anyone else the screen holds no customer invoices, so counting live ones
  * would read as "none" and drop a credit note that is owed.
  */
-const seesCustomerInvoices = (user: { role?: string } | null | undefined) =>
-  ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer'].includes(canonicalRole(String(user?.role ?? '')))
+const seesCustomerInvoices = (user: { role?: string } | null | undefined) => userCan(user, 'accounting.customer_invoices.view')
 import {
   findReleasedOrcsForReturn,
   pickPostedInvoiceForReturn,
@@ -2880,32 +2879,25 @@ interface StockAdjustment {
 const canApproveInventoryAction = (user: User | null) => userCan(user, 'manageInventoryApprovals')
 
 /** GRN / purchase receipt validation — narrower than general inventory approvals. */
-const canValidatePurchaseReceiptAction = (user: User | null) =>
-  !!user && ['director', 'admin_officer', 'inventory_officer'].includes(user.role)
+const canValidatePurchaseReceiptAction = (user: User | null) => userCan(user, 'validatePurchaseReceipt')
 
-const canManageInventoryControl = (user: User | null) =>
-  !!user && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(user.role)
+const canManageInventoryControl = (user: User | null) => userCan(user, 'inventory.stock_requests')
 
 export const canManageHR = (user: User | null) =>
   !!user && canManageHRRole(user.role)
 
-const canApprovePayroll = (user: User | null) =>
-  !!user && ['director', 'finance_officer'].includes(user.role)
+const canApprovePayroll = (user: User | null) => userCan(user, 'approvePayroll')
 
-const canManageHRAssets = (user: User | null) =>
-  !!user && ['director', 'inventory_officer', 'technical_lead'].includes(user.role)
+const canManageHRAssets = (user: User | null) => userCan(user, 'hr.assets.manage')
 
 /** Broad money role (includes Admin Officer) — use with threshold helpers for post/pay. */
-const canManageFinance = (user: User | null) =>
-  !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
+const canManageFinance = (user: User | null) => userCan(user, 'postFinancial')
 
 /** Bank recon / expense reimburse — Finance + Director only. */
-const canManageFullFinanceAction = (user: User | null) =>
-  !!user && ['director', 'finance_officer'].includes(user.role)
+const canManageFullFinanceAction = (user: User | null) => userCan(user, 'accounting.manage')
 
 /** Draft customer invoice from SO. */
-const canCreateCustomerInvoiceFromSOAction = (user: User | null) =>
-  !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
+const canCreateCustomerInvoiceFromSOAction = (user: User | null) => userCan(user, 'createCustomerInvoiceFromSO')
 
 const isoDate = (date?: string) => {
   const source = date || now()
@@ -3266,8 +3258,7 @@ const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: num
   }
 }
 
-const canManageProcurement = (user: User | null) =>
-  !!user && ['director', 'admin_officer', 'inventory_officer'].includes(canonicalRole(user.role))
+const canManageProcurement = (user: User | null) => userCan(user, 'manageProcurement')
 
 // ── Outsource Repair ────────────────────────────────────────────────────────
 export const OUTSOURCE_SERVICE_TYPES = [
@@ -6464,7 +6455,6 @@ function StoreProvider({
   const [workflowApprovals, setWorkflowApprovals] = useLS('deed_workflowApprovals', seedWorkflowApprovals)
   const [employeeAssetAssignments, setEmployeeAssetAssignments] = useLS('deed_employeeAssets', seedEmployeeAssetAssignments)
 
-  const HR_ROLES = ['director', 'finance_officer']
   const employees = useHrDomainStore(s => s.employees)
 
   // Sensitive: never stored in localStorage/app_state — fetched only for privileged roles
@@ -6675,7 +6665,7 @@ function StoreProvider({
             await fetchLeave()
             break
           case 'payroll': {
-            if (!['director', 'finance_officer'].includes(initialUser.role)) break
+            if (!userCan(initialUser, 'managePayroll')) break
             const [data, paymentJournalData] = await Promise.all([
               fetch('/api/payroll').then(r => r.ok ? r.json() : null),
               fetch('/api/accounting/journals?source=payroll_payment&limit=500').then(r => r.ok ? r.json() : null),
@@ -6731,7 +6721,7 @@ function StoreProvider({
     // Leave lists belong on HR. Polling them on every screen re-fetched
     // employees/balances while the user was on Sales or Finance.
     let leaveInterval: ReturnType<typeof setInterval> | undefined
-    const canPollLeave = ['director'].includes(initialUser.role)
+    const canPollLeave = userCan(initialUser, 'manageHR')
     const startLeavePoll = (nextPath: string) => {
       if (!canPollLeave || !nextPath.startsWith('/hr') || leaveInterval) return
       leaveInterval = setInterval(fetchLeave, 60_000)
@@ -8416,7 +8406,7 @@ const storeCtx: AppState = {
     kilimallOrders, kilimallDispatches, kilimallSettlements,
     createKilimallOrder: async (p) => {
       const user = currentUser()
-      if (!user || !['director', 'kilimall_officer', 'sales_rep'].includes(user.role)) {
+      if (!userCan(user, 'sales.kilimall.orders')) {
         showToast('Unauthorized to create Kilimall orders', 'error')
         return null
       }
@@ -8489,7 +8479,7 @@ const storeCtx: AppState = {
     },
     confirmKilimallDispatch: async (orderId, serialId, serialNumber, opts) => {
       const user = currentUser()
-      if (!user || !['director', 'inventory_officer', 'kilimall_officer'].includes(user.role)) {
+      if (!userCan(user, 'sales.kilimall.dispatch')) {
         showToast('Unauthorized to dispatch orders', 'error'); return null;
       }
       const order = kilimallOrdersRef.current.find(o => o.id === orderId)
@@ -8601,7 +8591,7 @@ const storeCtx: AppState = {
     },
     createKilimallSettlement: async (p) => {
       const user = currentUser()
-      if (!user || !['director', 'finance_officer', 'kilimall_officer'].includes(user.role)) {
+      if (!userCan(user, 'sales.kilimall.settlements')) {
         showToast('Unauthorized to manage settlements', 'error')
         return null
       }
@@ -8666,7 +8656,7 @@ const storeCtx: AppState = {
     )),
     reconcileKilimallSettlement: (settlementId) => {
       const user = currentUser()
-      if (!user || !['director', 'finance_officer', 'kilimall_officer'].includes(user.role)) {
+      if (!userCan(user, 'sales.kilimall.settlements')) {
         showToast('Unauthorized to reconcile settlements', 'error')
         return
       }
@@ -8733,7 +8723,7 @@ const storeCtx: AppState = {
     },
     matchKilimallSettlementLine: (settlementId, lineId, orderId, note) => {
       const user = currentUser()
-      if (!user || !['director', 'finance_officer', 'kilimall_officer'].includes(user.role)) {
+      if (!userCan(user, 'sales.kilimall.settlements')) {
         showToast('Unauthorized to match settlement lines', 'error')
         return false
       }
@@ -10506,7 +10496,7 @@ const storeCtx: AppState = {
       }
     },
     hasModuleAccess: (module) => userHasModuleAccess(currentUser(), module),
-    isSuperAdmin: () => currentUser()?.role === 'director',
+    isSuperAdmin: () => isDirector(currentUser()?.role),
 
     createPayrollRun: (month, year) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can prepare payroll', 'error'); throw new Error('Unauthorized payroll run creation') }
@@ -10783,7 +10773,7 @@ const storeCtx: AppState = {
     },
     decideSalaryAdvance: (id, approved, note) => {
       const user = currentUser()
-      if (!['director', 'finance_officer'].includes(user?.role ?? '')) {
+      if (!userCan(user, 'managePayroll')) {
         showToast('Only Finance or Director can review salary advances', 'error')
         return
       }
@@ -10809,7 +10799,7 @@ const storeCtx: AppState = {
     },
     markSalaryAdvancePaid: (id, paidDate = now().slice(0, 10)) => {
       const user = currentUser()
-      if (!['director', 'finance_officer'].includes(user?.role ?? '')) {
+      if (!userCan(user, 'managePayroll')) {
         showToast('Only Finance can mark salary advances as paid', 'error')
         return
       }
@@ -10834,7 +10824,7 @@ const storeCtx: AppState = {
       const advance = salaryAdvancesRef.current.find(item => item.id === id)
       if (!advance) return
       if (advance.status !== 'pending') { showToast('Only pending advances can be cancelled', 'error'); return }
-      if (advance.createdByUserId !== user?.id && !['director', 'finance_officer'].includes(user?.role ?? '')) {
+      if (advance.createdByUserId !== user?.id && !userCan(user, 'managePayroll')) {
         showToast('You can only cancel your own pending advance', 'error')
         return
       }
@@ -12603,7 +12593,7 @@ const storeCtx: AppState = {
 
     releaseSerialToStock: (serialId, destination = 'warehouse') => {
       const user = currentUser()
-      if (!user || !['director', 'admin_officer', 'inventory_officer'].includes(user.role)) {
+      if (!userCan(user, 'inventory.serials.release')) {
         showToast('Only Inventory, Admin Officer or Director can release held serials', 'error')
         return false
       }
@@ -13225,7 +13215,7 @@ const storeCtx: AppState = {
     },
     confirmSO: async (id, opts) => {
       const user = currentUser()
-      if (!user || !['director', 'sales_rep', 'admin_officer'].includes(user.role)) {
+      if (!userCan(user, 'sales.orders.confirm')) {
         showToast('Unauthorized to confirm Sales Orders', 'error'); return;
       }
       const reserveStock = opts?.reserveStock !== false
@@ -13745,7 +13735,7 @@ const storeCtx: AppState = {
     },
     setSaleOrderLock: (id, locked) => {
       const user = currentUser()
-      if (!user || user.role !== 'director') {
+      if (!user || !isDirector(user.role)) {
         showToast('Only a director can lock or unlock a confirmed order', 'error'); return
       }
       const so = soRef.current.find(s => s.id === id)
@@ -14492,7 +14482,7 @@ const storeCtx: AppState = {
       const so = soRef.current.find(s => s.id === id)
       if (!so) return
       const isQuotation = ['draft', 'sent', 'quotation', 'quotation_sent'].includes(so.status)
-      if (!isQuotation && actor?.role !== 'director') {
+      if (!isQuotation && !isDirector(actor?.role)) {
         showToast('Only a director can delete confirmed sale orders — cancel or reset instead', 'error')
         return
       }
@@ -14521,7 +14511,7 @@ const storeCtx: AppState = {
       if (!so) return false
       // Sent → draft: sales staff may unlock for edits. Confirmed SO → quotation
       // still requires Finance / Admin Officer / Director.
-      const salesCanResetSent = ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(actor?.role ?? '')
+      const salesCanResetSent = userCan(actor, 'sales.quotes.create')
       const financeCanResetConfirmed = canReverseConfirmedSale(actor?.role)
       if (so.status === 'quotation_sent' || so.status === 'cancelled') {
         if (!actor || !salesCanResetSent) {
@@ -15083,7 +15073,7 @@ const storeCtx: AppState = {
     },
     reverseInvoicePayment: async (invoiceId, paymentId, reason) => {
       const actor = currentUser()
-      if (!['director', 'finance_officer'].includes(String(actor?.role))) {
+      if (!userCan(actor, 'invoices.payments.reverse')) {
         showToast('Only Finance or a Director can reverse a payment', 'error'); return false
       }
       const inv = invRef.current.find(i => i.id === invoiceId)
@@ -16963,7 +16953,7 @@ const storeCtx: AppState = {
     },
     deleteRepair: async (id) => {
       const user = currentUser()
-      if (!user || user.role !== 'director') {
+      if (!user || !isDirector(user.role)) {
         showToast('Only a director can delete a repair', 'error'); return false
       }
       const repair = repairsRef.current.find(r => r.id === id)
@@ -17014,7 +17004,7 @@ const storeCtx: AppState = {
     // ── Repair Workflow Actions ──────────────────────────────────────────────
     verifyRepairIntake: (repairId, notes = '') => {
       const actor = currentUser()
-      if (!actor || !['technical_lead', 'director', 'admin_officer'].includes(actor.role)) {
+      if (!userCan(actor, 'repair.verify')) {
         showToast('Only authorised staff can verify repair intake', 'error'); return
       }
       const repair = repairs.find(r => r.id === repairId)
@@ -17116,7 +17106,7 @@ const storeCtx: AppState = {
         return
       }
       const isAssignedTech = repair.assignedTechnicianId === user.id
-      const isLeadOrDirector = ['technical_lead', 'director'].includes(canonicalRole(user.role))
+      const isLeadOrDirector = userCan(user, 'repair.lead')
       if (!isAssignedTech && !isLeadOrDirector) {
         showToast('Only the assigned technician or lead technician can log or update a diagnosis', 'error'); return
       }
@@ -17175,7 +17165,7 @@ const storeCtx: AppState = {
       if (isDirectRepairPath(repair.repairPath)) {
         showToast('Stop at diagnosis only applies to Diagnosis First repairs', 'error'); return
       }
-      const isManager = !!user && ['director', 'admin_officer', 'technical_lead'].includes(canonicalRole(user.role))
+      const isManager = userCan(user, 'repair.manage')
       if (!user || (!isManager && repair.assignedTechnicianId !== user.id)) {
         showToast('Only the assigned technician or a manager can stop at diagnosis', 'error'); return
       }
@@ -17230,9 +17220,7 @@ const storeCtx: AppState = {
         showToast('Diagnosis fee already marked paid')
         return
       }
-      const canMark = ['director', 'admin_officer', 'finance_officer', 'sales_rep'].includes(
-        canonicalRole(user.role),
-      )
+      const canMark = userCan(user, 'repair.fee.mark_paid')
       if (!canMark) {
         showToast('Only sales, finance, admin officer, or a director can mark the diagnosis fee paid', 'error')
         return
@@ -17263,7 +17251,7 @@ const storeCtx: AppState = {
       const repair = repairsRef.current.find(r => r.id === repairId)
       if (!repair) return
       if (blockIfOutsourced(repairId, 'update the repair quote')) return
-      const canGenerate = ['director', 'technical_lead', 'admin_officer', 'sales_rep', 'finance_officer'].includes(user.role) || repair.assignedTechnicianId === user.id
+      const canGenerate = userCan(user, 'repair.quote.generate') || repair.assignedTechnicianId === user.id
       if (!canGenerate) {
         showToast('Only the assigned technician or authorised staff can generate a quote', 'error'); return
       }
@@ -18320,7 +18308,7 @@ const storeCtx: AppState = {
         showToast('Repair must be in QC to complete quality check', 'error'); return
       }
       // Directors/leads can always QA; technicians (and users acting as one) can QA any repair they did NOT work on
-      const isAuthorized = ['director', 'technical_lead'].includes(user.role)
+      const isAuthorized = userCan(user, 'repair.lead')
         || (isRepairTechActor(user) && repair.assignedTechnicianId !== user.id)
       if (!isAuthorized) {
         showToast('You cannot perform QA on a repair you worked on — a different technician must do QC', 'error'); return
@@ -18523,7 +18511,7 @@ const storeCtx: AppState = {
     markPartsArrived: (repairId) => {
       const actor = currentUser()
       // Admin officers chase the purchase for the desk, so they may close it too.
-      if (!actor || !['technical_lead', 'director', 'inventory_officer', 'inventory', 'admin_officer'].includes(actor.role)) {
+      if (!userCan(actor, 'repair.parts.arrived')) {
         showToast('Only the Technical Lead, Inventory Officer or Admin Officer can mark parts as arrived', 'error'); return
       }
       const repair = repairs.find(r => r.id === repairId)
@@ -19381,7 +19369,7 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) return false
       
-      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(user.role)) return true
+      if (userCan(user, 'repair.view_all')) return true
 
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return false
@@ -19401,7 +19389,7 @@ const storeCtx: AppState = {
 
       // Full visibility: desk + finance + lead techs see every repair, even
       // when the same login also actsAsTechnician for shop-floor assignment.
-      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(canonicalRole(user.role))) return list
+      if (userCan(user, 'repair.view_all')) return list
 
       // Functional Firewall: technicians and users acting as one see their own jobs + the QC pool (peer QC)
       if (isRepairTechActor(user)) {
@@ -19523,7 +19511,7 @@ const storeCtx: AppState = {
       }
 
       const user = currentUser()
-      if (!user || !['technical_lead', 'director'].includes(user.role)) {
+      if (!userCan(user, 'repair.lead')) {
         showToast('Only the Lead Technician can move repair progress backwards', 'error')
         return
       }
@@ -19851,7 +19839,7 @@ const storeCtx: AppState = {
     waiveDiagnosisFee: (repairId, reason) => {
       const user = currentUser()
       if (!user) return
-      if (!['director', 'technical_lead', 'admin_officer', 'finance_officer'].includes(canonicalRole(user.role))) {
+      if (!userCan(user, 'repair.fee.waive')) {
         showToast('Only a manager can waive the diagnosis fee', 'error')
         return
       }
@@ -20147,7 +20135,7 @@ const storeCtx: AppState = {
     leaveDeviceWithDeed: (repairId, opts) => {
       const user = currentUser()
       if (!user) return { ok: false, message: 'Not signed in' }
-      if (!['director', 'admin_officer', 'technical_lead'].includes(user.role)) {
+      if (!userCan(user, 'repair.manage')) {
         showToast('Only managers can record that a customer left a device with Deed', 'error')
         return { ok: false, message: 'Not authorized' }
       }
@@ -20239,7 +20227,7 @@ const storeCtx: AppState = {
     convertRetainedRepairToDonation: (repairId, opts) => {
       const user = currentUser()
       if (!user) return { ok: false, message: 'Not signed in' }
-      if (!['director', 'admin_officer', 'technical_lead', 'inventory_officer'].includes(user.role)) {
+      if (!userCan(user, 'repair.retained.donate')) {
         showToast('Not authorized to convert retained repairs', 'error')
         return { ok: false, message: 'Not authorized' }
       }
@@ -20289,7 +20277,7 @@ const storeCtx: AppState = {
     convertRetainedRepairToBuyBack: (repairId, opts) => {
       const user = currentUser()
       if (!user) return { ok: false, message: 'Not signed in' }
-      if (!['director', 'admin_officer', 'technical_lead', 'inventory_officer'].includes(user.role)) {
+      if (!userCan(user, 'repair.retained.donate')) {
         showToast('Not authorized to convert retained repairs', 'error')
         return { ok: false, message: 'Not authorized' }
       }
@@ -20339,7 +20327,7 @@ const storeCtx: AppState = {
     createTradeInFromRepair: (repairId, opts) => {
       const user = currentUser()
       if (!user) return { ok: false, message: 'Not signed in' }
-      if (!['director', 'admin_officer', 'technical_lead'].includes(user.role)) {
+      if (!userCan(user, 'repair.manage')) {
         showToast('Only managers can create a trade-in from a repair', 'error')
         return { ok: false, message: 'Not authorized' }
       }
@@ -22565,7 +22553,7 @@ const storeCtx: AppState = {
 
     cancelWarranty: (id, reason) => {
       const user = currentUser(); if (!user) return
-      if (!['director', 'admin_officer', 'technical_lead', 'finance_officer'].includes(user.role)) {
+      if (!userCan(user, 'repair.warranty.cancel')) {
         showToast('Only a manager or Finance can cancel a warranty', 'error'); return
       }
       const why = reason.trim()
@@ -22658,7 +22646,7 @@ const storeCtx: AppState = {
 
     approveBuyBack: (id) => {
       const user = currentUser(); if (!user) return
-      if (!['director', 'finance_officer'].includes(user.role)) { showToast('Only Director or Finance can approve buy-backs', 'error'); return }
+      if (!userCan(user, 'sales.buyback.approve')) { showToast('Only Director or Finance can approve buy-backs', 'error'); return }
       const bb = buyBacks.find(b => b.id === id)
       if (!bb || bb.status !== 'draft') { showToast('Only draft buy-backs can be approved', 'error'); return }
       setBuyBacks(p => p.map(b => b.id === id
@@ -23014,7 +23002,7 @@ const storeCtx: AppState = {
 
     approveExchange: (id) => {
       const user = currentUser(); if (!user) return
-      if (!['director', 'finance_officer'].includes(user.role)) { showToast('Only Director or Finance can approve exchanges', 'error'); return }
+      if (!userCan(user, 'sales.exchange.approve')) { showToast('Only Director or Finance can approve exchanges', 'error'); return }
       const exchange = clientExchanges.find(e => e.id === id)
       if (!exchange || exchange.status !== 'draft') { showToast('Only draft exchanges can be approved', 'error'); return }
       setClientExchanges(p => p.map(e => e.id === id

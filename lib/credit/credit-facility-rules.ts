@@ -5,6 +5,7 @@
  * Source documents: Deed Technologies Credit Application Form, Credit Check
  * checklist and Corporate Client Payment Policy Acceptance Form.
  */
+import { userCan } from '@/lib/auth/can'
 
 export type CreditFacilityStatus =
   | 'draft'           // opened by sales, nothing sent yet
@@ -215,20 +216,23 @@ export const TRANSITIONS: Record<CreditAction, { from: CreditFacilityStatus[]; t
   revoke: { from: ['approved', 'suspended'], to: 'revoked' },
 }
 
-/** Roles that may take each action (on top of the approval-level check). */
-export const ACTION_ROLES: Record<CreditAction, string[]> = {
-  mark_sent: ['sales_rep', 'finance_officer', 'director', 'admin_officer'],
-  submit: ['sales_rep', 'finance_officer', 'director', 'admin_officer'],
-  withdraw: ['sales_rep', 'finance_officer', 'director', 'admin_officer'],
-  start_review: ['finance_officer', 'director'],
-  request_info: ['finance_officer', 'director'],
-  recommend: ['finance_officer', 'director'],
-  approve: ['finance_officer', 'director'],
-  decline: ['finance_officer', 'director'],
-  suspend: ['finance_officer', 'director'],
-  reinstate: ['director'],
-  revoke: ['director'],
+/** The permission each action needs (on top of the approval-level check). */
+export const ACTION_PERMISSIONS: Record<CreditAction, string> = {
+  mark_sent: 'sales.credit_applications',
+  submit: 'sales.credit_applications',
+  withdraw: 'sales.credit_applications',
+  start_review: 'sales.credit.review',
+  request_info: 'sales.credit.review',
+  recommend: 'sales.credit.review',
+  approve: 'sales.credit.review',
+  decline: 'sales.credit.review',
+  suspend: 'sales.credit.review',
+  reinstate: 'sales.credit.revoke',
+  revoke: 'sales.credit.revoke',
 }
+
+export const mayTakeCreditAction = (role: string | null | undefined, action: CreditAction) =>
+  !!ACTION_PERMISSIONS[action] && userCan({ role }, ACTION_PERMISSIONS[action])
 
 export function nextStatus(action: CreditAction, from: string): CreditFacilityStatus | null {
   const t = TRANSITIONS[action]

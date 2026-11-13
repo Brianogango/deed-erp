@@ -27,6 +27,7 @@ import {
 } from '@/components/modules/delivery/TripParts'
 import { paidRiderBooksText } from '@/lib/delivery/rider-direct-pay'
 import { carriedItems, hasStops, jobStops, openFollowUps, STOP_KIND_LABELS, stopsFinished } from '@/lib/delivery/trip'
+import { userCan } from '@/lib/auth/can'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -594,7 +595,7 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
     createDeliveryJob, assignRiderToJob, updateDeliveryJob, advanceJobStatus, deleteDeliveryJob,
     showToast, companySettings, users, currentUserId,
   } = useDeliveryStore()
-  const canFixBooks = ['director', 'finance_officer'].includes(users?.find(u => u.id === currentUserId)?.role ?? '')
+  const canFixBooks = userCan(users?.find(u => u.id === currentUserId), 'delivery.rider_cash_fix')
 
   const [printJob, setPrintJob] = useState<DeliveryJob | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -1323,7 +1324,7 @@ function RidersTab() {
 function WeeklyPayTab() {
   const { riders, deliveryJobs, riderWeeklyPays, generateWeeklyPay, markWeeklyPayPaid, companySettings, users, currentUserId } = useDeliveryStore()
   const currentUser = users.find(u => u.id === currentUserId)
-  const canManagePay = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+  const canManagePay = userCan(currentUser, 'delivery.rider_cash')
 
   const [printPay, setPrintPay] = useState<RiderWeeklyPay | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)

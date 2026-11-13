@@ -17,6 +17,7 @@ import {
   type PurchaseStatusFilter,
   type PurchaseTypeFilter,
 } from '@/lib/purchases-filter'
+import { userCan } from '@/lib/auth/can'
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'RFQ', sent: 'RFQ Sent', confirmed: 'Purchase Order',
@@ -26,7 +27,6 @@ const STATUS_LABEL: Record<string, string> = {
 // Matches lib/store.tsx's canManageProcurement — the actual gate behind
 // createPO/confirmPO. Buttons that trigger those actions must be hidden for
 // any other role, or clicking them is a guaranteed-denied dead end.
-const CAN_MANAGE_PROCUREMENT_ROLES = ['director', 'admin_officer', 'inventory_officer']
 const APPROVABLE_PURCHASE_STATUSES = ['draft', 'sent']
 
 export default function PurchaseOrdersTab() {
@@ -35,7 +35,7 @@ export default function PurchaseOrdersTab() {
     setActiveId, setSubView, setShowNewRFQ, fmtKes, fmtDate, confirmPO, currentUser, purchaseReturns,
   } = usePurchase()
   const statusOf = (po: Parameters<typeof poStatusView>[0]) => poStatusView(po, purchaseReturns)
-  const canManageProcurement = CAN_MANAGE_PROCUREMENT_ROLES.includes(currentUser?.role ?? '')
+  const canManageProcurement = userCan(currentUser, 'manageProcurement')
   const savedViewKey = 'deed_po_saved_view'
   const patchUi = useUrlUiPatch()
   const savedViewHydrated = useRef(false)

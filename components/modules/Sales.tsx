@@ -163,6 +163,8 @@ import { isNonStockSaleLine, isDeliveryNoteLine } from '@/lib/sales/non-stock-li
 import { sumUnappliedDownPayments } from '@/lib/sales/down-payment'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import { moneyInputValue } from '@/lib/intl-cache'
+import { isDirector } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -394,7 +396,7 @@ function SalesContent() {
   }, [searchParams, router])
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const isAdmin = currentUser?.role === 'director'
+  const isAdmin = isDirector(currentUser?.role)
   const canEditDiscount = isAdmin || !systemSettings.salesDiscountControl
   const canInvoiceFromSO = canCreateCustomerInvoiceFromSO(currentUser?.role)
   // Reversing a confirmed Sales Order (Set to Quotation / Cancel) is
@@ -2461,7 +2463,7 @@ function SalesContent() {
                       {activeOrder.status === 'cancelled' && (
                         // Confirmed-then-cancelled needs Finance / Admin Officer / Director;
                         // draft/sent cancel can be reset by sales.
-                        (activeOrder.confirmedAt ? canReverseConfirmedSO : ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(currentUser?.role ?? '')) && (
+                        (activeOrder.confirmedAt ? canReverseConfirmedSO : userCan(currentUser, 'sales.quotes.create')) && (
                           <button type="button" className="sp-btn" onClick={() => resetSOToDraft(activeOrder.id)}>Set to Quotation</button>
                         )
                       )}

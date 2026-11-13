@@ -12,7 +12,6 @@ import { findOpenRepairWithSerial, normalizeRepairSerial, resolveRepairWarranty,
 import { deleteRepairFromPrisma, findRepairInPrisma, loadRepairsFromPrisma } from '@/lib/repair-mirror'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
-import { canonicalUserRole } from '@/lib/auth/roles'
 
 const config = {
   storeKey: 'deed_repairs_v2',
@@ -54,7 +53,6 @@ const config = {
     repairTransitionWriteError(next, previous) ?? repairDatesWriteError(next, new Date(), previous),
   validateDelete: (repair: RepairOrder) => repairHardDeleteBlocker(repair as any),
   recordAccess: (user: any, repair: RepairOrder, action: 'patch' | 'delete') => {
-    const role = canonicalUserRole(user.role)
     // Technicians (and users acting as one) never delete repairs.
     if (action === 'delete' && allowedOnlyAsTechnician(user, 'repair.edit')) return false
     return canAccessRecord(

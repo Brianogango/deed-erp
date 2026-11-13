@@ -19,6 +19,7 @@ import {
   faMoneyBillWave, faMagnifyingGlass, faFileImport, faArrowsRotate,
   faTriangleExclamation, faCheck, faCircleExclamation,
 } from '@/components/icons'
+import { useCan } from '@/hooks/useCan'
 
 type Tab = 'orders' | 'dispatch' | 'settlements' | 'reconciliation' | 'returns' | 'reports' | 'settings'
 const KILIMALL_TABS: Tab[] = ['orders', 'dispatch', 'settlements', 'reconciliation', 'returns', 'reports', 'settings']
@@ -46,7 +47,8 @@ function KilimallContent() {
     updateKilimallSettlement, reconcileKilimallSettlement, matchKilimallSettlementLine,
     products, serials, setModule, showToast, currentUserId, users,
   } = useCommerceStore()
-  const canCheckSerials = ['director', 'inventory_officer', 'kilimall_officer'].includes(String(users.find(u => u.id === currentUserId)?.role))
+  const can = useCan()
+  const canCheckSerials = can('sales.kilimall.reconcile')
 
   // Lands directly on the operational order queue — module analytics moved to
   // the central dashboard; the KPI strip and Reports tab cover the summaries.

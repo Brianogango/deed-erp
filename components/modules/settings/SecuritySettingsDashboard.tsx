@@ -15,6 +15,7 @@ import {
   faUsers,
 } from '@fortawesome/free-solid-svg-icons'
 import ProductionEnvSettings from './ProductionEnvSettings'
+import { isDirector } from '@/lib/auth/roles'
 
 type ToastType = 'success' | 'error' | 'info'
 
@@ -388,7 +389,7 @@ export default function SecuritySettingsDashboard({
   const securityEvent = overview?.summary.lastSecurityEventAt
 
   const setMfaEnforcement = async (next: boolean) => {
-    if (currentUser?.role !== 'director' || savingMfaPolicy) return
+    if (!isDirector(currentUser?.role) || savingMfaPolicy) return
     if (!next && !window.confirm('Disable mandatory MFA for Director, Admin Officer and Finance Officer?')) return
 
     setSavingMfaPolicy(true)
@@ -414,7 +415,7 @@ export default function SecuritySettingsDashboard({
   }
 
   const revokeAll = async () => {
-    if (currentUser?.role !== 'director') {
+    if (!isDirector(currentUser?.role)) {
       showToast('Only the Director can revoke every other user session.', 'error')
       return
     }
@@ -434,7 +435,7 @@ export default function SecuritySettingsDashboard({
   }
 
   const revokeSession = async (sessionId: string, userName: string) => {
-    if (currentUser?.role !== 'director' || revokingSessionId) return
+    if (!isDirector(currentUser?.role) || revokingSessionId) return
     if (!window.confirm(`Revoke active ERP sessions for ${userName}? They will need to sign in again.`)) return
 
     setRevokingSessionId(sessionId)
@@ -492,7 +493,7 @@ export default function SecuritySettingsDashboard({
       detail: 'Required for Director, Admin Officer & Finance Officer',
       status: mfaEnforced ? 'Enforced' : 'Needs setup',
       statusTone: mfaEnforced ? 'green' as const : 'amber' as const,
-      onClick: currentUser?.role === 'director' ? () => setShowEnvironment(true) : undefined,
+      onClick: isDirector(currentUser?.role) ? () => setShowEnvironment(true) : undefined,
     },
     {
       icon: faKey,
@@ -519,7 +520,7 @@ export default function SecuritySettingsDashboard({
       detail: ipAllowlist.length ? `${ipAllowlist.length} approved address${ipAllowlist.length === 1 ? '' : 'es'} configured` : 'No production IP allowlist configured',
       status: ipAllowlist.length ? 'Configured' : 'Optional',
       statusTone: ipAllowlist.length ? 'blue' as const : 'gray' as const,
-      onClick: currentUser?.role === 'director' ? () => setShowEnvironment(true) : undefined,
+      onClick: isDirector(currentUser?.role) ? () => setShowEnvironment(true) : undefined,
     },
     {
       icon: faLandmark,
@@ -621,14 +622,14 @@ export default function SecuritySettingsDashboard({
                   icon={faShieldHalved}
                   tone="red"
                   onClick={() => void revokeAll()}
-                  disabled={revoking || currentUser?.role !== 'director'}
+                  disabled={revoking || !isDirector(currentUser?.role)}
                 />
                 <QuickAction
                   label="Rotate Secrets"
                   icon={faKey}
                   tone="navy"
                   onClick={() => setShowEnvironment(true)}
-                  disabled={currentUser?.role !== 'director'}
+                  disabled={!isDirector(currentUser?.role)}
                 />
                 <QuickAction
                   label="Security Audit"
@@ -664,8 +665,8 @@ export default function SecuritySettingsDashboard({
                   <ToggleDisplay
                     on={mfaEnforced}
                     label="Require MFA for privileged roles"
-                    disabled={currentUser?.role !== 'director' || savingMfaPolicy}
-                    onClick={currentUser?.role === 'director' ? () => void setMfaEnforcement(!mfaEnforced) : undefined}
+                    disabled={!isDirector(currentUser?.role) || savingMfaPolicy}
+                    onClick={isDirector(currentUser?.role) ? () => void setMfaEnforcement(!mfaEnforced) : undefined}
                   />
                 }
               />
@@ -753,7 +754,7 @@ export default function SecuritySettingsDashboard({
                       <td className="max-w-[70px] truncate py-2 font-mono">{session.ipAddress}</td>
                       <td className="py-2 text-right">{timeAgo(session.createdAt)}</td>
                       <td className="py-2 text-right">
-                        {!session.isCurrent && session.id !== 'current-session' && currentUser?.role === 'director' ? (
+                        {!session.isCurrent && session.id !== 'current-session' && isDirector(currentUser?.role) ? (
                           <button
                             type="button"
                             disabled={Boolean(revokingSessionId)}
@@ -819,7 +820,7 @@ export default function SecuritySettingsDashboard({
             )) : (
               <p className="py-3 text-[8.5px] leading-relaxed text-[#8995A7]">No allowlist is configured. Access remains protected by authentication, RBAC and same-origin write controls.</p>
             )}
-            {currentUser?.role === 'director' && (
+            {isDirector(currentUser?.role) && (
               <button type="button" onClick={() => setShowEnvironment(true)} className="mt-2 text-[8.5px] font-bold text-[var(--primary-dark)]">Manage production settings →</button>
             )}
           </div>
@@ -1024,7 +1025,7 @@ export default function SecuritySettingsDashboard({
                             <p className="truncate text-[11px] font-bold text-[#182033]">{session.name} <span className="font-normal text-[#7A8699]">@{session.username}</span></p>
                             <p className="mt-1 text-[9px] text-[#667085]">{compactAgent(session.userAgent)} · {session.ipAddress} · {timeAgo(session.createdAt)}</p>
                           </div>
-                          {!session.isCurrent && session.id !== 'current-session' && currentUser?.role === 'director' ? (
+                          {!session.isCurrent && session.id !== 'current-session' && isDirector(currentUser?.role) ? (
                             <button type="button" disabled={Boolean(revokingSessionId)} onClick={() => void revokeSession(session.id, session.name)} className="justify-self-start rounded-lg border border-[#F3C4C4] bg-[#FFF7F7] px-3 py-2 text-[9px] font-bold text-[#D63D3D] disabled:opacity-50 sm:justify-self-end">
                               {revokingSessionId === session.id ? 'Revoking…' : 'Revoke session'}
                             </button>

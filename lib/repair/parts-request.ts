@@ -209,8 +209,3 @@ export function partsOrderNote(repair: Pick<RepairForParts, 'ref' | 'productName
   return `Parts for repair ${repair.ref}${device} (${request.urgency || 'normal'} urgency). Receiving this order puts the repair back to work.${extra}`
 }
 
-/** Who may correct counts — the same roles that may request stock adjustments. */
-export const PARTS_ADJUST_ROLES = ['director', 'inventory_officer', 'technical_lead', 'finance_officer']
-/** Who may raise the purchase order — the same roles that may create one. */
-export const PARTS_ORDER_ROLES = ['director', 'admin_officer', 'inventory_officer']
-export const PARTS_ARRIVED_ROLES = ['director', 'technical_lead', 'inventory_officer', 'inventory', 'admin_officer']

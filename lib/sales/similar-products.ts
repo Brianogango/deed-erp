@@ -3,10 +3,10 @@
  * nothing ("hp 840 g5" → "HP EliteBook 840 G5 i5 8GB"), and who may create a
  * product from a quote. Pure.
  */
+import { userCan } from '@/lib/auth/can'
 
-/** Same roles the products API lets create products. */
-export const PRODUCT_CREATE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead'] as const
-export const canCreateProductFromSales = (role?: string | null) => (PRODUCT_CREATE_ROLES as readonly string[]).includes(String(role ?? ''))
+/** The same permission the products API checks. */
+export const canCreateProductFromSales = (role?: string | null) => userCan({ role }, 'inventory.products.create')
 
 const words = (s: string) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean)
 

@@ -14,6 +14,7 @@
 // consume these helpers so the vocabulary can never drift between layers.
 
 import { isDeliveryNoteLine } from './sales/non-stock-line'
+import { userCan } from '@/lib/auth/can'
 
 // ─── Sale order states ───────────────────────────────────────────────────────
 
@@ -100,21 +101,9 @@ export function saleOrderLooksConfirmed(order: {
 
 // ─── Server-side transition rules ────────────────────────────────────────────
 
-/** Roles allowed to confirm a quotation into a Sales Order. */
-const SALE_CONFIRM_ROLES = ['director', 'sales_rep', 'admin_officer']
-
-/** Workshop billing: tech/finance confirm the repair-linked quotation without the Sales desk. */
-const REPAIR_SALE_CONFIRM_ROLES = [
-  ...SALE_CONFIRM_ROLES,
-  'finance_officer',
-  'technical_lead',
-] as const
-
-/** Roles allowed to cancel or reset a confirmed Sales Order. */
-const SALE_REVERSE_CONFIRMED_ROLES = ['director', 'finance_officer', 'admin_officer'] as const
-
+/** Cancel or reset a confirmed Sales Order. */
 export function canReverseConfirmedSale(role: string | null | undefined): boolean {
-  return (SALE_REVERSE_CONFIRMED_ROLES as readonly string[]).includes(String(role ?? ''))
+  return userCan({ role }, 'sales.orders.reverse_confirmed')
 }
 
 /**
@@ -138,8 +127,8 @@ export function saleTransitionError(
         : `Cannot mark a ${SALE_STATUS_LABELS[from]} as Quotation Sent`
     case 'sale':
       if (!isQuotationStage(from)) return `Cannot confirm a ${SALE_STATUS_LABELS[from]}`
-      const confirmRoles = opts?.repairLinked ? REPAIR_SALE_CONFIRM_ROLES : SALE_CONFIRM_ROLES
-      if (!(confirmRoles as readonly string[]).includes(role)) return 'Your role cannot confirm Sales Orders'
+      // Workshop billing: tech/finance confirm the repair-linked quotation without the Sales desk.
+      if (!userCan({ role }, opts?.repairLinked ? 'sales.orders.confirm_repair' : 'sales.orders.confirm')) return 'Your role cannot confirm Sales Orders'
       return null
     case 'cancelled':
       // Quotations may always be cancelled. Cancelling a confirmed Sales

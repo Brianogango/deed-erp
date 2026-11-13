@@ -6,6 +6,7 @@ import { useApp } from '@/lib/store'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import { buildMyWork } from '@/lib/my-work'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
+import { userCan } from '@/lib/auth/can'
 
 /**
  * Everything waiting for the signed-in person, across modules. Start the day
@@ -16,7 +17,7 @@ export default function MyWork() {
   const user = app.currentUser
   // Leads live in their own table, not the app store: fetch the ones this
   // person may see (the server scopes a rep to their own and unassigned).
-  const crmRole = ['director', 'admin_officer', 'sales_rep'].includes(String(user?.role ?? ''))
+  const crmRole = userCan(user, 'sales.opportunities.edit')
   const [crm, setCrm] = useState<{ leads: any[]; deals: any[]; activities: any[] }>({ leads: [], deals: [], activities: [] })
   useEffect(() => {
     if (!crmRole) return

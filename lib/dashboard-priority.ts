@@ -10,6 +10,7 @@
 import { canApproveLeaveRole } from '@/lib/auth/access'
 import type { ModuleId, PublicUser, UserRole } from '@/lib/auth/types'
 import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
+import { userCan } from '@/lib/auth/can'
 
 interface DashboardSections {
   /** Revenue / receivables / payables KPIs and money-denominated analytics. */
@@ -174,7 +175,7 @@ export function visibleDashboardRepUsers<T extends { id: string }>(
   reps: readonly T[],
 ): T[] {
   if (!dashboardSectionsForUser(user).salesAnalytics) return []
-  if (user?.role === 'sales_rep') return reps.filter(rep => rep.id === user.id)
+  if (user && !userCan(user, 'sales.view_all')) return reps.filter(rep => rep.id === user.id)
   return [...reps]
 }
 

@@ -34,6 +34,8 @@ import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 import { normalizeProductCategorySettings, PRODUCT_CREATION_CATEGORY_OPTIONS, type ProductCategorySetting } from '@/lib/product-categories'
 import { DocumentLayoutConfigurator } from './settings/DocumentLayoutConfigurator'
 import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
+import { isDirector } from '@/lib/auth/roles'
 type Section =
   | 'general' | 'document_layout' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
@@ -266,10 +268,10 @@ export default function Settings() {
 
   const currentUser = users.find(user => user.id === currentUserId)
   const normalizedRole = canonicalRole(currentUser?.role)
-  const canAccessSettings = ['director', 'admin_officer', 'finance_officer'].includes(normalizedRole)
+  const canAccessSettings = userCan(currentUser, 'admin.settings.open')
   const canManageSystemUsers = isAdmin(currentUser?.role)
-  const canManageBanks = ['director', 'finance_officer'].includes(normalizedRole)
-  const canManageNotifications = ['director', 'admin_officer'].includes(normalizedRole)
+  const canManageBanks = userCan(currentUser, 'accounting.manage')
+  const canManageNotifications = userCan(currentUser, 'admin.notifications')
 
   useEffect(() => {
     if (section === 'access' && !canManageSystemUsers) setSection('general', { history: 'replace' })
@@ -486,7 +488,7 @@ export default function Settings() {
   }
 
   const handleResetAllData = () => {
-    if (!canManageSystemUsers || currentUser?.role !== 'director') {
+    if (!canManageSystemUsers || !isDirector(currentUser?.role)) {
       showToast('Only the Director can reset all ERP data.', 'error')
       return
     }
@@ -494,7 +496,7 @@ export default function Settings() {
     setResetStep(1)
   }
 
-  const accessRoles = useAccessRoles(canManageSystemUsers || normalizedRole === 'admin_officer')
+  const accessRoles = useAccessRoles(userCan(currentUser, 'viewUsers'))
   const customRoles = accessRoles.data?.custom ?? []
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
   const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: formatModuleLabel(m) }))
@@ -687,7 +689,7 @@ export default function Settings() {
                   </Field>
                   <div className="sm:col-span-2">
                     <CurrencyRatesEditor
-                      canWrite={currentUser?.role === 'director' || currentUser?.role === 'finance_officer'}
+                      canWrite={userCan(currentUser, 'settings.commercial')}
                       showToast={showToast}
                       companyCurrency={companySettings.currency}
                       onCompanyCurrencyChange={v => updateCompanySettings({ currency: v, functionalCurrency: 'KES' })}
@@ -734,7 +736,7 @@ export default function Settings() {
                   <button
                     className="text-[11px] font-semibold px-4 py-2 rounded-lg border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
                     style={{ background: resetting ? 'var(--border-strong)' : 'var(--danger)', color: '#fff' }}
-                    onClick={handleResetAllData} disabled={resetting || currentUser?.role !== 'director'}
+                    onClick={handleResetAllData} disabled={resetting || !userCan(currentUser, 'admin.system')}
                   >
                     {resetting ? 'Resetting…' : 'Reset All Data'}
                   </button>
@@ -939,7 +941,7 @@ export default function Settings() {
                 </div>
               </div>
               <AccessRoles roles={accessRoles.data} canManage={canManageSystemUsers} onChanged={() => { void accessRoles.reload() }} />
-              {normalizedRole === 'director' && <AccessHistory />}
+              {isDirector(normalizedRole) && <AccessHistory />}
             </div>
           )}
 
@@ -992,7 +994,7 @@ export default function Settings() {
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[11px] text-slate-700 leading-relaxed">
                       <p className="font-bold mb-1">Add or change mail secrets in Settings → Security.</p>
                       <p>The Director can set SMTP host, mailbox passwords, and department From addresses there without editing the server file by hand. Quotes send <span className="font-mono">From/Reply-To: SALES_EMAIL</span> and invoices <span className="font-mono">From/Reply-To: ACCOUNTS_EMAIL</span>.</p>
-                      {normalizedRole === 'director' && (
+                      {isDirector(normalizedRole) && (
                         <button
                           type="button"
                           className="btn-secondary text-[11px] mt-2 min-h-[44px]"
@@ -1387,7 +1389,7 @@ export default function Settings() {
           {section === 'data_cutover' && canManageSystemUsers && (
             <SectionCard title="Blob cutover (gated)">
               <BlobCutoverPanel
-                canWrite={currentUser?.role === 'director'}
+                canWrite={userCan(currentUser, 'admin.system')}
                 showToast={showToast}
               />
             </SectionCard>

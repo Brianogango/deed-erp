@@ -6,6 +6,7 @@ import { Fa } from '@/components/icons'
 import { faChartLine, faBullseye, faTrophy, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
 import AppraisalsPanel from './HRAppraisals'
+import { useCan } from '@/hooks/useCan'
 
 type TargetForm = {
   employeeId: string
@@ -37,9 +38,9 @@ const emptyTargetForm = (): TargetForm => ({
 export default function HRPerformanceTab() {
   const { hrPerfTargets, currentUser, saveHrPerfTargets, showToast } = useApp()
   const { employees } = useHrStore()
-  const isAdmin = currentUser?.role === 'director'
-  const isFinance = currentUser?.role === 'finance_officer'
-  const canViewAllTargets = isAdmin || isFinance
+  const can = useCan()
+  const isAdmin = can('manageHR')
+  const canViewAllTargets = can('viewHrRecords')
   const currentEmployee = useMemo(() => {
     if (!currentUser) return null
     const normalize = (value?: string | null) => (value ?? '').trim().toLowerCase()

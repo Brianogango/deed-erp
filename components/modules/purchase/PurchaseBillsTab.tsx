@@ -7,6 +7,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import type { Invoice } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { financeInvoicePath } from '@/lib/finance-invoice'
+import { userCan } from '@/lib/auth/can'
 
 type VendorBill = Invoice
 
@@ -16,7 +17,7 @@ export default function PurchaseBillsTab() {
     vendorBills, purchaseOrders, postInvoice, currentUser,
     fmtKes, fmtDate,
   } = usePurchase()
-  const canValidateBills = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+  const canValidateBills = userCan(currentUser, 'postFinancial')
 
   const linkedPORef = (b: VendorBill) => b.purchaseOrderId ? (purchaseOrders.find(p => p.id === b.purchaseOrderId)?.ref ?? '—') : '—'
   const billStatus = (b: VendorBill) => invoiceDocState(b.status) === 'posted' ? invoicePaymentStatus(b) : invoiceDocState(b.status)

@@ -1,5 +1,6 @@
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { isCommissionCloserRole } from '@/lib/sales/commission-closer'
+import { userCan } from '@/lib/auth/can'
 
 export type SaleAttributionDoc = {
   id: string
@@ -117,7 +118,6 @@ export function isRepCandidateRole(role?: string | null): boolean {
   return isCommissionCloserRole(role) || role === 'finance_officer'
 }
 
-const FULL_SALES_VIEW_ROLES = ['director', 'finance_officer', 'admin_officer'] as const
 
 export function salesVisibleToViewer<T extends { salespersonId?: string; createdByUserId?: string }>(
   viewer: { id?: string; role?: string | null } | null | undefined,
@@ -125,6 +125,6 @@ export function salesVisibleToViewer<T extends { salespersonId?: string; created
 ): T[] {
   const list = Array.isArray(docs) ? docs : []
   if (!viewer) return []
-  if ((FULL_SALES_VIEW_ROLES as readonly string[]).includes(String(viewer.role || ''))) return [...list]
+  if (userCan(viewer, 'sales.reports.view_all')) return [...list]
   return list.filter(doc => doc.salespersonId === viewer.id || doc.createdByUserId === viewer.id)
 }

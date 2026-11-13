@@ -49,6 +49,7 @@ function bankAccountCode(acc: { id: string; bankName?: string | null; name?: str
 
 export { buildCashbookEntries, bankAdjustmentEntryId } from '@/lib/accounting/cashbook-entries'
 import { buildCashbookEntries, bankAdjustmentEntryId } from '@/lib/accounting/cashbook-entries'
+import { userCan } from '@/lib/auth/can'
 // ── Running balance ───────────────────────────────────────────────────────────
 function addRunningBalance(entries: CashbookEntry[], opening: number) {
   let bal = opening
@@ -109,7 +110,7 @@ function ReconPanel({
     bankStatementLines, addStatementLine, deleteStatementLine, currentUser, systemSettings,
     matchStatementLine, unmatchStatementLine, autoMatchStatements, showToast, updateStatementLine,
   } = useFinanceStore()
-  const canBook = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const canBook = userCan(currentUser, 'manageBankRecon')
   const [bookingIds, setBookingIds] = useState<Set<string>>(new Set())
 
   // Local form state for adding a statement line
@@ -760,7 +761,7 @@ function ReconPanel({
                 <span>Last saved by <strong>{savedRecon.reconciledBy}</strong> · {savedRecon.reconciledAt?.slice(0, 10)}</span>
               )}
             </div>
-            {['director', 'finance_officer'].includes(currentUser?.role ?? '') && (
+            {canBook && (
               <div className="flex items-center gap-2">
                 {isLocked && (
                   <button

@@ -8,6 +8,7 @@ import { faLaptop, faPlus, faRotateLeft } from '@fortawesome/free-solid-svg-icon
 import { Input, Modal, Select, Textarea } from '@/components/ui'
 import { AsyncActionButton, FormField, PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { useCan } from '@/hooks/useCan'
 
 type AssignForm = {
   employeeId: string
@@ -52,9 +53,9 @@ export default function HRAssetsTab() {
     returnEmployeeAsset,
     showToast,
   } = useApp()
-  const isAdmin = currentUser?.role === 'director'
-  const isFinance = currentUser?.role === 'finance_officer'
-  const canViewAllAssignments = isAdmin || isFinance
+  const can = useCan()
+  const isAdmin = can('manageHR')
+  const canViewAllAssignments = can('viewHrRecords')
   const currentEmployee = useMemo(() => {
     if (!currentUser) return null
     const normalize = (value?: string | null) => (value ?? '').trim().toLowerCase()

@@ -702,11 +702,11 @@ function AccountingContent() {
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const canViewJournals = !!currentUser && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-  const canManageFinance = !!currentUser && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-  const canManageFullFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const canViewJournals = userCan(currentUser, 'accounting.view')
+  const canManageFinance = userCan(currentUser, 'postFinancial')
+  const canManageFullFinance = userCan(currentUser, 'accounting.manage')
   // The Admin Officer adds agents and adds/cancels commission bills (no payouts or payout settings).
-  const canAddAgentCommission = canManageFullFinance || currentUser?.role === 'admin_officer'
+  const canAddAgentCommission = userCan(currentUser, 'sales.agents.view')
   // A person on a custom role sees exactly the Finance parts their role lists;
   // everyone else keeps the screens their built-in role has always had.
   const customPermissions = Array.isArray(currentUser?.permissions)
@@ -1724,12 +1724,12 @@ function AccountingContent() {
           {tab === 'integrity' ? (
             <>
               {canManageFullFinance && <InvoiceCustomerCheck showToast={showToast} />}
-              {canManageFullFinance && <DuplicateInvoiceJournals showToast={showToast} canApply={currentUser?.role === 'director'} />}
-              {canManageFullFinance && <BillPaymentFix showToast={showToast} canApply={currentUser?.role === 'director'} />}
-              {canManageFullFinance && <ScreenLedgerSync showToast={showToast} canApply={currentUser?.role === 'director'} />}
-              {canManageFullFinance && <LedgerCleanup showToast={showToast} canApply={currentUser?.role === 'director'} />}
-              {canManageFullFinance && <DocumentLedgerRepair showToast={showToast} canApply={currentUser?.role === 'director'} />}
-              {canManageFullFinance && <StockReconcile showToast={showToast} canApply={currentUser?.role === 'director'} />}
+              {canManageFullFinance && <DuplicateInvoiceJournals showToast={showToast} canApply={userCan(currentUser, 'accounting.ledger_repair')} />}
+              {canManageFullFinance && <BillPaymentFix showToast={showToast} canApply={userCan(currentUser, 'accounting.ledger_repair')} />}
+              {canManageFullFinance && <ScreenLedgerSync showToast={showToast} canApply={userCan(currentUser, 'accounting.ledger_repair')} />}
+              {canManageFullFinance && <LedgerCleanup showToast={showToast} canApply={userCan(currentUser, 'accounting.ledger_repair')} />}
+              {canManageFullFinance && <DocumentLedgerRepair showToast={showToast} canApply={userCan(currentUser, 'accounting.ledger_repair')} />}
+              {canManageFullFinance && <StockReconcile showToast={showToast} canApply={userCan(currentUser, 'accounting.ledger_repair')} />}
               <IntegrityDashboard />
             </>
           ) : tab === 'invoices' || tab === 'bills' ? (
@@ -2073,7 +2073,7 @@ function AccountingContent() {
                 )}
               </div>
 
-              {['director', 'finance_officer'].includes(currentUser?.role ?? '') && (
+              {userCan(currentUser, 'accounting.manage') && (
                 <OpeningBalanceCorrection showToast={showToast} />
               )}
 

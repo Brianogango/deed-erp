@@ -5,6 +5,7 @@
  */
 
 import { calcSaleOrderLineMoney, calcSaleOrderTotals } from '@/lib/sales/line-calc'
+import { userCan } from '@/lib/auth/can'
 
 export type ConfirmableLine = {
   id: string
@@ -134,11 +135,10 @@ export function confirmSelectionTotals<T extends ConfirmableLine>(
   return calcSaleOrderTotals([...lines], { headerDiscount })
 }
 
-const CONFIRM_ROLES = new Set(['director', 'sales_rep', 'admin_officer'])
 
 /** Roles that may confirm a quotation into a sales order (matches store.confirmSO). */
 export function canConfirmQuotation(role?: string | null): boolean {
-  return !!role && CONFIRM_ROLES.has(role)
+  return userCan({ role }, 'sales.orders.confirm')
 }
 
 /**
@@ -146,7 +146,7 @@ export function canConfirmQuotation(role?: string | null): boolean {
  * Mirrors `canApproveInventoryAction` in lib/store.tsx.
  */
 export function canConfirmAndReserve(role?: string | null): boolean {
-  return !!role && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(role)
+  return userCan({ role }, 'manageInventoryApprovals')
 }
 
 /**
@@ -154,7 +154,7 @@ export function canConfirmAndReserve(role?: string | null): boolean {
  * so they can create the SO + waiting DN without allocating stock yet.
  */
 export function canConfirmWithoutReservation(role?: string | null): boolean {
-  return role === 'director' || role === 'inventory_officer'
+  return userCan({ role }, 'sales.orders.confirm_unreserved')
 }
 
 export type ConfirmQuotationMode = 'reserve' | 'no_reserve'

@@ -47,6 +47,7 @@ import {
 import { fetchMpesaStatus, sendMpesaStk, waitForMpesaStk } from '@/lib/mpesa/client'
 import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
 import { moneyInputValue } from '@/lib/intl-cache'
+import { userCan } from '@/lib/auth/can'
 
 
 const fmtHistoryTime = (iso: string) => {
@@ -110,8 +111,8 @@ export default function InvoiceDetail() {
   const { deliveryJobs, riders, recordCustomerPaidRider } = useDeliveryStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const canManageFinance = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-  const canManageFullFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const canManageFinance = userCan(currentUser, 'postFinancial')
+  const canManageFullFinance = userCan(currentUser, 'accounting.manage')
   const canCancelOrReset = canCancelOrResetInvoice(currentUser?.role)
   const canApplyCredit = canApplyCustomerCredit(currentUser?.role)
   const invoice = invoices.find(i => i.id === id)

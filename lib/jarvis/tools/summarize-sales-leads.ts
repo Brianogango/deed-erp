@@ -3,6 +3,7 @@ import 'server-only'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import type { ToolDefinition } from '../types'
+import { userCan } from '@/lib/auth/can'
 
 const inputSchema = z.object({
   source: z.enum(['inbound_email', 'all']).optional(),
@@ -56,7 +57,7 @@ export const summarizeSalesLeadsTool: ToolDefinition = {
     }
 
     // Sales reps only see their own leads; directors/admins see all.
-    if (ctx.user.role === 'sales_rep') {
+    if (!userCan(ctx.user, 'sales.view_all')) {
       where.ownerId = ctx.user.id
     }
 

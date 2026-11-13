@@ -10,6 +10,7 @@ import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import { invoiceDocState } from '@/lib/odoo-sales-flow'
 import { isVendorCreditNote, vendorCreditSummary } from '@/lib/finance/vendor-credit-note'
+import { userCan } from '@/lib/auth/can'
 
 /**
  * Supplier credit notes (VCN/…): what a supplier owes back or takes off, kept
@@ -19,7 +20,6 @@ import { isVendorCreditNote, vendorCreditSummary } from '@/lib/finance/vendor-cr
 type Row = { inv: Invoice; amount: number; applied: number; refunded: number; open: number; usedOn: string }
 type Action = { kind: 'apply' | 'refund'; row: Row }
 
-const MANAGE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
 export default function SupplierCreditsTab() {
   const { users, currentUserId, showToast } = useApp() as any
@@ -36,7 +36,7 @@ export default function SupplierCreditsTab() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const user = (users as Array<{ id: string; role?: string }> | undefined)?.find(u => u.id === currentUserId) ?? null
-  const canManage = MANAGE_ROLES.includes(String(user?.role ?? ''))
+  const canManage = userCan(user, 'invoices.manage')
 
   const rows: Row[] = useMemo(() => (invoices as Invoice[])
     .filter(inv => isVendorCreditNote(inv) && invoiceDocState(inv.status) !== 'cancelled')

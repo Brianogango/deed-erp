@@ -32,6 +32,7 @@ import {
   type PurchaseTypeFilter,
 } from '@/lib/purchases-filter'
 import { invoiceResidual, isOpenInvoice } from '@/lib/odoo-sales-flow'
+import { userCan } from '@/lib/auth/can'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills'
 type SubView  = 'list' | 'form' | 'receive' | 'receipt'
@@ -1364,7 +1365,7 @@ function PurchaseContent() {
         subtitle="Source, receive and pay with control"
         icon={<Fa icon={faClipboardCheck} />}
         color="var(--navy)"
-        primaryAction={mainView === 'orders' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '') ? (
+        primaryAction={mainView === 'orders' && userCan(currentUser, 'manageProcurement') ? (
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewRFQ(true)}>
             New RFQ
           </PrimaryActionButton>

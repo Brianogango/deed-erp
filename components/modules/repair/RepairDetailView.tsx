@@ -46,7 +46,8 @@ import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
 import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
-import { canonicalRole } from '@/lib/auth/roles'
+import { canonicalRole, isDirector as isDirectorRole } from '@/lib/auth/roles'
+import { useCan } from '@/hooks/useCan'
 
 const PROC_COLORS = {
   pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#F59E0B' },
@@ -164,22 +165,24 @@ export default function RepairDetailView() {
   const [tradeInCondition, setTradeInCondition] = useState<'good' | 'fair' | 'poor'>('good')
   const [tradeInNotes, setTradeInNotes] = useState('')
 
+  const can = useCan()
+
   if (!r) return null
 
   const currentRole = canonicalRole(currentUser?.role)
   const isMyRepair  = r.assignedTechnicianId === currentUserId
   const pendingOutsourceJob = outsourceJobs?.find(job => job.repairOrderId === r.id && job.status === 'sent')
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
-  const canVerify   = r.status === 'pending_verification' && ['technical_lead','director','admin_officer'].includes(currentRole)
-  const canAssign   = (currentRole === 'technical_lead' || (currentRole === 'director' && systemSettings?.repAdminAssignsJobs))
+  const canVerify   = r.status === 'pending_verification' && can('repair.verify')
+  const canAssign   = isDirectorRole(currentRole) ? !!systemSettings?.repAdminAssignsJobs : can('repair.assign')
     && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
     && !pendingOutsourceJob
   const canDiagnose = (
       r.status === 'assigned'
       || (r.status === 'diagnosed' && !hasDiagnosis)
-    ) && (isMyRepair || ['technical_lead', 'director'].includes(currentRole))
+    ) && (isMyRepair || can('repair.lead'))
     && r.repairPath !== 'direct_repair' && !pendingOutsourceJob
-  const canUpdateDiagnosis = !!r.diagnosis && (isMyRepair || ['technical_lead', 'director'].includes(currentRole))
+  const canUpdateDiagnosis = !!r.diagnosis && (isMyRepair || can('repair.lead'))
     && r.repairPath !== 'direct_repair'
     && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
     && !pendingOutsourceJob
@@ -187,7 +190,7 @@ export default function RepairDetailView() {
   const noCharge = isRepairNoCharge(r)
   const canQuote    = quotableStatusesForPath(r.repairPath).includes(r.status)
     && (isDirectRepairPath(r.repairPath) || !!(r.diagnosis?.findings || r.diagnosis?.faultDescription))
-    && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentRole))
+    && (isMyRepair || can('repair.quote.generate'))
     && !r.diagnosisStopped
     && !billingExempt
     && !pendingOutsourceJob
@@ -198,7 +201,7 @@ export default function RepairDetailView() {
   // without declining it first. Secondary action only (see repair-path.ts).
   const canEditSentQuote = isQuoteAwaitingApproval(r.status)
     && !!r.quote
-    && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentRole))
+    && (isMyRepair || can('repair.quote.generate'))
     && !r.diagnosisStopped
     && !billingExempt
     && !pendingOutsourceJob
@@ -223,28 +226,28 @@ export default function RepairDetailView() {
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
   const canPerformQA  = r.status === 'qc'
-    && (['director', 'technical_lead'].includes(currentRole)
+    && (can('repair.lead')
     || (!!currentUser && isRepairTechActor(currentUser) && !isMyRepair))
     && !pendingOutsourceJob
   const waitingForOthersQc = r.status === 'qc' && !canPerformQA
   const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status) && !pendingOutsourceJob
-  const isDirector  = currentRole === 'director'
-  const isDeliveryManager = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
+  const isDirector  = isDirectorRole(currentRole)
+  const isDeliveryManager = can('repair.manage')
   const isStaff     = !!currentUser
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned','retained']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
-  const canMoveBack           = ['technical_lead', 'director'].includes(currentRole) && !TERMINAL.includes(r.status) && r.status !== 'pending_verification' && !pendingOutsourceJob
+  const canMoveBack           = can('repair.lead') && !TERMINAL.includes(r.status) && r.status !== 'pending_verification' && !pendingOutsourceJob
   const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !pendingOutsourceJob
   const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status) && !pendingOutsourceJob
   const canPrepareRelease     = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !repairOrc && !pendingOutsourceJob
   // Managers (director/admin officer/lead tech) can correct intake details until the job is terminal
-  const canEditDetails        = ['director', 'admin_officer', 'technical_lead'].includes(currentRole) && !TERMINAL.includes(r.status)
+  const canEditDetails        = can('repair.manage') && !TERMINAL.includes(r.status)
   // Customer declines repair after diagnosis — close at diagnosis stage with the diagnosis fee
   const canStopAtDiagnosis    = !billingExempt && !r.diagnosisStopped && !!r.diagnosis && !isDirectRepairPath(r.repairPath)
   const feeResolved = resolveDiagnosisFee(r, systemSettings)
   const feeApplies = shouldChargeDiagnosisFee(r) && feeResolved.amount > 0
-  const canWaiveDiagnosisFee  = ['director', 'technical_lead', 'admin_officer', 'finance_officer'].includes(currentRole)
+  const canWaiveDiagnosisFee  = can('repair.fee.waive')
     && !isDirectRepairPath(r.repairPath)
     && feeApplies
     && r.diagnosisFeeStatus !== 'waived'
@@ -252,7 +255,7 @@ export default function RepairDetailView() {
     && r.diagnosisFeeStatus !== 'paid'
     && r.diagnosisFeeStatus !== 'not_applicable'
     && (!TERMINAL.includes(r.status) || isQuoteDeclinedReopenable(r.status))
-  const canMarkDiagnosisFeePaid = ['director', 'admin_officer', 'finance_officer', 'sales_rep'].includes(currentRole)
+  const canMarkDiagnosisFeePaid = can('repair.fee.mark_paid')
     && !isDirectRepairPath(r.repairPath)
     && feeApplies
     && r.diagnosisFeeStatus !== 'waived'
@@ -262,27 +265,27 @@ export default function RepairDetailView() {
     && !r.diagnosisFeePaidAt
     && (!TERMINAL.includes(r.status) || isQuoteDeclinedReopenable(r.status) || r.diagnosisStopped)
   const canMarkNoCharge = canMarkRepairBillingExempt(currentRole, r) && !pendingOutsourceJob
-  const canDeclineQuote = ['director', 'admin_officer', 'technical_lead', 'sales_rep', 'finance_officer'].includes(currentRole)
+  const canDeclineQuote = can('repair.quote.generate')
     && !!r.quote
     && ['awaiting_approval', 'diagnosed', 'approved'].includes(r.status)
     && !billingExempt
     && !pendingOutsourceJob
   // Return the device unrepaired (incl. after quote decline / unrepairable)
-  const canReturnDevice       = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
+  const canReturnDevice       = can('repair.manage')
     && returnableStatusesForPath(r.repairPath).includes(r.status)
     && !pendingOutsourceJob
-  const canLeaveDeviceWithDeed = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
+  const canLeaveDeviceWithDeed = can('repair.manage')
     && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready'].includes(r.status)
     && !pendingOutsourceJob
-  const canTradeInFromRepair = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
+  const canTradeInFromRepair = can('repair.manage')
     && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready', 'declined', 'unrepairable', 'retained'].includes(r.status)
     && !r.retainedBuyBackId && !r.retainedDonationId
     && !pendingOutsourceJob
   const canConvertRetained = r.status === 'retained'
     && !r.retainedBuyBackId && !r.retainedDonationId
-    && ['director', 'admin_officer', 'technical_lead', 'inventory_officer'].includes(currentRole)
+    && can('repair.retained.donate')
   const canMarkPartsArrived = r.status === 'awaiting_parts'
-    && ['technical_lead', 'director', 'inventory_officer', 'admin_officer'].includes(currentRole)
+    && can('repair.parts.arrived')
     && !pendingOutsourceJob
   const linkedInvoice      = repairInvoiceFor(r as any, invoices)
   const paidNotCollected   = isPaidNotCollected(r as any, invoices)
@@ -307,7 +310,7 @@ export default function RepairDetailView() {
   // The server lets only these roles create invoices. The button used to show
   // for everyone, so a technician / tech lead got a refusal every time —
   // part of why billing "works at times and at times not".
-  const canBillRole = ['director', 'finance_officer', 'admin_officer'].includes(currentRole)
+  const canBillRole = can('createCustomerInvoiceFromSO')
   const billingDue = (['ready', 'unrepairable'].includes(r.status) || declinedFeeDue) && !noCharge
   // Billing is offered only while the invoice still needs creating or
   // aligning: a posted invoice that matches the job needs nothing more.
@@ -331,16 +334,16 @@ export default function RepairDetailView() {
   // Offered only when this repair can itself go on a combined invoice and the
   // client has at least one other repair that can join it.
   const consolidationOptions = !linkedInvoice && !r.invoiceId
-    && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+    && can('createCustomerInvoiceFromSO')
     && !pendingOutsourceJob
     ? consolidationCandidates(allRepairs ?? [], r)
     : []
   const canBillTogether = consolidationOptions.some(c => c.repair.id === r.id && c.blocker === null)
     && consolidationOptions.filter(c => c.blocker === null).length >= 2
   const canCloseJob = ['delivered', 'collected'].includes(r.status)
-    && ['director', 'admin_officer', 'technical_lead', 'finance_officer'].includes(currentRole)
+    && can('repair.close')
   const canMarkUnrepairable = ['assigned', 'diagnosed', 'in_repair'].includes(r.status)
-    && ['technical_lead', 'director'].includes(currentRole)
+    && can('repair.lead')
     && !pendingOutsourceJob
   const failedQcItems = (r.qcItems ?? []).filter(item => item.testedDate && !item.passed)
   const showQcFailPanel = !!(r.qcFailReason || failedQcItems.length) && ['in_repair', 'qc'].includes(r.status)
@@ -350,7 +353,7 @@ export default function RepairDetailView() {
       ['approved', 'awaiting_parts', 'in_repair', 'ready'].includes(r.status)
       || (r.status === 'invoiced' && canInvoice)
     )
-    && (isMyRepair || ['director', 'technical_lead', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? ''))
+    && (isMyRepair || can('repair.progress.update'))
     && !pendingOutsourceJob
 
   const linkedOutsourceJob = pendingOutsourceJob ?? outsourceJobs.find(j => j.repairOrderId === r.id)
@@ -1087,7 +1090,7 @@ export default function RepairDetailView() {
                     mobilePresentation="anchored"
                     actions={[
                       { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
-                      { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')) },
+                      { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && can('repair.warranty.claim')) },
                     ]}
                   />
                 }
@@ -1897,7 +1900,7 @@ export default function RepairDetailView() {
                             Reviewed {new Date(r.paymentConfirmationReviewedAt).toLocaleString('en-KE')}{r.paymentConfirmationReviewedBy ? ` by ${r.paymentConfirmationReviewedBy}` : ''}
                           </p>
                         )}
-                        {r.paymentConfirmationStatus === 'pending_review' && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '') && (
+                        {r.paymentConfirmationStatus === 'pending_review' && can('recordPayment') && (
                           <div className="mt-3 space-y-2">
                             {showPaymentRejectInput ? (
                               <div className="space-y-2">

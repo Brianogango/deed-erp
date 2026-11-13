@@ -4,21 +4,19 @@
  * technician included) could list every lead, and any rep could edit or
  * delete a colleague's.
  */
-const LEAD_ROLES = new Set(['director', 'admin_officer', 'finance_officer', 'sales_rep'])
-const MANAGERS = new Set(['director', 'admin_officer'])
 
 type LeadLike = { ownerId?: string | null; stage?: string | null }
 
 export function leadRole(role: unknown): string | null {
   const r = canonicalUserRole(String(role ?? ''))
-  return r && LEAD_ROLES.has(r) ? r : null
+  return r && userCan({ role: r }, 'sales.leads.edit') ? r : null
 }
 
 /** Reps see their own leads and unassigned ones (so they can pick them up). */
 export function canSeeLead(role: unknown, userId: string, lead: LeadLike): boolean {
   const r = leadRole(role)
   if (!r) return false
-  if (r !== 'sales_rep') return true
+  if (userCan({ role: r }, 'sales.view_all')) return true
   return !lead.ownerId || lead.ownerId === userId
 }
 
@@ -28,19 +26,21 @@ export const canEditLead = canSeeLead
 export function canDeleteLead(role: unknown, userId: string, lead: LeadLike): boolean {
   const r = leadRole(role)
   if (!r) return false
-  if (MANAGERS.has(r)) return true
-  return r === 'sales_rep' && lead.ownerId === userId && lead.stage !== 'converted'
+  if (userCan({ role: r }, 'sales.crm.assign')) return true
+  return !userCan({ role: r }, 'sales.view_all') && lead.ownerId === userId && lead.stage !== 'converted'
 }
 
 /** Reps cannot hand a lead to someone else; only managers assign. */
 export function canAssignLead(role: unknown): boolean {
   const r = leadRole(role)
-  return Boolean(r && MANAGERS.has(r))
+  return Boolean(r && userCan({ role: r }, 'sales.crm.assign'))
 }
 
 export function leadListWhere(role: unknown, userId: string) {
-  return leadRole(role) === 'sales_rep' ? { OR: [{ ownerId: userId }, { ownerId: null }] } : {}
+  const r = leadRole(role)
+  return r && !userCan({ role: r }, 'sales.view_all') ? { OR: [{ ownerId: userId }, { ownerId: null }] } : {}
 }
 
 export { phoneKey } from '@/lib/crm/phone-key'
 import { canonicalUserRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'

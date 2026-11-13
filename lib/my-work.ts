@@ -12,6 +12,7 @@
 import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
 import { canonicalRole } from '@/lib/auth/roles'
 import { findOrphanTradeInSerials } from '@/lib/tradein/orphan-intake'
+import { userCan } from '@/lib/auth/can'
 
 type WorkItem = { id: string; title: string; subtitle: string; href: string; ageDays: number }
 type WorkQueue = {
@@ -70,6 +71,8 @@ const repairHref = (r: Any) => `/repairs?id=${encodeURIComponent(r.id)}`
 export function buildMyWork(input: MyWorkInput): WorkQueue[] {
   const role = canonicalRole(input.role)
   const is = (...roles: string[]) => role === 'director' || roles.includes(role)
+  // Sales reps see only their own records (sales.view_all).
+  const ownOnly = !userCan({ role }, 'sales.view_all')
   const { now } = input
   const out: WorkQueue[] = []
 
@@ -128,10 +131,10 @@ export function buildMyWork(input: MyWorkInput): WorkQueue[] {
   // ── CRM ───────────────────────────────────────────────────────────────
   if (is('sales_rep', 'admin_officer')) {
     const today = now.toISOString().slice(0, 10)
-    const mine = (ownerId: unknown) => role !== 'sales_rep' ? true : ownerId === input.userId
+    const mine = (ownerId: unknown) => !ownOnly ? true : ownerId === input.userId
     const leads = (input.leads ?? []).filter(l =>
       !['converted', 'lost'].includes(String(l.stage))
-      && (role === 'sales_rep' ? (l.ownerId === input.userId || !l.ownerId) : true)
+      && (ownOnly ? (l.ownerId === input.userId || !l.ownerId) : true)
       && (l.nextFollowUpAt
         ? String(l.nextFollowUpAt).slice(0, 10) <= today
         : !l.lastContactedAt && ageDays(l.createdAt, now) >= 1))
@@ -179,13 +182,13 @@ export function buildMyWork(input: MyWorkInput): WorkQueue[] {
     const quotations = input.saleOrders.filter(o =>
       ['quotation', 'quotation_sent'].includes(String(o.status))
       && ageDays(o.date ?? o.createdAt, now) >= 3
-      && (role !== 'sales_rep' || o.createdByUserId === input.userId || o.salespersonId === input.userId))
+      && (!ownOnly || o.createdByUserId === input.userId || o.salespersonId === input.userId))
     out.push(queue('quotations-open', 'Quotations to follow up', 'Open for 3+ days', '/sales',
       quotations.map(o => ({ id: o.id, title: o.ref ?? o.orderNumber, subtitle: `${o.customerName ?? ''} · ${kes(o.total)}`, href: `/sales?id=${encodeURIComponent(o.id)}`, ageDays: ageDays(o.date ?? o.createdAt, now) }))))
   }
   if (is('sales_rep', 'admin_officer', 'inventory_officer', 'finance_officer')) {
     const billed = findInvoicedNotDelivered({ saleOrders: input.saleOrders, invoices: input.invoices, deliveries: input.deliveries, products: input.products ?? [] })
-      .filter(r => role !== 'sales_rep' || input.saleOrders.some(o => o.id === r.saleOrderId && (o.createdByUserId === input.userId || o.salespersonId === input.userId)))
+      .filter(r => !ownOnly || input.saleOrders.some(o => o.id === r.saleOrderId && (o.createdByUserId === input.userId || o.salespersonId === input.userId)))
     out.push(queue('invoiced-not-delivered', 'Invoiced, not delivered', 'Machines billed but still counted in stock — validate the delivery with serials', '/sales',
       billed.map(r => ({ id: r.saleOrderId, title: r.ref, subtitle: `${r.customerName} · ${r.machines.map(m => `${m.undelivered} × ${m.name}`).join(', ')}`, href: `/sales?id=${encodeURIComponent(r.saleOrderId)}`, ageDays: ageDays(r.firstInvoiceDate, now) })), 'urgent'))
   }

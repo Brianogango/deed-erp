@@ -4,23 +4,14 @@
  * pay customer invoices, cancel/reset invoices, and apply customer credit.
  * Paying vendor bills, bank recon, and expense reimbursement stay Finance/Director.
  */
+import { userCan } from '@/lib/auth/can'
+import { canonicalRole, isDirector } from '@/lib/auth/roles'
 
 export const DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES = 1_000_000
 
-function normalizeFinanceRole(role: string | null | undefined): string {
-  if (!role) return ''
-  const aliases: Record<string, string> = {
-    super_admin: 'director',
-    admin: 'director',
-    finance: 'finance_officer',
-  }
-  return aliases[role] || role
-}
-
-/** Full finance seal — bank recon and expense reimbursement. */
+/** Full finance seal — bank recon and expense reimbursement (Finance + Director). */
 function isFullFinanceRole(role: string | null | undefined): boolean {
-  const r = normalizeFinanceRole(role)
-  return r === 'director' || r === 'finance_officer'
+  return userCan({ role }, 'accounting.manage')
 }
 
 function resolveAdminOfficerInvoiceLimit(limitKes?: number | null): number {
@@ -42,12 +33,13 @@ export function canPostOrPayCustomerInvoice(args: {
   limitKes?: number | null
   action?: 'post' | 'pay'
 }): { ok: boolean; reason?: string } {
-  const role = normalizeFinanceRole(args.role)
+  const role = canonicalRole(args.role)
   if (!role) return { ok: false, reason: 'Not signed in' }
 
   if (isFullFinanceRole(role)) return { ok: true }
 
-  if (role === 'admin_officer') {
+  // Admin Officer: posts finance documents (postFinancial) but not every type.
+  if (userCan({ role }, 'postFinancial')) {
     if (args.invoiceType === 'customer_invoice' || args.invoiceType === 'vendor_bill') {
       return { ok: true }
     }
@@ -58,17 +50,15 @@ export function canPostOrPayCustomerInvoice(args: {
 }
 
 export function canManageBankRecon(role: string | null | undefined): boolean {
-  return isFullFinanceRole(role)
+  return userCan({ role }, 'manageBankRecon')
 }
 
 export function canCancelOrResetInvoice(role: string | null | undefined): boolean {
-  const r = normalizeFinanceRole(role)
-  return r === 'director' || r === 'finance_officer' || r === 'admin_officer'
+  return userCan({ role }, 'postFinancial')
 }
 
 export function canApplyCustomerCredit(role: string | null | undefined): boolean {
-  const r = normalizeFinanceRole(role)
-  return r === 'director' || r === 'finance_officer' || r === 'admin_officer'
+  return userCan({ role }, 'manageCustomerCredit')
 }
 
 export function canReviewExpense(role: string | null | undefined): boolean {
@@ -90,8 +80,7 @@ export function canPayOwnPostedInvoice(args: {
   invoiceTotal: number
   sodThresholdKes?: number | null
 }): { ok: boolean; reason?: string } {
-  const role = normalizeFinanceRole(args.role)
-  if (role === 'director') return { ok: true }
+  if (isDirector(args.role)) return { ok: true }
   const threshold = resolveAdminOfficerInvoiceLimit(args.sodThresholdKes)
   if ((Number(args.invoiceTotal) || 0) <= threshold) return { ok: true }
   if (

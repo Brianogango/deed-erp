@@ -28,6 +28,7 @@ import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { compactSpecsString, UNIT_CONFIG_SOURCE_LABEL, type UnitConfigSource } from '@/lib/reconfiguration/unit-config'
 import SearchablePick from '@/components/reconfiguration/SearchablePick'
 import { useUrlQueryState, useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { userCan } from '@/lib/auth/can'
 
 type WorkOrderListItem = {
   id: string
@@ -73,7 +74,6 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T
 }
 
-const CREATE_ROLES = ['director', 'admin_officer', 'sales_rep', 'technical_lead', 'kilimall_officer']
 
 const ACTIONS: Array<{ value: BenchActionKind; label: string }> = [
   { value: 'none', label: 'Leave as-is' },
@@ -141,7 +141,7 @@ export default function Reconfiguration() {
   const [manualRamGb, setManualRamGb] = useState('')
   const [manualStorageGb, setManualStorageGb] = useState('')
 
-  const canCreate = CREATE_ROLES.includes(role)
+  const canCreate = userCan({ role }, 'createReconfiguration')
   const enabled = systemSettings?.reconfigurationEnabled !== false
 
   const ramParts = useMemo(() => ramComponentProducts(products), [products])

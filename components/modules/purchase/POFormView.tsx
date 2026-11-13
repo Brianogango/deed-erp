@@ -17,6 +17,7 @@ import {
   Fa, faBox, faCheck, faCreditCard, faFileInvoice, faPaperPlane, faPlus, faTrash, faUpload,
   faWarehouse, faBarcode, faWrench, faPhone, faLocationDot, faEnvelope, faStar,
 } from '@/components/icons'
+import { userCan } from '@/lib/auth/can'
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
@@ -197,9 +198,9 @@ export default function POFormView() {
   }
 
     const canEdit        = activePO.status === 'draft' || activePO.status === 'sent'
-    const canSend        = activePO.status === 'draft' && activePO.lines.length > 0 && !!activePO.vendorId && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
-    const canConfirm     = activePO.status === 'sent' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
-    const canRevertToDraft = activePO.status === 'sent' && ['director', 'admin_officer'].includes(currentUser?.role ?? '')
+    const canSend        = activePO.status === 'draft' && activePO.lines.length > 0 && !!activePO.vendorId && userCan(currentUser, 'manageProcurement')
+    const canConfirm = activePO.status === 'sent' && userCan(currentUser, 'manageProcurement')
+    const canRevertToDraft = activePO.status === 'sent' && userCan(currentUser, 'purchase.orders.revert')
     const hasDraftReceipt = receipts.some(r => r.poId === activePO.id && r.status === 'draft')
     const hasOutstandingQty = activePO.lines.some(line => line.qtyReceived < line.qty)
     // technical_lead is deliberately excluded: validateReceipt's
@@ -208,18 +209,18 @@ export default function POFormView() {
     // button to technical_lead is a guaranteed-denied dead end that loses
     // unsaved GRN scan progress (serials/specs are local component state
     // until the receipt is validated).
-    const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
-    const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
+    const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && userCan(currentUser, 'validatePurchaseReceipt')
+    const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && userCan(currentUser, 'manageProcurement')
     const hasBillableQty = activePO.lines.some(line => billableQtyForLine(line) > 0)
-    const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-    const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-    const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+    const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && userCan(currentUser, 'postFinancial')
+    const canValidateBill = linkedBill?.status === 'draft' && userCan(currentUser, 'postFinancial')
+    const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && userCan(currentUser, 'recordPayment')
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
     const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)
     const statusView     = poStatusView(activePO, purchaseReturns)
     const poCreditNotes  = invoices.filter(i => i.type === 'vendor_bill' && i.purchaseOrderId === activePO.id && Number(i.total) < 0 && !['cancelled', 'voided'].includes(String(i.status)))
-    const canCloseReturned = statusView.key === 'returned' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
+    const canCloseReturned = statusView.key === 'returned' && userCan(currentUser, 'manageProcurement')
     const billsCount     = linkedBill ? 1 : 0
     const activityItems = [
       { key: `po-${activePO.id}`, date: activePO.date, title: 'Purchase order created', detail: activePO.ref },

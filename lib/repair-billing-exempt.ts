@@ -7,6 +7,7 @@
  * Distinct from warranty (customer entitlement) and Direct Repair (customer
  * declined diagnosis). Requires a manager, a typed reason, and an audit log.
  */
+import { userCan } from '@/lib/auth/can'
 
 export type BillingExemptReason = 'company_mistake' | 'goodwill' | 'other'
 
@@ -25,7 +26,6 @@ export type BillingExemptRepair = {
   status?: string | null
 }
 
-const MANAGER_ROLES = ['director', 'admin_officer', 'technical_lead', 'finance_officer'] as const
 
 export function normalizeBillingExemptReason(value: unknown): BillingExemptReason {
   if (value === 'goodwill' || value === 'other' || value === 'company_mistake') return value
@@ -44,7 +44,7 @@ export function isRepairNoCharge(repair: BillingExemptRepair | null | undefined)
 }
 
 export function canApplyBillingExempt(role: string | null | undefined): boolean {
-  return MANAGER_ROLES.includes((role ?? '') as (typeof MANAGER_ROLES)[number])
+  return userCan({ role }, 'repair.billing.exempt')
 }
 
 const TERMINAL = new Set([
