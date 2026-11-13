@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 // Bulk data import — accepts JSON arrays for any store key.
 // Used to seed products, contacts, etc. from external sources.
 // POST body: { "deed_products": [...], "deed_contacts": [...] }
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Director only
-  if (session.user.role !== 'director') {
+  if (!isDirector(session.user.role)) {
     return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
   }
 

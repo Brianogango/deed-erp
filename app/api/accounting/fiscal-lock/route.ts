@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer'])
+    await requirePermission('accounting.manage')
     const lock = await prisma.fiscalLock.findFirst({ orderBy: { lockDate: 'desc' } })
     if (!lock) {
       return NextResponse.json({ lockDate: null, note: null, updatedBy: null, updatedAt: null })
@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer'])
+    const actor = await requirePermission('accounting.manage')
     const body = await request.json().catch(() => ({}))
     const lockDate = body.lockDate
     if (!lockDate || typeof lockDate !== 'string') {

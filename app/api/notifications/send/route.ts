@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/prisma'
@@ -6,7 +7,6 @@ import { configuredPhoneChannels } from '@/lib/notifications/channel-availabilit
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { runNotificationWorker } from '@/lib/notifications/worker'
 import type { NotificationChannel } from '@/lib/notifications/types'
-import { isUserAllowed } from '@/lib/auth/authorization'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,13 +32,13 @@ function requestedChannels(params: any, defaults: NotificationChannel[]): Notifi
 }
 
 function roleAllowed(user: { role: string; actsAsTechnician?: boolean }, type: string) {
-  const rules: Record<string, string[]> = {
-    repair: ['director', 'admin_officer', 'technical_lead', 'technician'],
-    quote: ['director', 'admin_officer', 'technical_lead', 'sales_rep'],
-    procurement: ['director', 'admin_officer', 'technical_lead', 'technician'],
-    general: ['director', 'admin_officer', 'super_admin'],
+  const permission: Record<string, string> = {
+    repair: 'repair.edit',
+    quote: 'sales.quote.notify',
+    procurement: 'purchase.notify',
+    general: 'admin.notifications',
   }
-  return isUserAllowed(user, rules[type] ?? [])
+  return !!permission[type] && userCan(user, permission[type])
 }
 
 async function loadRepairRecipient(ref: string) {

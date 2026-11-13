@@ -4,14 +4,14 @@
  * POST — correct it (director only).
  */
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { applyDocumentLedgerRepairs, approveReviewRows, findDocumentLedgerRepairs } from '@/lib/accounting/document-ledger-repair.server'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer'])
+    await requirePermission('accounting.manage')
     return NextResponse.json(await findDocumentLedgerRepairs())
   })
 }
@@ -19,7 +19,7 @@ export async function GET() {
 /** Body `{ approve: [invoiceId, …] }` applies only those review rows. */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director'])
+    const actor = await requirePermission('accounting.ledger_repair')
     const body = await request.json().catch(() => null) as { approve?: unknown } | null
     if (Array.isArray(body?.approve)) {
       const ids = body.approve.map(String).filter(id => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 200)

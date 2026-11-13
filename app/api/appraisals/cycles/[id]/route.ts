@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { HR_ROLES } from '@/lib/hr/appraisals.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(HR_ROLES)
+    const actor = await requirePermission('manageHR')
     const body = await request.json().catch(() => ({}))
     const status = body.status === 'open' ? 'open' : 'closed'
     const cycle = await prisma.appraisalCycle.findUnique({ where: { id } })

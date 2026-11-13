@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { ingestAllKnowledge, ingestSopDocuments, ingestWebsiteDocuments } from '@/lib/jarvis/ingest'
-
-const INGEST_ROLES = ['director', 'admin_officer']
 
 function summarize(results: { status: string }[]) {
   return {
@@ -21,7 +19,7 @@ function summarize(results: { status: string }[]) {
  */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(INGEST_ROLES)
+    await requirePermission('admin.assistant_documents')
 
     let source: 'all' | 'sop' | 'website' = 'all'
     try {

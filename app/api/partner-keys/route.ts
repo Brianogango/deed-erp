@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { generatePartnerApiKey } from '@/lib/partner-api'
-
-const MANAGE_ROLES = ['director', 'admin_officer']
 
 const toClient = (k: {
   id: string; name: string; prefix: string; isActive: boolean
@@ -21,7 +19,7 @@ const toClient = (k: {
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(MANAGE_ROLES)
+    await requirePermission('admin.partner_keys')
     const keys = await prisma.partnerApiKey.findMany({ orderBy: { createdAt: 'desc' } })
     return NextResponse.json({ items: keys.map(toClient) })
   })
@@ -29,7 +27,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(MANAGE_ROLES)
+    const actor = await requirePermission('admin.partner_keys')
     const body = await request.json().catch(() => ({}))
     const name = String(body?.name ?? '').trim()
     if (!name) return NextResponse.json({ error: 'A partner name is required' }, { status: 422 })

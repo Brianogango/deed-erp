@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole(['director'])
+    const user = await requirePermission('sales.contacts.merge')
     const body = await request.json() as { survivorId?: string; mergedId?: string }
     const survivorId = String(body.survivorId ?? '')
     const mergedId = String(body.mergedId ?? '')

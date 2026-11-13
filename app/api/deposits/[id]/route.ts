@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import prisma from '@/lib/prisma'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { z } from 'zod'
 import { notifyStoreKeysChanged } from '@/lib/server-store'
 
 export const dynamic = 'force-dynamic'
-const DEPOSIT_WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
-
 const depositMetadataSchema = z.object({
   notes: z.string().trim().max(10_000).optional().nullable(),
   dueDate: z.string().trim().max(40).optional().nullable(),
@@ -30,7 +28,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(DEPOSIT_WRITE_ROLES)
+    const actor = await requirePermission('manageDeposits')
     const parsed = depositMetadataSchema.safeParse(await request.json())
     if (!parsed.success) return NextResponse.json({ error: 'Invalid deposit update' }, { status: 422 })
     const body = parsed.data

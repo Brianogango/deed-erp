@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
 import { computePOTotals, mapPOItemsForCreate, publishPurchaseOrder } from '@/lib/purchase/po-api-shared'
 import { purchaseConsignment, returnConsignment } from '@/lib/inventory/consignment'
-import { CONSIGNMENT_WRITE_ROLES, consignmentFromRow, consignmentPurchaseOrderBody } from '@/lib/inventory/consignment-server'
+import { consignmentFromRow, consignmentPurchaseOrderBody } from '@/lib/inventory/consignment-server'
 
 /**
  * The two ways a consigned device leaves the register.
@@ -18,7 +18,7 @@ import { CONSIGNMENT_WRITE_ROLES, consignmentFromRow, consignmentPurchaseOrderBo
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(CONSIGNMENT_WRITE_ROLES)
+    const actor = await requirePermission('inventory.consignments.manage')
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const row = await prisma.consignmentDevice.findUnique({ where: { id } })
     if (!row) return NextResponse.json({ error: 'Device not found.' }, { status: 404 })

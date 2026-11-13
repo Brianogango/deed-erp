@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { FUNCTIONAL_CURRENCY, normalizeCurrencyCode, type CurrencyCode } from '@/lib/currency'
 
 export const dynamic = 'force-dynamic'
@@ -54,7 +54,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer'])
+    await requirePermission('settings.commercial')
     const body = await request.json().catch(() => ({}))
     const fromCurrency = normalizeCurrencyCode(body.fromCurrency)
     const rate = Number(body.rate)

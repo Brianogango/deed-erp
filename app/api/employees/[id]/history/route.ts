@@ -1,17 +1,16 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'finance_officer']
 const ACTIONS = ['create_employee', 'change_employee_salary', 'exit_employee']
 
 /** Salary and status changes for one employee, newest first, from the audit log. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('hr.employees.finance')
     const rows = await prisma.auditLog.findMany({
       where: { entityType: 'employee', entityId: id, action: { in: ACTIONS } },
       orderBy: { createdAt: 'desc' },

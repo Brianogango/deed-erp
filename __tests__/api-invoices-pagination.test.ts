@@ -20,6 +20,7 @@ vi.mock('@/lib/auth/api', () => ({
   },
   getRequiredSession: mockGetSession,
   requireRole: vi.fn(),
+  requirePermission: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ default: { invoice: mockPrismaInvoice } }))

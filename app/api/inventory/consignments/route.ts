@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { recordConsignmentReceipt } from '@/lib/inventory/consignment'
-import { CONSIGNMENT_READ_ROLES, CONSIGNMENT_WRITE_ROLES, consignmentFromRow } from '@/lib/inventory/consignment-server'
+import { consignmentFromRow } from '@/lib/inventory/consignment-server'
 
 /**
  * Vendor devices held at the shop and not yet bought.
@@ -16,7 +16,7 @@ import { CONSIGNMENT_READ_ROLES, CONSIGNMENT_WRITE_ROLES, consignmentFromRow } f
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(CONSIGNMENT_READ_ROLES)
+    await requirePermission('inventory.consignments.view')
     const [rows, vendors, products] = await Promise.all([
       prisma.consignmentDevice.findMany({ orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }], take: 1000 }),
       prisma.client.findMany({ where: { isActive: true }, select: { id: true, name: true, isVendor: true }, orderBy: { name: 'asc' } }),
@@ -39,7 +39,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(CONSIGNMENT_WRITE_ROLES)
+    const actor = await requirePermission('inventory.consignments.manage')
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
 
     const vendorId = String(body.vendorId ?? '').trim()

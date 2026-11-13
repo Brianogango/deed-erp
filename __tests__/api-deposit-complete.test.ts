@@ -15,6 +15,7 @@ vi.mock('@/lib/auth/api', () => ({
     }
   },
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
 }))
 vi.mock('@/lib/accounting/deposit-service', () => ({ applyDepositToInvoice: mockApply }))
 

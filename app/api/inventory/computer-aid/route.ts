@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
@@ -5,11 +6,9 @@ import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/
 import { upsertBulkStock, type BulkStockLevel } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { canonicalUserRole } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 const CA_LOCATION: LocationId = 'computer_aid'
 const CA_COLLECTED: LocationId = 'computer_aid_collected'
 const CA_ISSUES: LocationId = 'computer_aid_issues'
@@ -120,9 +119,7 @@ function nextRef(action: CustodyAction, movements: CustodyMovement[]) {
 async function requireUser() {
   const session = await getServerSession()
   if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  const role = canonicalUserRole(session.user.role)
-  const allowed = ALLOWED_ROLES.map(canonicalUserRole).filter(Boolean)
-  if (!role || !allowed.includes(role)) {
+  if (!userCan(session.user, 'inventory.computer_aid')) {
     return { error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
   }
   return { session }

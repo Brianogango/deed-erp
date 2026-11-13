@@ -5,7 +5,7 @@ import type { Delivery } from '@/lib/store'
 
 const config = {
   storeKey: 'deed_deliveries',
-  allowedWriteRoles: ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'inventory_officer', 'technical_lead'],
+  writePermission: 'delivery.edit',
   build: () => '' as unknown as Delivery,
   validateWrite: (next: Delivery, previous: Delivery | undefined) =>
     deliveryFulfillmentWriteError(next, previous ?? null),

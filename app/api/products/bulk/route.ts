@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { productSchema, validate } from '@/lib/validation'
 import { publishProduct, toClientProduct } from '@/lib/product-catalog-write'
 
 export const dynamic = 'force-dynamic'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 const MAX_BULK = 200
 
 /**
@@ -14,7 +13,7 @@ const MAX_BULK = 200
  */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.create')
 
     let body: any
     try {

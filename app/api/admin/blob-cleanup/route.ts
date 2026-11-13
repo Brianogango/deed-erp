@@ -1,6 +1,7 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { cleanupOrphanedBlobs } from '@/lib/blob-cleanup'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +13,7 @@ async function requireDirector(req: NextRequest) {
   if (internalSecret && providedSecret === internalSecret) return { ok: true as const }
   const session = await getServerSession()
   if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  if (!isRoleAllowed(session.user.role, ['director'])) {
+  if (!userCan(session.user, 'admin.system')) {
     return { error: NextResponse.json({ error: 'Forbidden — director only' }, { status: 403 }) }
   }
   return { ok: true as const }

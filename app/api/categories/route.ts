@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { ALL_CATEGORIES } from '@/lib/product-categories'
 
 export const dynamic = 'force-dynamic'
-
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
 
 function asRate(value: unknown): number | null {
   if (value === '' || value == null) return null
@@ -45,7 +43,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.categories.manage')
     let body: unknown
     try {
       body = await request.json()

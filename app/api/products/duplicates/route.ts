@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import {
   listDuplicateProductGroups,
   mergeDuplicateProducts,
   mergeObviousDuplicateProducts,
 } from '@/lib/inventory/merge-duplicate-products'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
-
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.create')
     const groups = await listDuplicateProductGroups()
     return NextResponse.json({ groups })
   })
@@ -18,7 +16,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.create')
     let body: { keepId?: string; dropId?: string; obvious?: boolean; dryRun?: boolean }
     try {
       body = await request.json()

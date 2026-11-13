@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { sendEmail, generateQuoteEmail, logEmailForDev } from '@/lib/integrations/email'
@@ -8,12 +9,9 @@ import { generateQuoteToken } from '@/lib/quote-token'
 import { loadAppState } from '@/lib/server-store'
 import { findPortalDocument } from '@/lib/portal-document-lookup'
 import { normalizeQuoteForClient } from '@/lib/quote-normalization'
-import { isUserAllowed } from '@/lib/auth/authorization'
 
 // Same people who can edit quotations (app/api/quotes/[id]); technicians only
 // for repair quotes.
-const SEND_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
-const REPAIR_SEND_ROLES = [...SEND_ROLES, 'technician']
 
 /**
  * POST /api/integrations/send-quote
@@ -73,7 +71,7 @@ export async function POST(request: Request) {
     }
     const doc = found.doc as Record<string, unknown>
     const repairLinked = Boolean(doc.repairId || doc.repairRef)
-    if (!isUserAllowed(session.user, repairLinked ? REPAIR_SEND_ROLES : SEND_ROLES)) {
+    if (!userCan(session.user, repairLinked ? 'repair.quote.send' : 'sales.quote.send')) {
       throw Object.assign(new Error('You do not have permission to send quotations'), { status: 403 })
     }
     const rawLines = Array.isArray(doc.lines) ? doc.lines : Array.isArray(doc.items) ? doc.items : []

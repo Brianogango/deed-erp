@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 import { NextResponse } from 'next/server'
 
 import { getServerSession } from '@/lib/auth/server'
@@ -7,7 +8,7 @@ import { isPrivilegedMfaEnforced } from '@/lib/auth/mfa-policy'
 export async function GET() {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== 'director') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isDirector(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const provenance = readDeploymentProvenance()
 

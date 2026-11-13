@@ -71,7 +71,7 @@ const m = vi.hoisted(() => ({
   valuation: vi.fn(),
 }))
 vi.mock('@/lib/auth/api', () => ({
-  requireRole: vi.fn(async () => ({ id: 'u1', name: 'Ann', username: 'ann', role: 'kilimall_officer' })),
+  requirePermission: vi.fn(async () => ({ id: 'u1', name: 'Ann', username: 'ann', role: 'kilimall_officer' })),
   withApiErrorHandling: (fn: () => unknown) => fn(),
 }))
 vi.mock('@/lib/server-store', () => ({

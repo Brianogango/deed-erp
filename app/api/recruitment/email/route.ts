@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { sendEmail } from '@/lib/integrations/email'
 import { companyForPdf } from '@/lib/hr/company-server'
@@ -8,7 +8,6 @@ import { buildOfferLetterPdf } from '@/lib/hr/offer-letter'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director']
 const KINDS: CandidateMailKind[] = ['interview_invite', 'rejection', 'offer']
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max)
@@ -17,7 +16,7 @@ const isoDate = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? S
 /** Send a candidate an interview invitation, a rejection, or an offer letter (PDF attached). */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('manageHR')
     const body = await request.json().catch(() => ({}))
     const kind = str(body.kind, 30) as CandidateMailKind
     if (!KINDS.includes(kind)) return NextResponse.json({ error: 'Unknown email type' }, { status: 400 })

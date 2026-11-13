@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
@@ -100,7 +101,7 @@ export async function POST(
 
   // Only directors, admin officers, and technical leads can upload SOP files
   const role = (session.user as any).role ?? ''
-  if (!['director', 'admin_officer', 'technical_lead'].includes(role)) {
+  if (!userCan(session.user, 'admin.sops.manage')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -158,7 +159,7 @@ export async function DELETE(
   }
 
   const role = (session.user as any).role ?? ''
-  if (!['director', 'admin_officer', 'technical_lead'].includes(role)) {
+  if (!userCan(session.user, 'admin.sops.manage')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

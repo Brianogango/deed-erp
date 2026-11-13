@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string; recordId: string }> }) {
   const { id, recordId } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director'])
+    const actor = await requirePermission('manageHR')
     const record = await prisma.employeeDisciplinaryRecord.findFirst({ where: { id: recordId, employeeId: id } })
     if (!record) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
     await prisma.employeeDisciplinaryRecord.delete({ where: { id: recordId } })

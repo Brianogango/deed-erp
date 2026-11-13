@@ -4,17 +4,16 @@
  * 3307 when switched on), the lines marked paid, a payout statement kept.
  */
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { recordAgentPayout } from '@/lib/agents/agent-commissions.server'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'finance_officer']
 const METHODS = new Set(['mpesa', 'bank', 'cash'])
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('sales.agents.payouts')
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const agentId = String(body.agentId ?? '').trim()
     const commissionIds = Array.isArray(body.commissionIds) ? body.commissionIds.map(String).filter(Boolean) : []

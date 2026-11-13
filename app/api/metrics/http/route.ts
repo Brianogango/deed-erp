@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { recordHttpMetric, snapshotHttpMetrics } from '@/lib/http-metrics'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'admin_officer'])
+    await requirePermission('admin.metrics')
     return NextResponse.json(snapshotHttpMetrics())
   })
 }

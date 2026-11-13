@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { CpanelError, cpanelConfig, suspendMailbox } from '@/lib/integrations/cpanel-email'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director']
-
 /** Blocks sign-in to the employee's work mailbox on exit. The mailbox and its mail are kept. */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('manageHR')
     const cfg = cpanelConfig()
     if (!cfg) return NextResponse.json({ error: 'cPanel is not configured on the server.' }, { status: 503 })
     const employee = await prisma.employee.findUnique({ where: { id }, select: { workEmail: true } })

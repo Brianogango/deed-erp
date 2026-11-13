@@ -1,10 +1,10 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
 import { clientOpportunityId, opportunityExtras } from '@/lib/opportunity-extras'
 import { broadcastOpportunities, opportunityRef, OPPORTUNITY_INCLUDE } from '@/lib/opportunity-server'
-import { canonicalUserRole } from '@/lib/auth/roles'
 
 function mapOpportunityToDb(body: any) {
   return {
@@ -26,12 +26,11 @@ function mapOpportunityToDb(body: any) {
 export async function GET() {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const role = canonicalUserRole(session.user.role)
-    if (!role || !['director', 'admin_officer', 'finance_officer', 'kilimall_officer', 'technical_lead', 'sales_rep'].includes(role)) {
+    if (!userCan(session.user, 'sales.opportunities.view')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const opportunities = await prisma.opportunity.findMany({
-      where: role === 'sales_rep'
+      where: !userCan(session.user, 'sales.view_all')
         ? {
             OR: [
               { createdById: session.user.id },
@@ -53,8 +52,7 @@ export async function GET() {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const role = canonicalUserRole(session.user.role)
-    if (!role || !['director', 'admin_officer', 'sales_rep'].includes(role)) {
+    if (!userCan(session.user, 'sales.opportunities.edit')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const body = await request.json()
@@ -72,7 +70,7 @@ export async function POST(request: Request) {
       data: {
         ...(id ? { id } : {}),
         ...mapOpportunityToDb(body),
-        ...(role === 'sales_rep' ? { assignedToId: session.user.id } : {}),
+        ...(!userCan(session.user, 'sales.view_all') ? { assignedToId: session.user.id } : {}),
         screenExtras: extras as object,
         createdById: session.user.id,
       },

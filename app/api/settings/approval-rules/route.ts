@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
-
-const READ_ROLES = ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'technical_lead']
-const WRITE_ROLES = ['director', 'finance_officer']
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(READ_ROLES)
+    await requirePermission('settings.approval_rules.view')
     try {
       const rules = await prisma.approvalRule.findMany({ orderBy: { approvalType: 'asc' } })
       return NextResponse.json(rules)
@@ -19,7 +16,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('settings.commercial')
     const body = await request.json()
     const approvalType = String(body.approvalType || '').trim()
     if (!approvalType) return NextResponse.json({ error: 'approvalType required' }, { status: 400 })

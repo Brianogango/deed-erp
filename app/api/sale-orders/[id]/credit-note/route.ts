@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { createCustomerCreditNote } from '@/lib/accounting/credit-note-service'
-
-const WRITE_ROLES = ['director', 'finance_officer']
 
 export async function POST(
   request: NextRequest,
@@ -13,7 +11,7 @@ export async function POST(
 ) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('sales.orders.credit_note')
     const body = await request.json().catch(() => null) as {
       invoiceId?: string
       reason?: string

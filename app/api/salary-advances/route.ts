@@ -1,6 +1,7 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { toClientAdvance, toDbAdvance } from '@/lib/hr/salary-advance-store'
@@ -8,8 +9,6 @@ import { publishSalaryAdvanceApplied } from '@/lib/notifications/hr-events'
 import { z } from 'zod'
 
 // HR/finance manage all advances; a regular employee sees/creates only their own.
-const HR_ROLES = ['director', 'finance_officer']
-
 const salaryAdvanceCreateSchema = z.object({
   employeeId: z.string().min(1).max(64).optional(),
   employeeName: z.string().trim().max(160).optional(),
@@ -29,7 +28,7 @@ const salaryAdvanceCreateSchema = z.object({
 export async function GET() {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const isHr = isRoleAllowed(session.user.role, HR_ROLES)
+    const isHr = userCan(session.user, 'managePayroll')
     if (isHr) {
       const rows = await prisma.salaryAdvance.findMany({ orderBy: { requestedDate: 'desc' } })
       return NextResponse.json(rows.map(toClientAdvance))
@@ -53,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     const body = parsed.data
-    const isHr = isRoleAllowed(session.user.role, HR_ROLES)
+    const isHr = userCan(session.user, 'managePayroll')
 
     // Self-service ownership is resolved from the authenticated session. A
     // caller cannot submit another employee's UUID and create a request for them.

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { periodKey, validateTemplate, type RecurringBill } from '@/lib/recurring/recurring-bills'
@@ -17,7 +17,7 @@ const KEY = 'deed_recurringBills'
  */
 export async function PATCH(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer'])
+    await requirePermission('accounting.recurring_bills.manage')
     const { id } = await resolveRouteParams(params)
     const body = await request.json().catch(() => ({}))
 

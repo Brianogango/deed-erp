@@ -4,7 +4,7 @@ import { buildInventoryBarcode } from '@/lib/inventory-identifiers'
 
 const config = {
   storeKey: 'deed_serials',
-  allowedWriteRoles: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'],
+  writePermission: 'inventory.serials.edit',
   // Serializes against the same advisory lock GRN receiving takes on
   // deed_serials (lib/inventory/stock-transactions.ts) — without this, a
   // manual serial POST here can interleave with a receipt's unlocked

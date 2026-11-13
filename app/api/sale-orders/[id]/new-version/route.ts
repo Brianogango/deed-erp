@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
@@ -7,7 +8,6 @@ import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 
 // Same roles that may create/edit a quotation — versioning is a quoting-stage
 // action. Confirmed Sales Orders use the existing "Duplicate" action instead.
-const NEW_VERSION_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
 async function broadcastSaleOrders() {
   try {
@@ -25,7 +25,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!NEW_VERSION_ROLES.includes(session.user.role)) {
+    if (!userCan(session.user, 'sales.orders.new_version')) {
       return NextResponse.json({ error: 'Your role cannot revise quotations' }, { status: 403 })
     }
 

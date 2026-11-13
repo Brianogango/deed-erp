@@ -8,14 +8,12 @@
  */
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { AGENT_TAG, commissionIdFor, type AgentCommission } from '@/lib/agents/agent-commissions'
 import { AGENT_COMMISSIONS_KEY, SALE_AGENTS_KEY, type SaleAgent } from '@/lib/agents/agent-commissions.server'
 
 export const dynamic = 'force-dynamic'
-
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
@@ -29,7 +27,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('sales.agents.assign')
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const saleOrderId = String(body.saleOrderId ?? '').trim()
     const agentId = String(body.agentId ?? '').trim()

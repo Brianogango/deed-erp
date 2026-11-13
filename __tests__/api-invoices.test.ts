@@ -62,6 +62,7 @@ vi.mock('@/lib/auth/api', () => ({
   },
   getRequiredSession: mockGetSession,
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
   jsonError: (msg: string, status = 400) =>
     new Response(JSON.stringify({ error: msg }), {
       status,
@@ -393,7 +394,7 @@ describe('POST /api/invoices', () => {
   it('extends allowed roles for repair-linked invoices', async () => {
     mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
     await POST(postReq({ clientId: CLIENT_ID, repairId: 'rep_1', notes: 'Repair REP/2026/001' }))
-    expect(mockRequireRole).toHaveBeenCalledWith(expect.arrayContaining(['technical_lead', 'technician']))
+    expect(mockRequireRole).toHaveBeenCalledWith('repair.invoice.edit')
   })
 
   it('extends allowed roles for POS till invoices and posts commission on create', async () => {
@@ -407,7 +408,7 @@ describe('POST /api/invoices', () => {
       notes: 'POS POS/0017',
     }))
     expect(res.status).toBe(201)
-    expect(mockRequireRole).toHaveBeenCalledWith(expect.arrayContaining(['sales_rep', 'kilimall_officer']))
+    expect(mockRequireRole).toHaveBeenCalledWith('recordSales')
     expect(mockPrismaInvoice.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ isPosInvoice: true }) }),
     )

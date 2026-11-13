@@ -12,16 +12,14 @@
 import { randomUUID } from 'crypto'
 import path from 'path'
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { addManualCommission, cancelManualCommission, findCommission } from '@/lib/agents/agent-commissions.server'
 import { validateFileContent, logRejectedUpload } from '@/lib/file-validation'
 import { deleteObject, getObject, putObject } from '@/lib/infra/object-store'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'finance_officer']
 // The Admin Officer can add and cancel commission bills and open attachments; paying agents stays with Finance.
-const ADD_ROLES = [...ROLES, 'admin_officer']
 const MAX_BYTES = 10 * 1024 * 1024
 const ALLOWED_TYPES = new Set([
   'application/pdf',
@@ -38,7 +36,7 @@ const safeStem = (value: string) =>
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(ADD_ROLES)
+    await requirePermission('sales.agents.view')
     const id = new URL(request.url).searchParams.get('file')?.trim()
     const row = id ? await findCommission(id) : undefined
     if (!row?.attachment) return NextResponse.json({ error: 'No attachment on this commission' }, { status: 404 })
@@ -55,7 +53,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ADD_ROLES)
+    const actor = await requirePermission('sales.agents.view')
     const multipart = (request.headers.get('content-type') || '').includes('multipart/form-data')
     let body: Record<string, unknown> = {}
     let file: File | null = null
@@ -113,7 +111,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ADD_ROLES)
+    const actor = await requirePermission('sales.agents.view')
     const id = new URL(request.url).searchParams.get('id')?.trim()
     if (!id) return NextResponse.json({ error: 'Which commission bill?' }, { status: 422 })
     const commission = await cancelManualCommission(id, { id: actor.id, name: actor.name || actor.username })

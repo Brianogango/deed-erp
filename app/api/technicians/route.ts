@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { listPublicUsers } from '@/lib/auth/users-repository'
 import { assignableTechnicians, toAssignableTechnicianPublic } from '@/lib/repair/assignable-technicians'
-
-const READ_ROLES = ['director', 'admin_officer', 'technical_lead']
 
 /**
  * Compact assignable-technician list for the repair assignment picker.
@@ -14,7 +12,7 @@ const READ_ROLES = ['director', 'admin_officer', 'technical_lead']
  */
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(READ_ROLES)
+    await requirePermission('repair.technicians.view')
     const users = await listPublicUsers()
     let employees: Array<{ id: string; status: string }> = []
     try {

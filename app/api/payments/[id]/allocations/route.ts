@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { allocatePayment, allocationPayerFor } from '@/lib/accounting/payment-allocations'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
@@ -22,7 +22,7 @@ export async function POST(
 ) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer', 'admin_officer'])
+    const actor = await requirePermission('recordPayment')
     const paymentId = resolvedParams.id
     const body = await request.json().catch(() => ({}))
 

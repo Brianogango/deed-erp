@@ -28,6 +28,7 @@ vi.mock('@/lib/auth/api', () => ({
   getRequiredSession: mockGetSession,
   // The route checks the deposit roles; resolve the role check from the mocked session.
   requireRole: async () => (await mockGetSession()).user,
+  requirePermission: async () => (await mockGetSession()).user,
 }))
 
 vi.mock('@/lib/accounting/deposit-service', () => ({

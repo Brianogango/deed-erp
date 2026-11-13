@@ -17,6 +17,7 @@ vi.mock('@/lib/auth/api', () => ({
     }
   },
   requireRole: h.requireRole,
+  requirePermission: h.requireRole,
 }))
 vi.mock('@/lib/server-store', () => {
   const read = async (keys: string[]) => Object.fromEntries(keys.map(k => [k, h.state[k]]))
@@ -84,19 +85,23 @@ describe('agent commissions API', () => {
   it('only directors, finance officers and admin officers may open it', async () => {
     h.requireRole.mockRejectedValue(Object.assign(new Error('Forbidden'), { status: 403 }))
     expect((await GET()).status).toBe(403)
-    expect(h.requireRole).toHaveBeenCalledWith(['director', 'finance_officer', 'admin_officer'])
+    expect(h.requireRole).toHaveBeenCalledWith('sales.agents.view')
   })
 
   it('lets the admin officer add and cancel a commission bill but not pay or change settings', async () => {
     h.requireRole.mockClear()
     await ADD_BILL(json({ agentId: 'agent-1', amount: 1500, date: '2026-10-10', saleRef: 'X1' }))
-    expect(h.requireRole).toHaveBeenLastCalledWith(['director', 'finance_officer', 'admin_officer'])
+    expect(h.requireRole).toHaveBeenLastCalledWith('sales.agents.view')
     await CANCEL_BILL(new Request('http://localhost/api/agents/commissions?id=AGB/0001', { method: 'DELETE' }))
-    expect(h.requireRole).toHaveBeenLastCalledWith(['director', 'finance_officer', 'admin_officer'])
+    expect(h.requireRole).toHaveBeenLastCalledWith('sales.agents.view')
     await PAY(json({ agentId: 'agent-1', commissionIds: [], method: 'cash' }))
-    expect(h.requireRole).toHaveBeenLastCalledWith(['director', 'finance_officer'])
+    expect(h.requireRole).toHaveBeenLastCalledWith('sales.agents.payouts')
     await PUT(json({ withholdingEnabled: true, withholdingRate: 5 }, 'PUT'))
-    expect(h.requireRole).toHaveBeenLastCalledWith(['director', 'finance_officer'])
+    expect(h.requireRole).toHaveBeenLastCalledWith('sales.agents.payouts')
+    const { userCan } = await import('@/lib/auth/can')
+    expect(userCan({ role: 'admin_officer' }, 'sales.agents.view')).toBe(true)
+    expect(userCan({ role: 'admin_officer' }, 'sales.agents.payouts')).toBe(false)
+    expect(userCan({ role: 'finance_officer' }, 'sales.agents.view')).toBe(true)
   })
 
   it('keeps the commission pending until the customer has paid in full, then posts it once', async () => {

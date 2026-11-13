@@ -1,20 +1,19 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { sendEmail } from '@/lib/integrations/email'
 import { buildWelcomeEmail } from '@/lib/hr/welcome-email'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director']
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** Sends the new-hire welcome email to the employee's personal address (falling back to the work address). */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('manageHR')
     const body = await request.json().catch(() => ({}))
     const note = String(body?.note ?? '').slice(0, 1500)
 

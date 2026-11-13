@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { applyDepositToInvoice } from '@/lib/accounting/deposit-service'
 import { z } from 'zod'
 import { notifyStoreKeysChanged } from '@/lib/server-store'
@@ -14,7 +14,7 @@ const depositApplySchema = z.object({
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer'])
+    const actor = await requirePermission('deposits.close')
     const parsed = depositApplySchema.safeParse(await request.json().catch(() => ({})))
     if (!parsed.success) {
       return NextResponse.json({

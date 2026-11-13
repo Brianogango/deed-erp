@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { hasPermission } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-
-const WRITE_ROLES = ['director']
 
 const DEPARTMENT_NAMES = [
   'HR',
@@ -203,7 +201,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('manageHR')
     const body = await request.json()
     const { firstName, lastName } = splitName(body.fullName)
     const departmentId = await resolveDepartmentId(body.departmentId)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { createCustomerCreditNote } from '@/lib/accounting/credit-note-service'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
@@ -9,7 +9,6 @@ import { calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { isUUID } from '@/lib/utils'
 import {
-  INVOICE_REISSUE_ROLES,
   approvedQuoteOrderItems,
   fullCreditLines,
   invoiceReachedLedger,
@@ -32,7 +31,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(INVOICE_REISSUE_ROLES)
+    const actor = await requirePermission('repair.invoice.reissue')
 
     const state = await loadAppState(['deed_repairs_v2'])
     const repairs = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as any[] : []

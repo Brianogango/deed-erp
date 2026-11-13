@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
@@ -11,8 +11,6 @@ import { nextLoanRef, validateNewLoan, type Loan } from '@/lib/loans/loans'
 export const dynamic = 'force-dynamic'
 
 const LOANS_KEY = 'deed_loans'
-const ROLES = ['director', 'finance_officer']
-
 async function readLoans(): Promise<Loan[]> {
   const state = await loadAppState([LOANS_KEY])
   return Array.isArray(state[LOANS_KEY]) ? (state[LOANS_KEY] as Loan[]) : []
@@ -21,7 +19,7 @@ async function readLoans(): Promise<Loan[]> {
 /** GET /api/loans — the loan register. */
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('managePayroll')
     return NextResponse.json({ loans: await readLoans() })
   })
 }
@@ -29,7 +27,7 @@ export async function GET() {
 /** POST /api/loans — record a loan; posts Dr bank / Cr 3401 unless already booked. */
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('managePayroll')
     const body = await request.json().catch(() => ({}))
 
     const input = {

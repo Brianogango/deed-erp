@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { NOTIFICATION_POLICIES } from '@/lib/notifications/registry'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'admin_officer', 'super_admin'])
+    await requirePermission('admin.notifications')
 
     const policies = Object.entries(NOTIFICATION_POLICIES)
       .map(([eventType, policy]) => ({

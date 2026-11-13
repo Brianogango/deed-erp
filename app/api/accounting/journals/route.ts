@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { z } from 'zod'
@@ -27,7 +27,7 @@ const manualJournalSchema = z.object({
 /** Read-only Prisma journals (KES). Never mutates app_state. */
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const { searchParams } = new URL(request.url)
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer'])
+    const actor = await requirePermission('accounting.manage')
     const parsed = manualJournalSchema.safeParse(await request.json().catch(() => ({})))
     if (!parsed.success) {
       return NextResponse.json(

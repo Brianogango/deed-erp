@@ -21,6 +21,7 @@ const {
 vi.mock('@/lib/auth/api', () => ({
   withApiErrorHandling: async (handler: () => Promise<unknown>) => handler(),
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
 }))
 
 vi.mock('@/lib/fiscal-lock.server', () => ({ checkFiscalLock: mockCheckFiscalLock }))

@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { randomUUID } from 'crypto'
 import { serialNumbersInOrder } from '@/lib/inventory/checkout-serials'
 import { NextRequest, NextResponse } from 'next/server'
@@ -10,12 +11,9 @@ import { notifyStockCheckout } from '@/lib/notifications/business-events'
 import { postAdjustmentValuation } from '@/lib/inventory/valuation-hooks'
 import { formatAccountLabel } from '@/lib/product-accounts'
 import { checkoutExpenseFor, reverseCheckoutBookings, type CheckoutBooking, type CheckoutBookedOutcome } from '@/lib/inventory/checkout-accounting'
-import { canonicalUserRole } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
-const REQUEST_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
-const APPROVE_ROLES = ['director', 'inventory_officer', 'technical_lead']
 // Every place stock sits in-house. Customer, vendor and employee units are
 // not in stock, and Computer Aid's collected units have left.
 const SOURCE_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit', 'pending_testing', 'quarantine', 'computer_aid', 'computer_aid_issues']
@@ -109,9 +107,7 @@ const returnableQty = (row: Checkout) => Math.max(0, (Number(row.consumedQty) ||
 async function auth(approve = false) {
   const session = await getServerSession()
   if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  const role = canonicalUserRole(session.user.role)
-  const allowed = (approve ? APPROVE_ROLES : REQUEST_ROLES).map(canonicalUserRole).filter(Boolean)
-  if (!role || !allowed.includes(role)) return { error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
+  if (!userCan(session.user, approve ? 'inventory.checkouts.approve' : 'inventory.checkouts.request')) return { error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
   return { session }
 }
 
@@ -146,7 +142,7 @@ export async function GET() {
       .map(s => ({ ...s, heldFor: heldFor(s) })),
     bulk,
     checkouts,
-    canApprove: APPROVE_ROLES.some(role => canonicalUserRole(role) === canonicalUserRole(access.session.user.role)),
+    canApprove: userCan(access.session.user, 'inventory.checkouts.approve'),
     currentUserId: access.session.user.id,
   })
 }

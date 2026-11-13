@@ -1,16 +1,16 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { isUserAllowed } from '@/lib/auth/authorization'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { HR_ROLES, appraisalsFor, toClientCycle } from '@/lib/hr/appraisals.server'
+import { appraisalsFor, toClientCycle } from '@/lib/hr/appraisals.server'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   return withApiErrorHandling(async () => {
     const { user } = await getRequiredSession()
-    const isHr = isUserAllowed(user, HR_ROLES)
+    const isHr = userCan(user, 'manageHR')
     const appraisals = await appraisalsFor(user, isHr)
     const cycleIds = [...new Set(appraisals.map(a => a.cycleId))]
     const cycles = await prisma.appraisalCycle.findMany({
@@ -25,7 +25,7 @@ export async function GET() {
 /** Open a review cycle and create a review for every active employee. */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(HR_ROLES)
+    const actor = await requirePermission('manageHR')
     const body = await request.json().catch(() => ({}))
     const name = String(body.name ?? '').trim().slice(0, 120)
     const start = new Date(`${String(body.periodStart ?? '').slice(0, 10)}T00:00:00Z`)

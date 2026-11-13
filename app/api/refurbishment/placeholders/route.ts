@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { productSchema } from '@/lib/validation'
 import { publishProduct, toClientProduct } from '@/lib/product-catalog-write'
 import { PLACEHOLDER_KINDS, placeholderProductName, type PlaceholderKind } from '@/lib/refurbishment/unidentified'
 
 export const dynamic = 'force-dynamic'
-
-const ROLES = ['director', 'technical_lead', 'admin_officer', 'inventory_officer']
 
 /**
  * POST { kind } — the "<Device> — unidentified" product unknown machines are
@@ -17,7 +15,7 @@ const ROLES = ['director', 'technical_lead', 'admin_officer', 'inventory_officer
  */
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('refurbishment.intake')
     const body = await req.json().catch(() => ({})) as { kind?: string }
     const kind = PLACEHOLDER_KINDS.find(k => k.id === body.kind)
     if (!kind) return NextResponse.json({ error: 'Choose the device type' }, { status: 422 })

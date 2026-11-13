@@ -1,10 +1,10 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { reconcileKilimallDispatchSerials } from '@/lib/inventory/stock-transactions'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = new Set(['director', 'inventory_officer', 'kilimall_officer'])
 
 /**
  * Dispatched Kilimall serials must be sold. GET lists the dispatches whose serial is not;
@@ -13,7 +13,7 @@ const ROLES = new Set(['director', 'inventory_officer', 'kilimall_officer'])
 async function run(apply: boolean) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!ROLES.has(String(session.user.role))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!userCan(session.user, 'sales.kilimall.reconcile')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const result = await reconcileKilimallDispatchSerials({ apply, userId: session.user.id })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 422 })
   return NextResponse.json(result)

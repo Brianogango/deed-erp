@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { applyDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
 import { postDeliveryValuationFromPayload } from '@/lib/inventory/valuation-hooks'
@@ -22,7 +22,6 @@ import { planHeldDelivery } from '@/lib/sales/deliver-held'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director']
 type Row = Record<string, any>
 const asRows = (v: unknown) => (Array.isArray(v) ? v as Row[] : [])
 
@@ -37,7 +36,7 @@ async function plan(soRef: string) {
 
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('sales.orders.deliver_held')
     const soRef = String(request.nextUrl.searchParams.get('so') ?? '').trim()
     if (!soRef) return NextResponse.json({ error: 'so is required' }, { status: 400 })
     const { so, lines } = await plan(soRef)
@@ -47,7 +46,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('sales.orders.deliver_held')
     const body = await request.json().catch(() => ({})) as { so?: string }
     const soRef = String(body.so ?? '').trim()
     if (!soRef) return NextResponse.json({ error: 'so is required' }, { status: 400 })

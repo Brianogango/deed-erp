@@ -4,7 +4,7 @@ import type { Receipt } from '@/lib/store'
 
 const config = {
   storeKey: 'deed_receipts',
-  allowedWriteRoles: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'],
+  writePermission: 'purchase.receipts.edit',
   prepareCreate: async (body: Record<string, unknown>) => {
     if (!body.ref) body.ref = await getNextDocNumber('receipt')
     return body

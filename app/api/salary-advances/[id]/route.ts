@@ -1,13 +1,11 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { toClientAdvance, toDbAdvance } from '@/lib/hr/salary-advance-store'
 import { publishSalaryAdvanceDecision, publishSalaryAdvanceDisbursed } from '@/lib/notifications/hr-events'
-
-const HR_ROLES = ['director', 'finance_officer']
-const PAY_ROLES = ['director', 'finance_officer']
 
 // Salary advance lifecycle transitions. Amounts and status changes are validated
 // server-side and gated by role. The payroll engine also PUTs deduction/recovery
@@ -21,8 +19,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const action = String(body.action ?? 'update')
-    const isHr = isRoleAllowed(session.user.role, HR_ROLES)
-    const isPay = isRoleAllowed(session.user.role, PAY_ROLES)
+    const isHr = userCan(session.user, 'managePayroll')
+    const isPay = userCan(session.user, 'managePayroll')
 
     // ── Explicit lifecycle actions (validated) ──────────────────────────────────
     if (action === 'decide') {

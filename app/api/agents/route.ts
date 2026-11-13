@@ -6,26 +6,23 @@
  * PUT — settings: withholding tax on payouts on/off and its rate.
  */
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { saveStoreKeys } from '@/lib/server-store'
 import { AGENT_SETTINGS_KEY, loadAgentOverview, readAgentSettings } from '@/lib/agents/agent-commissions.server'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'finance_officer']
 // The Admin Officer can see the agent list and commissions (to add a commission bill), but not change payout settings.
-const READ_ROLES = [...ROLES, 'admin_officer']
-
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(READ_ROLES)
+    await requirePermission('sales.agents.view')
     return NextResponse.json(await loadAgentOverview())
   })
 }
 
 export async function PUT(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('sales.agents.payouts')
     const body = await request.json().catch(() => ({})) as { withholdingEnabled?: unknown; withholdingRate?: unknown }
     const rate = Number(body.withholdingRate)
     if (body.withholdingRate !== undefined && (!Number.isFinite(rate) || rate <= 0 || rate >= 100)) {

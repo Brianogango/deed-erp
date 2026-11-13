@@ -8,7 +8,7 @@ import type { Delivery } from '@/lib/store'
 
 const config = {
   storeKey: 'deed_deliveries',
-  allowedWriteRoles: ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'inventory_officer'],
+  writePermission: 'delivery.create',
   prepareCreate: async (body: Record<string, unknown>) => {
     if (!body.ref) body.ref = await getNextDocNumber('delivery_note')
     const saleOrderId = typeof body.saleOrderId === 'string' ? body.saleOrderId : ''

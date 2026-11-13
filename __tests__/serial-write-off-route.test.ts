@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const m = vi.hoisted(() => ({ stock: vi.fn(), valuation: vi.fn(), audit: vi.fn() }))
 vi.mock('@/lib/auth/api', () => ({
-  requireRole: vi.fn(async () => ({ id: 'u1', name: 'Lead', role: 'technical_lead' })),
+  requirePermission: vi.fn(async () => ({ id: 'u1', name: 'Lead', role: 'technical_lead' })),
   withApiErrorHandling: (fn: () => unknown) => fn(),
 }))
 vi.mock('@/lib/server-store', () => ({ withAppStateKeyLock: (_k: string, fn: () => unknown) => fn() }))

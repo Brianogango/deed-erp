@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
@@ -29,7 +30,7 @@ function matchesQuery(row: CombinedAuditRow, q: string): boolean {
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== 'director') {
+  if (!userCan(session.user, 'viewAuditLog')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

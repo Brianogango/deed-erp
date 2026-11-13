@@ -15,6 +15,7 @@ const {
 
 vi.mock('@/lib/auth/api', () => ({
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
   withApiErrorHandling: async (handler: () => Promise<unknown>) => handler(),
 }))
 

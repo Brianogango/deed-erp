@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +8,7 @@ const CHANNELS = new Set(['in_app', 'push', 'email', 'whatsapp', 'sms'])
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'admin_officer', 'super_admin'])
+    await requirePermission('admin.notifications')
     const rows = await prisma.notificationTemplate.findMany({
       orderBy: [{ eventType: 'asc' }, { channel: 'asc' }, { version: 'desc' }],
     })
@@ -28,7 +28,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'admin_officer', 'super_admin'])
+    await requirePermission('admin.notifications')
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const eventType = String(body.eventType || '').trim().slice(0, 120)
     const channel = String(body.channel || '').trim()

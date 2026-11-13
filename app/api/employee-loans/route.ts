@@ -2,15 +2,13 @@ import { NextResponse } from 'next/server'
 import { cashLabelForBankAccount } from '@/lib/accounting/bank-cash-account.server'
 import { isUuid } from '@/lib/legacy-compat'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { cashAccountRoleForBankId, labelForRole } from '@/lib/accounting/coa-roles'
 
 export const dynamic = 'force-dynamic'
 
-const READ_ROLES = ['director', 'finance_officer']
-const WRITE_ROLES = ['director', 'finance_officer']
 const money = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100
 
 const toClient = (l: { id: string; employeeId: string; amount: unknown; monthlyDeduction: unknown; outstanding: unknown; issueDate: Date; reason: string | null; isCleared: boolean; createdAt: Date; employee?: { firstName: string; lastName: string; employeeNumber: string } | null }) => ({
@@ -29,7 +27,7 @@ const toClient = (l: { id: string; employeeId: string; amount: unknown; monthlyD
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(READ_ROLES)
+    await requirePermission('managePayroll')
     const rows = await prisma.employeeLoan.findMany({
       orderBy: [{ isCleared: 'asc' }, { issueDate: 'desc' }],
       take: 500,
@@ -45,7 +43,7 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('managePayroll')
     const body = await request.json().catch(() => ({}))
     const amount = money(body.amount)
     const monthly = money(body.monthlyDeduction)

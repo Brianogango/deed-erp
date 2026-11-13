@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cashLabelForBankAccount } from '@/lib/accounting/bank-cash-account.server'
 import { isUuid } from '@/lib/legacy-compat'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { cashAccountRoleForBankId, labelForRole } from '@/lib/accounting/coa-roles'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
@@ -9,8 +9,6 @@ import prisma from '@/lib/prisma'
 import { notifyPayrollPaid } from '@/lib/notifications/business-events'
 
 export const dynamic = 'force-dynamic'
-
-const PAY_ROLES = ['director', 'finance_officer']
 
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100
 
@@ -20,7 +18,7 @@ export async function POST(
 ) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(PAY_ROLES)
+    const actor = await requirePermission('managePayroll')
     const body = await request.json().catch(() => ({}))
 
     const bankAccountId = String(body.bankAccountId || 'ncba').trim() || 'ncba'

@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({ default: h.prisma }))
 vi.mock('@/lib/auth/api', () => ({
   requireRole: h.requireRole,
+  requirePermission: h.requireRole,
   withApiErrorHandling: async (fn: () => Promise<Response>) => {
     try { return await fn() } catch (err: any) {
       return new Response(JSON.stringify({ error: err?.message }), { status: err?.status ?? 500 })

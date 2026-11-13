@@ -1,12 +1,11 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { isLeaveTypeAllowedForGender, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import type { LeaveBalance } from '@/lib/store'
-
-const WRITE_ROLES = ['director']
 
 /**
  * PUT /api/leave-requests/balances
@@ -17,7 +16,7 @@ const WRITE_ROLES = ['director']
 export async function PUT(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isRoleAllowed(session.user.role, WRITE_ROLES)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!userCan(session.user, 'manageHR')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json().catch(() => null)
   if (!body || !Array.isArray(body.balances)) {

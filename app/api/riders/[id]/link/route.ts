@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { setRiderToken } from '@/lib/delivery/rider-portal.server'
 import { newRiderToken, riderPin } from '@/lib/delivery/rider-portal'
 import { writeFinancialAudit } from '@/lib/finance-audit'
@@ -7,12 +7,10 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 export const dynamic = 'force-dynamic'
 type Params = { params: Promise<{ id: string }> }
 
-const ROLES = ['director', 'admin_officer', 'inventory_officer', 'finance_officer']
-
 /** POST { reset?: boolean } — the rider's personal link (a new one when reset). */
 export async function POST(req: NextRequest, { params }: Params) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('delivery.riders.link')
     const { id } = await params
     const body = await req.json().catch(() => ({})) as { reset?: boolean; existing?: string }
     const { loadAppState } = await import('@/lib/server-store')

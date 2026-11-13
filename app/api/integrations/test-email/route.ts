@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { getEmailConfigStatus, sendEmail, type MailboxProfile } from '@/lib/integrations/email'
 
 /**
@@ -8,7 +8,7 @@ import { getEmailConfigStatus, sendEmail, type MailboxProfile } from '@/lib/inte
  */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'admin_officer'])
+    const actor = await requirePermission('admin.email')
     let body: { to?: string; mailbox?: MailboxProfile } = {}
     try { body = await request.json() } catch { /* empty */ }
 

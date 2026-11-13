@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
@@ -25,7 +25,6 @@ import { creditOpenAmount } from '@/lib/finance/vendor-credit-note'
  * The credit's open amount is |total| − |amountPaid| (its amountPaid is kept
  * negative, the convention since credits were introduced).
  */
-const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 const money = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100
 const POSTED = new Set(['approved', 'invoiced'])
 
@@ -35,7 +34,7 @@ function fail(message: string, status = 409): never {
 
 export async function POST(request: Request, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('invoices.manage')
     const { id } = await resolveRouteParams(params)
     const body = await request.json().catch(() => ({})) as Record<string, any>
     const action = String(body.action || '')

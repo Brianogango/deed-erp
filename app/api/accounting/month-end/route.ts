@@ -1,6 +1,7 @@
+import { isDirector } from '@/lib/auth/roles'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 
@@ -33,7 +34,7 @@ const GATE_CONTROL_TYPES = [
 
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const { searchParams } = new URL(request.url)
     const periodEnd = searchParams.get('periodEnd')
     const rows = await prisma.financialReconciliation.findMany({
@@ -47,11 +48,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer'])
+    const actor = await requirePermission('accounting.manage')
     const body = await request.json().catch(() => ({}))
     const periodEnd = String(body.periodEnd || '').trim()
     if (!periodEnd) return NextResponse.json({ error: 'periodEnd (YYYY-MM-DD) is required' }, { status: 400 })
-    const force = body.force === true && actor.role === 'director'
+    const force = body.force === true && isDirector(actor.role)
 
     const integrity = await runIntegritySuite(periodEnd)
     if (!integrity.allPassed && !force) {

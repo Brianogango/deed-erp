@@ -16,7 +16,7 @@
  * Body: { reason?: string }
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { releaseDeliveryReservations, reverseDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
 import { reverseJournalEntry } from '@/lib/accounting/journal-service'
@@ -24,11 +24,9 @@ import { mirrorDeliveryToPrisma } from '@/lib/delivery-mirror'
 import { effectiveDeliveryLineQty, normalizeDeliveryStatus } from '@/lib/odoo-sales-flow'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
-const REVERSE_ROLES = ['director', 'inventory_officer', 'admin_officer']
-
 export async function POST(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(REVERSE_ROLES)
+    const actor = await requirePermission('delivery.reverse')
     const { id } = await resolveRouteParams(params)
     const body = await request.json().catch(() => ({})) as { reason?: string }
     const reason = String(body.reason ?? '').trim().slice(0, 240)

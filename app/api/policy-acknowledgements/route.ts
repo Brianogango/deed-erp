@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
-
-const HR_ROLES = ['director']
 
 const toClient = (a: { id: string; employeeId: string; policyId: string; policyTitle: string; policyVersion: string; acknowledgedAt: Date }) => ({
   id: a.id, employeeId: a.employeeId, policyId: a.policyId, policyTitle: a.policyTitle,
@@ -18,7 +16,7 @@ export async function GET(request: Request) {
     const { user } = await getRequiredSession()
     const all = new URL(request.url).searchParams.get('scope') === 'all'
     if (all) {
-      await requireRole(HR_ROLES)
+      await requirePermission('manageHR')
       const rows = await prisma.policyAcknowledgement.findMany({ orderBy: { acknowledgedAt: 'desc' }, take: 5000 })
       return NextResponse.json(rows.map(toClient))
     }

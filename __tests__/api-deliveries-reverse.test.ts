@@ -17,6 +17,7 @@ const {
 
 vi.mock('@/lib/auth/api', () => ({
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
   withApiErrorHandling: (fn: () => Promise<Response>) => fn(),
 }))
 vi.mock('@/lib/server-store', () => ({
@@ -120,6 +121,6 @@ describe('POST /api/deliveries/:id/reverse', () => {
     expect(route).toBeDefined()
     mockLoadAppState.mockResolvedValue({ deed_deliveries: [delivery('done')] })
     await call()
-    expect(mockRequireRole).toHaveBeenCalledWith(['director', 'inventory_officer', 'admin_officer'])
+    expect(mockRequireRole).toHaveBeenCalledWith('delivery.reverse')
   })
 })

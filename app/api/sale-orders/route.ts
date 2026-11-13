@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { lineSerialIds } from '@/lib/sale-order-items-write'
 import { dealQuotationRaised, dealWon } from '@/lib/crm/deal-progress.server'
 import { NextResponse } from 'next/server'
@@ -18,7 +19,6 @@ import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import { linkLinesToProducts } from '@/lib/sales/link-line-products.server'
 import { normalizeOptionalProducts } from '@/lib/sales/sale-order-commercial-change'
 import { mergeScreenExtras, SALE_ORDER_EXTRA_KEYS } from '@/lib/screen-extras'
-import { canonicalUserRole } from '@/lib/auth/roles'
 
 async function broadcastSaleOrders() {
   try {
@@ -74,8 +74,8 @@ function mapSaleOrderItems(lines: any[], knownProductIds?: Set<string>) {
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const role = canonicalUserRole(session.user.role)
-    if (!role || !['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead'].includes(role)) {
+    const ownOnly = !userCan(session.user, 'sales.view_all')
+    if (!userCan(session.user, 'manageSaleOrders')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const { searchParams } = new URL(request.url)
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
         }
       : {}
 
-    const ownershipFilter = role === 'sales_rep'
+    const ownershipFilter = ownOnly
       ? {
           OR: [
             { createdById: session.user.id },
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
 
     const where = {
       ...(status ? { status } : {}),
-      ...(q || role === 'sales_rep'
+      ...(q || ownOnly
         ? { AND: [q ? searchFilter : {}, ownershipFilter] }
         : {}),
     }
@@ -134,8 +134,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const role = canonicalUserRole(session.user.role)
-    if (!role || !['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead'].includes(role)) {
+    const ownOnly = !userCan(session.user, 'sales.view_all')
+    if (!userCan(session.user, 'manageSaleOrders')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const body = await request.json()
@@ -228,7 +228,7 @@ export async function POST(request: Request) {
         currencyCode: body.currencyCode ?? 'KES',
         baseCurrencyCode: body.baseCurrencyCode ?? 'KES',
         exchangeRateToBase: Number(body.exchangeRateToBase ?? 1) || 1,
-        salespersonId: role === 'sales_rep' ? session.user.id : optionalUuid(body.salespersonId),
+        salespersonId: ownOnly ? session.user.id : optionalUuid(body.salespersonId),
         salespersonName: body.salespersonName ? String(body.salespersonName).slice(0, 120) : null,
         salesTeam: body.salesTeam ? String(body.salesTeam).slice(0, 120) : null,
         paymentTermsDays: body.paymentTermsDays !== undefined || body.paymentTerms !== undefined

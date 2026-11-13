@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
@@ -7,7 +8,6 @@ import {
   type CommissionRowView,
 } from '@/lib/accounting/sales-commission-view'
 
-const FULL_VIEW_ROLES = ['director', 'finance_officer', 'admin_officer']
 
 function employeeDisplayName(employee: { firstName?: string | null; lastName?: string | null } | null | undefined, fallback: string) {
   const name = `${employee?.firstName ?? ''} ${employee?.lastName ?? ''}`.trim()
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     const { page, limit, skip } = parsePaginationParams(searchParams, { defaultSort: 'createdAt' })
     const wantSummary = searchParams.get('summary') === '1'
 
-    const canViewAll = FULL_VIEW_ROLES.includes(session.user.role)
+    const canViewAll = userCan(session.user, 'sales.commissions.view_all')
     let employeeId = searchParams.get('employeeId')?.trim() || undefined
     if (!canViewAll) {
       const self = await prisma.user.findUnique({ where: { id: session.user.id }, select: { employeeId: true } })

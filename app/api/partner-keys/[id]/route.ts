@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-
-const MANAGE_ROLES = ['director', 'admin_officer']
 
 // Revoke a partner API key. Keys are never hard-deleted so the audit trail of
 // which partner had access (and when) is preserved.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(MANAGE_ROLES)
+    const actor = await requirePermission('admin.partner_keys')
     const existing = await prisma.partnerApiKey.findUnique({ where: { id: resolvedParams.id } })
     if (!existing) return NextResponse.json({ error: 'Key not found' }, { status: 404 })
     if (!existing.isActive) return NextResponse.json({ ok: true })

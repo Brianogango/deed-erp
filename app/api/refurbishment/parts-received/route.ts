@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
-import { RECEIPT_VALIDATORS } from '@/lib/inventory/permissions'
 import { refurbPartsReceivedOnOrder, type RefurbJobForQueue } from '@/lib/refurbishment/parts-request'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 
@@ -17,7 +16,7 @@ type Job = RefurbJobForQueue & { assignedTechnicianId?: string }
  */
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole([...RECEIPT_VALIDATORS])
+    const user = await requirePermission('validatePurchaseReceipt')
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const poId = String(body.poId ?? '').trim()
     const receiptRef = String(body.receiptRef ?? '').trim().slice(0, 40)

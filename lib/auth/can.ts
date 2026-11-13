@@ -10,7 +10,13 @@ import { PERMISSION_BY_KEY, PERMISSION_GROUPS } from './permission-catalog'
 import type { PublicUser } from './types'
 import { canonicalRole } from './roles'
 
-type Subject = Pick<PublicUser, 'role'> & { modules?: PublicUser['modules'] | null; permissions?: readonly string[] | null }
+type Subject = {
+  role?: string | null
+  modules?: readonly string[] | null
+  permissions?: readonly string[] | null
+  /** users.acts_as_technician: passes wherever technicians do. */
+  actsAsTechnician?: boolean | null
+}
 
 
 const SELF_SERVICE = new Set(['hr', 'sops', 'sop_documents', 'expenses', 'leave', 'my_documents'])
@@ -19,14 +25,15 @@ export function userCan(user: Subject | null | undefined, key: string): boolean 
   if (!user) return false
   const def = PERMISSION_BY_KEY[key]
   if (!def) return false // an unknown permission is never granted
-  if (Array.isArray(user.permissions)) return user.permissions.includes(key)
-  if (canonicalRole(user.role) === 'director') return true
+  if (Array.isArray(user.permissions) && (user.permissions.includes(key) || !def.followsBaseRole)) return user.permissions.includes(key)
+  const role = canonicalRole(user.role)
+  if (role === 'director') return true
   if (def.builtIn === 'module') {
     const module = PERMISSION_GROUPS.find(g => g.id === def.group)?.module
     if (!module) return false
     return SELF_SERVICE.has(module) || (user.modules ?? []).includes(module)
   }
-  return def.builtIn.includes(canonicalRole(user.role) as never)
+  return def.builtIn.includes(role as never) || (user.actsAsTechnician === true && def.builtIn.includes('technician'))
 }
 
 export const userCanAny = (user: Subject | null | undefined, keys: readonly string[]) => keys.some(key => userCan(user, key))

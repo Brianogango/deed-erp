@@ -1,13 +1,12 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { toClientRequest, adjustBalance, getBalance } from '@/lib/hr/leave-store'
 import { leaveDaysForRange, type StoreLeaveType } from '@/lib/leave-utils'
 import { publishLeaveCancelled, publishLeaveDecision } from '@/lib/notifications/hr-events'
-
-const WRITE_ROLES = ['director', 'finance_officer']
 
 // Approve / reject / cancel a leave request. Balance counters are recomputed
 // server-side from the transition — the client no longer supplies balances.
@@ -15,7 +14,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isRoleAllowed(session.user.role, WRITE_ROLES)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!userCan(session.user, 'approveLeave')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
@@ -158,7 +157,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isRoleAllowed(session.user.role, WRITE_ROLES)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!userCan(session.user, 'approveLeave')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const existing = await prisma.leaveRequest.findUnique({ where: { id: resolvedParams.id } })
   if (!existing) return NextResponse.json({ ok: true })

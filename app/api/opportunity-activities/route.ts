@@ -1,19 +1,18 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { notifyStoreKeysChanged } from '@/lib/server-store'
 import { activityExtras, toScreenActivity } from '@/lib/opportunity-activity-read-model.server'
-import { canAccessRecord, filterStoreValueForRole, isRoleAllowed } from '@/lib/auth/authorization'
+import { canAccessRecord, filterStoreValueForRole } from '@/lib/auth/authorization'
 
 /** Open tabs re-read activities from the table (the deed_oppActivities copy is frozen). */
 const broadcastOppActivities = () => notifyStoreKeysChanged(['deed_oppActivities'])
 
 // Same people who can edit deals (app/api/opportunities/[id]); a rep only on
 // deals they created or are assigned to.
-const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep']
-
 async function canWriteDealActivity(user: { id: string; role: string }, opportunityId: unknown): Promise<boolean> {
-  if (!isRoleAllowed(user.role, WRITE_ROLES)) return false
+  if (!userCan(user, 'sales.opportunities.activities')) return false
   if (typeof opportunityId !== 'string' || !opportunityId) return false
   const deal = await prisma.opportunity.findUnique({ where: { id: opportunityId }, select: { createdById: true, assignedToId: true } }).catch(() => null)
   if (!deal) return false

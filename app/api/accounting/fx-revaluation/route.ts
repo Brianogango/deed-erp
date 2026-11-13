@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { postFxGainLoss } from '@/lib/accounting/fx-journals'
-
-const WRITE_ROLES = ['director', 'finance_officer']
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const session = await requireRole(WRITE_ROLES)
+    const session = await requirePermission('accounting.manage')
     const body = await request.json()
 
     const amountBase = Number(body.amountBase)

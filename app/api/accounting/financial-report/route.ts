@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { hasModuleAccess } from '@/lib/auth/access'
@@ -5,7 +6,6 @@ import { buildFinancialReport } from '@/lib/accounting/financial-report'
 
 export const dynamic = 'force-dynamic'
 
-const REPORT_ROLES = ['director', 'finance_officer', 'admin_officer']
 
 /**
  * GET /api/accounting/financial-report?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
@@ -14,7 +14,7 @@ const REPORT_ROLES = ['director', 'finance_officer', 'admin_officer']
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!REPORT_ROLES.includes(session.user.role) && !hasModuleAccess(session.user, 'accounting')) {
+  if (!userCan(session.user, 'accounting.view') && !hasModuleAccess(session.user, 'accounting')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

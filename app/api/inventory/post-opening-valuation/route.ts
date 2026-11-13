@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { postOpeningStockValuation } from '@/lib/inventory/valuation-hooks'
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = String(session.user.role)
-  if (!['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(role)) {
+  if (!userCan(session.user, 'manageInventoryApprovals')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

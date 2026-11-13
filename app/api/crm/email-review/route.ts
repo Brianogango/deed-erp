@@ -1,14 +1,13 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { pickRoundRobinOwner } from '@/lib/crm/sales-inbox-leads'
 import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { canAssignLead, canEditLead, leadListWhere, leadRole } from '@/lib/crm/lead-access'
 import { storedRoleNames } from '@/lib/auth/roles'
-
-const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'sales']
 
 /**
  * Email Review queue: inbound audit rows + needs_review leads.
@@ -20,7 +19,7 @@ export async function GET(req: NextRequest) {
     const role = leadRole(session.user.role)
     if (!role) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const repScope = leadListWhere(session.user.role, session.user.id)
-    const isRep = role === 'sales_rep'
+    const isRep = !userCan(session.user, 'sales.view_all')
 
     const status = (req.nextUrl.searchParams.get('status') || 'REVIEW_REQUIRED').trim()
     const limit = Math.min(100, Math.max(1, Number(req.nextUrl.searchParams.get('limit') || 50) || 50))
@@ -92,7 +91,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
-    const session = await requireRole(WRITE_ROLES)
+    const session = await requirePermission('sales.crm.email_review')
     const body = await req.json() as {
       leadId?: string
       action?: string

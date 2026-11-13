@@ -1,5 +1,6 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
@@ -8,8 +9,6 @@ import { roundMoney } from '@/lib/accounting/money'
 
 export const dynamic = 'force-dynamic'
 
-const POS_ROLES = ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer']
-const FINANCE_ROLES = new Set(['director', 'finance_officer'])
 
 /**
  * POST /api/pos/post-sale-journal
@@ -33,7 +32,7 @@ const FINANCE_ROLES = new Set(['director', 'finance_officer'])
  */
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(POS_ROLES)
+    const actor = await requirePermission('recordSales')
 
     const body = await request.json().catch(() => ({}))
     const orderId = String(body.orderId || '').trim()
@@ -57,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     // Till roles may only post today's sale (a day either side for midnight
     // and timezone edges); backdated or future POS journals are a finance job.
-    if (!FINANCE_ROLES.has(String(actor.role))) {
+    if (!userCan(actor, 'sales.pos.backdate')) {
       const days = Math.abs(parsedDate.getTime() - Date.now()) / 86_400_000
       if (days > 1.5) {
         return NextResponse.json({ error: 'POS journals can only be posted for today' }, { status: 422 })

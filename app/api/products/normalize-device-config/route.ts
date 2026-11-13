@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { backfillInventoryDeviceConfig } from '@/lib/reconfiguration/backfill-device-config'
 
 export const dynamic = 'force-dynamic'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
-
 /** Idempotent: parse existing laptop/desktop titles into product.specs and empty serial.specs. */
 export async function POST() {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.create')
     const result = await backfillInventoryDeviceConfig()
     return NextResponse.json({
       ok: true,

@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
@@ -6,7 +7,6 @@ import { normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
 import { opportunityExtras } from '@/lib/opportunity-extras'
 import { broadcastOpportunities, OPPORTUNITY_INCLUDE } from '@/lib/opportunity-server'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep']
 
 function mapOpportunityToDb(body: any) {
   const data: Record<string, any> = {}
@@ -47,7 +47,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!userCan(session.user, 'sales.opportunities.edit')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const existing = await prisma.opportunity.findUnique({ where: { id: resolvedParams.id } })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -60,7 +60,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const body = await request.json()
     const data = mapOpportunityToDb(body)
-    if (session.user.role === 'sales_rep') delete data.assignedToId
+    if (!userCan(session.user, 'sales.view_all')) delete data.assignedToId
     // The number never changes after creation; the rest merge over what is stored.
     const extras = opportunityExtras(body, existing.screenExtras)
     const storedRef = (existing.screenExtras as { ref?: unknown } | null)?.ref
@@ -84,7 +84,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!userCan(session.user, 'sales.opportunities.edit')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const existing = await prisma.opportunity.findUnique({ where: { id: resolvedParams.id } })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (!canAccessRecord(session.user.role, 'opportunity', {

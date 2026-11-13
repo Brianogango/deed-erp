@@ -1,13 +1,12 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, leaveDaysForRange, remainingBalance, requiredNotice, noticeDaysGiven, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBalance } from '@/lib/hr/leave-store'
 import { publishLeaveApplied, publishLeaveBooked } from '@/lib/notifications/hr-events'
-
-const HR_ROLES = ['director', 'finance_officer']
 
 // The next sequential LV/NNNN reference based on what is already persisted.
 // Client-generated refs come from per-browser localStorage counters, so two
@@ -41,7 +40,7 @@ async function createLeaveRequest(data: Record<string, unknown>, preferredRef?: 
 export async function GET() {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const isHr = isRoleAllowed(session.user.role, HR_ROLES)
+    const isHr = userCan(session.user, 'approveLeave')
 
     if (isHr) {
       const [requests, balances] = await Promise.all([
@@ -81,7 +80,7 @@ export async function GET() {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const isHr = isRoleAllowed(session.user.role, HR_ROLES)
+    const isHr = userCan(session.user, 'approveLeave')
     const body = await request.json()
 
     if (isHr) {

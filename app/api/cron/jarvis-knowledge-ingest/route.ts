@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { ingestAllKnowledge } from '@/lib/jarvis/ingest'
 
 function cronAuthorized(req: NextRequest): boolean {
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
     const cronOk = cronAuthorized(req)
     if (!cronOk) {
-      await requireRole(['director', 'admin_officer', 'super_admin'])
+      await requirePermission('admin.jobs')
     }
 
     const { sop, website } = await ingestAllKnowledge()

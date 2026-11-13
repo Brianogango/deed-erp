@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director'])
+    const actor = await requirePermission('accounting.ledger_repair')
     const body = await request.json().catch(() => ({}))
     const reason = String(body.reason || '').trim()
     if (!reason) return NextResponse.json({ error: 'reopen reason is required' }, { status: 400 })

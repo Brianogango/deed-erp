@@ -1,6 +1,7 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { computeInvoiceTotals, computeInvoiceLineMoney, inferInvoiceLineTaxCategory, invoiceLineMissingTaxCategory, postedInvoicePutDecision, stripPostedInvoiceEconomicFields, POSTED_INVOICE_ECONOMIC_PUT_KEYS, PRISMA_POSTED_INVOICE_STATUSES } from '@/lib/finance-invoice'
 import { writeFinancialAudit, writeFinancialAuditInTx } from '@/lib/finance-audit'
@@ -15,17 +16,8 @@ import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
 import { allowedOnlyAsTechnician, canReadInvoiceRow } from '@/lib/auth/authorization'
 import { invoiceEditChanges } from '@/lib/finance/invoice-history'
-import { canonicalRole } from '@/lib/auth/roles'
 
-// technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
-const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
-// Repair staff revise repair invoices via quote revisions in the Repair
-// module; those syncs must not be rejected or the invoice goes stale.
-const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technician']
 
-function isRepairLinked(body: any) {
-  return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
-}
 
 // The stored status is a pure document state; payment progress
 // ('paid'/'partially_paid') is derived from amount_paid at read time, so
@@ -195,7 +187,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
     const body = await request.json()
     // Repair authorization is derived from the persisted Repair relation, never
     // from caller-supplied notes/repair-looking references.
-    const actor = await requireRole(REPAIR_WRITE_ROLES)
+    const actor = await requirePermission('repair.invoice.edit')
     let lines: any[] | undefined = body.lines ?? body.items ?? undefined
     const clientId = (body.clientId !== undefined || body.partnerId !== undefined)
       ? await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
@@ -207,7 +199,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
     })
     if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (allowedOnlyAsTechnician(actor, REPAIR_WRITE_ROLES) && !before.repairId) {
+    if (allowedOnlyAsTechnician(actor, 'repair.invoice.edit') && !before.repairId) {
       return NextResponse.json({ error: 'Technicians may only update invoices linked to an actual Repair record' }, { status: 403 })
     }
 
@@ -458,7 +450,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
           excludeBillId: id,
           // Prices move: Director / Finance may confirm a bill priced differently
           // from the order; the difference posts to Purchase Price Difference.
-          allowPriceVariance: ['director', 'finance_officer'].includes(canonicalRole(actor.role)),
+          allowPriceVariance: userCan(actor, 'invoices.price_variance'),
         })
       }
 
@@ -643,7 +635,7 @@ export async function PATCH(request: Request, { params }: { params: RouteParams<
 // A fully-paid invoice cannot be voided; it must be credited/refunded instead.
 export async function DELETE(_: Request, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('invoices.edit')
     const { id } = await resolveRouteParams(params)
 
     const invoice = await prisma.invoice.findUnique({ where: { id } })

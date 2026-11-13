@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 
 export const dynamic = 'force-dynamic'
-
-const POS_ROLES = ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer']
 
 /**
  * POST /api/pos/record-order
@@ -14,7 +12,7 @@ const POS_ROLES = ['director', 'finance_officer', 'admin_officer', 'sales_rep', 
  */
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(POS_ROLES)
+    await requirePermission('recordSales')
     const body = await request.json().catch(() => null)
     const order = body && typeof body === 'object' ? (body as { order?: unknown }).order : null
     if (!order || typeof order !== 'object' || Array.isArray(order)) {

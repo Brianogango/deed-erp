@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { applyCustomerReturnStockMutation } from '@/lib/inventory/stock-transactions'
 import { postCustomerReturnValuation } from '@/lib/inventory/valuation-hooks'
@@ -7,8 +7,6 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { kilimallReturnPlan, type KilimallReturnInput } from '@/lib/kilimall/kilimall-return'
 
 export const dynamic = 'force-dynamic'
-
-const ROLES = ['director', 'admin_officer', 'kilimall_officer', 'kilimall', 'inventory_officer', 'finance_officer']
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -25,7 +23,7 @@ type Params = { params: Promise<{ id: string }> }
  */
 export async function POST(req: NextRequest, { params }: Params) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole(ROLES)
+    const user = await requirePermission('sales.kilimall.returns')
     const { id } = await params
     const body = await req.json().catch(() => ({})) as Partial<KilimallReturnInput>
 

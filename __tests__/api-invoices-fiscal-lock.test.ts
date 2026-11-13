@@ -25,6 +25,7 @@ vi.mock('@/lib/auth/api', () => ({
   },
   getRequiredSession: mockGetSession,
   requireRole: mockGetSession,
+  requirePermission: mockGetSession,
 }))
 
 vi.mock('@/lib/fiscal-lock.server', () => ({ checkFiscalLock: mockCheckFiscalLock }))

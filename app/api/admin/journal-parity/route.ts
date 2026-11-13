@@ -1,6 +1,7 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { verifyJournalParityReport } from '@/lib/blob-cutover.server'
 
 export const dynamic = 'force-dynamic'
@@ -14,7 +15,7 @@ export const maxDuration = 120
 export async function GET() {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isRoleAllowed(session.user.role, ['director', 'finance_officer'])) {
+  if (!userCan(session.user, 'admin.ledger_checks')) {
     return NextResponse.json({ error: 'Forbidden — Finance or Director only' }, { status: 403 })
   }
 

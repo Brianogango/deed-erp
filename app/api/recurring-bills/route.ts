@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import {
   nextRecurringRef, periodKey, validateTemplate, type Frequency, type GeneratedBill, type RecurringBill, type RecurringLine,
@@ -8,8 +8,6 @@ import {
 export const dynamic = 'force-dynamic'
 
 const RECURRING_KEY = 'deed_recurringBills'
-const ROLES = ['director', 'finance_officer']
-
 async function read(): Promise<RecurringBill[]> {
   const state = await loadAppState([RECURRING_KEY])
   return Array.isArray(state[RECURRING_KEY]) ? (state[RECURRING_KEY] as RecurringBill[]) : []
@@ -26,7 +24,7 @@ function cleanLines(raw: unknown): RecurringLine[] {
 /** GET /api/recurring-bills — all templates. */
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('accounting.recurring_bills.manage')
     return NextResponse.json({ items: await read() })
   })
 }
@@ -34,7 +32,7 @@ export async function GET() {
 /** POST /api/recurring-bills — create a template. Posts nothing. */
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('accounting.recurring_bills.manage')
     const body = await request.json().catch(() => ({}))
     const items = await read()
 

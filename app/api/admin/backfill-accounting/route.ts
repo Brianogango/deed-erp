@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   if (!secretOk) {
     const session = await getServerSession()
-    if (!session || session.user.role !== 'director') {
+    if (!session || !isDirector(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }

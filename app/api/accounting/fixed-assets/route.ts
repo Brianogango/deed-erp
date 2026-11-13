@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { createFixedAsset, listFixedAssets } from '@/lib/accounting/fixed-asset-service'
 import { z } from 'zod'
 
@@ -20,7 +20,7 @@ const fixedAssetCreateSchema = z.object({
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const assets = await listFixedAssets()
     return NextResponse.json({ assets })
   })
@@ -28,7 +28,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer'])
+    const actor = await requirePermission('accounting.manage')
     const parsed = fixedAssetCreateSchema.safeParse(await request.json().catch(() => ({})))
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid fixed asset', issues: parsed.error.issues }, { status: 422 })

@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
@@ -28,7 +29,7 @@ async function authorize(request: NextRequest): Promise<boolean> {
   const providedSecret = request.headers.get('x-internal-secret')
   if (internalSecret && providedSecret === internalSecret) return true
   const session = await getServerSession()
-  return Boolean(session && session.user.role === 'director')
+  return Boolean(session && isDirector(session.user.role))
 }
 
 export async function GET(request: NextRequest) {

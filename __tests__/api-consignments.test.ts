@@ -16,6 +16,7 @@ const { mockPrisma, mockRequireRole, mockMirror } = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
 vi.mock('@/lib/auth/api', () => ({
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
   withApiErrorHandling: async (handler: () => Promise<Response>) => {
     try { return await handler() } catch (err: any) {
       return new Response(JSON.stringify({ error: err?.message }), { status: err?.status ?? 500 })

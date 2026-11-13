@@ -1,10 +1,10 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { postReceiptValuationFromBlobs } from '@/lib/inventory/valuation-hooks'
 import type { Receipt } from '@/lib/store'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
 
 async function mergeReceipt(params: { id: string; body: Record<string, unknown>; userId?: string }) {
   const state = await loadAppState(['deed_receipts'])
@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!WRITE_ROLES.includes(session.user.role)) {
+  if (!userCan(session.user, 'purchase.receipts.edit')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   const body = await request.json().catch(() => null)
@@ -58,7 +58,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!WRITE_ROLES.includes(session.user.role)) {
+  if (!userCan(session.user, 'purchase.receipts.edit')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   const state = await loadAppState(['deed_receipts'])

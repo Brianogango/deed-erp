@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
@@ -16,7 +17,6 @@ const LEAD_INCLUDE = {
   opportunity: true,
 } as const
 
-const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'finance_officer']
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
@@ -35,7 +35,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) {
+    if (!userCan(session.user, 'sales.leads.edit')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const body = await request.json()
@@ -97,7 +97,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) {
+    if (!userCan(session.user, 'sales.leads.edit')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const lead = await prisma.lead.findUnique({ where: { id: resolvedParams.id } })
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) {
+    if (!userCan(session.user, 'sales.leads.edit')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

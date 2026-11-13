@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
@@ -12,7 +13,7 @@ function getRecordCount(value: unknown): number | null {
 export async function GET() {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== 'director') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isDirector(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const state = await loadAppState([...PREVIEW_KEYS, RESTORE_META_KEY])
   const snapshot = PREVIEW_KEYS.map((key) => ({

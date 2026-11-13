@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { roundMoney } from '@/lib/accounting/money'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(_request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const { id } = await resolveRouteParams(params)
     const statement = await prisma.bankStatement.findUnique({ where: { id } })
     if (!statement) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -26,7 +26,7 @@ export async function GET(_request: NextRequest, { params }: { params: RoutePara
 
 export async function POST(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer'])
+    const actor = await requirePermission('accounting.manage')
     const body = await request.json().catch(() => ({}))
     const action = String(body.action || 'match')
     const { id } = await resolveRouteParams(params)

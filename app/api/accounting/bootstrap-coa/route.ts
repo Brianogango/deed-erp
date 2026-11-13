@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { bootstrapChartOfAccounts } from '@/lib/accounting/coa-bootstrap'
 
 export const dynamic = 'force-dynamic'
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 /** Idempotent CoA bootstrap — never deletes app_state keys. */
 export async function POST() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const result = await bootstrapChartOfAccounts()
     return NextResponse.json(result)
   })
@@ -15,7 +15,7 @@ export async function POST() {
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer', 'sales_rep'])
+    await requirePermission('accounting.chart_setup.view')
     const { default: prisma } = await import('@/lib/prisma')
     const { loadAppState } = await import('@/lib/server-store')
     const state = await loadAppState(['deed_accounts'])

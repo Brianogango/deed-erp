@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { sendEmail } from '@/lib/integrations/email'
 import { companyForPdf } from '@/lib/hr/company-server'
@@ -10,7 +10,6 @@ import { buildPayslipEmail } from '@/lib/hr/payslip-email'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'finance_officer']
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const pickEmail = (e: { workEmail: string | null; email: string | null }) =>
   [e.workEmail, e.email].map(v => String(v ?? '').trim()).find(v => EMAIL_RE.test(v)) ?? null
@@ -19,7 +18,7 @@ const pickEmail = (e: { workEmail: string | null; email: string | null }) =>
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('managePayroll')
     const run = await prisma.payrollRun.findUnique({ where: { id }, select: { status: true, runReference: true } })
     if (!run) return NextResponse.json({ error: 'Payroll run not found' }, { status: 404 })
     const slips = await prisma.payslip.findMany({
@@ -41,7 +40,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('managePayroll')
     const body = await request.json().catch(() => ({}))
     const only = Array.isArray(body?.payslipIds) ? new Set((body.payslipIds as unknown[]).map(String)) : null
 

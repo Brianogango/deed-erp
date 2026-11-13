@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
@@ -16,7 +17,7 @@ import { resolveDiagnosisFee, normalizeDeviceTier } from '@/lib/diagnosis-fee'
 import { configuredPhoneChannels } from '@/lib/notifications/channel-availability'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { findOpenRepairWithSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
-import { canAccessRecord, isUserAllowed } from '@/lib/auth/authorization'
+import { canAccessRecord } from '@/lib/auth/authorization'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -197,10 +198,9 @@ export async function POST(request: NextRequest) {
   }
 
   const user = session.user as any
-  const allowedRoles = ['director', 'admin_officer', 'technical_lead', 'technician']
   // Normalized: a Technical Lead stored as `lead_tech`, or a Director stored
   // as `super_admin`/`admin`, must not be locked out of their own module.
-  if (!isUserAllowed(user, allowedRoles)) {
+  if (!userCan(user, 'repair.edit')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

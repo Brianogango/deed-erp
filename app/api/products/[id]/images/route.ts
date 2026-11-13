@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import {
   ImageNormalizationError,
   deleteProductPhoto,
@@ -10,8 +10,6 @@ import {
 import { parseProductImageSlot, productImagePublicPath, productImageRole } from '@/lib/product-images'
 import { matchCatalogPhotoPack } from '@/lib/catalog-photos'
 import { catalogPhotoPublicPath } from '@/lib/product-images'
-
-const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'finance_officer']
 
 function photoPayload(productId: string, slot: 1 | 2, uploaded: boolean, packId?: string | null) {
   const url = uploaded
@@ -25,7 +23,7 @@ function photoPayload(productId: string, slot: 1 | 2, uploaded: boolean, packId?
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.edit')
     const product = await prisma.product.findUnique({
       where: { id: resolvedParams.id },
       select: { id: true, name: true, sku: true },
@@ -46,7 +44,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.edit')
     const product = await prisma.product.findUnique({
       where: { id: resolvedParams.id },
       select: { id: true },
@@ -86,7 +84,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.edit')
     const url = new URL(request.url)
     const slot = parseProductImageSlot(url.searchParams.get('slot'))
     if (!slot) return NextResponse.json({ error: 'slot must be 1 (hero) or 2 (detail)' }, { status: 400 })

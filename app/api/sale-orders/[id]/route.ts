@@ -1,3 +1,5 @@
+import { isDirector } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
 import { dealWon } from '@/lib/crm/deal-progress.server'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
@@ -55,11 +57,9 @@ async function broadcastSaleOrders() {
   await broadcastSaleOrdersChain
 }
 
-// technical_lead: repair-quote revisions PATCH the linked sale order totals.
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
-// Repair staff update repair-linked sale orders via quote revisions in the
-// Repair module; those syncs must not be rejected or the SO goes stale.
-const REPAIR_WRITE_ROLES = [...WRITE_ROLES]
+// Writes need manageSaleOrders. It includes technical_lead: repair-quote
+// revisions PATCH the linked sale order totals, and repair-linked syncs must
+// not be rejected or the SO goes stale.
 
 function isRepairLinked(record: any) {
   return Boolean(
@@ -162,8 +162,8 @@ async function buildSaleOrderUpdateData(body: any, existing: any) {
   return data
 }
 
-function canWrite(role: string) {
-  return WRITE_ROLES.includes(role)
+function canWrite(user: { role?: string | null }) {
+  return userCan(user, 'manageSaleOrders')
 }
 
 // ─── Server-side workflow enforcement ────────────────────────────────────────
@@ -278,7 +278,7 @@ async function enforceSaleWorkflow(
   // Lock rules: only a director may lock/unlock, and a locked order's
   // commercial fields are frozen for everyone else (fulfilment progress like
   // qtyDelivered/qtyInvoiced updates stays allowed).
-  const isDirector = session.user.role === 'director'
+  const directorActing = isDirector(session.user.role)
   const lockChangeRequested = body.locked !== undefined && Boolean(body.locked) !== Boolean(existing.locked)
   // Auto-locking during confirmation (Lock Confirmed Sales) is part of the
   // confirm action itself and does not require director rights.
@@ -288,7 +288,7 @@ async function enforceSaleWorkflow(
   // separately below) and always unlocks as part of that same request — it
   // must not be blocked here just because the requester isn't a director.
   const unlockingOnReset = to === 'quotation' && from === 'sale' && body.locked === false
-  if (lockChangeRequested && !isDirector && !lockingOnConfirm && !unlockingOnReset) {
+  if (lockChangeRequested && !directorActing && !lockingOnConfirm && !unlockingOnReset) {
     return NextResponse.json({ error: 'Only a director can lock or unlock a confirmed order' }, { status: 403 })
   }
   // Sent quotations are commercially frozen until Reset to Draft (Odoo Sent ≠ Draft).
@@ -316,7 +316,7 @@ async function enforceSaleWorkflow(
     confirmedFreeze
     && isFulfillmentQtyTrim(existing, body)
     && canTrimFulfillmentQty(session.user.role)
-  if ((existing.locked || confirmedFreeze) && !isDirector && to !== 'quotation' && hasCommercialChange(existing, body) && !fulfillmentTrim
+  if ((existing.locked || confirmedFreeze) && !directorActing && to !== 'quotation' && hasCommercialChange(existing, body) && !fulfillmentTrim
     && !(await isFeeOnlyRepairRewrite(existing, body))) {
     return NextResponse.json(
       { error: existing.locked
@@ -470,9 +470,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json()
     if (body?.repairRevision === true) return applyRepairQuoteRevision(resolvedParams.id, body, session)
     const trimRole = canTrimFulfillmentQty(session.user.role) && (body.fulfillmentTrim === true || body.fulfillmentTrim === 'true')
-    const allowed = isRepairLinked(body)
-      ? REPAIR_WRITE_ROLES.includes(session.user.role)
-      : canWrite(session.user.role) || trimRole
+    const allowed = canWrite(session.user) || (!isRepairLinked(body) && trimRole)
     if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const existing = await prisma.saleOrder.findUnique({
@@ -481,7 +479,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const validTrim = isFulfillmentQtyTrim(existing, body)
-    if (trimRole && !canWrite(session.user.role) && !validTrim) {
+    if (trimRole && !canWrite(session.user) && !validTrim) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     if (!canAccessRecord(session.user.role, 'sale_order', {
@@ -670,7 +668,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!canWrite(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!canWrite(session.user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const order = await prisma.saleOrder.findUnique({
       where: { id: resolvedParams.id },

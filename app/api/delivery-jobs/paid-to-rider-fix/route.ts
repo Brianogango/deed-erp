@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState } from '@/lib/server-store'
 import { describeOffBooks, fixOldPaidToRider, needsOffBooksFix } from '@/lib/delivery/rider-direct-pay.server'
 
 export const dynamic = 'force-dynamic'
-
-const ROLES = ['director', 'finance_officer']
 
 async function toFix() {
   const state = await loadAppState(['deed_deliveryJobs'])
@@ -15,7 +13,7 @@ async function toFix() {
 /** Trips whose direct rider payment was booked the first way (a payment on the invoice plus delivery expense). */
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('delivery.rider_cash_fix')
     const jobs = await toFix()
     return NextResponse.json({ jobs: jobs.map(j => ({ id: j.id, ref: j.ref, amount: Number(j.customerPaidRider?.amount) || 0, invoiceRef: j.customerPaidRider?.invoiceRef })) })
   })
@@ -27,7 +25,7 @@ export async function GET() {
  */
 export async function POST() {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('delivery.rider_cash_fix')
     const who = { id: String((actor as any).id), name: String((actor as any).name || (actor as any).username || 'Finance') }
     const results: Array<{ ref: string; ok: boolean; message: string }> = []
     for (const job of await toFix()) {

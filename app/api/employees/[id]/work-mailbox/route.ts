@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { CpanelError, cleanMailboxName, cpanelConfig, createMailbox, generateMailboxPassword, suggestMailboxName } from '@/lib/integrations/cpanel-email'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director']
-
 /** Whether cPanel is configured, and the suggested mailbox name for this employee. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('manageHR')
     const cfg = cpanelConfig()
     const employee = await prisma.employee.findUnique({ where: { id }, select: { firstName: true, lastName: true, workEmail: true } })
     if (!employee) return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
@@ -32,7 +30,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('manageHR')
     const cfg = cpanelConfig()
     if (!cfg) return NextResponse.json({ error: 'cPanel is not configured on the server (CPANEL_HOST, CPANEL_USER, CPANEL_API_TOKEN, CPANEL_MAIL_DOMAIN).' }, { status: 503 })
 

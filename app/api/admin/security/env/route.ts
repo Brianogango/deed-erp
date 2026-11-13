@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
@@ -21,7 +22,7 @@ type DirectorGate =
 async function requireDirector(): Promise<DirectorGate> {
   const session = await getServerSession()
   if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  if (session.user.role !== 'director') {
+  if (!isDirector(session.user.role)) {
     return { error: NextResponse.json({ error: 'Only the Director can manage production environment secrets.' }, { status: 403 }) }
   }
   return { session }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { canManageBankRecon } from '@/lib/finance-controls'
 import { paymentAllocatedSum, paymentUnallocated } from '@/lib/accounting/residuals'
 import {
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer'])
+    const actor = await requirePermission('manageBankRecon')
     if (!canManageBankRecon(actor.role)) {
       return NextResponse.json({ error: 'Only Finance or Director can match bank outstanding' }, { status: 403 })
     }

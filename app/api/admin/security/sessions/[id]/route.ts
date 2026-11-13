@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 import crypto from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -11,7 +12,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== 'director') {
+  if (!isDirector(session.user.role)) {
     return NextResponse.json({ error: 'Only the Director can revoke user sessions.' }, { status: 403 })
   }
 

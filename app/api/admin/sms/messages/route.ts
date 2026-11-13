@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { runNotificationWorker } from '@/lib/notifications/worker'
 import { backfillRecentSmsConversations, markSmsThreadRead } from '@/lib/notifications/sms-conversations'
 
 export const dynamic = 'force-dynamic'
 
-const allowedRoles = ['director', 'admin_officer', 'super_admin']
 
 const asFolder = (value: string | null) =>
   ['all', 'inbox', 'sent', 'failed'].includes(String(value)) ? String(value) : 'all'
 
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(allowedRoles)
+    await requirePermission('admin.sms')
     await backfillRecentSmsConversations(250).catch(error => {
       console.error('[sms messages] backfill failed', error)
     })
@@ -120,7 +119,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(allowedRoles)
+    const actor = await requirePermission('admin.sms')
     const body = await request.json().catch(() => ({})) as {
       action?: string
       threadId?: string

@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { clientToContact, deleteContactById, updateContactById, withoutCreditTerms, type ContactInput } from '@/lib/contact-prisma'
 import { refreshDocumentBlobsForClientChange } from '@/lib/documents-broadcast.server'
 
 export const dynamic = 'force-dynamic'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
-
 async function updateContact(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const user = await requireRole(WRITE_ROLES)
+    const user = await requirePermission('sales.contacts.edit')
     const body = withoutCreditTerms(await request.json() as ContactInput, user.role)
     const updated = await updateContactById(prisma, resolvedParams.id, body, user.id)
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -41,7 +39,7 @@ export const PUT = updateContact
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('sales.contacts.edit')
     const deleted = await deleteContactById(prisma, resolvedParams.id)
     if (!deleted) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })

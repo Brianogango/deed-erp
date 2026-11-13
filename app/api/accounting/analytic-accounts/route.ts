@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 const input = z.object({
@@ -12,7 +12,7 @@ const input = z.object({
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const analyticAccounts = await prisma.analyticAccount.findMany({ orderBy: [{ isActive: 'desc' }, { code: 'asc' }] })
     return NextResponse.json({ analyticAccounts })
   })
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer'])
+    await requirePermission('accounting.manage')
     const parsed = input.safeParse(await request.json().catch(() => ({})))
     if (!parsed.success) return NextResponse.json({ error: 'Invalid analytic account', issues: parsed.error.issues }, { status: 422 })
     const analyticAccount = await prisma.analyticAccount.create({

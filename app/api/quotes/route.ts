@@ -1,12 +1,12 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
-import { isUserAllowed } from '@/lib/auth/authorization'
 import { mergeScreenExtras, QUOTE_EXTRA_KEYS } from '@/lib/screen-extras'
 
 async function broadcastQuotes() {
@@ -16,10 +16,8 @@ async function broadcastQuotes() {
   } catch {}
 }
 
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 // Repair staff generate repair quotes in the Repair module; those syncs must
 // not be rejected or the server copy silently goes stale (causing duplicates).
-const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technical_lead', 'technician']
 
 function isRepairLinked(body: any) {
   return Boolean(body?.repairId || body?.repairRef || body?.source === 'repair' || /repair/i.test(String(body?.opportunityName ?? '')))
@@ -110,8 +108,7 @@ export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const body = await request.json()
-    const allowedRoles = isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES
-    if (!isUserAllowed(session.user, allowedRoles)) {
+    if (!userCan(session.user, isRepairLinked(body) ? 'repair.quotes.edit' : 'sales.quotes.create')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const lines: any[] = body.lines ?? body.items ?? []

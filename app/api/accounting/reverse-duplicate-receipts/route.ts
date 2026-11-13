@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
@@ -38,7 +39,7 @@ async function authorize(request: NextRequest): Promise<{ ok: boolean; actorId: 
   const secret = process.env.INTERNAL_API_SECRET
   if (secret && request.headers.get('x-internal-secret') === secret) return { ok: true, actorId: null }
   const session = await getServerSession()
-  if (session?.user && String(session.user.role) === 'director') return { ok: true, actorId: session.user.id }
+  if (session?.user && isDirector(session.user.role)) return { ok: true, actorId: session.user.id }
   return { ok: false, actorId: null }
 }
 

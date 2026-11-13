@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { buildManagementProfitAndLoss } from '@/lib/accounting/gl-reports'
 import { buildBalanceSheet } from '@/lib/accounting/gl-reports'
 import { buildHistoricalAgeing } from '@/lib/accounting/ageing.server'
@@ -79,7 +79,7 @@ async function accountBalances(asOf: Date, accountIds: string[]) {
 
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
 
     const { searchParams } = new URL(request.url)
     const now = new Date()

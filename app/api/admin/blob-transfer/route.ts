@@ -1,6 +1,7 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { transferBlobsToPrisma, countLiveAppStateKeys } from '@/lib/blob-transfer'
 import { storeBackend, countStoreRecords } from '@/lib/prisma-store'
 
@@ -21,7 +22,7 @@ async function requireDirectorOrSecret(req: NextRequest) {
   if (internalSecret && providedSecret === internalSecret) return { ok: true as const }
   const session = await getServerSession()
   if (!session) return { error: unauthorized() }
-  if (!isRoleAllowed(session.user.role, ['director'])) return { error: forbidden() }
+  if (!userCan(session.user, 'admin.system')) return { error: forbidden() }
   return { ok: true as const }
 }
 

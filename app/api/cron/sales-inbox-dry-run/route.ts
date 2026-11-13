@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { generateSalesInboxDryRunReport } from '@/lib/crm/inbox/dry-run-report'
 import { salesInboxConfigured } from '@/lib/crm/sales-inbox-imap'
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
     const cronOk = cronAuthorized(req)
     if (!cronOk) {
-      await requireRole(['director', 'admin_officer', 'super_admin'])
+      await requirePermission('admin.jobs')
     }
 
     if (!salesInboxConfigured()) {

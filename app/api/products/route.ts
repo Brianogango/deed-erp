@@ -1,7 +1,7 @@
 import { compressedJson } from '@/lib/http/compressed-json'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { productSchema, validate } from '@/lib/validation'
 import { publishProduct, toClientProduct } from '@/lib/product-catalog-write'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
@@ -15,8 +15,6 @@ export type ApiProduct = {
   requiresSerial: boolean; warrantyMonths: number
   canBeSold: boolean; canBePurchased: boolean; isActive: boolean; createdAt: string
 }
-
-const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
@@ -99,7 +97,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.create')
 
     let body: any
     try {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { allocationPayerFor, recordPaymentWithAllocations } from '@/lib/accounting/payment-allocations'
 import { paymentAllocatedSum, paymentUnallocated } from '@/lib/accounting/residuals'
@@ -22,7 +22,7 @@ const safeLegacyText = (value: unknown, max: number) => {
 
 const blobConfig = {
   storeKey: 'deed_payments',
-  allowedWriteRoles: ['director', 'finance_officer', 'admin_officer'],
+  writePermission: 'recordPayment',
   build: (body: Record<string, unknown>): Payment | string => {
     const customerId = safeLegacyText(body.customerId, 64)
     const amount = Number(body.amount)
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
   }
 
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('recordPayment')
     const payments = await prisma.payment.findMany({
       where: { isVoided: false },
       include: { allocations: true },
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const cloned = request.clone()
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer', 'admin_officer'])
+    const actor = await requirePermission('recordPayment')
     const body = await request.json().catch(() => ({}))
 
     const hasAllocationsKey = Array.isArray(body.allocations)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { BUILTIN_PRICELISTS } from '@/lib/pricing/pricelist'
 import { FUNCTIONAL_CURRENCY, normalizeCurrencyCode } from '@/lib/currency'
 
@@ -55,7 +55,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer'])
+    await requirePermission('settings.commercial')
     const body = await request.json().catch(() => ({}))
     const code = String(body.code || '').trim().toUpperCase()
     const name = String(body.name || '').trim()

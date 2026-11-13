@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { getEmailConfigStatus } from '@/lib/integrations/email'
 
 /**
@@ -8,7 +8,7 @@ import { getEmailConfigStatus } from '@/lib/integrations/email'
  */
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'admin_officer'])
+    await requirePermission('admin.email')
     return NextResponse.json({ success: true, status: getEmailConfigStatus() })
   })
 }

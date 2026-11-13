@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-
-const ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'sales_rep']
 
 /**
  * Append a history-only ORC audit log (e.g. partial_return) without changing
@@ -13,7 +11,7 @@ const ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_office
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const user = await requireRole(ROLES)
+    const user = await requirePermission('delivery.release.audit')
 
     const id = String(resolvedParams.id || '').trim()
     if (!id) return NextResponse.json({ error: 'Missing release id' }, { status: 400 })

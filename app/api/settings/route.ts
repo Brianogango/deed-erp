@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export async function GET() {
   return withApiErrorHandling(async () => {
@@ -12,7 +12,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole(['director', 'finance_officer'])
+    const user = await requirePermission('settings.commercial')
     const body = await request.json()
     
     const existing = await prisma.companySetting.findFirst()

@@ -1,17 +1,15 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { applyTransferStockMutation } from '@/lib/inventory/stock-transactions'
 
 export const dynamic = 'force-dynamic'
 
-const TRANSFER_ROLES = new Set([
-  'director', 'admin_officer', 'inventory_officer', 'technical_lead',
-])
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!TRANSFER_ROLES.has(String(session.user.role))) {
+  if (!userCan(session.user, 'manageInventoryApprovals')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

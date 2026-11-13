@@ -1,7 +1,7 @@
 import 'server-only'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
-import { isUserAllowed } from '@/lib/auth/authorization'
+import { userCan } from '@/lib/auth/can'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { findRepairByPortalRef } from '@/lib/repair-ref'
 import { isPortalPhoneVerificationRequired, portalDocumentAccessAllowed } from '@/lib/portal-verify'
@@ -18,8 +18,6 @@ import { isPortalPhoneVerificationRequired, portalDocumentAccessAllowed } from '
  * document gate covers; they were simply never wired to it.
  */
 
-const REPAIR_ATTACHMENT_WRITE_ROLES = ['director', 'admin_officer', 'technical_lead', 'technician']
-
 type AttachmentWriteDenial = { ok: false; status: number; error: string }
 type AttachmentWriteGrant = { ok: true; user: { id: string; role: string } }
 
@@ -28,7 +26,7 @@ export async function requireRepairAttachmentWriter(): Promise<AttachmentWriteGr
   const session = await getServerSession()
   if (!session) return { ok: false, status: 401, error: 'Unauthorized' }
   const user = session.user as any
-  if (!isUserAllowed(user, REPAIR_ATTACHMENT_WRITE_ROLES)) {
+  if (!userCan(user, 'repair.edit')) {
     return { ok: false, status: 403, error: 'Forbidden' }
   }
   if (!hasModuleAccess(user, 'repair')) {

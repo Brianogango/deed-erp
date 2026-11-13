@@ -16,8 +16,8 @@ async function refuseIfLastDirector(
   existing: { id: string; role: string },
   next: { role?: string; active?: boolean; removed?: boolean },
 ) {
-  if (canonicalUserRole(existing.role) !== 'director') return
-  const leaving = next.removed === true || next.active === false || (next.role !== undefined && canonicalUserRole(next.role) !== 'director')
+  if (!isDirector(existing.role)) return
+  const leaving = next.removed === true || next.active === false || (next.role !== undefined && !isDirector(next.role))
   if (!leaving) return
   const users = (await listAuthUsers()).map(u => ({ id: u.id, role: String(u.role), active: u.active !== false }))
   const message = lastDirectorViolation(users, existing.id, next)
@@ -60,7 +60,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       delete validated.modules
       delete validated.active
       delete validated.accessRoleId
-      // actsAsTechnician grants technician authority (isUserAllowed); only a
+      // actsAsTechnician grants technician authority (userCan); only a
       // director may set it, like the role itself.
       delete validated.actsAsTechnician
       // A forced password change can only be cleared by actually changing it.

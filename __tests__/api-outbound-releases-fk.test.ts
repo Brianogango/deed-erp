@@ -10,6 +10,7 @@ const { mockRequireRole, mockCreate, mockRepairFindUnique, mockInvoiceFindUnique
 
 vi.mock('@/lib/auth/api', () => ({
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
   getRequiredSession: vi.fn(),
   withApiErrorHandling: (fn: () => Promise<unknown>) => fn(),
 }))

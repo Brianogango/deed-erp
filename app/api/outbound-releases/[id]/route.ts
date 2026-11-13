@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { registerPortalRepair, type PortalRepair } from '@/lib/portal-repairs'
 import type { RepairOrder } from '@/lib/repair-types'
 
 // 'release_authoriser' was previously listed here but isn't a real UserRole (see lib/auth/types.ts) —
 // it could never match an actual user, so it's been dropped.
-const VERIFY_ROLES  = ['director', 'admin_officer']
-const VOID_AFTER_VERIFIED_ROLES = ['director']
 // Picking/voiding a not-yet-verified release is a lower-stakes warehouse correction —
 // open to the same operational roles allowed to initiate a release (see outbound-releases/route.ts INIT_ROLES).
-const OPERATIONAL_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
-
 type Params = { params: Promise<{ id: string }> }
 
 function repairToPortalRepair(repair: any, note?: string): PortalRepair {
@@ -153,7 +149,7 @@ const PATCHABLE_FIELDS = ['releaseNotes', 'conditionOnRelease'] as const
 export async function PATCH(request: NextRequest, { params }: Params) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await requireRole(VERIFY_ROLES)
+    await requirePermission('delivery.release.verify')
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const data: Record<string, string | null> = {}
     for (const key of PATCHABLE_FIELDS) {
@@ -173,7 +169,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 // ── POST /[id]/pick ───────────────────────────────────────────────────────────
 export async function pickHandler(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(OPERATIONAL_ROLES)
+    const actor = await requirePermission('delivery.release.manage')
     const release = await prisma.outboundRelease.findUniqueOrThrow({ where: { id } })
     if (release.status !== 'pending') {
       return NextResponse.json({ error: `Cannot pick from status ${release.status}` }, { status: 400 })
@@ -193,7 +189,7 @@ export async function pickHandler(request: NextRequest, id: string) {
 // ── POST /[id]/verify ─────────────────────────────────────────────────────────
 export async function verifyHandler(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(VERIFY_ROLES)
+    const actor = await requirePermission('delivery.release.verify')
     const body    = await request.json()
 
     // Load release with source document to check separation of duties
@@ -272,7 +268,7 @@ export async function verifyHandler(request: NextRequest, id: string) {
 // ── POST /[id]/release ────────────────────────────────────────────────────────
 export async function releaseHandler(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(VERIFY_ROLES)
+    const actor = await requirePermission('delivery.release.verify')
     const body    = await request.json()
 
     const release = await prisma.outboundRelease.findUniqueOrThrow({ where: { id } })
@@ -328,7 +324,7 @@ export async function releaseHandler(request: NextRequest, id: string) {
 // ── POST /[id]/void ───────────────────────────────────────────────────────────
 export async function voidHandler(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(OPERATIONAL_ROLES)
+    const actor = await requirePermission('delivery.release.manage')
     const body    = await request.json()
     const release = await prisma.outboundRelease.findUniqueOrThrow({ where: { id } })
 
@@ -336,7 +332,7 @@ export async function voidHandler(request: NextRequest, id: string) {
       return NextResponse.json({ error: `Cannot void a ${release.status} release` }, { status: 400 })
     }
     if (release.status === 'verified') {
-      await requireRole(VOID_AFTER_VERIFIED_ROLES)
+      await requirePermission('delivery.release.void_verified')
     }
 
     const updated = await prisma.outboundRelease.update({

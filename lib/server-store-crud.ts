@@ -1,7 +1,7 @@
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from './auth/server'
-import { isUserAllowed } from './auth/authorization'
+import { userCan } from './auth/can'
 import type { PublicUser } from './auth/types'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from './server-store'
 import { parsePaginationParams, paginateArray } from './api-pagination'
@@ -11,10 +11,10 @@ type AnyRecord = Record<string, unknown>
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function requireSession(allowedRoles?: string[]) {
+async function requireSession(permission?: string) {
   const session = await getServerSession()
   if (!session) return { session: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  if (allowedRoles && !isUserAllowed(session.user, allowedRoles)) {
+  if (permission && !userCan(session.user, permission)) {
     return { session: null, error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
   }
   return { session, error: null }
@@ -59,8 +59,8 @@ interface CrudConfig<T extends object> {
    * preserved (for example because downstream financial/audit documents exist).
    */
   validateDelete?: (existing: T) => string | null
-  /** Roles allowed to write (POST/PATCH/DELETE). GET is open to any authenticated user. */
-  allowedWriteRoles?: string[]
+  /** Permission needed to write (POST/PATCH/DELETE). GET is open to any authenticated user. */
+  writePermission?: string
   /**
    * Optional row-level authorization for detail mutations. Use this for
    * collaborative ledgers where a role may write only records it owns or is
@@ -142,7 +142,7 @@ export function makeListHandler<T extends object>(config: CrudConfig<T>) {
  */
 export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
   return async function POST(request: NextRequest) {
-    const { error } = await requireSession(config.allowedWriteRoles)
+    const { error } = await requireSession(config.writePermission)
     if (error) return error
 
     const body = await parseBody(request)
@@ -183,7 +183,7 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
  */
 function makePatchHandler<T extends object>(config: CrudConfig<T>) {
   return async function PATCH(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
-    const { session, error } = await requireSession(config.allowedWriteRoles)
+    const { session, error } = await requireSession(config.writePermission)
     if (error) return error
 
     const { id } = await resolveRouteParams(params)
@@ -231,7 +231,7 @@ function makePatchHandler<T extends object>(config: CrudConfig<T>) {
  */
 function makeDeleteHandler<T extends object>(config: CrudConfig<T>) {
   return async function DELETE(_: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
-    const { session, error } = await requireSession(config.allowedWriteRoles)
+    const { session, error } = await requireSession(config.writePermission)
     if (error) return error
 
     const { id } = await resolveRouteParams(params)

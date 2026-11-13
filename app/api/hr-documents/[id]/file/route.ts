@@ -1,6 +1,7 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { isUserAllowed } from '@/lib/auth/authorization'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
+
 import { readBlob, writeBlob } from '@/lib/blob-store'
 import { validateFileContent, logRejectedUpload } from '@/lib/file-validation'
 import { loadAppState } from '@/lib/server-store'
@@ -8,7 +9,6 @@ import { loadAppState } from '@/lib/server-store'
 export const dynamic = 'force-dynamic'
 
 // Contracts, IDs and permits: HR writes. Visibility is read from the document record.
-const HR_ROLES = ['director']
 const MAX_BYTES = 4 * 1024 * 1024
 const ALLOWED = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 const UUIDISH = /^[A-Za-z0-9_-]{8,64}$/
@@ -27,15 +27,15 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { user } = await getRequiredSession()
     if (!UUIDISH.test(id)) return NextResponse.json({ error: 'Invalid document id' }, { status: 400 })
 
-    let allowed = isUserAllowed(user, HR_ROLES)
+    let allowed = userCan(user, 'manageHR')
     if (!allowed) {
       // Other roles see a file only when the document record says so; unknown records stay HR-only.
       const state = await loadAppState(['deed_hrDocuments'])
       const docs = Array.isArray(state.deed_hrDocuments) ? (state.deed_hrDocuments as Array<{ id?: string; employeeId?: string; visibility?: string }>) : []
       const doc = docs.find(d => d?.id === id)
-      if (doc?.visibility === 'hr_finance') allowed = isUserAllowed(user, ['finance_officer'])
+      if (doc?.visibility === 'hr_finance') allowed = userCan(user, 'hr.documents.finance')
       else if (doc?.visibility === 'employee_visible') {
-        allowed = isUserAllowed(user, ['finance_officer']) || (!!user.employeeId && user.employeeId === doc.employeeId)
+        allowed = userCan(user, 'hr.documents.finance') || (!!user.employeeId && user.employeeId === doc.employeeId)
       }
     }
     if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -59,7 +59,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(HR_ROLES)
+    const actor = await requirePermission('manageHR')
     if (!UUIDISH.test(id)) return NextResponse.json({ error: 'Invalid document id' }, { status: 400 })
     const body = await request.json().catch(() => null) as { dataUrl?: string; fileName?: string } | null
     const parsed = body?.dataUrl ? parseDataUrl(body.dataUrl) : null
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    await requireRole(HR_ROLES)
+    await requirePermission('manageHR')
     if (!UUIDISH.test(id)) return NextResponse.json({ error: 'Invalid document id' }, { status: 400 })
     await writeBlob(blobKey(id), '')
     return NextResponse.json({ ok: true })

@@ -16,7 +16,7 @@ import { canonicalUserRole } from '@/lib/auth/roles'
 
 const config = {
   storeKey: 'deed_repairs_v2',
-  allowedWriteRoles: ['director', 'admin_officer', 'technical_lead', 'technician'],
+  writePermission: 'repair.edit',
   build: () => '' as unknown as RepairOrder,
   lockKey: 'deed_repairs_v2',
   preparePatch: async (body: Record<string, unknown>, previous: RepairOrder) => {
@@ -56,7 +56,7 @@ const config = {
   recordAccess: (user: any, repair: RepairOrder, action: 'patch' | 'delete') => {
     const role = canonicalUserRole(user.role)
     // Technicians (and users acting as one) never delete repairs.
-    if (action === 'delete' && (role === 'technician' || allowedOnlyAsTechnician(user, ['director', 'admin_officer', 'technical_lead', 'technician']))) return false
+    if (action === 'delete' && allowedOnlyAsTechnician(user, 'repair.edit')) return false
     return canAccessRecord(
       user.role,
       'repair',

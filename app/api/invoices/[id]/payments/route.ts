@@ -1,6 +1,7 @@
+import { isDirector } from '@/lib/auth/roles'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import {
@@ -17,7 +18,6 @@ import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { PAID_TO_RIDER, RIDER_FEE_ACCOUNTS, riderFeeAccount } from '@/lib/delivery/rider-direct-pay'
 
-const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
 // A DB status is payable when it represents a validated (posted) AR document.
 // This mirrors the client-side `invoiceDocState()` projection so the "Register
@@ -37,7 +37,7 @@ export async function POST(
   { params }: { params: RouteParams<{ id: string }> }
 ) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('invoices.manage')
     const { id: invoiceId } = await resolveRouteParams(params)
     const body = await request.json()
 
@@ -51,7 +51,7 @@ export async function POST(
     } = body
     // Booking a payment that was already received and recorded on screen
     // (screen-ledger repair): no "payment received" message to the customer.
-    const silent = body.silent === true && actor.role === 'director'
+    const silent = body.silent === true && isDirector(actor.role)
 
     if (!amount || Number(amount) <= 0) {
       return NextResponse.json({ error: 'Amount must be positive' }, { status: 400 })
@@ -324,7 +324,7 @@ export async function GET(
   { params }: { params: RouteParams<{ id: string }> }
 ) {
   return withApiErrorHandling(async () => {
-    await requireRole([...WRITE_ROLES])
+    await requirePermission('invoices.manage')
     const { id } = await resolveRouteParams(params)
     // Payments on this invoice, including ones spread over several invoices.
     const payments = await prisma.payment.findMany({

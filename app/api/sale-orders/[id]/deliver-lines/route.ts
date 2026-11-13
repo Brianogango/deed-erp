@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 /**
  * POST /api/sale-orders/:id/deliver-lines
  *
@@ -16,7 +17,6 @@ import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 
-const DELIVER_ROLES = ['director', 'admin_officer', 'inventory_officer', 'sales_rep']
 
 async function broadcastSaleOrders() {
   try {
@@ -34,7 +34,7 @@ async function broadcastSaleOrders() {
 export async function POST(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!DELIVER_ROLES.includes(session.user.role)) {
+    if (!userCan(session.user, 'sales.orders.deliver_lines')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const { id } = await resolveRouteParams(params)

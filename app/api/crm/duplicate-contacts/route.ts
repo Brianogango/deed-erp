@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import {
   findDuplicateContactGroups,
   mergeDuplicateContacts,
   mergeObviousDuplicateContacts,
 } from '@/lib/crm/inbox/duplicate-contacts'
 
-const READ_ROLES = ['director', 'admin_officer', 'sales_rep', 'sales', 'finance_officer', 'super_admin']
-const WRITE_ROLES = ['director', 'admin_officer', 'super_admin']
-
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(READ_ROLES)
+    await requirePermission('sales.crm.view_duplicates')
     const groups = await findDuplicateContactGroups({ limit: 50 })
     return NextResponse.json({ groups })
   })
@@ -19,7 +16,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('sales.crm.merge_duplicates')
     const body = await request.json() as {
       action?: string
       keepId?: string

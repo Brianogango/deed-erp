@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import prisma from '@/lib/prisma'
@@ -12,7 +13,7 @@ export async function GET() {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = String(session.user.role)
-  if (!['director', 'finance_officer', 'admin_officer', 'inventory_officer'].includes(role)) {
+  if (!userCan(session.user, 'inventory.valuation.view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { budgetVariance } from '@/lib/accounting/budget-variance'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const budgetId = new URL(request.url).searchParams.get('budgetId')
     if (!budgetId) return NextResponse.json({ error: 'budgetId is required' }, { status: 422 })
     const budget = await prisma.analyticBudget.findUnique({

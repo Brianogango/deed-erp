@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { withAppStateKeyLock } from '@/lib/server-store'
 import { applySerialWriteOffMutation } from '@/lib/inventory/stock-transactions'
 import { postAdjustmentValuation } from '@/lib/inventory/valuation-hooks'
@@ -8,8 +8,6 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 export const dynamic = 'force-dynamic'
 
 /** A write-off is a loss decision, and bringing a unit back reverses it. */
-const ROLES = ['director', 'technical_lead', 'admin_officer', 'inventory_officer']
-
 /**
  * Write a serial-tracked unit off, or bring it back.
  *
@@ -28,7 +26,7 @@ const ROLES = ['director', 'technical_lead', 'admin_officer', 'inventory_officer
  */
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole(ROLES)
+    const user = await requirePermission('inventory.serials.manage')
     const body = await req.json().catch(() => ({})) as {
       serialId?: string; action?: string; reference?: string; reason?: string
       unitCost?: number; restoreTo?: { status?: string; location?: string }

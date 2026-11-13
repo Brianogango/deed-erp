@@ -1,7 +1,8 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { findStoreItem, loadAppState, saveStoreKeys } from '@/lib/server-store'
-import { canAccessRecord, isRoleAllowed } from '@/lib/auth/authorization'
+import { canAccessRecord } from '@/lib/auth/authorization'
 
 // Each expense receipt is stored under its own app_state key:
 //   expense_receipt_<expenseId>
@@ -36,8 +37,6 @@ function detectReceiptType(b: Buffer): string | null {
   return null
 }
 
-const RECEIPT_ADMIN_ROLES = ['director', 'finance_officer', 'admin_officer']
-
 /**
  * Who may read or attach the receipt of an expense: the claimant and the
  * finance roles (canAccessRecord 'expense'). For an id with no claim on the
@@ -66,7 +65,7 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const access = await expenseAccess(session.user, resolvedParams.expenseId)
-  if (access === 'denied' || (access === 'unknown' && !isRoleAllowed(session.user.role, RECEIPT_ADMIN_ROLES))) {
+  if (access === 'denied' || (access === 'unknown' && !userCan(session.user, 'expenses.receipts.manage'))) {
     return NextResponse.json({ error: 'Receipt not found' }, { status: 404 })
   }
   try {
@@ -163,7 +162,7 @@ export async function DELETE(
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (!['director', 'finance_officer'].includes(String(session.user.role))) {
+  if (!userCan(session.user, 'expenses.receipts.remove')) {
     return NextResponse.json({ error: 'Only Finance or a Director can remove a receipt' }, { status: 403 })
   }
   try {

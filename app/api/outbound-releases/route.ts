@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { isUUID } from '@/lib/utils'
 import { getNextOrcRef } from '@/lib/orc-ref-counter'
 
 // 'release_authoriser' was previously listed here but isn't a real UserRole (see lib/auth/types.ts) —
 // it could never match an actual user, so it's been dropped.
-const INIT_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
-
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -40,7 +38,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(INIT_ROLES)
+    const actor = await requirePermission('delivery.release.manage')
     const body    = await request.json()
 
     if (!body.clientId || !body.serials?.length) {

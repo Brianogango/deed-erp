@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
@@ -14,7 +15,6 @@ const LEAD_INCLUDE = {
   opportunity: true,
 } as const
 
-const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'finance_officer']
 
 export async function GET() {
   return withApiErrorHandling(async () => {
@@ -32,7 +32,7 @@ export async function GET() {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) {
+    if (!userCan(session.user, 'sales.leads.edit')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const body = await request.json()

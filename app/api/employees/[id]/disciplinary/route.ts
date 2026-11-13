@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
 
 // Disciplinary records are sensitive: HR (director, admin officer) only.
-const ROLES = ['director']
 const RECORD_TYPES = ['verbal_warning', 'written_warning', 'final_warning', 'suspension', 'commendation', 'other'] as const
 
 const toClient = (r: { id: string; employeeId: string; recordType: string; incidentDate: Date; description: string; actionTaken: string | null; issuedByName: string | null; createdAt: Date }) => ({
@@ -23,7 +22,7 @@ const toClient = (r: { id: string; employeeId: string; recordType: string; incid
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('manageHR')
     const rows = await prisma.employeeDisciplinaryRecord.findMany({
       where: { employeeId: id },
       orderBy: { incidentDate: 'desc' },
@@ -35,7 +34,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('manageHR')
     const body = await request.json().catch(() => ({}))
     const recordType = String(body.recordType ?? '')
     if (!(RECORD_TYPES as readonly string[]).includes(recordType)) {

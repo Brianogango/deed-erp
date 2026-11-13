@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { withAppStateKeyLock } from '@/lib/server-store'
 import { intakeTaggedUnits } from '@/lib/refurbishment/unidentified.server'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'technical_lead', 'admin_officer', 'inventory_officer']
-
 /** POST { productId, units: [{ cost?, note?, serial?, assetId?, issue?, productId? }], from?: { productId, location }, reference, destination?: 'with_issues' | 'refurbishment' } — machines in with asset IDs (and tags when the serial is unknown). */
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole(ROLES)
+    const user = await requirePermission('refurbishment.intake')
     const body = await req.json().catch(() => ({})) as Record<string, any>
     const text = (v: unknown, max: number) => (v == null || String(v).trim() === '' ? undefined : String(v).trim().slice(0, max))
     const units = Array.isArray(body.units) ? body.units.map((u: any) => ({

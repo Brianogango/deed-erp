@@ -34,6 +34,7 @@ vi.mock('@/lib/auth/api', () => ({
   },
   getRequiredSession: mockGetSession,
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
   jsonError: (msg: string, status = 400) =>
     new Response(JSON.stringify({ error: msg }), {
       status,

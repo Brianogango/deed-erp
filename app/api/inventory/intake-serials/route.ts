@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getServerSession } from '@/lib/auth/server'
@@ -14,11 +15,9 @@ import { isOpeningStockLocked } from '@/lib/inventory/opening-stock'
 import prisma from '@/lib/prisma'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
-import { canonicalUserRole } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
 
 type BlobSerial = {
   id: string
@@ -80,9 +79,7 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const role = canonicalUserRole(session.user.role)
-  const allowed = ALLOWED_ROLES.map(item => canonicalUserRole(item)).filter(Boolean)
-  if (!role || !allowed.includes(role)) {
+  if (!userCan(session.user, 'inventory.serials.intake')) {
     return NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 })
   }
 

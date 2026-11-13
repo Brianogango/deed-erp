@@ -1,14 +1,13 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { allocateLoanRepayment } from '@/lib/hr/loans'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 import prisma from '@/lib/prisma'
 import { notifyPayrollApproved, notifyPayrollPosted, notifyPayrollSubmitted } from '@/lib/notifications/business-events'
-
-const WRITE_ROLES = ['director', 'finance_officer']
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft: ['pending_approval'],
@@ -26,7 +25,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const resolvedParams = await params
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isRoleAllowed(session.user.role, WRITE_ROLES)) {
+  if (!userCan(session.user, 'managePayroll')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

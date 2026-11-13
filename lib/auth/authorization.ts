@@ -6,9 +6,6 @@ import { canonicalUserRole } from './roles'
 import { userCan } from './can'
 
 
-// Shared predicate so every "is this role in this allow-list" check (requireRole,
-// the server-store-crud factory's requireSession, etc.) normalizes and compares
-// roles the same way instead of each reimplementing it.
 export const isRoleAllowed = (role: string | null | undefined, allowedRoles: string[]) => {
   const normalizedRole = canonicalUserRole(role)
   const normalizedAllowedRoles = allowedRoles.map(allowedRole => canonicalUserRole(allowedRole)).filter(Boolean)
@@ -28,19 +25,15 @@ type TechCapableUser = { role?: string | null; actsAsTechnician?: boolean | null
 export const hasTechnicianCapability = (user: TechCapableUser) =>
   canonicalUserRole(user?.role) === 'technician' || user?.actsAsTechnician === true
 
-/** isRoleAllowed for a user: an acting technician passes wherever technicians do. */
-export const isUserAllowed = (user: TechCapableUser, allowedRoles: string[]) =>
-  isRoleAllowed(user?.role, allowedRoles)
-  || (user?.actsAsTechnician === true && allowedRoles.some(r => canonicalUserRole(r) === 'technician'))
 
 /**
- * True when the user gets in only through the list's technician entry — a
- * technician, or a user acting as one whose own role is not listed. Such a
- * write gets the technician's limits (own jobs, repair documents only).
+ * True when the user holds the permission only as a technician — a
+ * technician, or a user acting as one whose own role would not grant it.
+ * Such a write gets the technician's limits (own jobs, repair documents only).
  */
-export const allowedOnlyAsTechnician = (user: TechCapableUser, allowedRoles: string[]) =>
-  !isRoleAllowed(user?.role, allowedRoles.filter(r => canonicalUserRole(r) !== 'technician'))
-  && isUserAllowed(user, allowedRoles)
+export const allowedOnlyAsTechnician = (user: TechCapableUser & { permissions?: readonly string[] | null }, permission: string) =>
+  !!user && userCan(user, permission)
+  && (canonicalUserRole(user.role) === 'technician' || !userCan({ role: user.role, permissions: user.permissions }, permission))
 
 
 export type { PermissionAction } from './role-matrix'

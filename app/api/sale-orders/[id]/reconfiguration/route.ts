@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import {
   analyzeSaleOrderReconfig,
   syncReconfigurationFromSaleOrder,
 } from '@/lib/reconfiguration/sales-bridge'
 
 export const dynamic = 'force-dynamic'
-
-const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'technical_lead', 'inventory_officer']
 
 /** GET — analyze whether this SO needs / has a linked reconfiguration. */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +30,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('sales.orders.reconfiguration')
     const result = await syncReconfigurationFromSaleOrder({
       saleOrderId: resolvedParams.id,
       userId: actor.id,

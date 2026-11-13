@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
@@ -5,7 +6,6 @@ import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { isUserAllowed } from '@/lib/auth/authorization'
 import { mergeScreenExtras, QUOTE_EXTRA_KEYS } from '@/lib/screen-extras'
 import { Prisma } from '@prisma/client'
 
@@ -17,10 +17,8 @@ async function broadcastQuotes() {
 }
 
 // technical_lead: repair-quote revisions and approval/decline update the linked sales quote.
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
 // Repair staff revise repair quotes in the Repair module; those syncs must
 // not be rejected or the server copy silently goes stale (causing duplicates).
-const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technician']
 
 function isRepairLinked(body: any) {
   return Boolean(body?.repairId || body?.repairRef || body?.source === 'repair' || /repair/i.test(String(body?.opportunityName ?? '')))
@@ -110,8 +108,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const body = await request.json()
-    const allowedRoles = isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES
-    if (!isUserAllowed(session.user, allowedRoles)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!userCan(session.user, isRepairLinked(body) ? 'repair.quotes.edit' : 'sales.quotes.edit')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const { lines, items } = body
     const linesData: any[] | undefined = lines ?? items ?? undefined
@@ -153,7 +150,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!userCan(session.user, 'sales.quotes.edit')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const quote = await prisma.quote.findUnique({ where: { id: resolvedParams.id } })
     if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 })

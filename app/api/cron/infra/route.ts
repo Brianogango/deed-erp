@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { runInfraWorker } from '@/lib/infra/worker'
 import { refreshCoreReportSnapshots } from '@/lib/infra/report-snapshots'
 import { infraRedisBackend } from '@/lib/infra/redis'
@@ -19,7 +19,7 @@ function secretOk(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    if (!secretOk(request)) await requireRole(['director', 'admin_officer', 'super_admin'])
+    if (!secretOk(request)) await requirePermission('admin.jobs')
     const refresh = await refreshCoreReportSnapshots()
     const worker = await runInfraWorker()
     return NextResponse.json({

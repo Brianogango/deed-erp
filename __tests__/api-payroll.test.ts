@@ -24,6 +24,7 @@ vi.mock('@/lib/auth/api', () => ({
     }
   },
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
 }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))

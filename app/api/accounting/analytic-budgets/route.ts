@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -20,7 +20,7 @@ const input = z.object({
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const budgets = await prisma.analyticBudget.findMany({
       include: { lines: { include: { analyticAccount: true }, orderBy: { createdAt: 'asc' } } },
       orderBy: [{ dateFrom: 'desc' }, { createdAt: 'desc' }],
@@ -31,7 +31,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer'])
+    await requirePermission('accounting.manage')
     const parsed = input.safeParse(await request.json().catch(() => ({})))
     if (!parsed.success) return NextResponse.json({ error: 'Invalid analytic budget', issues: parsed.error.issues }, { status: 422 })
     const body = parsed.data

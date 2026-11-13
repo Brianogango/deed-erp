@@ -3,20 +3,19 @@
  * for the Inbound import (lib/inventory/inbound-import.ts). Nothing is saved.
  */
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { readDeliveryDocument } from '@/lib/inventory/document-extract.server'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-const ROLES = ['director', 'admin_officer', 'inventory_officer']
 const TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
 const MAX_BYTES = 15 * 1024 * 1024
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('inventory.import')
     const body = await request.json().catch(() => ({})) as { fileBase64?: unknown; mimeType?: unknown }
     const mimeType = String(body.mimeType ?? '')
     const base64 = String(body.fileBase64 ?? '').replace(/^data:[^,]+,/, '').replace(/\s+/g, '')

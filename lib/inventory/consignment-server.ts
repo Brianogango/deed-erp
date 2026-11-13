@@ -99,8 +99,3 @@ export function consignmentPurchaseOrderBody(input: {
     }],
   }
 }
-
-/** Who may see the register: sales too, since they show these machines to clients. */
-export const CONSIGNMENT_READ_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead', 'sales_rep']
-/** Who may book devices in, buy them, or hand them back. */
-export const CONSIGNMENT_WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']

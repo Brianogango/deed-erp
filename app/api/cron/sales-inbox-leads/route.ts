@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { processSalesInboxLeads, salesInboxConfigured } from '@/lib/crm/sales-inbox-process'
 
 function cronAuthorized(req: NextRequest): boolean {
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
     const cronOk = cronAuthorized(req)
     if (!cronOk) {
-      const user = await requireRole(['director', 'admin_officer', 'super_admin'])
+      const user = await requirePermission('admin.jobs')
       void user
     }
 

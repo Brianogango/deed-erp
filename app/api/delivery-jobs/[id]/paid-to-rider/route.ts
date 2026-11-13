@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { applyCustomerPaidRider, describeOffBooks, retryOffBooks } from '@/lib/delivery/rider-direct-pay.server'
 
 export const dynamic = 'force-dynamic'
 type Params = { params: Promise<{ id: string }> }
-
-const ROLES = ['director', 'admin_officer', 'finance_officer']
 
 /**
  * The customer paid the rider the delivery charge directly (office side; the
@@ -17,7 +15,7 @@ const ROLES = ['director', 'admin_officer', 'finance_officer']
  */
 export async function POST(req: NextRequest, { params }: Params) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('delivery.rider_cash')
     const who = { id: String((actor as any).id), name: String((actor as any).name || (actor as any).username || 'Office') }
     const { id } = await params
     const body = await req.json().catch(() => ({})) as Record<string, any>

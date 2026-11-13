@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { runNotificationWorker } from '@/lib/notifications/worker'
 import { scanOperationalNotificationEvents } from '@/lib/notifications/operational-scanner'
 import { syncAgentCommissions } from '@/lib/agents/agent-commissions.server'
@@ -17,7 +17,7 @@ function secretOk(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    if (!secretOk(request)) await requireRole(['director', 'admin_officer', 'super_admin'])
+    if (!secretOk(request)) await requirePermission('admin.jobs')
     const scan = await scanOperationalNotificationEvents()
     const worker = await runNotificationWorker()
     // Agent commissions earn when a sale is fully paid; keep them current

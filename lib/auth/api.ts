@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 
 import type { PublicUser } from './types'
 import { getServerSession } from './server'
-import { assertPermission, isUserAllowed } from './authorization'
+import { assertPermission } from './authorization'
 import { recordHttpMetric } from '@/lib/http-metrics'
 
 export const getRequiredSession = async () => {
@@ -70,17 +70,6 @@ export const withApiErrorHandling = async <T>(handler: () => Promise<T>) => {
     return jsonError(message, status)
   }
 }
-
-export const requireRole = async (allowed: string[]) => {
-  const session = await getRequiredSession()
-  if (!isUserAllowed(session.user, allowed)) {
-    const error = new Error('Forbidden — insufficient role')
-    ;(error as Error & { status?: number }).status = 403
-    throw error
-  }
-  return session.user
-}
-
 
 export const sanitizeActor = (user: PublicUser) => ({
   id: user.id,

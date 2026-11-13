@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { sendMultiChannelMessage } from '@/lib/integrations/messaging'
 import { appendDocumentEmailSend, parseEmailList } from '@/lib/document-email-sends'
 import { brandedEmailFromHtml, emailDetailsHtml, emailSignature, escapeEmailHtml } from '@/lib/email/branded-layout'
@@ -23,7 +23,7 @@ import { brandedEmailFromHtml, emailDetailsHtml, emailSignature, escapeEmailHtml
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'finance_officer', 'admin_officer'])
+    const actor = await requirePermission('invoices.manage')
 
     let body: any = {}
     try { body = await request.json() } catch {}

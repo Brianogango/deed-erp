@@ -1,7 +1,8 @@
+import { userCan } from '@/lib/auth/can'
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { sql } from '@/lib/auth/db'
 import { uncertifiedProtectedKeys } from '@/lib/blob-cutover'
 import { listCutoverCertificates } from '@/lib/blob-cutover.server'
@@ -40,7 +41,7 @@ async function writeAdminAuditLog(req: NextRequest, session: Awaited<ReturnType<
 export async function POST(req: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isRoleAllowed(session.user.role, ['director'])) {
+  if (!userCan(session.user, 'admin.system')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

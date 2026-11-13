@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withApiErrorHandling } from '@/lib/auth/api'
@@ -65,7 +66,7 @@ async function authorize(request: NextRequest): Promise<{ ok: boolean; actorId: 
   const providedSecret = request.headers.get('x-internal-secret')
   if (internalSecret && providedSecret === internalSecret) return { ok: true, actorId: null }
   const session = await getServerSession()
-  if (session?.user && String(session.user.role) === 'director') {
+  if (session?.user && isDirector(session.user.role)) {
     return { ok: true, actorId: session.user.id }
   }
   return { ok: false, actorId: null }

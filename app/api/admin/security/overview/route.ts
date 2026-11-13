@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import crypto from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (!['director', 'admin_officer', 'finance_officer'].includes(session.user.role)) {
+  if (!userCan(session.user, 'admin.security.view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -112,7 +113,7 @@ export async function GET(request: NextRequest) {
   const mfaEnforced = String(envValues.MFA_ENFORCE_PRIVILEGED ?? process.env.MFA_ENFORCE_PRIVILEGED ?? '') === 'true'
   const rotatedAt = envValues.SECURITY_SECRETS_ROTATED_AT || process.env.SECURITY_SECRETS_ROTATED_AT || null
   const ipAllowlist = splitCsv(envValues.SECURITY_IP_ALLOWLIST || process.env.SECURITY_IP_ALLOWLIST)
-  const privilegedUsers = users.filter(user => ['director', 'admin_officer', 'finance_officer'].includes(user.role) && user.active).length
+  const privilegedUsers = users.filter(user => userCan(user, 'admin.security.view') && user.active).length
   const activeMfaUsers = Number(mfaRows[0]?.enabled_count || 0)
   const enrolledMfaUsers = Number(mfaRows[0]?.enrolled_count || 0)
   const activeApiKeys = Number(apiRows[0]?.active_count || 0)

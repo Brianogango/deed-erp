@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { withAppStateKeyLock } from '@/lib/server-store'
 import { harvestUnit } from '@/lib/refurbishment/unidentified.server'
 import { writeFinancialAudit } from '@/lib/finance-audit'
@@ -7,12 +7,10 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 export const dynamic = 'force-dynamic'
 
 /** Same people who may write a machine off. */
-const ROLES = ['director', 'technical_lead', 'admin_officer', 'inventory_officer']
-
 /** POST { serialId, reference, reason, parts: [{ productId, qty, unitValue }] } — strip a dead machine for parts. */
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole(ROLES)
+    const user = await requirePermission('refurbishment.intake')
     const body = await req.json().catch(() => ({})) as Record<string, any>
     const reason = String(body.reason || '').trim().slice(0, 300)
     if (!reason) return NextResponse.json({ error: 'Say why it cannot be repaired' }, { status: 422 })

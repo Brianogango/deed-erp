@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { buildManagementProfitAndLoss, buildProfitAndLoss } from '@/lib/accounting/gl-reports'
 import { readOptimisedReport } from '@/lib/infra/report-snapshots'
 
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const { searchParams } = new URL(request.url)
     const dateFrom = searchParams.get('dateFrom') ?? undefined
     const dateTo = searchParams.get('dateTo') ?? undefined

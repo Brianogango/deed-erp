@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole } from '@/lib/auth/api'
+import { requirePermission } from '@/lib/auth/api'
 import { computeInvoiceTotals } from '@/lib/finance-invoice'
-
-const POS_ROLES = ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer']
 
 export async function POST(request: Request) {
   try {
-    const actor = await requireRole(POS_ROLES)
+    const actor = await requirePermission('recordSales')
     const body = await request.json()
     const { lines, customerId, taxTotal, ref } = body
 

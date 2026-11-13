@@ -10,14 +10,6 @@
 
 import { extractRepairRefFromText } from '@/lib/repair/sale-order-link'
 
-export const POS_INVOICE_WRITE_ROLES = [
-  'director',
-  'finance_officer',
-  'admin_officer',
-  'sales_rep',
-  'kilimall_officer',
-] as const
-
 export function isPosInvoiceWrite(body?: Record<string, unknown> | null): boolean {
   return body?.isPosInvoice === true
 }

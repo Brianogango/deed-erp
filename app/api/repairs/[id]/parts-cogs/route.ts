@@ -1,15 +1,14 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
 import { processStockRepairConsume } from '@/lib/inventory/valuation-service'
-import { canAccessRecord, isUserAllowed } from '@/lib/auth/authorization'
+import { canAccessRecord } from '@/lib/auth/authorization'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { resolveConsumedLines } from '@/lib/repair/parts-cogs-lines'
 
 export const dynamic = 'force-dynamic'
-
-const WRITE_ROLES = ['director', 'admin_officer', 'technical_lead', 'technician']
 
 /**
  * POST /api/repairs/[id]/parts-cogs
@@ -28,7 +27,7 @@ export async function POST(req: NextRequest, ctx: { params: RouteParams<{ id: st
   const user = session.user as any
   // Roles are normalized so a Technical Lead stored as `lead_tech` (or a
   // Director stored as `super_admin`) is not silently locked out.
-  if (!isUserAllowed(user, WRITE_ROLES)) {
+  if (!userCan(user, 'repair.edit')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   if (!hasModuleAccess(user, 'repair')) {

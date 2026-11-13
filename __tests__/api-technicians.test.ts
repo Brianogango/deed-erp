@@ -20,6 +20,7 @@ vi.mock('@/lib/auth/api', () => ({
     }
   },
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
 }))
 
 vi.mock('@/lib/auth/users-repository', () => ({
@@ -55,7 +56,7 @@ describe('GET /api/technicians', () => {
   it('returns assignable technicians without emails for a technical lead', async () => {
     const res = await GET()
     expect(res.status).toBe(200)
-    expect(mockRequireRole).toHaveBeenCalledWith(['director', 'admin_officer', 'technical_lead'])
+    expect(mockRequireRole).toHaveBeenCalledWith('repair.technicians.view')
     const body = await res.json()
     expect(body.technicians.map((t: { id: string }) => t.id).sort()).toEqual(['lead', 't1'])
     expect(body.technicians.every((t: { email?: string }) => t.email == null)).toBe(true)

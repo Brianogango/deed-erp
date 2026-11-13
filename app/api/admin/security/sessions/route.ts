@@ -1,3 +1,4 @@
+import { isDirector } from '@/lib/auth/roles'
 import { NextResponse } from 'next/server'
 
 import { getServerSession } from '@/lib/auth/server'
@@ -7,7 +8,7 @@ import { invalidateUserSessions } from '@/lib/auth/session-validity'
 export async function DELETE() {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== 'director') return NextResponse.json({ error: 'Only the Director can revoke all sessions.' }, { status: 403 })
+  if (!isDirector(session.user.role)) return NextResponse.json({ error: 'Only the Director can revoke all sessions.' }, { status: 403 })
 
   const { rows } = await sql`
     UPDATE users

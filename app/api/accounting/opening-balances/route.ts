@@ -9,7 +9,7 @@
  */
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
@@ -25,7 +25,6 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'finance_officer']
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type Row = Record<string, any>
@@ -168,7 +167,7 @@ async function repairDocuments(rows: ReportRow[]): Promise<{ removed: number; da
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('accounting.manage')
     const rows = await buildReport()
     return NextResponse.json({ rows })
   })
@@ -176,7 +175,7 @@ export async function GET() {
 
 export async function POST() {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('accounting.manage')
     await ensureOpeningBalanceEquityAccount()
     // First the documents themselves (copies out, dates repaired), then the
     // journals from a fresh report, so they post with the repaired dates.

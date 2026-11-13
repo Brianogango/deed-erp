@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'finance_officer']
 const KINDS = ['earning', 'deduction', 'benefit_in_kind', 'insurance_premium'] as const
 const MAX_AMOUNT = 10_000_000
 
@@ -26,7 +25,7 @@ const toClient = (a: { id: string; employeeId: string; periodYear: number; perio
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('managePayroll')
     const url = new URL(request.url)
     const year = Number(url.searchParams.get('year')) || undefined
     const month = Number(url.searchParams.get('month')) || undefined
@@ -42,7 +41,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('managePayroll')
     const body = await request.json().catch(() => ({}))
     const year = Number(body.year)
     const month = Number(body.month)
@@ -86,7 +85,7 @@ export async function POST(request: Request) {
 /** Cancel an item that has not been picked up by a payroll run yet. */
 export async function DELETE(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('managePayroll')
     const id = new URL(request.url).searchParams.get('id') || ''
     if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
     const row = await prisma.payrollAdjustment.findUnique({ where: { id } })

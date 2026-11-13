@@ -1,9 +1,10 @@
+import { userCan } from '@/lib/auth/can'
 import { billedQtyByPoLine } from '@/lib/purchase/receipt-allocation'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, requirePermission, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
-import { invoiceReadScope, isRoleAllowed } from '@/lib/auth/authorization'
+import { invoiceReadScope } from '@/lib/auth/authorization'
 import { isUUID } from '@/lib/utils'
 import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney, inferInvoiceLineTaxCategory } from '@/lib/finance-invoice'
 import { assertBillableQty } from '@/lib/purchase/three-way-match'
@@ -11,7 +12,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
-import { isPosInvoiceWrite, POS_INVOICE_WRITE_ROLES, salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
+import { isPosInvoiceWrite, salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
@@ -19,19 +20,17 @@ import { ensureOpeningBalanceEquityAccount } from '@/lib/accounting/opening-bala
 import { serialInvoiceGateError } from '@/lib/sales/serial-invoice-gate.server'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
-const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
 // Repair staff trigger repair invoices from the Repair module; those syncs
 // must not be rejected or the server copy silently goes stale.
-const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technician']
 
 function isRepairLinked(body: any) {
   return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
 }
 
-function invoiceWriteRoles(body: any) {
-  if (isRepairLinked(body)) return REPAIR_WRITE_ROLES
-  if (isPosInvoiceWrite(body)) return [...POS_INVOICE_WRITE_ROLES]
-  return WRITE_ROLES
+function invoiceWritePermission(body: any) {
+  if (isRepairLinked(body)) return 'repair.invoice.edit'
+  if (isPosInvoiceWrite(body)) return 'recordSales'
+  return 'invoices.edit'
 }
 
 // Map frontend status aliases to valid DocumentStatus enum values. The stored
@@ -221,19 +220,19 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const body = await request.json()
-    const actor = await requireRole(invoiceWriteRoles(body))
-    // invoiceWriteRoles widens access from request markers ("repair" in the
+    const actor = await requirePermission(invoiceWritePermission(body))
+    // invoiceWritePermission widens access from request markers ("repair" in the
     // notes, isPosInvoice). Those markers only open a narrow lane: a caller
     // outside WRITE_ROLES may create a customer invoice and nothing else —
     // no vendor bills, credit notes or opening balances, and never one
     // pre-marked as paid (settlement goes through the payment routes). A
     // technician must also name a repair that actually exists.
-    if (!isRoleAllowed(actor.role, WRITE_ROLES)) {
+    if (!userCan(actor, 'invoices.edit')) {
       if (body.type === 'vendor_bill' || body.isCreditNote || body.isOpeningBalance === true) {
         return NextResponse.json({ error: 'You can only create customer invoices' }, { status: 403 })
       }
       body.amountPaid = 0
-      if (!isPosInvoiceWrite(body) || !isRoleAllowed(actor.role, [...POS_INVOICE_WRITE_ROLES])) {
+      if (!isPosInvoiceWrite(body) || !userCan(actor, 'recordSales')) {
         const { findRepairInPrisma } = await import('@/lib/repair-mirror')
         const repairKey = String(body.repairId || body.repairRef || '').trim()
         const repair = repairKey ? await findRepairInPrisma(repairKey) : null

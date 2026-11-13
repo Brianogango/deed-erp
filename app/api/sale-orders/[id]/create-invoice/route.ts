@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import {
@@ -40,8 +40,6 @@ import {
   stampInvoiceOnMatchingRepair,
 } from '@/lib/repair/sale-order-link'
 
-const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
-
 /**
  * Atomic SO → draft customer invoice.
  * Locks line qtyInvoiced on the Prisma sale order items in the same transaction
@@ -75,7 +73,7 @@ async function createInvoiceHandler(
 ) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('createCustomerInvoiceFromSO')
     const orderId = resolvedParams.id
 
     // Optional body:

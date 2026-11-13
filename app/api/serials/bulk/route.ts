@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { SerialNumber } from '@/lib/store'
 import { buildInventoryBarcode } from '@/lib/inventory-identifiers'
 
 export const dynamic = 'force-dynamic'
-
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
 
 /**
  * Atomic multi-serial create for GRN validation.
@@ -14,7 +12,7 @@ const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_
  */
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.serials.bulk')
 
     let body: { items?: unknown }
     try {

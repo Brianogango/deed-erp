@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
@@ -11,7 +12,6 @@ import { canAccessRecord } from '@/lib/auth/authorization'
 
 export const dynamic = 'force-dynamic'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'finance_officer']
 
 const emails = z.string().trim().min(3).max(500)
   .transform(s => s.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean))
@@ -39,7 +39,7 @@ const Body = z.object({
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!userCan(session.user, 'sales.crm.email')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const parsed = Body.safeParse(await request.json().catch(() => null))
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid email' }, { status: 400 })

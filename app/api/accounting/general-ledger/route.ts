@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { buildGeneralLedger } from '@/lib/accounting/gl-reports'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'finance_officer', 'admin_officer'])
+    await requirePermission('accounting.view')
     const { searchParams } = new URL(request.url)
     const accountCode = searchParams.get('accountCode') ?? undefined
     const accountId = searchParams.get('accountId') ?? undefined

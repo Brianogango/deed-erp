@@ -8,7 +8,7 @@
  */
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppState } from '@/lib/server-store'
 import { resolveClientId } from '@/lib/legacy-compat'
 import { appendInventoryAuditLog } from '@/lib/inventory/audit'
@@ -16,7 +16,6 @@ import { findMisfiledInvoices, type InvoiceForCheck, type MisfiledInvoice, type 
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'finance_officer']
 const SOURCE_LABEL = { pos: 'till ticket', sale_order: 'sale order', repair: 'repair' } as const
 
 async function buildReport(): Promise<MisfiledInvoice[]> {
@@ -73,14 +72,14 @@ async function buildReport(): Promise<MisfiledInvoice[]> {
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('accounting.manage')
     return NextResponse.json({ rows: await buildReport() })
   })
 }
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('accounting.manage')
     // Only the invoices ticked on screen (none sent = all, for older screens).
     const body = await request.json().catch(() => ({})) as { invoiceIds?: unknown }
     const only = Array.isArray(body.invoiceIds) ? new Set(body.invoiceIds.map(String)) : null

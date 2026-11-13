@@ -1,9 +1,8 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { isUserAllowed } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { HR_ROLES } from '@/lib/hr/appraisals.server'
 import { canAcknowledge, canManagerAssess, canSelfAssess, deriveFinalRating, isScore, sanitizeGoals, type Goal } from '@/lib/hr/appraisals'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!row) return NextResponse.json({ error: 'Review not found' }, { status: 404 })
     if (row.cycle.status !== 'open' && body.action !== 'acknowledge') return NextResponse.json({ error: 'This review cycle is closed' }, { status: 409 })
 
-    const who = { employeeId: user.employeeId ?? null, isHr: isUserAllowed(user, HR_ROLES) }
+    const who = { employeeId: user.employeeId ?? null, isHr: userCan(user, 'manageHR') }
     const like = { employeeId: row.employeeId, managerEmployeeId: row.employee.managerId, status: row.status as 'pending_self' | 'pending_manager' | 'completed', employeeAckAt: row.employeeAckAt?.toISOString() ?? null }
     const existingGoals = (Array.isArray(row.goals) ? row.goals : []) as unknown as Goal[]
 

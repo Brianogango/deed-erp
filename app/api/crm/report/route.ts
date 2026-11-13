@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
     const to = new Date(toDay.getTime() + 86_399_999)
     if (from > to) return NextResponse.json({ error: 'The start date is after the end date' }, { status: 400 })
 
-    const rep = role === 'sales_rep' ? session.user.id : null
+    const rep = userCan(session.user, 'sales.view_all') ? null : session.user.id
     const [leads, deals] = await Promise.all([
       prisma.lead.findMany({
         where: { createdAt: { gte: from, lte: to }, ...(rep ? { ownerId: rep } : {}) },

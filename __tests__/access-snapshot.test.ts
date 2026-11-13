@@ -41,10 +41,11 @@ describe('access snapshot', () => {
 })
 
 /**
- * Server routes that still decide access by role name instead of a
- * permission. The number may only go down; lower it when a route moves over.
+ * Server routes that name a role. Access is decided by permission; the two
+ * left only address notifications to a role (who is told, not who may act).
+ * The number may only go down.
  */
-const ROUTES_WITH_ROLE_NAMES = 205
+const ROUTES_WITH_ROLE_NAMES = 2
 
 function routeFiles(dir: string): string[] {
   return readdirSync(dir).flatMap(name => {

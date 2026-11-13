@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['director', 'finance_officer']
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const r2 = (n: number) => Math.round(n * 100) / 100
 
@@ -12,7 +11,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('hr.employees.finance')
     const exitDate = new URL(request.url).searchParams.get('exitDate') || new Date().toISOString().slice(0, 10)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(exitDate)) return NextResponse.json({ error: 'exitDate must be YYYY-MM-DD' }, { status: 400 })
 

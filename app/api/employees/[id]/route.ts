@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-
-const WRITE_ROLES = ['director', 'finance_officer']
 
 const DEPARTMENT_NAMES = [
   'HR',
@@ -157,7 +155,7 @@ const employeeInclude = {
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
+    const actor = await requirePermission('hr.employees.finance')
     const body = await request.json()
     const { firstName, lastName } = splitName(body.fullName)
     const departmentId = await resolveDepartmentId(body.departmentId)

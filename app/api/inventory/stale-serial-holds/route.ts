@@ -1,15 +1,15 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { releaseStaleSerialHolds } from '@/lib/inventory/stock-transactions'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES = new Set(['director', 'inventory_officer', 'admin_officer', 'finance_officer'])
 
 async function run(apply: boolean) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!ROLES.has(String(session.user.role))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!userCan(session.user, 'inventory.serial_holds')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const result = await releaseStaleSerialHolds({ apply })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 422 })
   return NextResponse.json(result)

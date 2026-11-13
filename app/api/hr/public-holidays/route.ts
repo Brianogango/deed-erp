@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 
-const HR_ROLES = ['director']
 const toClient = (h: { id: string; holidayDate: Date; name: string }) => ({ id: h.id, date: h.holidayDate.toISOString().slice(0, 10), name: h.name })
 
 /** Holidays HR has added on top of the built-in Kenyan list. Any signed-in user can read them (leave day counts need them). */
@@ -18,7 +17,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(HR_ROLES)
+    await requirePermission('manageHR')
     const body = await request.json().catch(() => ({}))
     const date = String(body.date ?? '').slice(0, 10)
     const name = String(body.name ?? '').trim().slice(0, 120)
@@ -37,7 +36,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(HR_ROLES)
+    await requirePermission('manageHR')
     const id = new URL(request.url).searchParams.get('id') || ''
     if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: 'Invalid holiday id' }, { status: 400 })
     await prisma.publicHoliday.deleteMany({ where: { id } })

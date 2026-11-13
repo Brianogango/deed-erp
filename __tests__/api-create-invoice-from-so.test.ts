@@ -56,6 +56,7 @@ vi.mock('@/lib/auth/api', () => ({
     }
   },
   requireRole: mockRequireRole,
+  requirePermission: mockRequireRole,
 }))
 
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))

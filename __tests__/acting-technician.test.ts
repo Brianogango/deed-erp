@@ -1,26 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import { allowedOnlyAsTechnician, hasTechnicianCapability, isUserAllowed } from '@/lib/auth/authorization'
+import { allowedOnlyAsTechnician, hasTechnicianCapability } from '@/lib/auth/authorization'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
+import { userCan } from '@/lib/auth/can'
 import { buildMyWork } from '@/lib/my-work'
 import { dashboardSectionsForUser } from '@/lib/dashboard-priority'
 
-const REPAIR_ROLES = ['director', 'admin_officer', 'technical_lead', 'technician']
 const kilimallTech = { id: 'k1', role: 'kilimall_officer', actsAsTechnician: true, modules: ['dashboard', 'kilimall', 'repair'] }
 const kilimall = { ...kilimallTech, actsAsTechnician: false }
 
 describe('a user acting as a technician', () => {
   it('passes the role checks a technician passes, and only those', () => {
     expect(hasTechnicianCapability(kilimallTech)).toBe(true)
-    expect(isUserAllowed(kilimallTech, REPAIR_ROLES)).toBe(true)
-    expect(isUserAllowed(kilimall, REPAIR_ROLES)).toBe(false)
-    expect(isUserAllowed(kilimallTech, ['director', 'finance_officer'])).toBe(false)
+    expect(userCan(kilimallTech, 'repair.edit')).toBe(true)
+    expect(userCan(kilimall, 'repair.edit')).toBe(false)
+    expect(userCan(kilimallTech, 'managePayroll')).toBe(false)
   })
 
-  it('is limited like a technician where only the technician entry lets them in', () => {
-    expect(allowedOnlyAsTechnician(kilimallTech, ['director', 'finance_officer', 'technician'])).toBe(true)
-    expect(allowedOnlyAsTechnician({ role: 'finance_officer', actsAsTechnician: true }, ['director', 'finance_officer', 'technician'])).toBe(false)
-    // A real technician gets the same limits.
-    expect(allowedOnlyAsTechnician({ role: 'technician' }, ['director', 'technician'])).toBe(true)
+  it('holds the permissions technicians hold', () => {
+    expect(userCan(kilimallTech, 'repair.edit')).toBe(true)
+    expect(userCan(kilimall, 'repair.edit')).toBe(false)
+  })
+
+  it('is limited like a technician where only the technician grant lets them in', () => {
+    expect(allowedOnlyAsTechnician(kilimallTech, 'repair.edit')).toBe(true)
+    // Finance may edit repair invoices in its own right.
+    expect(allowedOnlyAsTechnician({ role: 'finance_officer', actsAsTechnician: true }, 'repair.invoice.edit')).toBe(false)
+    // A real technician gets the same limits; the Director never does.
+    expect(allowedOnlyAsTechnician({ role: 'technician' }, 'repair.edit')).toBe(true)
+    expect(allowedOnlyAsTechnician({ role: 'director' }, 'repair.edit')).toBe(false)
   })
 
   it('can save repair work (diagnosis lives in the repairs list)', () => {

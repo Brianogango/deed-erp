@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
-
-const ROLES = ['director', 'finance_officer']
 
 /**
  * Change the monthly repayment, or close the loan early (settled in cash or written off).
@@ -14,7 +12,7 @@ const ROLES = ['director', 'finance_officer']
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(ROLES)
+    const actor = await requirePermission('managePayroll')
     const body = await request.json().catch(() => ({}))
     const loan = await prisma.employeeLoan.findUnique({ where: { id } })
     if (!loan) return NextResponse.json({ error: 'Loan not found' }, { status: 404 })

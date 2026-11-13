@@ -1,6 +1,7 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import { findAuthUserById } from '@/lib/auth/users-repository'
 import { invalidateUserSessions, publishSessionStatus } from '@/lib/auth/session-validity'
 
@@ -12,7 +13,7 @@ import { invalidateUserSessions, publishSessionStatus } from '@/lib/auth/session
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!isRoleAllowed(session.user.role, ['director', 'admin_officer'])) {
+    if (!userCan(session.user, 'admin.notifications')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

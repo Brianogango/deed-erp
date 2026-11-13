@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { productSchema } from '@/lib/validation'
 import { publishProduct, toClientProduct } from '@/lib/product-catalog-write'
@@ -11,8 +11,6 @@ export const dynamic = 'force-dynamic'
 
 // The bench creates variants while identifying machines; it cannot create
 // any other product (that stays with Inventory).
-const ROLES = ['director', 'technical_lead', 'admin_officer', 'inventory_officer', 'technician', 'lead_tech', 'repair_tech']
-
 type Row = Record<string, unknown>
 
 /**
@@ -23,7 +21,7 @@ type Row = Record<string, unknown>
  */
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(ROLES)
+    await requirePermission('refurbishment.identify')
     const body = await req.json().catch(() => ({})) as { baseProductId?: string; specs?: string; name?: string }
     const specs = String(body.specs ?? '').trim().slice(0, 300)
     if (!body.baseProductId) return NextResponse.json({ error: 'Choose the model first' }, { status: 422 })

@@ -9,6 +9,7 @@ const { mockGetSession, mockPrisma } = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth/api', async (importOriginal) => {
   const { isRoleAllowed } = await import('@/lib/auth/authorization')
+  const { userCan } = await import('@/lib/auth/can')
   return {
     withApiErrorHandling: async (handler: () => Promise<any>) => {
       try { return await handler() } catch (err: any) {
@@ -20,6 +21,12 @@ vi.mock('@/lib/auth/api', async (importOriginal) => {
       const session = await mockGetSession()
       if (!session) throw Object.assign(new Error('Unauthorized'), { status: 401 })
       if (!isRoleAllowed(session.user.role, allowed)) throw Object.assign(new Error('Forbidden'), { status: 403 })
+      return session.user
+    },
+    requirePermission: async (permission: string) => {
+      const session = await mockGetSession()
+      if (!session) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+      if (!userCan(session.user, permission)) throw Object.assign(new Error('Forbidden'), { status: 403 })
       return session.user
     },
   }

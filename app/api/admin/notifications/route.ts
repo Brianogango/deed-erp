@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'admin_officer', 'super_admin'])
+    await requirePermission('admin.notifications')
     const sinceDays = Math.max(1, Math.min(Number(request.nextUrl.searchParams.get('days') || 7), 90))
     const since = new Date(Date.now() - sinceDays * 86400000)
 
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(['director', 'admin_officer', 'super_admin'])
+    const actor = await requirePermission('admin.notifications')
     const body = await request.json().catch(() => ({})) as { action?: string; deliveryId?: string; note?: string }
     if (body.action !== 'retry_dead_letter' || !body.deliveryId) {
       return NextResponse.json({ error: 'Invalid admin notification action' }, { status: 400 })

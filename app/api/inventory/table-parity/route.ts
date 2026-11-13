@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { readStoreCopies } from '@/lib/server-store'
 import { stockTableParity } from '@/lib/stock-read-model.server'
 
@@ -18,7 +18,7 @@ function missingMigration(message: string): string | null {
 /** Read-only: do the stock tables match the deed_serials / deed_bulkStock / deed_stockMoves / deed_receipts / deed_products / deed_stockReservations copies? */
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(['director', 'admin_officer', 'inventory_officer'])
+    await requirePermission('inventory.import')
     try {
       const copies = await readStoreCopies(['deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_receipts', 'deed_products', 'deed_stockReservations'])
       return NextResponse.json(await stockTableParity(copies.deed_serials, copies.deed_bulkStock, copies.deed_stockMoves, copies.deed_receipts, copies.deed_products, copies.deed_stockReservations))

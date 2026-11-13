@@ -1,7 +1,8 @@
+import { userCan } from '@/lib/auth/can'
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { isRoleAllowed } from '@/lib/auth/authorization'
+
 import {
   archiveKeyFor,
   canArchive,
@@ -33,7 +34,7 @@ function forbidden() {
 async function requireDirector() {
   const session = await getServerSession()
   if (!session) return { error: unauthorized() as NextResponse }
-  if (!isRoleAllowed(session.user.role, ['director'])) return { error: forbidden() as NextResponse }
+  if (!userCan(session.user, 'admin.system')) return { error: forbidden() as NextResponse }
   return { session }
 }
 

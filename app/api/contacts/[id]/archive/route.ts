@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { broadcastContacts, clientToContact } from '@/lib/contact-prisma'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
 export const dynamic = 'force-dynamic'
 
-const WRITE_ROLES = ['director', 'admin_officer']
-
 /** Soft-archive a contact (P1-DEED-006). Never hard-deletes. */
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    const user = await requireRole(WRITE_ROLES)
+    const user = await requirePermission('sales.contacts.archive')
     const client = await prisma.client.findUnique({ where: { id: resolvedParams.id } })
     if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 

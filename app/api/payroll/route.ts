@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { runToClient, payslipToClient, createRunFromClient } from '@/lib/hr/payroll-store'
 
-const PAYROLL_ROLES = ['director', 'finance_officer']
-
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireRole(PAYROLL_ROLES)
+    await requirePermission('managePayroll')
     const [runs, payslips] = await Promise.all([
       prisma.payrollRun.findMany({ orderBy: { createdAt: 'desc' } }),
       prisma.payslip.findMany({ include: { payrollRun: { select: { periodMonth: true, periodYear: true } } } }),
@@ -22,7 +20,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(PAYROLL_ROLES)
+    const actor = await requirePermission('managePayroll')
     const body = await request.json()
     if (body.run) {
       // Idempotent: skip if a run with this reference already exists.

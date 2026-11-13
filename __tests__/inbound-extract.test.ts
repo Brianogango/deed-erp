@@ -10,6 +10,7 @@ vi.mock('@/lib/auth/api', () => ({
     }
   },
   requireRole: h.requireRole,
+  requirePermission: h.requireRole,
 }))
 
 import { POST } from '@/app/api/inventory/inbound-import/extract/route'

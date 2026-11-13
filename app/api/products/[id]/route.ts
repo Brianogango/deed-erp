@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { isSerialOnlyCategory } from '@/lib/inventory-identifiers'
 import { resolveListSaleFromMargin } from '@/lib/pricing/apply-margin-sale-price'
 import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
 import { deviceConfigFromProductSpecs, withCatalogDeviceConfig } from '@/lib/reconfiguration/unit-config'
 import { productUpdateSchema, validate } from '@/lib/validation'
-
-const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'finance_officer']
 
 async function findProductDuplicate(id: string, name?: string | null, sku?: string | null, barcode?: string | null) {
   const or: any[] = []
@@ -87,7 +85,7 @@ function mapBody(body: any, existingSpecs: Record<string, unknown>) {
 
 async function handleUpdate(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.edit')
     const rawBody = await request.json()
     const body = await validate(productUpdateSchema, rawBody)
     const existing = await prisma.product.findUnique({
@@ -195,7 +193,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    await requirePermission('inventory.products.edit')
     const id = resolvedParams.id
     const [stockLevel, serialCount, movementCount, poLineCount, saleLineCount, invoiceLineCount] = await Promise.all([
       prisma.stockLevel.findUnique({ where: { productId: id }, select: { qtyOnHand: true, qtyReserved: true, qtyOnOrder: true } }),

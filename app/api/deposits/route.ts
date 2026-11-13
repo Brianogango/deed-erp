@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import prisma from '@/lib/prisma'
 import { getNextDepositRef } from '@/lib/deposit-ref-counter'
 import { createDepositWithReceipt } from '@/lib/accounting/deposit-service'
@@ -7,7 +7,6 @@ import { z } from 'zod'
 import { depositToScreen } from '@/lib/deposit-read-model.server'
 import { notifyStoreKeysChanged } from '@/lib/server-store'
 
-const DEPOSIT_WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
 export const dynamic = 'force-dynamic'
 
 const depositCreateSchema = z.object({
@@ -50,7 +49,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(DEPOSIT_WRITE_ROLES)
+    const actor = await requirePermission('manageDeposits')
     const parsed = depositCreateSchema.safeParse(await request.json())
     if (!parsed.success) {
       return NextResponse.json(
