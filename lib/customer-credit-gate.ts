@@ -1,4 +1,14 @@
+import { isDirector, normalizeClientRole } from '@/lib/auth/access'
+
 export type CreditSalesDocument = 'quote' | 'order' | 'invoice'
+
+/**
+ * Who may go ahead despite overdue invoices, a credit limit or pay on
+ * receipt: the Director (who can override anything) and Finance.
+ */
+export function canOverrideCustomerCredit(role: string | null | undefined): boolean {
+  return isDirector(role) || normalizeClientRole(role) === 'finance_officer'
+}
 
 type CustomerCreditGateInput = {
   overdueBalance: number

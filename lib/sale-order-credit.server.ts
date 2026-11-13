@@ -1,7 +1,7 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { loadAppState } from '@/lib/server-store'
-import { evaluateCustomerCreditGate, isPayOnReceipt, type CreditSalesDocument } from '@/lib/customer-credit-gate'
+import { canOverrideCustomerCredit, evaluateCustomerCreditGate, isPayOnReceipt, type CreditSalesDocument } from '@/lib/customer-credit-gate'
 /** Prisma `DocumentStatus` values that can still carry an unpaid residual. */
 const OPEN_INVOICE_STATUSES = [
   'approved',
@@ -18,8 +18,6 @@ export function payOnReceiptEnforced(state: unknown): boolean {
   const settings = (state as { deed_systemSettings?: { accCreditPayOnReceiptEnforced?: unknown } } | null)?.deed_systemSettings
   return settings?.accCreditPayOnReceiptEnforced === true
 }
-
-const CREDIT_OVERRIDE_ROLES = new Set(['director', 'finance_officer'])
 
 type SaleOrderCreditCheck =
   | { ok: true }
@@ -39,7 +37,7 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
   const clientId = opts.clientId
   if (!clientId) return { ok: true }
 
-  const canOverride = CREDIT_OVERRIDE_ROLES.has(opts.role)
+  const canOverride = canOverrideCustomerCredit(opts.role)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 

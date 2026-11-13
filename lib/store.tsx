@@ -22,7 +22,7 @@ import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { PAID_TO_RIDER, riderFeeAccount, riderPayForJob } from '@/lib/delivery/rider-direct-pay'
-import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
+import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, isDirector, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
@@ -231,7 +231,7 @@ import {
 } from '@/lib/buyback-credit'
 import { canApproveInventory } from '@/lib/inventory/permissions'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
-import { evaluateCustomerCreditGate, isPayOnReceipt } from '@/lib/customer-credit-gate'
+import { canOverrideCustomerCredit, evaluateCustomerCreditGate, isPayOnReceipt } from '@/lib/customer-credit-gate'
 import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
 import {
   nextSseRetryMs,
@@ -13314,11 +13314,12 @@ const storeCtx: AppState = {
         }
 
         const creditStatus = storeCtxRef.current!.getCustomerCreditStatus(so.customerId, confirmTotals.totalAmount)
-        const canCreditOverride = user.role === 'director' || user.role === 'finance_officer'
+        const canCreditOverride = canOverrideCustomerCredit(user.role)
         if (!creditStatus.ok && !canCreditOverride) {
           showToast(creditStatus.message || 'Customer credit check failed — cannot confirm', 'error')
           return
         }
+        if (!creditStatus.ok) showToast(`Overriding: ${creditStatus.message}`, 'info')
         if (so.validUntil && !isRepairLinkedSaleOrder(so)) {
           const until = new Date(so.validUntil)
           until.setHours(23, 59, 59, 999)
@@ -13423,9 +13424,15 @@ const storeCtx: AppState = {
           r.status === 'pending' &&
           gatingTriggers.some(t => t.type === r.type),
         )
-        // Pending approvals still block everyone — including directors — so the
-        // audit decision is explicit (approve/reject) rather than silent.
-        if (leftoverSalesApprovals.length > 0) {
+        // The Director can override: confirming approves the pending requests
+        // in their name, so the decision is still on record. Everyone else
+        // waits for the approver.
+        if (leftoverSalesApprovals.length > 0 && isDirector(user.role)) {
+          const decided = leftoverSalesApprovals.map(r => processApproval(r, user.id, user.name, 'approved', 'Director override at confirm', user.role))
+          const byId = new Map(decided.map(r => [r.id, r]))
+          setApprovalRequests(prev => prev.map(r => byId.get(r.id) ?? r))
+          addAuditLog('approval_override', so.ref, `Director approved ${decided.map(r => r.type.replace(/_/g, ' ')).join(', ')} at confirm`)
+        } else if (leftoverSalesApprovals.length > 0) {
           showToast(
             `Resolve ${leftoverSalesApprovals.length} pending approval${leftoverSalesApprovals.length === 1 ? '' : 's'} before confirming`,
             'error',

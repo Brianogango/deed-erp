@@ -1,4 +1,5 @@
 import type { ApprovalType } from '@/lib/sales-flow-types'
+import { isDirector } from '@/lib/auth/access'
 
 export type ApprovalThreshold = { maxValue: number; requiredRoles: string[] }
 
@@ -143,6 +144,8 @@ export function actorSatisfiesApprovalRoles(
   actorRole: string | null | undefined,
 ): boolean {
   if (!actorRole || requiredRoles.length === 0) return requiredRoles.length === 0
+  // The Director can override any approval.
+  if (isDirector(actorRole)) return true
   if (approvalRolesAreAnyOf(type)) return requiredRoles.includes(actorRole)
   return requiredRoles.every(role => role === actorRole)
 }

@@ -1,7 +1,7 @@
 // ─── Approval Workflow Engine ─────────────────────────────────────────────────
 
 import type { ApprovalRequest, ApprovalLevel, ApprovalType } from './sales-flow-types'
-import { normalizeClientRole } from '@/lib/auth/access'
+import { isDirector, normalizeClientRole } from '@/lib/auth/access'
 import {
   APPROVAL_RULES,
   approvalRolesAreAnyOf,
@@ -117,17 +117,21 @@ export function processApproval(
 
   // Prefer the snapshot list, but also allow anyone currently holding a
   // required role for this level (covers stale approverIds / any-of price roles).
+  // The Director can decide any level, and their approval is final: the
+  // remaining levels are recorded as approved by them (a director override).
+  const directorOverride = isDirector(approverRole)
   const authorized =
-    currentLevel.approverIds.includes(approverId)
+    directorOverride
+    || currentLevel.approverIds.includes(approverId)
     || (Boolean(approverRole) && levelRoles(currentLevel).includes(String(approverRole)))
   
   if (!authorized) {
     throw new Error('User not authorized to approve at this level')
   }
   
-  // Update current level
+  // Update current level (and, on a director approval, every later one)
   const updatedApprovers = request.approvers.map(level => {
-    if (level.level === request.currentLevel) {
+    if (level.level === request.currentLevel || (directorOverride && decision === 'approved' && level.level > request.currentLevel)) {
       return {
         ...level,
         decision,
@@ -153,7 +157,7 @@ export function processApproval(
   }
   
   // If approved, check if more levels
-  const hasMoreLevels = request.currentLevel < request.approvers.length
+  const hasMoreLevels = !directorOverride && request.currentLevel < request.approvers.length
   
   if (hasMoreLevels) {
     // Move to next level
@@ -199,6 +203,7 @@ export function canApprove(
   const currentLevel = request.approvers.find(a => a.level === request.currentLevel)
   if (!currentLevel) return false
 
+  if (isDirector(userRole)) return true
   if (currentLevel.approverIds.includes(userId)) return true
   if (userRole && levelRoles(currentLevel).includes(userRole)) return true
   return false

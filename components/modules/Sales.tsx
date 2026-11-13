@@ -42,6 +42,7 @@ import { exportToCsv } from '@/lib/export-utils'
 import { isSaleOrderDraftEditing } from '@/lib/sale-order-draft-edits'
 import SerialMultiSelect from '@/components/SerialMultiSelect'
 import { hasModuleAccess, canCreateCustomerInvoiceFromSO } from '@/lib/auth/access'
+import { canOverrideCustomerCredit } from '@/lib/customer-credit-gate'
 import {
   useSalesStore,
   useApp,
@@ -1594,8 +1595,10 @@ function SalesContent() {
     const paymentTermsDays = quotationPaymentTermsDays(selectedCustomer)
     const draftTotalEstimate = newDraftLines.reduce((sum, l) => sum + calcDraftLineTotal(l), 0)
     const creditStatus = getCustomerCreditStatus(newCustomer.id, draftTotalEstimate, { document: 'quote' })
-    if (!creditStatus.ok) { showToast(creditStatus.message, 'error'); return }
-    if (creditStatus.isLocked && creditStatus.message) {
+    // Director / Finance may go ahead over the credit limit (they are told).
+    if (!creditStatus.ok && !canOverrideCustomerCredit(currentUser?.role)) { showToast(creditStatus.message, 'error'); return }
+    if (!creditStatus.ok) showToast(`Overriding: ${creditStatus.message}`, 'info')
+    else if (creditStatus.isLocked && creditStatus.message) {
       showToast(creditStatus.message, 'info')
     }
     savingNewQuoteRef.current = true

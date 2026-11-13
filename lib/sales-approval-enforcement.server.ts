@@ -1,4 +1,5 @@
 import 'server-only'
+import { isDirector } from '@/lib/auth/access'
 import type { ApprovalType } from '@/lib/sales-flow-types'
 import { requiresApprovalAsync, getApprovalRoles } from '@/lib/sales-approval-rules.server'
 import { loadAppState } from '@/lib/server-store'
@@ -261,6 +262,8 @@ export async function enforceSaleOrderApprovals(opts: {
 }): Promise<ApprovalEnforcementResult> {
   const { body, existing, sessionUserId, fromStatus, toStatus } = opts
   const isConfirming = toStatus === 'sale' && fromStatus !== 'sale'
+  // The Director can override any approval, pending ones included.
+  if (isDirector(opts.sessionRole)) return { ok: true }
   const orderId = existing?.id ?? body.id
 
   if (isConfirming) {
