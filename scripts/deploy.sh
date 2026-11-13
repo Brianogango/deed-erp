@@ -88,6 +88,9 @@ else
 fi
 
 say "Fetching"
+# next build rewrites next-env.d.ts (it names the build directory), so the
+# server's copy always differs and would block the pull. It is generated.
+git checkout -- next-env.d.ts 2>/dev/null || true
 LOCK_BEFORE=$(sha1sum package-lock.json 2>/dev/null | cut -d' ' -f1 || echo none)
 git pull --ff-only
 LOCK_AFTER=$(sha1sum package-lock.json 2>/dev/null | cut -d' ' -f1 || echo none)
