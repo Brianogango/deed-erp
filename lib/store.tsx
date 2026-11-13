@@ -22810,9 +22810,17 @@ const storeCtx: AppState = {
       }
       lines.forEach(line => {
         // Restore serials — good/fair → available, poor → refurbishment
+        // A serial still on a product that no longer exists (the line was
+        // relinked above) moves with the line, or it would sit in stock
+        // under a product nobody can see.
+        const productExists = (pid: string) => prodRef.current.some(x => x.id === pid)
         line.serialIds.forEach(sid => {
           setSerials(p => p.map(s => s.id === sid
-            ? { ...s, status: line.condition === 'poor' ? 'refurbishment' : 'available', location: bb.destinationLocation, soldDate: undefined, saleOrderId: undefined }
+            ? {
+                ...s,
+                ...(productExists(s.productId) ? {} : { productId: line.productId, productName: line.productName }),
+                status: line.condition === 'poor' ? 'refurbishment' : 'available', location: bb.destinationLocation, soldDate: undefined, saleOrderId: undefined,
+              }
             : s
           ))
         })
