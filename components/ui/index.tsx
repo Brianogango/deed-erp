@@ -6,6 +6,7 @@ import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 import { useOverlayDismiss } from '@/lib/overlay-dismiss'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
 import { searchPickerExactMatch, searchPickerItemText, searchPickerMatches } from '@/lib/search-picker-match'
+import { onVisibleViewportChange, visibleViewportBand } from '@/lib/visible-viewport'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -1566,8 +1567,10 @@ export function SearchPicker<T extends { id: string }>({
     if (!rect) return
     const margin = 8
     const preferredHeight = 240
-    const spaceBelow = window.innerHeight - rect.bottom - margin
-    const spaceAbove = rect.top - margin
+    // Measure against what is visible: on iOS the keyboard covers innerHeight.
+    const band = visibleViewportBand()
+    const spaceBelow = band.bottom - rect.bottom - margin
+    const spaceAbove = rect.top - band.top - margin
     const openAbove = spaceBelow < 150 && spaceAbove > spaceBelow
     const maxHeight = Math.max(112, Math.min(preferredHeight, openAbove ? spaceAbove - 6 : spaceBelow - 6))
     const width = Math.min(rect.width, window.innerWidth - margin * 2)
@@ -1577,7 +1580,7 @@ export function SearchPicker<T extends { id: string }>({
       width,
       maxHeight,
       top: openAbove
-        ? Math.max(margin, rect.top - maxHeight - 6)
+        ? Math.max(band.top + margin, rect.top - maxHeight - 6)
         : rect.bottom + 6,
     })
   }, [])
@@ -1594,12 +1597,12 @@ export function SearchPicker<T extends { id: string }>({
       if (e.key === 'Escape') setOpen(false)
     }
     window.addEventListener('mousedown', h)
-    window.addEventListener('resize', positionMenu)
+    const stopFollowingViewport = onVisibleViewportChange(positionMenu)
     window.addEventListener('scroll', positionMenu, true)
     window.addEventListener('keydown', closeOnEscape)
     return () => {
       window.removeEventListener('mousedown', h)
-      window.removeEventListener('resize', positionMenu)
+      stopFollowingViewport()
       window.removeEventListener('scroll', positionMenu, true)
       window.removeEventListener('keydown', closeOnEscape)
     }

@@ -21,6 +21,7 @@ import {
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { moneyInputValue } from '@/lib/intl-cache'
+import { visibleViewportBand } from '@/lib/visible-viewport'
 import {
   faUserGear,
   faStethoscope,
@@ -411,8 +412,10 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
     const GAP = 6
     const MIN_PANEL = 140
     const MAX_PANEL = 320
-    const spaceBelow = window.innerHeight - rect.bottom - GAP - 8
-    const spaceAbove = rect.top - GAP - 8
+    // Visible band, not innerHeight: on iOS the keyboard covers the bottom.
+    const band = visibleViewportBand()
+    const spaceBelow = band.bottom - rect.bottom - GAP - 8
+    const spaceAbove = rect.top - band.top - GAP - 8
     const openUp = spaceBelow < MIN_PANEL && spaceAbove > spaceBelow
     const room = Math.max(MIN_PANEL, openUp ? spaceAbove : spaceBelow)
     return {
