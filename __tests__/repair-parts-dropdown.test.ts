@@ -23,8 +23,10 @@ describe('repair parts picker dropdown', () => {
 
   it('bounds the panel to the space available instead of a fixed guess', () => {
     expect(source).toMatch(/maxHeight: Math\.min\(MAX_PANEL, room\)/)
-    expect(source).toMatch(/const spaceBelow = window\.innerHeight - rect\.bottom/)
-    expect(source).toMatch(/const spaceAbove = rect\.top/)
+    // The visible band, not innerHeight: an on-screen keyboard covers the bottom.
+    expect(source).toMatch(/const band = visibleViewportBand\(\)/)
+    expect(source).toMatch(/const spaceBelow = band\.bottom - rect\.bottom/)
+    expect(source).toMatch(/const spaceAbove = rect\.top - band\.top/)
     // and the panel scrolls rather than overflowing the viewport
     expect(source).toMatch(/overflowY: 'auto'/)
   })
