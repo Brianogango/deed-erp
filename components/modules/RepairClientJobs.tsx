@@ -4,7 +4,8 @@ import { activeOutsourceJob, isOutsourceOverdue, outsourceBadgeLabel, outsourced
 import { DataTable, type ActiveFilterChip, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
-import { fmtKes, fmtDateTime } from '@/lib/store'
+import { fmtKes, fmtDateTime, useRepairStore } from '@/lib/store'
+import { isPaidNotCollected } from '@/lib/repair/paid-not-collected'
 import { printRepairSticker } from '@/lib/repair-sticker'
 import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
 import { inNairobiDateRange, nairobiDateKey } from '@/lib/workspace-integrity'
@@ -82,7 +83,18 @@ function OutsourceLine({ repairId, outsourceJobs }: { repairId: string; outsourc
   )
 }
 
-function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
+/** Paid in full but never marked collected — record the handover. */
+function PaidNotCollectedLine({ show }: { show: boolean }) {
+  if (!show) return null
+  return (
+    <span className="block whitespace-normal text-[10px] font-bold leading-tight" style={{ color: '#dc2626' }}
+      title="Paid in full but still waiting for pickup. If the customer has the device, open the job and mark it collected.">
+      Paid · not collected
+    </span>
+  )
+}
+
+function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected }: any) {
   const rowColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'
   const outJob   = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
   const locLabel = outJob ? outJob.vendorName
@@ -127,6 +139,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
         <div className="flex flex-col items-end gap-2 shrink-0">
           <RepairStatusBadge status={r.status} />
           <OutsourceLine repairId={r.id} outsourceJobs={outsourceJobs} />
+          <PaidNotCollectedLine show={!!paidUncollected?.has(r.id)} />
           <span className="text-[10px] text-[var(--text-4)] font-medium tabular-nums">{fmtDateTime(r.intakeDate)}</span>
         </div>
       </div>
@@ -171,6 +184,11 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
 
 export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) => void }) {
   const { visibleRepairs, filter, setFilter, outsourceJobs } = useRepair()
+  const { invoices } = useRepairStore()
+  const paidUncollected = useMemo(
+    () => new Set(visibleRepairs.filter(r => isPaidNotCollected(r as any, invoices as any)).map(r => r.id)),
+    [visibleRepairs, invoices],
+  )
   const repairStats = useMemo(() => [
     {
       label: 'Needs action',
@@ -264,6 +282,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     if (statusFilter === 'pending_group') list = list.filter(r => ['pending_verification','received','assigned'].includes(r.status))
     else if (statusFilter === 'done_group') list = list.filter(r => ['delivered','closed'].includes(r.status))
     else if (statusFilter === 'outsourced') list = list.filter(r => !!activeOutsourceJob(r.id, outsourceJobs))
+    else if (statusFilter === 'paid_uncollected') list = list.filter(r => paidUncollected.has(r.id))
     else if (statusFilter !== 'all') list = list.filter(r => r.status === statusFilter)
     if (techFilter !== 'all') list = techFilter === 'unassigned' ? list.filter(r => !r.assignedTechnicianId) : list.filter(r => r.assignedTechnicianId === techFilter)
     if (pathFilter === 'direct_repair') list = list.filter(r => r.repairPath === 'direct_repair')
@@ -274,10 +293,11 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     }
     // Always newest-first before DataTable pagination — survives cleared column sort.
     return sortRepairsNewestFirst(list)
-  }, [visibleRepairs, outsourceJobs, searchQuery, statusFilter, techFilter, pathFilter, priorityFilter, dateFrom, dateTo])
+  }, [visibleRepairs, outsourceJobs, paidUncollected, searchQuery, statusFilter, techFilter, pathFilter, priorityFilter, dateFrom, dateTo])
 
   const selectedStatusLabel =
     statusFilter === 'outsourced' ? 'At vendors'
+    : statusFilter === 'paid_uncollected' ? 'Paid, not collected'
     : statusFilter === 'pending_group' ? 'Pending Group'
     : statusFilter === 'done_group' ? 'Done Group'
     : STATUS_FILTER_GROUPS.flatMap(g => g.options).find(o => o.id === statusFilter)?.label ?? 'All Statuses'
@@ -434,6 +454,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
         <div className="flex min-w-0 flex-col gap-0.5">
           <RepairStatusBadge status={r.status} />
           <OutsourceLine repairId={r.id} outsourceJobs={outsourceJobs} />
+          <PaidNotCollectedLine show={paidUncollected.has(r.id)} />
         </div>
       ),
       exportValue: r => r.status,
@@ -495,7 +516,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
       <div
         className="repair-metric-strip"
         aria-label="Repair workload summary"
-        style={{ '--repair-metric-count': repairStats.length + (outsourced.out > 0 ? 1 : 0) } as CSSProperties}
+        style={{ '--repair-metric-count': repairStats.length + (outsourced.out > 0 ? 1 : 0) + (paidUncollected.size > 0 ? 1 : 0) } as CSSProperties}
       >
         {repairStats.map(stat => (
           <div className={`repair-metric repair-metric--${stat.tone}`} key={stat.label}>
@@ -520,6 +541,20 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
               {outsourced.overdue > 0 && (
                 <span className="repair-metric__note">{outsourced.overdue} out over a week</span>
               )}
+            </div>
+          </button>
+        )}
+        {paidUncollected.size > 0 && (
+          <button
+            type="button"
+            className="repair-metric repair-metric--attention"
+            onClick={() => handleStatusChange('paid_uncollected')}
+            title="Paid in full but never marked collected — record the handover"
+          >
+            <span className="repair-metric__indicator" aria-hidden="true" />
+            <div>
+              <span>Paid, not collected</span>
+              <strong>{paidUncollected.size}</strong>
             </div>
           </button>
         )}
@@ -577,7 +612,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
             onRowClick={r => onSelect(r.id)}
             rowActions={repairRowActions}
             rowStyle={r => ({ borderLeft: `3px solid ${STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'}` })}
-            renderCard={r => <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} />}
+            renderCard={r => <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} paidUncollected={paidUncollected} />}
             exportTitle="Repair Jobs"
             exportFilename="repair-jobs"
           />

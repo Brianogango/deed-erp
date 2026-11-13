@@ -42,6 +42,7 @@ import {
 } from '@/lib/repair-billing-exempt'
 import { diagnosisFeeLineBadge, isDiagnosisFeeLine, resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 import { pickRepairPrimaryAction } from '@/lib/repair-handover'
+import { isPaidNotCollected, repairInvoiceFor } from '@/lib/repair/paid-not-collected'
 import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
 import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
@@ -283,8 +284,8 @@ export default function RepairDetailView() {
   const canMarkPartsArrived = r.status === 'awaiting_parts'
     && ['technical_lead', 'director', 'inventory_officer', 'admin_officer'].includes(currentRole)
     && !pendingOutsourceJob
-  const linkedInvoice      = invoices.find(i => i.id === (r.invoiceId ?? (r as any).linkedInvoiceId))
-    ?? invoices.find(i => i.repairId === r.id)
+  const linkedInvoice      = repairInvoiceFor(r as any, invoices)
+  const paidNotCollected   = isPaidNotCollected(r as any, invoices)
   const linkedSaleOrder    = findSaleOrderForRepair(saleOrders, r)
   const linkedSalesQuote   = findSalesQuoteForRepair(quotes, r)
   const repairCharges      = buildRepairInvoiceCharges(r, true, companySettings?.vatRate ?? 0)
@@ -1627,6 +1628,11 @@ export default function RepairDetailView() {
                   {billingSync.requiresCreditNote && !noCharge && (
                     <p role="status" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-800">
                       {`${linkedInvoice?.ref ?? 'The invoice'} (${fmtKes(Number(linkedInvoice?.total ?? 0))}) is posted and differs from the approved quote (${fmtKes(repairInvoiceChargeTotal(repairCharges))}). The job can still go ahead; Finance corrects the invoice with a credit or debit note in the Invoice module.`}
+                    </p>
+                  )}
+                  {paidNotCollected && (
+                    <p role="status" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-800">
+                      {`${linkedInvoice?.ref ?? 'The invoice'} is paid in full, but the device was never marked collected. If the customer has it, mark it collected${canMarkCollected ? '' : ' (front desk or a delivery manager)'} so the job can close.`}
                     </p>
                   )}
                   {primaryActionId === 'invoice' && canBillTogether && (
