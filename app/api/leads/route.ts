@@ -4,9 +4,9 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { pickRoundRobinOwner, pickStickyOwnerFromPriorLeads } from '@/lib/crm/sales-inbox-leads'
 import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
-import { storedRoleNames } from '@/lib/auth/authorization'
 import { notifyLeadAssigned } from '@/lib/crm/lead-notify'
 import { canAssignLead, leadListWhere, leadRole, phoneKey } from '@/lib/crm/lead-access'
+import { storedRoleNames } from '@/lib/auth/roles'
 
 const LEAD_INCLUDE = {
   owner: { select: { id: true, username: true, email: true } },

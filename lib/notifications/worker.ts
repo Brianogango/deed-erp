@@ -4,7 +4,6 @@ import crypto from 'crypto'
 import prisma from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { defaultNotificationPolicy } from './registry'
-import { storedRoleNames } from '@/lib/auth/authorization'
 import {
   bypassPreference,
   channelEnabled,
@@ -24,6 +23,7 @@ import type {
   NotificationRouting,
   NotificationSeverity,
 } from './types'
+import { storedRoleNames } from '@/lib/auth/roles'
 
 const MAX_ATTEMPTS = 5
 const RETRY_MINUTES = [1, 5, 30, 120, 360]

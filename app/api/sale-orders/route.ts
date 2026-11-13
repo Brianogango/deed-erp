@@ -3,7 +3,6 @@ import { dealQuotationRaised, dealWon } from '@/lib/crm/deal-progress.server'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { saveStoreKeys } from '@/lib/server-store'
@@ -19,6 +18,7 @@ import { mapSaleOrderToClient } from '@/lib/sales/sale-order-client-shape'
 import { linkLinesToProducts } from '@/lib/sales/link-line-products.server'
 import { normalizeOptionalProducts } from '@/lib/sales/sale-order-commercial-change'
 import { mergeScreenExtras, SALE_ORDER_EXTRA_KEYS } from '@/lib/screen-extras'
+import { canonicalUserRole } from '@/lib/auth/roles'
 
 async function broadcastSaleOrders() {
   try {
@@ -74,7 +74,7 @@ function mapSaleOrderItems(lines: any[], knownProductIds?: Set<string>) {
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const role = normalizePermissionRole(session.user.role)
+    const role = canonicalUserRole(session.user.role)
     if (!role || !['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead'].includes(role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -134,7 +134,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const role = normalizePermissionRole(session.user.role)
+    const role = canonicalUserRole(session.user.role)
     if (!role || !['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead'].includes(role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

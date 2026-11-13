@@ -1,4 +1,3 @@
-import { isDirector, normalizeClientRole } from '@/lib/auth/access'
 
 export type CreditSalesDocument = 'quote' | 'order' | 'invoice'
 
@@ -7,7 +6,7 @@ export type CreditSalesDocument = 'quote' | 'order' | 'invoice'
  * receipt: the Director (who can override anything) and Finance.
  */
 export function canOverrideCustomerCredit(role: string | null | undefined): boolean {
-  return isDirector(role) || normalizeClientRole(role) === 'finance_officer'
+  return isDirector(role) || canonicalRole(role) === 'finance_officer'
 }
 
 type CustomerCreditGateInput = {
@@ -99,3 +98,5 @@ export function isPayOnReceipt(customer: { type?: string | null; clientType?: st
   const kind = customer.type ?? (customer.clientType === 'individual' ? 'individual' : 'company')
   return kind === 'company' && PAY_ON_RECEIPT_STANDINGS.has(customer.creditStatus)
 }
+
+import { canonicalRole, isDirector } from '@/lib/auth/roles'

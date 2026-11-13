@@ -7,13 +7,13 @@ import prisma from '@/lib/prisma'
 import { getObject, putObject } from '@/lib/infra/object-store'
 import { validateFileContent } from '@/lib/file-validation'
 import { sanitizeClientForm } from './credit-form-fields'
-import { normalizeClientRole } from '@/lib/auth/access'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import {
   ACTION_ROLES, DOCUMENT_KINDS, DOCUMENT_RULES, OPEN_STATUSES, STANDARD_TERMS_DAYS,
   approvalCheck, canDecide, clientCreditStatus, documentChecklist, nextRef, nextStatus, reviewDueFrom,
   type CreditAction, type CreditFacilityStatus,
 } from './credit-facility-rules'
+import { canonicalRole } from '@/lib/auth/roles'
 
 export type Actor = { id: string; name?: string | null; role: string }
 
@@ -23,7 +23,7 @@ export class CreditFacilityError extends Error {
 
 const money = (v: unknown) => (v == null ? null : Number(v))
 const isoDay = (v: Date | null | undefined) => (v ? v.toISOString().slice(0, 10) : null)
-const roleOf = (actor: Actor) => normalizeClientRole(actor.role)
+const roleOf = (actor: Actor) => canonicalRole(actor.role)
 
 /** Fully paid customer invoices — the payment policy's "successful transactions". */
 export async function paidTransactionCount(clientId: string): Promise<number> {

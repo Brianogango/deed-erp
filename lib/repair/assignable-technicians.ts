@@ -1,4 +1,3 @@
-import { normalizeClientRole } from '@/lib/auth/access'
 
 /**
  * Technicians eligible for new repair / refurb assignment.
@@ -15,7 +14,7 @@ import { normalizeClientRole } from '@/lib/auth/access'
  * users and silently blocked them from assigning.
  */
 export function isRepairAssignerRole(role: string | null | undefined): boolean {
-  return ['technical_lead', 'director'].includes(normalizeClientRole(role))
+  return ['technical_lead', 'director'].includes(canonicalRole(role))
 }
 
 type TechUser = {
@@ -41,7 +40,7 @@ export function isRepairTechActor(user: {
   // take jobs (actsAsTechnician). Treating them as technicians hid the rest
   // of the bench and blocked diagnosis on jobs assigned to someone else.
   if (isRepairAssignerRole(user.role)) return false
-  return normalizeClientRole(user.role) === 'technician' || user.actsAsTechnician === true
+  return canonicalRole(user.role) === 'technician' || user.actsAsTechnician === true
 }
 
 /** Public fields needed to assign a job — never email, credentials, or HR PII. */
@@ -65,7 +64,7 @@ export function isAssignableTechnician(
   user: TechUser,
   exitedEmployeeIds?: Set<string>,
 ): boolean {
-  const normalizedRole = normalizeClientRole(user.role)
+  const normalizedRole = canonicalRole(user.role)
   const roleOk =
     ['technician', 'technical_lead'].includes(normalizedRole) || user.actsAsTechnician === true
   if (!roleOk) return false
@@ -96,3 +95,5 @@ export function mergeAssignableTechniciansIntoUsers<T extends { id: string }>(
   }
   return [...byId.values()]
 }
+
+import { canonicalRole } from '@/lib/auth/roles'

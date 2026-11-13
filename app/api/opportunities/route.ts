@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
 import { clientOpportunityId, opportunityExtras } from '@/lib/opportunity-extras'
 import { broadcastOpportunities, opportunityRef, OPPORTUNITY_INCLUDE } from '@/lib/opportunity-server'
+import { canonicalUserRole } from '@/lib/auth/roles'
 
 function mapOpportunityToDb(body: any) {
   return {
@@ -26,7 +26,7 @@ function mapOpportunityToDb(body: any) {
 export async function GET() {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const role = normalizePermissionRole(session.user.role)
+    const role = canonicalUserRole(session.user.role)
     if (!role || !['director', 'admin_officer', 'finance_officer', 'kilimall_officer', 'technical_lead', 'sales_rep'].includes(role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -53,7 +53,7 @@ export async function GET() {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const role = normalizePermissionRole(session.user.role)
+    const role = canonicalUserRole(session.user.role)
     if (!role || !['director', 'admin_officer', 'sales_rep'].includes(role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

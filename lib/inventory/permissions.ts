@@ -20,18 +20,6 @@ export const RECEIPT_VALIDATORS: InventoryRole[] = [
   'inventory_officer',
 ]
 
-/** Approve stock adjustments and other inventory approvals. */
-export const INVENTORY_APPROVERS: InventoryRole[] = [
-  'director',
-  'admin_officer',
-  'inventory_officer',
-  'technical_lead',
-]
-
-export function canApproveInventory(role: InventoryRole | null | undefined) {
-  return !!role && INVENTORY_APPROVERS.includes(role)
-}
-
 const SERIAL_EDITORS: InventoryRole[] = [
   'director',
   'admin_officer',

@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Badge, Modal } from '@/components/ui'
 import { fmtDate, fmtKes, useApp } from '@/lib/store'
-import { normalizeClientRole } from '@/lib/auth/access'
 import { STATUS_LABELS } from '@/lib/credit/credit-facility-rules'
 import CreditFacilityPanel, { type CreditApplicationView } from './CreditFacilityPanel'
+import { canonicalRole } from '@/lib/auth/roles'
 
 type Toast = (msg: string, type?: 'error' | 'success' | 'info') => void
 type ReviewRow = { clientId: string; name: string; creditStatus: string; reviewDue: string | null; creditLimit: number; paymentTermsDays: number; isCompany: boolean; openApplication: { id: string; ref: string } | null }
@@ -24,7 +24,7 @@ const FILTERS: Array<[string, string]> = [
 export default function CreditApplicationsQueue({ role, userId, showToast }: { role: string | null | undefined; userId?: string | null; showToast: Toast }) {
   const { systemSettings, updateSystemSettings } = useApp()
   const enforced = Boolean(systemSettings.accCreditPayOnReceiptEnforced)
-  const isDirector = normalizeClientRole(role) === 'director'
+  const isDirector = canonicalRole(role) === 'director'
   const toggleEnforced = () => {
     const next = !enforced
     if (!window.confirm(next

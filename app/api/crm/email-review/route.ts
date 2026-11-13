@@ -3,10 +3,10 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { pickRoundRobinOwner } from '@/lib/crm/sales-inbox-leads'
 import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
-import { storedRoleNames } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { canAssignLead, canEditLead, leadListWhere, leadRole } from '@/lib/crm/lead-access'
+import { storedRoleNames } from '@/lib/auth/roles'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'sales']
 

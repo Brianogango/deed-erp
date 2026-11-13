@@ -1,7 +1,7 @@
 /** GET — the photo kept with a cheque. */
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireCan, withApiErrorHandling } from '@/lib/auth/api'
+import { requirePermission, withApiErrorHandling } from '@/lib/auth/api'
 import { getObject } from '@/lib/infra/object-store'
 import { CHEQUE_IMAGE_BUCKET } from '@/lib/cheques/cheque-store.server'
 
@@ -10,7 +10,7 @@ export const runtime = 'nodejs'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    await requireCan('accounting.cheques.view')
+    await requirePermission('accounting.cheques.view')
     const { id } = await params
     const row = await prisma.cheque.findUnique({ where: { id }, select: { imageKey: true, imageType: true } })
     if (!row?.imageKey) return NextResponse.json({ error: 'No photo is kept for this cheque' }, { status: 404 })

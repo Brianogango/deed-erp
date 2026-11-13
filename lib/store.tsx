@@ -22,7 +22,7 @@ import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { PAID_TO_RIDER, riderFeeAccount, riderPayForJob } from '@/lib/delivery/rider-direct-pay'
-import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, isDirector, normalizeClientRole } from '@/lib/auth/access'
+import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
@@ -97,7 +97,7 @@ import { allocateSalesReturn, liveQtyInvoicedBySoLine } from '@/lib/sales/return
  * would read as "none" and drop a credit note that is owed.
  */
 const seesCustomerInvoices = (user: { role?: string } | null | undefined) =>
-  ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer'].includes(normalizeClientRole(String(user?.role ?? '')))
+  ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer'].includes(canonicalRole(String(user?.role ?? '')))
 import {
   findReleasedOrcsForReturn,
   pickPostedInvoiceForReturn,
@@ -198,6 +198,7 @@ import {
   isSerialOnlyCategory,
   type TrackingMethod,
 } from '@/lib/inventory-identifiers'
+import { canonicalRole, isDirector } from '@/lib/auth/roles'
 import {
   aggregateLinesByAccount,
   COMPANY_ACCOUNT_FALLBACKS,
@@ -229,7 +230,7 @@ import {
   buildBuyBackPayoutBillLines,
   resolveBuyBackProduct,
 } from '@/lib/buyback-credit'
-import { canApproveInventory } from '@/lib/inventory/permissions'
+import { userCan } from '@/lib/auth/can'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { canOverrideCustomerCredit, evaluateCustomerCreditGate, isPayOnReceipt } from '@/lib/customer-credit-gate'
 import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
@@ -2876,7 +2877,7 @@ interface StockAdjustment {
   formerRef?: string
 }
 
-const canApproveInventoryAction = (user: User | null) => canApproveInventory(user?.role)
+const canApproveInventoryAction = (user: User | null) => userCan(user, 'manageInventoryApprovals')
 
 /** GRN / purchase receipt validation — narrower than general inventory approvals. */
 const canValidatePurchaseReceiptAction = (user: User | null) =>
@@ -3266,7 +3267,7 @@ const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: num
 }
 
 const canManageProcurement = (user: User | null) =>
-  !!user && ['director', 'admin_officer', 'inventory_officer'].includes(normalizeClientRole(user.role))
+  !!user && ['director', 'admin_officer', 'inventory_officer'].includes(canonicalRole(user.role))
 
 // ── Outsource Repair ────────────────────────────────────────────────────────
 export const OUTSOURCE_SERVICE_TYPES = [
@@ -17115,7 +17116,7 @@ const storeCtx: AppState = {
         return
       }
       const isAssignedTech = repair.assignedTechnicianId === user.id
-      const isLeadOrDirector = ['technical_lead', 'director'].includes(normalizeClientRole(user.role))
+      const isLeadOrDirector = ['technical_lead', 'director'].includes(canonicalRole(user.role))
       if (!isAssignedTech && !isLeadOrDirector) {
         showToast('Only the assigned technician or lead technician can log or update a diagnosis', 'error'); return
       }
@@ -17174,7 +17175,7 @@ const storeCtx: AppState = {
       if (isDirectRepairPath(repair.repairPath)) {
         showToast('Stop at diagnosis only applies to Diagnosis First repairs', 'error'); return
       }
-      const isManager = !!user && ['director', 'admin_officer', 'technical_lead'].includes(normalizeClientRole(user.role))
+      const isManager = !!user && ['director', 'admin_officer', 'technical_lead'].includes(canonicalRole(user.role))
       if (!user || (!isManager && repair.assignedTechnicianId !== user.id)) {
         showToast('Only the assigned technician or a manager can stop at diagnosis', 'error'); return
       }
@@ -17230,7 +17231,7 @@ const storeCtx: AppState = {
         return
       }
       const canMark = ['director', 'admin_officer', 'finance_officer', 'sales_rep'].includes(
-        normalizeClientRole(user.role),
+        canonicalRole(user.role),
       )
       if (!canMark) {
         showToast('Only sales, finance, admin officer, or a director can mark the diagnosis fee paid', 'error')
@@ -19400,7 +19401,7 @@ const storeCtx: AppState = {
 
       // Full visibility: desk + finance + lead techs see every repair, even
       // when the same login also actsAsTechnician for shop-floor assignment.
-      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(normalizeClientRole(user.role))) return list
+      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(canonicalRole(user.role))) return list
 
       // Functional Firewall: technicians and users acting as one see their own jobs + the QC pool (peer QC)
       if (isRepairTechActor(user)) {
@@ -19850,7 +19851,7 @@ const storeCtx: AppState = {
     waiveDiagnosisFee: (repairId, reason) => {
       const user = currentUser()
       if (!user) return
-      if (!['director', 'technical_lead', 'admin_officer', 'finance_officer'].includes(normalizeClientRole(user.role))) {
+      if (!['director', 'technical_lead', 'admin_officer', 'finance_officer'].includes(canonicalRole(user.role))) {
         showToast('Only a manager can waive the diagnosis fee', 'error')
         return
       }
@@ -19897,7 +19898,7 @@ const storeCtx: AppState = {
         showToast('Repair not found', 'error')
         return
       }
-      if (!canMarkRepairBillingExempt(normalizeClientRole(user.role), repair)) {
+      if (!canMarkRepairBillingExempt(canonicalRole(user.role), repair)) {
         showToast(
           isRepairBillingExempt(repair)
             ? 'This job is already marked no-charge'

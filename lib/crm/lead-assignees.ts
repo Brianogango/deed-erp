@@ -1,4 +1,3 @@
-import { normalizeClientRole } from '@/lib/auth/access'
 
 /**
  * Roles eligible to own CRM leads / appear in assign dropdowns / inbox round-robin.
@@ -9,5 +8,7 @@ export const LEAD_ASSIGNEE_ROLES = ['director', 'sales_rep'] as const
 
 export function isLeadAssigneeRole(role: string | null | undefined): boolean {
   if (!role) return false
-  return (LEAD_ASSIGNEE_ROLES as readonly string[]).includes(normalizeClientRole(role))
+  return (LEAD_ASSIGNEE_ROLES as readonly string[]).includes(canonicalRole(role))
 }
+
+import { canonicalRole } from '@/lib/auth/roles'

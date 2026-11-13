@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const h = vi.hoisted(() => ({
   rows: [] as any[],
-  requireCan: vi.fn(),
+  requirePermission: vi.fn(),
   put: vi.fn(async () => ({})),
 }))
 
@@ -14,7 +14,7 @@ vi.mock('@/lib/auth/api', () => ({
       return new Response(JSON.stringify({ error: err?.message ?? 'error' }), { status, headers: { 'Content-Type': 'application/json' } })
     }
   },
-  requireCan: h.requireCan,
+  requirePermission: h.requirePermission,
 }))
 vi.mock('@/lib/infra/object-store', () => ({ putObject: h.put, getObject: vi.fn(async () => null) }))
 vi.mock('@/lib/prisma', () => ({
@@ -46,18 +46,16 @@ const post = (body: unknown) => POST(new Request('http://x/api/cheques', { metho
 const patch = (id: string, body: unknown) => PATCH(new Request('http://x', { method: 'PATCH', body: JSON.stringify(body) }), { params: Promise.resolve({ id }) })
 const valid = { direction: 'received', chequeNumber: '000123', bankName: 'Equity Bank', partyName: 'Farm To Feed Kenya', amount: 249400, chequeDate: '2026-10-20' }
 
-beforeEach(() => {
-  h.rows.length = 0
-  h.requireCan.mockReset()
-  h.requireCan.mockResolvedValue(user)
-  h.put.mockClear()
-})
+beforeEach(() => {h.rows.length = 0
+  h.requirePermission.mockReset()
+  h.requirePermission.mockResolvedValue(user)
+  h.put.mockClear()})
 
 describe('cheque register API', () => {
   it('only lets director, admin officer and finance officer in', async () => {
-    h.requireCan.mockRejectedValueOnce(Object.assign(new Error('Forbidden — insufficient role'), { status: 403 }))
+    h.requirePermission.mockRejectedValueOnce(Object.assign(new Error('Forbidden — insufficient role'), { status: 403 }))
     expect((await GET()).status).toBe(403)
-    expect(h.requireCan).toHaveBeenCalledWith('accounting.cheques.view')
+    expect(h.requirePermission).toHaveBeenCalledWith('accounting.cheques.view')
   })
 
   it('adds a cheque and records who received it', async () => {

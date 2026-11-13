@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
 
-import { storedRoleNames } from '@/lib/auth/authorization'
 import { isLeadAssigneeRole } from '@/lib/crm/lead-assignees'
 import { userIdsWithRoles } from '@/lib/in-app-notifications'
+import { storedRoleNames } from '@/lib/auth/roles'
 
 describe('role names', () => {
   it('a database lookup by role also matches the old names', () => {

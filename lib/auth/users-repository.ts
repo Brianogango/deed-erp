@@ -1,4 +1,5 @@
 import 'server-only'
+import { canonicalRole } from './roles'
 
 import { sql } from './db'
 import type { AuthUserRecord, CreateUserInput, PublicUser, UpdateUserInput } from './types'
@@ -33,27 +34,7 @@ type UserRow = {
   access_role_id?: string | null
 }
 
-const normalizeStoredRole = (role: string): AuthUserRecord['role'] => {
-  const aliases: Record<string, AuthUserRecord['role']> = {
-    super_admin: 'director',
-    admin: 'director',
-    director: 'director',
-    admin_officer: 'admin_officer',
-    finance: 'finance_officer',
-    finance_officer: 'finance_officer',
-    inventory: 'inventory_officer',
-    inventory_officer: 'inventory_officer',
-    kilimall: 'kilimall_officer',
-    kilimall_officer: 'kilimall_officer',
-    sales: 'sales_rep',
-    sales_rep: 'sales_rep',
-    lead_tech: 'technical_lead',
-    technical_lead: 'technical_lead',
-    repair_tech: 'technician',
-    technician: 'technician',
-  }
-  return aliases[role] ?? (role as AuthUserRecord['role'])
-}
+const normalizeStoredRole = (role: string) => canonicalRole(role) as AuthUserRecord['role']
 
 const parseModulesJson = (value: any): AuthUserRecord['modules'] => {
   if (!value) return []

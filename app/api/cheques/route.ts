@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
-import { requireCan, withApiErrorHandling } from '@/lib/auth/api'
+import { requirePermission, withApiErrorHandling } from '@/lib/auth/api'
 import { putObject } from '@/lib/infra/object-store'
 import { logRejectedUpload, validateFileContent } from '@/lib/file-validation'
 import { validateChequeInput, type ChequeDirection } from '@/lib/cheques/cheque-rules'
@@ -28,7 +28,7 @@ const dateOrNull = (value: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(value 
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await requireCan('accounting.cheques.view')
+    await requirePermission('accounting.cheques.view')
     const rows = await prisma.cheque.findMany({ orderBy: [{ chequeDate: 'desc' }, { createdAt: 'desc' }], take: 2000 })
     const today = nairobiToday()
     return NextResponse.json({ today, cheques: rows.map(row => toChequeDto(row, today)) })
@@ -37,7 +37,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const user = await requireCan('accounting.cheques.manage')
+    const user = await requirePermission('accounting.cheques.manage')
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const direction = body.direction as ChequeDirection
     const chequeNumber = text(body.chequeNumber, 40)

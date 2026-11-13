@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { normalizeClientRole } from '@/lib/auth/access'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { computeInvoiceTotals, computeInvoiceLineMoney, inferInvoiceLineTaxCategory, invoiceLineMissingTaxCategory, postedInvoicePutDecision, stripPostedInvoiceEconomicFields, POSTED_INVOICE_ECONOMIC_PUT_KEYS, PRISMA_POSTED_INVOICE_STATUSES } from '@/lib/finance-invoice'
 import { writeFinancialAudit, writeFinancialAuditInTx } from '@/lib/finance-audit'
@@ -16,6 +15,7 @@ import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
 import { allowedOnlyAsTechnician, canReadInvoiceRow } from '@/lib/auth/authorization'
 import { invoiceEditChanges } from '@/lib/finance/invoice-history'
+import { canonicalRole } from '@/lib/auth/roles'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -458,7 +458,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
           excludeBillId: id,
           // Prices move: Director / Finance may confirm a bill priced differently
           // from the order; the difference posts to Purchase Price Difference.
-          allowPriceVariance: ['director', 'finance_officer'].includes(normalizeClientRole(actor.role)),
+          allowPriceVariance: ['director', 'finance_officer'].includes(canonicalRole(actor.role)),
         })
       }
 

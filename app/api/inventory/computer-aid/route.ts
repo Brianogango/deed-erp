@@ -1,11 +1,11 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { upsertBulkStock, type BulkStockLevel } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
 import { writeFinancialAudit } from '@/lib/finance-audit'
+import { canonicalUserRole } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
@@ -120,8 +120,8 @@ function nextRef(action: CustodyAction, movements: CustodyMovement[]) {
 async function requireUser() {
   const session = await getServerSession()
   if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  const role = normalizePermissionRole(session.user.role)
-  const allowed = ALLOWED_ROLES.map(normalizePermissionRole).filter(Boolean)
+  const role = canonicalUserRole(session.user.role)
+  const allowed = ALLOWED_ROLES.map(canonicalUserRole).filter(Boolean)
   if (!role || !allowed.includes(role)) {
     return { error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
   }

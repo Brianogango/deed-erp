@@ -5,12 +5,12 @@ import { createHash } from 'crypto'
 import prisma from '@/lib/prisma'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { defaultNotificationPolicy } from './registry'
-import { storedRoleNames } from '@/lib/auth/authorization'
 import type {
   ExternalNotificationRecipient,
   NotificationRouting,
   PublishNotificationInput,
 } from './types'
+import { storedRoleNames } from '@/lib/auth/roles'
 
 type DbClient = Prisma.TransactionClient | PrismaClient
 

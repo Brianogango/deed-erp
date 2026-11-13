@@ -27,7 +27,6 @@ import Chatter from '@/components/erp/Chatter'
 import { Modal } from '@/components/ui'
 import { SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
-import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { repairProgressOrderFor } from '@/lib/repair-progress'
 import { isDirectRepairPath, isQuoteAwaitingApproval, isQuoteDeclinedReopenable, quotableStatusesForPath, repairPathLabel, returnableStatusesForPath, startableStatusesForPath } from '@/lib/repair-path'
@@ -47,6 +46,7 @@ import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
 import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
+import { canonicalRole } from '@/lib/auth/roles'
 
 const PROC_COLORS = {
   pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#F59E0B' },
@@ -166,7 +166,7 @@ export default function RepairDetailView() {
 
   if (!r) return null
 
-  const currentRole = normalizeClientRole(currentUser?.role)
+  const currentRole = canonicalRole(currentUser?.role)
   const isMyRepair  = r.assignedTechnicianId === currentUserId
   const pendingOutsourceJob = outsourceJobs?.find(job => job.repairOrderId === r.id && job.status === 'sent')
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)

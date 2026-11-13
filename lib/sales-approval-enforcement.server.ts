@@ -1,8 +1,8 @@
 import 'server-only'
-import { isDirector } from '@/lib/auth/access'
 import type { ApprovalType } from '@/lib/sales-flow-types'
 import { requiresApprovalAsync, getApprovalRoles } from '@/lib/sales-approval-rules.server'
 import { loadAppState } from '@/lib/server-store'
+import { isDirector } from '@/lib/auth/roles'
 
 const APPROVER_ROLES = new Set([
   'director',

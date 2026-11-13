@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Badge, StatusStepper } from '@/components/ui'
 import { fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
-import { normalizeClientRole } from '@/lib/auth/access'
 import {
   ACTION_ROLES, DECIDED_STATUSES, FINANCE_APPROVAL_LIMIT, MIN_PAID_TRANSACTIONS, STANDARD_TERMS_DAYS, STATUS_LABELS,
   TRANSITIONS, type CreditAction, type CreditFacilityStatus,
 } from '@/lib/credit/credit-facility-rules'
 import { BUSINESS_FIELDS, BUSINESS_TYPES, DECLARATION_TEXT, GROUPS, OFFICE_USE_FIELDS, REPRESENTATIVE_FIELDS, type FieldDef, type GroupDef } from '@/lib/credit/credit-form-fields'
+import { canonicalRole } from '@/lib/auth/roles'
 
 type Toast = (msg: string, type?: 'error' | 'success' | 'info') => void
 type Json = Record<string, any>
@@ -114,7 +114,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
   showToast: Toast
   onChanged?: () => void
 }) {
-  const r = normalizeClientRole(role)
+  const r = canonicalRole(role)
   const isFinance = r === 'finance_officer' || r === 'director'
   const [apps, setApps] = useState<CreditApplicationView[] | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)

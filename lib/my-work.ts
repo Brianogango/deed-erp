@@ -10,6 +10,7 @@
  */
 
 import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
+import { canonicalRole } from '@/lib/auth/roles'
 import { findOrphanTradeInSerials } from '@/lib/tradein/orphan-intake'
 
 type WorkItem = { id: string; title: string; subtitle: string; href: string; ageDays: number }
@@ -49,8 +50,6 @@ export type MyWorkInput = {
   invoiceHref: (id: string) => string
 }
 
-const ROLE_ALIASES: Record<string, string> = { inventory: 'inventory_officer', sales: 'sales_rep', finance: 'finance_officer', lead_tech: 'technical_lead', repair_tech: 'technician' }
-const normalizeWorkRole = (role: string) => ROLE_ALIASES[role] ?? role
 
 const DAY = 86_400_000
 const ageDays = (date: unknown, now: Date) => {
@@ -69,7 +68,7 @@ function queue(id: string, title: string, hint: string, href: string, items: Wor
 const repairHref = (r: Any) => `/repairs?id=${encodeURIComponent(r.id)}`
 
 export function buildMyWork(input: MyWorkInput): WorkQueue[] {
-  const role = normalizeWorkRole(input.role)
+  const role = canonicalRole(input.role)
   const is = (...roles: string[]) => role === 'director' || roles.includes(role)
   const { now } = input
   const out: WorkQueue[] = []

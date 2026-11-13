@@ -8,9 +8,9 @@
  * - Deduplicate open unread rows by entityKey per recipient.
  */
 
-import { normalizeClientRole } from '@/lib/auth/access'
 
 import type { ModuleId } from '@/lib/auth/types'
+import { canonicalRole } from '@/lib/auth/roles'
 
 export type NotifType = 'assignment' | 'leave' | 'asset' | 'expense' | 'system' | 'repair'
 
@@ -146,9 +146,9 @@ export function userIdsWithRoles(
   excludeUserId?: string | null,
 ): string[] {
   // Compare current role names, so a user saved under an old name still counts.
-  const roleSet = new Set(roles.map(normalizeClientRole))
+  const roleSet = new Set(roles.map(canonicalRole))
   return uniqueRecipientIds(
-    users.filter(u => roleSet.has(normalizeClientRole(u.role))).map(u => u.id),
+    users.filter(u => roleSet.has(canonicalRole(u.role))).map(u => u.id),
     excludeUserId,
   )
 }

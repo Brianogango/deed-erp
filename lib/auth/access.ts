@@ -1,4 +1,5 @@
 import type { ModuleId, PublicUser, UserRole } from './types'
+import { canonicalRole, isDirector } from './roles'
 
 const MODULE_LABELS: Record<ModuleId, string> = {
   dashboard: 'Dashboard',
@@ -32,28 +33,6 @@ const MODULE_LABELS: Record<ModuleId, string> = {
 // Modules accessible to every logged-in user regardless of operational role.
 const SELF_SERVICE_MODULES = new Set<ModuleId>(['hr', 'sops', 'sop_documents', 'expenses', 'my_documents', 'leave'])
 
-export const normalizeClientRole = (role: string | null | undefined) => {
-  if (!role) return ''
-  const aliases: Record<string, string> = {
-    super_admin: 'director',
-    admin: 'director',
-    director: 'director',
-    admin_officer: 'admin_officer',
-    finance: 'finance_officer',
-    finance_officer: 'finance_officer',
-    inventory: 'inventory_officer',
-    inventory_officer: 'inventory_officer',
-    kilimall: 'kilimall_officer',
-    kilimall_officer: 'kilimall_officer',
-    sales: 'sales_rep',
-    sales_rep: 'sales_rep',
-    lead_tech: 'technical_lead',
-    technical_lead: 'technical_lead',
-    repair_tech: 'technician',
-    technician: 'technician',
-  }
-  return aliases[role] ?? role
-}
 
 export const hasModuleAccess = (
   user: Pick<PublicUser, 'role' | 'modules'> | null | undefined,
@@ -61,8 +40,8 @@ export const hasModuleAccess = (
 ) => {
   if (!user) return false
   if (SELF_SERVICE_MODULES.has(module)) return true
-  if (normalizeClientRole(user.role) === 'director') return true
-  if (module === 'company_property' && ['admin_officer', 'finance_officer'].includes(normalizeClientRole(user.role))) return true
+  if (canonicalRole(user.role) === 'director') return true
+  if (module === 'company_property' && ['admin_officer', 'finance_officer'].includes(canonicalRole(user.role))) return true
   return (user.modules ?? []).includes(module)
 }
 
@@ -84,10 +63,10 @@ const COMPANY_PROPERTY_MANAGER_ROLES: readonly UserRole[] = ['director', 'admin_
 const COMPANY_PROPERTY_VIEWER_ROLES: readonly UserRole[] = ['director', 'admin_officer', 'finance_officer']
 
 export const canManageCompanyPropertyRole = (role?: string | null) =>
-  COMPANY_PROPERTY_MANAGER_ROLES.includes(normalizeClientRole(role) as UserRole)
+  COMPANY_PROPERTY_MANAGER_ROLES.includes(canonicalRole(role) as UserRole)
 
 const canViewCompanyPropertyRole = (role?: string | null) =>
-  COMPANY_PROPERTY_VIEWER_ROLES.includes(normalizeClientRole(role) as UserRole)
+  COMPANY_PROPERTY_VIEWER_ROLES.includes(canonicalRole(role) as UserRole)
 
 /** Monthly depreciation: Finance posts it; Admin/Director can too. */
 export const canRunCompanyAssetDepreciationRole = (role?: string | null) =>
@@ -124,7 +103,6 @@ export const formatRoleLabel = (role: string | null | undefined) => {
 }
 
 // Convenience role-group helpers used across modules.
-export const isDirector         = (role?: string | null) => normalizeClientRole(role) === 'director'
 // Keep client-side HR controls aligned with the server permission matrix.
 // HR is run by the Director; leave can also be decided by Finance.
 // Admin Officer and Technical Lead have self-service only.
@@ -135,19 +113,19 @@ export const LEAVE_APPROVER_ROLES: readonly UserRole[] = [
 ]
 
 export const canManageHRRole = (role?: string | null) =>
-  HR_MANAGER_ROLES.includes(normalizeClientRole(role) as UserRole)
+  HR_MANAGER_ROLES.includes(canonicalRole(role) as UserRole)
 
 export const canApproveLeaveRole = (role?: string | null) =>
-  LEAVE_APPROVER_ROLES.includes(normalizeClientRole(role) as UserRole)
+  LEAVE_APPROVER_ROLES.includes(canonicalRole(role) as UserRole)
 
 // Backward-compatible helper names retained for existing module code.
 export const isAdmin      = isDirector
 // Composite checks.
 export const canManageMoney   = (role?: string | null) =>
-  ['director', 'finance_officer', 'admin_officer'].includes(normalizeClientRole(role))
+  ['director', 'finance_officer', 'admin_officer'].includes(canonicalRole(role))
 /** Full finance (bank recon, expense reimburse) — excludes Admin Officer. */
 export const canManageFullFinance = (role?: string | null) =>
-  ['director', 'finance_officer'].includes(normalizeClientRole(role))
+  ['director', 'finance_officer'].includes(canonicalRole(role))
 /** Draft customer invoice from confirmed SO. */
 export const canCreateCustomerInvoiceFromSO = (role?: string | null) =>
-  ['director', 'finance_officer', 'admin_officer'].includes(normalizeClientRole(role))
+  ['director', 'finance_officer', 'admin_officer'].includes(canonicalRole(role))

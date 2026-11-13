@@ -54,7 +54,8 @@ import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPa
 import VendorStockPanel from '@/components/inventory/VendorStockPanel'
 import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
 import PartsRequestsPanel from '@/components/inventory/PartsRequestsPanel'
-import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct, canApproveInventory } from '@/lib/inventory/permissions'
+import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
+import { useCan } from '@/hooks/useCan'
 import type { ProductImageSlot } from '@/lib/product-images'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
@@ -666,8 +667,8 @@ function InventoryContent() {
   const canTransfer = !!currentUser && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser.role)
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
   const canRequestAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(currentUser.role)
-  // Same roles the save and the server accept (Admin Officer was missing here).
-  const canApproveAdj = canApproveInventory(currentUser?.role)
+  const can = useCan()
+  const canApproveAdj = can('manageInventoryApprovals')
 
   // Adjustment numbers used to be counted per browser, so ADJ/0001 repeated.
   // An approver opening Adjustments gives the repeats real numbers, once, and

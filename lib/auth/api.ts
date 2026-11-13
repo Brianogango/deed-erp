@@ -6,7 +6,6 @@ import { NextResponse } from 'next/server'
 import type { PublicUser } from './types'
 import { getServerSession } from './server'
 import { assertPermission, isUserAllowed } from './authorization'
-import { userCan } from './can'
 import { recordHttpMetric } from '@/lib/http-metrics'
 
 export const getRequiredSession = async () => {
@@ -21,9 +20,15 @@ export const getRequiredSession = async () => {
   return session
 }
 
-export const requirePermission = async (action: Parameters<typeof assertPermission>[1]) => {
+/**
+ * Refuses (403) unless the signed-in person holds this permission — a named
+ * action or a module part from the permission catalog. Built-in roles keep
+ * the rights they have always had; the Director holds every permission; a
+ * person on a custom role needs it in their role.
+ */
+export const requirePermission = async (permission: string) => {
   const session = await getRequiredSession()
-  assertPermission(session.user, action)
+  assertPermission(session.user, permission)
   return session.user
 }
 
@@ -76,20 +81,6 @@ export const requireRole = async (allowed: string[]) => {
   return session.user
 }
 
-/**
- * Refuses unless the signed-in person holds this permission (see
- * permission-catalog). Built-in roles keep the rights they have always had; a
- * person on a custom role needs the permission in their role.
- */
-export const requireCan = async (permission: string) => {
-  const session = await getRequiredSession()
-  if (!userCan(session.user, permission)) {
-    const error = new Error('Forbidden — insufficient role')
-    ;(error as Error & { status?: number }).status = 403
-    throw error
-  }
-  return session.user
-}
 
 export const sanitizeActor = (user: PublicUser) => ({
   id: user.id,

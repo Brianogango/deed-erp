@@ -39,7 +39,7 @@ import { maybeClassifyWithAi } from '@/lib/crm/inbox/classify-ai'
 import { withSalesInboxAdvisoryLock } from '@/lib/crm/inbox/advisory-lock'
 
 import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
-import { storedRoleNames } from '@/lib/auth/authorization'
+import { storedRoleNames } from '@/lib/auth/roles'
 
 const RR_KEY = 'deed_salesLeadRoundRobin'
 

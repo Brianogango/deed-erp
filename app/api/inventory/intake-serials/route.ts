@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getServerSession } from '@/lib/auth/server'
-import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { buildInventoryBarcode } from '@/lib/inventory-identifiers'
 import {
@@ -15,6 +14,7 @@ import { isOpeningStockLocked } from '@/lib/inventory/opening-stock'
 import prisma from '@/lib/prisma'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
+import { canonicalUserRole } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,8 +80,8 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const role = normalizePermissionRole(session.user.role)
-  const allowed = ALLOWED_ROLES.map(item => normalizePermissionRole(item)).filter(Boolean)
+  const role = canonicalUserRole(session.user.role)
+  const allowed = ALLOWED_ROLES.map(item => canonicalUserRole(item)).filter(Boolean)
   if (!role || !allowed.includes(role)) {
     return NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 })
   }

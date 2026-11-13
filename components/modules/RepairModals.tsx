@@ -10,7 +10,6 @@ import { findOpenRepairWithSerial, normalizeRepairSerial, resolveRepairWarranty,
 import { isRepairNoCharge } from '@/lib/repair-billing-exempt'
 import { shouldDefaultCloseAfterHandover } from '@/lib/repair-handover'
 import { buildRepairInvoiceCharges, repairBillingNeedsSync, repairBillsFeeOnly } from '@/lib/repair-invoice'
-import { normalizeClientRole } from '@/lib/auth/access'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import {
   DIAGNOSIS_FEE_LINE_DESCRIPTION,
@@ -44,6 +43,7 @@ import {
   faUser,
   faUsers,
 } from '@fortawesome/free-solid-svg-icons'
+import { canonicalRole } from '@/lib/auth/roles'
 
 // Reusable styled action button for modal footers
 function ActionBtn({ onClick, color, shadow, children, disabled }: {
@@ -1026,7 +1026,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
 export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { startRepair, markRepairComplete, createInvoiceFromRepair, invoices, quotes, saleOrders, companySettings, users, currentUserId } = useRepairStore()
   // Only these roles may create invoices on the server.
-  const canBillRole = ['director', 'finance_officer', 'admin_officer'].includes(normalizeClientRole(users.find(u => u.id === currentUserId)?.role))
+  const canBillRole = ['director', 'finance_officer', 'admin_officer'].includes(canonicalRole(users.find(u => u.id === currentUserId)?.role))
   const [notes, setNotes] = useState('')
   const noCharge = !!(repair.billingExempt || (repair.underWarranty && repair.warrantyCoverage === 'full'))
   const billingExempt = !!repair.billingExempt

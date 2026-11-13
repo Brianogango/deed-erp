@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
 import { processStockRepairConsume } from '@/lib/inventory/valuation-service'
-import { isSuperAdminRole } from '@/lib/auth/authorization'
+import { isDirector } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 export async function POST() {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isSuperAdminRole(session.user.role)) {
+  if (!isDirector(session.user.role)) {
     return NextResponse.json({ error: 'Director only' }, { status: 403 })
   }
 

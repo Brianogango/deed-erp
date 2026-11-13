@@ -1,4 +1,3 @@
-import { normalizePermissionRole } from '@/lib/auth/authorization'
 
 /**
  * Turn "notify the technical leads and inventory officers" into user ids.
@@ -18,13 +17,15 @@ export function resolveRoleRecipients(
   const wanted = new Set(
     roles
       .filter((r): r is string => typeof r === 'string' && r.length > 0)
-      .map(r => normalizePermissionRole(r) ?? r),
+      .map(r => canonicalUserRole(r) ?? r),
   )
   const ids: string[] = []
   for (const user of users ?? []) {
     if (!user?.id || user.isActive === false || user.id === opts.excludeUserId) continue
-    const role = normalizePermissionRole(user.role) ?? user.role
+    const role = canonicalUserRole(user.role) ?? user.role
     if (role && wanted.has(role) && !ids.includes(user.id)) ids.push(user.id)
   }
   return ids.slice(0, opts.limit ?? 50)
 }
+
+import { canonicalUserRole } from '@/lib/auth/roles'

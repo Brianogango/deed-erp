@@ -12,7 +12,7 @@ import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { modulesOutsideRole, roleDefaultModules } from '@/lib/auth/access-control'
 import AccessHistory from '@/components/settings/AccessHistory'
 import AccessRoles, { useAccessRoles } from '@/components/settings/AccessRoles'
-import { formatModuleLabel, formatRoleLabel, isAdmin, normalizeClientRole } from '@/lib/auth/access'
+import { formatModuleLabel, formatRoleLabel, isAdmin } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
@@ -33,6 +33,7 @@ import { resolveSettingsSection } from '@/lib/dashboard-priority'
 import { useUrlQueryState } from '@/hooks/useUrlRecordId'
 import { normalizeProductCategorySettings, PRODUCT_CREATION_CATEGORY_OPTIONS, type ProductCategorySetting } from '@/lib/product-categories'
 import { DocumentLayoutConfigurator } from './settings/DocumentLayoutConfigurator'
+import { canonicalRole } from '@/lib/auth/roles'
 type Section =
   | 'general' | 'document_layout' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
@@ -264,7 +265,7 @@ export default function Settings() {
   const RESET_CONFIRMATION = 'RESET DEED ERP PRODUCTION DATA'
 
   const currentUser = users.find(user => user.id === currentUserId)
-  const normalizedRole = normalizeClientRole(currentUser?.role)
+  const normalizedRole = canonicalRole(currentUser?.role)
   const canAccessSettings = ['director', 'admin_officer', 'finance_officer'].includes(normalizedRole)
   const canManageSystemUsers = isAdmin(currentUser?.role)
   const canManageBanks = ['director', 'finance_officer'].includes(normalizedRole)

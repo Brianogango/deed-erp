@@ -8,11 +8,11 @@ import {
   faTriangleExclamation, faXmark, faPen, faArrowLeft, faCamera,
 } from '@fortawesome/free-solid-svg-icons'
 import { useOperationsStore, OutboundRelease, OrcItem, SignatureMethod } from '@/lib/store'
-import { normalizeClientRole } from '@/lib/auth/access'
 import { Modal, Field, Input } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { resolveOrcConfirmedSerial } from '@/lib/barcode-scan'
+import { canonicalRole } from '@/lib/auth/roles'
 
 // ─── Signature Canvas ─────────────────────────────────────────────────────────
 
@@ -169,7 +169,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
   // Look up the linked repair (if this is a repair release) to show intake accessories
   const linkedRepair = isRepair && release.repairId ? repairs.find((r: any) => r.id === release.repairId) : undefined
   const intakeAccessories: { name: string; received: boolean }[] = linkedRepair?.accessories ?? []
-  const currentRole = normalizeClientRole(currentUser?.role)
+  const currentRole = canonicalRole(currentUser?.role)
   const canVerify   = ['release_authoriser', 'director', 'admin_officer'].includes(currentRole)
 
   // Derive UI step from release status

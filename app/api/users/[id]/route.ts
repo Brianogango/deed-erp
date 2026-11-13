@@ -3,21 +3,21 @@ import { getRequiredSession, requirePermission, withApiErrorHandling, sanitizeAc
 import { listAuthUsers, findAuthUserById, updateAuthUser, findAuthUserByUsername, clearFailedLogin, toPublicAuthUser, deleteAuthUser, deactivateAuthUser, reactivateAuthUser } from '@/lib/auth/users-repository'
 import { hashPassword, passwordMatchesHistory } from '@/lib/auth/password'
 import { userUpdateSchema, validate } from '@/lib/validation'
-import { assertPermission, normalizePermissionRole } from '@/lib/auth/authorization'
+import { assertPermission } from '@/lib/auth/authorization'
 import { lastDirectorViolation, diffAccess, snapshotAccess } from '@/lib/auth/access-control'
 import { recordAccessChange } from '@/lib/auth/access-audit.server'
-import { isDirector } from '@/lib/auth/access'
 import { getAccessRoleMap } from '@/lib/auth/access-roles.server'
 import { USER_ROLES } from '@/lib/auth/types'
 import { sendEmail } from '@/lib/integrations/email'
+import { canonicalUserRole, isDirector } from '@/lib/auth/roles'
 
 /** Refuses a change that would leave no active Director. Only looks at the users when it could matter. */
 async function refuseIfLastDirector(
   existing: { id: string; role: string },
   next: { role?: string; active?: boolean; removed?: boolean },
 ) {
-  if (normalizePermissionRole(existing.role) !== 'director') return
-  const leaving = next.removed === true || next.active === false || (next.role !== undefined && normalizePermissionRole(next.role) !== 'director')
+  if (canonicalUserRole(existing.role) !== 'director') return
+  const leaving = next.removed === true || next.active === false || (next.role !== undefined && canonicalUserRole(next.role) !== 'director')
   if (!leaving) return
   const users = (await listAuthUsers()).map(u => ({ id: u.id, role: String(u.role), active: u.active !== false }))
   const message = lastDirectorViolation(users, existing.id, next)
@@ -68,7 +68,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     // The role must be one the app knows; anything else used to be written as-is.
-    if (validated.role !== undefined && !(USER_ROLES as readonly string[]).includes(String(normalizePermissionRole(validated.role)))) {
+    if (validated.role !== undefined && !(USER_ROLES as readonly string[]).includes(String(canonicalUserRole(validated.role)))) {
       throw Object.assign(new Error('Role is invalid'), { status: 400 })
     }
 

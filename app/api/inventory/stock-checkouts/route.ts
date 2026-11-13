@@ -2,7 +2,6 @@ import { randomUUID } from 'crypto'
 import { serialNumbersInOrder } from '@/lib/inventory/checkout-serials'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { upsertBulkStock, type BulkStockLevel } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
@@ -11,6 +10,7 @@ import { notifyStockCheckout } from '@/lib/notifications/business-events'
 import { postAdjustmentValuation } from '@/lib/inventory/valuation-hooks'
 import { formatAccountLabel } from '@/lib/product-accounts'
 import { checkoutExpenseFor, reverseCheckoutBookings, type CheckoutBooking, type CheckoutBookedOutcome } from '@/lib/inventory/checkout-accounting'
+import { canonicalUserRole } from '@/lib/auth/roles'
 
 export const dynamic = 'force-dynamic'
 
@@ -109,8 +109,8 @@ const returnableQty = (row: Checkout) => Math.max(0, (Number(row.consumedQty) ||
 async function auth(approve = false) {
   const session = await getServerSession()
   if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  const role = normalizePermissionRole(session.user.role)
-  const allowed = (approve ? APPROVE_ROLES : REQUEST_ROLES).map(normalizePermissionRole).filter(Boolean)
+  const role = canonicalUserRole(session.user.role)
+  const allowed = (approve ? APPROVE_ROLES : REQUEST_ROLES).map(canonicalUserRole).filter(Boolean)
   if (!role || !allowed.includes(role)) return { error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
   return { session }
 }
@@ -146,7 +146,7 @@ export async function GET() {
       .map(s => ({ ...s, heldFor: heldFor(s) })),
     bulk,
     checkouts,
-    canApprove: APPROVE_ROLES.some(role => normalizePermissionRole(role) === normalizePermissionRole(access.session.user.role)),
+    canApprove: APPROVE_ROLES.some(role => canonicalUserRole(role) === canonicalUserRole(access.session.user.role)),
     currentUserId: access.session.user.id,
   })
 }

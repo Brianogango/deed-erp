@@ -1,58 +1,17 @@
 import 'server-only'
 
-import { ROLE_MATRIX, type PermissionAction } from './role-matrix'
+import type { PermissionAction } from './role-matrix'
 import type { ModuleId, PublicUser, UserRole } from './types'
+import { canonicalUserRole } from './roles'
+import { userCan } from './can'
 
-/** Old role names still accepted when read; new users are always saved under the current name. */
-export const LEGACY_ROLE_NAMES = ['super_admin', 'admin', 'finance', 'inventory', 'kilimall', 'sales', 'lead_tech', 'repair_tech'] as const
-
-export const normalizePermissionRole = (role: string | null | undefined): UserRole | null => {
-  if (!role) return null
-  const aliases: Record<string, UserRole> = {
-    super_admin: 'director',
-    admin: 'director',
-    director: 'director',
-    admin_officer: 'admin_officer',
-    finance: 'finance_officer',
-    finance_officer: 'finance_officer',
-    inventory: 'inventory_officer',
-    inventory_officer: 'inventory_officer',
-    kilimall: 'kilimall_officer',
-    kilimall_officer: 'kilimall_officer',
-    sales: 'sales_rep',
-    sales_rep: 'sales_rep',
-    lead_tech: 'technical_lead',
-    technical_lead: 'technical_lead',
-    repair_tech: 'technician',
-    technician: 'technician',
-  }
-  return aliases[role] ?? (role as UserRole)
-}
-
-/**
- * Every name a role may be stored under: the current name plus its old names
- * (finance → finance_officer, sales → sales_rep, admin/super_admin → director …).
- * Use it whenever users are looked up by role in the database, so a user
- * saved under an old name is never left out.
- */
-export const storedRoleNames = (roles: readonly string[]): string[] => {
-  const wanted = new Set(roles.map(r => normalizePermissionRole(r)).filter(Boolean) as string[])
-  const out = new Set<string>(wanted)
-  for (const alias of LEGACY_ROLE_NAMES) {
-    const canonical = normalizePermissionRole(alias)
-    if (canonical && wanted.has(canonical)) out.add(alias)
-  }
-  return [...out]
-}
-
-export const isSuperAdminRole = (role: string | null | undefined) => normalizePermissionRole(role) === 'director'
 
 // Shared predicate so every "is this role in this allow-list" check (requireRole,
 // the server-store-crud factory's requireSession, etc.) normalizes and compares
 // roles the same way instead of each reimplementing it.
 export const isRoleAllowed = (role: string | null | undefined, allowedRoles: string[]) => {
-  const normalizedRole = normalizePermissionRole(role)
-  const normalizedAllowedRoles = allowedRoles.map(allowedRole => normalizePermissionRole(allowedRole)).filter(Boolean)
+  const normalizedRole = canonicalUserRole(role)
+  const normalizedAllowedRoles = allowedRoles.map(allowedRole => canonicalUserRole(allowedRole)).filter(Boolean)
   return !!normalizedRole && normalizedAllowedRoles.includes(normalizedRole)
 }
 
@@ -67,12 +26,12 @@ type TechCapableUser = { role?: string | null; actsAsTechnician?: boolean | null
  * and be assigned jobs while every save of their work was refused.
  */
 export const hasTechnicianCapability = (user: TechCapableUser) =>
-  normalizePermissionRole(user?.role) === 'technician' || user?.actsAsTechnician === true
+  canonicalUserRole(user?.role) === 'technician' || user?.actsAsTechnician === true
 
 /** isRoleAllowed for a user: an acting technician passes wherever technicians do. */
 export const isUserAllowed = (user: TechCapableUser, allowedRoles: string[]) =>
   isRoleAllowed(user?.role, allowedRoles)
-  || (user?.actsAsTechnician === true && allowedRoles.some(r => normalizePermissionRole(r) === 'technician'))
+  || (user?.actsAsTechnician === true && allowedRoles.some(r => canonicalUserRole(r) === 'technician'))
 
 /**
  * True when the user gets in only through the list's technician entry — a
@@ -80,10 +39,9 @@ export const isUserAllowed = (user: TechCapableUser, allowedRoles: string[]) =>
  * write gets the technician's limits (own jobs, repair documents only).
  */
 export const allowedOnlyAsTechnician = (user: TechCapableUser, allowedRoles: string[]) =>
-  !isRoleAllowed(user?.role, allowedRoles.filter(r => normalizePermissionRole(r) !== 'technician'))
+  !isRoleAllowed(user?.role, allowedRoles.filter(r => canonicalUserRole(r) !== 'technician'))
   && isUserAllowed(user, allowedRoles)
 
-const roleMatrix = ROLE_MATRIX
 
 export type { PermissionAction } from './role-matrix'
 
@@ -182,7 +140,7 @@ export const canReadStoreKey = (
 
   const policy = COLLABORATIVE_STORE_READ_POLICIES[key]
   if (!policy) return true
-  const role = normalizePermissionRole(user.role)
+  const role = canonicalUserRole(user.role)
   const grants = new Set(user.modules ?? [])
   const hasModule = policy.modules.some(module => grants.has(module))
   if (!hasModule) return false
@@ -256,7 +214,7 @@ export function invoiceReadScope(
   user: StoreReadUser | null | undefined,
 ): 'all' | null | Record<string, unknown> {
   if (hasFullStoreContentAccess(user, 'deed_invoices')) return 'all'
-  switch (normalizePermissionRole(user?.role)) {
+  switch (canonicalUserRole(user?.role)) {
     case 'technical_lead':
     case 'technician':
       return { repairId: { not: null } }
@@ -289,7 +247,7 @@ export const hasFullStoreContentAccess = (
 ): boolean => {
   if (!CONTENT_FILTERED_STORE_KEYS.has(key)) return true
   if (COLLABORATIVE_STORE_READ_POLICIES[key] && !canReadStoreKey(user, key)) return false
-  const role = normalizePermissionRole(user?.role)
+  const role = canonicalUserRole(user?.role)
   if (key === 'deed_invoices') {
     // On a custom role, holding the finance permissions that post or collect
     // money is what earns the whole invoice ledger; otherwise the base role decides.
@@ -353,7 +311,7 @@ export function filterStoreValueForRole(
 ): unknown {
   if (!CONTENT_FILTERED_STORE_KEYS.has(key) || !Array.isArray(value)) return value
   if (hasFullStoreContentAccess(user, key)) return value
-  const role = normalizePermissionRole(user?.role)
+  const role = canonicalUserRole(user?.role)
   if (key === 'deed_invoices') return invoiceSliceForRole(role, value as StoreRow[])
   if (key === 'deed_expenses') {
     // Everyone keeps their own claims (self-service submissions/tracking).
@@ -436,7 +394,7 @@ export function canAccessRecord(
   userId: string | null | undefined,
   options?: { actsAsTechnician?: boolean },
 ): boolean {
-  const normalizedRole = normalizePermissionRole(role)
+  const normalizedRole = canonicalUserRole(role)
   if (!normalizedRole || !userId) return false
 
   switch (model) {
@@ -481,16 +439,12 @@ export const CLIENT_IMMUTABLE_STORE_KEYS = new Set<string>([
 
 type PermissionSubject = Pick<PublicUser, 'role'> & { permissions?: readonly string[] | null }
 
-export const hasPermission = (user: PermissionSubject | null | undefined, action: PermissionAction) => {
-  if (!user) return false
-  // A person on a custom role holds exactly the permissions that role lists.
-  if (Array.isArray(user.permissions)) return user.permissions.includes(action)
-  const normalizedRole = normalizePermissionRole(user.role)
-  return !!normalizedRole && roleMatrix[action].includes(normalizedRole)
-}
+/** A named action (ROLE_MATRIX) — the same check as userCan, typed to the actions. */
+export const hasPermission = (user: PermissionSubject | null | undefined, action: PermissionAction) => userCan(user, action)
 
-export const assertPermission = (user: PermissionSubject | null | undefined, action: PermissionAction) => {
-  if (!hasPermission(user, action)) {
+/** Throws 403 unless the person holds this permission (any catalog key). */
+export const assertPermission = (user: PermissionSubject | null | undefined, permission: string) => {
+  if (!userCan(user, permission)) {
     const error = new Error('Forbidden')
     ;(error as Error & { status?: number }).status = 403
     throw error

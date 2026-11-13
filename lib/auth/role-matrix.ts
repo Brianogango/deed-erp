@@ -18,7 +18,8 @@ export const ROLE_MATRIX = {
   viewHrRecords:             ['director', 'finance_officer'] as UserRole[],
   // Read access to full employee compensation/PII (salary, bank, national ID).
   viewEmployeeSensitive:     ['director', 'finance_officer'] as UserRole[],
-  manageInventoryApprovals:  ['director', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],
+  // Approve stock adjustments, opening stock, product deletes and other inventory requests.
+  manageInventoryApprovals:  ['director', 'admin_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
   // Validate purchase receipts / GRNs — stock-affecting; keep tight.
   // technical_lead intentionally excluded (ops oversight ≠ stock receipt authority).
   validatePurchaseReceipt:   ['director', 'admin_officer', 'inventory_officer'] as UserRole[],

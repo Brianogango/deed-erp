@@ -1,3 +1,4 @@
+import { canonicalRole } from './roles'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 
 type StoreUser = {
@@ -12,23 +13,16 @@ type StoreWritePolicy = {
   modules?: readonly string[]
 }
 
-const DIRECTOR = ['director', 'admin', 'super_admin'] as const
+const DIRECTOR = ['director'] as const
 const ADMIN = [...DIRECTOR, 'admin_officer'] as const
 // HR records: Director only (Admin Officer has no HR rights).
 const HR = DIRECTOR
-const FINANCE = [...ADMIN, 'finance', 'finance_officer'] as const
-const SALES = [...FINANCE, 'sales', 'sales_rep', 'kilimall', 'kilimall_officer', 'technical_lead', 'lead_tech'] as const
-const INVENTORY = [...ADMIN, 'inventory', 'inventory_officer', 'technical_lead', 'lead_tech'] as const
-const REPAIR = [...FINANCE, 'technical_lead', 'lead_tech', 'technician', 'repair_tech'] as const
-const OPERATIONS = [...ADMIN, 'finance_officer', 'inventory', 'inventory_officer', 'technical_lead', 'lead_tech'] as const
-const ALL_OPERATIONAL = [
-  ...FINANCE,
-  'inventory', 'inventory_officer',
-  'kilimall', 'kilimall_officer',
-  'sales', 'sales_rep',
-  'technical_lead', 'lead_tech',
-  'technician', 'repair_tech',
-] as const
+const FINANCE = [...ADMIN, 'finance_officer'] as const
+const SALES = [...FINANCE, 'sales_rep', 'kilimall_officer', 'technical_lead'] as const
+const INVENTORY = [...ADMIN, 'inventory_officer', 'technical_lead'] as const
+const REPAIR = [...FINANCE, 'technical_lead', 'technician'] as const
+const OPERATIONS = [...ADMIN, 'finance_officer', 'inventory_officer', 'technical_lead'] as const
+const ALL_OPERATIONAL = [...FINANCE, 'inventory_officer', 'kilimall_officer', 'sales_rep', 'technical_lead', 'technician'] as const
 
 const policy = (roles: readonly string[], modules?: readonly string[]): StoreWritePolicy => ({ roles, modules })
 
@@ -159,23 +153,9 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
   deed_companyAssets: policy(ADMIN, ['company_property']),
 })
 
-function normalizedRole(role: unknown): string {
-  if (typeof role !== 'string') return ''
-  const aliases: Record<string, string> = {
-    super_admin: 'director',
-    admin: 'director',
-    finance: 'finance_officer',
-    inventory: 'inventory_officer',
-    kilimall: 'kilimall_officer',
-    sales: 'sales_rep',
-    lead_tech: 'technical_lead',
-    repair_tech: 'technician',
-  }
-  return aliases[role] ?? role
-}
 
 function normalizeRoles(roles: readonly string[]): Set<string> {
-  return new Set(roles.map(normalizedRole))
+  return new Set(roles.map(canonicalRole))
 }
 
 export function canWriteStoreKey(user: StoreUser, key: string): boolean {
@@ -183,7 +163,7 @@ export function canWriteStoreKey(user: StoreUser, key: string): boolean {
   const entry = STORE_WRITE_POLICIES[key]
   if (!entry) return false
 
-  const role = normalizedRole(user.role)
+  const role = canonicalRole(user.role)
   const roles = normalizeRoles(entry.roles)
   // A user acting as a technician writes what a technician writes; they need
   // the module like anyone else (the repair module comes with the flag).

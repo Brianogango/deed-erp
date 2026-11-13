@@ -1,4 +1,3 @@
-import { normalizePermissionRole } from '@/lib/auth/authorization'
 
 /**
  * Who may see and change a lead. Before this, any signed-in user (a
@@ -11,7 +10,7 @@ const MANAGERS = new Set(['director', 'admin_officer'])
 type LeadLike = { ownerId?: string | null; stage?: string | null }
 
 export function leadRole(role: unknown): string | null {
-  const r = normalizePermissionRole(String(role ?? ''))
+  const r = canonicalUserRole(String(role ?? ''))
   return r && LEAD_ROLES.has(r) ? r : null
 }
 
@@ -44,3 +43,4 @@ export function leadListWhere(role: unknown, userId: string) {
 }
 
 export { phoneKey } from '@/lib/crm/phone-key'
+import { canonicalUserRole } from '@/lib/auth/roles'

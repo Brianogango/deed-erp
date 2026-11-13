@@ -2,7 +2,6 @@
 import { rememberRecentRecord } from '@/lib/recent-records'
 import CustomerSnapshot from '@/components/contacts/CustomerSnapshot'
 import CreditFacilityPanel, { CREDIT_STANDING_LABELS } from '@/components/credit/CreditFacilityPanel'
-import { normalizeClientRole } from '@/lib/auth/access'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS, isQuotationStage } from '@/lib/odoo-sales-flow'
@@ -28,6 +27,7 @@ import {
   customerCreditSourceLabel,
   customerCreditStatusLabel,
 } from '@/lib/customer-credit-view'
+import { canonicalRole } from '@/lib/auth/roles'
 
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
 type ViewTab   = 'info' | 'financial' | 'credit' | 'persons' | 'history' | 'chatter'
@@ -169,7 +169,7 @@ function ContactsInner() {
   const { contacts, addContact, updateContact,
     saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
-  const canSeeCredit = ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(normalizeClientRole(currentUser?.role))
+  const canSeeCredit = ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(canonicalRole(currentUser?.role))
   const [tabValue, setTabValue] = useUrlQueryState('tab', 'all')
   const tab: FilterTab = ['all', 'companies', 'individuals', 'customers', 'vendors'].includes(tabValue)
     ? tabValue as FilterTab

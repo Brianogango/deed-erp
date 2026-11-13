@@ -1,5 +1,5 @@
 import type { ApprovalType } from '@/lib/sales-flow-types'
-import { isDirector } from '@/lib/auth/access'
+import { isDirector } from '@/lib/auth/roles'
 
 export type ApprovalThreshold = { maxValue: number; requiredRoles: string[] }
 

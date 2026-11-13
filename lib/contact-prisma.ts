@@ -1,7 +1,7 @@
-import { normalizeClientRole } from '@/lib/auth/access'
 import { loadAppState, notifyStoreKeysChanged } from '@/lib/server-store'
 import type { Contact } from '@/lib/store'
 import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
+import { canonicalRole } from '@/lib/auth/roles'
 
 const CONTACT_STORE_KEY = 'deed_contacts'
 
@@ -397,7 +397,7 @@ const CREDIT_TERMS_ROLES = new Set(['director', 'finance_officer'])
  * (Contacts → Credit). Other roles' contact saves keep the current values.
  */
 export function withoutCreditTerms(body: ContactInput, role: string | null | undefined): ContactInput {
-  if (CREDIT_TERMS_ROLES.has(normalizeClientRole(role))) return body
+  if (CREDIT_TERMS_ROLES.has(canonicalRole(role))) return body
   const { creditLimit: _limit, paymentTermsDays: _terms, ...rest } = body as ContactInput & Record<string, unknown>
   return rest as ContactInput
 }

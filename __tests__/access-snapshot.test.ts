@@ -9,10 +9,10 @@ import { join } from 'node:path'
 import { PERMISSION_CATALOG } from '@/lib/auth/permission-catalog'
 import { ROLE_MATRIX, type PermissionAction } from '@/lib/auth/role-matrix'
 import { userCan } from '@/lib/auth/can'
-import { canReadStoreKey, hasPermission, normalizePermissionRole } from '@/lib/auth/authorization'
-import { normalizeClientRole } from '@/lib/auth/access'
+import { canReadStoreKey, hasPermission } from '@/lib/auth/authorization'
 import { STORE_WRITE_POLICIES, canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { MODULE_IDS } from '@/lib/auth/types'
+import { canonicalRole, canonicalUserRole } from '@/lib/auth/roles'
 
 const ROLE_NAMES = [
   'director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead', 'kilimall_officer', 'sales_rep', 'technician',
@@ -25,7 +25,7 @@ function accessOf(role: string) {
   const bare = { role: role as never, modules: [] as never[] }
   const full = { role: role as never, modules: ALL_MODULES as never[] }
   return {
-    canonical: [normalizePermissionRole(role), normalizeClientRole(role)],
+    canonical: [canonicalUserRole(role), canonicalRole(role)],
     can: PERMISSION_CATALOG.map(d => d.key).filter(k => userCan(bare, k)).sort(),
     canWithAllModules: PERMISSION_CATALOG.map(d => d.key).filter(k => userCan(full, k)).sort(),
     actions: (Object.keys(ROLE_MATRIX) as PermissionAction[]).filter(a => hasPermission(bare, a)).sort(),
