@@ -2,7 +2,8 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { Field, Input, Modal, Select } from '@/components/ui'
-import { LOCATIONS, useApp, type LocationId } from '@/lib/store'
+import { LOCATIONS, useApp, type LocationId, type Product } from '@/lib/store'
+import { RefurbProductPicker } from '@/components/refurbishment/RefurbProductPicker'
 import { PLACEHOLDER_KINDS, type PlaceholderKind } from '@/lib/refurbishment/unidentified'
 import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { INTAKE_SHEET_COLUMNS, parseIntakeSheet, type IntakeSheetRow } from '@/lib/refurbishment/intake-sheet'
@@ -31,6 +32,8 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
   const [sourceLocation, setSourceLocation] = useState<LocationId | ''>('')
   const [fileAs, setFileAs] = useState<PlaceholderKind | 'known'>('laptop')
   const [knownProductId, setKnownProductId] = useState('')
+  // A model just created from the search: on screen before the list has it.
+  const [createdModel, setCreatedModel] = useState<Product | null>(null)
   const [units, setUnits] = useState<Unit[]>([blankUnit()])
   const [sheet, setSheet] = useState<IntakeSheetRow[] | null>(null)
   const [saving, setSaving] = useState(false)
@@ -190,9 +193,17 @@ export function TaggedIntakeModal({ onClose }: { onClose: () => void }) {
           </Field>
         </div>
         {fileAs === 'known' && (
-          <Field label="Model" required>
-            <Select value={knownProductId} onChange={setKnownProductId} options={[{ value: '', label: 'Choose a serial-tracked product…' }, ...serialProducts.map(p => ({ value: p.id, label: `${p.name}${p.sku ? ` · ${p.sku}` : ''}` }))]} />
-          </Field>
+          <RefurbProductPicker
+            kind="machine"
+            label="Model *"
+            placeholder="Search: EliteBook 840 G5, Latitude 5490…"
+            items={serialProducts}
+            selected={serialProducts.find(p => p.id === knownProductId) ?? (createdModel?.id === knownProductId ? createdModel : undefined)}
+            onPick={p => {
+              if (!serialProducts.some(x => x.id === p.id)) setCreatedModel(p)
+              setKnownProductId(p.id)
+            }}
+          />
         )}
 
         {mode === 'rows' ? (

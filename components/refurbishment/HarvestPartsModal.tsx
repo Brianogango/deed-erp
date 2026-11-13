@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
-import { useApp, type RefurbishmentJob } from '@/lib/store'
+import { Field, Input, Modal, Textarea } from '@/components/ui'
+import { useApp, type Product, type RefurbishmentJob } from '@/lib/store'
+import { RefurbProductPicker } from '@/components/refurbishment/RefurbProductPicker'
 
 type Row = { productId: string; qty: string; unitValue: string }
 const isSerialized = (p: { requiresSerial?: boolean; trackingMethod?: string }) => Boolean(p.requiresSerial || p.trackingMethod === 'SERIAL')
@@ -18,6 +19,9 @@ export function HarvestPartsModal({ job, onClose, onDone }: { job: Refurbishment
   const [rows, setRows] = useState<Row[]>([blank()])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // Parts just created from the search: on screen before the list has them.
+  const [created, setCreated] = useState<Product[]>([])
+  const productOf = (id: string) => products.find(p => p.id === id) ?? created.find(p => p.id === id)
   const partProducts = useMemo(() => products.filter(p => !isSerialized(p) && p.isActive !== false).sort((a, b) => a.name.localeCompare(b.name)), [products])
   const patch = (i: number, v: Partial<Row>) => setRows(prev => prev.map((r, j) => (j === i ? { ...r, ...v } : r)))
   const total = rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.unitValue) || 0), 0)
@@ -47,7 +51,19 @@ export function HarvestPartsModal({ job, onClose, onDone }: { job: Refurbishment
           <div className="space-y-1.5">
             {rows.map((r, i) => (
               <div key={i} className="grid grid-cols-[1fr_70px_120px_28px] gap-2 items-center">
-                <Select value={r.productId} onChange={v => patch(i, { productId: v })} options={[{ value: '', label: 'Choose the part product…' }, ...partProducts.map(p => ({ value: p.id, label: p.name }))]} />
+                <RefurbProductPicker
+                  kind="part"
+                  countedOnly
+                  label={`Part ${i + 1}`}
+                  labelClassName="sr-only"
+                  placeholder="Search the part: RAM 8GB, battery…"
+                  items={partProducts}
+                  selected={r.productId ? productOf(r.productId) : undefined}
+                  onPick={p => {
+                    if (!products.some(x => x.id === p.id)) setCreated(prev => [...prev, p])
+                    patch(i, { productId: p.id })
+                  }}
+                />
                 <Input type="number" value={r.qty} onChange={v => patch(i, { qty: v })} placeholder="Qty" />
                 <Input type="number" value={r.unitValue} onChange={v => patch(i, { unitValue: v })} placeholder="Value each" />
                 <button type="button" className="text-t3 hover:text-red-600" aria-label="Remove part" onClick={() => setRows(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : [blank()])}>×</button>
@@ -57,7 +73,7 @@ export function HarvestPartsModal({ job, onClose, onDone }: { job: Refurbishment
           <button type="button" className="btn-outline text-[11px] mt-2" onClick={() => setRows(prev => [...prev, blank()])}>+ Add part</button>
         </div>
         <p className="text-[10px] text-t3">
-          Parts value: KES {total.toLocaleString('en-KE')}{cost ? ` of the machine's KES ${cost.toLocaleString('en-KE')}` : ''}. Together the parts can carry at most what the machine cost; above that their values are scaled down. The rest is booked as a write-off. Serial-tracked parts (e.g. a whole screen with a serial) are added from Inventory instead.
+          Parts value: KES {total.toLocaleString('en-KE')}{cost ? ` of the machine's KES ${cost.toLocaleString('en-KE')}` : ''}. Together the parts can carry at most what the machine cost; above that their values are scaled down. The rest is booked as a write-off. Serial-tracked parts (e.g. a whole screen with a serial) are added from Inventory instead. Not in the list? Create it from the search.
         </p>
         <div className="flex justify-end gap-2">
           <button className="btn-outline" onClick={onClose}>Cancel</button>

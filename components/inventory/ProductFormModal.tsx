@@ -69,7 +69,8 @@ import dynamic from 'next/dynamic'
 import { applyCostBandPrices, blankProduct, buildProductBarcode, buildProductSku, normKey } from '@/lib/inventory/product-form-helpers'
 
 export type ProductFormStart =
-  | { mode: 'new'; name?: string }
+  /** `tracking`: start the form tracked this way (a machine is SERIAL, a part QUANTITY). */
+  | { mode: 'new'; name?: string; tracking?: TrackingMethod }
   | { mode: 'edit'; product: Product }
   | { mode: 'variant'; parent: Product }
 
@@ -93,7 +94,9 @@ export default function ProductFormModal({
     1: { url: null, source: null },
     2: { url: null, source: null },
   })
-  const [form, setForm] = useState<any>(() => (start.mode === 'new' && start.name ? { ...blankProduct(), name: start.name } : blankProduct()))
+  const [form, setForm] = useState<any>(() => (start.mode === 'new'
+    ? { ...blankProduct(), ...(start.name ? { name: start.name } : {}), ...(start.tracking ? { trackingMethod: start.tracking } : {}) }
+    : blankProduct()))
   const [photoSlots, setPhotoSlots] = useState(emptyPhotoSlots)
   const [editId, setEditIdState] = useState<string | null>(start.mode === 'edit' ? start.product.id : null)
   const setEditId = (id: string | null) => { setEditIdState(id); onEditing?.(id) }

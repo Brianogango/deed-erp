@@ -12,8 +12,9 @@ import {
   refurbInstallActionLabel,
   resolveRefurbInstallAction,
 } from '@/lib/refurbishment/apply-upgrade-specs'
-import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
-import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader, TabBar, SearchPicker } from '@/components/ui'
+import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber, Product } from '@/lib/store'
+import { RefurbProductPicker } from '@/components/refurbishment/RefurbProductPicker'
+import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader, TabBar } from '@/components/ui'
 import { refurbNextStep, refurbFlowProgress, REFURB_FLOW_STEPS } from '@/lib/refurbishment/next-step'
 import { RefurbWeeklyReport } from '@/components/refurbishment/RefurbWeeklyReport'
 import { IdentifyUnitModal } from '@/components/refurbishment/IdentifyUnitModal'
@@ -131,6 +132,8 @@ function RefurbishmentContent() {
   const [requestNow, setRequestNow]         = useState(true)
   const [writeOffReason, setWriteOffReason] = useState('')
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
+  // A part just created from the search: on screen before the list has it.
+  const [createdPart, setCreatedPart] = useState<Product | null>(null)
   const [partForm, setPartForm] = useState<Omit<RefurbPart, 'id' | 'qty'> & { qty: number | '' }>({
     partName: '', productId: undefined, qty: '', estimatedCost: 0, status: 'needed', notes: '', installAction: undefined,
   })
@@ -694,18 +697,19 @@ function RefurbishmentContent() {
 
         {/* ── Part Modal ── */}
         {showPartModal && (() => {
-          const linkedProd = partForm.productId ? products.find(x => x.id === partForm.productId) : null
+          const linkedProd = partForm.productId ? (products.find(x => x.id === partForm.productId) ?? (createdPart?.id === partForm.productId ? createdPart : null)) : null
           return (
             <Modal title={editPartId ? 'Edit Part' : 'Add Part'} onClose={() => setShowPartModal(false)} width={440}>
               <div className="space-y-1">
-                <SearchPicker
+                <RefurbProductPicker
+                  kind="part"
                   label="Find it in inventory"
                   placeholder="Search parts: RAM 8GB, battery 840 G5, SSD…"
                   items={products.filter(x => x.isActive)}
-                  selectedLabel={linkedProd ? linkedProd.name : undefined}
-                  formatSelected={x => x.name}
-                  onSelect={prod => {
-                    const slot = refurbFitSlotForForm({ partName: prod.name, productId: prod.id, products })
+                  selected={linkedProd ?? undefined}
+                  onPick={prod => {
+                    if (!products.some(x => x.id === prod.id)) setCreatedPart(prod)
+                    const slot = refurbFitSlotForForm({ partName: prod.name, productId: prod.id, products: [...products, prod] })
                     setPartForm(p => ({
                       ...p,
                       productId: prod.id,
@@ -714,13 +718,7 @@ function RefurbishmentContent() {
                       installAction: slot ? (p.installAction || defaultRefurbInstallAction(slot)) : undefined,
                     }))
                   }}
-                  renderItem={x => (
-                    <div className="flex items-center justify-between gap-2 w-full">
-                      <span className="text-xs text-t1 truncate">{x.name}{x.sku ? <span className="text-t3"> · {x.sku}</span> : null}</span>
-                      <span className="text-[10px] text-t3 whitespace-nowrap">{x.stockQty} in stock</span>
-                    </div>
-                  )}
-                  emptyText="Not in inventory — it is added by this name, unlinked"
+                  emptyText="Not in inventory — create it below, or add it by this name, unlinked"
                   // What is typed becomes the part name until an item is chosen.
                   onQueryChange={q => setPartForm(p => (p.productId ? p : { ...p, partName: q }))}
                 />

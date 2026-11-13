@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Field, Input, Modal, SearchPicker, Textarea } from '@/components/ui'
-import { useApp, type RefurbishmentJob } from '@/lib/store'
+import { Field, Input, Modal, Textarea } from '@/components/ui'
+import { useApp, type Product, type RefurbishmentJob } from '@/lib/store'
+import { RefurbProductPicker } from '@/components/refurbishment/RefurbProductPicker'
 import { isPlaceholderProductName } from '@/lib/refurbishment/unidentified'
 import { specDifferences, variantName } from '@/lib/refurbishment/variant'
 
@@ -24,6 +25,8 @@ export function IdentifyUnitModal({ job, onClose }: { job: RefurbishmentJob; onC
   const [keepModel, setKeepModel] = useState(false)
   // The variant just created: on screen before the catalog list has it.
   const [createdVariant, setCreatedVariant] = useState<{ id: string; name: string } | null>(null)
+  // A model just created from the search: on screen before the list has it.
+  const [createdModel, setCreatedModel] = useState<Product | null>(null)
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -31,6 +34,7 @@ export function IdentifyUnitModal({ job, onClose }: { job: RefurbishmentJob; onC
     .filter(p => isSerialized(p) && p.isActive !== false && !isPlaceholderProductName(p.name))
     .sort((a, b) => a.name.localeCompare(b.name)), [products])
   const chosen = choices.find(p => p.id === productId)
+    ?? (createdModel && createdModel.id === productId ? createdModel : undefined)
     ?? (createdVariant && createdVariant.id === productId ? { ...createdVariant, description: '', sku: '', stockQty: 0 } : undefined)
   const onVariant = !!createdVariant && createdVariant.id === productId
   const known = serial.trim() ? serials.find(s => s.id !== job.serialId && s.serial.trim().toLowerCase() === serial.trim().toLowerCase()) : undefined
@@ -68,7 +72,7 @@ export function IdentifyUnitModal({ job, onClose }: { job: RefurbishmentJob; onC
   async function save() {
     setError('')
     if (serial.trim().length < 3) return setError('Enter the serial number from the machine')
-    if (!productId) return setError('Find the model in inventory. If it is not there, ask Inventory to add it.')
+    if (!productId) return setError('Find the model in inventory, or create it from the search.')
     if (showVariant) return setError('The specs differ from the model: create the variant, or choose to keep the model as it is')
     setSaving(true)
     const ok = await identifyRefurbUnit(job.id, { serial: serial.trim(), productId, specs: specs.trim() || undefined })
@@ -93,20 +97,17 @@ export function IdentifyUnitModal({ job, onClose }: { job: RefurbishmentJob; onC
         )}
 
         <div className="space-y-1">
-          <SearchPicker
+          <RefurbProductPicker
+            kind="machine"
             label="2. Model in inventory *"
             placeholder="Search: EliteBook 840 G5, Latitude 5490…"
             items={choices}
-            selectedLabel={chosen?.name}
-            formatSelected={p => p.name}
-            onSelect={p => { if (p.id === productId) return; setProductId(p.id); setKeepModel(false); setVariantLabel('') }}
-            renderItem={p => (
-              <div className="flex items-center justify-between gap-2 w-full">
-                <span className="text-xs text-t1 truncate">{p.name}{p.sku ? <span className="text-t3"> · {p.sku}</span> : null}</span>
-                <span className="text-[10px] text-t3 whitespace-nowrap">{p.stockQty} in stock</span>
-              </div>
-            )}
-            emptyText="No model matches — ask Inventory to add it"
+            selected={chosen}
+            onPick={p => {
+              if (p.id === productId) return
+              if (!choices.some(c => c.id === p.id)) setCreatedModel(p)
+              setProductId(p.id); setKeepModel(false); setVariantLabel('')
+            }}
           />
           {onPlaceholder && !chosen && <p className="text-[10px] text-t3">Filed as {job.productName}; choose what it really is.</p>}
           {onVariant && <p className="text-[11px]" style={{ color: 'var(--success-text)' }}>Filed under the new variant {createdVariant!.name}.</p>}
