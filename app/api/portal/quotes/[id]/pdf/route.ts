@@ -7,6 +7,7 @@ import { findPortalDocument } from '@/lib/portal-document-lookup'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
 import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
 import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
+import { pdfCompany } from '@/lib/pdf-company'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,30 +66,7 @@ async function handleGET(
           .join('\n') || undefined,
         paymentCommunication: true,
       },
-      {
-        name: co.name,
-        address: co.address,
-        city: co.city,
-        phone: co.phone,
-        email: co.email,
-        website: co.website,
-        kraPin: co.kraPin,
-        currency: co.currency,
-        mpesaPaybill: co.mpesaPaybill,
-        mpesaAccount: co.mpesaAccount,
-        printTemplate: co.printTemplate,
-      printFont: co.printFont,
-      printBackground: co.printBackground,
-      printPrimaryColor: co.printPrimaryColor,
-      printSecondaryColor: co.printSecondaryColor,
-      printTagline: co.printTagline,
-      printPaperFormat: co.printPaperFormat,
-      invoiceFooter: co.invoiceFooter,
-        logoDataUrl: logo?.dataUrl,
-        logoWidth: logo?.width,
-        logoHeight: logo?.height,
-        logoFormat: logo?.format,
-      },
+      pdfCompany(co, logo),
       banks,
     )
 

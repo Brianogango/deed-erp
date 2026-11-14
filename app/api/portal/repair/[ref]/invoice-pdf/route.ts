@@ -9,6 +9,7 @@ import { getServerSession } from '@/lib/auth/server'
 import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 import { findRepairByPortalRef } from '@/lib/repair-ref'
 import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
+import { pdfCompany } from '@/lib/pdf-company'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,30 +92,7 @@ async function handleGET(
         notes,
         paymentCommunication: true,
       },
-      {
-        name: co.name,
-        address: co.address,
-        city: co.city,
-        phone: co.phone,
-        email: co.email,
-        website: co.website,
-        kraPin: co.kraPin,
-        currency: co.currency,
-        mpesaPaybill: co.mpesaPaybill,
-        mpesaAccount: co.mpesaAccount,
-        printTemplate: co.printTemplate,
-      printFont: co.printFont,
-      printBackground: co.printBackground,
-      printPrimaryColor: co.printPrimaryColor,
-      printSecondaryColor: co.printSecondaryColor,
-      printTagline: co.printTagline,
-      printPaperFormat: co.printPaperFormat,
-      invoiceFooter: co.invoiceFooter,
-        logoDataUrl: logo?.dataUrl,
-        logoWidth: logo?.width,
-        logoHeight: logo?.height,
-        logoFormat: logo?.format,
-      },
+      pdfCompany(co, logo),
       savedBankAccounts,
     )
 

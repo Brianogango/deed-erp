@@ -2,11 +2,12 @@ import { now, uid } from './ids'
 import { type JournalEntryLine, type JournalEntry, type Invoice, type VendorJournalOpts } from './finance'
 import { type PpeJournalDraft } from '@/lib/accounting/ppe-journals'
 import { isPpeCostAccount } from '@/lib/company-property-ppe'
-import { type ExpenseCategory, type Expense } from './expenses'
+import { type Expense } from './expenses'
 import { aggregateLinesByAccount, formatAccountLabel, COMPANY_ACCOUNT_FALLBACKS, type AccountableProduct } from '@/lib/product-accounts'
 import { inferProductKind } from '@/lib/product-kind'
 import { buildVendorBillPerpetualLines, buildVendorCreditPerpetualLines } from '@/lib/accounting/vendor-bill-perpetual'
 import { paymentJournalRef } from '@/lib/finance-controls'
+import { expenseAccountForCategory } from '@/lib/accounting/expense-pos-accounts'
 
 /** Journal entries the store posts for invoices, bills, payments, expenses and credits. */
 
@@ -59,32 +60,6 @@ export const bankAccountIdForMethod = (method?: string, bankAccountId?: string) 
   if (method === 'cash' || method === 'petty_cash') return 'cash'
   // bank / bank_transfer / card (legacy POS) → default NCBA when no bank chosen
   return 'ncba'
-}
-
-export const expenseAccountForCategory = (category?: ExpenseCategory) => {
-  // Official Deed CoA (2025) operating-expense block — keep in sync with
-  // lib/accounting/expense-pos-accounts.ts.
-  const map: Partial<Record<ExpenseCategory, string>> = {
-    courier: '6519 - Courier and Delivery',
-    office_supplies: '6518 - Office Expenses',
-    water: '6506 - Water and Electricity',
-    printing: '6504 - Printing and Stationery',
-    transport: '6507 - Fuel and Transport',
-    meals: '6511 - Subsistence and Accommodation',
-    utilities: '6506 - Water and Electricity',
-    software: '6503 - Computer Expenses',
-    hardware: '6521 - Expensed Assets',
-    maintenance: '6505 - Repairs and Maintenance',
-    rent: '6508 - Rent and Service Charge',
-    service_charge: '6508 - Rent and Service Charge',
-    electricity: '6506 - Water and Electricity',
-    internet: '6510 - Telephone and Internet',
-    insurance: '6704 - Insurance',
-    bank_charges: '6703 - Bank Charges',
-    interest: '6701 - Interest Expense',
-    other: '6599 - Other Operating Expenses',
-  }
-  return map[category ?? 'other'] ?? '6599 - Other Operating Expenses'
 }
 
 /** Bill / vendor credit lines as the perpetual-inventory journal builders expect them. */
