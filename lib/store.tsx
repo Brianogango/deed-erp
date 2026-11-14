@@ -1,5 +1,6 @@
 // @ts-nocheck
 'use client'
+import { createShellActions } from './store/actions/shell'
 import { createSopActions } from './store/actions/sop'
 import { createHrActions } from './store/actions/hr'
 import { createPurchasingActions } from './store/actions/purchasing'
@@ -3139,6 +3140,14 @@ const setSerialCapitalised = (serialId: string | undefined, restore = false) => 
 }
 
 const storeDeps: StoreDeps = {
+  get setActiveModule() { return setActiveModule },
+  get setCompanySettings() { return setCompanySettings },
+  get setCurrentUserId() { return setCurrentUserId },
+  get setNotifications() { return setNotifications },
+  get setProfileImages() { return setProfileImages },
+  get setSidebarOpen() { return setSidebarOpen },
+  get setSystemSettings() { return setSystemSettings },
+  get setUsers() { return setUsers },
   get setRefSops() { return setRefSops },
   get setSopActuals() { return setSopActuals },
   get setSops() { return setSops },
@@ -3787,24 +3796,8 @@ const storeCtx: AppState = {
     },
 
     notifications, profileImages,
-    markNotificationRead: (id) => {
-      setNotifications(prev => markNotificationReadInList(prev, id))
-    },
-    markAllNotificationsRead: () => {
-      const uid = currentUserId
-      if (!uid) return
-      setNotifications(prev => markAllNotificationsReadForUser(prev, uid))
-    },
-    clearReadNotifications: () => {
-      const uid = currentUserId
-      if (!uid) return
-      setNotifications(prev => clearReadNotificationsForUser(prev, uid))
-    },
-    setProfileImage: (userId, dataUrl) => {
-      compressProfileImage(dataUrl).then(compressed => {
-        setProfileImages(prev => ({ ...prev, [userId]: compressed }))
-      })
-    },
+
+    ...createShellActions(storeDeps),
 
     // Cashbook & bank reconciliation
     bankAccounts, bankRecons, bankStatementLines,
@@ -3902,15 +3895,7 @@ const storeCtx: AppState = {
       setDocumentPaymentDetailsState(prev => ({ ...prev, [documentId]: next }))
     },
     companySettings,
-    updateCompanySettings: (p) => setCompanySettings(prev => ({ ...prev, ...p })),
     systemSettings,
-    updateSystemSettings: (p) => setSystemSettings(prev => {
-      const next = { ...prev, ...p }
-      if (p.pricingMarginPolicy) {
-        next.pricingMarginPolicy = normalizePricingMarginPolicy(p.pricingMarginPolicy)
-      }
-      return next
-    }),
 
     sopDocuments,
     saveSopDocuments: setSopDocuments,
@@ -5302,174 +5287,8 @@ const storeCtx: AppState = {
         return updated
       }))
     },
-    // ────────────────────────────────────────────────────────────────────────
-
-    setModule: (m) => {
-      const user = currentUser()
-      if (!userHasModuleAccess(user, m)) {
-        showToast('Access denied', 'error')
-        addAuditLog('access_denied', m, `Denied access to ${m}`)
-        return
-      }
-      setActiveModule(m)
-      if (typeof window !== 'undefined') window.localStorage.setItem('activeModule', m)
-      // Page views stay in this session's activity list. Sent to the server
-      // they cost a full audit-log rewrite per click and, with the log capped
-      // at 5,000 entries, pushed real commercial records out within days.
-      addAuditLog('navigate', m, `Navigated to ${m}`, { sessionOnly: true })
-    },
-    toggleSidebar: () => setSidebarOpen(v => !v),
     showToast,
     users, currentUserId, currentUser: currentUser(),
-    login: async (username, password) => {
-      try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
-        })
-
-        if (!res.ok) {
-          showToast('Invalid username or password', 'error')
-          addAuditLog('login_failed', username, 'Failed login attempt')
-          return false
-        }
-
-        window.location.href = '/'
-        return true
-      } catch {
-        showToast('Unable to reach the authentication service', 'error')
-        return false
-      }
-    },
-    logout: async () => {
-      const user = currentUser()
-      if (user) addAuditLog('logout', user.username, 'User logged out')
-      await fetch('/api/auth/logout', { method: 'POST' })
-      setCurrentUserId(null)
-      setActiveModule('dashboard')
-      // P0-DEED-001 / SEC-004: purge business + draft keys on explicit logout
-      try {
-        const { purgeClientBusinessStorage } = await import('@/hooks/useFormDraft')
-        purgeClientBusinessStorage()
-        const { clearCollectionCache } = await import('@/lib/browser-collection-cache')
-        await clearCollectionCache()
-      } catch {
-        // ignore — still complete logout
-      }
-      showToast('Logged out')
-      window.location.href = '/login'
-    },
-    createUser: async (u) => {
-      const { ok, payload } = await requestCreateUser(u)
-
-      if (!ok || !payload || !('user' in payload) || !payload.user) {
-        const message = payload?.message ?? 'Unable to create user'
-        showToast(message, 'error')
-        throw new Error(message)
-      }
-
-      const user = payload.user as User
-      setUsers(prev => [user, ...prev.filter(item => item.id !== user.id)])
-      addAuditLog('create_user', user.username, `Created user ${user.name}`)
-
-      const temporaryPassword = (payload as any).temporaryPassword as string | undefined
-      const credentialDelivery = (payload as any).credentialDelivery
-      if (temporaryPassword) {
-        window.alert(`User created for ${user.name}.\n\nEmail delivery failed or no email address is available.\n\nTemporary password (share securely):\n\n${temporaryPassword}`)
-      } else if (credentialDelivery?.success) {
-        showToast(`User created and credentials emailed to ${user.email || user.name}`)
-      } else {
-        showToast(`User created for ${user.name}`)
-      }
-      return user
-    },
-    updateUser: async (id, p) => {
-      const { ok, payload } = await requestUpdateUser(id, p)
-
-      if (!ok || !payload || !('user' in payload) || !payload.user) {
-        const message = payload?.message ?? 'Unable to update user'
-        showToast(message, 'error')
-        throw new Error(message)
-      }
-
-      const user = payload.user as User
-      setUsers(prev => prev.map(item => item.id === id ? user : item))
-      addAuditLog('update_user', id, `Updated user ${user.name}`)
-      showToast('User profile updated')
-    },
-    unlockUser: async (id) => {
-      const { ok, payload } = await requestUpdateUser(id, { unlock: true })
-
-      if (!ok || !payload || !('user' in payload) || !payload.user) {
-        const message = payload?.message ?? 'Unable to unlock user'
-        showToast(message, 'error')
-        throw new Error(message)
-      }
-
-      const user = payload.user as User
-      setUsers(prev => prev.map(item => item.id === id ? user : item))
-      addAuditLog('unlock_user', id, `Unlocked user ${user.username}`)
-      showToast('User unlocked successfully')
-    },
-    deleteUser: async (id) => {
-      const { ok, payload } = await requestDeleteUser(id)
-      if (!ok) {
-        const message = payload?.message ?? 'Unable to delete user'
-        showToast(message, 'error')
-        throw new Error(message)
-      }
-      setUsers(prev => prev.filter(u => u.id !== id))
-      addAuditLog('delete_user', id, `Deleted user ${id}`)
-      showToast('User deleted')
-    },
-    deactivateUser: async (id) => {
-      const { ok, payload } = await requestDeactivateUser(id)
-      if (!ok) {
-        const message = payload?.message ?? 'Unable to deactivate user'
-        showToast(message, 'error')
-        throw new Error(message)
-      }
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, active: false } : u))
-      addAuditLog('deactivate_user', id, `Deactivated user ${id}`)
-      showToast('User deactivated')
-    },
-    reactivateUser: async (id) => {
-      const { ok, payload } = await requestReactivateUser(id)
-      if (!ok) {
-        const message = payload?.message ?? 'Unable to reactivate user'
-        showToast(message, 'error')
-        throw new Error(message)
-      }
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, active: true } : u))
-      addAuditLog('reactivate_user', id, `Reactivated user ${id}`)
-      showToast('User reactivated')
-    },
-    resendCredentials: async (id) => {
-      try {
-        const res = await fetch(`/api/users/${id}/resend-credentials`, { method: 'POST' })
-        const data = await res.json().catch(() => ({})) as any
-        if (!res.ok) {
-          showToast(data?.message || 'Failed to resend credentials', 'error')
-          throw new Error(data?.message || 'resend failed')
-        }
-        const temporaryPassword = data.temporaryPassword as string | undefined
-        if (temporaryPassword) {
-          window.alert(`Credentials reset for ${data.user?.name || 'the user'}.\n\nEmail delivery failed or no email address is available.\n\nNew temporary password (share securely):\n\n${temporaryPassword}`)
-        } else if (data.credentialDelivery?.success) {
-          showToast(`Credentials reset and emailed to ${data.user?.email || data.user?.name || 'the user'}`)
-        } else {
-          showToast(`Credentials reset for ${data.user?.name || 'the user'}`)
-        }
-        addAuditLog('resend_credentials', id, `Resent credentials for user ${id}`)
-        if (data.user) setUsers(prev => prev.map(u => u.id === id ? data.user as User : u))
-      } catch (e) {
-        // already toasted
-        throw e
-      }
-    },
-    hasModuleAccess: (module) => userHasModuleAccess(currentUser(), module),
-    isSuperAdmin: () => isDirector(currentUser()?.role),
 
     ...createHrActions(storeDeps),
 
