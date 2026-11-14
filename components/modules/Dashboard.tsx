@@ -2,6 +2,7 @@
 'use client'
 
 import { useMemo, useCallback, useEffect, useState } from 'react'
+import { SecondaryActionMenu } from '@/components/erp/SecondaryActionMenu'
 import type { ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -148,10 +149,6 @@ function CardHeader({ title, sub, action }: { title: string; sub?: string; actio
   )
 }
 
-function SectionLabel({ label }: { label: string }) {
-  return <h2 className="dashboard-section-title">{label}</h2>
-}
-
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="py-6 flex flex-col items-center justify-center gap-2.5 text-center">
@@ -203,12 +200,11 @@ export function Dashboard() {
   useStoreHydrated()
   const pathname = usePathname()
   const routeReady = useRouteDataReady(pathname || '/')
-  const [dashboardClock, setDashboardClock] = useState({ greeting: 'Welcome', date: '' })
+  const [dashboardClock, setDashboardClock] = useState({ greeting: 'Welcome' })
   useEffect(() => {
     const now = new Date()
     setDashboardClock({
       greeting: now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening',
-      date: now.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Nairobi' }),
     })
   }, [])
   // Lean rows from the server: the dashboard does not load the sale-order list.
@@ -902,7 +898,7 @@ export function Dashboard() {
     return items
       .filter(item => !item.module || has(item.module))
       .sort((a, b) => (rank[a.tone] ?? 3) - (rank[b.tone] ?? 3))
-      .slice(0, 3)
+      .slice(0, 5)
   }, [invoicedNotDelivered, canSeeFinance, canApproveLeave, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits, has])
 
   const executiveSnapshot = useMemo(() => {
@@ -989,48 +985,76 @@ export function Dashboard() {
   // sync timestamp while this route's collections are still in flight.
   if (!mounted || !routeReady) return <ModuleSkeleton />
 
+  const shownKpis = kpis.filter(({ key }) => canShowDashboardKpi(currentUser, key))
+  // Finance sees paid revenue as the lead figure; everyone else their first KPI.
+  const restKpis = canSeeFinance ? shownKpis.filter(k => k.key !== 'revenue') : shownKpis.slice(1)
+  const leadKpi = canSeeFinance ? null : shownKpis[0] ?? null
+  const stackKpis = restKpis.slice(0, 3)
+  const moreKpis = restKpis.slice(3)
+  // The one primary button: what this role starts most often.
+  const primaryAction: QuickAction | undefined = canSeeSales
+    ? { key: 'new-quotation', title: 'New quotation', desc: 'Start a quotation', module: 'sales', path: '/sales?view=new', color: '#3B82F6', icon: <Fa icon={faClipboardList} /> }
+    : quickActions[0]
+  const otherActions = quickActions.filter(action => action.key !== primaryAction?.key)
+  const runAction = (action: QuickAction) => (action.module ? handleNav(action.module, action.path) : handleRoute(action.path))
+  const firstName = (currentUser?.name || '').split(' ')[0]
+
   return (
-    <div className="dashboard-page">
-      <div className="dashboard-executive-grid">
-        <div className="dashboard-executive-main">
-          <section className="dashboard-week-card">
-            <div className="dashboard-week-heading">
-              <span className="dashboard-week-icon" aria-hidden="true"><Fa icon={faArrowsRotate} /></span>
-              <div>
-                <h1>This Week</h1>
-                <p>Live company activity from the ERP</p>
-              </div>
-            </div>
-            <p className="dashboard-week-summary">
-              {fmtKes(executiveSnapshot.paidThisWeek)} in paid invoice revenue across {executiveSnapshot.paidInvoiceCount} invoice{executiveSnapshot.paidInvoiceCount === 1 ? '' : 's'} this week. {financeStats.overdueCount} overdue customer invoice{financeStats.overdueCount === 1 ? '' : 's'} currently need collection.
-            </p>
-            <div className="dashboard-week-chips">
-              <button type="button" onClick={() => handleNav('accounting', '/finance?tab=invoices')}>{executiveSnapshot.paidInvoiceCount} invoices paid this week</button>
-              <button type="button" onClick={() => handleNav('sales', '/sales')}>{salesStats.openOrders} open sales</button>
-              <button type="button" onClick={() => handleNav('repair', '/repairs')}>{repairStats.active.length} active repairs</button>
-            </div>
-          </section>
-
-          <div className="dashboard-kpi-grid">
-            {kpis
-              .filter(({ key }) => canShowDashboardKpi(currentUser, key))
-              .slice(0, 6)
-              .map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
-          </div>
-
-          <section className="dashboard-period-strip" aria-label="Paid revenue by period">
-            {executiveSnapshot.periods.map(period => (
-              <div key={period.label}>
-                <span>{period.label}</span>
-                <strong>{fmtKes(period.value)}</strong>
-              </div>
-            ))}
-          </section>
+    <div className="dashboard-page dash2">
+      {/* Header: who and when, and the one thing to do next */}
+      <header className="dash2-header">
+        <div className="min-w-0">
+          <h1 className="dash2-title">{dashboardClock.greeting}{firstName ? `, ${firstName}` : ''}</h1>
         </div>
+        <div className="dash2-actions">
+          {otherActions.slice(0, 2).map(action => (
+            <button type="button" key={action.key} className="btn-secondary dash2-action" onClick={() => runAction(action)}>{action.title}</button>
+          ))}
+          {otherActions.length > 2 && (
+            <SecondaryActionMenu
+              label="More actions"
+              actions={otherActions.slice(2).map(action => ({ id: action.key, label: action.title, onClick: () => runAction(action) }))}
+            />
+          )}
+          {primaryAction && (
+            <button type="button" className="btn-primary dash2-action" onClick={() => runAction(primaryAction)}>
+              <span aria-hidden="true">{primaryAction.icon}</span> {primaryAction.title}
+            </button>
+          )}
+        </div>
+      </header>
 
-        <aside className="dashboard-executive-side">
-          <section className="dashboard-panel overflow-hidden">
-            <CardHeader title="Needs attention" sub="Most urgent items first" />
+      {/* P1: the lead figure, what needs attention, three key numbers */}
+      <div className="dash2-bento">
+        {canSeeFinance ? (
+          <section className="dash2-hero" aria-label="Paid this week">
+            <p className="dash2-hero-label">Paid this week</p>
+            <p className="dash2-hero-value">{fmtKes(executiveSnapshot.paidThisWeek)}</p>
+            <p className="dash2-hero-sub">
+              {executiveSnapshot.paidInvoiceCount} invoice{executiveSnapshot.paidInvoiceCount === 1 ? '' : 's'} paid
+              {financeStats.overdueCount > 0 && (
+                <> · <button type="button" className="dash2-hero-link" onClick={() => handleNav('accounting', '/finance?tab=invoices')}>{financeStats.overdueCount} overdue to collect</button></>
+              )}
+            </p>
+            <div className="dash2-hero-periods">
+              {executiveSnapshot.periods.filter(period => period.label === 'Today' || period.label === 'This month' || period.label === 'This year').map(period => (
+                <div key={period.label}>
+                  <span>{period.label}</span>
+                  <strong>{fmtKes(period.value)}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : leadKpi ? (
+          <button type="button" className="dash2-hero text-left" onClick={leadKpi.onClick}>
+            <p className="dash2-hero-label">{leadKpi.label}</p>
+            <p className="dash2-hero-value">{leadKpi.isCurrency && typeof leadKpi.value === 'number' ? fmtKes(leadKpi.value) : leadKpi.value}</p>
+            <p className="dash2-hero-sub">{leadKpi.sub}</p>
+          </button>
+        ) : null}
+
+        <section className="dashboard-panel dash2-attention overflow-hidden">
+          <CardHeader title="Needs attention" sub="Most urgent first" />
             {focusItems.length > 0 ? (
               <div className="dashboard-alerts-list">
                 {focusItems.map(item => (
@@ -1051,32 +1075,19 @@ export function Dashboard() {
             ) : (
               <div className="dashboard-compact-clear"><Fa icon={faCircleCheck} /> No urgent items</div>
             )}
-          </section>
+        </section>
 
-          <section className="dashboard-panel overflow-hidden">
-            <CardHeader title="Performance" sub="Where things stand right now" />
-            <div className="dashboard-performance-grid">
-              {executiveSnapshot.performance.map(metric => (
-                <div key={metric.label} className="dashboard-performance-item">
-                  <div
-                    className="dashboard-performance-ring"
-                    style={{ '--ring-value': `${Math.max(0, Math.min(100, metric.value)) * 3.6}deg` } as React.CSSProperties}
-                  >
-                    <span>{metric.value}%</span>
-                  </div>
-                  <strong>{metric.label}</strong>
-                </div>
-              ))}
-            </div>
-          </section>
-        </aside>
+        {stackKpis.length > 0 && (
+          <div className="dash2-kpi-stack">
+            {stackKpis.map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
+          </div>
+        )}
       </div>
 
+      {/* P2: today's work queues */}
       {(canSeeInventory || canSeeWorkshop) && (
-        <>
-          <SectionLabel label="Operational overview" />
-          <div className="dashboard-workspace-grid">
-            {canSeeInventory && (
+        <div className={`dash2-queues ${canSeeInventory && canSeeWorkshop ? '' : 'is-single'}`}>
+          {canSeeInventory && (
               <section className="dashboard-panel overflow-hidden">
                 <CardHeader
                   title="Stock health"
@@ -1105,9 +1116,8 @@ export function Dashboard() {
                   {inventoryStats.lowStockItems.length === 0 && <EmptyState message="All visible stock levels are healthy" />}
                 </div>
               </section>
-            )}
-
-            {canSeeWorkshop && (
+          )}
+          {canSeeWorkshop && (
               <section className="dashboard-panel overflow-hidden">
                 <CardHeader
                   title={isTechnician ? 'My repair queue' : 'Workshop queue'}
@@ -1130,21 +1140,36 @@ export function Dashboard() {
                   {repairStats.active.length === 0 && <EmptyState message={isTechnician ? 'No jobs assigned to you yet' : 'No repair jobs require attention'} />}
                 </div>
               </section>
-            )}
-          </div>
-        </>
+          )}
+        </div>
       )}
 
-      {sections.salesAnalytics && has('sales') && (
-        <>
-          <SectionLabel label="Sales intelligence" />
-          <section className="dashboard-panel overflow-hidden">
-            <CardHeader
-              title="Sales intelligence"
-              sub="Pipeline, revenue and salesperson performance · this month"
-              action={<button type="button" className="btn-primary text-[11px]" onClick={() => handleNav('sales', '/sales')}>Open sales</button>}
-            />
+      {/* P3: everything else, one click away (each remembers open/closed) */}
+      <h2 className="dash2-more-title">More insight</h2>
+      <div className="dash2-more">
+        <CollapsibleSection id="figures" title="More figures" sub="Other key numbers and how things stand" accent="#2563EB" icon={<Fa icon={faFileInvoiceDollar} />}>
+          {moreKpis.length > 0 && (
+            <div className="dash2-more-kpis">
+              {moreKpis.map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
+            </div>
+          )}
+            <div className="dashboard-performance-grid">
+              {executiveSnapshot.performance.map(metric => (
+                <div key={metric.label} className="dashboard-performance-item">
+                  <div
+                    className="dashboard-performance-ring"
+                    style={{ '--ring-value': `${Math.max(0, Math.min(100, metric.value)) * 3.6}deg` } as React.CSSProperties}
+                  >
+                    <span>{metric.value}%</span>
+                  </div>
+                  <strong>{metric.label}</strong>
+                </div>
+              ))}
+            </div>
+        </CollapsibleSection>
 
+        {sections.salesAnalytics && has('sales') && (
+          <CollapsibleSection id="sales_intelligence" title="Sales intelligence" sub="Pipeline, revenue and salespeople · this month" accent="#0EA5E9" icon={<Fa icon={faCartShopping} />}>
             <div className="grid grid-cols-2 border-b border-[var(--border-lt)] md:grid-cols-3 xl:grid-cols-6">
               {[
                 { label: 'Quoted value', value: fmtKes(salesIntelligenceStats.quotedValue), note: 'Open quotations', color: '#0EA5E9' },
@@ -1290,20 +1315,11 @@ export function Dashboard() {
                 </div>
               </div>
             </div>
-          </section>
-        </>
-      )}
+          </CollapsibleSection>
+        )}
 
-      {sections.repairRevenue && (
-        <>
-          <SectionLabel label="Repairs intelligence" />
-          <section className="dashboard-panel overflow-hidden">
-            <CardHeader
-              title="Repairs intelligence"
-              sub="Revenue, collections and workshop performance · this month"
-              action={<button type="button" className="btn-primary text-[11px]" onClick={() => handleNav('repair', '/repairs')}>Open repairs</button>}
-            />
-
+        {sections.repairRevenue && (
+          <CollapsibleSection id="repairs_intelligence" title="Repairs intelligence" sub="Revenue, collections and workshop · this month" accent="#16A34A" icon={<Fa icon={faScrewdriverWrench} />}>
             <div className="grid grid-cols-2 border-b border-[var(--border-lt)] lg:grid-cols-4">
               {[
                 { label: 'Invoiced', value: techLeadStats.repairInvoicedThisMonth, note: 'Posted repair invoices', color: '#0EA5E9' },
@@ -1438,26 +1454,20 @@ export function Dashboard() {
                 </div>
               </div>
             </div>
-          </section>
-        </>
-      )}
+          </CollapsibleSection>
+        )}
 
-      {/* ── P3 · Trends & analytics (progressive disclosure) ─────────────── */}
-      {(sections.salesAnalytics || sections.inventoryOverview) && (
-        <>
-          <SectionLabel label="Trends & analytics" />
-          <div className="dashboard-analytics-grid">
-            {sections.salesAnalytics && has('sales') && (
-              <CollapsibleSection id="sales_analytics" title="Sales analytics" sub="Revenue, pipeline, products and customers" accent="#6366F1" icon={<Fa icon={faClipboardList} />}>
-                <div className="p-3 sm:p-4"><SalesAnalytics /></div>
-              </CollapsibleSection>
-            )}
+        {sections.salesAnalytics && has('sales') && (
+          <CollapsibleSection id="sales_analytics" title="Sales analytics" sub="Revenue, pipeline, products and customers" accent="#6366F1" icon={<Fa icon={faClipboardList} />}>
+            <div className="p-3 sm:p-4"><SalesAnalytics /></div>
+          </CollapsibleSection>
+        )}
 
-            {sections.salesAnalytics && has('sales') && (
-              <CollapsibleSection id="rep_performance" title="Rep performance" sub="Targets, attainment and leaderboard" accent="#A855F7" icon={<Fa icon={faUsers} />}>
-                <div className="p-3 sm:p-4"><RepPerformance /></div>
-              </CollapsibleSection>
-            )}
+        {sections.salesAnalytics && has('sales') && (
+          <CollapsibleSection id="rep_performance" title="Rep performance" sub="Targets, attainment and leaderboard" accent="#A855F7" icon={<Fa icon={faUsers} />}>
+            <div className="p-3 sm:p-4"><RepPerformance /></div>
+          </CollapsibleSection>
+        )}
 
             {sections.inventoryOverview && (
               <CollapsibleSection id="inventory_overview" title="Inventory overview" sub={canSeeFinance ? 'Cost-basis stock value by category' : 'Physical stock by category'} accent="#F59E0B" icon={<Fa icon={faBoxesStacked} />}>
@@ -1479,39 +1489,25 @@ export function Dashboard() {
               </CollapsibleSection>
             )}
 
-
-          </div>
-        </>
-      )}
-
-      {/* ── P4 · Shortcuts & activity ────────────────────────────────────── */}
-      <SectionLabel label="Work faster" />
-      <div className="dashboard-bottom-grid">
-        <section className="dashboard-panel dashboard-quick-actions-panel overflow-hidden">
-          <CardHeader title="Quick actions" sub="Shortcuts selected for your role and permissions" />
-          <div className="dashboard-quick-actions-grid">
-            {quickActions.map(action => (
-              <button
-                type="button"
-                key={action.key}
-                onClick={() => action.module ? handleNav(action.module, action.path) : handleRoute(action.path)}
-                className="dashboard-quick-action"
-              >
-                <div className="dashboard-quick-icon" style={{ color: action.color, background: action.color + '12' }}>
-                  {action.icon}
+        <CollapsibleSection id="recent_activity" title="Recent activity" sub="Records visible to your role" accent="#64748B" icon={<Fa icon={faArrowsRotate} />}>
+            <div className="divide-y divide-[var(--border-lt)]">
+              {activity.slice(0, 5).map(item => (
+                <div key={`${item.title}-${item.date}`} className="dashboard-activity-row">
+                  <div className="dashboard-activity-icon" style={{ background: item.color + '12', color: item.color }}>
+                    {item.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-bold text-[var(--text-1)] truncate">{item.title}</p>
+                    <p className="text-[11px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
+                  </div>
+                  <span className="text-[11px] text-[var(--text-4)] flex-shrink-0">{fmtDate(item.date)}</span>
                 </div>
-                <span className="min-w-0">
-                  <span className="block text-[12px] sm:text-sm font-bold text-[var(--text-1)] leading-snug line-clamp-2 sm:truncate">{action.title}</span>
-                  <span className="hidden sm:block text-xs text-[var(--text-4)] mt-1 leading-snug line-clamp-2">{action.desc}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
+              ))}
+              {activity.length === 0 && <EmptyState message="No recent activity is available for your role" />}
+            </div>
+        </CollapsibleSection>
 
-        <div className="dashboard-bottom-side">
-          <section className="dashboard-panel overflow-hidden">
-            <CardHeader title="My self-service" sub="Your personal workspace" />
+        <CollapsibleSection id="self_service" title="My self-service" sub="Leave, payslips, targets and expenses" accent="#0891B2" icon={<Fa icon={faUsers} />}>
             <div className="p-2.5 sm:p-4 grid grid-cols-2 gap-1.5 sm:gap-2.5">
               {[
                 { label: 'Leave', value: selfServiceStats.myLeave.length, path: '/hr?tab=leave', module: 'hr' as ModuleId },
@@ -1530,27 +1526,7 @@ export function Dashboard() {
                 </button>
               ))}
             </div>
-          </section>
-
-          <section className="dashboard-panel overflow-hidden flex-1">
-            <CardHeader title="Recent activity" sub="Records visible to your role" />
-            <div className="divide-y divide-[var(--border-lt)]">
-              {activity.slice(0, 5).map(item => (
-                <div key={`${item.title}-${item.date}`} className="dashboard-activity-row">
-                  <div className="dashboard-activity-icon" style={{ background: item.color + '12', color: item.color }}>
-                    {item.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-bold text-[var(--text-1)] truncate">{item.title}</p>
-                    <p className="text-[11px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
-                  </div>
-                  <span className="text-[11px] text-[var(--text-4)] flex-shrink-0">{fmtDate(item.date)}</span>
-                </div>
-              ))}
-              {activity.length === 0 && <EmptyState message="No recent activity is available for your role" />}
-            </div>
-          </section>
-        </div>
+        </CollapsibleSection>
       </div>
     </div>
   )
