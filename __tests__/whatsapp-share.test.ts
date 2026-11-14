@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  buildRepairTrackingWhatsAppMessage,
-  buildWhatsAppShareUrl,
-  resolveRepairWhatsAppRecipient,
-  whatsappPhoneDigits,
-} from '@/lib/whatsapp-share'
+import { buildRepairTrackingWhatsAppMessage, buildWhatsAppShareUrl, whatsappPhoneDigits } from '@/lib/whatsapp-share'
 
 describe('whatsapp-share', () => {
   it('normalises Kenyan phone numbers for wa.me', () => {
@@ -34,23 +29,4 @@ describe('whatsapp-share', () => {
     expect(url).toBe('https://wa.me/254712345678?text=Hello')
   })
 
-  it('prefers contact person on company repairs', () => {
-    expect(
-      resolveRepairWhatsAppRecipient({
-        customerName: 'Acme Ltd',
-        customerPhone: '020123456',
-        contactPersonName: 'Jane Doe',
-        contactPersonPhone: '0712345678',
-      }),
-    ).toEqual({ name: 'Jane Doe', phone: '0712345678' })
-
-    expect(
-      resolveRepairWhatsAppRecipient({
-        customerName: 'John',
-        customerPhone: '0711111111',
-      }),
-    ).toEqual({ name: 'John', phone: '0711111111' })
-
-    expect(resolveRepairWhatsAppRecipient({ customerName: 'X' })).toBeNull()
   })
-})

@@ -199,10 +199,6 @@ function diagnosisCharges(repair: RepairInvoiceSource): RepairInvoiceChargeLine[
   }]
 }
 
-export function executionChargeTotal(repair: RepairInvoiceSource): number {
-  return executionCharges(repair, false, 0).reduce((sum, line) => sum + line.subtotal, 0)
-}
-
 function quoteChargeTotal(
   repair: RepairInvoiceSource,
   applyVat = true,

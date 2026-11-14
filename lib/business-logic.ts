@@ -1,4 +1,3 @@
-import { calculateKenyaPayroll } from '@/lib/hr/kenya-payroll'
 /**
  * Pure business-logic functions extracted from lib/store.tsx so they can be
  * unit-tested without importing React or the full client-side store.
@@ -202,22 +201,6 @@ export function availableSellableQty(
 }
 
 /**
- * Product Catalog / price list: only SKUs with warehouse stock ready to sell.
- * Services, archived products, not-for-sale, With Issues, Repair, and zero-qty
- * SKUs stay in Product Master — they are not catalog items.
- */
-export function isListedInProductCatalog(
-  product: (StockProduct & { isActive?: boolean; canBeSold?: boolean }) | undefined,
-  serials: SerialNumber[],
-  bulkStock: BulkStockLevel[],
-  productId: string,
-): boolean {
-  if (!product) return false
-  if (product.isActive === false || product.canBeSold === false) return false
-  return availableSellableQty(product, serials, bulkStock, productId) >= 1
-}
-
-/**
  * Partner catalog: active, for-sale SKUs even when warehouse qty is 0.
  * Category hiding is applied by the route. Stock is reported separately.
  */
@@ -246,31 +229,6 @@ export function upsertBulkStock(
   return nextQty > 0 ? [...remaining, { productId, location, qty: nextQty }] : remaining
 }
 
-// ── Payroll calculations ───────────────────────────────────────────────────────
-
-/**
- * Computes a single payroll line for an employee.
- * Formula (mirrors store.tsx createPayrollRun):
- *   allowances  = housingAllowance + transportAllowance
- *   deductions  = round(basicSalary × 0.18)
- *   netPay      = basicSalary + allowances − deductions
- */
-export function computePayrollLine(emp: PayrollEmployee): PayrollLine {
-  const calculated = calculateKenyaPayroll(
-    emp.basicSalary,
-    emp.housingAllowance,
-    emp.transportAllowance,
-  )
-  return {
-    employeeId: emp.id,
-    employeeName: emp.fullName,
-    basicSalary: calculated.basicSalary,
-    allowances: calculated.houseAllowance + calculated.transportAllowance,
-    deductions: calculated.totalDeductions,
-    netPay: calculated.netSalary,
-  }
-}
-
 /**
  * Aggregates totals across all payroll lines.
  */
@@ -284,19 +242,4 @@ export function aggregatePayroll(lines: PayrollLine[]) {
 
 // ── Deposit payment helpers ───────────────────────────────────────────────────
 
-type DepositStatus = 'active' | 'partially_paid' | 'fully_paid' | 'completed' | 'cancelled'
 
-/**
- * Determines the new deposit status after a payment.
- * Returns 'fully_paid' when balance reaches or goes below 0.
- */
-export function resolveDepositStatus(newBalance: number): DepositStatus {
-  return newBalance <= 0 ? 'fully_paid' : 'partially_paid'
-}
-
-/**
- * Caps payment at remaining balance so totalPaid never exceeds totalValue.
- */
-export function capPayment(requestedAmount: number, remainingBalance: number): number {
-  return Math.min(requestedAmount, remainingBalance)
-}

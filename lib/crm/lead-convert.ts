@@ -18,19 +18,6 @@ export function splitContactName(fullName: string): { firstName: string; lastNam
   return { firstName, lastName }
 }
 
-export function salesQuoteHref(opts: {
-  customerId: string
-  customerName?: string | null
-  opportunityId?: string | null
-}): string {
-  const params = new URLSearchParams()
-  params.set('new', '1')
-  params.set('customerId', opts.customerId)
-  if (opts.customerName?.trim()) params.set('customerName', opts.customerName.trim())
-  if (opts.opportunityId) params.set('opportunityId', opts.opportunityId)
-  return `/sales?${params.toString()}`
-}
-
 export type LeadIdentity = {
   clientId?: string | null
   name: string

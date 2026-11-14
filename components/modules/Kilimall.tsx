@@ -7,7 +7,7 @@ import {
 } from '@/lib/store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isLegacyReturned } from '@/lib/kilimall/kilimall-return'
-import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar, ModuleHeader, SearchPicker } from '@/components/ui'
+import { PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar, ModuleHeader, SearchPicker } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -44,9 +44,8 @@ function KilimallContent() {
     kilimallOrders, kilimallDispatches, kilimallSettlements,
     createKilimallOrder, updateKilimallOrder, returnKilimallOrder,
     confirmKilimallDispatch, createKilimallSettlement,
-    updateKilimallSettlement, reconcileKilimallSettlement, matchKilimallSettlementLine,
-    products, serials, setModule, showToast, currentUserId, users,
-  } = useCommerceStore()
+    reconcileKilimallSettlement, matchKilimallSettlementLine,
+    products, serials, setModule, showToast,   } = useCommerceStore()
   const can = useCan()
   const canCheckSerials = can('sales.kilimall.reconcile')
 
@@ -169,12 +168,7 @@ function KilimallContent() {
   const totalOrders        = kilimallOrders.length
   const pendingDispatch    = kilimallOrders.filter(o => o.status === 'pending').length
   const delivered          = kilimallOrders.filter(o => o.status === 'delivered').length
-  const returned           = kilimallOrders.filter(o => o.status === 'returned').length
-  const grossRevenue       = kilimallOrders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + o.total, 0)
-  const lastSettlement     = kilimallSettlements[0]
-  const netReceived        = kilimallSettlements.reduce((s, x) => s + x.netPaid, 0)
   const unreconciled       = kilimallOrders.filter(o => o.status === 'delivered' && !o.settlementId).length
-  const returnsRate        = totalOrders > 0 ? ((returned / totalOrders) * 100).toFixed(1) : '0'
   const todayKey           = nairobiDateKey()
   const dispatchedToday    = kilimallDispatches.filter(d => d.date?.slice(0, 10) === todayKey).length
   const unmatchedAmount    = kilimallSettlements.reduce((sum, settlement) => sum + settlement.lines

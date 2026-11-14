@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  autoMatchStatementLines,
-  scoreStatementCashbookMatch,
-  suggestOutstandingPaymentMatches,
-  unmatchedBankChargeTotal,
-  unmatchedInterestEarnedTotal,
-} from '@/lib/accounting/bank-statement-match'
+import { autoMatchStatementLines, scoreStatementCashbookMatch, suggestOutstandingPaymentMatches } from '@/lib/accounting/bank-statement-match'
 import {
   assertPostingBalanced,
   buildBankChargeLines,
@@ -64,16 +58,7 @@ describe('statement ↔ cashbook match', () => {
     expect(suggestions[0]?.unallocated).toBe(4000)
   })
 
-  it('sums unmatched bank charges / interest', () => {
-    expect(unmatchedBankChargeTotal([
-      { id: '1', date: '2026-05-01', debit: 150, credit: 0, category: 'bank_charge' },
-      { id: '2', date: '2026-05-01', debit: 50, credit: 0, category: 'bank_charge', matchedEntryId: 'x' },
-    ])).toBe(150)
-    expect(unmatchedInterestEarnedTotal([
-      { id: '3', date: '2026-05-01', debit: 0, credit: 20, category: 'interest_earned' },
-    ])).toBe(20)
   })
-})
 
 describe('bank adjustment builders', () => {
   it('maps bank charge and interest roles', () => {

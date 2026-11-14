@@ -80,15 +80,7 @@ export function assertPostingBalanced(lines: Array<{ debit: number; credit: numb
   }
 }
 
-function isCustomerCreditMethod(method?: string) {
-  const m = String(method || '').toLowerCase()
-  return m === 'customer_credit' || m === 'credit_note' || m === 'credit'
-}
 
-function isDepositApplyMethod(method?: string) {
-  const m = String(method || '').toLowerCase()
-  return m === 'deposit' || m === 'deposit_apply' || m === 'customer_deposit'
-}
 
 /** Pure builder — customer invoice (Dr AR, Cr revenue, Cr VAT). */
 export function buildCustomerInvoiceLines(params: {
@@ -114,44 +106,6 @@ export function buildCustomerInvoiceLines(params: {
     lines.push({ role: 'output_vat', description: `VAT on ${params.ref}`, debit: 0, credit: tax })
   }
   return lines
-}
-
-/** Pure builder — customer/vendor payment settlement lines. */
-export function buildInvoicePaymentLines(params: {
-  partnerName: string
-  ref: string
-  amount: number
-  method?: string
-  isVendor?: boolean
-}): PostingLineInput[] {
-  const amount = roundMoney(params.amount)
-  const method = String(params.method || '').toLowerCase()
-
-  if (!params.isVendor && isCustomerCreditMethod(method)) {
-    return [
-      { role: 'customer_credits', description: `Apply credit: ${params.partnerName}`, debit: amount, credit: 0 },
-      { role: 'ar', description: `AR settlement: ${params.ref}`, debit: 0, credit: amount },
-    ]
-  }
-
-  if (!params.isVendor && isDepositApplyMethod(method)) {
-    return [
-      { role: 'customer_deposits', description: `Clear deposit liability: ${params.partnerName}`, debit: amount, credit: 0 },
-      { role: 'ar', description: `AR settlement: ${params.ref}`, debit: 0, credit: amount },
-    ]
-  }
-
-  const cashRole = cashAccountRoleForMethod(params.method)
-  if (params.isVendor) {
-    return [
-      { role: 'ap', description: `AP settlement: ${params.partnerName}`, debit: amount, credit: 0 },
-      { role: cashRole, description: `Payment out: ${params.ref}`, debit: 0, credit: amount },
-    ]
-  }
-  return [
-    { role: cashRole, description: `Received from ${params.partnerName}`, debit: amount, credit: 0 },
-    { role: 'ar', description: `AR settlement: ${params.ref}`, debit: 0, credit: amount },
-  ]
 }
 
 /**
@@ -271,69 +225,6 @@ export function buildAllocateOutstandingLines(params: {
     }
   }
   return lines
-}
-
-/** Pure builder — GRN / stock receipt (Dr Inventory [+ variance], Cr GRNI). */
-export function buildStockReceiptLines(params: {
-  inventoryDebit: number
-  grniCredit: number
-  priceDiffLabel?: string
-}): PostingLineInput[] {
-  const invDebit = roundMoney(params.inventoryDebit)
-  const grniCredit = roundMoney(params.grniCredit)
-  const variance = roundMoney(grniCredit - invDebit)
-  const lines: PostingLineInput[] = [
-    { role: 'inventory', description: 'Inventory receipt', debit: invDebit, credit: 0 },
-  ]
-  if (variance > 0 && params.priceDiffLabel) {
-    lines.push({
-      accountLabel: params.priceDiffLabel,
-      description: 'Purchase price variance',
-      debit: variance,
-      credit: 0,
-    })
-  } else if (variance < 0 && params.priceDiffLabel) {
-    lines.push({
-      accountLabel: params.priceDiffLabel,
-      description: 'Purchase price variance',
-      debit: 0,
-      credit: roundMoney(-variance),
-    })
-  }
-  lines.push({
-    role: 'grni',
-    description: 'GRNI / Accruals',
-    debit: 0,
-    credit: grniCredit || invDebit,
-  })
-  return lines
-}
-
-/** Pure builder — delivery / POS COGS (Dr COGS, Cr Inventory). */
-export function buildStockCogsLines(params: { totalCost: number }): PostingLineInput[] {
-  const total = roundMoney(params.totalCost)
-  return [
-    { role: 'cogs', description: 'COGS', debit: total, credit: 0 },
-    { role: 'inventory', description: 'Inventory reduction', debit: 0, credit: total },
-  ]
-}
-
-/** Pure builder — customer return (Dr Inventory, Cr COGS). */
-export function buildStockCustomerReturnLines(params: { totalCost: number }): PostingLineInput[] {
-  const total = roundMoney(params.totalCost)
-  return [
-    { role: 'inventory', description: 'Inventory restore', debit: total, credit: 0 },
-    { role: 'cogs', description: 'COGS reversal', debit: 0, credit: total },
-  ]
-}
-
-/** Pure builder — vendor RTV (Dr GRNI, Cr Inventory). */
-export function buildStockVendorReturnLines(params: { totalCost: number }): PostingLineInput[] {
-  const total = roundMoney(params.totalCost)
-  return [
-    { role: 'grni', description: 'GRNI on vendor return', debit: total, credit: 0 },
-    { role: 'inventory', description: 'Inventory reduction', debit: 0, credit: total },
-  ]
 }
 
 /** Bank statement fee: Dr Bank Charges, Cr Bank. */

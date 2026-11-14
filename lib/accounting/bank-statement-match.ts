@@ -155,23 +155,3 @@ export function suggestOutstandingPaymentMatches(params: {
   return results.sort((a, b) => a.score - b.score)
 }
 
-/** Unmatched bank_charge lines eligible for GL posting. */
-export function unmatchedBankChargeTotal(
-  lines: ReadonlyArray<MatchableStatementLine & { category?: string }>,
-): number {
-  return roundMoney(
-    lines
-      .filter(l => !l.matchedEntryId && l.category === 'bank_charge')
-      .reduce((s, l) => s + Number(l.debit || 0), 0),
-  )
-}
-
-export function unmatchedInterestEarnedTotal(
-  lines: ReadonlyArray<MatchableStatementLine & { category?: string }>,
-): number {
-  return roundMoney(
-    lines
-      .filter(l => !l.matchedEntryId && l.category === 'interest_earned')
-      .reduce((s, l) => s + Number(l.credit || 0), 0),
-  )
-}

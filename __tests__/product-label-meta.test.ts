@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  formatConditionLabel,
-  categoryConditionLine,
-  truncateLabelText,
-  resolveProductSpecs,
-  normalizeProductType,
-  resolveProductType,
-} from '@/lib/product-label-meta'
+import { formatConditionLabel, truncateLabelText, resolveProductSpecs, normalizeProductType, resolveProductType } from '@/lib/product-label-meta'
 
 describe('product-label-meta', () => {
   it('formats condition for labels', () => {
@@ -25,12 +18,7 @@ describe('product-label-meta', () => {
     expect(resolveProductType(null, undefined)).toBe('refurbished')
   })
 
-  it('joins category and condition', () => {
-    expect(categoryConditionLine('Laptops', 'refurbished')).toBe('Laptops · REFURB')
-    expect(categoryConditionLine('Laptops', 'new')).toBe('Laptops · NEW')
-    expect(categoryConditionLine('Accessories', null)).toBe('Accessories')
-  })
-
+  
   it('truncates long specs', () => {
     expect(truncateLabelText('8GB RAM, 256GB SSD', 40)).toBe('8GB RAM, 256GB SSD')
     expect(truncateLabelText('A'.repeat(80), 20).endsWith('…')).toBe(true)

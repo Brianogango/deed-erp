@@ -51,13 +51,3 @@ export function evaluateRepairTransition(
   }
 }
 
-export function canTransitionRepair(
-  current: RepairStatus | string,
-  next: RepairStatus | string,
-): boolean {
-  return evaluateRepairTransition(current, next).allowed
-}
-
-export function isRepairOperationalStatus(status: unknown): boolean {
-  return String(status) !== 'invoiced'
-}

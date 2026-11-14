@@ -54,22 +54,6 @@ export function resolveListSaleFromMargin(opts: {
   return { salePrice: legacy, quoteOk: false, reason: quote.error }
 }
 
-/** Classic markup % that approximates the max-band list price (for reconfig cost_plus fallback). */
-export function impliedMarkupPctFromMargin(opts: {
-  costPrice: number
-  erpCategory?: string | null
-  pricingCategoryId?: string | null
-  productType?: 'new' | 'refurbished' | string | null
-  productKind?: string | null
-  unit?: string | null
-  policy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
-  legacyMarkupMap?: Partial<Record<string, number>> | null
-}): number | null {
-  const resolved = resolveListSaleFromMargin(opts)
-  if (resolved.salePrice == null || !(opts.costPrice > 0)) return null
-  return ((resolved.salePrice / opts.costPrice) - 1) * 100
-}
-
 /**
  * cost_plus list for reconfiguration: prefer rounded margin-policy list;
  * fall back to 25% markup when the product is unmapped / policy off.

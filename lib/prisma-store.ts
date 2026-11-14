@@ -43,52 +43,7 @@ export async function writeStoreRecords(entries: Record<string, string>): Promis
   )
 }
 
-export async function storeRecordVersion(keys: string[]): Promise<{ latest: string; n: number }> {
-  const wanted = keys.filter(Boolean)
-  if (!wanted.length) return { latest: '', n: 0 }
-  const agg = await prisma.storeRecord.aggregate({
-    where: { key: { in: wanted } },
-    _max: { updatedAt: true },
-    _count: { _all: true },
-  })
-  return {
-    latest: agg._max.updatedAt ? agg._max.updatedAt.toISOString() : '',
-    n: agg._count._all,
-  }
-}
-
-export async function loadStoreRecordChangesSince(sinceUpdatedAt: string): Promise<{
-  changes: StoreMap
-  latestUpdatedAt: string
-}> {
-  const since = Date.parse(sinceUpdatedAt)
-  const rows = Number.isFinite(since)
-    ? await prisma.storeRecord.findMany({
-      where: { updatedAt: { gt: new Date(since) } },
-      orderBy: { updatedAt: 'asc' },
-    })
-    : await prisma.storeRecord.findMany({ orderBy: { updatedAt: 'asc' } })
-  const changes: StoreMap = {}
-  for (const row of rows) changes[row.key] = row.value
-  const latestUpdatedAt = rows.length
-    ? rows[rows.length - 1].updatedAt.toISOString()
-    : sinceUpdatedAt
-  return { changes, latestUpdatedAt }
-}
-
-export async function latestStoreRecordUpdatedAt(): Promise<string> {
-  const agg = await prisma.storeRecord.aggregate({
-    _max: { updatedAt: true },
-  })
-  return agg._max.updatedAt ? agg._max.updatedAt.toISOString() : ''
-}
-
 export async function countStoreRecords(): Promise<number> {
   return prisma.storeRecord.count()
 }
 
-export async function deleteStoreRecords(keys: string[]): Promise<number> {
-  if (!keys.length) return 0
-  const result = await prisma.storeRecord.deleteMany({ where: { key: { in: keys } } })
-  return result.count
-}

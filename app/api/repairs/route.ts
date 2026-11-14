@@ -1,7 +1,7 @@
 import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
+import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import { isOfficialRepairRef, isTemporaryRepairRef, takenRepairRefs, uniqueRepairRefs } from '@/lib/repair-ref'
 import type { RepairOrder } from '@/lib/store'

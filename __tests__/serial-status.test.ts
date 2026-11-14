@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  blobSerialStatusFromPrisma,
-  isOnHandSerialStatus,
-  prismaSerialStatusFromBlob,
-} from '@/lib/inventory/serial-status'
+import { isOnHandSerialStatus } from '@/lib/inventory/serial-status'
 
 describe('serial status vocabulary', () => {
   it('treats available and in_stock as on-hand', () => {
@@ -12,9 +8,4 @@ describe('serial status vocabulary', () => {
     expect(isOnHandSerialStatus('sold')).toBe(false)
   })
 
-  it('maps blob ↔ prisma', () => {
-    expect(prismaSerialStatusFromBlob('available')).toBe('in_stock')
-    expect(blobSerialStatusFromPrisma('in_stock')).toBe('available')
-    expect(prismaSerialStatusFromBlob('refurbishment')).toBe('refurbishing')
   })
-})

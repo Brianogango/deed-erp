@@ -1,45 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import {
-  REPAIR_DATE_MIN,
-  REPAIR_DATE_MAX_YEARS_AHEAD,
-  repairDateMaxIso,
-  repairDateBoundsError,
-  repairDatesWriteError,
-  assertFiniteSequenceNext,
-  isCorruptDocRef,
-  toDateOnly,
-} from '@/lib/data-validation'
+import { REPAIR_DATE_MIN, REPAIR_DATE_MAX_YEARS_AHEAD, repairDateMaxIso, repairDateBoundsError, repairDatesWriteError, toDateOnly } from '@/lib/data-validation'
 
-describe('assertFiniteSequenceNext (P1-DATA-001)', () => {
-  it('accepts a finite positive integer', () => {
-    expect(assertFiniteSequenceNext(1)).toBe(1)
-    expect(assertFiniteSequenceNext(42, 'RFD sequence')).toBe(42)
-  })
 
-  it('rejects NaN (the RFD/0NaN root cause)', () => {
-    expect(() => assertFiniteSequenceNext(NaN, 'RFD sequence')).toThrow(/finite positive integer/)
-    expect(() => assertFiniteSequenceNext(Number('bad') + 1)).toThrow()
-  })
-
-  it('rejects Infinity, zero, negatives, and non-integers', () => {
-    expect(() => assertFiniteSequenceNext(Infinity)).toThrow()
-    expect(() => assertFiniteSequenceNext(0)).toThrow()
-    expect(() => assertFiniteSequenceNext(-3)).toThrow()
-    expect(() => assertFiniteSequenceNext(1.5)).toThrow()
-  })
-})
-
-describe('isCorruptDocRef', () => {
-  it('flags NaN refs', () => {
-    expect(isCorruptDocRef('RFD/0NaN')).toBe(true)
-    expect(isCorruptDocRef('JRN/RFD/0NaN')).toBe(true)
-  })
-
-  it('allows normal refs', () => {
-    expect(isCorruptDocRef('RFD/0007')).toBe(false)
-    expect(isCorruptDocRef('REP-352227')).toBe(false)
-  })
-})
 
 describe('repair date bounds (P1-DATA-001)', () => {
   const now = new Date('2026-08-06T12:00:00.000Z')
@@ -92,14 +54,3 @@ describe('repair date bounds (P1-DATA-001)', () => {
   })
 })
 
-describe('seq NaN simulation', () => {
-  it('undefined/NaN counter + 1 is rejected before ref formatting', () => {
-    const current = Number(undefined) // NaN — same as missing makeC key / bad localStorage
-    expect(() => assertFiniteSequenceNext(current + 1, 'RFD sequence')).toThrow()
-    // Demonstrates the historical "0NaN" formatting path is no longer reachable
-    // once the guard runs first:
-    const broken = `${'RFD'}/${String(NaN).padStart(4, '0')}`
-    expect(broken).toBe('RFD/0NaN')
-    expect(isCorruptDocRef(broken)).toBe(true)
-  })
-})

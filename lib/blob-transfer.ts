@@ -70,10 +70,6 @@ const MOVE_TYPE: Record<string, string> = {
   return: 'return_from_client',
 }
 
-async function productExists(id: string): Promise<boolean> {
-  const row = await prisma.product.findUnique({ where: { id }, select: { id: true } })
-  return Boolean(row)
-}
 
 /**
  * deed_serials fields read back from their own column; every other field

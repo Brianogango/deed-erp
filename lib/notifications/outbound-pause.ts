@@ -34,11 +34,6 @@ export function isSmsPaused(env: NotificationPauseEnv = process.env): boolean {
   return channelPaused(env.NOTIFICATIONS_PAUSE_SMS, env)
 }
 
-/** True when both email and SMS are paused (the old single switch). */
-export function isEmailSmsPaused(env: NotificationPauseEnv = process.env): boolean {
-  return isEmailPaused(env) && isSmsPaused(env)
-}
-
 export function isPausedOutboundChannel(
   channel: NotificationChannel | string,
   env: NotificationPauseEnv = process.env,

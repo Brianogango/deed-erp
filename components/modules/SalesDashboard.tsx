@@ -117,7 +117,6 @@ export default function SalesDashboard() {
     }))
   }, [visibleOrders, posSales, selectedMonth])
 
-  const maxRev = Math.max(...monthlyRevenue.map(m => m.revenue), 1)
 
   // ── Top 5 products by revenue ───────────────────────────────────────────────
   const topProducts = useMemo(() => {

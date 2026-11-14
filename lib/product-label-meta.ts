@@ -48,16 +48,6 @@ export function truncateLabelText(value: string, max: number): string {
   return `${s.slice(0, Math.max(0, max - 1)).trimEnd()}…`
 }
 
-export function categoryConditionLine(
-  category?: string | null,
-  productType?: ProductLabelCondition,
-): string {
-  const cat = String(category || '').trim()
-  const cond = formatConditionLabel(productType)
-  if (cat && cond) return `${cat} · ${cond}`
-  return cat || cond || ''
-}
-
 export function resolveProductSpecs(product: {
   specs?: string | null
   description?: string | null

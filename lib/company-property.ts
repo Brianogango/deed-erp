@@ -245,10 +245,6 @@ export function nextCompanyAssetRef(
   return `AST/${year}/${String(max + 1).padStart(4, '0')}`
 }
 
-export function allowedCompanyAssetTransitions(from: CompanyAssetStatus): CompanyAssetStatus[] {
-  return [...(TRANSITIONS[from] ?? [])]
-}
-
 export function canTransitionCompanyAsset(from: CompanyAssetStatus, to: CompanyAssetStatus): boolean {
   if (from === to) return true
   return (TRANSITIONS[from] ?? []).includes(to)

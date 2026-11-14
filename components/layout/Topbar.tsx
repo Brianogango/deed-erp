@@ -1131,7 +1131,6 @@ export default function Topbar() {
   const [dateLabel, setDateLabel] = useState('')
   const [timeLabel, setTimeLabel] = useState('')
   const [serverNotifs, setServerNotifs] = useState<BellNotification[]>([])
-  const [tableDensity, setTableDensity] = useState<'cozy' | 'compact'>('cozy')
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     stage: 'idle',
     pendingKeys: 0,
@@ -1156,7 +1155,6 @@ export default function Topbar() {
     const key = `deed_table_density_${currentUserId}`
     const stored = localStorage.getItem(key)
     const nextDensity = stored === 'compact' ? 'compact' : 'cozy'
-    setTableDensity(nextDensity)
     document.body.dataset.tableDensity = nextDensity
   }, [currentUserId])
 
@@ -1483,18 +1481,6 @@ export default function Topbar() {
     trackUxEvent('account_panel_open', { module: activeModule })
   }, [activeModule])
 
-  const toggleTableDensity = useCallback(() => {
-    if (!currentUserId) return
-    const next = tableDensity === 'cozy' ? 'compact' : 'cozy'
-    setTableDensity(next)
-    document.body.dataset.tableDensity = next
-    try {
-      localStorage.setItem(`deed_table_density_${currentUserId}`, next)
-    } catch {
-      // ignore
-    }
-    trackUxEvent('table_density_change', { density: next })
-  }, [currentUserId, tableDensity])
 
   return (
     <>

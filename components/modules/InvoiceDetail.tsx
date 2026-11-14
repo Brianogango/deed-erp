@@ -84,7 +84,6 @@ export default function InvoiceDetail() {
     invoices,
     contacts,
     saleOrders,
-    deliveries,
     bankAccounts,
     companySettings,
     outboundReleases,

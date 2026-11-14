@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { NextRequest } from 'next/server'
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
 const {
@@ -165,7 +164,6 @@ const USER_ID     = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
 
 const directorUser = { id: USER_ID, name: 'Director', username: 'director', role: 'director' }
 const directorSession = { user: directorUser }
-const salesSession = { user: { id: USER_ID, name: 'Sales', username: 'sales', role: 'sales_rep' } }
 
 const baseInvoice = {
   id: INVOICE_ID,

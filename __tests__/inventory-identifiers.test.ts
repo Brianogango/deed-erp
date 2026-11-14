@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildInventoryBarcode,
-  coerceTrackingForCategory,
-  inferTrackingMethod,
-  isSerialOnlyCategory,
-  productOffersOnHandSerials,
-  rewriteInventoryTags,
-} from '@/lib/inventory-identifiers'
+import { buildInventoryBarcode, inferTrackingMethod, isSerialOnlyCategory, productOffersOnHandSerials, rewriteInventoryTags } from '@/lib/inventory-identifiers'
 
 describe('inferTrackingMethod', () => {
   it('forces SERIAL for Laptops even when QUANTITY was saved', () => {
@@ -35,11 +28,7 @@ describe('serial-only categories', () => {
     expect(isSerialOnlyCategory('Parts & Components')).toBe(false)
   })
 
-  it('coerces tracking to SERIAL for machines', () => {
-    expect(coerceTrackingForCategory('Laptops', 'QUANTITY')).toBe('SERIAL')
-    expect(coerceTrackingForCategory('Accessories', 'QUANTITY')).toBe('QUANTITY')
   })
-})
 
 describe('productOffersOnHandSerials', () => {
   it('offers Serials for Laptops', () => {

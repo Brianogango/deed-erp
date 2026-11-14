@@ -267,14 +267,6 @@ export async function syncReconfigurationFromSaleOrder(params: {
 }
 
 /**
- * Sales no longer gates delivery on reconfiguration. Kept so leftover
- * callers stay permissive.
- */
-export async function assertSaleOrderReconfigAllowsDelivery(_saleOrderId?: string | null) {
-  return { ok: true as const }
-}
-
-/**
  * After RCF complete: rewrite the unit selling name onto every commercial
  * document that still shows the catalog/intake specs.
  *

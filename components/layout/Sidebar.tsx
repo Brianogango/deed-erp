@@ -53,7 +53,7 @@ interface NavGroup {
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule, profileImages } = useShellStore()
+  const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, setModule, profileImages } = useShellStore()
   const [isOverlay, setIsOverlay] = useState(false)
   const [navQuery, setNavQuery] = useState('')
 

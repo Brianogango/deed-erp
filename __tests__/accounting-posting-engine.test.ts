@@ -1,13 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  assertPostingBalanced,
-  buildCustomerInvoiceLines,
-  buildInvoicePaymentLines,
-  commitPosting,
-  invoiceResidual,
-  resolvePostingAccountLabel,
-  roundMoney,
-} from '@/lib/accounting/posting-service'
+import { assertPostingBalanced, buildCustomerInvoiceLines, commitPosting, invoiceResidual, resolvePostingAccountLabel, roundMoney } from '@/lib/accounting/posting-service'
 import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 import { COA_ROLE_CODES, labelForRole } from '@/lib/accounting/coa-roles'
 
@@ -86,25 +78,7 @@ describe('line builders', () => {
     ], 'JRN/BAD')).toThrow(/Unbalanced posting/)
   })
 
-  it('builds customer receipt and credit-apply payment lines', () => {
-    const cash = buildInvoicePaymentLines({
-      partnerName: 'Acme',
-      ref: 'INV-1',
-      amount: 500,
-      method: 'mpesa',
-    })
-    expect(resolvePostingAccountLabel(cash[0])).toBe('2211 - Petty Cash / Mobile Money')
-    expect(resolvePostingAccountLabel(cash[1])).toBe('1800 - Accounts Receivable')
-
-    const credit = buildInvoicePaymentLines({
-      partnerName: 'Acme',
-      ref: 'INV-1',
-      amount: 200,
-      method: 'customer_credit',
-    })
-    expect(resolvePostingAccountLabel(credit[0])).toBe('3313 - Customer Credits')
   })
-})
 
 describe('commitPosting', () => {
   it('persists balanced lines via journal-service', async () => {

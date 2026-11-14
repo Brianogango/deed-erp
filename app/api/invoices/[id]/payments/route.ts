@@ -141,7 +141,6 @@ export async function POST(
     }
 
     const capped = Math.min(Number(amount), balance)
-    const newAmountPaid = Number(invoice.amountPaid) + capped
 
     const notesParts = [
       bankAccountId ? `Account: ${bankAccountId}` : null,
@@ -300,7 +299,7 @@ export async function POST(
         })
       },
     })
-    const { payment, allocations } = result
+    const { payment } = result
 
     const updatedInvoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
 

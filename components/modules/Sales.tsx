@@ -6,39 +6,7 @@ import { isSellableSerial } from '@/lib/inventory/sellable-stock'
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Fragment, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useUrlQueryState, useUrlUiState } from '@/hooks/useUrlRecordId'
-import {
-  faClipboardCheck,
-  faCircleCheck,
-  faFileInvoiceDollar,
-  faMoneyBillWave,
-  faPlus,
-  faArrowUp,
-  faArrowDown,
-  faSearch,
-  faArrowLeft,
-  faDownload,
-  faPrint,
-  faTrash,
-  faCheck,
-  faTruck,
-  faBan,
-  faRotateLeft,
-  faFileAlt,
-  faBoxOpen,
-  faFileInvoice,
-  faUser,
-  faCalendarAlt,
-  faStickyNote,
-  faClockRotateLeft,
-  faThLarge,
-  faListUl,
-  faPencil,
-  faXmark,
-  faSave,
-  faChevronDown,
-  faCopy,
-  faCodeBranch,
-} from '@fortawesome/free-solid-svg-icons'
+import { faClipboardCheck, faCircleCheck, faFileInvoiceDollar, faPlus, faArrowUp, faArrowDown, faDownload, faPrint, faTrash, faCheck, faTruck, faBan, faRotateLeft, faFileAlt, faClockRotateLeft, faThLarge, faListUl, faPencil, faXmark, faSave, faChevronDown, faCopy, faCodeBranch } from '@fortawesome/free-solid-svg-icons'
 import { downloadDeliveryNotePdf } from '@/lib/delivery-note-pdf'
 import { exportToCsv } from '@/lib/export-utils'
 import { isSaleOrderDraftEditing } from '@/lib/sale-order-draft-edits'
@@ -59,23 +27,7 @@ import ProductFormModal from '@/components/inventory/ProductFormModal'
 import PickerSheet, { COMPACT_PICKER_QUERY, useCompactViewport } from '@/components/ui/PickerSheet'
 import { visibleViewportBand } from '@/lib/visible-viewport'
 import { allocateDocNumber } from '@/lib/doc-numbers'
-import {
-  Badge,
-  Modal,
-  Field,
-  Input,
-  Select,
-  Confirm,
-  StatCard,
-  PanelHeader,
-  StatusStepper,
-  SearchPicker,
-  Divider,
-  ModuleSkeleton,
-  ModuleHeader,
-  TabBar,
-  useMounted,
-} from '@/components/ui'
+import { Modal, Field, Input, Confirm, SearchPicker, ModuleSkeleton, ModuleHeader, useMounted } from '@/components/ui'
 import { DestructiveAction, PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import type { CommercialPdfInput } from '@/lib/commercial-pdf'
@@ -127,39 +79,7 @@ import {
 } from '@/lib/sales/confirm-quotation'
 import { canApprove, isSalesConfirmGatingApproval } from '@/lib/sales-approvals'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
-import {
-  SALE_STATUS_BAR,
-  SALE_STATUS_LABELS,
-  SO_INVOICE_STATUS_LABELS,
-  SO_FULFILMENT_STATUS_LABELS,
-  INVOICE_POLICY_LABELS,
-  PAYMENT_STATUS_LABELS,
-  DELIVERY_STATE_LABELS,
-  isQuotationStage,
-  isQuotationDraft,
-  matchesSalesListFilter,
-  matchesSalesListTab,
-  hasValidatedDeliveryForInvoice,
-  effectiveDeliveryLineQty,
-  deliveryDeliveredTotal,
-  canGenerateDeliveryNote,
-  reconcileInvoicedQty,
-  saleOrderInvoiceStatus,
-  saleOrderInvoicePrimaryAction,
-  saleOrderFulfilmentStatus,
-  saleOrderIsOperationallyComplete,
-  saleOrderIsAccepted,
-  invoiceableQty,
-  invoicePaymentStatus,
-  isOpenDeliveryStatus,
-  normalizeDeliveryStatus,
-  shouldReplaceCancelledDelivery,
-  deliveriesForSaleOrder,
-  remainingUndeliveredByProduct,
-  saleOrderLooksConfirmed,
-  canReverseConfirmedSale,
-  type SalesListFilter,
-} from '@/lib/odoo-sales-flow'
+import { SALE_STATUS_LABELS, SO_INVOICE_STATUS_LABELS, SO_FULFILMENT_STATUS_LABELS, INVOICE_POLICY_LABELS, PAYMENT_STATUS_LABELS, DELIVERY_STATE_LABELS, isQuotationStage, isQuotationDraft, matchesSalesListFilter, matchesSalesListTab, hasValidatedDeliveryForInvoice, effectiveDeliveryLineQty, deliveryDeliveredTotal, canGenerateDeliveryNote, reconcileInvoicedQty, saleOrderInvoiceStatus, saleOrderInvoicePrimaryAction, saleOrderFulfilmentStatus, saleOrderIsOperationallyComplete, saleOrderIsAccepted, invoiceableQty, invoicePaymentStatus, isOpenDeliveryStatus, normalizeDeliveryStatus, shouldReplaceCancelledDelivery, deliveriesForSaleOrder, saleOrderLooksConfirmed, canReverseConfirmedSale, type SalesListFilter } from '@/lib/odoo-sales-flow'
 import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
 import { isNonStockSaleLine, isDeliveryNoteLine } from '@/lib/sales/non-stock-line'
 import { sumUnappliedDownPayments } from '@/lib/sales/down-payment'
@@ -377,8 +297,7 @@ function SalesContent() {
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO, createNewSOVersion,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts,
-    updateDelivery, outboundReleases, initRelease,
-    getDocumentPaymentDetails, setDocumentPaymentDetails,
+    updateDelivery, getDocumentPaymentDetails, setDocumentPaymentDetails,
     issueCreditNoteFromSaleOrder,
     approveRequest,
   } = useSalesStore()
@@ -442,7 +361,7 @@ function SalesContent() {
   const [creditNoteAmount, setCreditNoteAmount] = useState('')
   const [creditNoteReason, setCreditNoteReason] = useState('')
   const [showCreditNoteModal, setShowCreditNoteModal] = useState(false)
-  const [draftDirtyTick, setDraftDirtyTick] = useState(0)
+  const [, setDraftDirtyTick] = useState(0)
   const [newNotes, setNewNotes] = useState('')
   const [newTermsAndConditions, setNewTermsAndConditions] = useState('')
   const [newOptionalProducts, setNewOptionalProducts] = useState<OptionalProductDraft[]>([])
@@ -999,16 +918,11 @@ function SalesContent() {
     () => activeOrder ? isRepairLinkedSaleOrder(activeOrder, activeInvoices) : false,
     [activeOrder, activeInvoices],
   )
-  const activePayments = useMemo(
-    () => activeInvoices.flatMap(i => i.payments ?? []),
-    [activeInvoices],
-  )
   const activeReturns = useMemo(
     () => activeOrder ? (returnOrders ?? []).filter((r: any) => r.saleOrderId === activeOrder.id) : [],
     [returnOrders, activeOrder],
   )
   // Smart buttons only appear when the user can open the related records.
-  const canSeeFinanceRecords = hasModuleAccess(currentUser, 'accounting')
   const canSeeReturns = hasModuleAccess(currentUser, 'after_sales')
 
   // Persist user navigation as real browser history. Canonical redirects still use
@@ -4061,7 +3975,6 @@ function NewQuotationForm({
   const [productDropdownOpen, setProductDropdownOpen] = useState<{ id: string; top: number; left: number; openUp: boolean } | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
   const selectedCustomer = customers.find(c => c.id === newCustomer?.id)
   const paymentTermsDays = quotationPaymentTermsDays(selectedCustomer)
   const customerRef = useRef<HTMLDivElement>(null)

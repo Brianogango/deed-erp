@@ -7,24 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { calculateKenyaPayroll } from '@/lib/hr/kenya-payroll'
-import {
-  calcStockByLocation,
-  availableSellableQty,
-  isListedInProductCatalog,
-  isListedInPartnerCatalog,
-  upsertBulkStock,
-  computePayrollLine,
-  aggregatePayroll,
-  resolveDepositStatus,
-  capPayment,
-  onHandQtyAtStockLocations,
-  isLowStockSku,
-  type StockProduct,
-  type SerialNumber,
-  type BulkStockLevel,
-  type PayrollEmployee,
-} from '@/lib/business-logic'
+import { calcStockByLocation, availableSellableQty, isListedInPartnerCatalog, upsertBulkStock, aggregatePayroll, onHandQtyAtStockLocations, isLowStockSku, type StockProduct, type SerialNumber, type BulkStockLevel } from '@/lib/business-logic'
 
 // ── calcStockByLocation ───────────────────────────────────────────────────────
 
@@ -220,27 +203,6 @@ describe('availableSellableQty()', () => {
   })
 })
 
-describe('isListedInProductCatalog()', () => {
-  const laptop = { category: 'Laptops', requiresSerial: true, isActive: true, canBeSold: true }
-  const warehouseSerial: SerialNumber = { productId: 'prod-1', location: 'warehouse', status: 'available' }
-
-  it('lists a laptop with warehouse stock', () => {
-    expect(isListedInProductCatalog(laptop, [warehouseSerial], [], 'prod-1')).toBe(true)
-  })
-
-  it('hides zero-stock, With Issues only, archived, not-for-sale, and services', () => {
-    expect(isListedInProductCatalog(laptop, [], [], 'prod-1')).toBe(false)
-    expect(isListedInProductCatalog(laptop, [{ productId: 'prod-1', location: 'shop', status: 'available' }], [], 'prod-1')).toBe(false)
-    expect(isListedInProductCatalog({ ...laptop, isActive: false }, [warehouseSerial], [], 'prod-1')).toBe(false)
-    expect(isListedInProductCatalog({ ...laptop, canBeSold: false }, [warehouseSerial], [], 'prod-1')).toBe(false)
-    expect(isListedInProductCatalog(
-      { unit: 'service', isActive: true, canBeSold: true },
-      [warehouseSerial],
-      [{ productId: 'prod-1', location: 'warehouse', qty: 4 }],
-      'prod-1',
-    )).toBe(false)
-  })
-})
 
 describe('isListedInPartnerCatalog()', () => {
   const laptop = { category: 'Laptops', requiresSerial: true, isActive: true, canBeSold: true }
@@ -321,59 +283,6 @@ describe('upsertBulkStock()', () => {
 
 // ── computePayrollLine ────────────────────────────────────────────────────────
 
-describe('computePayrollLine()', () => {
-  const emp: PayrollEmployee = {
-    id: 'emp-001',
-    fullName: 'Jane Otieno',
-    basicSalary: 50000,
-    housingAllowance: 10000,
-    transportAllowance: 5000,
-  }
-
-  it('sums housing and transport into allowances', () => {
-    const line = computePayrollLine(emp)
-    expect(line.allowances).toBe(15000)
-  })
-
-  it('computes statutory deductions via the Kenya payroll engine', () => {
-    const line = computePayrollLine(emp)
-    // Real PAYE + NSSF + SHIF + AHL on 65,000 gross — not the old flat 18%.
-    const engine = calculateKenyaPayroll(emp.basicSalary, emp.housingAllowance, emp.transportAllowance)
-    expect(line.deductions).toBe(engine.totalDeductions)
-    expect(line.deductions).toBeCloseTo(16547.1, 2)
-  })
-
-  it('netPay = basicSalary + allowances − deductions', () => {
-    const line = computePayrollLine(emp)
-    expect(line.netPay).toBeCloseTo(50000 + 15000 - line.deductions, 2)
-  })
-
-  it('carries employee id and name through', () => {
-    const line = computePayrollLine(emp)
-    expect(line.employeeId).toBe('emp-001')
-    expect(line.employeeName).toBe('Jane Otieno')
-  })
-
-  it('carries basicSalary through', () => {
-    const line = computePayrollLine(emp)
-    expect(line.basicSalary).toBe(50000)
-  })
-
-  it('deductions track the statutory engine for non-integer salaries', () => {
-    const oddSalary: PayrollEmployee = { ...emp, basicSalary: 33333 }
-    const line = computePayrollLine(oddSalary)
-    const engine = calculateKenyaPayroll(33333, emp.housingAllowance, emp.transportAllowance)
-    expect(line.deductions).toBe(engine.totalDeductions)
-  })
-
-  it('handles zero allowances', () => {
-    const noAllowances: PayrollEmployee = { ...emp, housingAllowance: 0, transportAllowance: 0 }
-    const line = computePayrollLine(noAllowances)
-    expect(line.allowances).toBe(0)
-    const engine = calculateKenyaPayroll(50000, 0, 0)
-    expect(line.netPay).toBeCloseTo(50000 - engine.totalDeductions, 2)
-  })
-})
 
 // ── aggregatePayroll ──────────────────────────────────────────────────────────
 
@@ -413,37 +322,6 @@ describe('aggregatePayroll()', () => {
 
 // ── resolveDepositStatus ──────────────────────────────────────────────────────
 
-describe('resolveDepositStatus()', () => {
-  it('returns "fully_paid" when balance is exactly 0', () => {
-    expect(resolveDepositStatus(0)).toBe('fully_paid')
-  })
-
-  it('returns "fully_paid" when balance is negative (over-payment capped upstream)', () => {
-    expect(resolveDepositStatus(-1)).toBe('fully_paid')
-  })
-
-  it('returns "partially_paid" when balance > 0', () => {
-    expect(resolveDepositStatus(1)).toBe('partially_paid')
-    expect(resolveDepositStatus(50000)).toBe('partially_paid')
-  })
-})
 
 // ── capPayment ────────────────────────────────────────────────────────────────
 
-describe('capPayment()', () => {
-  it('returns the requested amount when it is less than balance', () => {
-    expect(capPayment(10000, 60000)).toBe(10000)
-  })
-
-  it('caps at balance when requested amount exceeds it', () => {
-    expect(capPayment(80000, 60000)).toBe(60000)
-  })
-
-  it('returns exact balance when payment equals balance', () => {
-    expect(capPayment(60000, 60000)).toBe(60000)
-  })
-
-  it('returns 0 when requested amount is 0', () => {
-    expect(capPayment(0, 60000)).toBe(0)
-  })
-})

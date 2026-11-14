@@ -19,8 +19,7 @@ export default function MyDocuments() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { users, currentUserId, showToast, refSops: sops, addRefSop, updateRefSop, deleteRefSop } = useHrStore()
-  const currentUser = users.find(u => u.id === currentUserId) ?? null
+  const { showToast, refSops: sops, addRefSop, updateRefSop, deleteRefSop } = useHrStore()
   const can = useCan()
   const isAdmin = can('manageHR')
 

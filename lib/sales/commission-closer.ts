@@ -72,33 +72,3 @@ export function commissionCloserOptions(users: readonly CommissionCloserUser[]):
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function commissionCloserSelectOptions(closers: readonly CommissionCloserOption[]) {
-  return closers.map(closer => ({
-    value: closer.id,
-    label: closer.hasEmployee ? closer.name : `${closer.name} (no HR employee — commission will not post)`,
-  }))
-}
-
-export function commissionCloserHint(opts: {
-  closer?: CommissionCloserOption | null
-  createdByName?: string | null
-  earnWhen?: 'invoice-post' | 'pos-charge'
-}): string {
-  const created = String(opts.createdByName || '').trim()
-  const pos = opts.earnWhen === 'pos-charge'
-  if (opts.closer && !opts.closer.hasEmployee) {
-    return pos
-      ? `${opts.closer.name} has no Employee record in HR. Charging will not create commission until that login is linked.`
-      : `${opts.closer.name} has no Employee record in HR. Posting the invoice will not create commission until that login is linked.`
-  }
-  if (pos && created) {
-    return `Cashier stays ${created}. Commission goes to the person chosen here when you Charge.`
-  }
-  if (pos) {
-    return 'Commission goes to the person chosen here when you Charge.'
-  }
-  if (created) {
-    return `Creator stays ${created}. Commission goes to the person chosen here when the customer invoice is posted — not when the quote is saved.`
-  }
-  return 'Commission goes to the person chosen here when the customer invoice is posted — not when the quote is saved.'
-}

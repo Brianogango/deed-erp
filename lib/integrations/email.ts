@@ -611,8 +611,6 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
  * Email Templates
  */
 
-const escapeHtml = (value: string) =>
-  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 type QuoteEmailKind = 'initial' | 'update'
 
@@ -720,7 +718,6 @@ export const generateRfqEmail = (rfq: {
   senderName?: string
   message?: string
 }) => {
-  const company = escapeHtml(rfq.companyName || 'Deed Technologies')
   const kes = (n: number) => `KES ${Number(n || 0).toLocaleString('en-KE')}`
   const rfqBody = [
     emailParagraph(`Hello ${rfq.vendorName || 'there'},`),

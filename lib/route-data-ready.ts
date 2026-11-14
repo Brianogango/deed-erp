@@ -39,10 +39,6 @@ export function resetRouteDataReadyForTests() {
   emit()
 }
 
-export function isRouteDataReady(pathname: string) {
-  return readyRoutes.has(normalizeRoute(pathname))
-}
-
 /** True once this session has loaded the route's store payload (or it was already cached). */
 export function useRouteDataReady(pathname: string): boolean {
   const route = normalizeRoute(pathname)

@@ -63,13 +63,6 @@ export function documentMoneySnapshot(opts?: {
   }
 }
 
-export function toBaseAmount(amount: number, exchangeRateToBase = 1): number {
-  const n = Number(amount) || 0
-  const rate = Number(exchangeRateToBase)
-  const safe = Number.isFinite(rate) && rate > 0 ? rate : 1
-  return Math.round(n * safe * 100) / 100
-}
-
 export function formatMoney(amount: number, currencyCode?: string | null): string {
   const code = normalizeCurrencyCode(currencyCode)
   try {
@@ -83,21 +76,3 @@ export function formatMoney(amount: number, currencyCode?: string | null): strin
   }
 }
 
-/** Prefer the latest rate for from→KES on or before asOf (ISO date). */
-export function findExchangeRate(
-  rates: ExchangeRateRow[],
-  fromCurrency: string,
-  asOf?: string,
-): number | null {
-  const from = normalizeCurrencyCode(fromCurrency)
-  if (from === FUNCTIONAL_CURRENCY) return 1
-  const day = (asOf || new Date().toISOString().slice(0, 10)).slice(0, 10)
-  const matches = rates
-    .filter(r => normalizeCurrencyCode(r.fromCurrency) === from && r.toCurrency === FUNCTIONAL_CURRENCY)
-    .filter(r => String(r.effectiveDate).slice(0, 10) <= day)
-    .sort((a, b) => String(b.effectiveDate).localeCompare(String(a.effectiveDate)))
-  const hit = matches[0]
-  if (!hit) return null
-  const rate = Number(hit.rate)
-  return Number.isFinite(rate) && rate > 0 ? rate : null
-}

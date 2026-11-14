@@ -1,20 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { calculateConfigurationDiff } from '@/lib/reconfiguration/diff-engine'
 import { checkCompatibility, hasBlockingCompatibilityIssues } from '@/lib/reconfiguration/compatibility'
-import {
-  calculateMargin,
-  calculateReconfigCost,
-  calculateRecommendedSellingPrice,
-  calculateUpgradeCharge,
-  isBelowMinimumMargin,
-  reconfigCompletionEventKey,
-} from '@/lib/reconfiguration/costing'
+import { calculateMargin, calculateReconfigCost, calculateRecommendedSellingPrice, isBelowMinimumMargin, reconfigCompletionEventKey } from '@/lib/reconfiguration/costing'
 import { buildDisplayName, buildSpecsString, parseSpecsString } from '@/lib/reconfiguration/display-name'
 import { SNAPSHOT_FIELD_MAX, clipSnapshotText, snapshotTextFields } from '@/lib/reconfiguration/snapshot-write'
 import { canTransition, nextStatus } from '@/lib/reconfiguration/state-machine'
 import { buildReservationId } from '@/lib/reconfiguration/service'
 import type { InstalledComponentView } from '@/lib/reconfiguration/types'
-import { planComponentInstall, planComponentRemoval, isSellableLocation } from '@/lib/inventory/reconfiguration-stock'
+import { planComponentInstall, planComponentRemoval } from '@/lib/inventory/reconfiguration-stock'
 
 function ram(id: string, gb: number, slot: number, opts?: Partial<InstalledComponentView>): InstalledComponentView {
   return {
@@ -277,16 +270,7 @@ describe('costing & pricing', () => {
     expect(price.recommended).toBe(50000)
   })
 
-  it('calculates customer-paid upgrade charge with trade-in', () => {
-    expect(
-      calculateUpgradeCharge({
-        installedComponentsSellingPrice: 12000,
-        labourCharge: 1500,
-        approvedTradeInValue: 2000,
-      }),
-    ).toBe(11500)
-  })
-
+  
   it('builds idempotent completion keys', () => {
     expect(reconfigCompletionEventKey('abc')).toBe('RCF-COMPLETE:abc')
   })
@@ -345,12 +329,7 @@ describe('stock planners', () => {
     expect(plan.kind).toBe('consume_bulk')
   })
 
-  it('excludes quarantine from sellable locations', () => {
-    expect(isSellableLocation('warehouse')).toBe(true)
-    expect(isSellableLocation('pending_testing')).toBe(false)
-    expect(isSellableLocation('quarantine')).toBe(false)
   })
-})
 
 describe('defaultPriceAfterBench (price left blank on a bench job)', () => {
   it('keeps the unit\'s price and adds what the job added to its cost — no cut after an upgrade', async () => {

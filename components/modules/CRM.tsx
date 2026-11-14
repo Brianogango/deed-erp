@@ -13,11 +13,7 @@ import CrmEmailComposer from '@/components/crm/CrmEmailComposer'
 import CrmReportPanel from '@/components/crm/CrmReportPanel'
 import { PivotView } from '@/components/erp/PivotView'
 import { DataTable, type ColumnDef } from '@/components/data-table'
-import {
-  Fa, faChartBar, faMoneyBillWave, faArrowTrendUp, faBullseye, faCircleCheck,
-  faFileSignature, faScrewdriverWrench, faTriangleExclamation, faChartLine, faPlus,
-  faPhone, faEnvelope, faHandshake, faClipboardList, faNoteSticky,
-} from '@/components/icons'
+import { Fa, faChartBar, faBullseye, faCircleCheck, faPlus, faPhone, faEnvelope, faHandshake, faClipboardList, faNoteSticky } from '@/components/icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { isLeadAssigneeRole } from '@/lib/crm/lead-assignees'
@@ -51,15 +47,6 @@ const STAGE_LABELS: Record<OpportunityStage, string> = {
   on_hold: 'On Hold',
 }
 
-const STAGE_COLORS: Record<OpportunityStage, string> = {
-  prospecting: 'var(--text-3)',
-  qualification: 'var(--info)',
-  proposal: 'var(--warning)',
-  negotiation: 'var(--primary)',
-  closed_won: 'var(--success)',
-  closed_lost: 'var(--danger)',
-  on_hold: 'var(--text-3)',
-}
 
 const LEAD_SOURCE_OPTIONS: { value: LeadSource; label: string }[] = [
   { value: 'website', label: 'Website' },
@@ -143,11 +130,7 @@ function CRMContent() {
   const {
     companies, contactPersons, opportunities, opportunityActivities, quotes, customerContracts, users, currentUserId,
     repairs,
-    createCompany, updateCompany, deleteCompany,
-    createContactPerson, updateContactPerson, deleteContactPerson,
-    createOpportunity, updateOpportunity, ingestOpportunity, moveOpportunityStage, markOpportunityWon, markOpportunityLost, deleteOpportunity,
-    logActivity, completeActivity,
-    createCustomerContract, renewCustomerContract, terminateCustomerContract,
+    createCompany, createContactPerson, createOpportunity, ingestOpportunity, markOpportunityWon, markOpportunityLost, logActivity, createCustomerContract, renewCustomerContract, terminateCustomerContract,
     showToast, systemSettings,
   } = useCrmStore()
 
@@ -297,7 +280,6 @@ function CRMContent() {
 
   const currentUser = users.find(u => u.id === currentUserId)
   const activeOpp = opportunities.find(o => o.id === activeOppId)
-  const activeCompany = companies.find(c => c.id === activeCompanyId)
 
   useEffect(() => {
     if (!urlOppId) {
@@ -402,10 +384,6 @@ function CRMContent() {
     return slaRepairs.filter(r => r.slaDeadline && new Date(r.slaDeadline) < now && !['ready', 'delivered', 'closed'].includes(r.status))
   }, [slaRepairs])
 
-  const complianceRate = useMemo(() => {
-    if (slaRepairs.length === 0) return 100
-    return Math.round(((slaRepairs.length - missedSLAs.length) / slaRepairs.length) * 100)
-  }, [slaRepairs, missedSLAs])
 
   type CompanyRow = typeof companies[number]
   const filteredContracts = useMemo(() => {
@@ -657,7 +635,7 @@ function CRMContent() {
     }
     const preferredChannel = contactForm.preferredChannel
 
-    const contact = createContactPerson({
+    createContactPerson({
       clientId: contactForm.companyId, companyId: contactForm.companyId,
       companyName: contactForm.companyName,
       firstName: contactForm.firstName,

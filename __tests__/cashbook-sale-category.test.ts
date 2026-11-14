@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { saleCategoryLabel } from '@/lib/accounting/cashbook-category'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
 
 const accounts = [
@@ -16,32 +15,9 @@ const products = [
 ]
 
 describe('sale category in the Cashbook', () => {
-  it('shows the revenue account of what was sold, not a fixed one', () => {
-    expect(saleCategoryLabel({ lines: [{ productId: 'lap', subtotal: 90000 }], products, accounts }).label).toBe('Laptops')
-    expect(saleCategoryLabel({ lines: [{ productId: 'prn', subtotal: 20000 }], products, accounts }).label).toBe('Printers')
-  })
-
-  it('shows the biggest account and counts the rest for a mixed sale', () => {
-    const sale = saleCategoryLabel({
-      lines: [
-        { productId: 'acc', subtotal: 2000 },
-        { productId: 'lap', subtotal: 90000 },
-        { productId: 'prn', subtotal: 15000 },
-      ],
-      products,
-      accounts,
-    })
-    expect(sale.label).toBe('Laptops +2 more')
-    expect(sale.title.split('\n')).toHaveLength(3)
-    expect(sale.title).toContain('Printers: KES 15,000')
-  })
-
-  it('honours an account set on the line itself and falls back to Sales Revenue', () => {
-    expect(saleCategoryLabel({ lines: [{ subtotal: 500, accountCode: '5002' }], products, accounts }).label).toBe('Accessories')
-    expect(saleCategoryLabel({ lines: [{ productId: 'gone', subtotal: 500 }], products, accounts }).label).toBe('Sales Revenue')
-    expect(saleCategoryLabel({ lines: [], products, accounts }).label).toBe('Sales Revenue')
-  })
-
+  
+  
+  
   it('labels invoice payments, POS sales and deposits correctly in the cashbook', () => {
     const entries = buildCashbookEntries({
       invoices: [{

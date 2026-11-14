@@ -506,112 +506,6 @@ export async function releaseDeliveryReservations(params: {
   return released
 }
 
-export async function reverseReceiptStockMutation(params: {
-  receiptRef: string
-  destination: string
-  lines: Array<{
-    productId: string
-    qtyReceived: number
-    requiresSerial: boolean
-    serials?: string[]
-  }>
-}): Promise<void> {
-  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
-  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
-  let serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
-  let bulkStock: BulkStockLevel[] =
-    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
-  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
-  const destination = asLocationId(params.destination || 'warehouse')
-  const stockLevelDeltas = new Map<string, number>()
-  const serialKeys = new Set(
-    params.lines.flatMap(l => (l.serials || []).map(s => String(s).toLowerCase())).filter(Boolean),
-  )
-
-  for (const line of params.lines) {
-    const productId = String(line.productId || '')
-    const qty = Math.max(0, Math.floor(Number(line.qtyReceived) || 0))
-    if (!productId || qty <= 0) continue
-    const idx = products.findIndex(p => p.id === productId)
-    if (idx >= 0) {
-      products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - qty) }
-    }
-    if (!line.requiresSerial) {
-      bulkStock = upsertBulkStock(bulkStock, productId, destination, -qty)
-    }
-    stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - qty)
-  }
-
-  if (serialKeys.size > 0) {
-    serials = serials.filter(s => !serialKeys.has(String(s.serial || '').toLowerCase()))
-  }
-
-  await bumpPrismaOnHand(stockLevelDeltas)
-  await rollbackRelationalReceipt(params.receiptRef)
-  await saveStoreKeys({
-    deed_products: JSON.stringify(products),
-    deed_serials: JSON.stringify(serials),
-    deed_bulkStock: JSON.stringify(bulkStock),
-    deed_stockMoves: JSON.stringify(stockMoves.filter(m => m.documentRef !== params.receiptRef)),
-  })
-}
-
-/**
- * Valuation rollback used to reverse blob + StockLevel but leave the
- * GoodsReceivedNote row. Retrying Validate then crashed on
- * goods_received_notes_grn_number_key. Undo the PO counters and delete the
- * GRN so a retry is a clean create.
- */
-async function rollbackRelationalReceipt(receiptRef: string) {
-  const ref = String(receiptRef || '').trim()
-  if (!ref) return
-
-  await prisma.$transaction(async tx => {
-    const grn = await tx.goodsReceivedNote.findUnique({
-      where: { grnNumber: ref },
-      include: { items: true },
-    })
-    if (!grn) return
-
-    const itemIds = grn.items.map(item => item.id)
-    if (itemIds.length > 0) {
-      await tx.serialNumber.updateMany({
-        where: { purchaseItemId: { in: itemIds } },
-        data: { purchaseItemId: null },
-      })
-      await tx.inventoryBatch.updateMany({
-        where: { receivedLineId: { in: itemIds } },
-        data: { receivedLineId: null },
-      })
-    }
-
-    for (const item of grn.items) {
-      const poItem = await tx.purchaseOrderItem.findUnique({
-        where: { id: item.poItemId },
-        select: { id: true, qtyReceived: true },
-      })
-      if (!poItem) continue
-      await tx.purchaseOrderItem.update({
-        where: { id: poItem.id },
-        data: { qtyReceived: Math.max(0, poItem.qtyReceived - item.qtyReceived) },
-      })
-    }
-
-    await tx.goodsReceivedNote.delete({ where: { id: grn.id } })
-
-    const refreshedItems = await tx.purchaseOrderItem.findMany({ where: { poId: grn.poId } })
-    const allReceived = refreshedItems.length > 0
-      && refreshedItems.every(item => item.qtyReceived >= item.qtyOrdered)
-    const anyReceived = refreshedItems.some(item => item.qtyReceived > 0)
-    const nextStatus = allReceived ? 'received' : anyReceived ? 'partial' : 'confirmed'
-    if (anyReceived || nextStatus === 'confirmed') {
-      await tx.purchaseOrder.update({
-        where: { id: grn.poId },
-        data: { status: nextStatus },
-      })
-    }
-  })
-}
 
 export async function reserveStockForSaleOrder(
   orderId: string,
@@ -656,7 +550,6 @@ export async function reserveStockForSaleOrder(
 
   const reservedDeltas = new Map<string, number>()
   let reservedCount = 0
-  const reservedAt = new Date().toISOString()
 
   for (const line of orderLines) {
     if (line.lineType === 'section') continue

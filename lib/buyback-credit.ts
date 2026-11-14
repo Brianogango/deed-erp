@@ -24,10 +24,6 @@ function isBuyBackCashMethod(method?: string | null): method is BuyBackCashMetho
   return BUYBACK_CASH_METHODS.includes(method as BuyBackCashMethod)
 }
 
-export function isBuyBackStoreCredit(bb: BuyBackSettleLike): boolean {
-  return bb.paymentMethod === BUYBACK_STORE_CREDIT_METHOD
-}
-
 export function canSettleApprovedBuyBack(bb: BuyBackSettleLike | null | undefined): {
   ok: boolean
   error?: string

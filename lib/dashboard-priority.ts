@@ -198,11 +198,6 @@ export function visibleDashboardRepairs<T extends { assignedTechnicianId?: strin
 // exclusively at /crm (the Sales component redirects the legacy ?tab=crm deep
 // link itself). Anything unknown or legacy ('dashboard', 'reps', 'crm', …)
 // resolves to the operational order list.
-type SalesTab = 'list'
-
-export function resolveSalesTab(_param: string | null | undefined): SalesTab {
-  return 'list'
-}
 
 // ── Settings deep links ──────────────────────────────────────────────────────
 // Settings selects sections with local state; these aliases let ?tab= deep

@@ -20,8 +20,3 @@ export function saleOrderLinesFromBody(body: {
   return undefined
 }
 
-/** Strip raw Prisma `items` so client round-trips cannot resurrect deletes. */
-export function omitSaleOrderPrismaItems<T extends Record<string, unknown>>(order: T): Omit<T, 'items'> {
-  const { items: _items, ...rest } = order
-  return rest
-}

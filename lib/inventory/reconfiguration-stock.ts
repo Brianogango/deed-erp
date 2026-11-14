@@ -120,7 +120,3 @@ export function planComponentInstall(params: {
   }
 }
 
-/** Sellable free qty excludes pending_testing and quarantine. */
-export function isSellableLocation(location: string): boolean {
-  return location === 'warehouse' || location === 'shop'
-}

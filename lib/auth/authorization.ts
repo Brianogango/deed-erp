@@ -15,18 +15,6 @@ export const isRoleAllowed = (role: string | null | undefined, allowedRoles: str
 type TechCapableUser = { role?: string | null; actsAsTechnician?: boolean | null } | null | undefined
 
 /**
- * A technician, or a user given the technician capability on top of their
- * own role (users.acts_as_technician — e.g. a chosen Kilimall officer). Such a
- * user does repair work exactly as a technician does, scoped to their own
- * jobs by canAccessRecord. Every "is this a technician" check goes through
- * here so the two can never drift apart again: the flag used to let them see
- * and be assigned jobs while every save of their work was refused.
- */
-export const hasTechnicianCapability = (user: TechCapableUser) =>
-  canonicalUserRole(user?.role) === 'technician' || user?.actsAsTechnician === true
-
-
-/**
  * True when the user holds the permission only as a technician — a
  * technician, or a user acting as one whose own role would not grant it.
  * Such a write gets the technician's limits (own jobs, repair documents only).
@@ -145,16 +133,6 @@ export const canReadStoreKey = (
   if (key === 'deed_repairs_v2' && user.actsAsTechnician) return true
   return false
 }
-
-/**
- * Filter a set of store keys down to those the user is allowed to READ. Keys not
- * present in the read map are returned to everyone (multi-role collaborative
- * data); keys in the map require the mapped permission.
- */
-export const filterReadableStoreKeys = (
-  user: StoreReadUser | null | undefined,
-  keys: string[],
-): string[] => keys.filter(key => canReadStoreKey(user, key))
 
 // ── Content-level filtering (Odoo ir.rule-style row ACL) ─────────────────────
 // deed_invoices / deed_expenses can't be blocked outright like journal entries:

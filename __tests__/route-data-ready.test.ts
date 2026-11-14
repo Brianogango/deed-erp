@@ -1,11 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { criticalAppStateKeysForRoute } from '@/lib/app-state-hydration'
-import {
-  isRouteDataReady,
-  markRouteDataReady,
-  resetRouteDataReadyForTests,
-  routeHasLocalCache,
-} from '@/lib/route-data-ready'
+import { resetRouteDataReadyForTests, routeHasLocalCache } from '@/lib/route-data-ready'
 
 function stubLocalStorage() {
   const store = new Map<string, string>()
@@ -42,19 +37,8 @@ describe('route data ready', () => {
     expect(routeHasLocalCache('/finance')).toBe(true)
   })
 
-  it('remembers a route after markRouteDataReady', () => {
-    expect(isRouteDataReady('/repairs')).toBe(false)
-    markRouteDataReady('/repairs')
-    expect(isRouteDataReady('/repairs')).toBe(true)
-    expect(isRouteDataReady('/repairs?status=all')).toBe(true)
-  })
-
-  it('does not treat a prior sync timestamp as cached route data', () => {
-    window.localStorage.setItem('deed_last_synced_at', new Date().toISOString())
-    expect(routeHasLocalCache('/')).toBe(false)
-    expect(isRouteDataReady('/')).toBe(false)
-  })
-
+  
+  
   it('can paint the dashboard before deferred keys such as serials are cached', () => {
     const keys = criticalAppStateKeysForRoute('/')
     keys.forEach(key => window.localStorage.setItem(key, '[]'))

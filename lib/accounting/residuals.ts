@@ -6,11 +6,6 @@
  */
 
 import { roundMoney } from '@/lib/accounting/money'
-type PaymentAllocationState =
-  | 'unallocated'
-  | 'partial'
-  | 'fully_allocated'
-  | 'void'
 
 export function paymentAllocatedSum(
   allocations: ReadonlyArray<{ amount: number }>,
@@ -26,24 +21,3 @@ export function paymentUnallocated(
   return Math.max(0, roundMoney(Number(paymentAmount) - Number(allocatedSum)))
 }
 
-export function paymentAllocationState(params: {
-  amount: number
-  allocatedSum: number
-  isVoided?: boolean
-}): PaymentAllocationState {
-  if (params.isVoided) return 'void'
-  const amount = roundMoney(params.amount)
-  const allocated = roundMoney(params.allocatedSum)
-  if (allocated <= 0.009) return 'unallocated'
-  if (allocated + 0.009 >= amount) return 'fully_allocated'
-  return 'partial'
-}
-
-export function isOutstandingPayment(params: {
-  amount: number
-  allocatedSum: number
-  isVoided?: boolean
-}): boolean {
-  if (params.isVoided) return false
-  return paymentUnallocated(params.amount, params.allocatedSum) > 0.009
-}

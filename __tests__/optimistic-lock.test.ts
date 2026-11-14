@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  lockVersionMismatch,
-  omitLockVersion,
-  readExpectedVersion,
-  readLockVersionFromResponse,
-} from '@/lib/optimistic-lock'
+import { readLockVersionFromResponse } from '@/lib/optimistic-lock'
 import { nextJournalSourceVersion } from '@/lib/accounting/ids'
 
 describe('readLockVersionFromResponse', () => {
@@ -26,26 +21,6 @@ describe('readLockVersionFromResponse', () => {
   })
 })
 
-describe('omitLockVersion', () => {
-  it('drops a stale client lockVersion so Align can rewrite after Reset to Draft', () => {
-    const patched = {
-      id: 'inv-1',
-      status: 'draft',
-      lockVersion: 0,
-      total: 4500,
-      lines: [{ qty: 1, unitPrice: 4000 }, { qty: 1, unitPrice: 500 }],
-    }
-    const body = omitLockVersion(patched) as Record<string, unknown>
-    expect(body).toEqual({
-      id: 'inv-1',
-      status: 'draft',
-      total: 4500,
-      lines: [{ qty: 1, unitPrice: 4000 }, { qty: 1, unitPrice: 500 }],
-    })
-    expect(lockVersionMismatch(1, readExpectedVersion(patched as unknown as Record<string, unknown>))).toBe(true)
-    expect(lockVersionMismatch(1, readExpectedVersion(body))).toBe(false)
-  })
-})
 
 describe('nextJournalSourceVersion', () => {
   it('starts at 1 when nothing has been posted', () => {

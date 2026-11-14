@@ -149,17 +149,6 @@ export function migratedDiagnosisFeeSettings(
 }
 
 /**
- * @deprecated Flat fee policy — tier no longer changes the amount.
- * Kept so call sites compile; always returns diagnosisFeeAmount(settings).
- */
-export function diagnosisFeeAmountForTier(
-  _tier: unknown,
-  settings?: DiagnosisFeeSettings | null,
-): number {
-  return diagnosisFeeAmount(settings)
-}
-
-/**
  * True when the job was received on/after the policy effective instant
  * (3 Aug 2026, 3:00pm EAT). Missing intake dates are treated as pre-policy
  * so legacy jobs are not charged.
@@ -194,13 +183,6 @@ export function normalizeStoredDiagnosisFee(
   return resolved.amount
 }
 
-/** Fee is billed on the final invoice for both walk-in and corporate. */
-export function resolveDiagnosisFeeBilling(
-  _clientType?: 'individual' | 'company' | string | null,
-): DiagnosisFeeBilling {
-  return 'invoice'
-}
-
 export function resolveCustomerBillingType(
   clientType: 'individual' | 'company' | string | null | undefined,
 ): CustomerBillingType {
@@ -226,14 +208,6 @@ export function isDiagnosisFeeSettled(repair: DiagnosisFeeRepair): boolean {
   const status = String(repair.diagnosisFeeStatus ?? '')
   if (status === 'paid' || status === 'invoiced' || status === 'waived' || status === 'not_applicable') return true
   if (repair.diagnosisFeePaidAt) return true
-  return false
-}
-
-/**
- * Upfront collection is optional — never blocks diagnosis or repair start.
- * Kept for call-site compatibility; always returns false.
- */
-export function mustCollectDiagnosisFeeUpfront(_repair: DiagnosisFeeRepair): boolean {
   return false
 }
 

@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  draftLeadFromInboundEmail,
-  normalizeMessageId,
-  organizationStickyKey,
-  parseFromIdentity,
-  pickRoundRobinOwner,
-  pickStickyOwnerFromPriorLeads,
-  shouldSkipInboundEmail,
-  hydrateEmailContextFromNotes,
-} from '@/lib/crm/sales-inbox-leads'
+import { draftLeadFromInboundEmail, normalizeMessageId, organizationStickyKey, parseFromIdentity, pickRoundRobinOwner, pickStickyOwnerFromPriorLeads, shouldSkipInboundEmail } from '@/lib/crm/sales-inbox-leads'
 import { resolveSalesImapConfig } from '@/lib/crm/sales-inbox-imap'
 
 describe('shouldSkipInboundEmail', () => {
@@ -106,15 +97,6 @@ describe('sticky organization assignment', () => {
   })
 })
 
-describe('hydrateEmailContextFromNotes', () => {
-  it('pulls subject and body from legacy notes', () => {
-    const hydrated = hydrateEmailContextFromNotes(
-      'Re: Need quotation\n\nInbound email to sales@deed.co.ke\nSubject: Need quotation\n\nHello team',
-    )
-    expect(hydrated.emailSubject).toBe('Need quotation')
-    expect(hydrated.emailBody).toContain('Hello team')
-  })
-})
 
 describe('pickRoundRobinOwner', () => {
   it('cycles through sorted sales rep ids', () => {

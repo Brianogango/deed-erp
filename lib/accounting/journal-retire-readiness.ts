@@ -134,7 +134,3 @@ export function evaluateJournalRetireReadiness(
   }
 }
 
-/** Gate used by blob-cutover retire action for journals. */
-export function canRetireJournalLiveKey(input: JournalRetireReadinessInput): boolean {
-  return evaluateJournalRetireReadiness(input).retireReady
-}

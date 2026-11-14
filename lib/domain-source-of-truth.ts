@@ -11,7 +11,6 @@
  */
 
 type DomainTruth = 'prisma'
-type DomainPersistence = 'normalized' | 'row_projection'
 
 export const DOMAIN_SOURCE_OF_TRUTH = {
   products: 'prisma',
@@ -37,31 +36,6 @@ export const DOMAIN_SOURCE_OF_TRUTH = {
   deliveries: 'prisma',
   receipts: 'prisma',
 } as const satisfies Record<string, DomainTruth>
-
-export const DOMAIN_PERSISTENCE = {
-  products: 'normalized',
-  quotes: 'normalized',
-  opportunities: 'normalized',
-  employees: 'normalized',
-  leave: 'normalized',
-  payroll: 'normalized',
-  notifications: 'normalized',
-  contacts: 'normalized',
-  repairs: 'normalized',
-  sale_orders: 'normalized',
-  invoices: 'normalized',
-  journals: 'normalized',
-  payments: 'normalized',
-  accounts: 'normalized',
-  deposits: 'normalized',
-  holdovers: 'normalized',
-  stock_reservations: 'normalized',
-  purchase_orders: 'row_projection',
-  serials: 'row_projection',
-  stock_moves: 'row_projection',
-  deliveries: 'row_projection',
-  receipts: 'row_projection',
-} as const satisfies Record<keyof typeof DOMAIN_SOURCE_OF_TRUTH, DomainPersistence>
 
 /**
  * Client must not POST these keys. Dedicated REST routes own the write; a

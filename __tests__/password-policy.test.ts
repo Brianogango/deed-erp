@@ -5,7 +5,6 @@ import {
   passwordMatchesHistory,
   MIN_PASSWORD_LENGTH,
 } from '@/lib/auth/password'
-import { normalizeUpdateUserInput } from '@/lib/auth/validation'
 import { userUpdateSchema, validate } from '@/lib/validation'
 
 describe('password policy (AGENT-SEC-001)', () => {
@@ -13,10 +12,7 @@ describe('password policy (AGENT-SEC-001)', () => {
     expect(MIN_PASSWORD_LENGTH).toBe(12)
   })
 
-  it('rejects short passwords in normalizeUpdateUserInput', () => {
-    expect(() => normalizeUpdateUserInput({ password: 'Short1!' })).toThrow(/at least 12/)
-  })
-
+  
   it('rejects short passwords in userUpdateSchema', async () => {
     await expect(validate(userUpdateSchema, { password: 'Short1!' })).rejects.toThrow(/at least 12/)
   })

@@ -40,9 +40,6 @@ function monthStart(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
 }
 
-function monthEnd(d: Date) {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
-}
 
 function monthKey(d: Date) {
   return d.toISOString().slice(0, 7)

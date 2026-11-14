@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildVatControlFromAggregates,
-  buildVatControlFromInvoices,
-  buildVatReturnDraft,
-  inputVatAccountCode,
-  outputVatAccountCode,
-} from '@/lib/accounting/vat-reports'
+import { buildVatControlFromAggregates, buildVatReturnDraft, inputVatAccountCode, outputVatAccountCode } from '@/lib/accounting/vat-reports'
 
 describe('VAT account codes', () => {
   it('maps to live CoA roles', () => {
@@ -34,21 +28,6 @@ describe('buildVatControlFromAggregates', () => {
   })
 })
 
-describe('buildVatControlFromInvoices', () => {
-  it('sums tax on posted customer and vendor docs', () => {
-    const control = buildVatControlFromInvoices([
-      { type: 'customer_invoice', status: 'posted', taxTotal: 160, subtotal: 1000 },
-      { type: 'vendor_bill', status: 'posted', taxTotal: 80, subtotal: 500 },
-      { type: 'customer_invoice', status: 'draft', taxTotal: 999, subtotal: 9999 },
-    ])
-    expect(control.outputVat).toBe(160)
-    expect(control.inputVat).toBe(80)
-    expect(control.vatPayable).toBe(80)
-    expect(control.taxableSales).toBe(1000)
-    expect(control.taxablePurchases).toBe(500)
-    expect(control.source).toBe('invoices')
-  })
-})
 
 describe('buildVatReturnDraft', () => {
   it('shapes a simple return draft DTO', () => {

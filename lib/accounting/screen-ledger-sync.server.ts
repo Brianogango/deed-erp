@@ -3,7 +3,6 @@ import 'server-only'
 import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock, loadAppStateForWrite } from '@/lib/server-store'
 import { isPostingRef } from '@/lib/accounting/duplicate-invoice-journals'
-import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import {
   planMissingDocs,
   planUnbookedPayments,

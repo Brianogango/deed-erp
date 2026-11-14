@@ -4,7 +4,6 @@ import prisma from '@/lib/prisma'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { ensureTemplateAccounts } from '@/lib/accounting/ensure-template-accounts'
-import { labelForRole } from '@/lib/accounting/coa-roles'
 import {
   AGENT_TAG,
   DEFAULT_AGENT_SETTINGS,

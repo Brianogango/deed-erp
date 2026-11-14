@@ -528,9 +528,6 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
     const invoiceType = body.type === 'vendor_bill' || mirror.type === 'vendor_bill'
       ? 'vendor_bill'
       : 'customer_invoice'
-    const purchaseOrderId = optionalUuid(body.purchaseOrderId)
-      ?? mirror.purchaseOrderId
-      ?? undefined
 
     const becamePosted = willPostNow
     if (becamePosted && invoiceType === 'customer_invoice' && salesCommissionAppliesToInvoice(invoice)) {

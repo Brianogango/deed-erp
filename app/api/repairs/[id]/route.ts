@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { makeDetailHandlers } from '@/lib/server-store-crud'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppState } from '@/lib/server-store'
 import { getServerSession } from '@/lib/auth/server'
 import type { RepairOrder } from '@/lib/store'
 import { repairDatesWriteError } from '@/lib/data-validation'
@@ -9,8 +9,7 @@ import { hasModuleAccess } from '@/lib/auth/access'
 import { repairHardDeleteBlocker } from '@/lib/repair-delete'
 import { repairTransitionWriteError } from '@/lib/repair-transition-guard'
 import { findOpenRepairWithSerial, normalizeRepairSerial, resolveRepairWarranty, warrantyPatchFromDecision } from '@/lib/repair-warranty'
-import { deleteRepairFromPrisma, findRepairInPrisma, loadRepairsFromPrisma } from '@/lib/repair-mirror'
-import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
+import { deleteRepairFromPrisma, findRepairInPrisma } from '@/lib/repair-mirror'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 const config = {

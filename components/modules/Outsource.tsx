@@ -9,7 +9,7 @@ import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
-import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard, faPlus, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
+import { faScrewdriverWrench, faBuilding, faPlus, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
 import { userCan } from '@/lib/auth/can'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -420,15 +420,7 @@ function OutsourceContent() {
 
   // ── UI ───────────────────────────────────────────────────────────────────
 
-  const tabStyle = (t: string) => ({
-    background: tab === t ? '#E8F3FA' : 'transparent',
-    border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
-    borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? 'var(--navy)' : 'var(--text-4)',
-    padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
-    display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s',
-  } as React.CSSProperties)
-
+  
   // ── Jobs DataTable column config ──────────────────────────────────────────
   const jobColumns: ColumnDef<OutsourceJob>[] = [
     {

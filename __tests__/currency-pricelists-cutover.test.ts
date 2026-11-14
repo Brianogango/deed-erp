@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  documentMoneySnapshot,
-  findExchangeRate,
-  formatMoney,
-  FUNCTIONAL_CURRENCY,
-  normalizeCurrencyCode,
-  toBaseAmount,
-} from '@/lib/currency'
+import { documentMoneySnapshot, FUNCTIONAL_CURRENCY, normalizeCurrencyCode } from '@/lib/currency'
 import {
   BUILTIN_PRICELISTS,
   needsSpecialPricingApproval,
@@ -45,21 +38,8 @@ describe('multi-currency KES-first', () => {
     })
   })
 
-  it('converts to base and formats', () => {
-    expect(toBaseAmount(10, 130)).toBe(1300)
-    expect(formatMoney(1500, 'KES')).toContain('1,500')
+  
   })
-
-  it('finds latest exchange rate on or before asOf', () => {
-    const rates = [
-      { id: '1', fromCurrency: 'USD' as const, toCurrency: 'KES' as const, rate: 120, effectiveDate: '2026-01-01' },
-      { id: '2', fromCurrency: 'USD' as const, toCurrency: 'KES' as const, rate: 130, effectiveDate: '2026-06-01' },
-    ]
-    expect(findExchangeRate(rates, 'USD', '2026-03-01')).toBe(120)
-    expect(findExchangeRate(rates, 'USD', '2026-07-01')).toBe(130)
-    expect(findExchangeRate(rates, 'KES')).toBe(1)
-  })
-})
 
 describe('pricelist engine', () => {
   const product = {

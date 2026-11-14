@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allowedOnlyAsTechnician, hasTechnicianCapability } from '@/lib/auth/authorization'
+import { allowedOnlyAsTechnician } from '@/lib/auth/authorization'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { userCan } from '@/lib/auth/can'
 import { buildMyWork } from '@/lib/my-work'
@@ -9,13 +9,7 @@ const kilimallTech = { id: 'k1', role: 'kilimall_officer', actsAsTechnician: tru
 const kilimall = { ...kilimallTech, actsAsTechnician: false }
 
 describe('a user acting as a technician', () => {
-  it('passes the role checks a technician passes, and only those', () => {
-    expect(hasTechnicianCapability(kilimallTech)).toBe(true)
-    expect(userCan(kilimallTech, 'repair.edit')).toBe(true)
-    expect(userCan(kilimall, 'repair.edit')).toBe(false)
-    expect(userCan(kilimallTech, 'managePayroll')).toBe(false)
-  })
-
+  
   it('holds the permissions technicians hold', () => {
     expect(userCan(kilimallTech, 'repair.edit')).toBe(true)
     expect(userCan(kilimall, 'repair.edit')).toBe(false)

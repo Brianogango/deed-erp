@@ -1,17 +1,14 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useApp, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Field, Input, Modal, Select, Textarea, Badge } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { documentExpiry, expiryCounts } from '@/lib/hr/document-status'
 import { PolicyAckReport } from './HRPolicies'
-import {
-  faGraduationCap, faPlus, faFileLines, faUsers, faBuilding,
-  faCalendarMinus, faMoneyBillWave, faCircleCheck,
-} from '@fortawesome/free-solid-svg-icons'
+import { faGraduationCap, faPlus, faFileLines, faBuilding } from '@fortawesome/free-solid-svg-icons'
 
 // ── Training ──────────────────────────────────────────────────────────────────
 export function HRTrainingTab() {

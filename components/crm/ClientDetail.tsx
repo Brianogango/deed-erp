@@ -3,19 +3,9 @@
 import { useMemo } from 'react'
 import { useCrmStore, fmtKes, fmtDate } from '@/lib/store'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
-import { saleOrderInvoiceStatus } from '@/lib/odoo-sales-flow'
 import { Badge, PanelHeader, Divider, InfoRow } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { 
-  faBuilding, 
-  faCreditCard, 
-  faChartLine, 
-  faHistory, 
-  faUserTie,
-  faEnvelope,
-  faPhone,
-  faGlobe
-} from '@fortawesome/free-solid-svg-icons'
+import { faBuilding, faCreditCard, faUserTie, faEnvelope, faPhone, faGlobe } from '@fortawesome/free-solid-svg-icons'
 
 export default function ClientDetail({ clientId, onClose }: { clientId: string, onClose: () => void }) {
   const { companies, saleOrders, opportunities, contactPersons, contacts, customerCredits } = useCrmStore()
@@ -37,20 +27,6 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
     [contactPersons, clientId]
   )
 
-  const stats = useMemo(() => {
-    // Revenue = fully invoiced Sales Orders (invoicing progress is derived
-    // from per-line quantities, not the sale status).
-    const totalRevenue = clientOrders.filter(o => {
-      const s = saleOrderInvoiceStatus(o.status, o.lines ?? [])
-      return s === 'invoiced' || s === 'upselling'
-    }).reduce((acc, o) => acc + o.totalAmount, 0)
-    const openOppsValue = clientOpps.filter(o => !['closed_won', 'closed_lost'].includes(o.stage)).reduce((acc, o) => acc + o.expectedValue, 0)
-    const winRate = clientOpps.length > 0
-      ? Math.round((clientOpps.filter(o => o.stage === 'closed_won').length / clientOpps.length) * 100)
-      : 0
-      
-    return { totalRevenue, openOppsValue, winRate }
-  }, [clientOrders, clientOpps])
 
   if (!client) return null
 

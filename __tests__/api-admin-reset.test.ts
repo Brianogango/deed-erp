@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   mockGetSession,
   mockListCerts,
-  mockClearTables,
   mockSql,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),

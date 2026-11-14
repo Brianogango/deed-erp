@@ -1,19 +1,11 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { postStockJournal, reversePosting } from '@/lib/accounting/posting-service'
+import { postStockJournal } from '@/lib/accounting/posting-service'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 import { loadAppState } from '@/lib/server-store'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
 import { GRNI_ACCOUNT_LABEL } from '@/lib/accounting/vendor-bill-perpetual'
-import {
-  applyDeliveryAverage,
-  applyReceiptAverage,
-  consumeBatchesFIFO,
-  restoreBatchesFIFO,
-  stockValuationEventKey,
-  stockValuationJournalRef,
-  type StockValuationKind,
-} from '@/lib/inventory/valuation-math'
+import { applyDeliveryAverage, applyReceiptAverage, consumeBatchesFIFO, stockValuationEventKey, stockValuationJournalRef, type StockValuationKind } from '@/lib/inventory/valuation-math'
 import { isNonStockProduct } from '@/lib/sales/non-stock-line'
 
 const DEFAULT_WAREHOUSE_ID = 'main'
@@ -692,41 +684,6 @@ export async function processStockRepairConsume(params: {
   })
 }
 
-async function restoreFifoQty(params: {
-  productId: string
-  qty: number
-  unitCost: number
-  reference: string
-}) {
-  const batches = await prisma.inventoryBatch.findMany({
-    where: { productId: params.productId },
-    orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
-  })
-  const restored = restoreBatchesFIFO(
-    batches.map(b => ({
-      id: b.id,
-      quantityAvailable: b.quantityAvailable,
-      quantityReceived: b.quantityReceived,
-      unitCost: Number(b.unitCost ?? 0),
-      receivedAt: b.receivedAt,
-    })),
-    params.qty,
-  )
-  for (const line of restored.restored) {
-    await prisma.inventoryBatch.update({
-      where: { id: line.batchId },
-      data: { quantityAvailable: { increment: line.qty } },
-    })
-  }
-  if (restored.leftover > 0) {
-    await upsertFifoBatch({
-      productId: params.productId,
-      qty: restored.leftover,
-      unitCost: params.unitCost,
-      reference: `POS-REV-${params.reference}`.slice(0, 80),
-    })
-  }
-}
 
 /**
  * Customer RMA receive — reverse delivery COGS (Dr Inventory / Cr COGS).

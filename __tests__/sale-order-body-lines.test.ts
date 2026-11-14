@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { saleOrderLinesFromBody, omitSaleOrderPrismaItems } from '@/lib/sale-order-body-lines'
+import { saleOrderLinesFromBody } from '@/lib/sale-order-body-lines'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
 
 describe('saleOrderLinesFromBody', () => {
@@ -34,13 +34,3 @@ describe('saleOrderPersistBody strips stale items', () => {
   })
 })
 
-describe('omitSaleOrderPrismaItems', () => {
-  it('removes items from mapped client rows', () => {
-    const row = omitSaleOrderPrismaItems({
-      id: 'so-1',
-      items: [{ id: 'x' }],
-      lines: [{ id: 'y' }],
-    })
-    expect(row).toEqual({ id: 'so-1', lines: [{ id: 'y' }] })
-  })
-})

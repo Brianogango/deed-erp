@@ -51,15 +51,3 @@ export function buildWhatsAppShareUrl(opts: {
   return `https://wa.me/${digits}?text=${encodeURIComponent(opts.text)}`
 }
 
-/** Prefer contact-person details on company jobs; fall back to customer. */
-export function resolveRepairWhatsAppRecipient(repair: {
-  customerName?: string | null
-  customerPhone?: string | null
-  contactPersonName?: string | null
-  contactPersonPhone?: string | null
-}): { name: string; phone: string } | null {
-  const phone = String(repair.contactPersonPhone || repair.customerPhone || '').trim()
-  if (!whatsappPhoneDigits(phone)) return null
-  const name = String(repair.contactPersonName || repair.customerName || '').trim() || 'valued customer'
-  return { name, phone }
-}

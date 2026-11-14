@@ -273,29 +273,3 @@ export function normalizeMessageId(raw: string | undefined | null, fallbackSeed:
   return `synthetic:${fallbackSeed}`.slice(0, 500)
 }
 
-/**
- * Best-effort hydrate for older inbound leads that only stored a notes blob.
- */
-export function hydrateEmailContextFromNotes(notes: string | null | undefined): {
-  emailSubject: string | null
-  emailSnippet: string | null
-  emailBody: string | null
-} {
-  const raw = String(notes || '')
-  if (!raw.trim()) {
-    return { emailSubject: null, emailSnippet: null, emailBody: null }
-  }
-  const subject =
-    raw.match(/^Re:\s*(.+)$/m)?.[1]?.trim()
-    || raw.match(/^Subject:\s*(.+)$/m)?.[1]?.trim()
-    || null
-  // Body is usually after the blank line following headers
-  const parts = raw.split(/\n\n/)
-  const body = parts.length > 1 ? parts.slice(1).join('\n\n').trim() : raw.trim()
-  const snippet = body.replace(/\s+/g, ' ').trim()
-  return {
-    emailSubject: subject ? subject.slice(0, 500) : null,
-    emailSnippet: snippet ? (snippet.length > 240 ? `${snippet.slice(0, 240)}…` : snippet).slice(0, 500) : null,
-    emailBody: body ? body.slice(0, 50_000) : null,
-  }
-}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bootApiGroupsForRoute, remainingBootApiGroups } from '@/lib/boot-apis'
+import { bootApiGroupsForRoute } from '@/lib/boot-apis'
 
 describe('bootApiGroupsForRoute', () => {
   it('does not boot HR or settings lists on unrelated routes', () => {
@@ -45,14 +45,7 @@ describe('bootApiGroupsForRoute', () => {
     expect(groups).not.toContain('repairs')
   })
 
-  it('lists idle groups as the remainder', () => {
-    const immediate = bootApiGroupsForRoute('/inventory')
-    const rest = remainingBootApiGroups(immediate)
-    expect(rest).toContain('crm')
-    expect(rest).not.toContain('products')
-    expect(rest).not.toContain('stock_moves')
-  })
-
+  
   it('keeps the operations alias on the same boot groups as inventory', () => {
     expect(bootApiGroupsForRoute('/operations')).toEqual(bootApiGroupsForRoute('/inventory'))
   })

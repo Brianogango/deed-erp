@@ -3,51 +3,27 @@ import { FormerRefNote, refWithFormer } from '@/components/erp/FormerRefNote'
 import React, { useCallback, useMemo, useState, useRef, useEffect, Suspense } from 'react'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { readXlsx } from '@/lib/inventory/read-xlsx'
-import {
-  useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
-  fmtKes, fmtDate, Account, AdjReason, SerialNumber,
-  PRODUCT_KIND_OPTIONS, UOM_OPTIONS, inferProductKind, defaultTrackingForKind, defaultUnitForKind,
-  kindRequiresInventoryAccounts, applyCategoryAccountDefaults, resolveProductAccounts,
-} from '@/lib/store'
+import { useInventoryStore, Product, LOCATIONS, LocationId, ALL_CATEGORIES, CategoryId, fmtKes, fmtDate, AdjReason, SerialNumber, inferProductKind, defaultTrackingForKind, defaultUnitForKind } from '@/lib/store'
 import type { ProductKind } from '@/lib/product-kind'
-import {
-  inventoryCategoryFilterOptions,
-  resolveProductCreationCategoryOptions,
-} from '@/lib/product-categories'
+import { inventoryCategoryFilterOptions } from '@/lib/product-categories'
 import { userCan } from '@/lib/auth/can'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { PrimaryActionButton, SecondaryActionMenu, TablePageLayout, OperationalSummary, CompactInfoNotice, StatusBadge } from '@/components/erp'
-import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faMagnifyingGlass } from '@/components/icons'
+import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWrench, faPrint, faIndustry, faMagnifyingGlass } from '@/components/icons'
 import { printProductLabels } from '@/lib/product-label'
 import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { TaggedIntakeModal } from '@/components/refurbishment/TaggedIntakeModal'
 import { useRouteDataReady } from '@/lib/route-data-ready'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { Barcode } from '@/components/modules/Barcode'
-import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
+import { inferTrackingMethod, isSerialTracking, isStockTracked } from '@/lib/inventory-identifiers'
 import { availableSellableQty, everStockedProductIds, isLowStockSku, onHandQtyAtStockLocations } from '@/lib/business-logic'
 import { isStockOutMove } from '@/lib/kpi-stock'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
-import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategory } from '@/lib/reconfiguration/unit-config'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
 import { useInventoryView } from '@/lib/inventory/use-inventory-view'
-import {
-  CATALOG_LAYOUTS,
-  CONDITION_OPTIONS,
-  CATALOG_SHOW_OPTIONS,
-  CATALOG_SORT_OPTIONS,
-  DEFAULT_VIEW_PREFS,
-  WAREHOUSE_SORT_OPTIONS,
-  compareCatalog,
-  matchesCatalogShow,
-  matchesCondition,
-  type CatalogShow,
-  type CatalogSort,
-  type WarehouseSort,
-} from '@/lib/inventory/view-prefs'
-import ProductPhotoFields, { uploadProductPhoto } from '@/components/inventory/ProductPhotoFields'
-import { applyCostBandPrices, blankProduct, buildProductBarcode, buildProductSku, normKey } from '@/lib/inventory/product-form-helpers'
+import { CATALOG_LAYOUTS, CONDITION_OPTIONS, CATALOG_SHOW_OPTIONS, CATALOG_SORT_OPTIONS, DEFAULT_VIEW_PREFS, compareCatalog, matchesCatalogShow, matchesCondition, type CatalogShow, type CatalogSort } from '@/lib/inventory/view-prefs'
+import { buildProductSku, normKey } from '@/lib/inventory/product-form-helpers'
 import ProductFormModal, { type ProductFormStart } from '@/components/inventory/ProductFormModal'
 import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPanel'
 import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPanel'
@@ -56,14 +32,12 @@ import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
 import PartsRequestsPanel from '@/components/inventory/PartsRequestsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
 import { useCan } from '@/hooks/useCan'
-import type { ProductImageSlot } from '@/lib/product-images'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
-import { getCategoryMarkupPct, quoteSalePriceFromCost, autoSalePriceFromCost, suggestWholesalePriceFromCost } from '@/lib/sale-price-calculator'
+import { getCategoryMarkupPct, quoteSalePriceFromCost, autoSalePriceFromCost } from '@/lib/sale-price-calculator'
 import { reviewSalePrice } from '@/lib/pricing/latest-cost-review'
-import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import dynamic from 'next/dynamic'
 const InboundImport = dynamic(() => import('@/components/inventory/InboundImport'), { ssr: false })
@@ -121,10 +95,6 @@ type OpeningStockLine = {
   location: LocationId | ''
 }
 
-const INTERNAL_LOCS = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map(k => ({
-  value: k,
-  label: `${LOCATIONS[k].icon} ${LOCATIONS[k].name}`,
-}))
 
 
 
@@ -152,13 +122,6 @@ function col(row: any, ...keys: string[]): string {
 }
 
 
-type ProductListRow = {
-  id: string
-  product: Product
-  kind: 'standalone' | 'parent' | 'variant'
-  variants?: Product[]
-  isExpanded?: boolean
-}
 
 export default function Inventory() {
   return (
@@ -173,15 +136,12 @@ function InventoryContent() {
   useEffect(() => { setMounted(true) }, [])
 
   const {
-    products, productPriceHistory, addProduct, publishProductBulk, updateProduct, updateProductPrice,
-    unarchiveProduct,
+    products, productPriceHistory, publishProductBulk, updateProductPrice,
     serials, stockMoves, stockTransfers,
-    createTransfer, addTransferLine, validateTransfer, submitTransfer,
+    submitTransfer,
     importOpeningStock, openingStockPosted,
-    getStockByLocation, getMonthlyMovements,
-    purchaseOrders, receipts,
-    showToast, currentUserId, users, accounts,
-    refreshProductCatalog,
+    getStockByLocation, purchaseOrders, receipts,
+    showToast, currentUserId, users, refreshProductCatalog,
     refurbishmentJobs, createRefurbishmentJob, transferToSell,
     systemSettings,
     bulkStock,
@@ -236,7 +196,6 @@ function InventoryContent() {
       window.history.pushState(null, '', `${url.pathname}${url.search}${url.hash}`)
     }
   }
-  const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('All')
   const patchInventoryUi = useUrlUiPatch()
   const { prefs: viewPrefs, update: updateView, reset: resetView } = useInventoryView()
@@ -348,7 +307,6 @@ function InventoryContent() {
   const [priceForm, setPriceForm] = useState({ salePrice: '', costPrice: '', reason: '', effectiveDate: '' })
 
   // Duplicate & variant state
-  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
 
 
   const stockableProducts = useMemo(
@@ -413,49 +371,13 @@ function InventoryContent() {
     }
   }, [adjSearch, showAdjForm])
 
-  const filteredProducts = useMemo(
-    () => products.filter(p => {
-      const matchesSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase())
-      const matchesCategory = catFilter === 'All' || p.category === catFilter
-      return p.isActive && matchesSearch && matchesCategory
-    }),
-    [products, search, catFilter],
-  )
 
   // Group products by parent — orphaned variants (parent inactive/missing) float to top level
   const allActiveIds = useMemo(() => new Set(products.filter(p => p.isActive).map(p => p.id)), [products])
   const orphanedVariantIds = useMemo(() => new Set(
     products.filter(p => p.parentId && !allActiveIds.has(p.parentId)).map(p => p.id)
   ), [products, allActiveIds])
-  const productGroups = useMemo(() => {
-    const filteredIds = new Set(filteredProducts.map(p => p.id))
-    const childrenByParent: Record<string, Product[]> = {}
-    const topLevel: Product[] = []
-    for (const p of filteredProducts) {
-      if (p.parentId && filteredIds.has(p.parentId)) {
-        ;(childrenByParent[p.parentId] ??= []).push(p)
-      } else {
-        topLevel.push(p)
-      }
-    }
-    return topLevel.map(p => ({ product: p, variants: childrenByParent[p.id] ?? [] }))
-  }, [filteredProducts])
 
-  const productListRows = useMemo(() => {
-    const rows: ProductListRow[] = []
-    for (const { product, variants } of productGroups) {
-      if (variants.length === 0) {
-        rows.push({ id: product.id, product, kind: 'standalone' })
-        continue
-      }
-      const isExpanded = !collapsedParents.has(product.id)
-      rows.push({ id: product.id, product, kind: 'parent', variants, isExpanded })
-      if (isExpanded) {
-        for (const v of variants) rows.push({ id: v.id, product: v, kind: 'variant' })
-      }
-    }
-    return rows
-  }, [productGroups, collapsedParents])
 
 
   const { pendingReceipts, validatedReceipts } = useMemo(() => {
@@ -868,15 +790,6 @@ function InventoryContent() {
     label: `${LOCATIONS[k].icon} ${openingStockLocationLabels[k]}`,
   }))
 
-  const activeRefurbSerialIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const j of refurbishmentJobs) {
-      if (j.status !== 'transferred' && j.status !== 'written_off') {
-        ids.add(j.serialId)
-      }
-    }
-    return ids
-  }, [refurbishmentJobs])
 
   const downloadProductTemplate = async () => {
     const XLSX = await loadXlsx()

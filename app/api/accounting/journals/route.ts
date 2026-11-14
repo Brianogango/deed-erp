@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'

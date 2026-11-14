@@ -8,12 +8,7 @@ import {
   productMatchesSearch,
 } from '@/lib/inventory/product-filters'
 import { validateSerialEdit } from '@/lib/inventory/serial-edit'
-import {
-  canArchiveProduct,
-  canEditSerialNumber,
-  canValidatePurchaseReceipt,
-  canViewPurchaseCost,
-} from '@/lib/inventory/permissions'
+import { canArchiveProduct } from '@/lib/inventory/permissions'
 
 describe('product filters', () => {
   const product = {
@@ -196,17 +191,7 @@ describe('serial edit validation', () => {
 })
 
 describe('inventory permissions', () => {
-  it('gates receipt validation and serial edits', () => {
-    expect(canValidatePurchaseReceipt('director')).toBe(true)
-    expect(canValidatePurchaseReceipt('admin_officer')).toBe(true)
-    expect(canValidatePurchaseReceipt('inventory_officer')).toBe(true)
-    expect(canValidatePurchaseReceipt('technical_lead')).toBe(false)
-    expect(canValidatePurchaseReceipt('sales_rep')).toBe(false)
-    expect(canEditSerialNumber('inventory_officer')).toBe(true)
-    expect(canEditSerialNumber('technician')).toBe(false)
-    expect(canViewPurchaseCost('finance_officer')).toBe(true)
-  })
-
+  
   it('gates product archive / restore', () => {
     expect(canArchiveProduct('director')).toBe(true)
     expect(canArchiveProduct('inventory_officer')).toBe(true)

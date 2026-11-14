@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isOutstandingPayment,
-  paymentAllocationState,
-  paymentAllocatedSum,
-  paymentUnallocated,
-} from '@/lib/accounting/residuals'
+import { paymentAllocatedSum, paymentUnallocated } from '@/lib/accounting/residuals'
 import {
   assertPostingBalanced,
   buildAllocateOutstandingLines,
@@ -20,15 +15,7 @@ describe('payment outstanding residuals', () => {
     expect(paymentAllocatedSum([{ amount: 100 }, { amount: 50.555 }])).toBe(150.56)
   })
 
-  it('derives allocation state', () => {
-    expect(paymentAllocationState({ amount: 500, allocatedSum: 0 })).toBe('unallocated')
-    expect(paymentAllocationState({ amount: 500, allocatedSum: 200 })).toBe('partial')
-    expect(paymentAllocationState({ amount: 500, allocatedSum: 500 })).toBe('fully_allocated')
-    expect(paymentAllocationState({ amount: 500, allocatedSum: 0, isVoided: true })).toBe('void')
-    expect(isOutstandingPayment({ amount: 500, allocatedSum: 100 })).toBe(true)
-    expect(isOutstandingPayment({ amount: 500, allocatedSum: 500 })).toBe(false)
   })
-})
 
 describe('outstanding clearing CoA roles', () => {
   it('maps outstanding receipts/payments to live clearing codes', () => {

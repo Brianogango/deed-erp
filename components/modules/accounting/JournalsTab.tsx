@@ -20,12 +20,9 @@ export default function JournalsTab() {
     viewJournal, setViewJournal, canViewJournals, hdr, showToast,
   } = useAccounting()
 
-  const [sourceValue, setSourceValue] = useUrlUiState('journalBook', 'prisma')
   // Always the posted journals on the server: browsers no longer hold every journal.
   const source: 'blob' | 'prisma' = 'prisma'
-  void sourceValue
-  const setSource = (next: 'blob' | 'prisma') => setSourceValue(next)
-  const [journalStatus, setJournalStatus] = useUrlUiState('journalStatus', 'all')
+    const [journalStatus, setJournalStatus] = useUrlUiState('journalStatus', 'all')
   const [showManual, setShowManual] = useState(false)
   const [saving, setSaving] = useState(false)
   const [manualRef, setManualRef] = useState('')

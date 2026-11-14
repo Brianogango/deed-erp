@@ -138,7 +138,6 @@ export default function RepairPortalPage() {
 
   const [declineReason, setDeclineReason] = useState('')
   const [verifyPhone,   setVerifyPhone]   = useState('')
-  const [showDecline,   setShowDecline]   = useState(false)
   const [itemDecisions, setItemDecisions] = useState<Record<string, 'approved' | 'declined'>>({})
   const [acting,        setActing]        = useState(false)
   const [actionDone,    setActionDone]    = useState(false)

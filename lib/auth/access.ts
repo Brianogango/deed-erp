@@ -1,5 +1,5 @@
 import type { ModuleId, PublicUser, UserRole } from './types'
-import { canonicalRole, isDirector } from './roles'
+import { canonicalRole } from './roles'
 
 const MODULE_LABELS: Record<ModuleId, string> = {
   dashboard: 'Dashboard',

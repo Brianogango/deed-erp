@@ -159,7 +159,6 @@ export default function ContactFormModal({
     initial.creditLimit == null ? (editId ? '0' : '') : String(initial.creditLimit),
   )
   // React 18's DetailsHTMLAttributes has `open`/`onToggle` but not `defaultOpen`.
-  const [moreDetailsOpen, setMoreDetailsOpen] = useState(() => Boolean(editId))
 
   const companies = useMemo(
     () => contacts.filter(c => c.type === 'company' && c.id !== editId),

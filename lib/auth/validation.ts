@@ -1,6 +1,5 @@
 import { MODULE_IDS, USER_ROLES, ROLE_DEFAULT_MODULES } from './types'
-import type { CreateUserInput, ModuleId, UpdateUserInput, UserRole } from './types'
-import { MIN_PASSWORD_LENGTH } from './password-policy'
+import type { CreateUserInput, ModuleId, UserRole } from './types'
 
 const isModuleId = (value: string): value is ModuleId => MODULE_IDS.includes(value as ModuleId)
 const isUserRole = (value: string): value is UserRole => USER_ROLES.includes(value as UserRole)
@@ -30,85 +29,3 @@ export const normalizeCreateUserInput = (body: unknown): CreateUserInput => {
   return { employeeId, username, name, role, modules: normalizedModules, active, password, email, actsAsTechnician, ...(accessRoleId ? { accessRoleId } : {}) }
 }
 
-export const normalizeUpdateUserInput = (body: unknown): UpdateUserInput => {
-  const payload = body as Record<string, unknown>
-  const update: UpdateUserInput = {}
-
-  if ('username' in payload) {
-    if (typeof payload.username !== 'string' || !payload.username.trim()) {
-      throw Object.assign(new Error('Username must be a non-empty string'), { status: 400 })
-    }
-    update.username = payload.username.trim()
-  }
-
-  if ('name' in payload) {
-    if (typeof payload.name !== 'string' || !payload.name.trim()) {
-      throw Object.assign(new Error('Name must be a non-empty string'), { status: 400 })
-    }
-    update.name = payload.name.trim()
-  }
-
-  if ('role' in payload) {
-    if (typeof payload.role !== 'string' || !isUserRole(payload.role)) {
-      throw Object.assign(new Error('Role is invalid'), { status: 400 })
-    }
-    update.role = payload.role
-  }
-
-  if ('active' in payload) {
-    if (typeof payload.active !== 'boolean') {
-      throw Object.assign(new Error('Active must be a boolean'), { status: 400 })
-    }
-    update.active = payload.active
-  }
-
-  if ('modules' in payload) {
-    if (!Array.isArray(payload.modules)) {
-      throw Object.assign(new Error('Modules must be an array'), { status: 400 })
-    }
-    const modules = uniqueModules(payload.modules.filter((value): value is string => typeof value === 'string'))
-    if (modules.length === 0) {
-      throw Object.assign(new Error('At least one module is required'), { status: 400 })
-    }
-    update.modules = modules
-  }
-
-  if ('password' in payload) {
-    if (typeof payload.password !== 'string' || payload.password.length < MIN_PASSWORD_LENGTH) {
-      throw Object.assign(
-        new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`),
-        { status: 400 },
-      )
-    }
-    update.password = payload.password
-  }
-
-  if ('unlock' in payload) {
-    update.unlock = Boolean(payload.unlock)
-  }
-
-  if ('mustChangePassword' in payload) {
-    update.mustChangePassword = Boolean(payload.mustChangePassword)
-  }
-
-  if ('employeeId' in payload) {
-    update.employeeId = typeof payload.employeeId === 'string' && payload.employeeId.trim() ? payload.employeeId.trim() : null
-  }
-
-  if ('email' in payload) {
-    update.email = typeof payload.email === 'string' && payload.email.trim() ? payload.email.trim() : null
-  }
-
-  if ('actsAsTechnician' in payload) {
-    if (typeof payload.actsAsTechnician !== 'boolean') {
-      throw Object.assign(new Error('actsAsTechnician must be a boolean'), { status: 400 })
-    }
-    update.actsAsTechnician = payload.actsAsTechnician
-  }
-
-  if (Object.keys(update).length === 0) {
-    throw Object.assign(new Error('No valid user fields were provided'), { status: 400 })
-  }
-
-  return update
-}

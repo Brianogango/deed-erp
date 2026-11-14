@@ -1,10 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import {
-  useFinanceStore, useInventoryStore, fmtKes, fmtDate,
-  CashbookEntry, BankAccount, BankStatementLine, StatementLineCategory,
-  Invoice, POSOrder, Expense, JournalEntry, Deposit,
-} from '@/lib/store'
+import { useFinanceStore, useInventoryStore, fmtKes, fmtDate, CashbookEntry, BankAccount, BankStatementLine, StatementLineCategory } from '@/lib/store'
 import type { Account } from '@/lib/store'
 import { computeCashbookTotals } from '@/lib/finance-alerts'
 import CashbookMonthSummary from '@/components/finance/CashbookMonthSummary'
@@ -153,7 +149,6 @@ function ReconPanel({
   const adjBookBalance  = bookBalance + unrecordedCredits - unrecordedCharges
   const isReconciled    = stmtLines.length > 0 && Math.abs(adjBankBalance - adjBookBalance) < 1
   const isLocked        = !!savedRecon && savedRecon.status === 'reconciled' && systemSettings.accLockDates
-  const statementDate   = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).toISOString().slice(0, 10)
 
   function submitLine() {
     if (isLocked) { showToast('This reconciled bank period is locked. Reopen it before adding statement lines.', 'error'); return }

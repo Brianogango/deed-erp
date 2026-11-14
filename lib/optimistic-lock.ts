@@ -30,8 +30,3 @@ export function readLockVersionFromResponse(body: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-/** Drop a stale client lockVersion so the server can claim the live row. */
-export function omitLockVersion<T extends { lockVersion?: unknown }>(row: T): Omit<T, 'lockVersion'> {
-  const { lockVersion: _ignored, ...rest } = row
-  return rest
-}

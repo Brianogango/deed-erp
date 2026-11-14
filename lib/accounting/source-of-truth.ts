@@ -21,10 +21,6 @@ export function journalWritersMigratedOffBlob(): boolean {
   return enabled(process.env.ACCOUNTING_PRISMA_JOURNAL_WRITERS)
 }
 
-export function storeStillWritesJournalBlob(): boolean {
-  return !journalWritersMigratedOffBlob()
-}
-
 export function accountingCutoverState() {
   const writersMigrated = journalWritersMigratedOffBlob()
   return {

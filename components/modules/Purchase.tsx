@@ -4,16 +4,12 @@ import { newestDocumentFirst } from '@/lib/document-order'
 import { OperationalSummary } from '@/components/erp/OperationalSummary'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { useFinanceStore, type Product, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
+import { useFinanceStore, type Product, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, resolveProductAccounts } from '@/lib/store'
+import { Badge, Modal, Field, Select, Textarea, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import ProductFormModal from '@/components/inventory/ProductFormModal'
 import { canCreateProductFromSales } from '@/lib/sales/similar-products'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
-import {
-  Fa, faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint,
-  faClipboardList, faPlus, faBarcode, faTriangleExclamation, faFolderOpen,
-  faFileLines, faImage, faMagnifyingGlass, faCheck, faXmark,
-} from '@/components/icons'
+import { Fa, faClipboardCheck, faPrint, faClipboardList, faPlus, faBarcode, faTriangleExclamation, faFolderOpen, faFileLines, faImage, faMagnifyingGlass, faCheck, faXmark } from '@/components/icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import ContactFormModal, { blankCompanyContact } from '@/components/contacts/ContactFormModal'
@@ -47,7 +43,6 @@ const PURCHASE_RECORD_QUERY = { tab: 'orders' }
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 
-const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
 
 // Receiving into Pending Testing keeps goods unsellable until each passes
 // its checks on the Warehouse screen; Warehouse makes them sellable at once.
@@ -67,9 +62,6 @@ const REASON_OPTS = [
 const STATUS_LABEL: Record<string, string> = {
   draft: 'RFQ', sent: 'RFQ Sent', confirmed: 'Purchase Order',
   partial: 'Partially Received', received: 'Fully Received', cancelled: 'Cancelled',
-}
-const PO_STEP_IDX: Record<string, number> = {
-  draft: 0, sent: 1, confirmed: 2, partial: 3, received: 3,
 }
 
 // CSV template columns
@@ -767,20 +759,7 @@ function PurchaseContent() {
   }
 
   // ── Return ─────────────────────────────────────────────────────────────────
-  const openReturnForPO = () => {
-    if (!activePO) return
-    const latest = receipts.filter(r => r.poId === activePO.id && r.status === 'validated').pop()
-    if (!latest) { showToast('No validated receipt found', 'error'); return }
-    setReturnReceiptId(latest.id)
-    setReturnLines(latest.lines.filter(l => l.qtyReceived > 0).map(l => ({ productId: l.productId, productName: l.productName, qty: '', serials: [], requiresSerial: l.requiresSerial })))
-    setReturnReason('')
-    setReturnScanInput({})
-    setReturnCollectedBy('')
-    setReturnCollectedDate('')
-    setReturnPickupNotes('')
-    setShowReturnModal(true)
-  }
-
+  
   const addReturnSerial = (idx: number, serial: string) => {
     const val = serial.trim().toUpperCase()
     if (!val) return
@@ -1848,7 +1827,6 @@ function PurchaseContent() {
 
               <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
                 {importRows.map((row, i) => {
-                  const rowAcct = row.accountCode ? accounts.find(a => a.code === row.accountCode) : null
                   return (
                   <div key={i} className="grid items-center text-xs px-3 py-2 rounded"
                     style={{

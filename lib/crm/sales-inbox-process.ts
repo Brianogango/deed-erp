@@ -259,7 +259,6 @@ async function processSalesInboxLeadsUnlocked(opts?: {
     orderBy: { username: 'asc' },
   })
   const salesRepIds = salesReps.map(u => u.id)
-  const salesRepById = new Map(salesReps.map(u => [u.id, u]))
 
   let messages
   try {

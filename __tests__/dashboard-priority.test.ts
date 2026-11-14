@@ -1,14 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  canShowDashboardKpi,
-  dashboardSectionsForRole,
-  dashboardSectionsForUser,
-  resolveSalesTab,
-  resolveSettingsSection,
-  visibleDashboardRepairs,
-  visibleDashboardRepUsers,
-  visibleDashboardSalesOrders,
-} from '@/lib/dashboard-priority'
+import { canShowDashboardKpi, dashboardSectionsForRole, dashboardSectionsForUser, resolveSettingsSection, visibleDashboardRepairs, visibleDashboardRepUsers, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
 import { ROLE_DEFAULT_MODULES, USER_ROLES } from '@/lib/auth/types'
 import { userCan } from '@/lib/auth/can'
 const canManageHRRole = (role: string) => userCan({ role }, 'manageHR')
@@ -149,25 +140,10 @@ describe('dashboard role + per-user module gating', () => {
 })
 
 describe('module landing behaviour', () => {
-  it('legacy sales ?tab=dashboard deep links resolve to the operational list', () => {
-    expect(resolveSalesTab('dashboard')).toBe('list')
-  })
-
-  it('missing or unknown sales tabs land on the list', () => {
-    expect(resolveSalesTab(null)).toBe('list')
-    expect(resolveSalesTab(undefined)).toBe('list')
-    expect(resolveSalesTab('nonsense')).toBe('list')
-  })
-
-  it('removed tabs (reps moved to dashboard) resolve to the list', () => {
-    expect(resolveSalesTab('reps')).toBe('list')
-  })
-
-  it('crm deep links resolve to the list (CRM moved fully to /crm)', () => {
-    expect(resolveSalesTab('crm')).toBe('list')
-    expect(resolveSalesTab('list')).toBe('list')
-  })
-
+  
+  
+  
+  
   it('settings deep-link aliases resolve to real sections', () => {
     expect(resolveSettingsSection('users')).toBe('access')
     expect(resolveSettingsSection('account')).toBe('general')

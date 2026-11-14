@@ -93,20 +93,6 @@ export function buildPaymentReceiptContent(input: {
   }
 }
 
-export function paymentReceiptAlreadySent(
-  sends: Array<{ documentType: string; documentId: string; status: string; subject?: string; documentRef?: string }>,
-  paymentId: string,
-  invoiceRef?: string,
-): boolean {
-  return sends.some(
-    s =>
-      s.documentType === 'payment_receipt'
-      && s.documentId === paymentId
-      && s.status === 'success'
-      && (!invoiceRef || !s.documentRef || s.documentRef === invoiceRef),
-  )
-}
-
 /**
  * Best-effort customer notify after a new (non-idempotent) payment.
  * Idempotent retries must skip this — payment API returns early with idempotent:true.

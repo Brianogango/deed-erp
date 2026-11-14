@@ -20,16 +20,7 @@ const { mockPrisma } = vi.hoisted(() => {
 
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
 
-import {
-  countStoreRecords,
-  deleteStoreRecords,
-  latestStoreRecordUpdatedAt,
-  loadStoreRecordChangesSince,
-  readStoreRecords,
-  storeBackend,
-  storeRecordVersion,
-  writeStoreRecords,
-} from '@/lib/prisma-store'
+import { readStoreRecords, storeBackend, writeStoreRecords } from '@/lib/prisma-store'
 
 const originalBackend = process.env.STORE_BACKEND
 
@@ -137,21 +128,5 @@ describe('store_records KV', () => {
     expect(Object.keys(stored)).toEqual(['deed_contacts'])
   })
 
-  it('tracks version and changes since', async () => {
-    await writeStoreRecords({ deed_serials: '[]' })
-    const ver = await storeRecordVersion(['deed_serials'])
-    expect(ver.n).toBe(1)
-    expect(ver.latest).toMatch(/T/)
-    expect(await countStoreRecords()).toBe(1)
-    expect(await latestStoreRecordUpdatedAt()).toBe(ver.latest)
-
-    const since = await loadStoreRecordChangesSince('1970-01-01T00:00:00.000Z')
-    expect(since.changes.deed_serials).toEqual([])
+  
   })
-
-  it('deletes selected keys', async () => {
-    await writeStoreRecords({ a: '1', b: '2' })
-    expect(await deleteStoreRecords(['a'])).toBe(1)
-    expect(await readStoreRecords()).toEqual({ b: 2 })
-  })
-})

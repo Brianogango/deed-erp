@@ -7,7 +7,6 @@
  * moved onto a custom role.
  */
 import { PERMISSION_BY_KEY, PERMISSION_GROUPS } from './permission-catalog'
-import type { PublicUser } from './types'
 import { canonicalRole } from './roles'
 
 type Subject = {

@@ -44,10 +44,4 @@ describe('installIntlFormatCache', () => {
     expect(capture()).toEqual(builtIn)
   })
 
-  it('formats Kenyan dates and amounts', async () => {
-    const { formatKeDate, formatKe2dp } = await import('@/lib/intl-cache')
-    expect(formatKeDate('2026-10-05T21:30:00Z')).toBe(new Date('2026-10-05T21:30:00Z').toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' }))
-    expect(formatKeDate('not a date')).toBe('not a date')
-    expect(formatKe2dp(1234.5)).toBe('1,234.50')
   })
-})

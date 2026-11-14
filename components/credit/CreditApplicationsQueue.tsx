@@ -5,7 +5,6 @@ import { Badge, Modal } from '@/components/ui'
 import { fmtDate, fmtKes, useApp } from '@/lib/store'
 import { STATUS_LABELS } from '@/lib/credit/credit-facility-rules'
 import CreditFacilityPanel, { type CreditApplicationView } from './CreditFacilityPanel'
-import { canonicalRole } from '@/lib/auth/roles'
 import { isDirector } from '@/lib/auth/roles'
 
 type Toast = (msg: string, type?: 'error' | 'success' | 'info') => void

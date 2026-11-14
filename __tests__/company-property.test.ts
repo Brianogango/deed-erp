@@ -2,23 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { userCan } from '@/lib/auth/can'
-import {
-  nextCompanyAssetRef,
-  defaultPpeAccountCode,
-  canTransitionCompanyAsset,
-  canDeleteCompanyAsset,
-  allowedCompanyAssetTransitions,
-  validateCompanyAssetInput,
-  findDuplicateAssetTag,
-  capitalRegisterVsCoa,
-  applyMove,
-  applyDispose,
-  applyWriteOff,
-  applyStatusChange,
-  isCapitalOnRegister,
-  resolvedPpeAccountCode,
-  type CompanyAsset,
-} from '@/lib/company-property'
+import { nextCompanyAssetRef, defaultPpeAccountCode, canTransitionCompanyAsset, validateCompanyAssetInput, findDuplicateAssetTag, capitalRegisterVsCoa, applyMove, applyDispose, applyWriteOff, applyStatusChange, isCapitalOnRegister, resolvedPpeAccountCode, type CompanyAsset } from '@/lib/company-property'
 
 function asset(partial: Partial<CompanyAsset> = {}): CompanyAsset {
   return {
@@ -70,11 +54,7 @@ describe('default PPE accounts', () => {
 })
 
 describe('lifecycle', () => {
-  it('allows draft → in_use / in_storage only', () => {
-    expect(allowedCompanyAssetTransitions('draft')).toEqual(['in_use', 'in_storage'])
-    expect(canTransitionCompanyAsset('draft', 'disposed')).toBe(false)
-  })
-
+  
   it('allows live items to move through repair, lost, dispose, and write-off', () => {
     expect(canTransitionCompanyAsset('in_use', 'under_repair')).toBe(true)
     expect(canTransitionCompanyAsset('in_storage', 'disposed')).toBe(true)
@@ -82,13 +62,7 @@ describe('lifecycle', () => {
     expect(canTransitionCompanyAsset('lost', 'in_use')).toBe(true)
   })
 
-  it('locks disposed and written-off rows', () => {
-    expect(allowedCompanyAssetTransitions('disposed')).toEqual([])
-    expect(allowedCompanyAssetTransitions('written_off')).toEqual([])
-    expect(canDeleteCompanyAsset('in_use')).toBe(false)
-    expect(canDeleteCompanyAsset('draft')).toBe(true)
   })
-})
 
 describe('validateCompanyAssetInput', () => {
   const valid = {

@@ -21,18 +21,6 @@ export async function cacheSet(key: string, value: unknown, ttlSeconds: number):
   }
 }
 
-export async function cacheGetOrSet<T>(
-  key: string,
-  ttlSeconds: number,
-  load: () => Promise<T>,
-): Promise<{ value: T; source: 'cache' | 'live' }> {
-  const cached = await cacheGet<T>(key)
-  if (cached != null) return { value: cached, source: 'cache' }
-  const value = await load()
-  await cacheSet(key, value, ttlSeconds)
-  return { value, source: 'live' }
-}
-
 export async function cacheIncr(key: string): Promise<number> {
   const redis = await getInfraRedis()
   return redis.incr(key)

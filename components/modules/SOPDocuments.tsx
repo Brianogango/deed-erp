@@ -5,15 +5,10 @@ import { useHrStore } from '@/lib/store'
 import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
-import {
-  faFileLines, faPlus, faSearch, faPen, faTrash, faCheck, faXmark,
-  faBookOpen, faTag, faListOl, faClock, faUser, faUpload, faDownload,
-  faFilePdf, faFileWord, faFileImage, faFile, faBuilding, faEye,
-} from '@fortawesome/free-solid-svg-icons'
+import { faFileLines, faPlus, faSearch, faTrash, faCheck, faXmark, faBookOpen, faTag, faListOl, faClock, faUser, faUpload, faDownload, faFilePdf, faFileWord, faFileImage, faFile, faBuilding, faEye } from '@fortawesome/free-solid-svg-icons'
 import { useCan } from '@/hooks/useCan'
 
 const CYAN = 'var(--accent-cyan)'
-const NAVY = 'var(--navy)'
 
 // ── File size limit (must match server-side guard) ────────────────────────────
 const MAX_FILE_BYTES = 5 * 1024 * 1024   // 5 MB

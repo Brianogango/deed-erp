@@ -25,11 +25,7 @@ import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
-import {
-  faRotate, faPlus, faUser, faWrench, faCheckCircle,
-  faArrowRight, faBan, faChevronLeft, faBoxOpen, faPencil, faTrash,
-  faBell, faTriangleExclamation, faCheck, faMagnifyingGlass, faScrewdriverWrench, faPrint,
-} from '@fortawesome/free-solid-svg-icons'
+import { faRotate, faPlus, faUser, faWrench, faCheckCircle, faArrowRight, faBan, faBoxOpen, faPencil, faTrash, faBell, faTriangleExclamation, faCheck, faMagnifyingGlass, faScrewdriverWrench, faPrint } from '@fortawesome/free-solid-svg-icons'
 import { useCan } from '@/hooks/useCan'
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -71,7 +67,6 @@ function RefurbishmentContent() {
     addRefurbishmentPart, updateRefurbishmentPart, removeRefurbishmentPart,
     requestPartFromInventory, allocateRefurbPart, notifyTechPartAvailable,
     markRefurbishmentReady, transferToSell, writeOffRefurbishmentJob, restoreRefurbishmentJob,
-    updateSerial,
     showToast,
     fixRefurbJobNumbers,
   } = useOperationsStore()

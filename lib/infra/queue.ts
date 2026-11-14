@@ -64,7 +64,3 @@ export async function dequeueJobs<T = unknown>(queue: string, limit: number): Pr
   return jobs
 }
 
-export async function queueLength(queue: string): Promise<number> {
-  const redis = await getInfraRedis()
-  return redis.llen(queueRedisKey(queue))
-}

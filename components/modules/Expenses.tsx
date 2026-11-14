@@ -14,7 +14,7 @@ import {
   Fa, faBox, faCar, faComputer, faDesktop, faDroplet, faFileLines, faLightbulb,
   faPrint, faScrewdriverWrench, faUtensils, faImage, faPaperclip, faTriangleExclamation,
 } from '@/components/icons'
-import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { faClipboardList, faPlus } from '@fortawesome/free-solid-svg-icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'

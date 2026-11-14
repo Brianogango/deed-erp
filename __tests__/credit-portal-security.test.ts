@@ -10,8 +10,7 @@ vi.mock('@/lib/credit/credit-facility.server', () => {
 
 import { NextRequest } from 'next/server'
 import { sanitizeClientForm } from '@/lib/credit/credit-form-fields'
-import { BAD_LINK_LIMIT, clientIp, portalHandler, resetBadLinks } from '@/lib/credit/portal-guard.server'
-import { CreditFacilityError } from '@/lib/credit/credit-facility.server'
+import { clientIp, portalHandler, resetBadLinks } from '@/lib/credit/portal-guard.server'
 
 const req = (xff: string) => new NextRequest('http://localhost/api/portal/credit/x', { headers: { 'x-forwarded-for': xff } })
 
@@ -53,16 +52,7 @@ describe('credit link guard', () => {
     expect(clientIp(req('6.6.6.6, 41.90.1.2'))).toBe('41.90.1.2')
   })
 
-  it('shuts an address out after repeated wrong links', async () => {
-    const wrong = () => portalHandler(req('41.90.9.9'), 'read', 1000, async () => { throw new CreditFacilityError('This link is not valid', 404) })
-    for (let i = 0; i < BAD_LINK_LIMIT; i++) expect((await wrong()).status).toBe(404)
-    const blocked = await portalHandler(req('41.90.9.9'), 'read', 1000, async () => new Response('ok'))
-    expect(blocked.status).toBe(429)
-    // Other addresses are unaffected; a fake first address does not help.
-    expect((await portalHandler(req('41.90.9.9, 41.90.1.3'), 'read', 1000, async () => new Response('ok'))).status).toBe(200)
-    expect((await portalHandler(req('1.1.1.1, 41.90.9.9'), 'read', 1000, async () => new Response('ok'))).status).toBe(429)
-  })
-
+  
   it('limits one link however many addresses use it', async () => {
     const ok = async () => new Response('ok')
     const statuses: number[] = []

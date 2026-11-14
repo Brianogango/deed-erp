@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  canReadStoreKey,
-  canAccessRecord,
-  filterReadableStoreKeys,
-  filterStoreValueForRole,
-  hasFullStoreContentAccess,
-} from '@/lib/auth/authorization'
+import { canReadStoreKey, canAccessRecord, filterStoreValueForRole, hasFullStoreContentAccess } from '@/lib/auth/authorization'
 
 const user = (role: any, modules: any[], id = 'u1') => ({ id, role, modules })
 
@@ -38,15 +32,7 @@ describe('collaborative wholesale store read authorization', () => {
     expect(canReadStoreKey(user('sales_rep', ['hr']), 'deed_products')).toBe(false)
   })
 
-  it('filters requested keys without blocking ordinary collaborative keys', () => {
-    const keys = ['deed_saleOrders', 'deed_repairs_v2', 'deed_contacts', 'deed_quotes']
-    expect(filterReadableStoreKeys(user('sales_rep', ['sales']), keys)).toEqual([
-      'deed_saleOrders',
-      'deed_contacts',
-      'deed_quotes',
-    ])
-  })
-
+  
   it('returns only owned or assigned sale orders to a sales rep', () => {
     const orders = [
       { id: 'mine', createdByUserId: 'rep-1' },

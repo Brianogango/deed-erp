@@ -107,7 +107,6 @@ function idReq(id: string, body: unknown, method = 'PUT'): NextRequest {
 }
 
 function err401() { return Object.assign(new Error('Unauthorized'), { status: 401 }) }
-function err403() { return Object.assign(new Error('Forbidden — insufficient role'), { status: 403 }) }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 beforeEach(() => {

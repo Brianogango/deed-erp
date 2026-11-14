@@ -49,12 +49,9 @@ export default function GeneralLedgerTab() {
   )
   const [accountSearch, setAccountSearch] = useState('')
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
-  const [sourceValue, setSourceValue] = useUrlUiState('glBook', 'prisma')
   // Always the posted ledger on the server: browsers no longer hold every journal.
   const source: 'blob' | 'prisma' = 'prisma'
-  void sourceValue
-  const setSource = (next: 'blob' | 'prisma') => setSourceValue(next)
-  const [selectedLine, setSelectedLine] = useState<GlRow | null>(null)
+    const [selectedLine, setSelectedLine] = useState<GlRow | null>(null)
   const [prismaLines, setPrismaLines] = useState<GlRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

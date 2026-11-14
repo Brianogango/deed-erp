@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockPrisma, mockCreateJournal } = vi.hoisted(() => {
+const { mockPrisma } = vi.hoisted(() => {
   const mockPrisma: any = {
     deposit: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
     depositPayment: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },

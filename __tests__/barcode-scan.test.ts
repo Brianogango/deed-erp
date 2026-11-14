@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildSerialLabelScanPayload,
-  codesEqual,
-  identityMatchesScan,
-  matchPosScan,
-  parseScanPayload,
-  resolveOrcConfirmedSerial,
-} from '@/lib/barcode-scan'
+import { codesEqual, identityMatchesScan, matchPosScan, parseScanPayload, resolveOrcConfirmedSerial } from '@/lib/barcode-scan'
 
 describe('parseScanPayload', () => {
   it('parses plain inventory barcodes', () => {
@@ -104,10 +97,3 @@ describe('resolveOrcConfirmedSerial', () => {
   })
 })
 
-describe('buildSerialLabelScanPayload', () => {
-  it('prefers manufacturer serial over inventory barcode for scanning', () => {
-    expect(buildSerialLabelScanPayload({ serial: 'MFG', barcode: 'INV-1' })).toBe('MFG')
-    expect(buildSerialLabelScanPayload({ serial: 'MFG', barcode: '' })).toBe('MFG')
-    expect(buildSerialLabelScanPayload({ serial: '', barcode: 'INV-1' })).toBe('INV-1')
-  })
-})

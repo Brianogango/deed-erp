@@ -12,9 +12,6 @@ const { mockPrismaStore } = vi.hoisted(() => ({
     storeBackend: vi.fn((): 'prisma' | 'dual' | 'app_state' => 'dual'),
     writeStoreRecords: vi.fn().mockResolvedValue(undefined),
     readStoreRecords: vi.fn().mockResolvedValue({}),
-    storeRecordVersion: vi.fn().mockResolvedValue({ latest: '', n: 0 }),
-    loadStoreRecordChangesSince: vi.fn().mockResolvedValue({ changes: {}, latestUpdatedAt: '' }),
-    latestStoreRecordUpdatedAt: vi.fn().mockResolvedValue(''),
   },
 }))
 

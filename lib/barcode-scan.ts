@@ -198,14 +198,3 @@ export function resolveOrcConfirmedSerial(input: {
   }
 }
 
-/** Build the QR / CODE128 payload printed on a serial unit label.
- * Prefer manufacturer serial so shop-floor scans match the physical device. */
-export function buildSerialLabelScanPayload(item: {
-  serial: string
-  barcode?: string | null
-  sku?: string | null
-}): string {
-  const serial = normalizeScanCode(item.serial)
-  if (serial) return serial
-  return normalizeScanCode(item.barcode)
-}

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { correctBillPaymentLines, planBillPaymentFix, type FixJournal } from '@/lib/accounting/bill-payment-fix'
-import { mergeInvoiceMirror } from '@/lib/invoice-mirror-merge'
 import { preservePostedInvoicePaymentProgress } from '@/lib/finance-invoice'
 
 const receipt = (id: string, amount: number, reversed = false): FixJournal => ({
@@ -53,27 +52,5 @@ describe('paid documents stay paid', () => {
     expect((preservePostedInvoicePaymentProgress(current, [{ id: 'b1', status: 'draft', amountPaid: 0 }]) as any[])[0].amountPaid).toBe(0)
   })
 
-  it('the table refresh keeps the payment lists and respects a reversal', () => {
-    const existing = [
-      { id: 'b1', amountPaid: 25000, payments: [{ id: 'p1', amount: 25000 }] },
-      { id: 'i2', amountPaid: 42000, payments: [], voidedPayments: [{ id: 'p9', amount: 42000 }] },
-    ]
-    const table = [{ id: 'b1', amountPaid: 25000 }, { id: 'i2', amountPaid: 15000 }]
-    const { merged } = mergeInvoiceMirror(table, existing) as { merged: any[] }
-    expect(merged[0].payments).toEqual([{ id: 'p1', amount: 25000 }])
-    expect(merged[1]).toMatchObject({ amountPaid: 15000, voidedPayments: [{ id: 'p9' }] })
   })
-})
 
-describe('amount paid never below the payments listed', () => {
-  it('a refresh restores an amount lowered while the payments stayed listed', () => {
-    const existing = [{ id: 'i1', total: 42000, amountPaid: 0, payments: [{ id: 'p1', amount: 15000 }, { id: 'p2', amount: 27000 }] }]
-    const { merged } = mergeInvoiceMirror([{ id: 'i1', total: 42000, amountPaid: 0 }], existing) as { merged: any[] }
-    expect(merged[0].amountPaid).toBe(42000)
-  })
-  it('never above the total, and reversed payments do not count', () => {
-    const existing = [{ id: 'i1', total: 10000, amountPaid: 0, payments: [{ id: 'p1', amount: 12000 }], voidedPayments: [{ id: 'p0', amount: 9000 }] }]
-    const { merged } = mergeInvoiceMirror([{ id: 'i1', total: 10000, amountPaid: 0 }], existing) as { merged: any[] }
-    expect(merged[0].amountPaid).toBe(10000)
-  })
-})

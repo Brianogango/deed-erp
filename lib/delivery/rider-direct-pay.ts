@@ -35,8 +35,6 @@ export const riderPayForJob = (job: JobLike) =>
 export const feeCoveredByCustomer = (job: JobLike) =>
   Math.round(((Number(job.riderFee) || 0) - riderPayForJob(job)) * 100) / 100
 
-export const paidDirectToRider = (job: JobLike) => Number(job.customerPaidRider?.amount) || 0
-
 /** A "Delivery charge" line, as scheduling a delivery writes it. */
 export const isDeliveryChargeLine = (description: unknown) => /^\s*delivery charge\b/i.test(String(description ?? ''))
 

@@ -87,59 +87,6 @@ export function buildVatControlFromAggregates(
   }
 }
 
-/** Invoice-sum path (parity with Accounting.tsx blob VAT tab). */
-export function buildVatControlFromInvoices(
-  invoices: Array<{
-    type?: string
-    status?: unknown
-    taxTotal?: number
-    taxAmount?: number
-    subtotal?: number
-  }>,
-  opts?: {
-    dateFrom?: string | null
-    dateTo?: string | null
-    isPosted?: (status: unknown) => boolean
-  },
-): VatControlResult {
-  const isPosted = opts?.isPosted ?? ((s) => {
-    const v = String(s || '').toLowerCase()
-    return v === 'posted' || v === 'approved' || v === 'invoiced' || v === 'paid' || v === 'partially_paid'
-  })
-
-  let outputVat = 0
-  let inputVat = 0
-  let taxableSales = 0
-  let taxablePurchases = 0
-
-  for (const inv of invoices) {
-    if (!isPosted(inv.status)) continue
-    const tax = roundMoney(inv.taxTotal ?? inv.taxAmount ?? 0)
-    const sub = roundMoney(inv.subtotal ?? 0)
-    if (inv.type === 'vendor_bill') {
-      inputVat = roundMoney(inputVat + Math.abs(tax))
-      taxablePurchases = roundMoney(taxablePurchases + Math.abs(sub))
-    } else {
-      outputVat = roundMoney(outputVat + Math.abs(tax))
-      taxableSales = roundMoney(taxableSales + Math.abs(sub))
-    }
-  }
-
-  return {
-    currency: 'KES',
-    dateFrom: opts?.dateFrom ?? null,
-    dateTo: opts?.dateTo ?? null,
-    outputVatCode: outputVatAccountCode(),
-    inputVatCode: inputVatAccountCode(),
-    outputVat,
-    inputVat,
-    vatPayable: roundMoney(outputVat - inputVat),
-    source: 'invoices',
-    taxableSales,
-    taxablePurchases,
-  }
-}
-
 /** Kenya-style return draft DTO (not an eTIMS submission). */
 export function buildVatReturnDraft(
   control: VatControlResult,

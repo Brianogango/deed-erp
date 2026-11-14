@@ -5,7 +5,7 @@ import { MarginPolicySettings } from '@/components/modules/settings/MarginPolicy
 import { CommissionRatesSettings } from '@/components/modules/settings/CommissionRatesSettings'
 import { normalizePricingMarginPolicy, DEFAULT_PRICING_MARGIN_POLICY } from '@/lib/pricing/margin-policy'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Textarea, ExportButtons, useMounted } from '@/components/ui'
+import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, Select, Textarea, ExportButtons, useMounted } from '@/components/ui'
 import { ModuleChrome } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'

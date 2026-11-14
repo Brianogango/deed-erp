@@ -76,7 +76,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await params
   return PUT(request, { params })
 }
 

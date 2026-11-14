@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  buildRepairInvoiceCharges,
-  executionChargeTotal,
-  invoiceMatchesRepairCharges,
-  repairBillingNeedsSync,
-  repairBillsFeeOnly,
-  repairInvoiceChargeTotal,
-} from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairBillingNeedsSync, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 
 describe('buildRepairInvoiceCharges', () => {
   it('bills the approved quote even when parts were also logged', () => {
@@ -41,26 +34,7 @@ describe('buildRepairInvoiceCharges', () => {
     expect(repairInvoiceChargeTotal(lines)).toBe(5500)
   })
 
-  it('uses the repair quote when labour/parts were never logged (REP/0283)', () => {
-    const lines = buildRepairInvoiceCharges({
-      partsUsed: [],
-      laborCost: 0,
-      logisticsCost: 0,
-      diagnosisFee: 0,
-      diagnosisFeeStatus: 'not_applicable',
-      quote: {
-        lines: [
-          { type: 'service', description: 'Service', qty: 1, unitPrice: 1500, subtotal: 1500 },
-          { type: 'part', description: 'Hardrive 500 GB', qty: 1, unitPrice: 3500, subtotal: 3500 },
-        ],
-      },
-    }, true, 16)
-    expect(executionChargeTotal({ partsUsed: [], laborCost: 0 })).toBe(0)
-    expect(lines).toHaveLength(2)
-    expect(repairInvoiceChargeTotal(lines)).toBe(5000)
-    expect(lines.every(l => l.taxRate === 0)).toBe(true)
-  })
-
+  
   it('skips declined quote lines and already-paid diagnosis fees', () => {
     const lines = buildRepairInvoiceCharges({
       laborCost: 0,

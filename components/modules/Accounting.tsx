@@ -22,34 +22,10 @@ import DocumentLedgerRepair from '@/components/finance/DocumentLedgerRepair'
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
-import {
-  faArrowDown,
-  faTriangleExclamation,
-  faMoneyBillWave,
-  faArrowUp,
-  faBook,
-  faBalanceScale,
-  faChartLine,
-  faListUl,
-  faUsers,
-  faPrint,
-  faDownload,
-  faPlus,
-  faTrash,
-  faFileInvoiceDollar,
-} from '@fortawesome/free-solid-svg-icons'
+import { faArrowDown, faMoneyBillWave, faArrowUp, faBook, faBalanceScale, faChartLine, faUsers, faPrint, faDownload, faPlus, faTrash, faFileInvoiceDollar } from '@fortawesome/free-solid-svg-icons'
 
-import {
-  useFinanceStore,
-  Invoice,
-  InvoiceLine,
-  JournalEntry,
-  RefundPayment,
-  Account,
-  fmtKes,
-  fmtDate,
-} from '@/lib/store'
-import { downloadPdf, printPdf, PdfLine } from '@/lib/pdf'
+import { useFinanceStore, Invoice, JournalEntry, Account, fmtKes, fmtDate } from '@/lib/store'
+import { PdfLine } from '@/lib/pdf'
 import { downloadInvoicePdf } from '@/components/modules/invoice-pdf'
 import { CO } from '@/lib/company'
 import {
@@ -63,27 +39,10 @@ import {
   INVOICE_DOC_STATE_LABELS,
   PAYMENT_STATUS_LABELS,
 } from '@/lib/odoo-sales-flow'
-import { exportToPDF, exportToExcel, type ExportRow } from '@/lib/export-utils'
+import { exportToPDF, exportToExcel } from '@/lib/export-utils'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { ensureArray } from '@/lib/safe-local-state'
-import {
-  Badge,
-  Modal,
-  Field,
-  Input,
-  Select,
-  PanelHeader,
-  Divider,
-  SearchPicker,
-  ModuleSkeleton,
-  ModuleHeader,
-  useMounted,
-  TabContent,
-  RecordCard,
-  TabBar,
-  StatePanel,
-  EmptyState,
-} from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, SearchPicker, ModuleSkeleton, ModuleHeader, useMounted, RecordCard, TabBar, EmptyState } from '@/components/ui'
 import { PrimaryActionButton, WorkflowStageBar } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
@@ -109,13 +68,7 @@ import IntegrityDashboard from './accounting/IntegrityDashboard'
 import CashFlowPanel from './accounting/CashFlowPanel'
 import AccountingDashboard from './accounting/AccountingDashboard'
 import { usePrismaAccountingReports, bootstrapCoaClient } from '@/hooks/usePrismaAccountingReports'
-import {
-  DEFAULT_DOCUMENT_PAYMENT_DETAILS,
-  alignPaymentDetailsToTax,
-  documentHasVat,
-  normalizeDocumentPaymentDetails,
-  type DocumentPaymentDetails,
-} from '@/lib/document-payment-details'
+import { DEFAULT_DOCUMENT_PAYMENT_DETAILS, alignPaymentDetailsToTax, normalizeDocumentPaymentDetails, type DocumentPaymentDetails } from '@/lib/document-payment-details'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
@@ -221,65 +174,18 @@ const MANAGEMENT_REPORT_IDS = new Set<ReportTab>(['pl', 'bs', 'cash_flow', 'agei
 const CONTROL_REPORT_IDS = new Set<ReportTab>(['monthly', 'vat', 'trial_balance', 'cash_position', 'fx'])
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
-const CA_GROUPS = [
-  'Inventory - Closing',
-  'Receivables - Product',
-  'Receivables - Services',
-  'Receivables - Repair',
-  'Receivables - Other',
-  'Prepayments - Product',
-  'Prepayments - Services',
-  'Prepayments - Repair',
-  'Prepayments - Other',
-  'Cash at Bank',
-  'Cash in Hand',
-]
-const NCA_GROUPS = ['PPE - Cost', 'Accumulated Depreciation']
-const CL_GROUPS = [
-  'Payables - Product',
-  'Payables - Services',
-  'Payables - Repair',
-  'Payables - Other',
-  'Accruals',
-  'Statutory Liabilities',
-]
-const NCL_GROUPS = ['Non-Current Liabilities']
 
 // ── P&L group lists ───────────────────────────────────────────────────────────
-const REV_GROUPS = ['Revenue - Products', 'Revenue - Solutions', 'Revenue - Repair']
-const OI_GROUPS = ['Other Income']
-const OS_GROUPS = ['Inventory - Opening'] // Opening Stock (COGS)
-const PUR_GROUPS = ['Local Purchases', 'Import Purchases']
-const DIRECT_GROUPS = ['Direct Expenses', 'Other Direct Expenses']
-const CS_GROUPS = ['Inventory - Closing'] // Closing Stock (negative in COGS)
-const OPEX_GROUPS = ['Operating Expenses']
-const EMP_GROUPS = ['Employment Expenses']
-const FIN_GROUPS = ['Financial Expenses']
+// Opening Stock (COGS)
+// Closing Stock (negative in COGS)
 
 const uid = () => crypto.randomUUID()
 const today = () => new Date().toISOString().slice(0, 10)
-const cell = (row: Record<string, unknown>, ...keys: string[]) => {
-  for (const key of keys) {
-    const direct = row[key]
-    if (direct !== undefined && direct !== null && String(direct).trim()) return String(direct).trim()
-    const actualKey = Object.keys(row).find(candidate => candidate.trim().toLowerCase() === key.trim().toLowerCase())
-    const value = actualKey ? row[actualKey] : undefined
-    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim()
-  }
-  return ''
-}
 const addDays = (d: string, n: number) => {
   const dt = new Date(d)
   dt.setDate(dt.getDate() + n)
   return dt.toISOString().slice(0, 10)
 }
-const FISCAL_YEAR = new Date().getFullYear().toString()
-const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
-  timeZone: 'Africa/Nairobi',
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-})
 type ManualInvoiceLine = { type: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount: string; account?: string }
 const newManualInvoiceLine = (): ManualInvoiceLine => ({ type: 'item', desc: '', qty: '', price: '', tax: '', discount: '', account: '' })
 const newManualSectionLine = (): ManualInvoiceLine => ({ type: 'section', desc: '', qty: '0', price: '0', tax: '0', discount: '0' })
@@ -314,13 +220,6 @@ const monthLabel = (key: string) => {
 // UTILS
 // ═══════════════════════════════════════════════════════════════════════════
 
-const row = (label: string, value: string, y: number, bold = false, indent = 0): PdfLine[] => [
-  { text: label, x: 40 + indent, y, size: 10, bold },
-  { text: value, x: 430, y, size: 10, bold },
-]
-const sectionHeader = (label: string, y: number): PdfLine[] => [
-  { text: label, x: 40, y, size: 11, bold: true },
-]
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -361,7 +260,6 @@ function AccountingContent() {
     updateAccount,
     bankAccounts,
     addBankAccount,
-    bankRecons,
     bankStatementLines,
     posOrders,
     products,
@@ -1293,16 +1191,7 @@ function AccountingContent() {
     }
   }
 
-  const handleBillFile = async (file: File | null) => {
-    if (!file) return
-    setReceiptFile(file)
-    setIsScanning(true)
-    setTimeout(() => {
-      setIsScanning(false)
-      showToast('Bill uploaded — complete the form fields manually', 'info')
-    }, 1500)
-  }
-
+  
   const downloadMigrationTemplate = async () => {
     const XLSX = await loadXlsx()
     const headers = ['Kind', 'Name', 'Email', 'Phone', 'Address', 'VAT Number', 'Opening Balance', 'Reference', 'Date', 'Due Date', 'Notes']
@@ -1514,31 +1403,8 @@ function AccountingContent() {
     resetInvForm({ navigateToInvoiceId: savedId })
   }
 
-  const saveAccount = () => {
-    const missing: string[] = []
-    if (!accountForm.code) missing.push('Code')
-    if (!accountForm.name) missing.push('Name')
-    if (!accountForm.type) missing.push('Type')
-    if (!accountForm.group) missing.push('Group')
-    if (accountForm.balance === '' || !Number.isFinite(Number(accountForm.balance))) missing.push('Opening balance')
-    if (missing.length || !accountForm.type) {
-      showToast(`Required: ${missing.join(', ')}`, 'error')
-      return
-    }
-    const payload: Omit<Account, 'id'> = { ...accountForm, type: accountForm.type, balance: Number(accountForm.balance) }
-    if (editAccountId) {
-      updateAccount(editAccountId, payload)
-      showToast('Account updated', 'success')
-    } else {
-      addAccount({ ...payload })
-      showToast('Account created', 'success')
-    }
-    setShowAccountForm(false)
-  }
-
-  const af = (field: keyof typeof accountForm) => (val: any) =>
-    setAccountForm(p => ({ ...p, [field]: val }))
-
+  
+  
   const ctxValue = {
     invoices, contacts, journalEntries, refundPayments, users, currentUserId,
     accounts, bankAccounts, posOrders, expenses, payrollRuns, purchaseOrders, companySettings,

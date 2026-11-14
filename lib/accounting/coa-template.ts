@@ -237,18 +237,3 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
   return a
 }
 
-export function coaTemplateToBlobAccounts(rows: CoaTemplateAccount[]) {
-  return rows.map((r, i) => ({
-    id: `coa-bootstrap-${r.code}`,
-    code: r.code,
-    name: r.name,
-    type: r.type,
-    group: r.group,
-    subGroup: r.subGroup,
-    isActive: true,
-    balance: 0,
-    isDynamic: r.isDynamic ?? false,
-    dynamicKey: r.dynamicKey,
-    notes: r.notes,
-  }))
-}

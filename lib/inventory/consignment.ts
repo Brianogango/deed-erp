@@ -116,12 +116,6 @@ export function openConsignments(devices: ConsignmentDevice[]): ConsignmentDevic
   return (devices ?? []).filter(isAtShop)
 }
 
-export function consignmentsForVendor(vendorId: string, devices: ConsignmentDevice[]): ConsignmentDevice[] {
-  const id = text(vendorId)
-  if (!id) return []
-  return openConsignments(devices).filter(d => text(d.vendorId) === id)
-}
-
 /**
  * Book a device in.
  *

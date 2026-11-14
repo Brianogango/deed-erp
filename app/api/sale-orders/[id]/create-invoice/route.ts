@@ -12,15 +12,7 @@ import {
 } from '@/lib/odoo-sales-flow'
 import { allocateDeliveredQtyToOrderLines } from '@/lib/delivery-prepare'
 import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
-import {
-  computeDownPaymentAmount,
-  downPaymentDeductionForFinal,
-  isDownPaymentMode,
-  normalizeCreateInvoiceMode,
-  saleOrderDownPaymentBase,
-  sumUnappliedDownPayments,
-  type CreateInvoiceMode,
-} from '@/lib/sales/down-payment'
+import { downPaymentDeductionForFinal, isDownPaymentMode, normalizeCreateInvoiceMode, sumUnappliedDownPayments, type CreateInvoiceMode } from '@/lib/sales/down-payment'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import {

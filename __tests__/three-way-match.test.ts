@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  assertBillableQty,
-  assertVendorBillThreeWayMatch,
-  billableQty,
-  billMatchStatus,
-  poHasReceivedGoods,
-  summarizePoThreeWayMatch,
-} from '@/lib/purchase/three-way-match'
+import { assertBillableQty, billableQty, billMatchStatus, poHasReceivedGoods } from '@/lib/purchase/three-way-match'
 
 describe('three-way match', () => {
   it('computes billable qty as received minus billed', () => {
@@ -32,31 +25,5 @@ describe('three-way match', () => {
     expect(billMatchStatus({ qtyOrdered: 10, qtyReceived: 5, qtyBilled: 2 })).toBe('under_billed')
   })
 
-  it('asserts vendor bill lines against PO by productId', () => {
-    const poLines = [
-      { productId: 'p1', qtyOrdered: 10, qtyReceived: 8, qtyBilled: 2 },
-      { productId: 'p2', qtyOrdered: 5, qtyReceived: 5, qtyBilled: 0 },
-    ]
-    expect(() => assertVendorBillThreeWayMatch({
-      poLines,
-      billLines: [{ productId: 'p1', qty: 6 }, { productId: 'p2', qty: 5 }],
-    })).not.toThrow()
-
-    expect(() => assertVendorBillThreeWayMatch({
-      poLines,
-      billLines: [{ productId: 'p1', qty: 7 }],
-    })).toThrow(/3-way match failed/)
-
-    expect(() => assertVendorBillThreeWayMatch({
-      poLines,
-      billLines: [{ productId: 'missing', qty: 1 }],
-    })).toThrow(/not found on purchase order/)
+  
   })
-
-  it('summarizes PO match', () => {
-    const summary = summarizePoThreeWayMatch([
-      { productId: 'p1', qtyOrdered: 10, qtyReceived: 10, qtyBilled: 10 },
-    ])
-    expect(summary.status).toBe('matched')
-  })
-})

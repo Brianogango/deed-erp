@@ -1,5 +1,5 @@
 'use client'
-import { Suspense, useState, useMemo, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import {
   useApp, fmtKes,
   SOP, SOPMetric, SOPMetricType, SOPTargetDir,
@@ -9,7 +9,7 @@ import {
 import { useHrStore } from '@/hooks/useHrStore'
 import { Confirm, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
-import { Fa, faBullseye, faCircleCheck, faCircleXmark, faTriangleExclamation, faUserSlash, faPlus } from '@/components/icons'
+import { Fa, faBullseye, faCircleCheck, faCircleXmark, faTriangleExclamation, faPlus } from '@/components/icons'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { userCan } from '@/lib/auth/can'
@@ -334,9 +334,6 @@ function SOPsContent() {
   }
 
   // ── Current period view ──
-  const viewSOP    = selectedSopId ? (sops.find(s => s.id === selectedSopId) ?? mySOP) : mySOP
-  const viewPeriod = viewSOP ? (histPeriod ?? currentPeriodKey(viewSOP.period)) : ''
-  const viewSummary = viewSOP ? sopSummary(viewSOP, viewPeriod) : null
   const teamRows = sops.filter(s => s.active).map(sop => ({
     sop,
     summary: sopSummary(sop, currentPeriodKey(sop.period)),
@@ -348,15 +345,7 @@ function SOPsContent() {
   const teamNeedsAttention = teamRows.filter(row => row.summary.pctOverall > 0 && row.summary.pctOverall < 70).length
   const teamNoActivity = teamRows.filter(row => row.summary.pctOverall === 0).length
 
-  const tabStyle = (t: string): React.CSSProperties => ({
-    background: tab === t ? '#E8F3FA' : 'transparent',
-    border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
-    borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? 'var(--navy)' : 'var(--text-3)',
-    padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
-    transition: 'all 0.15s',
-  })
-
+  
   if (!mounted) return <ModuleSkeleton />
 
   // ── Render ────────────────────────────────────────────────────────────────

@@ -10,10 +10,6 @@ export function hasAcknowledged(acks: AckLike[], employeeId: string, p: PolicyLi
   return acks.some(a => a.employeeId === employeeId && a.policyId === p.id && a.policyVersion === v)
 }
 
-export function pendingPolicies<P extends PolicyLike>(policies: P[], acks: AckLike[], employeeId: string): P[] {
-  return policies.filter(p => !hasAcknowledged(acks, employeeId, p))
-}
-
 export interface PolicyCoverage { policy: PolicyLike; acknowledged: number; total: number; missing: string[] }
 
 /** Per policy: how many active employees accepted its current version, and who has not. */

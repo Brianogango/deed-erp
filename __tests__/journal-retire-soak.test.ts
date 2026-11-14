@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import {
-  canRetireJournalLiveKey,
-  evaluateJournalRetireReadiness,
-} from '@/lib/accounting/journal-retire-readiness'
+import { evaluateJournalRetireReadiness } from '@/lib/accounting/journal-retire-readiness'
 import {
   buildPostingEngineSoakReport,
   POSTING_ENGINE_SURFACES,
@@ -13,27 +10,7 @@ beforeEach(() => {
 })
 
 describe('journal retire readiness', () => {
-  it('blocks retire while store still blob-writes journals', () => {
-    const r = evaluateJournalRetireReadiness({
-      deepParityOk: true,
-      certificateStatus: 'archived',
-      certificateParityOk: true,
-      archiveKey: 'archive:deed_journalEntries:2026',
-      storeStillBlobWrites: true,
-      postingEngineEnabled: false,
-      writersMigratedOffBlob: false,
-    })
-    expect(r.retireReady).toBe(false)
-    expect(r.blockers.some(b => b.code === 'writers_off_blob')).toBe(true)
-    expect(canRetireJournalLiveKey({
-      deepParityOk: true,
-      certificateStatus: 'archived',
-      certificateParityOk: true,
-      archiveKey: 'archive:deed_journalEntries:2026',
-      storeStillBlobWrites: true,
-    })).toBe(false)
-  })
-
+  
   it('requires deep parity, certificate, and archive', () => {
     const r = evaluateJournalRetireReadiness({
       deepParityOk: false,

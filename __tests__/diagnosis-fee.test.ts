@@ -1,52 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import {
-  buildDiagnosisFeeQuoteLine,
-  DEFAULT_DIAGNOSIS_FEE_KES,
-  DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT,
-  diagnosisFeeAmount,
-  diagnosisFeeLineBadge,
-  diagnosisFeeAmountForTier,
-  diagnosisFeeCustomerNotice,
-  ensureDiagnosisFeeInQuoteLines,
-  isDiagnosisFeeLine,
-  portalDiagnosisFeeFields,
-  isDiagnosisFeePolicyInEffect,
-  isDiagnosisFeeSettled,
-  mustCollectDiagnosisFeeUpfront,
-  resolveCustomerBillingType,
-  resolveDiagnosisFee,
-  resolveDiagnosisFeeBilling,
-  shouldChargeDiagnosisFee,
-  taxableQuoteSubtotal,
-} from '@/lib/diagnosis-fee'
+import { buildDiagnosisFeeQuoteLine, DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT, diagnosisFeeLineBadge, diagnosisFeeCustomerNotice, ensureDiagnosisFeeInQuoteLines, isDiagnosisFeeLine, portalDiagnosisFeeFields, isDiagnosisFeePolicyInEffect, isDiagnosisFeeSettled, resolveDiagnosisFee, shouldChargeDiagnosisFee, taxableQuoteSubtotal } from '@/lib/diagnosis-fee'
 
 const AFTER = '2026-08-03T15:00:00+03:00'
 const JUST_BEFORE = '2026-08-03T14:59:59+03:00'
 const EARLIER = '2026-08-02T10:00:00+03:00'
 
 describe('diagnosis-fee', () => {
-  it('uses flat KES 1000 by default (tier ignored)', () => {
-    expect(diagnosisFeeAmount({})).toBe(DEFAULT_DIAGNOSIS_FEE_KES)
-    expect(diagnosisFeeAmount({ diagnosisFeeKes: 1000 })).toBe(1000)
-    expect(diagnosisFeeAmountForTier('regular', {})).toBe(1000)
-    expect(diagnosisFeeAmountForTier('high_end', {})).toBe(1000)
-    expect(diagnosisFeeAmountForTier('high_end', { diagnosisFeeKes: 1200 })).toBe(1200)
-    // Custom legacy amount still honored when flat unset and not the old shipped default
-    expect(diagnosisFeeAmount({ diagnosisFeeRegularKes: 900 })).toBe(900)
-    // Old shipped defaults (1,500 / 2,500) must not override the flat policy
-    expect(diagnosisFeeAmount({ diagnosisFeeRegularKes: 1500 })).toBe(1000)
-    expect(diagnosisFeeAmount({ diagnosisFeeRegularKes: 2500 })).toBe(1000)
-    expect(diagnosisFeeAmount({ diagnosisFeeKes: 1500 })).toBe(1000)
-    expect(diagnosisFeeAmount({ diagnosisFeeKes: 1200 })).toBe(1200)
-  })
-
-  it('bills fee on final invoice for walk-in and corporate', () => {
-    expect(resolveDiagnosisFeeBilling('individual')).toBe('invoice')
-    expect(resolveDiagnosisFeeBilling('company')).toBe('invoice')
-    expect(resolveCustomerBillingType('individual')).toBe('walk_in')
-    expect(resolveCustomerBillingType('company')).toBe('corporate')
-  })
-
+  
+  
   it('applies only from 3 Aug 2026 3pm EAT based on intakeDate', () => {
     expect(DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT).toBe('2026-08-03T15:00:00+03:00')
     expect(isDiagnosisFeePolicyInEffect(AFTER)).toBe(true)
@@ -123,16 +84,7 @@ describe('diagnosis-fee', () => {
     }).status).toBe('invoiced')
   })
 
-  it('never gates diagnosis/start on unpaid fee (invoice settlement)', () => {
-    expect(mustCollectDiagnosisFeeUpfront({
-      repairPath: 'diagnosis_first',
-      intakeDate: AFTER,
-      diagnosisFeeBilling: 'upfront',
-      diagnosisFeeStatus: 'applicable',
-    })).toBe(false)
-    expect(mustCollectDiagnosisFeeUpfront({ repairPath: 'direct_repair' })).toBe(false)
-  })
-
+  
   it('treats paid / invoiced as settled', () => {
     expect(isDiagnosisFeeSettled({ diagnosisFeeStatus: 'paid' })).toBe(true)
     expect(isDiagnosisFeeSettled({ diagnosisFeeStatus: 'invoiced' })).toBe(true)

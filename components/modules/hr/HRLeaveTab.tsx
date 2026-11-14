@@ -58,13 +58,12 @@ function leaveBadge(status: string) {
 }
 
 export default function HRLeaveTab() {
-  const { users, currentUserId, showToast } = useApp()
+  const { currentUserId, showToast } = useApp()
   const {
     employees, leaveRequests, leaveBalances,
     addLeaveRequest, decideLeaveRequest, closeApprovedLeaveEarly,
   } = useHrStore()
 
-  const currentUser = users.find(u => u.id === currentUserId) ?? null
   const can = useCan()
   const isAdmin = can('manageHR')
   const canViewTeamHR = can('viewHrRecords')

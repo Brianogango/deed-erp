@@ -3,8 +3,8 @@ import ProductFormModal from '@/components/inventory/ProductFormModal'
 import { canCreateProductFromSales } from '@/lib/sales/similar-products'
 import { useState } from 'react'
 import { usePurchase } from './PurchaseContext'
-import { Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
-import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
+import { Modal, Field, Input, Confirm, PanelHeader, StatusStepper, SearchPicker } from '@/components/ui'
+import { LOCATIONS, CATEGORY_CONFIG, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { downloadPoPdf, downloadRfqPdf } from '@/lib/purchase-pdf'
 import Chatter from '@/components/erp/Chatter'
@@ -20,9 +20,7 @@ import {
 } from '@/components/icons'
 import { userCan } from '@/lib/auth/can'
 
-const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
-const STATUS_LABEL: Record<string,string> = { draft:'RFQ', sent:'RFQ Sent', confirmed:'Purchase Order', partial:'Partially Received', received:'Fully Received', cancelled:'Cancelled' }
 const PO_STEP_IDX: Record<string,number> = { draft:0, sent:1, confirmed:2, partial:3, received:3 }
 
 function openRfqMail(po: any, vendor: any, companySettings: any) {
@@ -79,21 +77,13 @@ async function sendRfqViaServer(po: any, vendor: any, companySettings: any): Pro
 export default function POFormView() {
   const {
     activePO, linkedBill, receipts, purchaseReturns, invoices, contacts, products, accounts,
-    currentUser, serials, bankAccounts, companySettings, purchaseOrders,
-    updatePO, updatePOLine, removePOLine, bulkAddPOLines, sendPO, confirmPO, createReceiptFromPO, deletePO, createBillFromPO, revertPOToDraft,
-    postInvoice, registerPayment, createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
-    showToast, addContact,
-    setSubView, setActiveId, setMainView, openReceiptDetail, openReceive,
+    currentUser, companySettings, updatePO, updatePOLine, removePOLine, sendPO, confirmPO, deletePO, createBillFromPO, revertPOToDraft,
+    postInvoice, showToast, setSubView, setActiveId, setMainView, openReceiptDetail, openReceive,
     editCell, setEditCell, editVal, setEditVal, commitCell,
     showAddLine, setShowAddLine, addProd, setAddProd, addQty, setAddQty, addPrice, setAddPrice, addVAT, setAddVAT, handleAddLine,
-    showImport, setShowImport, showScanModal, setShowScanModal, scanFile, setScanFile, isScanningScan, setIsScanningScan, scanFileRef,
-    importRows, setImportRows, importVendorId, setImportVendorId, importVendorName, setImportVendorName, isDragging, setIsDragging, fileInputRef, setImportRowAccount,
-    activeReceiptId, setActiveReceiptId, grnLines, setGrnLines, destLocation, setDestLocation,
-    serialInputs, setSerialInputs, serialAccessories, setSerialAccessories,
-    serialAccessoryNotes, setSerialAccessoryNotes, serialSpecs, setSerialSpecs, serialIssues, setSerialIssues, serialRefs,
-    showReturnModal, setShowReturnModal, returnReceiptId, setReturnReceiptId,
-    returnReason, setReturnReason, returnLines, setReturnLines, returnScanInput, setReturnScanInput,
-    returnCollectedBy, setReturnCollectedBy, returnCollectedDate, setReturnCollectedDate, returnPickupNotes, setReturnPickupNotes,
+    setShowImport, setShowScanModal, setShowReturnModal, setReturnReceiptId,
+    setReturnReason, setReturnLines, setReturnScanInput,
+    setReturnCollectedBy, setReturnCollectedDate, setReturnPickupNotes,
     delId, setDelId, vendors, purchasableProds,
   } = usePurchase()
 
@@ -202,7 +192,6 @@ export default function POFormView() {
     const canSend        = activePO.status === 'draft' && activePO.lines.length > 0 && !!activePO.vendorId && userCan(currentUser, 'manageProcurement')
     const canConfirm = activePO.status === 'sent' && userCan(currentUser, 'manageProcurement')
     const canRevertToDraft = activePO.status === 'sent' && userCan(currentUser, 'purchase.orders.revert')
-    const hasDraftReceipt = receipts.some(r => r.poId === activePO.id && r.status === 'draft')
     const hasOutstandingQty = activePO.lines.some(line => line.qtyReceived < line.qty)
     // technical_lead is deliberately excluded: validateReceipt's
     // canValidatePurchaseReceiptAction gate (and the server's

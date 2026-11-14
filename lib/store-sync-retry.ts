@@ -29,23 +29,6 @@ export function nextSseRetryMs(previous: number): number {
   return nextBackoffMs(previous, SSE_RETRY_MIN_MS, SSE_RETRY_MAX_MS)
 }
 
-/**
- * Apply a remote key map without letting one pending/dirty key freeze the rest.
- * `shouldSkipKey` is evaluated per key; other keys still merge.
- */
-export function mergeRemoteStatePerKey<T>(
-  remoteState: Record<string, T>,
-  shouldSkipKey: (key: string, value: T) => boolean,
-): Array<[string, T]> {
-  const applied: Array<[string, T]> = []
-  for (const [key, value] of Object.entries(remoteState)) {
-    if (!key.startsWith('deed_')) continue
-    if (shouldSkipKey(key, value)) continue
-    applied.push([key, value])
-  }
-  return applied
-}
-
 function asDeedKeyList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((key): key is string => typeof key === 'string' && key.startsWith('deed_'))
@@ -79,15 +62,3 @@ export function parseStoreSseData(raw: string): {
   }
 }
 
-/** Parse an SSE `hello` event. Missing/invalid `liveNotify` means not live. */
-export function parseStoreHelloData(raw: string): { liveNotify: boolean } {
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { liveNotify: false }
-    }
-    return { liveNotify: (parsed as { liveNotify?: unknown }).liveNotify === true }
-  } catch {
-    return { liveNotify: false }
-  }
-}

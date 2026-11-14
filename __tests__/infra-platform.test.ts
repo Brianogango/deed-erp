@@ -21,8 +21,6 @@ const { mockPrisma } = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
 
 import { __resetInfraRedisForTests, __redisTest, getInfraRedis } from '@/lib/infra/redis'
-import { cacheGet, cacheGetOrSet, cacheSet } from '@/lib/infra/cache'
-import { dequeueJob, enqueueJob, queueLength } from '@/lib/infra/queue'
 import {
   __resetObjectStoreForTests,
   getObject,
@@ -86,26 +84,8 @@ describe('infra redis', () => {
     })
   })
 
-  it('round-trips cache values through the memory backend', async () => {
-    await cacheSet('deed:cache:demo', { ok: true, n: 3 }, 30)
-    expect(await cacheGet('deed:cache:demo')).toEqual({ ok: true, n: 3 })
-    const loader = vi.fn(async () => 'fresh')
-    const first = await cacheGetOrSet('deed:cache:miss', 30, loader)
-    const second = await cacheGetOrSet('deed:cache:miss', 30, loader)
-    expect(first).toEqual({ value: 'fresh', source: 'live' })
-    expect(second).toEqual({ value: 'fresh', source: 'cache' })
-    expect(loader).toHaveBeenCalledTimes(1)
-  })
-
-  it('uses Redis lists as a FIFO queue', async () => {
-    const a = await enqueueJob('reports', { type: 'refresh_core_reports', payload: { n: 1 } })
-    const b = await enqueueJob('reports', { type: 'refresh_core_reports', payload: { n: 2 } })
-    expect(await queueLength('reports')).toBe(2)
-    expect(await dequeueJob('reports')).toMatchObject({ id: a.id, payload: { n: 1 } })
-    expect(await dequeueJob('reports')).toMatchObject({ id: b.id, payload: { n: 2 } })
-    expect(await dequeueJob('reports')).toBeNull()
-  })
-
+  
+  
   it('supports setNx locks', async () => {
     const redis = await getInfraRedis()
     expect(await redis.setNx('lock:report', '1', 30)).toBe(true)

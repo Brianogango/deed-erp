@@ -137,21 +137,6 @@ export function isBelowMinimumMargin(params: {
   return params.grossMarginPct + 1e-9 < min
 }
 
-/** Customer-paid upgrade commercial charge (not inventory valuation). */
-export function calculateUpgradeCharge(params: {
-  installedComponentsSellingPrice: number
-  labourCharge: number
-  otherServiceCharges?: number
-  approvedTradeInValue?: number
-}): number {
-  return round2(
-    Math.max(0, Number(params.installedComponentsSellingPrice) || 0) +
-      Math.max(0, Number(params.labourCharge) || 0) +
-      Math.max(0, Number(params.otherServiceCharges) || 0) -
-      Math.max(0, Number(params.approvedTradeInValue) || 0),
-  )
-}
-
 export function reconfigValuationEventKey(ref: string) {
   return `VAL/RCF/${String(ref || '').trim() || 'noref'}`.slice(0, 120)
 }

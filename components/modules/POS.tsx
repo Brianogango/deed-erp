@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useCommerceStore, useInventoryStore, fmtKes, fmtDate, isPosBankPayment } from '@/lib/store'
-import { Modal, Field, Input, Select, Badge, ModuleSkeleton } from '@/components/ui'
+import { Modal, Field, Input, Select, ModuleSkeleton } from '@/components/ui'
 import { PosTransactionHistory } from '@/components/pos/PosTransactionHistory'
 import { SalespersonCloserField } from '@/components/sales/SalespersonCloserField'
 import { AgentField, type AgentValue } from '@/components/sales/AgentField'

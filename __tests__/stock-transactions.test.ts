@@ -82,7 +82,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { releaseStaleSerialHolds, reconcileKilimallDispatchSerials, applyDeliveryStockMutation, applyReceiptStockMutation, applyPosStockMutation, applyVendorReturnStockMutation, reserveStockForSaleOrder, reverseReceiptStockMutation } from '@/lib/inventory/stock-transactions'
+import { releaseStaleSerialHolds, reconcileKilimallDispatchSerials, applyDeliveryStockMutation, applyReceiptStockMutation, applyPosStockMutation, applyVendorReturnStockMutation, reserveStockForSaleOrder } from '@/lib/inventory/stock-transactions'
 
 const PRODUCT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const PRISMA_PRODUCT_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -703,45 +703,7 @@ describe('applyReceiptStockMutation() — atomic relational GRN', () => {
     expect(mockGrnItemCreate).not.toHaveBeenCalled()
   })
 
-  it('rolls back the relational GRN when reversing a failed valuation', async () => {
-    mockLoadAppState.mockResolvedValue({
-      deed_products: [{ id: PRODUCT_ID, name: 'Widget', stockQty: 3, requiresSerial: false }],
-      deed_serials: [],
-      deed_bulkStock: [{ productId: PRODUCT_ID, location: 'warehouse', qty: 3 }],
-      deed_stockMoves: [{ documentRef: 'REC/2026/0001', type: 'in', productId: PRODUCT_ID, qty: 3 }],
-    })
-    mockStockLevelFindUnique.mockResolvedValue({ qtyOnHand: 3, qtyReserved: 0 })
-    mockGoodsReceivedNoteFindUnique.mockResolvedValue({
-      id: 'grn-1',
-      poId: PO_ID,
-      items: [{ id: 'grn-item-1', poItemId: PO_ITEM_ID, productId: PRODUCT_ID, qtyReceived: 3 }],
-    })
-    mockPurchaseOrderItemFindUnique.mockResolvedValue({ id: PO_ITEM_ID, qtyReceived: 3 })
-    mockPurchaseOrderItemFindMany.mockResolvedValue([{ id: PO_ITEM_ID, qtyReceived: 0, qtyOrdered: 10 }])
-
-    await reverseReceiptStockMutation({
-      receiptRef: 'REC/2026/0001',
-      destination: 'warehouse',
-      lines: [{ productId: PRODUCT_ID, qtyReceived: 3, requiresSerial: false }],
-    })
-
-    expect(mockSerialNumberUpdateMany).toHaveBeenCalledWith({
-      where: { purchaseItemId: { in: ['grn-item-1'] } },
-      data: { purchaseItemId: null },
-    })
-    expect(mockPurchaseOrderItemUpdate).toHaveBeenCalledWith({
-      where: { id: PO_ITEM_ID },
-      data: { qtyReceived: 0 },
-    })
-    expect(mockGoodsReceivedNoteDelete).toHaveBeenCalledWith({
-      where: { id: 'grn-1' },
-    })
-    expect(mockPurchaseOrderUpdate).toHaveBeenCalledWith({
-      where: { id: PO_ID },
-      data: { status: 'confirmed' },
-    })
   })
-})
 
 
 describe('applyPosStockMutation()', () => {

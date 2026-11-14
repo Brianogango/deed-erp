@@ -48,9 +48,6 @@ export function formatKeDateTime(d: Date): string {
 /** Whole number with en-KE grouping: 1,234,567. */
 export const formatKeInteger = (n: number) => numberFormatter('en-KE').format(n)
 
-/** Two decimals with en-KE grouping: 1,234.50. */
-export const formatKe2dp = (n: number) => numberFormatter('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
-
 /**
  * Plain editable string for a money amount, for pre-filling an input: rounded to
  * cents so binary floating-point noise (0.1 + 0.2 → 0.30000000000000004) never

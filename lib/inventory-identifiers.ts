@@ -42,15 +42,6 @@ export function isSerialOnlyCategory(category?: string | null): boolean {
   return (SERIAL_ONLY_CATEGORIES as readonly string[]).includes(categoryKey)
 }
 
-/** Force SERIAL for machine categories; otherwise return the requested method. */
-export function coerceTrackingForCategory(
-  category: string | null | undefined,
-  tracking: TrackingMethod,
-): TrackingMethod {
-  if (isSerialOnlyCategory(category)) return 'SERIAL'
-  return tracking
-}
-
 export function inferTrackingMethod(input: {
   trackingMethod?: string | null
   category?: string | null

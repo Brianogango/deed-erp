@@ -11,7 +11,7 @@ import {
   stockValuationEventKey,
   stockValuationJournalRef,
 } from '@/lib/inventory/valuation-math'
-import { buildZeroBalanceCoaTemplate, coaTemplateToBlobAccounts } from '@/lib/accounting/coa-template'
+import { buildZeroBalanceCoaTemplate } from '@/lib/accounting/coa-template'
 
 describe('accounting ids', () => {
   it('extracts codes from CoA labels', () => {
@@ -104,9 +104,4 @@ describe('zero-balance CoA template', () => {
     expect(new Set(codes).size).toBe(codes.length)
   })
 
-  it('maps to blob account shape', () => {
-    const blob = coaTemplateToBlobAccounts(buildZeroBalanceCoaTemplate().slice(0, 3))
-    expect(blob[0]).toMatchObject({ balance: 0, isActive: true })
-    expect(blob[0].id).toContain('coa-bootstrap-')
   })
-})

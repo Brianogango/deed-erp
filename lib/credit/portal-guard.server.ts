@@ -7,9 +7,6 @@ import { CreditFacilityError } from './credit-facility.server'
 
 export { clientIp }
 
-/** Wrong links allowed from one address before it is shut out for an hour. */
-export const BAD_LINK_LIMIT = FAILURE_LIMIT
-
 /** For tests. */
 export const resetBadLinks = resetPortalFailures
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clip, leadCustomerDisplayName, looksLikeEnquiryTitle, salesQuoteHref, splitContactName } from '@/lib/crm/lead-convert'
+import { clip, leadCustomerDisplayName, looksLikeEnquiryTitle, splitContactName } from '@/lib/crm/lead-convert'
 
 describe('lead-convert helpers', () => {
   it('clips oversized contact fields that caused LengthMismatch on convert', () => {
@@ -12,14 +12,7 @@ describe('lead-convert helpers', () => {
     expect(clip('x'.repeat(40), 20)?.length).toBe(20)
   })
 
-  it('builds a Sales new-quotation deep link', () => {
-    expect(salesQuoteHref({
-      customerId: 'cust-1',
-      customerName: 'Acme',
-      opportunityId: 'opp-9',
-    })).toBe('/sales?new=1&customerId=cust-1&customerName=Acme&opportunityId=opp-9')
-  })
-
+  
   it('does not use an inbound RFQ subject as the customer name', () => {
     expect(looksLikeEnquiryTitle('K-elec — 1 × External portable disc 2TB')).toBe(true)
     expect(leadCustomerDisplayName({

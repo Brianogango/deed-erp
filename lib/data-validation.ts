@@ -66,19 +66,3 @@ export function repairDatesWriteError(
   )
 }
 
-/**
- * Guard for sequence counters. Throws when the next value is not a finite
- * positive integer — callers must not persist refs containing "NaN".
- */
-export function assertFiniteSequenceNext(next: number, label = 'sequence'): number {
-  if (!Number.isFinite(next) || !Number.isInteger(next) || next < 1) {
-    throw new Error(`Invalid ${label}: expected a finite positive integer, got ${String(next)}`)
-  }
-  return next
-}
-
-/** True when a document ref looks corrupt (e.g. RFD/0NaN). */
-export function isCorruptDocRef(ref: unknown): boolean {
-  const s = String(ref ?? '')
-  return /NaN/i.test(s) || !s.trim()
-}

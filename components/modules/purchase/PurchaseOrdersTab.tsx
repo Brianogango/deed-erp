@@ -19,10 +19,6 @@ import {
 } from '@/lib/purchases-filter'
 import { userCan } from '@/lib/auth/can'
 
-const STATUS_LABEL: Record<string, string> = {
-  draft: 'RFQ', sent: 'RFQ Sent', confirmed: 'Purchase Order',
-  partial: 'Partially Received', received: 'Fully Received', cancelled: 'Cancelled',
-}
 
 // Matches lib/store.tsx's canManageProcurement — the actual gate behind
 // createPO/confirmPO. Buttons that trigger those actions must be hidden for

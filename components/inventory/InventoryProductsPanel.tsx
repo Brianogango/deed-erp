@@ -1,15 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import {
-  useInventoryStore,
-  Product,
-  LOCATIONS,
-  LocationId,
-  ALL_CATEGORIES,
-  fmtKes,
-  SerialNumber,
-} from '@/lib/store'
+import { useInventoryStore, Product, LOCATIONS, LocationId, ALL_CATEGORIES, SerialNumber } from '@/lib/store'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig, type ActiveFilterChip } from '@/components/data-table'
 import { CompactInfoNotice, TablePageLayout } from '@/components/erp'
 import { Fa } from '@/components/icons'

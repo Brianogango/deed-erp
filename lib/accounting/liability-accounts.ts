@@ -12,5 +12,3 @@ import { labelForRole } from '@/lib/accounting/coa-roles'
 export const CUSTOMER_DEPOSITS_ACCOUNT = labelForRole('customer_deposits')
 export const CUSTOMER_CREDITS_ACCOUNT = labelForRole('customer_credits')
 
-export const CUSTOMER_DEPOSITS_CODE = '3100'
-export const CUSTOMER_CREDITS_CODE = '3313'

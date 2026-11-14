@@ -19,7 +19,5 @@ export const canReleaseHeldSerial = (role: Role) => userCan({ role }, 'inventory
 
 export const canPrintInventoryLabels = (role: Role) => userCan({ role }, 'printInventoryLabels')
 
-export const canViewPurchaseCost = (role: Role) => userCan({ role }, 'viewPurchaseCost')
-
 /** Archiving a product is an inventory approval (as deleting one is). */
 export const canArchiveProduct = (role: Role) => userCan({ role }, 'manageInventoryApprovals')

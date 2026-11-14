@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  consignmentsForVendor,
-  missingAssetId,
-  openConsignments,
-  purchaseConsignment,
-  recordConsignmentReceipt,
-  returnConsignment,
-  summariseConsignments,
-  type ConsignmentDevice,
-} from '@/lib/inventory/consignment'
+import { missingAssetId, openConsignments, purchaseConsignment, recordConsignmentReceipt, returnConsignment, summariseConsignments, type ConsignmentDevice } from '@/lib/inventory/consignment'
 
 const device = (over: Partial<ConsignmentDevice> = {}): ConsignmentDevice => ({
   id: 'con-1',
@@ -168,14 +159,8 @@ describe('what is on the floor', () => {
     expect(openConsignments(floor).map(d => d.id)).toEqual(['a', 'b', 'c'])
   })
 
-  it('filters to one vendor', () => {
-    expect(consignmentsForVendor('vendor-cak', floor).map(d => d.id)).toEqual(['a', 'b'])
-  })
-
-  it('returns nothing for an unknown vendor rather than everything', () => {
-    expect(consignmentsForVendor('', floor)).toEqual([])
-  })
-
+  
+  
   it('summarises per vendor, busiest first, flagging untagged machines', () => {
     const summary = summariseConsignments(floor)
     expect(summary).toEqual([

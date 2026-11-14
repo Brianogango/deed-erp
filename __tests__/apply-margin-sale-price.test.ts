@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  resolveListSaleFromMargin,
-  resolveCostPlusListPrice,
-  impliedMarkupPctFromMargin,
-} from '@/lib/pricing/apply-margin-sale-price'
+import { resolveListSaleFromMargin, resolveCostPlusListPrice } from '@/lib/pricing/apply-margin-sale-price'
 import { DEFAULT_PRICING_MARGIN_POLICY } from '@/lib/pricing/margin-policy'
 
 describe('resolveListSaleFromMargin', () => {
@@ -63,13 +59,3 @@ describe('resolveCostPlusListPrice', () => {
   })
 })
 
-describe('impliedMarkupPctFromMargin', () => {
-  it('returns positive markup for a quoted list', () => {
-    const pct = impliedMarkupPctFromMargin({
-      costPrice: 5000,
-      pricingCategoryId: 'repair_parts',
-      policy: DEFAULT_PRICING_MARGIN_POLICY,
-    })
-    expect(pct).toBeCloseTo(((7000 / 5000) - 1) * 100, 5)
-  })
-})

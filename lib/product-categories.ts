@@ -105,11 +105,6 @@ export function resolveProductCreationCategoryOptions(raw?: unknown): Array<{ va
     .map(({ value, label }) => ({ value, label }))
 }
 
-/** First enabled creation category, so a hidden default is never preselected. */
-export function defaultProductCreationCategory(raw?: unknown): string {
-  return resolveProductCreationCategoryOptions(raw)[0]?.value || 'Laptops'
-}
-
 /** Catalog/report filters: canonical categories plus administrator-created customs. */
 export function inventoryCategoryFilterOptions(raw?: unknown): Array<{ value: string; label: string }> {
   const settings = normalizeProductCategorySettings(raw)

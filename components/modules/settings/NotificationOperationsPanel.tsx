@@ -116,8 +116,6 @@ type NotificationPreference = {
 type TabId = 'overview' | 'templates' | 'automation' | 'messages' | 'preferences' | 'gateways'
 type TemplateChannel = 'sms' | 'email' | 'in_app' | 'whatsapp'
 
-const DEED_NAVY = '#1A1F5E'
-const DEED_CYAN = '#00AEEF'
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'overview', label: 'Overview' },

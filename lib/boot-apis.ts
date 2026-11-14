@@ -18,20 +18,6 @@ export type BootApiGroup =
   | 'approval_rules'
   | 'stock_moves'
 
-const ALL_BOOT_API_GROUPS: BootApiGroup[] = [
-  'products',
-  'contacts',
-  'sales',
-  'crm',
-  'repairs',
-  'purchases',
-  'employees',
-  'leave',
-  'payroll',
-  'salary_advances',
-  'approval_rules',
-  'stock_moves',
-]
 
 /** Shell user comes from the session. Do not boot HR/settings lists on every route. */
 const ALWAYS_BOOT: BootApiGroup[] = []
@@ -95,8 +81,3 @@ export function bootApiGroupsForRoute(pathname: string): BootApiGroup[] {
   return Array.from(new Set([...ALWAYS_BOOT, ...matched]))
 }
 
-/** Remainder helper for tests / future idle warm — StoreProvider no longer idle-prefetches. */
-export function remainingBootApiGroups(immediate: BootApiGroup[]): BootApiGroup[] {
-  const have = new Set(immediate)
-  return ALL_BOOT_API_GROUPS.filter(g => !have.has(g))
-}

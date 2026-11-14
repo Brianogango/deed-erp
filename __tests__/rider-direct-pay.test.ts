@@ -1,16 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { riderFeeAccount, riderPayForJob, paidDirectToRider } from '@/lib/delivery/rider-direct-pay'
+import { riderFeeAccount } from '@/lib/delivery/rider-direct-pay'
 import { riderWeeks } from '@/lib/delivery/rider-portal'
 import { paymentMethodEnum } from '@/lib/accounting/payment-allocations'
 
 describe('customer paid the rider directly', () => {
-  it('nets it off the trip pay', () => {
-    expect(riderPayForJob({ riderFee: 400 })).toBe(400)
-    expect(riderPayForJob({ riderFee: 400, customerPaidRider: { amount: 300 } })).toBe(100)
-    expect(riderPayForJob({ riderFee: 300, customerPaidRider: { amount: 500 } })).toBe(0) // the extra is the rider's to keep
-    expect(paidDirectToRider({ riderFee: 300 })).toBe(0)
-  })
-
+  
   it('books to the delivery expense the chart has, and stores as a non-cash method', () => {
     expect(riderFeeAccount(['6401']).label).toBe('6401 - Selling and Delivery')
     expect(riderFeeAccount(['6401', '6519']).code).toBe('6519')

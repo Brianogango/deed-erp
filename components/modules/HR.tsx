@@ -2,46 +2,12 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import {
-  faUsers,
-  faFolderOpen,
-  faLaptop,
-  faUserPlus,
-  faCalendarPlus,
-  faPlus,
-  faCheck,
-  faXmark,
-  faDownload,
-  faPrint,
-  faTriangleExclamation,
-  faCircleCheck,
-  faCircleXmark,
-  faMoneyBill,
-  faBoxesStacked,
-  faBuilding,
-  faPen,
-  faTrash,
-  faEye,
-  faCalendarDays,
-  faCalendarCheck,
-  faChartSimple,
-  faEnvelope,
-  faPhone,
-  faLink,
-  faCircleExclamation,
-  faIdCard,
-  faBuildingColumns,
-  faFileSignature,
-  faChartLine,
-  faChevronDown,
-  faChevronUp,
-} from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faLaptop, faUserPlus, faCalendarPlus, faMoneyBill, faPen, faEye, faCalendarDays, faCalendarCheck, faFileSignature } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { useUrlRecordId, useUrlUiState } from '@/hooks/useUrlRecordId'
-import { downloadPdf, printPdf } from '@/lib/pdf'
-import { calculatePayroll } from '@/lib/payroll'
+import { downloadPdf } from '@/lib/pdf'
 import HRLeaveTab from './hr/HRLeaveTab'
 import HRPayrollTab from './hr/HRPayrollTab'
 import HRRecruitmentTab from './hr/HRRecruitmentTab'
@@ -49,23 +15,10 @@ import HRAssetsTab from './hr/HRAssetsTab'
 import HRSalaryAdvanceTab from './hr/HRSalaryAdvanceTab'
 import HRPerformanceTab from './hr/HRPerformanceTab'
 import { HRTrainingTab, HRDocumentsTab, HRReportsTab } from './hr/HRExtraTabs'
-import {
-  Badge,
-  Confirm,
-  Field,
-  Input,
-  Modal,
-  Select,
-  Textarea,
-  ModuleSkeleton,
-  useMounted,
-  TabContent,
-  TabBar,
-  ModuleHeader,
-} from '@/components/ui'
+import { Badge, Confirm, Field, Input, Modal, Select, ModuleSkeleton, useMounted, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
-import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget, type Employee } from '@/lib/store'
+import { type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import EmployeeLifecyclePanel from './hr/HREmployeeLifecycle'
 import HROrgChart from './hr/HROrgChart'
@@ -98,33 +51,8 @@ type HRTab =
 const MANAGEMENT_TABS: HRTab[] = ['employees', 'org_chart', 'recruitment', 'training', 'documents', 'performance', 'reports']
 const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
 
-const SOP_CATEGORIES: {
-  id: SOPCategory
-  label: string
-  color: string
-  bg: string
-  border: string
-}[] = [
-  { id: 'recruitment', label: 'Recruitment', color: 'var(--primary-dark)', bg: 'var(--primary-light)', border: '#BFDBFE' },
-  { id: 'onboarding', label: 'Onboarding', color: 'var(--success-text)', bg: 'var(--success-bg)', border: '#A7F3D0' },
-  { id: 'leave', label: 'Leave', color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A' },
-  { id: 'payroll', label: 'Payroll', color: '#5B21B6', bg: '#EDE9FE', border: '#DDD6FE' },
-  { id: 'offboarding', label: 'Offboarding', color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
-  { id: 'conduct', label: 'Conduct', color: '#0E7490', bg: '#CFFAFE', border: '#A5F3FC' },
-  { id: 'general', label: 'General', color: 'var(--text-3)', bg: 'var(--bg-muted)', border: 'var(--border-lt)' },
-]
 
-const PERF_STATUS: Record<
-  PerfStatus,
-  { label: string; color: string; bg: string; border: string }
-> = {
-  on_track: { label: 'On Track', color: 'var(--success-text)', bg: 'var(--success-bg)', border: '#A7F3D0' },
-  at_risk: { label: 'At Risk', color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A' },
-  achieved: { label: 'Achieved', color: 'var(--primary-dark)', bg: 'var(--primary-light)', border: '#BFDBFE' },
-  missed: { label: 'Missed', color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
-}
 
-const uid = () => crypto.randomUUID()
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -147,55 +75,19 @@ function HRContent() {
   const {
     users,
     currentUserId,
-    contracts,
-    workflowApprovals,
     payrollRuns,
     payslips,
-    journalEntries,
     employeeAssetAssignments,
-    products,
-    serials,
-    repairs,
-    saleOrders,
-    kilimallOrders,
-    expenses,
-    createPayrollRun,
-    approvePayrollRun,
-    postPayrollRun,
-    assignAssetToEmployee,
-    acknowledgeEmployeeAsset,
-    returnEmployeeAsset,
-    reassignEmployeeAsset,
-    systemSettings,
     showToast,
-    hrSops: sops,
-    saveHrSops: saveSops,
-    hrPerfTargets: targets,
-    saveHrPerfTargets: saveTargets,
   } = useApp()
 
   const {
     departments,
     employees,
-    leaveBalances,
     leaveRequests,
     hrDocuments,
-    jobPostings,
-    candidates,
-    trainingPrograms,
-    employeeTrainings,
     addEmployee,
     updateEmployee,
-    addLeaveRequest,
-    decideLeaveRequest,
-    addHRDocument,
-    addJobPosting,
-    updateJobPosting,
-    addCandidate,
-    updateCandidate,
-    addTrainingProgram,
-    enrollEmployeeTraining,
-    updateTrainingStatus,
   } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -214,7 +106,6 @@ function HRContent() {
 
   const myEmployee = employees.find(userMatchesEmployee) ?? null
   const myDepartment = departments.find(d => d.id === myEmployee?.departmentId)
-  const myLeaves = leaveRequests.filter(r => r.employeeId === myEmployee?.id)
   const myPayslips = payslips.filter(p => p.employeeId === myEmployee?.id && p.status === 'published')
   const myAssets = employeeAssetAssignments.filter(
     a => a.employeeId === myEmployee?.id && a.status === 'assigned'
@@ -255,7 +146,6 @@ function HRContent() {
   }, [searchParams, defaultTab, allowedTabs, router, pathname])
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
-  const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [empSearch, setEmpSearchValue] = useUrlUiState('employeeQ', '')
   const [empPageValue, setEmpPageValue] = useUrlUiState('employeePage', '1')
   const empPage = Math.max(1, Number.parseInt(empPageValue, 10) || 1)
@@ -401,12 +291,6 @@ function HRContent() {
 
   // Distinct employees whose approved leave covers today — not the all-time
   // count of approved requests.
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const onLeaveTodayCount = new Set(
-    leaveRequests
-      .filter(r => r.status === 'approved' && r.startDate <= todayStr && r.endDate >= todayStr)
-      .map(r => r.employeeId),
-  ).size
 
   const employeeColumns: ColumnDef<Employee>[] = [
     {

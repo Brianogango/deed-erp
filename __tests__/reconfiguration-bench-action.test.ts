@@ -25,20 +25,6 @@ function ramInstall(id: string, gb: number, slot: number): InstalledComponentVie
   }
 }
 
-function ssdInstall(id: string, gb: number): InstalledComponentView {
-  return {
-    id,
-    componentProductId: `prod-ssd-${gb}`,
-    category: 'storage',
-    slotType: 'm2_slot',
-    slotNumber: 1,
-    capacityGb: gb,
-    quantity: 1,
-    removable: true,
-    status: 'installed',
-    costAtInstallation: 0,
-  }
-}
 
 describe('bench-action RAM', () => {
   it('pull one stick: 2×8 → 8, removed stick goes to parts', () => {

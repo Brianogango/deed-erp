@@ -6,66 +6,19 @@
  * quote line, an RFQ / purchase order line). Saving goes through the same
  * checks and addProduct / updateProduct as always.
  */
-import React, { useCallback, useMemo, useState, useRef, useEffect, Suspense } from 'react'
-import { loadXlsx } from '@/lib/xlsx-lazy'
-import {
-  useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
-  fmtKes, fmtDate, Account, AdjReason, SerialNumber,
-  PRODUCT_KIND_OPTIONS, UOM_OPTIONS, inferProductKind, defaultTrackingForKind, defaultUnitForKind,
-  kindRequiresInventoryAccounts, applyCategoryAccountDefaults, resolveProductAccounts,
-} from '@/lib/store'
+import React, { useMemo, useState, useRef, useEffect } from 'react'
+import { useInventoryStore, Product, fmtKes, Account, PRODUCT_KIND_OPTIONS, UOM_OPTIONS, inferProductKind, defaultTrackingForKind, defaultUnitForKind, kindRequiresInventoryAccounts, applyCategoryAccountDefaults, resolveProductAccounts } from '@/lib/store'
 import type { ProductKind } from '@/lib/product-kind'
-import {
-  inventoryCategoryFilterOptions,
-  resolveProductCreationCategoryOptions,
-} from '@/lib/product-categories'
-import { userCan } from '@/lib/auth/can'
-import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar, Textarea } from '@/components/ui'
-import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
-import { PrimaryActionButton, SecondaryActionMenu, TablePageLayout, OperationalSummary, CompactInfoNotice, StatusBadge } from '@/components/erp'
-import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faMagnifyingGlass } from '@/components/icons'
-import { printProductLabels } from '@/lib/product-label'
-import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
-import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
+import { resolveProductCreationCategoryOptions } from '@/lib/product-categories'
+import { Modal, Field, Input, Select } from '@/components/ui'
+import { Fa, faBox, faTriangleExclamation } from '@/components/icons'
 import { Barcode } from '@/components/modules/Barcode'
-import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
-import { availableSellableQty, everStockedProductIds, isLowStockSku, onHandQtyAtStockLocations } from '@/lib/business-logic'
-import { isStockOutMove } from '@/lib/kpi-stock'
-import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
+import { inferTrackingMethod, isSerialTracking, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
 import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategory } from '@/lib/reconfiguration/unit-config'
-import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
-import InventoryViewBar from '@/components/inventory/InventoryViewBar'
-import { useInventoryView } from '@/lib/inventory/use-inventory-view'
-import {
-  CATALOG_LAYOUTS,
-  CATALOG_SHOW_OPTIONS,
-  CATALOG_SORT_OPTIONS,
-  DEFAULT_VIEW_PREFS,
-  WAREHOUSE_SORT_OPTIONS,
-  compareCatalog,
-  matchesCatalogShow,
-  matchesCondition,
-  type CatalogShow,
-  type CatalogSort,
-  type WarehouseSort,
-} from '@/lib/inventory/view-prefs'
 import ProductPhotoFields, { uploadProductPhoto } from '@/components/inventory/ProductPhotoFields'
-import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPanel'
-import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPanel'
-import VendorStockPanel from '@/components/inventory/VendorStockPanel'
-import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
-import PartsRequestsPanel from '@/components/inventory/PartsRequestsPanel'
-import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
 import type { ProductImageSlot } from '@/lib/product-images'
-import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
-import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
-import { ScanInputRow } from '@/components/BarcodeScanner'
-import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
-import { getCategoryMarkupPct, quoteSalePriceFromCost, autoSalePriceFromCost, suggestWholesalePriceFromCost } from '@/lib/sale-price-calculator'
-import { reviewSalePrice } from '@/lib/pricing/latest-cost-review'
+import { quoteSalePriceFromCost } from '@/lib/sale-price-calculator'
 import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
-import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
-import dynamic from 'next/dynamic'
 import { applyCostBandPrices, blankProduct, buildProductBarcode, buildProductSku, normKey } from '@/lib/inventory/product-form-helpers'
 
 export type ProductFormStart =

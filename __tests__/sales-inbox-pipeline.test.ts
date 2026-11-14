@@ -19,10 +19,6 @@ import {
   extractAttachmentEvidence,
   withAttachmentEvidenceBody,
 } from '@/lib/crm/inbox/attachment-evidence'
-import {
-  SALES_INBOX_LOCK_KEY,
-  salesInboxMessageLockKey,
-} from '@/lib/crm/inbox/lock-keys'
 
 const config = resolveSalesInboxPipelineConfig({
   SALES_INBOX_MODE: 'auto',
@@ -322,8 +318,4 @@ describe('phase-2 classifiers + evidence', () => {
     expect(enriched).toContain('attachment evidence')
   })
 
-  it('advisory lock key is stable', () => {
-    expect(SALES_INBOX_LOCK_KEY).toBe(872_014_355)
-    expect(salesInboxMessageLockKey('IMAP', 'INBOX', '<a@b>')).toContain('sales-inbox:IMAP:INBOX:')
   })
-})
