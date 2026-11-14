@@ -396,7 +396,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       action('viewUsers', 'admin', 'See the user list'),
       action('manageMasterData', 'admin', 'Change master data (contacts, products setup)'),
       action('viewAuditLog', 'admin', 'Read the whole audit trail (every area)', { sensitive: true }),
-      auditArea('users', 'User accounts and access changes', ['director', 'admin_officer']),
+      auditArea('users', 'User accounts and access changes', ['director']),
       auditArea('inventory', 'Inventory, purchases and delivery', ['director', 'admin_officer']),
       auditArea('sales', 'Sales, CRM, POS and repairs', ['director', 'admin_officer']),
       auditArea('finance', 'Accounting, expenses and deposits', ['director', 'finance_officer']),

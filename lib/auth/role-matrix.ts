@@ -7,14 +7,14 @@ import type { UserRole } from './types'
 
 export const ROLE_MATRIX = {
   manageUsers:               ['director'] as UserRole[],
-  viewUsers:                 ['director', 'admin_officer'] as UserRole[],
+  viewUsers:                 ['director'] as UserRole[],
   manageHR:                  [...HR_MANAGER_ROLES] as UserRole[],
   // Rider weekly pay belongs to delivery admin, not HR.
   manageRiderPay:            ['director', 'admin_officer'] as UserRole[],
   approveLeave:              [...LEAVE_APPROVER_ROLES] as UserRole[],
   approvePayroll:            ['director', 'finance_officer'] as UserRole[],
   // Read access to HR records (leave, HR documents, employee full profiles).
-  // Includes technical_lead so leads can review their technicians' leave.
+  // Technical leads have no part in leave.
   viewHrRecords:             ['director', 'finance_officer'] as UserRole[],
   // Read access to full employee compensation/PII (salary, bank, national ID).
   viewEmployeeSensitive:     ['director', 'finance_officer'] as UserRole[],

@@ -6254,8 +6254,9 @@ function StoreProvider({
     window.addEventListener('online', handleOnline)
 
     // 3. Sync users list (stored in DB, not app_state) — much less frequent.
-    // Technical leads cannot GET /api/users (viewUsers is director/admin only).
-    // Fall back to /api/technicians so the assign picker is not just "yourself".
+    // Only user-account managers may GET /api/users. Everyone else gets
+    // colleagues' names from /api/staff, and /api/technicians adds the
+    // repair picker details for those who assign repairs.
     // A role that is refused once is refused every minute after: stop asking.
     // These refusals were ~560 of the server's error responses.
     let usersForbidden = false
@@ -6273,6 +6274,15 @@ function StoreProvider({
               : prev)
             return
           }
+        }
+        const staffRes = await fetch('/api/staff')
+        if (staffRes.ok) {
+          const staff = ((await staffRes.json())?.staff ?? []) as Array<Record<string, unknown>>
+          setUsers(prev => mergeAssignableTechniciansIntoUsers(prev, staff.map((u: any) => ({
+            ...u,
+            username: u.username || u.id,
+            createdAt: u.createdAt || '',
+          }))).map(u => Array.isArray(u.modules) ? u : { ...u, modules: [] }))
         }
         if (techniciansForbidden) return
         const techRes = await fetch('/api/technicians')

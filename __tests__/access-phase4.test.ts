@@ -54,7 +54,7 @@ describe('audit log by area', () => {
 
   it('each role reads its own areas; the Director reads everything', () => {
     expect(auditAreasFor({ role: 'director' })).toBe('all')
-    expect([...(auditAreasFor({ role: 'admin_officer' }) as Set<string>)].sort()).toEqual(['inventory', 'sales', 'users'])
+    expect([...(auditAreasFor({ role: 'admin_officer' }) as Set<string>)].sort()).toEqual(['inventory', 'sales'])
     expect([...(auditAreasFor({ role: 'finance_officer' }) as Set<string>)]).toEqual(['finance'])
     expect([...(auditAreasFor(hr) as Set<string>)].sort()).toEqual(['hr', 'users'])
     expect((auditAreasFor({ role: 'technician' }) as Set<string>).size).toBe(0)

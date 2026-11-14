@@ -6,7 +6,7 @@ import { assignableTechnicians, toAssignableTechnicianPublic } from '@/lib/repai
 
 /**
  * Compact assignable-technician list for the repair assignment picker.
- * Technical leads cannot GET /api/users (viewUsers is director/admin only),
+ * Only user-account managers may GET /api/users (viewUsers),
  * so this is the allowed way to see other bench techs without the full
  * user-admin directory.
  */

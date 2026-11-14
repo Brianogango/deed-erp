@@ -731,7 +731,6 @@ exports[`access snapshot > matches today, role by role 1`] = `
       "viewReconfigComponentCosts",
       "viewReconfigSellingPrices",
       "viewReconfiguration",
-      "viewUsers",
       "viewVendorInventoryLedger",
     ],
     "can": [
@@ -755,7 +754,6 @@ exports[`access snapshot > matches today, role by role 1`] = `
       "approveReconfiguration",
       "audit.view.inventory",
       "audit.view.sales",
-      "audit.view.users",
       "createCustomerInvoiceFromSO",
       "createReconfiguration",
       "delivery.create",
@@ -880,7 +878,6 @@ exports[`access snapshot > matches today, role by role 1`] = `
       "viewReconfigComponentCosts",
       "viewReconfigSellingPrices",
       "viewReconfiguration",
-      "viewUsers",
       "viewVendorInventoryLedger",
     ],
     "canWithAllModules": [
@@ -921,7 +918,6 @@ exports[`access snapshot > matches today, role by role 1`] = `
       "approveReconfiguration",
       "audit.view.inventory",
       "audit.view.sales",
-      "audit.view.users",
       "createCustomerInvoiceFromSO",
       "createReconfiguration",
       "delivery.create",
@@ -1058,7 +1054,6 @@ exports[`access snapshot > matches today, role by role 1`] = `
       "viewReconfigComponentCosts",
       "viewReconfigSellingPrices",
       "viewReconfiguration",
-      "viewUsers",
       "viewVendorInventoryLedger",
     ],
     "canonical": [

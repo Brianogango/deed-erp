@@ -60,6 +60,7 @@ const OPEN_ROUTES: Record<string, string> = {
   'repair-qc-reports/[repairRef]': 'customer QC report link by job reference',
   'repairs/next-ref': 'hands out the next repair number',
   'sale-order-attachments/[soId]': 'attachments, checked against the uploader',
+  staff: 'colleagues’ names for pickers (no account details)',
   'scan-purchase-document': 'reads a document image; saves nothing',
   'scan-receipt': 'reads a receipt image; saves nothing',
   'setup-admin': 'first-run only: needs SETUP_ADMIN_SECRET and refuses once a user exists',

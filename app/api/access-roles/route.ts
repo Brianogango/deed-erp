@@ -2,7 +2,7 @@
  * Custom roles.
  *
  * GET  — the built-in roles (read-only) and every custom role, with how many
- *        people are on each. Directors and Admin Officers (viewUsers).
+ *        people are on each. Whoever may see the user list (viewUsers).
  * POST — create a custom role. Directors only (manageUsers).
  */
 import { NextResponse } from 'next/server'
