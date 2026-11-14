@@ -6,6 +6,7 @@ import { fmtDate, fmtKes, useApp } from '@/lib/store'
 import { STATUS_LABELS } from '@/lib/credit/credit-facility-rules'
 import CreditFacilityPanel, { type CreditApplicationView } from './CreditFacilityPanel'
 import { canonicalRole } from '@/lib/auth/roles'
+import { isDirector } from '@/lib/auth/roles'
 
 type Toast = (msg: string, type?: 'error' | 'success' | 'info') => void
 type ReviewRow = { clientId: string; name: string; creditStatus: string; reviewDue: string | null; creditLimit: number; paymentTermsDays: number; isCompany: boolean; openApplication: { id: string; ref: string } | null }
@@ -24,7 +25,7 @@ const FILTERS: Array<[string, string]> = [
 export default function CreditApplicationsQueue({ role, userId, showToast }: { role: string | null | undefined; userId?: string | null; showToast: Toast }) {
   const { systemSettings, updateSystemSettings } = useApp()
   const enforced = Boolean(systemSettings.accCreditPayOnReceiptEnforced)
-  const isDirector = canonicalRole(role) === 'director'
+  const directorViewing = isDirector(role)
   const toggleEnforced = () => {
     const next = !enforced
     if (!window.confirm(next
@@ -108,7 +109,7 @@ export default function CreditApplicationsQueue({ role, userId, showToast }: { r
             ? 'Company customers without approved credit cannot get a new order or invoice while they owe money; their invoices fall due on the day.'
             : 'Off — company customers without approved credit are not blocked yet. Mark real credit customers as legacy or approve their applications, then turn it on.'}
         </p>
-        {isDirector
+        {directorViewing
           ? <button type="button" className={enforced ? 'btn-secondary text-[11px]' : 'btn-primary text-[11px]'} onClick={toggleEnforced}>{enforced ? 'Turn off' : 'Turn on'}</button>
           : <span className="text-[11px] text-text-3">A director switches this.</span>}
       </div>

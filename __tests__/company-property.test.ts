@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
-import { canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, hasModuleAccess } from '@/lib/auth/access'
+import { hasModuleAccess } from '@/lib/auth/access'
+import { userCan } from '@/lib/auth/can'
 import {
   nextCompanyAssetRef,
   defaultPpeAccountCode,
@@ -216,10 +217,10 @@ describe('role defaults', () => {
   })
 
   it('lets finance run depreciation even though they cannot record items', () => {
-    expect(canManageCompanyPropertyRole('finance_officer')).toBe(false)
-    expect(canRunCompanyAssetDepreciationRole('finance_officer')).toBe(true)
-    expect(canRunCompanyAssetDepreciationRole('director')).toBe(true)
-    expect(canRunCompanyAssetDepreciationRole('technician')).toBe(false)
+    expect(userCan({ role: 'finance_officer' }, 'manageCompanyProperty')).toBe(false)
+    expect(userCan({ role: 'finance_officer' }, 'viewCompanyProperty')).toBe(true)
+    expect(userCan({ role: 'director' }, 'viewCompanyProperty')).toBe(true)
+    expect(userCan({ role: 'technician' }, 'viewCompanyProperty')).toBe(false)
   })
 
   it('lets admin and finance open Property even without an explicit module chip', () => {

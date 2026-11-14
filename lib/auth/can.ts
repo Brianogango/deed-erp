@@ -38,4 +38,3 @@ export function userCan(user: Subject | null | undefined, key: string): boolean 
   return def.builtIn.includes(role as never) || (user.actsAsTechnician === true && def.builtIn.includes('technician'))
 }
 
-export const userCanAny = (user: Subject | null | undefined, keys: readonly string[]) => keys.some(key => userCan(user, key))

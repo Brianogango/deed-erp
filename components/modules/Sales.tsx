@@ -41,7 +41,7 @@ import { downloadDeliveryNotePdf } from '@/lib/delivery-note-pdf'
 import { exportToCsv } from '@/lib/export-utils'
 import { isSaleOrderDraftEditing } from '@/lib/sale-order-draft-edits'
 import SerialMultiSelect from '@/components/SerialMultiSelect'
-import { hasModuleAccess, canCreateCustomerInvoiceFromSO } from '@/lib/auth/access'
+import { hasModuleAccess } from '@/lib/auth/access'
 import { canOverrideCustomerCredit } from '@/lib/customer-credit-gate'
 import {
   useSalesStore,
@@ -374,7 +374,7 @@ function SalesContent() {
     assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, reverseDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO, createNewSOVersion,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
-    companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
+    companySettings, bankAccounts,
     updateDelivery, outboundReleases, initRelease,
     getDocumentPaymentDetails, setDocumentPaymentDetails,
     issueCreditNoteFromSaleOrder,
@@ -398,7 +398,7 @@ function SalesContent() {
   const currentUser = users.find(u => u.id === currentUserId)
   const isAdmin = isDirector(currentUser?.role)
   const canEditDiscount = isAdmin || !systemSettings.salesDiscountControl
-  const canInvoiceFromSO = canCreateCustomerInvoiceFromSO(currentUser?.role)
+  const canInvoiceFromSO = userCan(currentUser, 'createCustomerInvoiceFromSO')
   // Reversing a confirmed Sales Order (Set to Quotation / Cancel) is
   // Finance / Admin Officer / Director — matches enforceSaleWorkflow / cancelSO.
   const canReverseConfirmedSO = canReverseConfirmedSale(currentUser?.role)

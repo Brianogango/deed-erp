@@ -59,19 +59,6 @@ export const formatModuleLabel = (moduleId: string | null | undefined) => {
   return formatRoleLabel(moduleId)
 }
 
-const COMPANY_PROPERTY_MANAGER_ROLES: readonly UserRole[] = ['director', 'admin_officer']
-const COMPANY_PROPERTY_VIEWER_ROLES: readonly UserRole[] = ['director', 'admin_officer', 'finance_officer']
-
-export const canManageCompanyPropertyRole = (role?: string | null) =>
-  COMPANY_PROPERTY_MANAGER_ROLES.includes(canonicalRole(role) as UserRole)
-
-const canViewCompanyPropertyRole = (role?: string | null) =>
-  COMPANY_PROPERTY_VIEWER_ROLES.includes(canonicalRole(role) as UserRole)
-
-/** Monthly depreciation: Finance posts it; Admin/Director can too. */
-export const canRunCompanyAssetDepreciationRole = (role?: string | null) =>
-  canViewCompanyPropertyRole(role)
-
 export const formatRoleLabel = (role: string | null | undefined) => {
   if (!role) return 'No role'
 
@@ -112,17 +99,4 @@ export const LEAVE_APPROVER_ROLES: readonly UserRole[] = [
   'finance_officer',
 ]
 
-export const canApproveLeaveRole = (role?: string | null) =>
-  LEAVE_APPROVER_ROLES.includes(canonicalRole(role) as UserRole)
 
-// Backward-compatible helper names retained for existing module code.
-export const isAdmin      = isDirector
-// Composite checks.
-export const canManageMoney   = (role?: string | null) =>
-  ['director', 'finance_officer', 'admin_officer'].includes(canonicalRole(role))
-/** Full finance (bank recon, expense reimburse) — excludes Admin Officer. */
-export const canManageFullFinance = (role?: string | null) =>
-  ['director', 'finance_officer'].includes(canonicalRole(role))
-/** Draft customer invoice from confirmed SO. */
-export const canCreateCustomerInvoiceFromSO = (role?: string | null) =>
-  ['director', 'finance_officer', 'admin_officer'].includes(canonicalRole(role))

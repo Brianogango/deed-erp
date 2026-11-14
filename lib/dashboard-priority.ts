@@ -7,7 +7,6 @@
 // Sale-order lists are company-wide for sales reps; commission/rep pickers stay
 // self-scoped.
 
-import { canApproveLeaveRole } from '@/lib/auth/access'
 import type { ModuleId, PublicUser, UserRole } from '@/lib/auth/types'
 import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
 import { userCan } from '@/lib/auth/can'
@@ -59,7 +58,7 @@ export function dashboardSectionsForRole(role: UserRole | string | null | undefi
     purchasing: isDirector || isAdmin || isFinance || isInventory,
     kilimall: isDirector || isFinance || isKilimall,
     hrAdmin: isDirector,
-    leaveApprovals: canApproveLeaveRole(r),
+    leaveApprovals: userCan({ role: r }, 'approveLeave'),
     repairRevenue: isDirector || isFinance || isLead,
   }
 }

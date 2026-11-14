@@ -1,3 +1,4 @@
+import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
@@ -46,7 +47,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const { user } = await getRequiredSession()
+    if (!canWriteStoreKey(user, 'deed_companies')) throw Object.assign(new Error('You cannot change companies'), { status: 403 })
     const body = await request.json()
     const company = await prisma.client.create({
       data: {

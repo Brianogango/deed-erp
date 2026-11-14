@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { userCan } from '@/lib/auth/can'
 import {
   canPostOrPayCustomerInvoice,
   canPayOwnPostedInvoice,
@@ -10,7 +11,6 @@ import {
   paymentJournalRef,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
-import { canCreateCustomerInvoiceFromSO, canManageFullFinance, canManageMoney } from '@/lib/auth/access'
 import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
 import { APPROVAL_RULES } from '@/lib/sales-approvals'
 import { canReverseConfirmedSale } from '@/lib/odoo-sales-flow'
@@ -57,8 +57,7 @@ describe('hybrid finance seals', () => {
     expect(canManageBankRecon('admin_officer')).toBe(false)
     expect(canManageBankRecon('finance_officer')).toBe(true)
     expect(canReimburseExpense('admin_officer')).toBe(false)
-    expect(canManageFullFinance('admin_officer')).toBe(false)
-    expect(canManageMoney('admin_officer')).toBe(true)
+    expect(userCan({ role: 'admin_officer' }, 'accounting.manage')).toBe(false)
   })
 
   it('enforces SoD above threshold for non-director', () => {
@@ -117,7 +116,7 @@ describe('sales approval + GRN permissions', () => {
   })
 
   it('allows sales roles to create SO invoices drafts and keeps GRN tight', () => {
-    expect(canCreateCustomerInvoiceFromSO('admin_officer')).toBe(true)
+    expect(userCan({ role: 'admin_officer' }, 'createCustomerInvoiceFromSO')).toBe(true)
     expect(canValidatePurchaseReceipt('technical_lead')).toBe(false)
     expect(canValidatePurchaseReceipt('admin_officer')).toBe(true)
   })

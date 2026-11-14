@@ -13,6 +13,7 @@ import { Fa } from '@/components/icons'
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { resolveOrcConfirmedSerial } from '@/lib/barcode-scan'
 import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
 
 // ─── Signature Canvas ─────────────────────────────────────────────────────────
 
@@ -170,7 +171,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
   const linkedRepair = isRepair && release.repairId ? repairs.find((r: any) => r.id === release.repairId) : undefined
   const intakeAccessories: { name: string; received: boolean }[] = linkedRepair?.accessories ?? []
   const currentRole = canonicalRole(currentUser?.role)
-  const canVerify   = ['release_authoriser', 'director', 'admin_officer'].includes(currentRole)
+  const canVerify   = userCan(currentUser, 'delivery.release.verify')
 
   // Derive UI step from release status
   const statusToStep = { pending: 0, all_picked: 1, verified: 2, released: 3, voided: 0 }

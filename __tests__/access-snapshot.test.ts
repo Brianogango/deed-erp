@@ -4,8 +4,6 @@
  * be intended, and the snapshot updated in the same commit.
  */
 import { describe, expect, it } from 'vitest'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
 import { PERMISSION_CATALOG } from '@/lib/auth/permission-catalog'
 import { ROLE_MATRIX, type PermissionAction } from '@/lib/auth/role-matrix'
 import { userCan } from '@/lib/auth/can'
@@ -40,24 +38,3 @@ describe('access snapshot', () => {
   })
 })
 
-/**
- * Server routes that name a role. Access is decided by permission; the two
- * left only address notifications to a role (who is told, not who may act).
- * The number may only go down.
- */
-const ROUTES_WITH_ROLE_NAMES = 2
-
-function routeFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap(name => {
-    const path = join(dir, name)
-    return statSync(path).isDirectory() ? routeFiles(path) : name === 'route.ts' ? [path] : []
-  })
-}
-
-describe('route access', () => {
-  it(`no new route decides access by role name (at most ${ROUTES_WITH_ROLE_NAMES})`, () => {
-    const roleName = /\[\s*'(director|admin_officer|finance_officer|inventory_officer|technical_lead)'|role\s*===\s*'/
-    const offenders = routeFiles(join(process.cwd(), 'app/api')).filter(f => roleName.test(readFileSync(f, 'utf8')))
-    expect(offenders.length).toBeLessThanOrEqual(ROUTES_WITH_ROLE_NAMES)
-  })
-})

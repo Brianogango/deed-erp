@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { startStkPush } from '@/lib/mpesa/service'
@@ -5,6 +6,7 @@ import { startStkPush } from '@/lib/mpesa/service'
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const actor = await getRequiredSession()
+    if (!userCan(actor.user, 'recordSales')) throw Object.assign(new Error('You cannot request M-Pesa payments'), { status: 403 })
     const body = await request.json().catch(() => ({})) as {
       phone?: string
       amount?: number

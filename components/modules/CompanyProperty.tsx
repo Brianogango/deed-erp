@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react'
 import { useApp, useFinanceStore, fmtDate, fmtKes, type CompanyAsset, type CompanyAssetInput } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, hasModuleAccess } from '@/lib/auth/access'
+import { hasModuleAccess } from '@/lib/auth/access'
+import { userCan } from '@/lib/auth/can'
 import {
   CATEGORY_LABELS,
   CLASS_LABELS,
@@ -425,8 +426,8 @@ export default function CompanyProperty() {
   const { showToast } = useApp()
 
   const canOpen = hasModuleAccess(currentUser, 'company_property')
-  const canManage = canManageCompanyPropertyRole(currentUser?.role)
-  const canRunDepreciation = canRunCompanyAssetDepreciationRole(currentUser?.role)
+  const canManage = userCan(currentUser, 'manageCompanyProperty')
+  const canRunDepreciation = userCan(currentUser, 'viewCompanyProperty') // Finance posts monthly depreciation; Admin/Director can too
 
   const patchListUi = useUrlUiPatch()
   const [filterValue, setFilterValue] = useUrlUiState('status', 'all')

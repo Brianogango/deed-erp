@@ -8,7 +8,8 @@ import NotificationPopups, { usePopupPreference } from '@/components/layout/Noti
 import { useShellStore, ModuleId, AppNotification, SYNC_STATUS_EVENT, LAST_SYNC_AT_LS, DIRTY_KEYS_LS } from '@/lib/store'
 import type { UpdateUserInput } from '@/lib/auth/types'
 import { passwordPolicyError } from '@/lib/auth/password-policy'
-import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/auth/access'
+import { formatRoleLabel, hasModuleAccess } from '@/lib/auth/access'
+import { isDirector } from '@/lib/auth/roles'
 import { usePathname, useRouter } from 'next/navigation'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { trackUxEvent } from '@/lib/ux-telemetry'
@@ -1384,7 +1385,7 @@ export default function Topbar() {
     const requiredModule = ROUTE_MODULE[baseRoute]
 
     if (baseRoute === '/settings') {
-      if (!isAdminRole(currentUser.role)) {
+      if (!isDirector(currentUser.role)) {
         showToast('Access Denied: You do not have permission to view this page.', 'error')
         router.replace('/')
       }

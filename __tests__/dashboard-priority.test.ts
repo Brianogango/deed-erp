@@ -10,7 +10,6 @@ import {
   visibleDashboardSalesOrders,
 } from '@/lib/dashboard-priority'
 import { ROLE_DEFAULT_MODULES, USER_ROLES } from '@/lib/auth/types'
-import { canApproveLeaveRole } from '@/lib/auth/access'
 import { userCan } from '@/lib/auth/can'
 const canManageHRRole = (role: string) => userCan({ role }, 'manageHR')
 
@@ -207,7 +206,7 @@ describe('HR client/server role alignment', () => {
   })
 
   it('keeps leave decisions available to the dedicated API role set', () => {
-    expect(USER_ROLES.filter(canApproveLeaveRole)).toEqual([
+    expect(USER_ROLES.filter(role => userCan({ role }, 'approveLeave'))).toEqual([
       'director',
       'finance_officer',
     ])

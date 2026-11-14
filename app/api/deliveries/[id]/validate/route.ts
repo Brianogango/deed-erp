@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
@@ -14,6 +15,8 @@ import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 export async function POST(request: NextRequest, { params }: { params: RouteParams<{ id: string }> }) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Validating moves stock: the same rule as the screen's Validate button.
+  if (!userCan(session.user, 'manageInventoryApprovals')) return NextResponse.json({ error: 'Only Inventory or Admin can validate deliveries' }, { status: 403 })
   const { id } = await resolveRouteParams(params)
 
   const body = await request.json().catch(() => null)

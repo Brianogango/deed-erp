@@ -428,14 +428,6 @@ export const PERMISSION_BY_KEY: Record<string, PermissionDef> = Object.fromEntri
 
 export const isKnownPermission = (key: string) => Object.prototype.hasOwnProperty.call(PERMISSION_BY_KEY, key)
 
-export const isNamedAction = (key: string): key is PermissionAction => Object.prototype.hasOwnProperty.call(ROLE_MATRIX, key)
-
-/** Modules a permission group needs the person to be able to open. */
-export const moduleOfPermission = (key: string): ModuleId | null => {
-  const group = PERMISSION_GROUPS.find(g => g.items.some(item => item.key === key))
-  return group?.module ?? null
-}
-
 /**
  * What a built-in role holds. `modules` are the modules that role opens (its
  * default list, or a user's own list), because parts of a module follow it.

@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { issueWarrantiesForSale } from '@/lib/warranty/e-warranty.server'
@@ -10,7 +11,8 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(req: NextRequest) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const { user } = await getRequiredSession()
+    if (!userCan(user, 'recordSales')) throw Object.assign(new Error('You cannot issue sale warranties'), { status: 403 })
     const b = await req.json().catch(() => ({})) as Record<string, any>
     const source = b.source === 'delivery' ? 'delivery' : b.source === 'pos' ? 'pos' : null
     const id = String(b.id ?? '').trim().slice(0, 80)

@@ -22,7 +22,7 @@ import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { PAID_TO_RIDER, riderFeeAccount, riderPayForJob } from '@/lib/delivery/rider-direct-pay'
-import { canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
+import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
@@ -4161,7 +4161,6 @@ interface AppState {
   
   // Delivery & Fulfillment
   createDeliveryFromSO: (salesOrderId: string, forcedRef?: string) => Delivery | null
-  confirmDeliveryWithStockDeduction: (deliveryId: string) => void
   createInvoiceFromDelivery: (deliveryId: string) => Invoice | null
   
   // Approval Workflows
@@ -4310,7 +4309,6 @@ type SalesStoreState = Pick<AppState,
   | 'createNewSOVersion'
   | 'getCustomerCreditStatus'
   | 'issueCreditNoteFromSaleOrder'
-  | 'confirmDeliveryWithStockDeduction'
   | 'updateDelivery'
   | 'initRelease'
   | 'approveRequest'
@@ -7889,7 +7887,6 @@ function StoreProvider({
     createNewSOVersion: (...args: Parameters<AppState['createNewSOVersion']>) => storeCtxRef.current!.createNewSOVersion(...args),
     getCustomerCreditStatus: (...args: Parameters<AppState['getCustomerCreditStatus']>) => storeCtxRef.current!.getCustomerCreditStatus(...args),
     issueCreditNoteFromSaleOrder: (...args: Parameters<AppState['issueCreditNoteFromSaleOrder']>) => storeCtxRef.current!.issueCreditNoteFromSaleOrder(...args),
-    confirmDeliveryWithStockDeduction: (...args: Parameters<AppState['confirmDeliveryWithStockDeduction']>) => storeCtxRef.current!.confirmDeliveryWithStockDeduction(...args),
     updateDelivery: (...args: Parameters<AppState['updateDelivery']>) => storeCtxRef.current!.updateDelivery(...args),
     initRelease: (...args: Parameters<AppState['initRelease']>) => storeCtxRef.current!.initRelease(...args),
     approveRequest: (...args: Parameters<AppState['approveRequest']>) => storeCtxRef.current!.approveRequest(...args),
@@ -9741,7 +9738,7 @@ const storeCtx: AppState = {
     createCompanyAsset: (input) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
-      if (!canManageCompanyPropertyRole(user.role)) {
+      if (!userCan(user, 'manageCompanyProperty')) {
         showToast('Only a Director or Admin Officer can record company property', 'error')
         return null
       }
@@ -9823,7 +9820,7 @@ const storeCtx: AppState = {
     updateCompanyAsset: (id, input) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!canManageCompanyPropertyRole(user.role)) {
+      if (!userCan(user, 'manageCompanyProperty')) {
         showToast('Only a Director or Admin Officer can edit company property', 'error')
         return
       }
@@ -9890,7 +9887,7 @@ const storeCtx: AppState = {
     deleteCompanyAsset: (id) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!canManageCompanyPropertyRole(user.role)) {
+      if (!userCan(user, 'manageCompanyProperty')) {
         showToast('Only a Director or Admin Officer can delete company property', 'error')
         return
       }
@@ -9911,7 +9908,7 @@ const storeCtx: AppState = {
     moveCompanyAsset: (id, locationName, note) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!canManageCompanyPropertyRole(user.role)) {
+      if (!userCan(user, 'manageCompanyProperty')) {
         showToast('Only a Director or Admin Officer can move company property', 'error')
         return
       }
@@ -9926,7 +9923,7 @@ const storeCtx: AppState = {
     setCompanyAssetCustodian: (id, custodian, note) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!canManageCompanyPropertyRole(user.role)) {
+      if (!userCan(user, 'manageCompanyProperty')) {
         showToast('Only a Director or Admin Officer can change custodians', 'error')
         return
       }
@@ -9940,7 +9937,7 @@ const storeCtx: AppState = {
     setCompanyAssetStatus: async (id, status, note, opts) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!canManageCompanyPropertyRole(user.role)) {
+      if (!userCan(user, 'manageCompanyProperty')) {
         showToast('Only a Director or Admin Officer can change property status', 'error')
         return
       }
@@ -9994,7 +9991,7 @@ const storeCtx: AppState = {
     disposeCompanyAsset: (id, qty, opts) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!canManageCompanyPropertyRole(user.role)) {
+      if (!userCan(user, 'manageCompanyProperty')) {
         showToast('Only a Director or Admin Officer can dispose company property', 'error')
         return
       }
@@ -10026,7 +10023,7 @@ const storeCtx: AppState = {
     writeOffCompanyAsset: (id, reason) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!canManageCompanyPropertyRole(user.role)) {
+      if (!userCan(user, 'manageCompanyProperty')) {
         showToast('Only a Director or Admin Officer can write off company property', 'error')
         return
       }
@@ -10053,7 +10050,7 @@ const storeCtx: AppState = {
     runCompanyAssetDepreciation: (period) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!canRunCompanyAssetDepreciationRole(user.role)) {
+      if (!userCan(user, 'viewCompanyProperty')) {
         showToast('Only Finance, Admin, or a Director can run depreciation', 'error')
         return
       }
@@ -10087,7 +10084,7 @@ const storeCtx: AppState = {
     linkSerialToCompanyAsset: (assetId, serialId) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!canManageCompanyPropertyRole(user.role)) {
+      if (!userCan(user, 'manageCompanyProperty')) {
         showToast('Only a Director or Admin Officer can link a trading serial', 'error')
         return
       }
@@ -21585,160 +21582,6 @@ const storeCtx: AppState = {
       return delivery
     },
     
-    confirmDeliveryWithStockDeduction: async (deliveryId) => {
-      const delivery = deliveries.find(d => d.id === deliveryId)
-      if (!delivery) {
-        showToast('Delivery not found', 'error')
-        return
-      }
-      
-      const user = currentUser()
-      if (!user) return
-      
-      const hasIssues = delivery.lines.some(line => {
-        const product = products.find(p => p.id === line.productId)
-        if (product && isSerialTracking(inferTrackingMethod(product)) && line.serialIds.length !== line.qty) {
-          showToast(`${line.productName} requires ${line.qty} serial numbers`, 'error')
-          return true
-        }
-        return false
-      })
-      
-      if (hasIssues) return
-      
-      const newWarranties: Warranty[] = []
-
-      delivery.lines.forEach(line => {
-        const product = products.find(p => p.id === line.productId)
-        if (!product) return
-
-        setProducts(prev => prev.map(p =>
-          p.id === line.productId ? { ...p, stockQty: Math.max(0, p.stockQty - line.qty) } : p
-        ))
-        
-        if (product.requiresSerial && line.serialIds.length > 0) {
-          setSerials(prev => prev.map(s =>
-            line.serialIds.includes(s.id) ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s
-          ))
-
-          if (resolveWarrantyMonths(product.warrantyMonths, systemSettings.invDefaultWarrantyMonths) > 0) {
-            line.serialIds.forEach(serialId => {
-              const serial = serials.find(s => s.id === serialId)
-              if (serial) {
-                const months = resolveWarrantyMonths(product.warrantyMonths, systemSettings.invDefaultWarrantyMonths)
-                newWarranties.push({
-                  id: uid(), ref: '',
-                  customerId: delivery.customerId, customerName: delivery.customerName,
-                  productId: line.productId, productName: line.productName,
-                  serialId: serial.id, serialNumber: serial.serial,
-                  deliveryId: delivery.id, saleOrderRef: delivery.saleOrderRef,
-                  startDate: now(), endDate: addWarrantyMonths(now(), months),
-                  status: 'active', months,
-                })
-              }
-            })
-          }
-        }
-        
-        const srcLoc = (line.sourceLocation as LocationId | undefined) ?? 'warehouse'
-        if (!product.requiresSerial) {
-          setBulkStock(prev => upsertBulkStock(prev, line.productId, srcLoc, -line.qty))
-        }
-
-        setStockReservations(prev => prev.map(r => 
-          r.productId === line.productId && r.referenceId === delivery.saleOrderId && r.status === 'reserved'
-            ? { ...r, status: 'fulfilled', fulfilledQty: line.qty } : r
-        ))
-        
-        addMove(
-          line.productId, line.productName, line.qty, 'out',
-          `Delivery ${delivery.ref}`, delivery.ref, srcLoc, 'customer',
-          line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial || '').filter(Boolean)
-        )
-      })
-
-      if (newWarranties.length > 0) {
-        // Issued on the server from what was sold (lib/warranty/e-warranty.ts).
-        requestWarrantySync()
-      }
-
-      // Update delivery
-      setDeliveries(prev => {
-        const next = prev.map(d =>
-          d.id === deliveryId
-            ? { ...d, status: 'done' as const, warrantyCreated: newWarranties.length > 0 }
-            : d
-        )
-        return next
-      })
-
-      // Track delivered quantities on the SO lines; the order stays a
-      // Sales Order (delivery progress is not a sale status).
-      setSaleOrders(prev => prev.map(so => {
-        if (so.id !== delivery.saleOrderId) return so
-        const doneByProduct: Record<string, number> = {}
-        delivery.lines.forEach(l => { doneByProduct[l.productId] = (doneByProduct[l.productId] ?? 0) + l.qty })
-        const lines = allocateDeliveredQtyToOrderLines(so.lines, doneByProduct, 'add')
-        return { ...so, lines }
-      }))
-
-      addAuditLog('confirm_delivery', delivery.ref, `Delivered by ${user.name} • Stock deducted`)
-      showToast(`${delivery.ref} confirmed • Stock deducted${newWarranties.length > 0 ? ` • ${newWarranties.length} warranties activated` : ''}`, 'success')
-
-      // Auto-create invoice logic
-      const so = soRef.current.find(s => s.id === delivery.saleOrderId)
-      let hasExistingInvoice = false
-      if (so) {
-        const existing = invRef.current.find(i => i.notes?.includes(delivery.ref))
-        hasExistingInvoice = !!existing
-        if (!existing) {
-          const soLineMap: Record<string, { unitPrice: number; subtotal: number }> = {}
-          so.lines.forEach(l => { soLineMap[l.productId] = { unitPrice: l.unitPrice, subtotal: l.subtotal } })
-
-          const invoice: Invoice = {
-            id: uid(), ref: await storeCtxRef.current!.allocateDocRef('INV'), type: 'customer_invoice', status: 'posted',
-            partnerId: delivery.customerId, partnerName: delivery.customerName,
-            date: now(), dueDate: addDays(now(), customerPaymentTermsDays(contacts.find(c => c.id === delivery.customerId), 0, systemSettings.accCreditPayOnReceiptEnforced)),
-            lines: delivery.lines.map(l => ({
-              id: uid(), description: l.productName, qty: l.qty,
-              unitPrice: soLineMap[l.productId]?.unitPrice ?? 0, taxRate: companySettings.vatRate ?? 16,
-              subtotal: soLineMap[l.productId]?.subtotal ?? 0,
-            })),
-            subtotal: so.subtotal, taxTotal: so.taxTotal, total: so.total,
-            amountPaid: 0, notes: `Invoice for ${so.ref} via ${delivery.ref}`,
-          }
-          setInvoices(prev => [invoice, ...prev])
-          postInvoiceJournalOnce(invoice)
-          // The invoice was only ever created in the browser: /validate ignores
-          // autoInvoice and creates nothing, so this document never reached the
-          // invoices table — missing from AR, the ageing report and the
-          // dashboard, with its journal arriving only if the mirror replayed
-          // the blob. POSTing it here creates the row and posts JRN/<ref>,
-          // which is the same ref the local copy uses, so there is one entry.
-          syncOrWarn('/api/invoices', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(invoice),
-          }, message => showToast(message, 'error'), `${invoice.ref} was not saved — please retry from Sales`)
-          setSaleOrders(prev => {
-            const next = prev.map(s => {
-              if (s.id !== so.id) return s
-              const invoicedByProduct: Record<string, number> = {}
-              delivery.lines.forEach(l => { invoicedByProduct[l.productId] = (invoicedByProduct[l.productId] ?? 0) + l.qty })
-              const lines = s.lines.map((l: any) => invoicedByProduct[l.productId]
-                ? { ...l, qtyInvoiced: (Number(l.qtyInvoiced) || 0) + invoicedByProduct[l.productId] }
-                : l)
-              return { ...s, lines, invoiceId: invoice.id }
-            })
-            return next
-          })
-          addAuditLog('auto_invoice', invoice.ref, `Auto-generated from ${delivery.ref}`)
-          showToast(`Invoice ${invoice.ref} generated`, 'success')
-        }
-      }
-      
-      sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: !!so && !hasExistingInvoice }) })
-    },
 
     createInvoiceFromDelivery: async (deliveryId) => {
       const delivery = deliveries.find(d => d.id === deliveryId)

@@ -1,3 +1,4 @@
+import { userCan } from '@/lib/auth/can'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
@@ -7,7 +8,8 @@ import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const { user } = await getRequiredSession()
+    if (!userCan(user, 'manageSaleOrders')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const source = await prisma.saleOrder.findUnique({
       where: { id: resolvedParams.id },

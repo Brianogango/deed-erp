@@ -9,6 +9,8 @@ import {
 } from '@/lib/credit/credit-facility-rules'
 import { BUSINESS_FIELDS, BUSINESS_TYPES, DECLARATION_TEXT, GROUPS, OFFICE_USE_FIELDS, REPRESENTATIVE_FIELDS, type FieldDef, type GroupDef } from '@/lib/credit/credit-form-fields'
 import { canonicalRole } from '@/lib/auth/roles'
+import { userCan } from '@/lib/auth/can'
+import { isDirector } from '@/lib/auth/roles'
 
 type Toast = (msg: string, type?: 'error' | 'success' | 'info') => void
 type Json = Record<string, any>
@@ -115,7 +117,7 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
   onChanged?: () => void
 }) {
   const r = canonicalRole(role)
-  const isFinance = r === 'finance_officer' || r === 'director'
+  const isFinance = userCan({ role: r }, 'sales.credit.review')
   const [apps, setApps] = useState<CreditApplicationView[] | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<CreditApplicationView | null>(null)
@@ -287,8 +289,8 @@ export default function CreditFacilityPanel({ clientId, clientName, role, userId
     return (Object.keys(TRANSITIONS) as CreditAction[])
       .filter(a => (TRANSITIONS[a].from as string[]).includes(detail.status) && mayTakeCreditAction(r, a))
       .filter(a => {
-        if (a === 'approve') return r === 'director' || (detail.approval?.level === 'finance_officer' && detail.requestedById !== userId)
-        if (a === 'recommend') return r !== 'director'
+        if (a === 'approve') return isDirector(r) || (detail.approval?.level === 'finance_officer' && detail.requestedById !== userId)
+        if (a === 'recommend') return !isDirector(r)
         return true
       })
   }, [detail, r, userId])
