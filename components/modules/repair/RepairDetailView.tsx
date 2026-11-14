@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import JobTrail from '@/components/erp/JobTrail'
@@ -9,17 +8,8 @@ import { useRepair } from './RepairContext'
 import { useRepairStore, fmtKes } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
 import { Fa } from '@/components/icons'
-import {
-  faArrowLeft, faMicrochip, faCircleExclamation, faCamera, faImage,
-  faPlay, faLink, faExternalLinkAlt, faUserCheck, faUserPlus,
-  faFileInvoiceDollar, faTrash, faUpload, faSync,
-  faExpand, faTools, faCheckCircle, faHistory,
-  faClipboardList, faQuoteRight, faStethoscope, faWrench,
-  faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle,
-  faClock, faStar, faArrowRight, faCartPlus, faBan, faShieldAlt,
-  faTruck, faUndo,
-} from '@fortawesome/free-solid-svg-icons'
-import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
+import { faArrowLeft, faMicrochip, faCircleExclamation, faCamera, faImage, faPlay, faLink, faExternalLinkAlt, faUserCheck, faUserPlus, faFileInvoiceDollar, faTrash, faUpload, faSync, faExpand, faTools, faCheckCircle, faClipboardList, faQuoteRight, faStethoscope, faWrench, faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle, faClock, faStar, faArrowRight, faCartPlus, faBan, faShieldAlt, faTruck, faUndo } from '@fortawesome/free-solid-svg-icons'
+import { STATUS_LABELS } from '../repair-config'
 import StatusStepper from './StatusStepper'
 import MessageThread from './MessageThread'
 import ConsolidatedBillingModal from './ConsolidatedBillingModal'
@@ -150,7 +140,7 @@ export default function RepairDetailView() {
   // Find existing ORC for this repair
   const repairOrc = outboundReleases?.find(o => o.repairId === r?.id && o.status !== 'voided')
 
-  const photoInputRef = useRef(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [workNoteDraft, setWorkNoteDraft] = useState('')
@@ -489,7 +479,7 @@ export default function RepairDetailView() {
     verifyRepairIntake(r.id)
   }
 
-  const handlePhotoUpload = async (e) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingPhoto(true)
@@ -516,7 +506,7 @@ export default function RepairDetailView() {
     }
   }
 
-  const removePhoto = async (idx) => {
+  const removePhoto = async (idx: number) => {
     const photos = [...(r.issuePhotos || [])]
     const photo = photos[idx]
     const photoId = (photo as any)._id
@@ -541,7 +531,6 @@ export default function RepairDetailView() {
     showToast('Portal link copied!', 'success')
     setTimeout(() => setCopiedLink(false), 2000)
   }
-  const accentColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#3B82F6'
   const intakeTimestamp = new Date(r.intakeDate || Date.now()).getTime()
   const repairAgeDays = Number.isFinite(intakeTimestamp)
     ? Math.max(0, Math.floor((Date.now() - intakeTimestamp) / 86400000))
@@ -967,10 +956,10 @@ export default function RepairDetailView() {
                 {r.contactPersonName && <InfoField label="Contact Email" value={r.contactPersonEmail} />}
                 <InfoField label="Device"      value={r.productName} />
                 <InfoField label="Serial No."  value={r.serialNumber}                                        mono />
-                <InfoField label="Colour"      value={r.deviceColor ?? r.deviceColour} />
+                <InfoField label="Colour"      value={r.deviceColor} />
                 <InfoField label="Condition"   value={r.deviceCondition} />
                 <InfoField label="Laptop Password" value={r.clientLaptopPassword} mono />
-                <InfoField label="Priority"    value={r.priority}    highlight={['high','urgent'].includes(r.priority)} />
+                <InfoField label="Priority"    value={r.priority}    highlight={['high','urgent'].includes(r.priority ?? '')} />
                 <InfoField label="Channel"     value={r.intakeChannel?.replace(/_/g,' ')} />
                 <InfoField label="Technician" value={r.assignedTechnicianName ?? 'Unassigned'} highlight={!!r.assignedTechnicianId} />
                 <InfoField
@@ -1259,7 +1248,7 @@ export default function RepairDetailView() {
                     {(r.diagnosis?.estimatedHours ?? 0) > 0 && (
                       <div className="p-3 rounded-xl bg-[rgba(99,102,241,0.08)] border border-indigo-500/25">
                         <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-1">Est. Labour</p>
-                        <p className="text-[18px] font-black text-indigo-500 leading-none">{r.diagnosis.estimatedHours}<span className="text-[11px] font-bold ml-0.5">h</span></p>
+                        <p className="text-[18px] font-black text-indigo-500 leading-none">{r.diagnosis?.estimatedHours}<span className="text-[11px] font-bold ml-0.5">h</span></p>
                       </div>
                     )}
                     {(feeApplies || feeResolved.status === 'paid' || feeResolved.status === 'invoiced' || feeResolved.status === 'waived' || feeResolved.status === 'not_applicable') && (
@@ -1582,7 +1571,7 @@ export default function RepairDetailView() {
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 {(r.issuePhotos?.length ?? 0) > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                    {r.issuePhotos.map((photo, idx) => (
+                    {(r.issuePhotos ?? []).map((photo, idx) => (
                       <div key={idx} className="group relative aspect-square rounded-xl sm:rounded-2xl overflow-hidden border border-[var(--border)] shadow-sm hover:shadow-xl transition-all duration-300">
                         <img src={photo.url} alt={photo.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                         <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2.5 sm:gap-3">
@@ -1936,7 +1925,7 @@ export default function RepairDetailView() {
                           <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Breakdown</p>
                         </div>
                         {r.quote.lines.map((line, i) => (
-                          <div key={i} className={`flex items-center justify-between px-3 py-2.5 bg-[var(--bg-card)] ${i < r.quote.lines.length - 1 ? 'border-b border-[var(--border-lt)]' : ''}`}>
+                          <div key={i} className={`flex items-center justify-between px-3 py-2.5 bg-[var(--bg-card)] ${i < (r.quote?.lines.length ?? 0) - 1 ? 'border-b border-[var(--border-lt)]' : ''}`}>
                             <div className="min-w-0 flex-1">
                               <p className="text-[10px] font-semibold text-[var(--text-2)] truncate">{line.description}</p>
                               <p className="text-[9px] text-[var(--text-4)] capitalize">{line.type} · qty {line.qty}{line.decision ? ` · ${line.decision}` : ''}</p>
@@ -1978,7 +1967,7 @@ export default function RepairDetailView() {
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
                   title="Parts & Procurement"
-                  subtitle={`${r.procurementRequests.length} request${r.procurementRequests.length !== 1 ? 's' : ''}`}
+                  subtitle={`${r.procurementRequests?.length ?? 0} request${r.procurementRequests?.length !== 1 ? 's' : ''}`}
                   action={
                     <SecondaryActionMenu
                       label="Parts"
@@ -1992,7 +1981,7 @@ export default function RepairDetailView() {
                   }
                 />
                 <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
-                  {r.procurementRequests.map((req, ri) => {
+                  {(r.procurementRequests ?? []).map((req, ri) => {
                     const sc = PROC_COLORS[req.status] ?? PROC_COLORS.pending
                     return (
                       <div key={ri} className="rounded-xl border border-[var(--border)] overflow-hidden">

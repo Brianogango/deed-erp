@@ -1,16 +1,12 @@
-// @ts-nocheck
 'use client'
 import { Suspense, useState, useMemo, useRef, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import {
-  useAfterSalesStore, BuyBack, BuyBackLine, Donation, DonationLine, ClientExchange, ExchangeLine,
-  LocationId, LOCATIONS, fmtKes, fmtDate,
-} from '@/lib/store'
+import { useAfterSalesStore, BuyBack, Donation, ClientExchange, LocationId, LOCATIONS, fmtKes, fmtDate } from '@/lib/store'
 import { parseReturnSerialTokens } from '@/lib/tradein-serial-intake'
 import { clearFormDraft, loadFormDraft, saveFormDraft } from '@/lib/form-draft'
-import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
+import { Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
@@ -275,10 +271,10 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const bulkFileRef = useRef<HTMLInputElement>(null)
 
   const originalSO = useMemo(() =>
-    originalSORef ? saleOrders.find(s => s.ref.toLowerCase() === originalSORef.toLowerCase()) : undefined,
+    originalSORef ? saleOrders.find(s => (s.ref ?? '').toLowerCase() === originalSORef.toLowerCase()) : undefined,
     [originalSORef, saleOrders])
 
-  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setDestination(''); setNotes(''); setLines([]); clearFormDraft('buyback', currentUserId) }
+  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setDestination(''); setNotes(''); setLines([]); clearFormDraft('buyback', currentUserId ?? '') }
   function resetBulk() { setBulkRows([]); if (bulkFileRef.current) bulkFileRef.current.value = '' }
 
   // A half-filled buy-back survives leaving the page: its machine's serial is
@@ -827,7 +823,7 @@ async function downloadBulkTemplate() {
 
 function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
   const { donations, createDonation, confirmDonation, deleteDonation,
-    products, serials, users, currentUserId, showToast } = useAfterSalesStore()
+    products, serials, showToast } = useAfterSalesStore()
 
   const [showNew, setShowNew] = useState(false)
   const [showBulk, setShowBulk] = useState(false)
@@ -1294,7 +1290,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
   const bulkFileRef = useRef<HTMLInputElement>(null)
 
   const originalSO = useMemo(() =>
-    originalSORef ? saleOrders.find(s => s.ref.toLowerCase() === originalSORef.toLowerCase()) : undefined,
+    originalSORef ? saleOrders.find(s => (s.ref ?? '').toLowerCase() === originalSORef.toLowerCase()) : undefined,
     [originalSORef, saleOrders])
 
   const sorted = [...clientExchanges].sort((a, b) => b.date.localeCompare(a.date))
@@ -1326,7 +1322,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
   ]
 
 
-  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setNotes(''); setReturnLines([]); setNewLines([]); clearFormDraft('exchange', currentUserId) }
+  function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setNotes(''); setReturnLines([]); setNewLines([]); clearFormDraft('exchange', currentUserId ?? '') }
 
   // A half-filled exchange survives leaving the page (its returned machine's
   // serial is registered the moment it is entered).

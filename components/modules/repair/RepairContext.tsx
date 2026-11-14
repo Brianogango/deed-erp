@@ -53,9 +53,6 @@ interface RepairCtxValue {
   openRefurbJob: (id: string) => void
   detailPanel: 'hidden' | 'detail' | 'loading' | 'missing'
   // Quick-assign / invoice
-  quickAssignRepairId: string | null; setQuickAssignRepairId: (v: string | null) => void
-  invoiceRepairId: string | null; setInvoiceRepairId: (v: string | null) => void
-  invoiceApplyVat: boolean; setInvoiceApplyVat: (v: boolean) => void
   // Modals
   showAssignModal: boolean; setShowAssignModal: (v: boolean) => void
   showDiagnosisModal: boolean; setShowDiagnosisModal: (v: boolean) => void
@@ -66,18 +63,11 @@ interface RepairCtxValue {
   showProcurementModal: boolean; setShowProcurementModal: (v: boolean) => void
   showReturnModal: boolean; setShowReturnModal: (v: boolean) => void
   // Diagnosis form
-  diagForm: any; setDiagForm: (f: any) => void
   // Quote form
-  quoteLines: any[]; setQuoteLines: (l: any[]) => void
-  quoteApplyVat: boolean; setQuoteApplyVat: (v: boolean) => void
   // Delivery form
-  deliveryForm: any; setDeliveryForm: (f: any) => void
   // Procurement form
-  procurementForm: any; setProcurementForm: (f: any) => void
   // Decline/Return
-  returnReason: string; setReturnReason: (v: string) => void
   showDeclineModal: boolean; setShowDeclineModal: (v: boolean) => void
-  declineReason: string; setDeclineReason: (v: string) => void
   showMarkDeliveredConfirm: boolean; setShowMarkDeliveredConfirm: (v: boolean) => void
   showCancelModal: boolean; setShowCancelModal: (v: boolean) => void
   showDeleteConfirm: boolean; setShowDeleteConfirm: (v: boolean) => void

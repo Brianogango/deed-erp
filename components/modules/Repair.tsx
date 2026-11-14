@@ -1,9 +1,8 @@
-// @ts-nocheck
 'use client'
 import { useFullRecord } from '@/lib/full-record'
 import { useState, useMemo, useRef, useCallback, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
-import { useRepairStore } from '@/lib/store'
+import { useRepairStore, type RepairOrder } from '@/lib/store'
 import { useRepair, RepairProvider } from './repair/RepairContext'
 import RepairClientJobs from './RepairClientJobs'
 import RepairRefurbJobs from './RepairRefurbJobs'
@@ -51,8 +50,7 @@ const RepairIntake = dynamic(() => import('../repair/RepairIntake'), {
 
 function RepairContent() {
   const {
-    view, setView, activeRepair, setActiveId, mainTab, setMainTab, openRepairCount, currentUser,
-    openRefurbJob, detailPanel,
+    view, setView, activeRepair, setActiveId, mainTab, setMainTab, openRepairCount, openRefurbJob, detailPanel,
     showAssignModal, setShowAssignModal,
     showDiagnosisModal, setShowDiagnosisModal,
     showQuoteModal, setShowQuoteModal,
@@ -107,7 +105,7 @@ function RepairContent() {
               { id: 'refurb', label: 'Refurbishment' },
             ]}
             active={mainTab}
-            onChange={id => setMainTab(id)}
+            onChange={(id: string) => setMainTab(id as 'client' | 'refurb')}
             maxVisibleDesktop={6}
             ariaLabel="Repair sections"
           />
@@ -193,7 +191,7 @@ function RepairInner() {
 
   const [activeId, setActiveId] = useUrlRecordId()
   const [isIntake, setIsIntake] = useState(false)
-  const setView = useCallback((nextView) => {
+  const setView = useCallback((nextView: string) => {
     if (nextView === 'intake') {
       setIsIntake(true)
       setActiveId(null, { history: 'replace' })
@@ -206,8 +204,8 @@ function RepairInner() {
   }, [setActiveId])
   const [filter, setFilter] = useState('all')
   const [mainTabValue, setMainTabValue] = useUrlQueryState('tab', 'client')
-  const mainTab = mainTabValue === 'refurb' ? 'refurb' : 'client'
-  const setMainTab = useCallback((nextTab) => {
+  const mainTab: 'client' | 'refurb' = mainTabValue === 'refurb' ? 'refurb' : 'client'
+  const setMainTab = useCallback((nextTab: string) => {
     setMainTabValue(nextTab === 'refurb' ? 'refurb' : 'client', { history: 'replace' })
   }, [setMainTabValue])
 
@@ -226,12 +224,12 @@ function RepairInner() {
   const [showEditDetailsModal, setShowEditDetailsModal] = useState(false)
   const [showStopDiagnosisModal, setShowStopDiagnosisModal] = useState(false)
 
-  const diagReportInputRef = useRef(null)
-  const qcReportInputRef = useRef(null)
+  const diagReportInputRef = useRef<HTMLInputElement>(null)
+  const qcReportInputRef = useRef<HTMLInputElement>(null)
   const [uploadingDiagReport, setUploadingDiagReport] = useState(false)
   const [uploadingQcReport, setUploadingQcReport] = useState(false)
 
-  const handleReportUpload = useCallback(async (file, field, nameFld, repairId, setLoading) => {
+  const handleReportUpload = useCallback(async (file: File, field: string, nameFld: string, repairId: string, setLoading: (loading: boolean) => void) => {
     const repair = repairs.find(r => r.id === repairId)
 
     if (field === 'qcReportData') {
@@ -289,8 +287,8 @@ function RepairInner() {
   }, [repairs, updateRepair, appendRepairHistory, showToast])
 
   const localActiveRepair = useMemo(() => repairs.find(r => r.id === activeId) ?? null, [repairs, activeId])
-  const [serverActiveRepair, setServerActiveRepair] = useState(null)
-  const [detailLookup, setDetailLookup] = useState('idle')
+  const [serverActiveRepair, setServerActiveRepair] = useState<RepairOrder | null>(null)
+  const [detailLookup, setDetailLookup] = useState<'idle' | 'loading' | 'missing'>('idle')
   const localGenerationRef = useRef(0)
   const workspaceIdKind = useMemo(
     () => resolveRepairWorkspaceId(
@@ -301,7 +299,7 @@ function RepairInner() {
     [activeId, repairs, refurbishmentJobs],
   )
 
-  const openRefurbJob = useCallback((id) => {
+  const openRefurbJob = useCallback((id: string) => {
     setModule('refurbishment')
     router.push(refurbishmentJobHref(id))
   }, [router, setModule])

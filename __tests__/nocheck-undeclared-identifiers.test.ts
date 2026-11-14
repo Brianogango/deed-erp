@@ -11,7 +11,7 @@ import ts from 'typescript'
 const GLOBAL_NAMES = new Set(['undefined', 'arguments', 'globalThis'])
 
 function nocheckFiles(): string[] {
-  const out = execSync('git grep -l "@ts-nocheck" -- "app/*.ts" "app/*.tsx" "components/*.tsx" "components/*.ts" "lib/*.ts" "lib/*.tsx" "hooks/*.ts"', { encoding: 'utf8' })
+  const out = execSync('git grep -l -E "^// @ts-nocheck" -- "app/*.ts" "app/*.tsx" "components/*.tsx" "components/*.ts" "lib/*.ts" "lib/*.tsx" "hooks/*.ts"', { encoding: 'utf8' })
   return out.split('\n').filter(Boolean).map(f => path.resolve(f))
 }
 
@@ -32,6 +32,12 @@ function isNameNotReference(n: ts.Identifier): boolean {
 }
 
 describe('@ts-nocheck files', () => {
+  it('are only the store and its action files (the list may shrink, never grow)', () => {
+    const files = nocheckFiles().map(f => path.relative(process.cwd(), f))
+    const allowed = (f: string) => f === 'lib/store.tsx' || /^lib\/store\/actions\/[\w-]+\.ts$/.test(f)
+    expect(files.filter(f => !allowed(f))).toEqual([])
+  })
+
   it('use no undeclared names', () => {
     const files = nocheckFiles()
     const cfg = ts.parseJsonConfigFileContent(ts.readConfigFile('tsconfig.json', ts.sys.readFile).config, ts.sys, process.cwd())

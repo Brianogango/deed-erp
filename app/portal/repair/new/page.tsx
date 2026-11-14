@@ -1,14 +1,9 @@
-// @ts-nocheck
 'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
 import { Fa } from '@/components/icons'
-import { 
-  faCheckCircle, faMicrochip, faUser, faClipboardList, 
-  faShieldAlt, faArrowRight, faInfoCircle, faSignature,
-  faMobileAlt, faLaptop, faDesktop, faPrint, faWrench
-} from '@fortawesome/free-solid-svg-icons'
+import { faCheckCircle, faMicrochip, faUser, faClipboardList, faArrowRight, faInfoCircle, faSignature, faMobileAlt, faLaptop, faDesktop, faPrint, faWrench } from '@fortawesome/free-solid-svg-icons'
 
 const DEVICE_TYPES = [
   { id: 'laptop',  label: 'Laptop',   icon: faLaptop },

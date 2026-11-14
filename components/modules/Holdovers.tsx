@@ -1,5 +1,4 @@
 'use client'
-// @ts-nocheck
 
 import { Suspense, useState, useMemo } from 'react'
 import { useOperationsStore, type Holdover, type HoldoverStatus, type HoldoverPurpose, type HoldoverDeviceCondition } from '@/lib/store'

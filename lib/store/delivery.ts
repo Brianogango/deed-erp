@@ -65,7 +65,7 @@ export interface Rider {
   hasPortalLink?: boolean
 }
 
-export interface DeliveryJob {
+export type DeliveryJob = {
   id: string
   ref: string
   type: DeliveryJobType

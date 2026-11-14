@@ -35,6 +35,7 @@ export interface RepairOrder {
   issueDescription: string
   accessories: { name: string; received: boolean; notes?: string }[]
   preRepairPhotos?: string[]
+  issuePhotos?: { url: string; name: string; date: string }[]
   verificationDate?: string
   verifiedBy?: string
   verificationNotes?: string

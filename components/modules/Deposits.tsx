@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { Suspense, useState, useMemo } from 'react'
@@ -72,7 +71,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
       const prod = (products || []).find(p => p.id === value)
       if (prod) {
         updated.productName = prod.name
-        updated.sku = prod.sku || prod.code || ''
+        updated.sku = prod.sku || ''
         // Keep: the unit price comes from the product the user selected.
         updated.unitPrice = prod.salePrice || 0
         updated.total = (prod.salePrice || 0) * (Number(updated.qty) || 0)

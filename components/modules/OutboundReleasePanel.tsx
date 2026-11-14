@@ -1,18 +1,13 @@
-// @ts-nocheck
 'use client'
 
 import { useFullRecord } from '@/lib/full-record'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import {
-  faBoxOpen, faShieldHalved, faSignature, faCircleCheck,
-  faTriangleExclamation, faXmark, faPen, faArrowLeft, faCamera,
-} from '@fortawesome/free-solid-svg-icons'
-import { useOperationsStore, OutboundRelease, OrcItem, SignatureMethod } from '@/lib/store'
+import { faBoxOpen, faShieldHalved, faSignature, faCircleCheck, faTriangleExclamation, faPen, faArrowLeft, faCamera } from '@fortawesome/free-solid-svg-icons'
+import { useOperationsStore, OutboundRelease, SignatureMethod } from '@/lib/store'
 import { Modal, Field, Input } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { resolveOrcConfirmedSerial } from '@/lib/barcode-scan'
-import { canonicalRole } from '@/lib/auth/roles'
 import { userCan } from '@/lib/auth/can'
 
 // ─── Signature Canvas ─────────────────────────────────────────────────────────
@@ -170,7 +165,6 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
   // Look up the linked repair (if this is a repair release) to show intake accessories
   const linkedRepair = isRepair && release.repairId ? repairs.find((r: any) => r.id === release.repairId) : undefined
   const intakeAccessories: { name: string; received: boolean }[] = linkedRepair?.accessories ?? []
-  const currentRole = canonicalRole(currentUser?.role)
   const canVerify   = userCan(currentUser, 'delivery.release.verify')
 
   // Derive UI step from release status

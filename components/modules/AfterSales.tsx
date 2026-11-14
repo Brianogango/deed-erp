@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 import { FormerRefNote, refWithFormer } from '@/components/erp/FormerRefNote'
 import { Suspense, useState, useMemo, useEffect } from 'react'
@@ -9,14 +8,10 @@ import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
-import { Badge, Field, Input, Modal, ModuleSkeleton, Select, Textarea, useMounted, ModuleHeader, TabBar } from '@/components/ui'
+import { Field, Input, Modal, ModuleSkeleton, Select, Textarea, useMounted, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
-import {
-  Fa, faShield, faRotateLeft, faPlus, faMoneyBillWave, faArrowsRotate, faWrench,
-  faFileLines, faCircleXmark, faNoteSticky, faCircleCheck, faBox, faFlagCheckered,
-  faThumbtack, faMoneyBill, faMobileScreenButton, faBuildingColumns,
-} from '@/components/icons'
+import { Fa, faShield, faPlus, faMoneyBillWave, faArrowsRotate, faWrench, faFileLines, faCircleXmark, faNoteSticky, faCircleCheck, faBox, faFlagCheckered, faThumbtack, faMoneyBill, faMobileScreenButton, faBuildingColumns } from '@/components/icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import TradeIn from './TradeIn'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
@@ -220,7 +215,7 @@ function AfterSalesContent() {
   const matchedSO = useMemo(() => {
     const q = rmaSORef.toLowerCase().trim()
     if (!q) return null
-    const so = saleOrders.find(o => o.ref.toLowerCase() === q)
+    const so = saleOrders.find(o => (o.ref ?? '').toLowerCase() === q)
     if (so) return { id: so.id, ref: so.ref, customerId: so.customerId, customerName: so.customerName, lines: so.lines, date: so.date, total: so.total }
     const posOrder = posOrders.find(o => o.ref.toLowerCase() === q)
     const inv = invoices.find(i =>
@@ -285,7 +280,7 @@ function AfterSalesContent() {
     }))
     try {
       const order = createReturnOrder(
-        matchedSO.id, matchedSO.ref,
+        matchedSO.id, matchedSO.ref ?? '',
         matchedSO.customerId, matchedSO.customerName,
         rmaReason, lines
       )
@@ -315,15 +310,7 @@ function AfterSalesContent() {
     setProcessRMA(null)
   }
 
-  const tabStyle = (t: Tab): React.CSSProperties => ({
-    fontSize: 11, fontWeight: tab === t ? 700 : 400,
-    padding: '6px 16px', borderRadius: 8, cursor: 'pointer',
-    background: tab === t ? '#E8F3FA' : 'transparent',
-    border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
-    color: tab === t ? 'var(--navy)' : 'var(--text-4)',
-    transition: 'all 0.15s',
-  })
-
+  
   if (!mounted) return <ModuleSkeleton />
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -866,7 +853,7 @@ function AfterSalesContent() {
                     { value: 'expired', label: 'Expired' },
                     { value: 'cancelled', label: 'Cancelled' },
                   ],
-                  onChange: setWFilter,
+                  onChange: (value: string) => setWFilter(value as Warranty['status'] | 'all'),
                 },
               ]}
               onClearFilters={() => patchListUi({ warrantyQ: null, warrantyStatus: null, warrantyPage: null })}
@@ -911,7 +898,7 @@ function AfterSalesContent() {
                     { value: 'processed', label: 'Processed' },
                     { value: 'rejected', label: 'Rejected' },
                   ],
-                  onChange: setRmaFilter,
+                  onChange: (value: string) => setRmaFilter(value as ReturnOrder['status'] | 'all'),
                 },
               ]}
               onClearFilters={() => patchListUi({ returnQ: null, returnStatus: null, returnPage: null })}

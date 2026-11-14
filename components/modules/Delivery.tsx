@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { CustomerPaidRiderModal } from '@/components/delivery/CustomerPaidRiderModal'
@@ -665,7 +664,7 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
         { value: 'all', label: `All statuses (${deliveryJobs.length})` },
         ...(['pending', 'assigned', 'in_transit', 'delivered', 'failed'] as DeliveryJobStatus[]).map(status => ({
           value: status,
-          label: `${labelMap[status] ?? status} (${stats[status]})`,
+          label: `${labelMap[status] ?? status} (${stats[status as keyof typeof stats]})`,
         })),
       ],
       onChange: value => setFilterStatus(value as DeliveryJobStatus | 'all'),
@@ -1040,7 +1039,7 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
         <JobModal
           onClose={() => setShowCreateModal(false)}
           repairs={repairs.map(r => ({ id: r.id, ref: r.ref, customerName: r.customerName, customerPhone: r.customerPhone }))}
-          saleOrders={saleOrders.filter(so => so.status === 'sale' || so.status === 'quotation' || so.status === 'quotation_sent').map(so => ({ id: so.id, ref: so.ref, customerName: so.customerName, lines: so.lines }))}
+          saleOrders={saleOrders.filter(so => so.status === 'sale' || so.status === 'quotation' || so.status === 'quotation_sent').map(so => ({ id: so.id, ref: so.ref ?? '', customerName: so.customerName, lines: so.lines }))}
           riders={riders}
           createDeliveryJob={createDeliveryJob}
           assignRiderToJob={assignRiderToJob}
@@ -1066,13 +1065,13 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
         />
       )}
       {checkInTarget && (
-        <CheckInModal job={checkInTarget} onDone={applyServerJob} onClose={() => setCheckInTarget(null)} />
+        <CheckInModal job={checkInTarget} onDone={job => applyServerJob(job as DeliveryJob)} onClose={() => setCheckInTarget(null)} />
       )}
       {paidRiderTarget && (
         <CustomerPaidRiderModal job={paidRiderTarget} onClose={() => setPaidRiderTarget(null)} />
       )}
       {followUpTarget && (
-        <FollowUpModal job={followUpTarget.job} itemId={followUpTarget.itemId} onDone={applyServerJob} onClose={() => setFollowUpTarget(null)} />
+        <FollowUpModal job={followUpTarget.job} itemId={followUpTarget.itemId} onDone={job => applyServerJob(job as DeliveryJob)} onClose={() => setFollowUpTarget(null)} />
       )}
       {stopsTarget && (
         <EditStopsModal

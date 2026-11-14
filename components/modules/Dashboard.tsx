@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useMemo, useCallback, useEffect, useState } from 'react'
@@ -29,7 +28,6 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { useDashboardSaleOrders } from '@/hooks/useDashboardSaleOrders'
 import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
 import { useRouteDataReady } from '@/lib/route-data-ready'
-import { formatRoleLabel } from '@/lib/auth/access'
 import {
   canShowDashboardKpi,
   dashboardSectionsForUser,
@@ -45,7 +43,6 @@ import { computeLowStockItems } from '@/lib/kpi-stock'
 import { isOpenRepairJob } from '@/lib/repair-progress'
 import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
 import { Fa } from '@/components/icons'
-import { OnboardingChecklist } from '@/components/erp/OnboardingChecklist'
 import type { DashboardInvoiceFigures } from '@/lib/dashboard/invoice-figures'
 
 // Full sales analytics and rep performance (Recharts/tables) — loaded only
@@ -225,8 +222,6 @@ export function Dashboard() {
     kilimallOrders,
     posOrders,
     deposits,
-    accounts,
-    companySettings,
     serials,
     bulkStock,
   } = useApp()
@@ -262,8 +257,7 @@ export function Dashboard() {
   const canSeeSales = sections.sales
   const canSeeInventory = sections.inventory
   const canSeeWorkshop = sections.workshop
-  const canSeePurchasing = sections.purchasing
-  const canSeeKilimall = sections.kilimall
+    const canSeeKilimall = sections.kilimall
   const canSeeHRAdmin = sections.hrAdmin
   const canApproveLeave = sections.leaveApprovals
 
@@ -557,8 +551,8 @@ export function Dashboard() {
     const currentRepairRecords = [...new Map(
       currentRepairInvoices
         .flatMap(invoice => (invoice.linkedRepairIds as string[]).map(id => repairById.get(id)))
-        .filter(Boolean)
-        .map(repair => [repair.id, repair]),
+        .filter((repair): repair is NonNullable<typeof repair> => Boolean(repair))
+        .map(repair => [repair.id, repair] as const),
     ).values()]
     const currentRepairRecordIds = new Set(currentRepairRecords.map(repair => repair.id))
     const recordedCostThisMonth = currentRepairRecords.reduce((sum, repair) => {
@@ -897,7 +891,7 @@ export function Dashboard() {
     const rank = { danger: 0, warn: 1, info: 2 }
     return items
       .filter(item => !item.module || has(item.module))
-      .sort((a, b) => (rank[a.tone] ?? 3) - (rank[b.tone] ?? 3))
+      .sort((a, b) => (rank[a.tone as keyof typeof rank] ?? 3) - (rank[b.tone as keyof typeof rank] ?? 3))
       .slice(0, 5)
   }, [invoicedNotDelivered, canSeeFinance, canApproveLeave, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits, has])
 
@@ -949,7 +943,7 @@ export function Dashboard() {
 
   const activity = useMemo<ActivityItem[]>(() => {
     const list: ActivityItem[] = []
-    const takeNewest = (items, n, dateOf) => [...items]
+    const takeNewest = <T,>(items: T[], n: number, dateOf: (item: T) => string | undefined) => [...items]
       .sort((a, b) => new Date(dateOf(b) || 0).getTime() - new Date(dateOf(a) || 0).getTime())
       .slice(0, n)
 
@@ -1061,7 +1055,7 @@ export function Dashboard() {
                   <button
                     type="button"
                     key={item.key}
-                    onClick={item.path ? () => (item.module ? handleNav(item.module, item.path) : handleRoute(item.path)) : undefined}
+                    onClick={item.path ? () => (item.module ? handleNav(item.module, item.path!) : handleRoute(item.path!)) : undefined}
                     className={`dashboard-alert dashboard-alert-${item.tone} ${item.path ? 'cursor-pointer' : 'cursor-default'}`}
                   >
                     <span className="dashboard-alert-dot" aria-hidden="true" />

@@ -784,6 +784,9 @@ export function Input({
   autoFocus,
   maxLength,
   pattern,
+  min,
+  step,
+  autoComplete,
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
 }: {
@@ -796,6 +799,9 @@ export function Input({
   autoFocus?: boolean
   maxLength?: number
   pattern?: string
+  min?: string | number
+  step?: string | number
+  autoComplete?: string
   'aria-invalid'?: boolean | 'true' | 'false'
   'aria-describedby'?: string
 }) {
@@ -811,6 +817,9 @@ export function Input({
       placeholder={placeholder}
       maxLength={maxLength}
       pattern={pattern}
+      min={min}
+      step={step}
+      autoComplete={autoComplete}
       aria-invalid={ariaInvalid}
       aria-describedby={ariaDescribedBy}
     />

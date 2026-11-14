@@ -1,20 +1,14 @@
-// @ts-nocheck
 'use client'
 
 import { contactPersonHint, defaultContactPerson } from '@/lib/crm/default-contact-person'
 import { useState, useMemo, useEffect } from 'react'
-import { useOperationsStore, RepairOrder, fmtDate, fmtDateTime } from '@/lib/store'
+import { useOperationsStore, fmtDate, fmtDateTime } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { diagnosisFeeAmount, isDiagnosisFeePolicyInEffect, resolveCustomerBillingType, resolveDiagnosisFee } from '@/lib/diagnosis-fee'
-import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
+import { Field, Input, Select, Textarea } from '@/components/ui'
 import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import { Fa } from '@/components/icons'
-import {
-  faArrowLeft, faSave, faUser, faMicrochip, faClipboardList,
-  faShieldAlt, faCheckCircle, faExclamationTriangle, faSignature,
-  faCopy, faExternalLinkAlt, faBuilding, faPlusCircle, faChevronDown,
-  faArrowsRotate, faMagnifyingGlass, faScrewdriverWrench, faCommentDots,
-} from '@fortawesome/free-solid-svg-icons'
+import { faArrowLeft, faSave, faUser, faMicrochip, faClipboardList, faShieldAlt, faCheckCircle, faExclamationTriangle, faSignature, faCopy, faExternalLinkAlt, faBuilding, faPlusCircle, faArrowsRotate, faMagnifyingGlass, faScrewdriverWrench, faCommentDots } from '@fortawesome/free-solid-svg-icons'
 import {
   buildRepairTrackingWhatsAppMessage,
   buildWhatsAppShareUrl,
@@ -443,7 +437,7 @@ export default function RepairIntake({ onCancel, onSuccess, warrantyId }: { onCa
       const isDirect = device.repairPath === 'direct_repair'
       const waiverAt = new Date().toISOString()
       const feeResolved = resolveDiagnosisFee({
-        repairPath: device.repairPath,
+        repairPath: device.repairPath || undefined,
         intakeDate: new Date().toISOString(),
         underWarranty: intakeUnderWarranty,
         warrantyCoverage: intakeUnderWarranty ? 'full' : undefined,
@@ -463,11 +457,11 @@ export default function RepairIntake({ onCancel, onSuccess, warrantyId }: { onCa
         contactPersonPhone: cpPhone || undefined,
         contactPersonEmail: cpEmail || undefined,
         contactPersonTitle: cpTitle || undefined,
-        intakeChannel: device.intakeChannel,
-        deviceCondition: device.deviceCondition,
+        intakeChannel: device.intakeChannel || undefined,
+        deviceCondition: device.deviceCondition || undefined,
         clientLaptopPassword: device.clientLaptopPassword.trim() || undefined,
-        priority: device.priority,
-        repairPath: device.repairPath,
+        priority: device.priority || undefined,
+        repairPath: device.repairPath || undefined,
         deviceType: deviceTypeLabel,
         deviceBrand: device.brand.trim() || undefined,
         deviceModel: device.model.trim() || undefined,
@@ -1054,7 +1048,7 @@ export default function RepairIntake({ onCancel, onSuccess, warrantyId }: { onCa
                       <Fa icon={faShieldAlt} style={{ color: '#16A34A', fontSize: 18 }} />
                       <div className="flex-1">
                         <p className="text-xs font-bold">Active Warranty Found</p>
-                        <p className="text-[10px] opacity-80">{matchedWarranty.ref} · Expires {fmtDate(matchedWarranty.endDate)}</p>
+                        <p className="text-[10px] opacity-80">{matchedWarranty.ref} · Expires {fmtDate(matchedWarranty.endDate ?? '')}</p>
                       </div>
                       <span className="px-2 py-0.5 rounded-full text-white text-[9px] font-black" style={{ background: '#16A34A' }}>COVERED</span>
                     </div>
