@@ -6512,7 +6512,7 @@ const storeCtx: AppState = {
         // Auto-create missing pending approval requests when the confirmer
         // cannot satisfy the required roles (Director/Finance may self-approve).
         const existingForDoc = approvalRequests.filter(r => r.documentId === id)
-        const createdRequests: typeof approvalRequests = []
+        const createdRequests: ApprovalRequest[] = []
         const unmetTriggers = gatingTriggers.filter(trigger => {
           const roles = APPROVAL_RULES[trigger.type](trigger.details)
           if (roles.length === 0) return false
