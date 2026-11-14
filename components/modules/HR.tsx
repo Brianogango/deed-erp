@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { faUsers, faLaptop, faUserPlus, faCalendarPlus, faMoneyBill, faPen, faEye, faCalendarDays, faCalendarCheck, faFileSignature } from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faLaptop, faUserPlus, faCalendarPlus, faMoneyBill, faPen, faEye } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
@@ -27,6 +27,7 @@ import HRMyDocuments from './hr/HRMyDocuments'
 import AppraisalsPanel from './hr/HRAppraisals'
 import { documentExpiry } from '@/lib/hr/document-status'
 import { userCan } from '@/lib/auth/can'
+import { OperationalSummary } from '@/components/erp/OperationalSummary'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS & TYPES
@@ -346,6 +347,48 @@ function HRContent() {
 
   if (!mounted) return <ModuleSkeleton />
 
+  // What HR must act on. A group with nothing in it is left out, and the panel with it.
+  const pendingLeave = leaveRequests.filter(req => req.status === 'pending_hr')
+  const openPayroll = payrollRuns.filter(run => run.status !== 'posted')
+  const onLeaveCount = employees.filter(e => e.status === 'on_leave').length
+  const dayMs = 86400000
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  type AttentionItem = { id: string; title: string; sub: string; when: string; open?: () => void }
+  const attention: Array<{ title: string; open: () => void; items: AttentionItem[] }> = [
+    {
+      title: 'Leave approvals', open: () => setTab('leave'),
+      items: pendingLeave.slice(0, 3).map(req => ({ id: req.id, title: req.employeeName, sub: `${req.leaveType.replaceAll('_', ' ')} leave`, when: fmtDate(req.startDate) })),
+    },
+    {
+      title: 'Asset acknowledgements', open: () => setTab('assets'),
+      items: employeeAssetAssignments.filter(a => a.status === 'assigned').slice(0, 3).map(a => ({ id: a.id, title: a.employeeName, sub: a.productName, when: 'Pending' })),
+    },
+    {
+      title: 'Payroll review', open: () => setTab('payroll'),
+      items: openPayroll.slice(0, 2).map(run => ({ id: run.id, title: run.ref, sub: `${run.lines.length} employees`, when: run.status.replaceAll('_', ' ') })),
+    },
+    {
+      title: 'Probation reviews', open: () => setTab('employees'),
+      items: employees
+        .filter(e => e.status === 'active' && e.probationEndDate)
+        .map(e => ({ e, days: Math.round((new Date(`${e.probationEndDate}T00:00:00`).getTime() - todayStart) / dayMs) }))
+        .filter(x => x.days <= 30 && x.days >= -14)
+        .sort((a, b) => a.days - b.days)
+        .slice(0, 3)
+        .map(({ e, days }) => ({ id: e.id, title: e.fullName, sub: e.jobTitle || 'Probation', when: days < 0 ? `${-days}d overdue` : days === 0 ? 'Today' : `${days}d`, open: () => { setTab('employees'); setViewEmpId(e.id) } })),
+    },
+    {
+      title: 'Documents to renew', open: () => setTab('documents'),
+      items: hrDocuments
+        .map(d => ({ d, x: documentExpiry(d.expiryDate) }))
+        .filter(x => x.x.status !== 'active')
+        .sort((a, b) => (a.x.daysLeft ?? 0) - (b.x.daysLeft ?? 0))
+        .slice(0, 3)
+        .map(({ d, x }) => ({ id: d.id, title: d.title, sub: employees.find(e => e.id === d.employeeId)?.fullName ?? '', when: x.status === 'expired' ? 'Expired' : `${x.daysLeft}d` })),
+    },
+  ].filter(group => group.items.length > 0)
+
   /** Employee form fields, shared by the Add and Edit modals. */
   const employeeFormFields = (isNew: boolean) => (
     <>
@@ -515,29 +558,16 @@ function HRContent() {
       <div className="hr-content-shell card overflow-hidden m-3 sm:m-4">
         {tab === 'employees' && canManageHR ? (
           <div className="hr-employees-view">
-            <div className="hr-kpi-strip" aria-label="HR overview">
-              <div className="hr-kpi-card">
-                <span className="hr-kpi-icon"><Fa icon={faUsers} /></span>
-                <span><small>Active employees</small><strong>{employees.filter(e => e.status === 'active').length}</strong></span>
-              </div>
-              <div className="hr-kpi-card">
-                <span className="hr-kpi-icon"><Fa icon={faCalendarDays} /></span>
-                <span><small>On leave</small><strong>{employees.filter(e => e.status === 'on_leave').length}</strong></span>
-              </div>
-              <div className="hr-kpi-card">
-                <span className="hr-kpi-icon"><Fa icon={faCalendarCheck} /></span>
-                <span><small>Leave requests</small><strong>{leaveRequests.filter(req => req.status === 'pending_hr').length}</strong></span>
-              </div>
-              <div className="hr-kpi-card">
-                <span className="hr-kpi-icon"><Fa icon={faFileSignature} /></span>
-                <span><small>Payroll to review</small><strong>{payrollRuns.filter(run => run.status !== 'posted').length}</strong></span>
-              </div>
-            </div>
-            <div className="hr-employees-grid">
+            <OperationalSummary
+              items={[
+                { id: 'active', label: 'active', value: employees.filter(e => e.status === 'active').length },
+                ...(onLeaveCount > 0 ? [{ id: 'on-leave', label: 'on leave', value: onLeaveCount }] : []),
+                ...(pendingLeave.length > 0 ? [{ id: 'leave', label: `leave request${pendingLeave.length === 1 ? '' : 's'} to approve`, value: pendingLeave.length, tone: 'warning' as const, onClick: () => setTab('leave') }] : []),
+                ...(openPayroll.length > 0 ? [{ id: 'payroll', label: `payroll run${openPayroll.length === 1 ? '' : 's'} to review`, value: openPayroll.length, tone: 'warning' as const, onClick: () => setTab('payroll') }] : []),
+              ]}
+            />
+            <div className={attention.length > 0 ? 'hr-employees-grid' : undefined}>
               <section className="hr-directory card overflow-hidden">
-            <div className="hr-directory-toolbar p-4 border-b border-[var(--border-lt)]">
-              <h2>Employee directory</h2>
-            </div>
             <DataTable
               tableId="hr_employees"
               columns={employeeColumns}
@@ -581,76 +611,22 @@ function HRContent() {
               exportFilename="employees"
             />
               </section>
-              <aside className="hr-attention card" aria-label="HR needs attention">
-                <div className="hr-attention__title">Needs attention</div>
-                <section>
-                  <header><strong>Leave approvals</strong><button type="button" onClick={() => setTab('leave')}>View all</button></header>
-                  {leaveRequests.filter(req => req.status === 'pending_hr').slice(0, 3).map(req => (
-                    <button key={req.id} type="button" className="hr-attention__item" onClick={() => setTab('leave')}>
-                      <span><strong>{req.employeeName}</strong><small>{req.leaveType.replaceAll('_', ' ')} leave</small></span>
-                      <span>{fmtDate(req.startDate)}</span>
-                    </button>
+              {attention.length > 0 && (
+                <aside className="hr-attention card" aria-label="HR needs attention">
+                  <div className="hr-attention__title">Needs attention</div>
+                  {attention.map(group => (
+                    <section key={group.title}>
+                      <header><strong>{group.title}</strong><button type="button" onClick={group.open}>View all</button></header>
+                      {group.items.map(item => (
+                        <button key={item.id} type="button" className="hr-attention__item" onClick={item.open ?? group.open}>
+                          <span><strong>{item.title}</strong><small>{item.sub}</small></span>
+                          <span>{item.when}</span>
+                        </button>
+                      ))}
+                    </section>
                   ))}
-                  {leaveRequests.every(req => req.status !== 'pending_hr') && <p className="hr-attention__empty">No leave approvals pending.</p>}
-                </section>
-                <section>
-                  <header><strong>Asset acknowledgements</strong><button type="button" onClick={() => setTab('assets')}>View all</button></header>
-                  {employeeAssetAssignments.filter(a => a.status === 'assigned').slice(0, 3).map(a => (
-                    <button key={a.id} type="button" className="hr-attention__item" onClick={() => setTab('assets')}>
-                      <span><strong>{a.employeeName}</strong><small>{a.productName}</small></span>
-                      <span>Pending</span>
-                    </button>
-                  ))}
-                  {employeeAssetAssignments.every(a => a.status !== 'assigned') && <p className="hr-attention__empty">No asset acknowledgements pending.</p>}
-                </section>
-                <section>
-                  <header><strong>Payroll review</strong><button type="button" onClick={() => setTab('payroll')}>View all</button></header>
-                  {payrollRuns.filter(run => run.status !== 'posted').slice(0, 2).map(run => (
-                    <button key={run.id} type="button" className="hr-attention__item" onClick={() => setTab('payroll')}>
-                      <span><strong>{run.ref}</strong><small>{run.lines.length} employees</small></span>
-                      <span>{run.status.replaceAll('_', ' ')}</span>
-                    </button>
-                  ))}
-                  {payrollRuns.every(run => run.status === 'posted') && <p className="hr-attention__empty">No payroll reviews pending.</p>}
-                </section>
-                {canManageHR && (() => {
-                  const dayMs = 86400000
-                  const todayStart = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime()
-                  const probation = employees
-                    .filter(e => e.status === 'active' && e.probationEndDate)
-                    .map(e => ({ e, days: Math.round((new Date(`${e.probationEndDate}T00:00:00`).getTime() - todayStart) / dayMs) }))
-                    .filter(x => x.days <= 30 && x.days >= -14)
-                    .sort((a, b) => a.days - b.days)
-                  const docs = hrDocuments
-                    .map(d => ({ d, x: documentExpiry(d.expiryDate) }))
-                    .filter(x => x.x.status !== 'active')
-                    .sort((a, b) => (a.x.daysLeft ?? 0) - (b.x.daysLeft ?? 0))
-                  return (
-                    <>
-                      <section>
-                        <header><strong>Probation reviews</strong><button type="button" onClick={() => setTab('employees')}>View all</button></header>
-                        {probation.slice(0, 3).map(({ e, days }) => (
-                          <button key={e.id} type="button" className="hr-attention__item" onClick={() => { setTab('employees'); setViewEmpId(e.id) }}>
-                            <span><strong>{e.fullName}</strong><small>{e.jobTitle || 'Probation'}</small></span>
-                            <span>{days < 0 ? `${-days}d overdue` : days === 0 ? 'Today' : `${days}d`}</span>
-                          </button>
-                        ))}
-                        {probation.length === 0 && <p className="hr-attention__empty">No probation reviews due in the next 30 days.</p>}
-                      </section>
-                      <section>
-                        <header><strong>Documents to renew</strong><button type="button" onClick={() => setTab('documents')}>View all</button></header>
-                        {docs.slice(0, 3).map(({ d, x }) => (
-                          <button key={d.id} type="button" className="hr-attention__item" onClick={() => setTab('documents')}>
-                            <span><strong>{d.title}</strong><small>{employees.find(e => e.id === d.employeeId)?.fullName ?? ''}</small></span>
-                            <span>{x.status === 'expired' ? 'Expired' : `${x.daysLeft}d`}</span>
-                          </button>
-                        ))}
-                        {docs.length === 0 && <p className="hr-attention__empty">No documents expiring soon.</p>}
-                      </section>
-                    </>
-                  )
-                })()}
-              </aside>
+                </aside>
+              )}
             </div>
           </div>
         ) : tab === 'leave' ? (

@@ -11,6 +11,7 @@ import { Fa } from '@/components/icons'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { faScrewdriverWrench, faBuilding, faPlus, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
 import { userCan } from '@/lib/auth/can'
+import { OperationalSummary } from '@/components/erp/OperationalSummary'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -609,7 +610,6 @@ function OutsourceContent() {
         title="Outsource repairs"
         subtitle="External repair jobs, vendor performance and costs"
         icon={<Fa icon={faScrewdriverWrench} />}
-        count={outsourceJobs.length}
         color="var(--navy)"
         primaryAction={
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openNewJob} hideLabelOnMobile={false}>
@@ -630,29 +630,21 @@ function OutsourceContent() {
       />
 
       <div className="mod-body outsource-body p-3 sm:p-4">
-        <section className="outsource-summary" aria-label="Outsource repair summary">
-          <button type="button" className="outsource-summary__item" onClick={() => { setTab('jobs'); setJobStatusFilter('sent') }}>
-            <span>Out with vendors</span><strong>{outCount}</strong>
-            <small style={overdueCount > 0 ? { color: '#dc2626', fontWeight: 700 } : undefined}>
-              {overdueCount > 0 ? `${overdueCount} out over ${OUTSOURCE_OVERDUE_DAYS} days — chase or mark returned` : 'Currently away'}
-            </small>
-          </button>
-          <button type="button" className="outsource-summary__item is-warning" onClick={() => { setTab('jobs'); setJobStatusFilter('returned_unresolved') }}>
-            <span>Needs follow-up</span><strong>{unresolvedCount}</strong><small>Returned unresolved</small>
-          </button>
-          <button type="button" className="outsource-summary__item" onClick={() => setTab('jobs')}>
-            <span>Returned today</span><strong>{returnedToday}</strong><small>All outcomes</small>
-          </button>
-          <button type="button" className="outsource-summary__item" onClick={() => setTab('vendors')}>
-            <span>Outstanding</span><strong>{fmtKes(vendorOutstanding)}</strong><small>Vendor balances</small>
-          </button>
-        </section>
+        <OperationalSummary
+          items={[
+            ...(outCount > 0 ? [{ id: 'out', label: 'out with vendors', value: outCount, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
+            ...(overdueCount > 0 ? [{ id: 'overdue', label: `out over ${OUTSOURCE_OVERDUE_DAYS} days — chase or mark returned`, value: overdueCount, tone: 'danger' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('sent') } }] : []),
+            ...(unresolvedCount > 0 ? [{ id: 'unresolved', label: 'returned unresolved', value: unresolvedCount, tone: 'warning' as const, onClick: () => { setTab('jobs'); setJobStatusFilter('returned_unresolved') } }] : []),
+            ...(returnedToday > 0 ? [{ id: 'today', label: 'returned today', value: returnedToday }] : []),
+            ...(vendorOutstanding > 0 ? [{ id: 'owed', label: 'owed to vendors', value: fmtKes(vendorOutstanding), onClick: () => setTab('vendors') }] : []),
+          ]}
+        />
 
       <div className="card overflow-hidden outsource-surface">
 
         {/* ── Jobs tab ── */}
         {tab === 'jobs' && (
-          <div className="outsource-jobs-layout">
+          <div>
             <div className="outsource-directory">
               <DataTable
             tableId="outsource_jobs"
@@ -703,43 +695,6 @@ function OutsourceContent() {
             exportFilename="outsource-jobs"
           />
             </div>
-            <aside className="outsource-attention" aria-label="Needs attention">
-              <div className="outsource-attention__header">
-                <div><span>Priority</span><h3>Needs attention</h3></div>
-                <strong>{unresolvedCount + outsourceVendors.filter(v => vendorBilled(v.id) > vendorPaid(v.id)).length}</strong>
-              </div>
-              <div className="outsource-attention__group">
-                <p>Returned unresolved</p>
-                {outsourceJobs.filter(job => job.status === 'returned_unresolved').slice(0, 4).map(job => (
-                  <button
-                    key={job.id}
-                    type="button"
-                    className="outsource-attention__job"
-                    onClick={() => setActiveJobId(job.id)}
-                  >
-                    <span className="outsource-attention__ref">{job.ref}</span>
-                    <strong className="outsource-attention__device">{job.deviceDescription}</strong>
-                    <small className="outsource-attention__vendor">{job.vendorName}</small>
-                  </button>
-                ))}
-                {unresolvedCount === 0 && <small className="outsource-attention__empty">No unresolved returns.</small>}
-              </div>
-              <div className="outsource-attention__group">
-                <p>Vendor balances</p>
-                {outsourceVendors.filter(v => vendorBilled(v.id) > vendorPaid(v.id)).slice(0, 4).map(vendor => (
-                  <button
-                    key={vendor.id}
-                    type="button"
-                    className="outsource-attention__balance"
-                    onClick={() => setSelectedVendorId(vendor.id)}
-                  >
-                    <strong className="outsource-attention__vendor-name">{vendor.name}</strong>
-                    <span className="outsource-attention__amount">{fmtKes(vendorBilled(vendor.id) - vendorPaid(vendor.id))}</span>
-                  </button>
-                ))}
-                {vendorOutstanding <= 0 && <small className="outsource-attention__empty">No outstanding balances.</small>}
-              </div>
-            </aside>
           </div>
         )}
 

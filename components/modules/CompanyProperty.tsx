@@ -42,6 +42,7 @@ import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/component
 import { Fa } from '@/components/icons'
 import { faChair, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { OperationalSummary } from '@/components/erp/OperationalSummary'
 
 type FormState = {
   name: string
@@ -910,27 +911,24 @@ export default function CompanyProperty() {
             Run depreciation
           </PrimaryActionButton>
         ) : undefined}
+        overflowActions={canManage ? (
+          <SecondaryActionMenu actions={[{ id: 'depreciate', label: 'Run monthly depreciation', onClick: () => { setActionPeriod(''); setAction('depreciate') } }]} />
+        ) : undefined}
       />
 
-      <div className="kpi-summary-strip" aria-label="Asset Management overview">
-        <article className="kpi-summary-card kpi-summary-card--green"><span>In use</span><strong>{inUse.length}</strong></article>
-        <article className="kpi-summary-card"><span>In storage</span><strong>{inStorage.length}</strong></article>
-        <article className="kpi-summary-card"><span>Capital on register</span><strong>{fmtKes(capitalCost)}</strong></article>
-        <article className="kpi-summary-card"><span>Book NBV</span><strong>{fmtKes(capitalNbv)}</strong></article>
-        <article className={`kpi-summary-card ${missingLocation.length ? 'kpi-summary-card--amber' : ''}`}><span>Missing location</span><strong>{missingLocation.length}</strong></article>
-      </div>
+      <OperationalSummary
+        items={[
+          { id: 'in-use', label: 'in use', value: inUse.length },
+          ...(inStorage.length > 0 ? [{ id: 'storage', label: 'in storage', value: inStorage.length }] : []),
+          ...(capitalCost > 0 ? [{ id: 'cost', label: 'capital cost', value: fmtKes(capitalCost) }, { id: 'nbv', label: 'book value', value: fmtKes(capitalNbv) }] : []),
+          ...(missingLocation.length > 0 ? [{ id: 'no-location', label: 'with no location', value: missingLocation.length, tone: 'warning' as const }] : []),
+        ]}
+      />
 
       <div className="px-3 sm:px-6 pt-3 space-y-2">
         <CompactInfoNotice>
-          Office furniture and equipment — not trading stock. Staff laptops issued from stock stay on HR → Assets. Book depreciation posts 6517 / 175x; KRA capital allowances are a separate tax track.
+          Staff laptops issued from stock stay on HR → Assets. Book depreciation posts 6517 / 175x; KRA capital allowances are a separate tax track.
         </CompactInfoNotice>
-        {canManage && (
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-secondary" onClick={() => { setActionPeriod(''); setAction('depreciate') }}>
-              Run monthly depreciation
-            </button>
-          </div>
-        )}
         {coaMismatch && (
           <CompactInfoNotice>
             Capital totals on this register do not match COA 1701–1704. That is expected for opening items that already sit on the ledger — do not post them again.

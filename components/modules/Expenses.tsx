@@ -8,7 +8,8 @@ import {
 } from '@/lib/store'
 import { canUserReviewExpense } from '@/lib/expense-approval-chain'
 import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
-import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
+import { PrimaryActionButton, StatusBadge } from '@/components/erp'
+import { OperationalSummary } from '@/components/erp/OperationalSummary'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import {
   Fa, faBox, faCar, faComputer, faDesktop, faDroplet, faFileLines, faLightbulb,
@@ -419,10 +420,8 @@ function ExpensesContent() {
   }
 
   // ── Stats ──
-  const myTotal      = myExpenses.reduce((s, e) => s + e.amount, 0)
   const myPending    = myExpenses.filter(e => e.status === 'submitted').length
   const myApproved   = myExpenses.filter(e => e.status === 'approved').length
-  const myReimbursed = myExpenses.filter(e => e.status === 'reimbursed' || e.status === 'paid').reduce((s, e) => s + e.amount, 0)
 
   const totalPendingAmt = allPending.reduce((s, e) => s + e.amount, 0)
   const reimbDue        = pendingReimbursements.reduce((s, e) => s + e.amount, 0)
@@ -443,14 +442,6 @@ function ExpensesContent() {
             New expense
           </PrimaryActionButton>
         }
-        overflowActions={
-          <SecondaryActionMenu
-            actions={[
-              { id: 'mine', label: 'My expenses', onClick: () => setTab('mine') },
-              ...(canReviewExpenses ? [{ id: 'review', label: 'Review expenses', onClick: () => setTab('review' as const) }] : []),
-            ]}
-          />
-        }
       />
 
       <TabBar
@@ -467,12 +458,14 @@ function ExpensesContent() {
       />
 
       <div className="mod-body expenses-body">
-      <div className="expenses-kpi-strip" aria-label="Expense overview">
-        <div className="expenses-kpi-card"><small>My claims</small><strong>{myExpenses.length}</strong><span>{fmtKes(myTotal)} submitted</span></div>
-        <div className="expenses-kpi-card"><small>Pending review</small><strong>{canReviewExpenses ? allPending.length : myPending}</strong><span>{canReviewExpenses ? fmtKes(totalPendingAmt) : 'Awaiting approval'}</span></div>
-        <div className="expenses-kpi-card"><small>Approved to pay</small><strong>{isFinance ? pendingReimbursements.length : myApproved}</strong><span>{isFinance ? fmtKes(reimbDue) : 'Ready for finance'}</span></div>
-        <div className="expenses-kpi-card"><small>Paid / reimbursed</small><strong>{fmtKes(myReimbursed)}</strong><span>Settled claims</span></div>
-      </div>
+      <OperationalSummary
+        items={[
+          ...(canReviewExpenses && allPending.length > 0 ? [{ id: 'pending', label: `to review · ${fmtKes(totalPendingAmt)}`, value: allPending.length, tone: 'warning' as const, onClick: () => { setTab('review'); setReviewStatus('submitted') } }] : []),
+          ...(isFinance && pendingReimbursements.length > 0 ? [{ id: 'pay', label: `approved to pay · ${fmtKes(reimbDue)}`, value: pendingReimbursements.length, tone: 'warning' as const, onClick: () => { setTab('review'); setReviewStatus('approved') } }] : []),
+          ...(myPending > 0 ? [{ id: 'mine-pending', label: 'of my claims awaiting approval', value: myPending, onClick: () => setTab('mine') }] : []),
+          ...(myApproved > 0 ? [{ id: 'mine-approved', label: 'of my claims approved, awaiting payment', value: myApproved, onClick: () => setTab('mine') }] : []),
+        ]}
+      />
       <div className="expenses-content-shell">
 
         {/* ── My Expenses tab ── */}
@@ -494,7 +487,7 @@ function ExpensesContent() {
 
         {/* ── Review tab (finance + chain approvers) ── */}
         {tab === 'review' && canReviewExpenses && (
-          <div className="expenses-review-grid">
+          <div>
             <section className="expenses-table-panel card">
               <ExpenseTable
             rows={reviewList}
@@ -547,46 +540,6 @@ function ExpensesContent() {
             onView={e => setReviewingId(e.id)}
               />
             </section>
-            <aside className="expenses-approval-rail" aria-label="Expense approval queue">
-              <header>
-                <small>Finance workflow</small>
-                <h2>Approval queue</h2>
-              </header>
-              <section>
-                <div className="expenses-queue-heading"><strong>Pending approval</strong><span>{allPending.length}</span></div>
-                {allPending.slice(0, 4).map(exp => (
-                  <button key={exp.id} type="button" className="expenses-queue-item" onClick={() => { setReviewingId(exp.id); setReviewNotes('') }}>
-                    <span><strong>{exp.submittedByName}</strong><small>{exp.description}</small></span>
-                    <em>{fmtKes(exp.amount)}</em>
-                  </button>
-                ))}
-                {allPending.length === 0 && <p className="expenses-queue-empty">No claims are waiting for approval.</p>}
-              </section>
-              {isFinance && (
-                <section>
-                  <div className="expenses-queue-heading"><strong>Ready to pay</strong><span>{pendingReimbursements.length}</span></div>
-                  {pendingReimbursements.slice(0, 3).map(exp => (
-                    <button
-                      key={exp.id}
-                      type="button"
-                      className="expenses-queue-item"
-                      onClick={() => {
-                        setReimbursingId(exp.id)
-                        setReimburseNote('')
-                        setReimburseMethod('')
-                        setReimburseBankAccountId('')
-                        setReimburseReference('')
-                        setReimburseDate('')
-                      }}
-                    >
-                      <span><strong>{exp.submittedByName}</strong><small>{exp.ref}</small></span>
-                      <em>{fmtKes(exp.amount)}</em>
-                    </button>
-                  ))}
-                  {pendingReimbursements.length === 0 && <p className="expenses-queue-empty">No approved expenses need payment.</p>}
-                </section>
-              )}
-            </aside>
           </div>
         )}
       </div>

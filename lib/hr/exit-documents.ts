@@ -47,26 +47,65 @@ function header(doc: jsPDF, company: ExitCompany, title: string) {
 export function buildCertificateOfService(emp: ExitEmployee, company: ExitCompany, issuedOn: string): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()
-  header(doc, company, 'CERTIFICATE OF SERVICE')
-  doc.setFont('helvetica', 'normal').setFontSize(11).setTextColor(...INK)
-  doc.text(`Date: ${longDate(issuedOn)}`, 40, 150)
-  doc.setFont('helvetica', 'bold').text('TO WHOM IT MAY CONCERN', 40, 184)
-  const body = [
-    `This is to certify that ${emp.name}${emp.idNumber ? ` (ID No. ${emp.idNumber})` : ''} was employed by ${company.name} as ${emp.jobTitle || 'an employee'}${emp.department ? ` in the ${emp.department} department` : ''}.`,
-    `Employment commenced on ${longDate(emp.startDate)} and ended on ${longDate(emp.exitDate)}, a period of service of ${lengthOfService(emp.startDate, emp.exitDate)}.`,
-    'This certificate is issued in accordance with Section 51 of the Employment Act, 2007.',
-  ]
-  doc.setFont('helvetica', 'normal').setFontSize(11)
-  let y = 214
-  body.forEach(p => {
-    const lines = doc.splitTextToSize(p, W - 80) as string[]
-    doc.text(lines, 40, y)
-    y += lines.length * 16 + 10
+  const H = doc.internal.pageSize.getHeight()
+  const L = 56
+  const R = W - 56
+
+  // Letterhead: name on the left, contact details on the right, one rule.
+  doc.setFont('helvetica', 'bold').setFontSize(18).setTextColor(...NAVY).text(company.name, L, 62)
+  doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...MUTED)
+  const contact = [[company.address, company.city].filter(Boolean).join(', '), [company.phone, company.email].filter(Boolean).join('  ·  '), company.kraPin ? `KRA PIN ${company.kraPin}` : ''].filter(Boolean)
+  contact.forEach((t, i) => doc.text(t, R, 48 + i * 12, { align: 'right' }))
+  doc.setDrawColor(...NAVY).setLineWidth(1.2).line(L, 84, R, 84)
+
+  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...MUTED)
+  if (emp.employeeNo) doc.text(`Ref: ${emp.employeeNo}/COS`, L, 116)
+  doc.text(longDate(issuedOn), R, 116, { align: 'right' })
+
+  doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...INK).text('CERTIFICATE OF SERVICE', W / 2, 168, { align: 'center' })
+  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...MUTED).text('To whom it may concern', W / 2, 186, { align: 'center' })
+
+  doc.setFontSize(11).setTextColor(...INK)
+  const intro = doc.splitTextToSize(`This is to certify that the person named below was employed by ${company.name}. The particulars of the employment are as follows.`, R - L) as string[]
+  doc.text(intro, L, 228, { lineHeightFactor: 1.5 })
+
+  const rows: Array<[string, string]> = ([
+    ['Name', emp.name],
+    ['National ID No.', emp.idNumber],
+    ['Employee No.', emp.employeeNo],
+    ['Position held', emp.jobTitle],
+    ['Department', emp.department],
+    ['Date of joining', longDate(emp.startDate)],
+    ['Last day of service', longDate(emp.exitDate)],
+    ['Length of service', lengthOfService(emp.startDate, emp.exitDate)],
+  ] as Array<[string, string]>).filter(([, value]) => Boolean(value))
+  autoTable(doc, {
+    startY: 228 + intro.length * 17 + 8,
+    margin: { left: L, right: 56 },
+    theme: 'plain',
+    styles: { font: 'helvetica', fontSize: 11, cellPadding: { top: 8, bottom: 8, left: 0, right: 8 }, textColor: INK, lineColor: LINE, lineWidth: { bottom: 0.6 } as never },
+    columnStyles: { 0: { cellWidth: 150, textColor: MUTED }, 1: { fontStyle: 'bold' } },
+    body: rows,
   })
-  doc.text('Yours faithfully,', 40, y + 24)
-  doc.setDrawColor(...MUTED).setLineWidth(0.6).line(40, y + 84, 220, y + 84)
-  doc.setFont('helvetica', 'bold').setFontSize(10).text('Authorised signatory', 40, y + 98)
-  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...MUTED).text(company.name, 40, y + 112)
+  let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 32
+
+  doc.setFont('helvetica', 'normal').setFontSize(11).setTextColor(...INK)
+  doc.text('This certificate is issued in accordance with Section 51 of the Employment Act, 2007.', L, y)
+  y += 78
+
+  // Signature on the left, room for the company stamp on the right.
+  doc.setDrawColor(...MUTED).setLineWidth(0.6).line(L, y, L + 200, y)
+  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...INK).text('Authorised signatory', L, y + 15)
+  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(...MUTED)
+  doc.text(`For ${company.name}`, L, y + 29)
+  doc.text('Name and designation:', L, y + 52)
+  doc.setDrawColor(...LINE).line(L + 108, y + 54, L + 260, y + 54)
+  doc.setLineDashPattern([3, 3], 0).setDrawColor(...MUTED).roundedRect(R - 130, y - 62, 130, 92, 6, 6)
+  doc.setLineDashPattern([], 0)
+  doc.setFontSize(8).text('Company stamp', R - 65, y - 12, { align: 'center' })
+
+  doc.setDrawColor(...LINE).setLineWidth(0.6).line(L, H - 54, R, H - 54)
+  doc.setFontSize(8).setTextColor(...MUTED).text(`${company.name} — this certificate states the facts of employment only.`, W / 2, H - 40, { align: 'center' })
   return doc
 }
 
