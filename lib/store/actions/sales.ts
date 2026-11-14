@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import { userCan } from '@/lib/auth/can'
 import type { KilimallOrder, KilimallDispatch, KilimallSettlement, KilimallSettlementLine, Company, ContactPerson, Contact, Opportunity, OpportunityActivity, CustomerContract, Quote, QuoteLineItem, SaleOrder, POSSession, POSOrder } from '../sales'
 import { uid, now } from '../ids'
@@ -51,6 +50,8 @@ import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { nextPosTicketRef } from '@/lib/pos-orders-merge'
 import type { AppState } from '../state'
 import type { StoreDeps } from './deps'
+import type { SaleOrderLine } from '../sales'
+import type { PurchaseOrder } from '../purchasing'
 
 /** sales actions of the store. `store` reads the provider's current state, setters and helpers. */
 export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKilimallOrder' | 'updateKilimallOrder' | 'returnKilimallOrder' | 'confirmKilimallDispatch' | 'createKilimallSettlement' | 'updateKilimallSettlement' | 'reconcileKilimallSettlement' | 'matchKilimallSettlementLine' | 'addContact' | 'updateContact' | 'deleteContact' | 'createCompany' | 'updateCompany' | 'deleteCompany' | 'createContactPerson' | 'updateContactPerson' | 'deleteContactPerson' | 'createOpportunity' | 'ingestOpportunity' | 'updateOpportunity' | 'moveOpportunityStage' | 'markOpportunityWon' | 'markOpportunityLost' | 'deleteOpportunity' | 'logActivity' | 'completeActivity' | 'createCustomerContract' | 'updateCustomerContract' | 'renewCustomerContract' | 'terminateCustomerContract' | 'createQuote' | 'updateQuote' | 'addQuoteLine' | 'removeQuoteLine' | 'sendQuote' | 'acceptQuote' | 'rejectQuote' | 'convertQuoteToSaleOrder' | 'convertRepairQuoteToSOAndInvoice' | 'reviseQuote' | 'deleteQuote' | 'createSaleOrder' | 'updateSaleOrder' | 'addSOLine' | 'assignSerialToSOLine' | 'assignSerialsToSOLine' | 'unassignSerialFromSOLine' | 'removeSOLine' | 'moveSOLine' | 'addSOSection' | 'confirmSO' | 'ensureWaitingDeliveryForSO' | 'markQuotationSent' | 'setSaleOrderLock' | 'prepareDelivery' | 'reverseDelivery' | 'validateDelivery' | 'markDeliveryNoteGenerated' | 'updateDelivery' | 'createInvoiceFromSO' | 'deleteSaleOrder' | 'resetSOToDraft' | 'cancelSO' | 'createNewSOVersion' | 'openPOSSession' | 'closePOSSession' | 'createPOSOrder' | 'checkDiscountApproval' | 'requestApproval' | 'checkCreditLimit' | 'getCustomerCreditStatus' | 'issueCreditNoteFromSaleOrder' | 'approveRequest' | 'getPendingApprovalsForUser'> {
@@ -544,7 +545,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           (
             (c.email && person.email?.trim().toLowerCase() === c.email.trim().toLowerCase()) ||
             (c.phone && person.phone?.replace(/\D/g, '').slice(-9) === c.phone.replace(/\D/g, '').slice(-9)) ||
-            person.fullName.trim().toLowerCase() === fullName.toLowerCase()
+            (person.fullName ?? '').trim().toLowerCase() === fullName.toLowerCase()
           )
         )
   
@@ -708,7 +709,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
       }),
 
     markOpportunityWon: (id, actualValue) => store.setOpportunities(prev => {
-        const next = prev.map(o => o.id === id ? {
+        const next: Opportunity[] = prev.map(o => o.id === id ? {
           ...o,
           stage: 'closed_won',
           probability: 100,
@@ -724,7 +725,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
       }),
 
     markOpportunityLost: (id, reason, competitor) => store.setOpportunities(prev => {
-        const next = prev.map(o => o.id === id ? {
+        const next: Opportunity[] = prev.map(o => o.id === id ? {
           ...o,
           stage: 'closed_lost',
           probability: 0,
@@ -773,7 +774,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
       },
 
     completeActivity: (id, outcome) => store.setOpportunityActivities(prev => {
-        const next = prev.map(a => a.id === id ? {
+        const next: OpportunityActivity[] = prev.map(a => a.id === id ? {
           ...a,
           status: 'completed',
           completedDate: now(),
@@ -866,7 +867,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         store.setQuotes(p => [quote, ...p])
         sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(quote) })
         store.setOpportunities(prev => {
-          const next = prev.map(o => o.id === quote.opportunityId ? { ...o, quoteIds: [...o.quoteIds, quote.id] } : o)
+          const next = prev.map(o => o.id === quote.opportunityId ? { ...o, quoteIds: [...(o.quoteIds ?? []), quote.id] } : o)
           const updated = next.find(o => o.id === quote.opportunityId)
           if (updated) sync(`/api/opportunities/${quote.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return next
@@ -1063,12 +1064,12 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
       },
 
     acceptQuote: (id) => store.setQuotes(prev => {
-        const next = prev.map(q => q.id === id ? { ...q, status: 'accepted', acceptedDate: now() } : q)
+        const next: Quote[] = prev.map(q => q.id === id ? { ...q, status: 'accepted', acceptedDate: now() } : q)
         const updated = next.find(q => q.id === id)
         if (updated) sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         const quote = store.quotes.find(q => q.id === id)
         store.setOpportunities(p => {
-          const n = p.map(o => o.id === quote?.opportunityId ? { ...o, stage: 'closed_won', probability: 100, lastActivityDate: now() } : o)
+          const n: Opportunity[] = p.map(o => o.id === quote?.opportunityId ? { ...o, stage: 'closed_won', probability: 100, lastActivityDate: now() } : o)
           const up = n.find(o => o.id === quote?.opportunityId)
           if (up) sync(`/api/opportunities/${quote?.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(up) })
           return n
@@ -1079,7 +1080,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
       }),
 
     rejectQuote: (id, reason) => store.setQuotes(prev => {
-        const next = prev.map(q => q.id === id ? {
+        const next: Quote[] = prev.map(q => q.id === id ? {
           ...q, status: 'rejected', rejectedDate: now(), rejectionReason: reason,
         } : q)
         const updated = next.find(q => q.id === id)
@@ -1162,7 +1163,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         store.setSaleOrders(p => [so, ...p])
         sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
         store.setQuotes(prev => {
-          const next = prev.map(q => q.id === quoteId ? {
+          const next: Quote[] = prev.map(q => q.id === quoteId ? {
             ...q, status: 'accepted', saleOrderId: so.id, convertedDate: now(),
           } : q)
           const updated = next.find(q => q.id === quoteId)
@@ -1178,7 +1179,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         // Close linked opportunity as won
         if (quote.opportunityId) {
           store.setOpportunities(prev => {
-            const next = prev.map(opp => opp.id === quote.opportunityId ? {
+            const next: Opportunity[] = prev.map(opp => opp.id === quote.opportunityId ? {
               ...opp, stage: 'closed_won', actualValue: quote.total, closedDate: now(), wonReason: 'Quote accepted and converted to sales order'
             } : opp)
             const updated = next.find(o => o.id === quote.opportunityId)
@@ -1258,7 +1259,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         void store.saveInvoiceToServer(invoice, msg => store.showToast(msg, 'error'))
   
         store.setQuotes(p => {
-          const next = p.map(q => q.id === quoteId ? {
+          const next: Quote[] = p.map(q => q.id === quoteId ? {
             ...q, status: 'accepted', saleOrderId: soId, invoiceId: invoice.id, acceptedDate: now(), convertedDate: now(),
           } : q)
           const updated = next.find(q => q.id === quoteId)
@@ -1285,13 +1286,12 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         
         // Mark original as revised
         store.setQuotes(prev => {
-          const next = prev.map(q => q.id === quoteId ? { ...q, status: 'revised' } : q)
+          const next: Quote[] = prev.map(q => q.id === quoteId ? { ...q, status: 'revised' } : q)
           sync(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(q => q.id === quoteId)) })
           return next
         })
         
         // Create new version
-        const user = store.currentUser()
         const newQuote: Quote = {
           ...originalQuote,
           id: uid(),
@@ -1355,7 +1355,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           pricelistId: (initial as any).pricelistId,
           discountAmount: headerDiscount,
           total: Math.max(0, (totals.total ?? 0) - headerDiscount),
-          totalAmount: Math.max(0, (totals.totalAmount ?? totals.total ?? 0) - headerDiscount),
+          totalAmount: Math.max(0, (totals.total ?? 0) - headerDiscount),
           ...money,
           // Odoo defaults the salesperson to the creating user; the form may override.
           salespersonId: initial.salespersonId ?? user?.id,
@@ -1764,7 +1764,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           if (so.id !== orderId) return so
           const lines = so.lines.map(l => {
             if (l.id !== lineId) return l
-            return { ...l, serialIds: (l.serialIds || []).filter(id => id !== serialId) }
+            return { ...l, serialIds: (l.serialIds || []).filter((id: string) => id !== serialId) }
           })
           const updated = { ...so, lines }
           sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saleOrderPersistBody(updated as unknown as Record<string, unknown>)) })
@@ -1772,7 +1772,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         }))
         const so = store.soRef.current.find(order => order.id === orderId)
         const line = so?.lines.find(item => item.id === lineId)
-        const nextSerialIds = (line?.serialIds || []).filter(id => id !== serialId)
+        const nextSerialIds = (line?.serialIds || []).filter((id: string) => id !== serialId)
         const pendingDelivery = store.delRef.current.find(d =>
           d.saleOrderId === orderId && ['draft', 'waiting', 'ready'].includes(d.status),
         )
@@ -1928,8 +1928,8 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
                   confirmedAt: so.confirmedAt ?? new Date().toISOString(),
                   orderNumber: so.orderNumber ?? so.ref,
                   quotationRef: so.quotationRef,
-                  confirmedById: so.confirmedById ?? user.id,
-                  confirmedByName: so.confirmedByName ?? user.name,
+                  confirmedById: so.confirmedById ?? user!.id,
+                  confirmedByName: so.confirmedByName ?? user!.name,
                 }),
               })
               if (healRes.ok) {
@@ -1981,7 +1981,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           }
   
           const creditStatus = store.storeCtxRef.current!.getCustomerCreditStatus(so.customerId, confirmTotals.totalAmount)
-          const canCreditOverride = canOverrideCustomerCredit(user.role)
+          const canCreditOverride = canOverrideCustomerCredit(user!.role)
           if (!creditStatus.ok && !canCreditOverride) {
             store.showToast(creditStatus.message || 'Customer credit check failed — cannot confirm', 'error')
             return
@@ -2043,7 +2043,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
             const roles = APPROVAL_RULES[trigger.type](trigger.details)
             if (roles.length === 0) return false
             // Price: Director OR Finance may self-satisfy. Other types still need every role.
-            if (actorSatisfiesApprovalRoles(trigger.type, roles, user.role)) return false
+            if (actorSatisfiesApprovalRoles(trigger.type, roles, user!.role)) return false
             const already = existingForDoc.some(r =>
               r.type === trigger.type && (r.status === 'pending' || r.status === 'approved'),
             )
@@ -2054,9 +2054,9 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
               trigger.type,
               'sales_order',
               id,
-              so.ref,
-              user.id,
-              user.name,
+              so.ref ?? '',
+              user!.id,
+              user!.name,
               { ...trigger.details, reason: trigger.reason },
               store.users.map(u => ({ id: u.id, name: u.name, role: u.role })),
             )
@@ -2075,7 +2075,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
                 path: approvalDocumentPath(request),
                 icon: '⚠️',
                 entityKey: `approval:${request.id}`,
-                excludeUserId: user.id,
+                excludeUserId: user!.id,
               })
             }
             store.showToast(
@@ -2094,11 +2094,11 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           // The Director can override: confirming approves the pending requests
           // in their name, so the decision is still on record. Everyone else
           // waits for the approver.
-          if (leftoverSalesApprovals.length > 0 && isDirector(user.role)) {
-            const decided = leftoverSalesApprovals.map(r => processApproval(r, user.id, user.name, 'approved', 'Director override at confirm', user.role))
+          if (leftoverSalesApprovals.length > 0 && isDirector(user!.role)) {
+            const decided = leftoverSalesApprovals.map(r => processApproval(r, user!.id, user!.name, 'approved', 'Director override at confirm', user!.role))
             const byId = new Map(decided.map(r => [r.id, r]))
             store.setApprovalRequests(prev => prev.map(r => byId.get(r.id) ?? r))
-            store.addAuditLog('approval_override', so.ref, `Director approved ${decided.map(r => r.type.replace(/_/g, ' ')).join(', ')} at confirm`)
+            store.addAuditLog('approval_override', so.ref ?? '', `Director approved ${decided.map(r => r.type.replace(/_/g, ' ')).join(', ')} at confirm`)
           } else if (leftoverSalesApprovals.length > 0) {
             store.showToast(
               `Resolve ${leftoverSalesApprovals.length} pending approval${leftoverSalesApprovals.length === 1 ? '' : 's'} before confirming`,
@@ -2121,9 +2121,9 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
             quotationRef: so.quotationRef ?? so.ref,
             status: 'sale' as const,
             confirmedAt,
-            confirmedById: user.id,
-            confirmedByName: user.name,
-            approvedBy: user.id,
+            confirmedById: user!.id,
+            confirmedByName: user!.name,
+            approvedBy: user!.id,
             // Do not force not_required — server enforces + role satisfaction.
             approvalStatus: gatingTriggers.length > 0 ? 'approved' as const : 'not_required' as const,
             locked: store.systemSettings.salesLockConfirmed || undefined,
@@ -2233,9 +2233,9 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
                   quotationRef: s.quotationRef ?? snapshot.ref,
                   status: 'sale',
                   confirmedAt,
-                  confirmedById: user.id,
-                  confirmedByName: user.name,
-                  approvedBy: user.id,
+                  confirmedById: user!.id,
+                  confirmedByName: user!.name,
+                  approvedBy: user!.id,
                   approvalStatus: 'not_required',
                   locked: store.systemSettings.salesLockConfirmed || undefined,
                   lockVersion: serverLock ?? s.lockVersion,
@@ -2272,9 +2272,9 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
               quotationRef: s.quotationRef ?? snapshot.ref,
               status: 'sale',
               confirmedAt,
-              confirmedById: user.id,
-              confirmedByName: user.name,
-              approvedBy: user.id,
+              confirmedById: user!.id,
+              confirmedByName: user!.name,
+              approvedBy: user!.id,
               approvalStatus: 'not_required',
               approvalRequiredReason: undefined,
               approvalRequestIds: [],
@@ -2292,7 +2292,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           store.addAuditLog(
             'confirm_sale_order',
             serverRef,
-            `Same document: quotation ${snapshot.ref} renamed to sales order ${serverRef} by ${user.name}${store.systemSettings.salesLockConfirmed ? ' · order locked' : ''}${selection.changed ? ` · ${selection.droppedIds.length} line(s) dropped at confirm` : ''}`,
+            `Same document: quotation ${snapshot.ref} renamed to sales order ${serverRef} by ${user!.name}${store.systemSettings.salesLockConfirmed ? ' · order locked' : ''}${selection.changed ? ` · ${selection.droppedIds.length} line(s) dropped at confirm` : ''}`,
           )
           store.showToast(
             del
@@ -2328,7 +2328,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           id: uid(),
           ref: dnRef,
           saleOrderId: id,
-          saleOrderRef: so.orderNumber ?? so.ref,
+          saleOrderRef: so.orderNumber ?? so.ref ?? '',
           customerId: so.customerId,
           customerName: so.customerName,
           status: 'waiting',
@@ -2409,7 +2409,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           })
           return updated
         }))
-        store.addAuditLog('quotation_sent', so.ref, `Quotation emailed to ${recipient ?? so.customerName} by ${user.name}${message ? ` — ${message}` : ''}`)
+        store.addAuditLog('quotation_sent', so.ref ?? '', `Quotation emailed to ${recipient ?? so.customerName} by ${user.name}${message ? ` — ${message}` : ''}`)
       },
 
     setSaleOrderLock: (id, locked) => {
@@ -2425,7 +2425,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return updated
         }))
-        store.addAuditLog(locked ? 'lock_sale_order' : 'unlock_sale_order', so.ref, `${locked ? 'Locked' : 'Unlocked'} by ${user.name}`)
+        store.addAuditLog(locked ? 'lock_sale_order' : 'unlock_sale_order', so.ref ?? '', `${locked ? 'Locked' : 'Unlocked'} by ${user.name}`)
         store.showToast(`${so.ref} ${locked ? 'locked' : 'unlocked'}`)
       },
 
@@ -2773,7 +2773,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
                 customerId: del.customerId, customerName: del.customerName,
                 productId: l.productId, productName: l.productName,
                 serialId: sid, serialNumber: serial?.serial ?? '',
-                deliveryId: del.id, saleOrderRef: so.ref,
+                deliveryId: del.id, saleOrderRef: so.ref ?? '',
                 startDate: now(), endDate: addWarrantyMonths(now(), months),
                 status: 'active', months,
               }
@@ -2821,13 +2821,13 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           const backorderShort = clampedBackorder.some(l => {
             const prod = store.prodRef.current.find(p => p.id === l.productId)
             if (isNonStockSaleLine(l, prod ?? null)) return false
-            return (Number(prod.stockQty) || 0) < l.qty
+            return (Number(prod!.stockQty) || 0) < l.qty
           })
           backorder = {
             id: uid(), ref: await store.storeCtxRef.current!.allocateDocRef('DN'), saleOrderId: del.saleOrderId, saleOrderRef: del.saleOrderRef,
             customerId: del.customerId, customerName: del.customerName,
             status: initialDeliveryState(backorderShort), date: now(),
-            lines: clampedBackorder,
+            lines: clampedBackorder as DeliveryLine[],
             warrantyCreated: false,
             backorderOfId: del.id,
             backorderOfRef: del.ref,
@@ -3185,7 +3185,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         }
         store.setSaleOrders(p => p.filter(s => s.id !== id))
         sync(`/api/sale-orders/${id}`, { method: 'DELETE' })
-        store.addAuditLog('delete_sale_order', so.ref, `Deleted by ${actor?.name || 'user'}`)
+        store.addAuditLog('delete_sale_order', so.ref ?? '', `Deleted by ${actor?.name || 'user'}`)
         store.showToast('Order deleted')
       },
 
@@ -3280,7 +3280,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         const nextRow = normalized ?? updated
         store.soRef.current = store.soRef.current.map(s => s.id === id ? nextRow : s)
         store.setSaleOrders(p => p.map(s => s.id === id ? nextRow : s))
-        store.addAuditLog('reset_to_quotation', so.ref, `Order set back to Quotation by ${actor.name}`)
+        store.addAuditLog('reset_to_quotation', so.ref ?? '', `Order set back to Quotation by ${actor.name}`)
         store.showToast(so.status === 'quotation_sent' ? 'Quotation reset to draft — you can edit and save' : 'Order set back to Quotation')
         return true
       },
@@ -3333,7 +3333,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return updated
         }))
-        store.addAuditLog('cancel_sale_order', so.ref, 'Order cancelled')
+        store.addAuditLog('cancel_sale_order', so.ref ?? '', 'Order cancelled')
         store.showToast('Order cancelled')
       },
 
@@ -3353,7 +3353,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           }
           const created = payload as SaleOrder
           store.setSaleOrders(p => [created, ...p])
-          store.addAuditLog('sale_order_new_version', created.ref, `Revision ${created.versionNumber} created from ${so.ref}`)
+          store.addAuditLog('sale_order_new_version', created.ref ?? '', `Revision ${created.versionNumber} created from ${so.ref}`)
           store.showToast(`Revision ${created.versionNumber ?? 1} created — edit and resend ${created.ref}`)
           return created
         } catch {
@@ -3930,9 +3930,9 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         const netOutstanding = Math.max(0, outstanding - availableCredits)
   
         const creditUsed = netOutstanding + orderTotal
-        const creditAvailable = customer.creditLimit - netOutstanding
+        const creditAvailable = (customer.creditLimit ?? 0) - netOutstanding
   
-        if (creditUsed > customer.creditLimit) {
+        if (creditUsed > (customer.creditLimit ?? 0)) {
           return { ok: false, message: `Credit limit exceeded. Limit: ${store.fmtKes(customer.creditLimit)}, Used: ${store.fmtKes(netOutstanding)}, Available: ${store.fmtKes(creditAvailable)}`, requiresApproval: true }
         }
         return { ok: true, creditAvailable }
@@ -4036,7 +4036,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         const creditJournal = buildCustomerCreditJournal(sourceInvoice, ref, creditAmount)
         store.setJournalEntries(prev => [creditJournal, ...prev])
         store.postSystemJournal('sale_order_credit_note', creditJournal, message => store.showToast(message, 'error'))
-        store.addAuditLog('sales_credit_note', so.ref, `Credit note ${ref} issued for ${store.fmtKes(creditAmount)}`)
+        store.addAuditLog('sales_credit_note', so.ref ?? '', `Credit note ${ref} issued for ${store.fmtKes(creditAmount)}`)
         store.showToast(`Credit note ${ref} issued for ${store.fmtKes(creditAmount)}`, 'success')
         return ref
       },
@@ -4061,30 +4061,30 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
             : docRequests.some(r => r.status === 'pending') ? 'pending'
             : 'approved'
           if (request.documentType === 'sales_order') {
-            store.setSaleOrders(prev => prev.map(so => {
+            store.setSaleOrders(prev => (prev.map(so => {
               if (so.id !== request.documentId) return so
               // The approval gate never changes the Odoo stage — the record
               // stays a Quotation until someone clicks Confirm.
               const updated = { ...so, approvalStatus: docStatus }
               sync(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
               return updated
-            }))
+            })) as SaleOrder[])
           }
           if (request.documentType === 'quote') {
-            store.setQuotes(prev => prev.map(q => {
+            store.setQuotes(prev => (prev.map(q => {
               if (q.id !== request.documentId) return q
               const updated = { ...q, approvalStatus: docStatus }
               sync(`/api/quotes/${q.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
               return updated
-            }))
+            })) as Quote[])
           }
           if (request.documentType === 'purchase_order') {
-            store.setPurchaseOrders(prev => prev.map(po => {
+            store.setPurchaseOrders(prev => (prev.map(po => {
               if (po.id !== request.documentId) return po
               const updated = { ...po, approvalStatus: docStatus }
               sync(`/api/purchase-orders/${po.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
               return updated
-            }))
+            })) as PurchaseOrder[])
           }
           if (request.requestedBy && request.requestedBy !== user.id) {
             store.notifyUsers({

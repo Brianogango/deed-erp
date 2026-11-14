@@ -2,7 +2,7 @@ import type { CategoryId } from '@/lib/product-categories'
 import type { TrackingMethod } from '@/lib/inventory-identifiers'
 import type { LocationId } from './core'
 
-export interface Product {
+export type Product = {
   id: string; name: string; sku: string; barcode: string
   category: CategoryId; salePrice: number; costPrice: number; taxRate: number
   /** Unit cost on the most recent goods receipt — pricing and replacement value only (costPrice is the average the books use). */
@@ -50,6 +50,8 @@ export interface Product {
   } | null
   priceUpdatedAt?: string
   priceUpdatedBy?: string
+  /** False for services and other lines that never touch stock. */
+  trackStock?: boolean
 }
 
 export interface ProductPriceHistory {

@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import type { ReturnOrder, BuyBackLine, BuyBack, Donation, ExchangeLine, ClientExchange } from '../after-sales'
 import { uid, now } from '../ids'
 import { allocateDocNumberSync } from '@/lib/doc-numbers'
@@ -674,7 +673,7 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
         const user = store.currentUser(); if (!user) return
         const bb = store.buyBacks.find(b => b.id === id)
         const allowed = canCreditBuyBack(bb)
-        if (!allowed.ok) { store.showToast(allowed.error || 'Cannot add buy-back as credit', 'error'); return }
+        if (!allowed.ok || !bb) { store.showToast(allowed.error || 'Cannot add buy-back as credit', 'error'); return }
         const amount = buyBackStoreCreditAmount(bb)
         const at = now()
         let creditRef: string

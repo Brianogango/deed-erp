@@ -467,7 +467,7 @@ function CRMContent() {
     },
     { key: 'type', label: 'Type', priority: 2, width: '110px', render: a => <span className="text-xs capitalize text-[var(--text-2)]">{a.type}</span>, accessor: a => a.type, exportValue: a => a.type },
     { key: 'by', label: 'By', priority: 3, width: '140px', render: a => <span className="truncate text-xs text-[var(--text-2)]">{a.createdByName ?? ''}</span>, accessor: a => a.createdByName ?? '', exportValue: a => a.createdByName ?? '' },
-    { key: 'date', label: 'Date', priority: 2, width: '110px', render: a => <span className="text-xs text-[var(--text-3)]">{fmtDate(a.createdDate ?? a.createdAt)}</span>, sortValue: a => a.createdDate ?? a.createdAt, exportValue: a => a.createdDate ?? a.createdAt ?? '' },
+    { key: 'date', label: 'Date', priority: 2, width: '110px', render: a => <span className="text-xs text-[var(--text-3)]">{fmtDate(a.createdDate ?? a.createdAt ?? '')}</span>, sortValue: a => a.createdDate ?? a.createdAt, exportValue: a => a.createdDate ?? a.createdAt ?? '' },
     { key: 'status', label: 'Status', priority: 2, width: '110px', render: a => a.status ? <Badge status={a.status} label={a.status} size="xs" /> : null, accessor: a => a.status ?? '', exportValue: a => a.status ?? '' },
   ]
 
@@ -1643,7 +1643,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
 
   const acts = opportunityActivities
     .filter(a => a.opportunityId === opp.id)
-    .sort((a, b) => (b.createdDate ?? b.createdAt).localeCompare(a.createdDate ?? a.createdAt))
+    .sort((a, b) => (b.createdDate ?? b.createdAt ?? '').localeCompare(a.createdDate ?? a.createdAt ?? ''))
   const nextActivity = opportunityActivities
     .filter(a => a.opportunityId === opp.id && a.status === 'scheduled')
     .sort((a, b) => String(a.scheduledDate ?? '').localeCompare(String(b.scheduledDate ?? '')))[0]
@@ -1756,7 +1756,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
                   <span className="crm-activity-item__icon" aria-hidden="true"><Fa icon={ACTIVITY_ICONS[a.type] ?? faNoteSticky} /></span>
                   <div>
                     <strong>{a.subject ?? a.type}</strong>
-                    <small>{fmtDate(a.createdDate ?? a.createdAt)} · {a.createdByName ?? ''}</small>
+                    <small>{fmtDate(a.createdDate ?? a.createdAt ?? '')} · {a.createdByName ?? ''}</small>
                     {a.description && <p>{a.description}</p>}
                   </div>
                 </div>

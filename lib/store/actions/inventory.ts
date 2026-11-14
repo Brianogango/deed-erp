@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import { allocateDocNumberSync, allocateDocNumber } from '@/lib/doc-numbers'
 import type { OutboundRelease, ItemReleaseStatus, OrcLogEntry, ReleaseStatus, SerialNumber, ProductPriceHistory, Product, StockMove, RefurbishmentJob, RefurbPart, StockAdjustment } from '../inventory'
 import { uid, now } from '../ids'
@@ -15,7 +14,6 @@ import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { isSellableSerial } from '@/lib/inventory/sellable-stock'
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { userCan } from '@/lib/auth/can'
-import { isSalesConfirmGatingApproval } from '@/lib/sales-approval-rules'
 import { isAssignableTechnician } from '@/lib/repair/assignable-technicians'
 import { refurbPartStockTaken } from '@/lib/refurbishment/refurb-parts'
 import { userIdsWithRoles } from '@/lib/in-app-notifications'
@@ -24,10 +22,11 @@ import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade
 import { recordsNeedingNumbers, adjustmentsMissingValuation, isProvisionalDocRef } from '@/lib/doc-number-repair'
 import type { StockTransfer } from '../purchasing'
 import type { AppState } from '../state'
+import type { StockReservation } from '@/lib/sales-flow-types'
 import type { StoreDeps } from './deps'
 
 /** inventory actions of the store. `store` reads the provider's current state, setters and helpers. */
-export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHoldover' | 'updateHoldover' | 'initRelease' | 'pickRelease' | 'verifyReleaseItem' | 'completeVerification' | 'completeRelease' | 'voidRelease' | 'addProduct' | 'normalizeInventoryTags' | 'publishProductBulk' | 'updateProduct' | 'updateProductPrice' | 'archiveProduct' | 'unarchiveProduct' | 'deleteProduct' | 'importOpeningStock' | 'intakeProductSerials' | 'getProductSerials' | 'getAvailableSerials' | 'updateSerial' | 'releaseSerialToStock' | 'getSalesApprovalState' | 'createRefurbishmentJob' | 'assignRefurbishmentJob' | 'updateRefurbishmentJob' | 'addRefurbishmentPart' | 'updateRefurbishmentPart' | 'removeRefurbishmentPart' | 'requestPartFromInventory' | 'allocateRefurbPart' | 'notifyTechPartAvailable' | 'markRefurbishmentReady' | 'transferToSell' | 'writeOffRefurbishmentJob' | 'restoreRefurbishmentJob' | 'fixRefurbJobNumbers' | 'fixAdjustmentNumbers' | 'intakeTaggedMachines' | 'identifyRefurbUnit' | 'harvestRefurbishmentJob' | 'createTransfer' | 'addTransferLine' | 'validateTransfer' | 'submitTransfer' | 'createAdjustment' | 'approveAdjustment' | 'getStockByLocation' | 'getMonthlyMovements' | 'reserveStock' | 'getReservedQty' | 'getAvailableStock' | 'fulfillReservation' | 'cancelReservation'> {
+export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHoldover' | 'updateHoldover' | 'initRelease' | 'pickRelease' | 'verifyReleaseItem' | 'completeVerification' | 'completeRelease' | 'voidRelease' | 'addProduct' | 'normalizeInventoryTags' | 'publishProductBulk' | 'updateProduct' | 'updateProductPrice' | 'archiveProduct' | 'unarchiveProduct' | 'deleteProduct' | 'importOpeningStock' | 'intakeProductSerials' | 'getProductSerials' | 'getAvailableSerials' | 'updateSerial' | 'releaseSerialToStock' | 'createRefurbishmentJob' | 'assignRefurbishmentJob' | 'updateRefurbishmentJob' | 'addRefurbishmentPart' | 'updateRefurbishmentPart' | 'removeRefurbishmentPart' | 'requestPartFromInventory' | 'allocateRefurbPart' | 'notifyTechPartAvailable' | 'markRefurbishmentReady' | 'transferToSell' | 'writeOffRefurbishmentJob' | 'restoreRefurbishmentJob' | 'fixRefurbJobNumbers' | 'fixAdjustmentNumbers' | 'intakeTaggedMachines' | 'identifyRefurbUnit' | 'harvestRefurbishmentJob' | 'createTransfer' | 'addTransferLine' | 'validateTransfer' | 'submitTransfer' | 'createAdjustment' | 'approveAdjustment' | 'getStockByLocation' | 'getMonthlyMovements' | 'reserveStock' | 'getReservedQty' | 'getAvailableStock' | 'fulfillReservation' | 'cancelReservation'> {
   return {
     addHoldover: (h) => {
         store.setHoldovers(prev => [h, ...prev])
@@ -68,7 +67,7 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
           initiatedAt: now(),
           items: p.serials.map(s => ({
             id: uid(), releaseId: '', // filled by setter
-            serialNumberId: s.serialNumberId, expectedSerial: s.expectedSerial,
+            serialNumberId: s.serialNumberId ?? '', expectedSerial: s.expectedSerial,
             status: 'picked' as ItemReleaseStatus,
           })),
           auditLog: [{ id: uid(), releaseId: '', action: 'initiated', toStatus: 'pending', performedById: user?.id ?? '', performedByName: user?.name ?? '', performedAt: now() }],
@@ -962,7 +961,7 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
           if (!touched) return so
           const lines = so.lines.map(l => ({
             ...l,
-            serialIds: (l.serialIds || []).filter(id => id !== serialId),
+            serialIds: (l.serialIds || []).filter((id: string) => id !== serialId),
           }))
           const updated = { ...so, lines }
           sync(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
@@ -988,20 +987,10 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
         store.addAuditLog(
           'serial_release',
           serial.serial,
-          `Released ${serial.serial} from ${serial.status} → available @ ${dest} by ${user.name}`,
+          `Released ${serial.serial} from ${serial.status} → available @ ${dest} by ${user?.name ?? "System"}`,
         )
         store.showToast(`${serial.serial} returned to on-hand (available)`, 'success')
         return true
-      },
-
-    getSalesApprovalState: (documentId: string) => {
-        const requests = store.approvalRequests.filter(r =>
-          r.documentId === documentId && isSalesConfirmGatingApproval(r.type, store.systemSettings),
-        )
-        if (requests.length === 0) return { status: 'not_required', requests }
-        if (requests.some(r => r.status === 'rejected')) return { status: 'rejected', requests }
-        if (requests.some(r => r.status === 'pending')) return { status: 'pending', requests }
-        return { status: 'approved', requests }
       },
 
     // ── Refurbishment ──────────────────────────────────────────────────────────
@@ -1698,14 +1687,14 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
           productId,
           productName: product.name,
           qty,
-          reservedFor,
+          reservedFor: reservedFor as StockReservation['reservedFor'],
           referenceId,
           referenceRef,
           location: 'warehouse',
           reservedBy: store.currentUser()?.name ?? 'System',
           reservedDate: now(),
           expiresDate: store.addDays(now(), 7),
-          status: 'reserved',
+          status: 'reserved' as const,
           fulfilledQty: 0,
           serialNumbers: [],
         }

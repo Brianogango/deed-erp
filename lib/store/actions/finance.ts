@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import { canManageFinance, canManageFullFinanceAction } from '../permissions'
 import { sync } from '../sync'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
@@ -131,7 +130,7 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
         }
         const prevCredits = store.customerCreditsRef.current
         const prevInvoice = inv
-        store.setCustomerCredits(nextCredits)
+        store.setCustomerCredits(nextCredits as CustomerCredit[])
         const updatedInvoice: Invoice = {
           ...inv,
           amountPaid: inv.amountPaid + applied,

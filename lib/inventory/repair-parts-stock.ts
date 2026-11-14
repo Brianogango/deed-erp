@@ -3,7 +3,7 @@
  * Store applies the plans against live serials + bulkStock.
  */
 
-type LocationId = 'warehouse' | 'shop' | 'repair_unit' | 'vendor' | 'customer' | 'employee'
+import type { LocationId } from '@/lib/store/core'
 
 type RepairPartLine = {
   productId: string

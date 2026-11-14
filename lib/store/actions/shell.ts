@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import { markNotificationReadInList, markAllNotificationsReadForUser, clearReadNotificationsForUser } from '@/lib/in-app-notifications'
 import { compressProfileImage } from '../sync'
 import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'

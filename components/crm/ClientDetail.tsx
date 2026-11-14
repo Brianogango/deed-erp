@@ -13,7 +13,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
   const client = useMemo(() => companies.find(c => c.id === clientId), [companies, clientId])
 
   const clientOrders = useMemo(() =>
-    saleOrders.filter(o => o.clientId === clientId).sort((a, b) => b.orderDate.localeCompare(a.orderDate)),
+    saleOrders.filter(o => o.clientId === clientId).sort((a, b) => (b.orderDate ?? b.date).localeCompare(a.orderDate ?? a.date)),
     [saleOrders, clientId]
   )
   
@@ -171,7 +171,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
                   {clientOrders.slice(0, 5).map(order => (
                     <tr key={order.id} className="hover:bg-[var(--bg-surface)] transition-colors">
                       <td className="px-4 py-3 text-xs font-mono">{order.orderNumber}</td>
-                      <td className="px-4 py-3 text-xs">{fmtDate(order.orderDate)}</td>
+                      <td className="px-4 py-3 text-xs">{fmtDate(order.orderDate ?? order.date)}</td>
                       <td className="px-4 py-3"><Badge status={order.status} size="xs" /></td>
                       <td className="px-4 py-3 text-xs font-bold text-right">{fmtKes(order.totalAmount)}</td>
                     </tr>

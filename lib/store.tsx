@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 import { createFinanceActions } from './store/actions/finance'
 import { createSalesActions } from './store/actions/sales'
@@ -10,97 +9,31 @@ import { createHrActions } from './store/actions/hr'
 import { createPurchasingActions } from './store/actions/purchasing'
 import { createDeliveryActions } from './store/actions/delivery'
 import { createAfterSalesActions } from './store/actions/after-sales'
-import { applyReversalToInvoices, reversalJournalForStore, type PaymentReversalInfo } from '@/lib/accounting/payment-reversal'
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react'
-import {
-  hasActivePosSession,
-  isPosBankPayment,
-  mergePosSessionsRemoteState,
-  posOrdersForSession,
-  resolveOpenPosSessionId,
-} from '@/lib/pos-session'
+import { isPosBankPayment, mergePosSessionsRemoteState, resolveOpenPosSessionId } from '@/lib/pos-session'
 export { isPosBankPayment }
-import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosTicketRef } from '@/lib/pos-orders-merge'
-import { loyaltyPointsEarned } from '@/lib/loyalty'
+import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState } from '@/lib/pos-orders-merge'
 import { allocateDocNumber, allocateDocNumberSync } from '@/lib/doc-numbers'
-import { adjustmentsMissingValuation, isProvisionalDocRef, recordsNeedingNumbers } from '@/lib/doc-number-repair'
-import { allocateRepairRef, takenRepairRefs } from '@/lib/repair-ref'
+import { isProvisionalDocRef, recordsNeedingNumbers } from '@/lib/doc-number-repair'
 import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { useRouteDataReady } from '@/lib/route-data-ready'
 import { persistClientStoreValue } from '@/lib/client-store-cache'
 import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
-import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
-import { PAID_TO_RIDER, riderFeeAccount, riderPayForJob } from '@/lib/delivery/rider-direct-pay'
-import { isWithholdingMethod, WITHHOLDING_KINDS } from '@/lib/accounting/withholding'
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
-import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
-import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
 import { bootApiGroupsForRoute, type BootApiGroup } from '@/lib/boot-apis'
 import { appStateKeysForRoute } from '@/lib/app-state-hydration'
-import { isPrismaRestSotStoreKey } from '@/lib/domain-source-of-truth'
 import { useInventoryDomainStore } from '@/hooks/useInventoryDomainStore'
 import { useNotificationStore } from '@/hooks/useNotificationStore'
-import { documentMoneySnapshot, FUNCTIONAL_CURRENCY } from '@/lib/currency'
-import { resolveListPrice } from '@/lib/pricing/pricelist'
-import {
-  DEFAULT_PRICING_MARGIN_POLICY,
-  normalizePricingMarginPolicy,
-  type PricingMarginPolicy,
-} from '@/lib/pricing/margin-policy'
-import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
-import {
-  type CompanyAsset,
-  type CompanyAssetInput,
-  type CompanyAssetStatus,
-  nextCompanyAssetRef,
-  resolvedPpeAccountCode,
-  validateCompanyAssetInput,
-  canDeleteCompanyAsset,
-  applyMove,
-  applyCustodian,
-  applyStatusChange,
-  applyDispose,
-  applyWriteOff,
-  historyEntry,
-} from '@/lib/company-property'
-import {
-  applyBookDepreciationCharge,
-  canDepreciateAsset,
-  monthlyBookDepreciation,
-  periodAlreadyRun,
-  periodKey,
-  shouldPostCapitaliseJournal,
-  withBookDefaults,
-  isPpeCostAccount,
-} from '@/lib/company-property-ppe'
-import {
-  buildCapitaliseFromApJournal,
-  buildCapitaliseFromInventoryJournal,
-  buildDepreciationJournal,
-  buildDisposalJournal,
-  depreciationJournalRef,
-  type PpeJournalDraft,
-} from '@/lib/accounting/ppe-journals'
-import { applyKraAnnualAllowance, initialTaxWdv } from '@/lib/tax/kra-capital-allowances'
+import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
+import { type CompanyAsset } from '@/lib/company-property'
+import { shouldPostCapitaliseJournal } from '@/lib/company-property-ppe'
+import { buildCapitaliseFromApJournal, buildCapitaliseFromInventoryJournal, type PpeJournalDraft } from '@/lib/accounting/ppe-journals'
 export type { CompanyAsset, CompanyAssetInput } from '@/lib/company-property'
 import { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId } from '@/lib/product-categories'
 export { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId }
-import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
-import { calculatePayroll } from '@/lib/payroll'
-import {
-  APPROVAL_RULES,
-  createApprovalRequest,
-  computeConfirmBackorderLines,
-  getPendingApprovals,
-  processApproval,
-  approvalRecipientIds,
-  approvalDocumentPath,
-} from '@/lib/sales-approvals'
-import { actorSatisfiesApprovalRoles, isSalesConfirmGatingApproval } from '@/lib/sales-approval-rules'
-import { computeSaleOrderApprovalTriggers } from '@/lib/sales/margin-approval'
-import { allocateSalesReturn, liveQtyInvoicedBySoLine } from '@/lib/sales/return-allocation'
+import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock } from '@/lib/business-logic'
 
 /**
  * Roles the server sends customer invoices to (see invoiceSliceForRole). For
@@ -108,289 +41,75 @@ import { allocateSalesReturn, liveQtyInvoicedBySoLine } from '@/lib/sales/return
  * would read as "none" and drop a credit note that is owed.
  */
 const seesCustomerInvoices = (user: { role?: string } | null | undefined) => userCan(user, 'accounting.customer_invoices.view')
-import {
-  findReleasedOrcsForReturn,
-  pickPostedInvoiceForReturn,
-  resolveReturnCreditAmount,
-  stampDeliveryReturnQtys,
-} from '@/lib/sales/return-orchestration'
-import { isDownPaymentMode, normalizeCreateInvoiceMode } from '@/lib/sales/down-payment'
-import {
-  advanceExpenseApproval,
-  buildExpenseApprovalChain,
-  canUserReviewExpense,
-  expenseChainIsComplete,
-} from '@/lib/expense-approval-chain'
-import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
-import {
-  buildNotifyRows,
-  clearReadNotificationsForUser,
-  markAllNotificationsReadForUser,
-  markNotificationReadInList,
-  mergeNotificationsSticky,
-  userIdsWithRoles,
-  type NotifyUsersInput,
-} from '@/lib/in-app-notifications'
-import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
-import type { StoreLeaveType } from '@/lib/leave-utils'
-import { normalizeQuotesForClient } from '@/lib/quote-normalization'
-import { normalizeOpportunitiesForClient, normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
+import type { ApprovalRequest, StockReservation } from '@/lib/sales-flow-types'
+import type { Employee } from './store/hr'
+import { buildNotifyRows, mergeNotificationsSticky, type NotifyUsersInput } from '@/lib/in-app-notifications'
+import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
-import { fulfillmentSaleOrderPatch } from '@/lib/sales/fulfillment-sale-order-patch'
-import { readLockVersionFromResponse } from '@/lib/optimistic-lock'
-import { createdInvoiceId, invoiceErrorMessage, invoicePersistBody, putInvoiceOrCreateThenPost, putInvoiceWithLockRetry } from '@/lib/invoice-persist'
-import { resolveAddSaleOrderLineTaxRate } from '@/lib/sale-order-line-tax'
-import {
-  markSaleOrderDraftEdit,
-  hasSaleOrderDraftEdits,
-  isSaleOrderDraftEditing,
-  stampSaleOrderPersisted,
-  mergeSaleOrdersPreservingDraftEdits,
-  saleOrderLinesFingerprint,
-} from '@/lib/sale-order-draft-edits'
-import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
+import { markSaleOrderDraftEdit, hasSaleOrderDraftEdits, mergeSaleOrdersPreservingDraftEdits, saleOrderLinesFingerprint } from '@/lib/sale-order-draft-edits'
 import { mergeCollectionById } from '@/lib/collection-merge'
-import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 import { fetchCollection } from '@/lib/api-pagination'
 import { fetchAndApplyStoreKeys } from '@/lib/client-store-hydrate'
-import {
-  registerSaleOrderDraftPersistApi,
-  scheduleDraftSaleOrderLinePersist,
-  beginHardSaleOrderPersist,
-  endHardSaleOrderPersist,
-  waitForDraftSaleOrderPersistIdle,
-  isSaleOrderHardSaving,
-} from '@/lib/sale-order-draft-persist'
-import {
-  normalizeSaleOrdersForClient,
-  saleOrderCancelBlockers,
-  splitDeliveryForBackorder,
-  initialDeliveryState,
-  invoicePaymentStatus,
-  invoiceDocState,
-  isOpenInvoice,
-  invoiceResidual,
-  hasValidatedDeliveryForInvoice,
-  isOpenDeliveryStatus,
-  normalizeDeliveryStatus,
-  remainingUndeliveredByProduct,
-  openDeliveryDemandByProduct,
-  saleOrderLooksConfirmed,
-  canReverseConfirmedSale,
-  isQuotationStage,
-} from '@/lib/odoo-sales-flow'
-import {
-  applyConfirmLineSelection,
-  confirmSelectionHasProduct,
-} from '@/lib/sales/confirm-quotation'
-import { calcSaleOrderTotals } from '@/lib/sales/line-calc'
-import { trimSaleOrderLinesToDelivered } from '@/lib/sales/fulfillment-trim'
-import {
-  allocateDeliveredQtyToOrderLines,
-  assertSerialUsableForDeliveryPrepare,
-  pairOrderLinesWithDeliveryLines,
-  planPrepareDeliveryLines,
-  sumQtyByProductId,
-} from '@/lib/delivery-prepare'
-import { isNonStockSaleLine, isDeliveryNoteLine, saleLineFieldsForRepairQuoteLine } from '@/lib/sales/non-stock-line'
-import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
-import {
-  normalizeDocumentPaymentDetails,
-  type DocumentPaymentDetails,
-  type DocumentPaymentDetailsMap,
-} from '@/lib/document-payment-details'
+import { registerSaleOrderDraftPersistApi } from '@/lib/sale-order-draft-persist'
+import { normalizeSaleOrdersForClient } from '@/lib/odoo-sales-flow'
+import { type DocumentPaymentDetailsMap } from '@/lib/document-payment-details'
 import { useHrStore as useHrDomainStore } from '@/hooks/useHrStore'
-import {
-  buildInventoryBarcode,
-  inferTrackingMethod,
-  isSerialTracking,
-  isStockTracked,
-  isSerialOnlyCategory,
-  type TrackingMethod,
-} from '@/lib/inventory-identifiers'
-import { canonicalRole, isDirector } from '@/lib/auth/roles'
-import {
-  aggregateLinesByAccount,
-  COMPANY_ACCOUNT_FALLBACKS,
-  formatAccountLabel,
-  resolveProductAccounts,
-  type AccountableProduct,
-} from '@/lib/product-accounts'
-import {
-  buildVendorBillPerpetualLines,
-  buildVendorCreditPerpetualLines,
-} from '@/lib/accounting/vendor-bill-perpetual'
-import { autoMatchStatementLines } from '@/lib/accounting/bank-statement-match'
-import { inferProductKind, defaultTrackingForKind, defaultUnitForKind } from '@/lib/product-kind'
-import {
-  canPostOrPayCustomerInvoice,
-  canPayOwnPostedInvoice,
-  canCancelOrResetInvoice,
-  canApplyCustomerCredit,
-  paymentJournalRef,
-  DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
-} from '@/lib/finance-controls'
+import { buildInventoryBarcode, inferTrackingMethod, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
 // Buy-back settlement: Pay (cash) XOR Add as credit (3102). Shared by store + tests.
-import {
-  BUYBACK_STORE_CREDIT_METHOD,
-  buildBuyBackStoreCreditJournalLines,
-  buyBackStoreCreditAmount,
-  canCreditBuyBack,
-  canPayBuyBackCash,
-  buildBuyBackPayoutBillLines,
-  resolveBuyBackProduct,
-} from '@/lib/buyback-credit'
 import { userCan } from '@/lib/auth/can'
-import { customerCreditBalance } from '@/lib/customer-credit-view'
-import { canOverrideCustomerCredit, evaluateCustomerCreditGate, isPayOnReceipt } from '@/lib/customer-credit-gate'
-import { ensureArray, parseStoredState, preferExistingArray } from '@/lib/safe-local-state'
-import {
-  nextSseRetryMs,
-  nextSyncRetryMs,
-  parseStoreSseData,
-  STORE_HELLO_GRACE_MS,
-  STORE_NOTIFY_BACKUP_POLL_MS,
-} from '@/lib/store-sync-retry'
+import { preferExistingArray } from '@/lib/safe-local-state'
+import { nextSseRetryMs, parseStoreSseData, STORE_HELLO_GRACE_MS, STORE_NOTIFY_BACKUP_POLL_MS } from '@/lib/store-sync-retry'
 import { startVisiblePoll } from '@/lib/visible-poll'
-import { repairOutsourceReadiness, repairHasLoggedDiagnosis } from '@/lib/repair-outsource'
-import { applyLoggedDiagnosis, type DiagnosisLogRepairPatch } from '@/lib/repair-diagnosis-log'
-import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
-import { evaluateRepairTransition } from '@/lib/repair-transition-policy'
-import { repairDatesWriteError } from '@/lib/data-validation'
-import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
-import { EXCHANGE_RETURN_LOCATION } from '@/lib/aftersales/exchange-stock'
-import {
-  isDirectRepairPath,
-  isQuoteDeclinedReopenable,
-  isQuoteAwaitingApproval,
-  quotableStatusesForPath,
-  returnableStatusesForPath,
-  startableStatusesForPath,
-} from '@/lib/repair-path'
-import {
-  BILLING_EXEMPT_REASON_LABELS,
-  canMarkRepairBillingExempt,
-  isRepairBillingExempt,
-  isRepairNoCharge,
-  normalizeBillingExemptReason,
-  startableStatusesWhenBillingExempt,
-  type BillingExemptReason,
-} from '@/lib/repair-billing-exempt'
-import { applyRepairHandover, canCloseRepairAfterHandover, repairHasInvoiceLink } from '@/lib/repair-handover'
-import { resolveWarrantyMonths, addWarrantyMonths } from '@/lib/warranty-period'
-import { resolveRepairWarranty } from '@/lib/repair-warranty'
-import {
-  ensureDiagnosisFeeInQuoteLines,
-  isDiagnosisFeeLine,
-  isDiagnosisFeeSettled,
-  migratedDiagnosisFeeSettings,
-  needsDiagnosisFeeSettingsMigration,
-  normalizeStoredDiagnosisFee,
-  resolveCustomerBillingType,
-  resolveDiagnosisFee,
-  shouldChargeDiagnosisFee,
-  taxableQuoteSubtotal,
-  diagnosisFeeAmount,
-} from '@/lib/diagnosis-fee'
-import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
-import { repairPriceChangeImpact, describeRepairPriceChange } from '@/lib/repair/document-impact'
-import { isAssignableTechnician, isRepairTechActor, isRepairAssignerRole, mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
-import { requestSaleOrderInvoice } from '@/lib/sales/create-invoice-request'
-import { resolveBillProductId } from '@/lib/purchase/bill-product-id'
-import { contactPaymentTermsDays, customerPaymentTermsDays } from '@/lib/due-date'
-import { deniedSaveMessage } from '@/lib/store-denied-message'
-import { planRepairConsolidation, supersededOrderBlockers } from '@/lib/repair/consolidation-plan'
-import { isSellableSerial } from '@/lib/inventory/sellable-stock'
-import { reportingFetch } from '@/lib/save-failure'
-import { allocateReceiptToPoLines, billedQtyByPoLine } from '@/lib/purchase/receipt-allocation'
-import { reissueAfterClientDecision, reissueBlocker, reissueOnRevision, type InvoiceReissue } from '@/lib/repair/invoice-reissue'
-import { countCorrectionBlocker, countCorrectionNote, partsOrderNote, purchaseOrderBlocker, requestAfterCountCheck, requestAfterPurchaseOrder, type PartsRequest, type PartsRequestKind } from '@/lib/repair/parts-request'
-import { refurbPartAfterRequest, refurbPartRequest, refurbPartsOrderNote } from '@/lib/refurbishment/parts-request'
-import { executeRepairConsolidation, mergedSaleOrderFromPlan } from '@/lib/repair/consolidation-execute'
-import { findSaleOrderForRepair, findSalesQuoteForRepair, isDiagnosisFeeOnlyLines } from '@/lib/repair/sale-order-link'
-import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
-import {
-  buildDefaultRepairQcItems,
-  prepareRepairQcItemsForRound,
-  summarizeFailedQcItems,
-} from '@/lib/repair-qc'
-import {
-  buyBackConditionFromRepair,
-  canConvertRetainedRepair,
-  canCreateTradeInFromRepair,
-  findRepairCatalogProduct,
-  matchRepairDeviceSerial,
-} from '@/lib/repair-retain-convert'
-import { planRepairPartConsume, planRepairPartReserve } from '@/lib/inventory/repair-parts-stock'
+import { migratedDiagnosisFeeSettings, needsDiagnosisFeeSettingsMigration, normalizeStoredDiagnosisFee, resolveDiagnosisFee } from '@/lib/diagnosis-fee'
+import { mergeAssignableTechniciansIntoUsers } from '@/lib/repair/assignable-technicians'
+import { contactPaymentTermsDays } from '@/lib/due-date'
+import { type PartsRequest, type PartsRequestKind } from '@/lib/repair/parts-request'
+import { refurbPartAfterRequest, refurbPartRequest } from '@/lib/refurbishment/parts-request'
+import { buyBackConditionFromRepair, findRepairCatalogProduct, matchRepairDeviceSerial } from '@/lib/repair-retain-convert'
 import {
   isOpeningStockLocked,
   isOpeningStockMove,
 } from '@/lib/inventory/opening-stock'
-import { billableQty, assertBillableQty, poHasReceivedGoods } from '@/lib/purchase/three-way-match'
-import { allocatePurchaseReturn, liveQtyBilledByPoLine } from '@/lib/purchase/return-allocation'
-import {
-  formatStockByLocation,
-  resolveBulkDeliverySourceLocation,
-} from '@/lib/inventory/delivery-source'
-import { resolveAssignedRiderFee } from '@/lib/delivery-job-fee'
-import {
-  appendDeliveryChargeToInvoice,
-  buildDeliveryChargeInvoiceLine,
-} from '@/lib/invoice-delivery-charge'
 import { safeLocalStorageSet } from '@/lib/client-store-cache'
-import { computeCollectionDelta, upsertOnlyDelta, type CollectionDelta } from '@/lib/store-delta'
-import { deltaDisabledFor, forgetServerBaseline, patchServerBaseline, rememberServerBaseline, serverBaselineFor } from '@/lib/store-baseline'
+import { rememberServerBaseline } from '@/lib/store-baseline'
 import { isSlimRow, SLIM_MARK } from '@/lib/store-slim'
 import { loadFullRecord } from '@/lib/full-record'
 import { awaitRouteHydration, awaitStoreDownloads, downloadedThisSession, keysChangedSinceRead, noteStoreChanges, noteStoreRead, trackStoreDownload } from '@/lib/store-freshness'
 import { formatKeDate, formatKeDateTime, formatKeInteger, installIntlFormatCache } from '@/lib/intl-cache'
-import { keepContainedRows, keepUnchangedRows } from '@/lib/same-content'
-import { refurbPartStockTaken } from '@/lib/refurbishment/refurb-parts'
-import type { KilimallReturnEntry, KilimallReturnInput } from '@/lib/kilimall/kilimall-return'
-import { contactFromPersonInput, deriveContactPersons } from '@/lib/contact-person-derive'
-import {
-  applyCustomerToInvoice,
-  applyCustomerToQuote,
-  applyCustomerToSaleOrder,
-  formatCustomerAddress,
-  quoteMatchesCustomer,
-  shouldSyncInvoiceCustomer,
-  shouldSyncQuoteCustomer,
-  shouldSyncSaleOrderCustomer,
-} from '@/lib/sync-customer-documents'
-import type { IntakeChannel, RepairDiagnosis, RepairDiagnosisRevisionType, RepairPaymentConfirmationStatus, RepairQAItem, RepairQuote, RepairQuoteLine, RepairQuoteLineDecision, RepairStatus } from '@/lib/repair-types'
-import type { BuyBack, BuyBackLine, ClientExchange, Donation, DonationLine, DonationType, ExchangeLine, RMAResolution, ReturnOrder, ReturnOrderLine } from './store/after-sales'
+import { keepContainedRows } from '@/lib/same-content'
+import { deriveContactPersons } from '@/lib/contact-person-derive'
+import { applyCustomerToInvoice, applyCustomerToQuote, applyCustomerToSaleOrder, quoteMatchesCustomer, shouldSyncInvoiceCustomer, shouldSyncQuoteCustomer, shouldSyncSaleOrderCustomer } from '@/lib/sync-customer-documents'
+import type { RepairStatus } from '@/lib/repair-types'
+import type { BuyBack, ClientExchange, Donation, ReturnOrder } from './store/after-sales'
 export type { BuyBack, BuyBackLine, BuyBackStatus, ClientExchange, Donation, DonationLine, DonationType, ExchangeLine, ExchangeStatus, RMAResolution, RMAStatus, ReturnOrder, ReturnOrderLine } from './store/after-sales'
-import type { AuditLog, LocationId, ModuleId, User, UserRole, WorkflowApproval } from './store/core'
+import type { AuditLog, LocationId, ModuleId, User } from './store/core'
 export type { LocationId, ModuleId, User, UserRole, WorkflowApproval } from './store/core'
-import type { Delivery, DeliveryJob, DeliveryJobStatus, DeliveryLine, Rider, RiderWeeklyPay } from './store/delivery'
+import type { Delivery, DeliveryJob, Rider, RiderWeeklyPay } from './store/delivery'
 export type { Delivery, DeliveryJob, DeliveryJobStatus, DeliveryJobType, DeliveryLine, Rider, RiderWeeklyPay } from './store/delivery'
-import type { Account, AccountType, BankAccount, BankRecon, BankStatementLine, CreateDepositInput, CustomerCredit, Deposit, DepositPayment, DepositStatus, ExpenseApprovalStep, ExpensePaymentMethod, ExpenseStatus, Invoice, InvoiceLine, InvoicePayment, InvoiceType, JournalEntry, JournalEntryLine, Payment, RefundPayment, RefundPaymentMethod, VendorJournalOpts } from './store/finance'
+import type { Account, BankAccount, BankRecon, BankStatementLine, CustomerCredit, Deposit, Invoice, InvoiceLine, InvoiceType, JournalEntry, Payment, RefundPayment } from './store/finance'
 export type { Account, AccountType, BankAccount, BankStatementLine, CashbookEntry, Deposit, DepositItem, DepositPayment, DepositStatus, ExpenseApprovalStep, ExpensePaymentMethod, ExpenseStatus, Invoice, InvoiceLine, InvoicePayment, InvoiceStatus, InvoiceType, JournalEntry, JournalEntryLine, Payment, RefundPayment, RefundPaymentMethod, StatementLineCategory } from './store/finance'
-import type { Candidate, Contract, Department, Employee, EmployeeAssetAssignment, EmployeeTraining, HRDocument, HRSOP, JobPosting, LeaveBalance, LeaveRequest, PayrollRun, Payslip, PerformanceTarget, RefSOP, SalaryAdvance, TrainingProgram } from './store/hr'
+import type { HRSOP, PayrollRun, Payslip, PerformanceTarget, RefSOP, SalaryAdvance } from './store/hr'
 export type { Candidate, CandidateCommunication, CandidateInterview, CandidateOffer, CandidateStage, Department, Employee, EmployeeAssetAssignment, EmployeeChecklistItem, EmployeeTraining, HRDocument, HRSOP, JobPosting, JobStatus, LeaveBalance, LeaveRequest, PayrollLine, PayrollRun, Payslip, PerfPeriod, PerfStatus, PerformanceTarget, RefSOP, RefSOPCategory, SOPCategory, SalaryAdvance, TrainingProgram, TrainingStatus } from './store/hr'
-import type { AdjReason, BulkStockLevel, Holdover, ItemReleaseStatus, OrcLogEntry, OutboundRelease, Product, ProductPriceHistory, RefurbPart, RefurbishmentJob, ReleaseStatus, SerialNumber, SignatureMethod, StockAdjustment, StockMove, TaggedIntakeInput } from './store/inventory'
+import type { BulkStockLevel, Holdover, OutboundRelease, Product, ProductPriceHistory, RefurbPart, RefurbishmentJob, SerialNumber, StockAdjustment, StockMove } from './store/inventory'
 export type { AdjReason, Holdover, HoldoverDeviceCondition, HoldoverPurpose, HoldoverStatus, ItemReleaseStatus, OrcItem, OrcLogEntry, OutboundRelease, Product, RefurbPart, RefurbStatus, RefurbishmentJob, ReleaseStatus, SerialNumber, SignatureMethod, StockMove, TaggedIntakeInput } from './store/inventory'
 import type { POLine, PurchaseOrder, PurchaseReturn, Receipt, StockTransfer } from './store/purchasing'
 export type { POLine, POStatus, PurchaseOrder, PurchaseReturn, Receipt } from './store/purchasing'
-import type { OutsourceJobStatus, OutsourcePayment, RepairOrder, Warranty } from './store/repairs'
+import type { RepairOrder, Warranty } from './store/repairs'
 export type { OutsourceJobStatus, RepairOrder, Warranty } from './store/repairs'
-import type { Company, Contact, ContactPerson, CustomerContract, KilimallDispatch, KilimallOrder, KilimallSettlement, KilimallSettlementLine, Opportunity, OpportunityActivity, OpportunityStage, POSOrder, POSSession, Quote, QuoteLineItem, SaleOrder } from './store/sales'
+import type { Company, Contact, ContactPerson, KilimallDispatch, KilimallOrder, KilimallSettlement, Opportunity, OpportunityActivity, POSOrder, POSSession, Quote, SaleOrder } from './store/sales'
 export type { Client, Contact, CustomerContract, KilimallDispatch, KilimallOrder, KilimallOrderStatus, KilimallSettlement, KilimallSettlementLine, LeadSource, OpportunityStage, POSOrder, Quote, SOStatus, SaleOrder, SaleOrderItem } from './store/sales'
 import type { CompanySettings, SystemSettings } from './store/settings'
 export type { CompanySettings } from './store/settings'
-import type { SOPActual, SOPDocument, SOPTargetDir } from './store/sop'
+import type { SOPActual, SOPDocument } from './store/sop'
 import { uid, now } from './store/ids'
-import { type ExpenseCategory, type Expense } from './store/expenses'
-import { isoDate, accountLine, journalFromPpeDraft, bankAccountLabel, bankAccountIdForMethod, buildInvoicePostingJournal, buildVendorCreditJournal, buildInvoicePaymentJournal, buildExpenseApprovalJournal, buildExpenseCompanyPaymentJournal, buildExpenseReimbursementJournal, buildReversalJournal, buildCustomerCreditJournal } from './store/journals'
-import { OUTSOURCE_SERVICE_TYPES, type OutsourceVendor, type OutsourceJob } from './store/repairs'
+import { type Expense } from './store/expenses'
+import { journalFromPpeDraft, buildInvoicePostingJournal } from './store/journals'
+import { OUTSOURCE_SERVICE_TYPES, type OutsourceJob } from './store/repairs'
 import { type SOP } from './store/sop'
 import { DEFAULT_SYSTEM_SETTINGS, seedAccounts, seedContacts, seedCompanies, seedOpportunities, seedQuotes, seedCustomerContracts, seedOpportunityActivities, seedContracts, seedWorkflowApprovals, seedPayrollRuns, seedPayslips, seedJournalEntries, seedEmployeeAssetAssignments, seedProducts, seedSerials, seedPOs, seedReceipts, seedTransfers, seedRefurbishmentJobs, seedSOs, seedRiders, seedDeliveryJobs, seedDeliveries, seedWarranties, seedInvoices, seedBulkStock, seedRepairs, seedSOPs, seedSopActuals, seedRefSOPs, seedExpenses, seedOutsourceVendors, seedOutsourceJobs, seedOutsourcePayments } from './store/initial-state'
 import { DEFAULT_BANK_ACCOUNTS, DEFAULT_COMPANY_SETTINGS } from './store/initial-state'
-import { canApproveInventoryAction, canValidatePurchaseReceiptAction, canManageInventoryControl, canApprovePayroll, canManageHRAssets, canManageFinance, canManageFullFinanceAction, canCreateCustomerInvoiceFromSOAction, canManageProcurement } from './store/permissions'
-import { canManageHR } from './store/permissions'
-import { _pendingSync, _inFlightSyncKeys, isServerHydrated, markServerHydrated, emitSyncStatus, getDirtyKeys, addDirtyKey, removeDirtyKeys, rememberSaleOrdersSnapshot, flushServerSync, compressProfileImage, useLS, sync } from './store/sync'
+import { _pendingSync, _inFlightSyncKeys, isServerHydrated, markServerHydrated, emitSyncStatus, getDirtyKeys, addDirtyKey, removeDirtyKeys, rememberSaleOrdersSnapshot, flushServerSync, useLS, sync } from './store/sync'
 import { SESSION_AUDIT_LOG_LIMIT, RETIRED_LOCAL_KEYS, evictRetiredLocalKeys } from './store/sync'
 import { type AppState, type InventoryStoreState, type SalesStoreState, type RepairStoreState, type ShellStoreState, type CrmStoreState, type FinanceStoreState, type HrStoreState, type DeliveryStoreState, type CommerceStoreState, type AfterSalesStoreState, type OperationsStoreState } from './store/state'
 export { SYNC_STATUS_EVENT, LAST_SYNC_AT_LS, DIRTY_KEYS_LS, useStoreHydrated, debouncedServerSync, SESSION_AUDIT_LOG_LIMIT, RETIRED_LOCAL_KEYS, evictRetiredLocalKeys } from './store/sync'
@@ -426,9 +145,8 @@ export {
 } from '@/lib/product-accounts'
 
 // ── In-app Notifications ──────────────────────────────────────────────────────
-export type {
-  AppNotification
-} from '@/lib/in-app-notifications'
+import type { AppNotification } from '@/lib/in-app-notifications'
+export type { AppNotification }
 
 // Comprehensive Repair Status Flow
 const REPAIR_TERMINAL_STATUSES: RepairStatus[] = ['closed', 'cancelled', 'declined', 'unrepairable', 'returned', 'retained']
@@ -458,7 +176,6 @@ function productCreateLockKey(product: Partial<Product>) {
   ].join('|')
 }
 const addDays = (d: string, n: number) => { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10) }
-const addMonths = (d: string, m: number) => { const dt = new Date(d); dt.setMonth(dt.getMonth() + m); return dt.toISOString().slice(0, 10) }
 
 // Document numbers come from the server (lib/doc-numbers.ts); the per-browser
 // counters that lived here repeated across browsers (ADJ/0001, TR/0001…).
@@ -509,7 +226,7 @@ const draftInvoiceRef = (type: InvoiceType) =>
   `DRAFT/${type === 'vendor_bill' ? 'BILL' : 'INV'}/${uid().slice(0, 8).toUpperCase()}`
 const isDraftInvoiceRef = (ref: string | undefined) => Boolean(ref?.startsWith('DRAFT/'))
 
-const calcSO = (lines: SaleOrderLine[]) => {
+const calcSO = (lines: Array<{ subtotal: number; taxRate: number }>) => {
   const sub = lines.reduce((a, l) => a + l.subtotal, 0)
   const tax = lines.reduce((a, l) => a + Math.round(l.subtotal * l.taxRate / 100), 0)
   return { subtotal: sub, taxTotal: tax, total: sub + tax }
@@ -1372,7 +1089,7 @@ function useStoreCore({
   // HR — employees, departments, leave, hrDocuments, recruitment, and training have
   // moved to hooks/useHrStore.ts (Zustand). `employees` is still read locally below
   // (via empRef) because payroll/asset actions that stay in this file need it.
-  const [contracts, setContracts]       = useLS('deed_contracts', seedContracts)
+  const [contracts] = useLS('deed_contracts', seedContracts)
   const [customerContracts, setCustomerContracts] = useLS('deed_customerContracts', seedCustomerContracts)
   const [workflowApprovals, setWorkflowApprovals] = useLS('deed_workflowApprovals', seedWorkflowApprovals)
   const [employeeAssetAssignments, setEmployeeAssetAssignments] = useLS('deed_employeeAssets', seedEmployeeAssetAssignments)
@@ -1523,10 +1240,10 @@ function useStoreCore({
   useEffect(() => {
     if (!initialUser) return
 
-    const fetchLeave = () => fetch('/api/leave-requests').then(r => r.ok && r.json().then(data => {
-      if (data.requests) useHrDomainStore.getState().setLeaveRequests(data.requests)
-      if (data.balances) useHrDomainStore.getState().setLeaveBalances(data.balances)
-    })).catch(() => {})
+    const fetchLeave = () => fetch('/api/leave-requests').then(r => (r.ok ? r.json() : null)).then(data => {
+      if (data?.requests) useHrDomainStore.getState().setLeaveRequests(data.requests)
+      if (data?.balances) useHrDomainStore.getState().setLeaveBalances(data.balances)
+    }).catch(() => {})
 
     const runGroup = async (group: BootApiGroup) => {
       if (bootedApiGroupsRef.current.has(group)) return
@@ -1580,7 +1297,7 @@ function useStoreCore({
           case 'employees': {
             const d = await fetchCollection('/api/employees?limit=200')
             const prev = useHrDomainStore.getState().employees ?? []
-            useHrDomainStore.getState().setEmployees(preferExistingArray(prev, d))
+            useHrDomainStore.getState().setEmployees(preferExistingArray(prev, d) as Employee[])
             break
           }
           case 'leave':
@@ -2077,7 +1794,7 @@ function useStoreCore({
         setRepairs(p => (p.some(r => JSON.stringify(r.statusHistory ?? []).includes(provisional) || (r.notes ?? '').includes(provisional))
           ? p.map(r => ({
             ...r,
-            notes: swap(r.notes),
+            notes: swap(r.notes) ?? r.notes,
             statusHistory: r.statusHistory?.map(h => ({ ...h, note: swap(h.note) ?? h.note })),
           }))
           : p))
@@ -2145,7 +1862,7 @@ function useStoreCore({
         else setClientExchanges(p => p.map(e => (e.ref === provisional ? { ...e, ref: finalRef } : e)))
         setRepairs(p => (p.some(r => r.retainedBuyBackRef === provisional || (r.notes ?? '').includes(provisional))
           ? p.map(r => (r.retainedBuyBackRef === provisional || (r.notes ?? '').includes(provisional)
-            ? { ...r, retainedBuyBackRef: r.retainedBuyBackRef === provisional ? finalRef : r.retainedBuyBackRef, notes: swap(r.notes) }
+            ? { ...r, retainedBuyBackRef: r.retainedBuyBackRef === provisional ? finalRef : r.retainedBuyBackRef, notes: swap(r.notes) ?? r.notes }
             : r))
           : p))
         setWarranties(p => (p.some(w => w.cancelledByRef === provisional)
@@ -2380,10 +2097,7 @@ function useStoreCore({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId])
 
-  const getVendorOutstanding = (vendorId: string) =>
-    invRef.current.filter(i => i.type === 'vendor_bill' && i.partnerId === vendorId)
-      .reduce((sum, inv) => sum + invoiceResidual(inv), 0)
-
+  
   const addMove = (productId: string, productName: string, qty: number, type: StockMove['type'], reason: string, docRef: string, fromLoc?: LocationId, toLoc?: LocationId, serNums: string[] = []) => {
     const actor = currentUser()
     const move: StockMove = { id: uid(), type, productId, productName, qty, reason, fromLocation: fromLoc, toLocation: toLoc, serialNumbers: serNums, date: now(), userId: actor?.id ?? 'system', documentRef: docRef }
@@ -2423,7 +2137,7 @@ function useStoreCore({
     technicianId?: string
     request: PartsRequest
     write: (fn: (req: PartsRequest) => PartsRequest) => void
-  } & ({ kind: 'refurb'; job: RefurbishmentJob; part: RefurbPart } | { kind: 'repair'; repair: Repair })
+  } & ({ kind: 'refurb'; job: RefurbishmentJob; part: RefurbPart } | { kind: 'repair'; repair: RepairOrder })
   const partsQueueRequest = (kind: PartsRequestKind, ownerId: string, requestId: string): QueueRequest | null => {
     if (kind === 'refurb') {
       const job = refurbishmentJobs.find(j => j.id === ownerId)
@@ -2754,7 +2468,7 @@ function useStoreCore({
     addAuditLog('post_invoice', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to journal ${journal.ref}`)
   }
 
-  const storeCtxRef = useRef<AppState | null>(null)
+  const storeCtxRef = useRef<AppState>(null as unknown as AppState)
   const inventoryActions = useMemo(() => ({
     addProduct: (...args: Parameters<AppState['addProduct']>) => storeCtxRef.current!.addProduct(...args),
     publishProductBulk: (...args: Parameters<AppState['publishProductBulk']>) => storeCtxRef.current!.publishProductBulk(...args),
@@ -3089,7 +2803,7 @@ function useStoreCore({
   // file's Context — see hooks/useHrStore.ts and the store-refactor pilot plan.
   useEffect(() => {
     useHrDomainStore.getState().setHrContext({
-      currentUser, users, showToast, addAuditLog, pushNotif,
+      currentUser, users, showToast, addAuditLog, pushNotif: pushNotif as (...args: unknown[]) => void,
       workflowApprovals, setWorkflowApprovals,
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3425,6 +3139,7 @@ function StoreProvider(props: StoreProviderProps) {
 
 
 const storeCtx: AppState = {
+    stockReservations: core.stockReservations,
     activeModule: core.activeModule, sidebarOpen: core.sidebarOpen, toast: core.toast,
     
     // CRM & Contacts
@@ -3525,9 +3240,6 @@ const storeCtx: AppState = {
     ...createPurchasingActions(core),
 
     // ── Rider Management ────────────────────────────────────────────────────
-    riders: core.riders,
-    deliveryJobs: core.deliveryJobs,
-    riderWeeklyPays: core.riderWeeklyPays,
 
     ...createDeliveryActions(core),
     
@@ -3601,6 +3313,7 @@ const storeCtx: AppState = {
 
   const salesStore = useMemo<SalesStoreState>(() => ({
     saleOrders: core.saleOrders,
+    repairs: core.repairs,
     contacts: core.contacts,
     products: core.products,
     serials: core.serials,
@@ -4015,11 +3728,6 @@ export function useRepairStore() {
   return ctx
 }
 
-function useFeatureStore(ctx: React.Context<AppState | null>, name: string) {
-  const value = useContext(ctx)
-  if (!value) throw new Error(`${name} must be inside AppProvider`)
-  return value
-}
 
 export function useCrmStore() {
   const ctx = useContext(CrmStoreCtx)

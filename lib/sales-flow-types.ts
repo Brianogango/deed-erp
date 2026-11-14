@@ -77,7 +77,7 @@ export interface StockReservation {
   reservedFor: 'sales_order' | 'repair' | 'transfer' | 'employee' | 'reconfiguration'
   referenceId: string
   referenceRef: string
-  referenceType: string
+  referenceType?: string
   /** Exact delivery/picking that owns this reservation (sales flow). */
   deliveryId?: string
 

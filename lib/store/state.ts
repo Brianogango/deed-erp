@@ -195,7 +195,7 @@ export interface AppState {
   // SOPs / Performance Targets
   sops: SOP[]
   sopActuals: SOPActual[]
-  createSOP: (s: Omit<SOP, 'id' | 'createdByUserId' | 'createdByName' | 'createdAt'>) => SOP
+  createSOP: (s: Omit<SOP, 'id' | 'createdByUserId' | 'createdByName' | 'createdAt'>) => SOP | null
   updateSOP: (id: string, p: Partial<Pick<SOP, 'metrics' | 'period' | 'active' | 'notes'>>) => void
   deleteSOP: (id: string) => void
   setSopActual: (sopId: string, metricId: string, periodKey: string, actual: number, notes?: string) => void
@@ -214,7 +214,7 @@ export interface AppState {
 
   // Expenses
   expenses: Expense[]
-  submitExpense: (e: Omit<Expense, 'id' | 'ref' | 'submittedByUserId' | 'submittedByName' | 'submittedDate' | 'status' | 'createdAt'>) => Expense
+  submitExpense: (e: Omit<Expense, 'id' | 'ref' | 'submittedByUserId' | 'submittedByName' | 'submittedDate' | 'status' | 'createdAt'>) => Expense | null
   reviewExpense: (id: string, approved: boolean, notes?: string) => void
   payExpense: (id: string, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string, notes?: string) => void
   reimburseExpense: (id: string, notes?: string, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
@@ -250,7 +250,7 @@ export interface AppState {
   outsourcePayments: OutsourcePayment[]
   addOutsourceVendor: (v: Omit<OutsourceVendor, 'id' | 'createdAt'>) => OutsourceVendor
   updateOutsourceVendor: (id: string, p: Partial<OutsourceVendor>) => void
-  addOutsourceJob: (j: Omit<OutsourceJob, 'id' | 'ref' | 'createdAt' | 'sentByUserId' | 'sentByName' | 'status'>) => OutsourceJob
+  addOutsourceJob: (j: Omit<OutsourceJob, 'id' | 'ref' | 'createdAt' | 'sentByUserId' | 'sentByName' | 'status'>) => OutsourceJob | null
   returnOutsourceJob: (id: string, p: { returnedDate: string; isResolved: boolean; returnNotes?: string; finalCost?: number; repairNextStep?: 'keep' | 'in_repair' | 'unrepairable' }) => void
   recordOutsourcePayment: (p: Omit<OutsourcePayment, 'id' | 'ref' | 'createdAt' | 'paidByUserId' | 'paidByName' | 'postedToAccounts' | 'billRefs'>) => Promise<OutsourcePayment | null>
   /** Create the draft vendor bill for a returned job that has a cost but no bill yet. */
@@ -299,7 +299,7 @@ export interface AppState {
   deleteOpportunity: (id: string) => void
   
   // CRM - Opportunity Activities
-  logActivity: (activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'createdDate' | 'createdById' | 'createdByName'>) => OpportunityActivity
+  logActivity: (activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'createdDate' | 'createdById' | 'createdByName'>) => OpportunityActivity | null
   completeActivity: (id: string, outcome?: string) => void
   
   // Customer Contracts
@@ -309,20 +309,20 @@ export interface AppState {
   terminateCustomerContract: (id: string, reason: string) => void
   
   // Sales - Quotes
-  createQuote: (quote: Omit<Quote, 'id' | 'ref' | 'quoteNumber' | 'quoteDate' | 'totalAmount' | 'version' | 'issueDate' | 'viewCount' | 'createdBy' | 'createdById' | 'createdByName' | 'createdAt' | 'updatedAt'>) => Quote
+  createQuote: (quote: Omit<Quote, 'id' | 'ref' | 'quoteNumber' | 'quoteDate' | 'totalAmount' | 'version' | 'issueDate' | 'viewCount' | 'createdBy' | 'createdById' | 'createdByName' | 'createdAt' | 'updatedAt'>) => Promise<Quote | null>
   updateQuote: (id: string, p: Partial<Quote>) => void
   addQuoteLine: (quoteId: string, product: Product, qty: number, discount?: number, customPrice?: number) => void
   removeQuoteLine: (quoteId: string, lineId: string) => void
   sendQuote: (id: string) => void
   acceptQuote: (id: string) => void
   rejectQuote: (id: string, reason: string) => void
-  convertQuoteToSaleOrder: (quoteId: string) => SaleOrder | null
-  convertRepairQuoteToSOAndInvoice: (quoteId: string) => { so: SaleOrder; invoice: Invoice } | null
-  reviseQuote: (quoteId: string, changes: string) => Quote
+  convertQuoteToSaleOrder: (quoteId: string) => Promise<SaleOrder | null>
+  convertRepairQuoteToSOAndInvoice: (quoteId: string) => Promise<{ so: SaleOrder; invoice: Invoice } | null>
+  reviseQuote: (quoteId: string, changes: string) => Promise<Quote>
   deleteQuote: (id: string) => void
 
   // Products
-  addProduct: (p: Omit<Product, 'id'>) => Product | null
+  addProduct: (p: Omit<Product, 'id'>) => Promise<Product | null>
   /** Bulk publish: server checks exists, creates missing, then refreshes catalog into local state. */
   publishProductBulk: (rows: Array<Omit<Product, 'id'> & { skuProvided?: boolean }>) => Promise<{
     created: number
@@ -365,15 +365,15 @@ export interface AppState {
     p: Partial<SaleOrder>,
     opts?: { persist?: boolean; soft?: boolean },
   ) => void | Promise<boolean>
-  addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void | Promise<boolean>
+  addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => boolean | void | Promise<boolean>
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
   assignSerialsToSOLine: (orderId: string, lineId: string, serialIds: string[]) => void
   unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
-  removeSOLine: (orderId: string, lineId: string) => void | Promise<boolean>
+  removeSOLine: (orderId: string, lineId: string) => boolean | void | Promise<boolean>
   /** Reorder a quotation line (product or section) up/down. Quotation stage only. */
-  moveSOLine: (orderId: string, lineId: string, direction: -1 | 1) => void | Promise<boolean>
+  moveSOLine: (orderId: string, lineId: string, direction: -1 | 1) => boolean | void | Promise<boolean>
   /** Insert a section heading on a quotation. */
-  addSOSection: (orderId: string, title?: string) => void | Promise<boolean>
+  addSOSection: (orderId: string, title?: string) => boolean | void | Promise<boolean>
   confirmSO: (id: string, opts?: { reserveStock?: boolean; qtyByLineId?: Record<string, number> }) => void | Promise<void>
   /** Create a waiting delivery when a confirmed SO has none (heal / retry). */
   ensureWaitingDeliveryForSO: (id: string) => Promise<Delivery | null>
@@ -443,7 +443,7 @@ export interface AppState {
   revertPOToDraft: (id: string) => void
   confirmPO: (id: string) => void
   // Create receipt from PO (opens receiving dialog)
-  createReceiptFromPO: (poId: string, forcedRef?: string) => Receipt | null
+  createReceiptFromPO: (poId: string, forcedRef?: string) => Promise<Receipt | null>
   // Validate receipt — the CRITICAL stock entry step
   // serialAccessories: map of serial string → accessories array (e.g. { 'SN001': ['Charger','Bag'] })
   // serialIssues: map of serial string → issue description (non-empty = received with issues → refurbishment)
@@ -659,8 +659,8 @@ export interface AppState {
   cancelReservation: (referenceId: string, reason: string) => void
   
   // Delivery & Fulfillment
-  createDeliveryFromSO: (salesOrderId: string, forcedRef?: string) => Delivery | null
-  createInvoiceFromDelivery: (deliveryId: string) => Invoice | null
+  createDeliveryFromSO: (salesOrderId: string, forcedRef?: string) => Promise<Delivery | null>
+  createInvoiceFromDelivery: (deliveryId: string) => Promise<Invoice | null>
   
   // Approval Workflows
   approvalRequests: ApprovalRequest[]

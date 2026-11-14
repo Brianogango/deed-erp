@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import { type OutsourceVendor, type OutsourceJob, OUTSOURCE_SERVICE_TYPES, type OutsourcePayment, type RepairOrder } from '../repairs'
 import { uid, now } from '../ids'
 import type { Contact, Quote, SaleOrder } from '../sales'
@@ -83,7 +82,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(contactPayload),
-        }).then(r => r.ok && r.json().then(c => store.setContacts(p => [c, ...p]))).catch(() => {})
+        }).then(r => (r.ok ? r.json().then(c => store.setContacts(p => [c, ...p])) : undefined)).catch(() => {})
         store.showToast('Vendor added', 'success')
         return vendor
       },
@@ -333,23 +332,16 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         const draft: RepairOrder = {
           id: uid(),
           ref: `REP-${Date.now().toString().slice(-6)}`,
-          status: 'received',
           
           // Customer & Device
-          customerId,
-          customerName,
           customerPhone: customer?.phone ?? '',
           customerEmail: customer?.email,
           productId: '',
-          productName,
-          serialNumber: serial,
           deviceCondition: 'good',
           
           // Intake
           intakeChannel: 'walk_in',
-          intakeDate: bookedAt,
           intakeNotes: desc,
-          issueDescription: desc,
           accessories: [],
           
           // Warranty
@@ -377,7 +369,6 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           
           // Legacy fields
           date: now(),
-          description: desc,
           technicianName: '',
   
           // Booking extras (path, warranty, waiver, accessories, …) must be on
@@ -559,14 +550,14 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           ...repair,
           status: 'received',
           verificationDate: now(),
-          verifiedBy: actor.name,
+          verifiedBy: actor!.name,
           verificationNotes: notes.trim() || undefined,
         }
         store.setRepairs(p => p.map(r => r.id === repairId ? verified : r))
         store.syncRepairToPortal(verified, 'Device verified by staff — repair received')
         store.notifyUsers({
           recipientRoles: ['technical_lead'],
-          recipients: userIdsWithRoles(store.users, ['technical_lead'], actor.id),
+          recipients: userIdsWithRoles(store.users, ['technical_lead'], actor!.id),
           type: 'repair',
           title: `Repair intake verified: ${repair.ref}`,
           body: `${repair.productName} for ${repair.customerName} is ready for assignment.`,
@@ -574,9 +565,9 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           path: `?id=${repair.id}`,
           icon: '✅',
           entityKey: `repair:${repair.id}:verified`,
-          excludeUserId: actor.id,
+          excludeUserId: actor!.id,
         })
-        store.addAuditLog('verify_repair_intake', repairId, `${actor.name} verified intake${notes ? `: ${notes}` : ''}`)
+        store.addAuditLog('verify_repair_intake', repairId, `${actor!.name} verified intake${notes ? `: ${notes}` : ''}`)
         store.showToast(`${repair.ref} verified and moved to received`)
       },
 
@@ -1113,9 +1104,9 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         if (isQuoteUpdate) {
           // Upsert locally — the quote may be absent from local state if the
           // list was rebuilt from the server after the original POST failed.
-          store.setQuotes(p => p.some(q => q.id === existingSalesQuoteId)
+          store.setQuotes(p => (p.some(q => q.id === existingSalesQuoteId)
             ? p.map(q => q.id === existingSalesQuoteId ? { ...q, ...salesQuoteRecord } : q)
-            : [salesQuoteRecord as unknown as Quote, ...p])
+            : [salesQuoteRecord as unknown as Quote, ...p]) as Quote[])
           // PUT the revision; if the quote never reached the server, create it.
           fetch(`/api/quotes/${existingSalesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
             .then(res => {
@@ -1421,7 +1412,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         }
         
         // Reserve parts from inventory
-        const partLines = repair.quote.lines.filter(line => line.type === 'part')
+        const partLines = repair.quote!.lines.filter(line => line.type === 'part')
         let allPartsAvailable = true
         
         for (const line of partLines) {
@@ -1531,10 +1522,10 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           // Do not create an invoice while parts are still being sourced.
           let awaitingSoId = repair.saleOrderId ?? (repair as any).linkedSaleOrderId
           let awaitingSoRef = repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
-          const linkedAwaitingSo = findSaleOrderForRepair(soRef.current, repair)
+          const linkedAwaitingSo = findSaleOrderForRepair(store.soRef.current, repair)
           awaitingSoId = linkedAwaitingSo?.id ?? awaitingSoId
           awaitingSoRef = linkedAwaitingSo?.ref ?? linkedAwaitingSo?.orderNumber ?? awaitingSoRef
-          const approvedSoLines = repair.quote.lines.map(l => ({
+          const approvedSoLines = repair.quote!.lines.map(l => ({
             id: uid(),
             ...saleLineFieldsForRepairQuoteLine(l),
           }))
@@ -1546,7 +1537,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
             customerId: repair.customerId, customerName: repair.customerName,
             date: now(),
               lines: approvedSoLines,
-              subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
+              subtotal: repair.quote!.subtotal, taxTotal: repair.quote!.tax, total: repair.quote!.total,
               notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
               source: 'repair', repairId: repair.id, repairRef: repair.ref,
               createdByUserId: repair.createdBy,
@@ -1559,11 +1550,11 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
               confirmedAt: linkedAwaitingSo?.confirmedAt ?? new Date().toISOString(),
               reserveStock: false,
               lines: approvedSoLines,
-              subtotal: repair.quote.subtotal,
-              taxAmount: repair.quote.tax,
-              taxTotal: repair.quote.tax,
-              totalAmount: repair.quote.total,
-              total: repair.quote.total,
+              subtotal: repair.quote!.subtotal,
+              taxAmount: repair.quote!.tax,
+              taxTotal: repair.quote!.tax,
+              totalAmount: repair.quote!.total,
+              total: repair.quote!.total,
               notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
               source: 'repair', repairId: repair.id, repairRef: repair.ref,
             }
@@ -1576,7 +1567,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           const approvedRepair = {
             ...repair,
             status: 'awaiting_parts' as const,
-            quote: { ...repair.quote, approvedDate: repair.quote.approvedDate ?? now(), approvedBy: repair.quote.approvedBy ?? 'customer' },
+            quote: { ...repair.quote!, approvedDate: repair.quote!.approvedDate ?? now(), approvedBy: repair.quote!.approvedBy ?? 'customer' },
             saleOrderId: awaitingSoId,
             saleOrderRef: awaitingSoRef,
           }
@@ -1602,7 +1593,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         }
         
         // Reserve parts — transfer bulk into repair_unit + assign serials
-        const updatedLines = repair.quote.lines.map(line => ({
+        const updatedLines = repair.quote!.lines.map(line => ({
           ...line,
           reserved: line.type === 'part',
         }))
@@ -1669,14 +1660,14 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
   
         // Confirm the existing commercial lineage only. Approval must never
         // create an invoice; the invoice is created from this SO after QC/Ready.
-        const soLines = repair.quote.lines.map(l => ({
+        const soLines = repair.quote!.lines.map(l => ({
           id: uid(),
           ...saleLineFieldsForRepairQuoteLine(l),
         }))
   
         let soId: string
         let soRef: string
-        const linkedApprovedSo = findSaleOrderForRepair(soRef.current, repair)
+        const linkedApprovedSo = findSaleOrderForRepair(store.soRef.current, repair)
         const presetSoId = linkedApprovedSo?.id ?? repair.saleOrderId ?? (repair as any).linkedSaleOrderId
         const presetSoRef = linkedApprovedSo?.ref ?? linkedApprovedSo?.orderNumber ?? repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
         if (presetSoId) {
@@ -1687,11 +1678,11 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
             confirmedAt: linkedApprovedSo?.confirmedAt ?? new Date().toISOString(),
             reserveStock: false,
             lines: soLines,
-            subtotal: repair.quote.subtotal,
-            taxAmount: repair.quote.tax,
-            taxTotal: repair.quote.tax,
-            totalAmount: repair.quote.total,
-            total: repair.quote.total,
+            subtotal: repair.quote!.subtotal,
+            taxAmount: repair.quote!.tax,
+            taxTotal: repair.quote!.tax,
+            totalAmount: repair.quote!.total,
+            total: repair.quote!.total,
             notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
             source: 'repair',
             repairId: repair.id,
@@ -1708,7 +1699,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
             id: soId, ref: soRef, status: 'sale', confirmedAt: new Date().toISOString(),
             customerId: repair.customerId, customerName: repair.customerName,
             date: now(),
-            lines: soLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
+            lines: soLines, subtotal: repair.quote!.subtotal, taxTotal: repair.quote!.tax, total: repair.quote!.total,
             notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
             source: 'repair', repairId: repair.id, repairRef: repair.ref,
             createdByUserId: repair.createdBy,
@@ -1720,9 +1711,9 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         const approvedRepair = {
           ...repair,
           quote: {
-            ...repair.quote,
-            approvedDate: repair.quote.approvedDate ?? now(),
-            approvedBy: repair.quote.approvedBy ?? 'customer',
+            ...repair.quote!,
+            approvedDate: repair.quote!.approvedDate ?? now(),
+            approvedBy: repair.quote!.approvedBy ?? 'customer',
             lines: updatedLines,
           },
           status: 'approved' as const,
@@ -2133,7 +2124,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           })
         }
         store.syncRepairToPortal({ ...repair, status: 'approved' }, 'Parts arrived — repair resuming')
-        store.addAuditLog('parts_arrived', repairId, `${actor.name} confirmed parts arrived and reserved`)
+        store.addAuditLog('parts_arrived', repairId, `${actor!.name} confirmed parts arrived and reserved`)
         store.showToast('Parts received and reserved — technician notified')
       },
 
@@ -2720,7 +2711,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           store.showToast('Only Finance, Admin Officer, or Director can bill repairs together', 'error')
           return null
         }
-        const selected = repairIds.map(id => store.repairsRef.current.find(r => r.id === id)).filter(Boolean)
+        const selected = repairIds.map(id => store.repairsRef.current.find(r => r.id === id)).filter((r): r is RepairOrder => Boolean(r))
         if (selected.length !== repairIds.length) {
           store.showToast('Some of the selected repairs could not be found — refresh and try again', 'error')
           return null
@@ -2743,7 +2734,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
   
         const supersededOrders = plan.supersededSaleOrderIds
           .map(id => store.soRef.current.find(s => s.id === id))
-          .filter(Boolean)
+          .filter((s): s is SaleOrder => Boolean(s))
         const blockers = supersededOrderBlockers({
           orders: supersededOrders,
           invoices: store.invRef.current,
@@ -3073,13 +3064,13 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         }
   
         const changedAt = now()
-        const note = `${user.name} moved progress back from ${repair.status.replace(/_/g, ' ')} to ${previousStatus.replace(/_/g, ' ')}`
+        const note = `${user!.name} moved progress back from ${repair.status.replace(/_/g, ' ')} to ${previousStatus.replace(/_/g, ' ')}`
         const updatedRepair: RepairOrder = {
           ...repair,
           status: previousStatus,
           statusHistory: [
             ...(repair.statusHistory ?? []),
-            { status: previousStatus, date: changedAt, note, by: user.name },
+            { status: previousStatus, date: changedAt, note, by: user!.name },
           ],
         }
   
@@ -3182,7 +3173,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
             })
           })
   
-          const procResult = await procResponse.json()
+          await procResponse.json()
   
           // Notify customer about delay
           if (repair.customerPhone) {

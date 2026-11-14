@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import { canManageProcurement, canValidatePurchaseReceiptAction, canManageFinance } from '../permissions'
 import type { PurchaseOrder, POLine, Receipt, PurchaseReturn } from '../purchasing'
 import { uid, now } from '../ids'
@@ -122,7 +121,6 @@ export function createPurchasingActions(store: StoreDeps): Pick<AppState, 'creat
     sendPO: (id) => {
         const po = store.poRef.current.find(p => p.id === id)
         if (!po) return
-        const vendor = store.contacts.find(c => c.id === po.vendorId)
         
         store.setPurchaseOrders(p => {
           const next = p.map(po => po.id === id ? { ...po, status: 'sent' as const } : po)

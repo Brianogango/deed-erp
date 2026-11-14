@@ -37,8 +37,10 @@ export interface Client {
   tags?: string[]
   status: 'active' | 'inactive' | 'suspended'
   notes?: string
-  createdAt: string
-  updatedAt: string
+  createdAt?: string
+  createdDate?: string
+  createdBy?: string
+  updatedAt?: string
   // Relations
   opportunities?: Opportunity[]
   contactPersons?: ContactPerson[]
@@ -55,6 +57,9 @@ export interface ContactPerson {
   companyName?: string
   firstName: string
   lastName: string
+  /** First and last name joined, as contact persons are derived from Contacts. */
+  fullName?: string
+  createdDate?: string
   jobTitle?: string
   department?: string
   email: string
@@ -106,7 +111,7 @@ export interface Opportunity {
   lostReason?: string
   lostToCompetitor?: string
   wonReason?: string
-  createdAt: string
+  createdAt?: string
   createdDate?: string
   lastActivityDate?: string
   // Relations
@@ -207,11 +212,13 @@ export interface Quote {
   assignedTo?: User
   approvedBy?: User
   convertedTo?: Invoice
-  createdBy?: User
+  createdBy?: User | string
   items?: QuoteLineItem[]
   invoices?: Invoice[]
   opportunity?: Opportunity
   saleOrders?: SaleOrder[]
+  /** What changed, recorded when the quote is revised. */
+  revisionNotes?: string
 }
 
 export interface OpportunityActivity {
@@ -225,13 +232,13 @@ export interface OpportunityActivity {
   scheduledDate?: string
   status?: 'completed' | 'scheduled'
   completedDate?: string
-  createdById: string
+  createdById?: string
   createdByName?: string
-  createdAt: string
+  createdAt?: string
   createdDate?: string
   // Relations
   opportunity?: Opportunity
-  createdBy?: User
+  createdBy?: User | string
 }
 
 // Contact — unified record for companies, individuals, customers, vendors
@@ -303,6 +310,9 @@ export interface SaleOrderItem {
   serialNumber?: SerialNumber
 }
 
+/** One line of a sale order as the store keeps it. The fields are not modelled yet. */
+export type SaleOrderLine = SaleOrder['lines'][number]
+
 // Odoo-style sale document states. Fulfilment progress (delivery, invoicing)
 // no longer lives in the status: it is derived from the delivery records and
 // per-line qtyDelivered / qtyInvoiced (see lib/odoo-sales-flow.ts).
@@ -331,7 +341,7 @@ export interface SaleOrder {
   backorderApprovalId?: string
   backorderLines?: Array<{ productId: string; productName: string; qtyOrdered: number; qtyAvailable: number; qtyBackordered: number }>
   status: SOStatus
-  orderDate: string
+  orderDate?: string
   date: string
   validUntil?: string
   deliveryDate?: string
@@ -372,14 +382,18 @@ export interface SaleOrder {
   opportunityId?: string
   invoiceAddress?: string
   deliveryAddress?: string
+  /** Where the order came from when not typed in Sales (e.g. 'repair'). */
+  source?: string
+  repairId?: string
+  repairRef?: string
   lines: any[]
   subtotal: number
-  taxAmount: number
+  taxAmount?: number
   taxTotal: number
-  discountAmount: number
-  totalAmount: number
+  discountAmount?: number
+  totalAmount?: number
   total: number
-  amountPaid: number
+  amountPaid?: number
   notes?: string
   termsAndConditions?: string
   optionalProducts?: Array<{ id: string; productId?: string; productName: string; qty: number; unitPrice: number }>
@@ -392,7 +406,7 @@ export interface SaleOrder {
   // Relations
   client?: Client
   quote?: Quote
-  createdBy?: User
+  createdBy?: User | string
   items?: SaleOrderItem[]
   invoices?: Invoice[]
   deliveries?: Delivery[]

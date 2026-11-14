@@ -137,6 +137,7 @@ export function findRepairsForConsolidatedSaleOrder<T extends RepairSaleOrderLin
 
 type RepairSaleOrderCandidate = SaleOrderRepairHint & {
   status?: string | null
+  confirmedAt?: string | null
   createdAt?: string | null
   updatedAt?: string | null
   date?: string | null

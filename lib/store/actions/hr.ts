@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import { canManageHR, canApprovePayroll, canManageFullFinanceAction, canManageHRAssets } from '../permissions'
 import type { SalaryAdvance, PayrollRun, EmployeeAssetAssignment, HRDocument } from '../hr'
 import { calculatePayroll } from '@/lib/payroll'

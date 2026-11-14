@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import type { Rider, DeliveryJob, RiderWeeklyPay, Delivery } from '../delivery'
 import { uid, now } from '../ids'
 import { invoiceDocState, isOpenDeliveryStatus, remainingUndeliveredByProduct } from '@/lib/odoo-sales-flow'
@@ -375,7 +374,7 @@ export function createDeliveryActions(store: StoreDeps): Pick<AppState, 'addRide
           .map(line => {
             const prod = store.prodRef.current.find(p => p.id === line.productId)
             const qty = remaining[line.productId]
-            const selectedSource = (line as SaleOrderLine & { sourceLocation?: LocationId }).sourceLocation
+            const selectedSource = (line as { sourceLocation?: LocationId }).sourceLocation
             let sourceLocation: LocationId | undefined
             if (isNonStockSaleLine(line, prod ?? null)) {
               sourceLocation = undefined
@@ -421,7 +420,7 @@ export function createDeliveryActions(store: StoreDeps): Pick<AppState, 'addRide
           id: uid(),
           ref: forcedRef ?? await store.storeCtxRef.current!.allocateDocRef('DN'),
           saleOrderId: so.id,
-          saleOrderRef: so.ref,
+          saleOrderRef: so.ref ?? '',
           customerId: so.customerId,
           customerName: so.customerName,
           date: now(),

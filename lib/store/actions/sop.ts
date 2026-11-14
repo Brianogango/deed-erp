@@ -1,4 +1,3 @@
-// @ts-nocheck -- moved unchanged from the provider, which is not type-checked yet
 import type { SOP, SOPActual } from '../sop'
 import { uid, now } from '../ids'
 import type { RefSOP } from '../hr'
