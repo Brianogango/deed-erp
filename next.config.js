@@ -50,6 +50,10 @@ const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   compress: true,
   poweredByHeader: false,
+  // Loaded from node_modules at runtime, not bundled: tesseract.js starts its OCR
+  // worker from a path relative to its own files, which bundling breaks
+  // (receipt and purchase-document scanning then fail).
+  serverExternalPackages: ['tesseract.js'],
   experimental: {
     optimizePackageImports: [
       '@fortawesome/free-solid-svg-icons',

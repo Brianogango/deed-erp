@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { recognize } from 'tesseract.js'
 import { getRequiredSession } from '@/lib/auth/api'
+import { ocrErrorMessage } from '@/lib/ocr-error'
 import { guardImageBase64Upload } from '@/lib/server-image-guard'
 
 export const dynamic = 'force-dynamic'
@@ -256,7 +257,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(parsed)
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Purchase document scan failed'
+    const msg = ocrErrorMessage(err, 'Purchase document scan failed')
     const status = typeof err === 'object' && err !== null && 'status' in err && typeof err.status === 'number' ? err.status : 500
     return NextResponse.json({ error: msg }, { status })
   }

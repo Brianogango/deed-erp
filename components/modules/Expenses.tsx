@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect, Suspense } from 'react'
+import { useState, useRef, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   useFinanceStore, fmtDate, fmtKes,
@@ -19,6 +19,7 @@ import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { useCan } from '@/hooks/useCan'
+import { newestDocumentFirst } from '@/lib/document-order'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -128,7 +129,12 @@ function ExpensesContent() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const { users, currentUserId, expenses, submitExpense, reviewExpense, payExpense, reimburseExpense, showToast, bankAccounts } = useFinanceStore()
+  const { users, currentUserId, expenses: storedExpenses, submitExpense, reviewExpense, payExpense, reimburseExpense, showToast, bankAccounts } = useFinanceStore()
+  // Newest claim first: latest submission date, then highest reference.
+  const expenses = useMemo(
+    () => [...storedExpenses].sort((a, b) => newestDocumentFirst({ date: a.submittedDate, ref: a.ref }, { date: b.submittedDate, ref: b.ref })),
+    [storedExpenses],
+  )
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const can = useCan()
