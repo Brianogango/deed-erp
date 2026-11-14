@@ -555,6 +555,8 @@ export default function Settings() {
     )
   }
 
+  /** A custom role's own name (e.g. HR Officer), else the built-in role's. */
+  const userRoleLabel = (user: { role: string; accessRole?: { name?: string } | null }) => user.accessRole?.name || formatRoleLabel(user.role)
   const roleBadgeStyle = (role: string) => {
     if (role === 'director')     return { bg: 'var(--navy)', color: '#fff',     border: 'var(--navy)' }
     if (role === 'finance_officer') return { bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FDE68A' }
@@ -848,10 +850,10 @@ export default function Settings() {
                       key: 'role', label: 'Role', priority: 1, width: '0.9fr',
                       render: user => {
                         const rb = roleBadgeStyle(user.role)
-                        return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
+                        return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{userRoleLabel(user)}</span>
                       },
-                      accessor: user => formatRoleLabel(user.role),
-                      exportValue: user => formatRoleLabel(user.role),
+                      accessor: user => userRoleLabel(user),
+                      exportValue: user => userRoleLabel(user),
                     },
                     {
                       key: 'modules', label: 'Modules', priority: 3, width: '3fr',
@@ -906,7 +908,7 @@ export default function Settings() {
                             <strong>{user.name}</strong>
                             <small>@{user.username}</small>
                           </span>
-                          <span className="settings-user-card__role" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
+                          <span className="settings-user-card__role" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{userRoleLabel(user)}</span>
                         </div>
                         <div className="settings-user-card__state"><span className={user.active ? 'is-active' : ''} />{user.active ? 'Active' : 'Inactive'}</div>
                         <dl>
