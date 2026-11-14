@@ -1829,7 +1829,7 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
           return
         }
         if (inv.status === 'cancelled') { store.showToast('Document is already cancelled', 'info'); return }
-        store.storeCtx.cancelInvoice(id)
+        store.storeCtxRef.current.cancelInvoice(id)
       },
 
     addAuditLog: (action, documentRef, details) => { store.addAuditLog(action, documentRef, details) },

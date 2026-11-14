@@ -1069,7 +1069,7 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
         const newPart: RefurbPart = { ...part, id: uid() }
         store.setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, partsNeeded: [...j.partsNeeded, newPart] }))
         // The part is not in this render's job list yet, so it is passed along.
-        if (opts?.request && newPart.productId) store.storeCtx.requestPartFromInventory(jobId, newPart.id, newPart)
+        if (opts?.request && newPart.productId) store.storeCtxRef.current.requestPartFromInventory(jobId, newPart.id, newPart)
       },
 
     updateRefurbishmentPart: (jobId, partId, patch) => {
