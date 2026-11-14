@@ -31,10 +31,10 @@ import { isStockOutMove } from '@/lib/kpi-stock'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategory } from '@/lib/reconfiguration/unit-config'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
-import InventoryViewBar from '@/components/inventory/InventoryViewBar'
 import { useInventoryView } from '@/lib/inventory/use-inventory-view'
 import {
   CATALOG_LAYOUTS,
+  CONDITION_OPTIONS,
   CATALOG_SHOW_OPTIONS,
   CATALOG_SORT_OPTIONS,
   DEFAULT_VIEW_PREFS,
@@ -474,13 +474,11 @@ function InventoryContent() {
   )
 
   const {
-    lowStockProducts,
     reportFilteredProducts,
     filteredReportMoves,
     filteredTrackedSerials,
     filteredLowStock,
   } = useMemo(() => {
-    const low: typeof stockableProducts = []
     const rProds: typeof stockableProducts = []
     const lStock: typeof stockableProducts = []
     const validProductIds = new Set<string>()
@@ -491,7 +489,6 @@ function InventoryContent() {
     for (const p of stockableProducts) {
       const derivedTotal = onHandQtyAtStockLocations(p, serials, bulkStock, p.id, true)
       const isLow = isLowStockSku(p, derivedTotal, stocked.has(p.id))
-      if (isLow) low.push(p)
       const matchesCat = catFilter === 'All' || p.category === catFilter
       const matchesId = reportProductId === 'All' || p.id === reportProductId
       if (matchesCat && matchesId) {
@@ -515,7 +512,6 @@ function InventoryContent() {
       }
     }
     return {
-      lowStockProducts: low,
       reportFilteredProducts: rProds,
       filteredReportMoves: rMoves,
       filteredTrackedSerials: rSerials,
@@ -562,27 +558,7 @@ function InventoryContent() {
 
   const canReleaseSerials = canReleaseHeldSerial(users.find(u => u.id === currentUserId)?.role)
 
-  const kpis = useMemo(() => {
-    let activeProducts = 0
-    let archivedProducts = 0
-    for (const p of products) {
-      if (p.isActive) activeProducts++
-      else archivedProducts++
-    }
-    // "Ready for sale" means the warehouse stage only — an available unit in
-    // Inbound or With Issues cannot be sold (same rule as the Warehouse tab).
-    let availSerials = 0
-    for (const s of serials) {
-      if (s.status === 'available' && s.location === 'warehouse') availSerials++
-    }
-    return {
-      productMasters: activeProducts,
-      archivedProducts,
-      stockReceipts: validatedReceipts.length,
-      serialTracked: availSerials,
-      lowStock: lowStockProducts.length,
-    }
-  }, [products, validatedReceipts.length, serials, lowStockProducts.length])
+  const activeProductCount = useMemo(() => products.filter(p => p.isActive).length, [products])
 
   const warehouseStock = useMemo(() => {
     const bulkProducts = stockableProducts.filter(p => !p.requiresSerial)
@@ -1308,7 +1284,7 @@ function InventoryContent() {
         title="Inventory"
         subtitle="Inventory, warehouse and stock control"
         icon={<Fa icon={faBoxesStacked} />}
-        count={kpis.productMasters}
+        count={activeProductCount}
         color="var(--navy)"
         subtitleMode="visible"
         primaryAction={
@@ -1320,38 +1296,7 @@ function InventoryContent() {
             </PrimaryActionButton>
           ) : undefined
         }
-        overflowActions={
-          canEditStock && (tab === 'product_master' || tab === 'product_catalog') ? (
-            <div className="operations-bulk-actions flex items-center gap-2 flex-wrap justify-end">
-              <button
-                type="button"
-                className="btn-secondary text-[11px] px-3 py-2"
-                onClick={downloadProductTemplate}
-              >
-                Download template
-              </button>
-              <button
-                type="button"
-                className="btn-secondary text-[11px] px-3 py-2"
-                onClick={() => productImportRef.current?.click()}
-              >
-                Bulk upload
-              </button>
-              {canMergeProducts && (
-                <button
-                  type="button"
-                  className="btn-secondary text-[11px] px-3 py-2"
-                  onClick={() => setShowDuplicates(true)}
-                >
-                  Find duplicates
-                </button>
-              )}
-            </div>
-          ) : undefined
-        }
       />
-
-      {/* KPI strip removed — stock health lives on the central dashboard */}
 
       <TabBar
         tabs={([
@@ -1384,28 +1329,6 @@ function InventoryContent() {
       />
 
       <div className="mod-body">
-      <div className="inventory-pilot-rail operations-summary" aria-label="Inventory overview">
-        <button type="button" className={`inventory-pilot-stat ${tab === 'product_catalog' ? 'is-active' : ''}`} onClick={() => setActiveTab('product_catalog')}>
-          <span className="inventory-pilot-stat-label">Active products</span>
-          <span className="inventory-pilot-stat-value tabular-nums">{kpis.productMasters.toLocaleString()}</span>
-          <span className="operations-summary__hint">Sellable catalog items</span>
-        </button>
-        <button type="button" className={`inventory-pilot-stat ${tab === 'warehouse_view' ? 'is-active' : ''}`} onClick={() => setActiveTab('warehouse_view')}>
-          <span className="inventory-pilot-stat-label">Available serials</span>
-          <span className="inventory-pilot-stat-value tabular-nums">{kpis.serialTracked.toLocaleString()}</span>
-          <span className="operations-summary__hint">Ready for sale</span>
-        </button>
-        <button type="button" className={`inventory-pilot-stat ${kpis.lowStock > 0 ? 'tone-warning' : ''} ${tab === 'reports' ? 'is-active' : ''}`} onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }}>
-          <span className="inventory-pilot-stat-label">Low stock</span>
-          <span className="inventory-pilot-stat-value tabular-nums">{kpis.lowStock.toLocaleString()}</span>
-          <span className="operations-summary__hint">Products below minimum</span>
-        </button>
-        <button type="button" className={`inventory-pilot-stat ${tab === 'stock_in' || tab === 'movements' ? 'is-active' : ''}`} onClick={() => setActiveTab(canEditStock ? 'stock_in' : 'movements')}>
-          <span className="inventory-pilot-stat-label">Validated GRNs</span>
-          <span className="inventory-pilot-stat-value tabular-nums">{kpis.stockReceipts.toLocaleString()}</span>
-          <span className="operations-summary__hint">Receipts posted</span>
-        </button>
-      </div>
 
       {tab === 'warehouse_view' && (() => {
         const { warehouseSerials, issuesSerials, repairSerials, testingSerials, quarantineSerials, bulkByLocation } = warehouseStock
@@ -2243,6 +2166,30 @@ function InventoryContent() {
               ]
               const catalogPrimaryFilters: PrimaryFilterConfig[] = [
                 {
+                  key: 'show',
+                  label: 'Show',
+                  value: viewPrefs.catalogShow,
+                  allValue: DEFAULT_VIEW_PREFS.catalogShow,
+                  options: CATALOG_SHOW_OPTIONS.map(o => ({ value: o.value, label: o.label })),
+                  onChange: v => { updateView({ catalogShow: v as CatalogShow }); setCatalogPage(1) },
+                },
+                {
+                  key: 'condition',
+                  label: 'Condition',
+                  value: viewPrefs.condition,
+                  allValue: 'all',
+                  options: CONDITION_OPTIONS.map(o => ({ value: o.value, label: o.value === 'all' ? 'Any condition' : o.label })),
+                  onChange: v => { updateView({ condition: v as typeof viewPrefs.condition }); setCatalogPage(1) },
+                },
+                {
+                  key: 'sort',
+                  label: 'Sort',
+                  value: viewPrefs.catalogSort,
+                  allValue: DEFAULT_VIEW_PREFS.catalogSort,
+                  options: CATALOG_SORT_OPTIONS,
+                  onChange: v => updateView({ catalogSort: v as CatalogSort }),
+                },
+                {
                   key: 'category',
                   label: 'Category',
                   placeholder: 'All categories',
@@ -2257,64 +2204,33 @@ function InventoryContent() {
               ]
               return (
                 <TablePageLayout
-                  title="Product catalog"
-                  summary={
+                  summary={(priceReviewCount > 0 || pendingPriceUpdates > 0) ? (
                     <OperationalSummary
                       items={[
-                        {
-                          id: 'catalog',
-                          label: viewPrefs.catalogShow === 'in_stock' ? 'in stock' : viewPrefs.catalogShow === 'out_of_stock' ? 'out of stock' : 'products',
-                          value: catalogProducts.length,
-                          tone: 'success',
-                          onClick: () => { patchInventoryUi({ catalogQ: null, category: null, page: null }); resetView() },
-                        },
-                        {
+                        ...(priceReviewCount > 0 ? [{
                           id: 'review',
                           label: priceReviewOnly ? 'need price review — showing only these (click to show all)' : 'need price review',
                           value: priceReviewCount,
-                          tone: priceReviewCount > 0 ? 'warning' : 'default',
+                          tone: 'warning' as const,
                           onClick: () => setPriceReviewOnly(v => !v),
-                        },
-                        {
+                        }] : []),
+                        ...(pendingPriceUpdates > 0 ? [{
                           id: 'pending',
                           label: 'pending price updates',
                           value: pendingPriceUpdates,
-                          tone: pendingPriceUpdates > 0 ? 'warning' : 'default',
-                        },
+                          tone: 'warning' as const,
+                        }] : []),
                       ]}
                     />
-                  }
+                  ) : undefined}
                   notice={
-                    <CompactInfoNotice dismissible storageKey="inventory-catalog-price-notice">
-                      {viewPrefs.catalogShow === 'in_stock'
-                        ? 'Catalog lists only products with warehouse stock ready to sell. Zero-stock SKUs, With Issues, Repair, and services stay in Product Master — change “Show” above to see them here.'
-                        : viewPrefs.catalogShow === 'out_of_stock'
-                          ? 'Showing sellable products with nothing ready to sell. Their Available count is 0.'
-                          : 'Showing every active product that can be sold, whether or not it is in stock.'}
-                      Price changes apply only to future sales. Historical invoices and POS receipts remain unchanged.
-                      {!canUpdatePrice ? ' Price editing is read-only for your role.' : ''}
+                    <CompactInfoNotice dismissible storageKey="inventory-catalog-notice-v2">
+                      {viewPrefs.catalogShow === 'in_stock' ? 'Showing products ready to sell.' : viewPrefs.catalogShow === 'out_of_stock' ? 'Showing sellable products with nothing on the shelf.' : 'Showing every sellable product, in stock or not.'}
+                      {' '}Price changes apply to future sales only.
+                      {!canUpdatePrice ? ' Prices are read-only for your role.' : ''}
                     </CompactInfoNotice>
                   }
                 >
-                  <InventoryViewBar
-                    show={{ value: viewPrefs.catalogShow, options: CATALOG_SHOW_OPTIONS, onChange: v => { updateView({ catalogShow: v as CatalogShow }); setCatalogPage(1) } }}
-                    condition={{ value: viewPrefs.condition, onChange: v => { updateView({ condition: v }); setCatalogPage(1) } }}
-                    sort={{ value: viewPrefs.catalogSort, options: CATALOG_SORT_OPTIONS, onChange: v => updateView({ catalogSort: v as CatalogSort }) }}
-                    layout={{
-                      value: viewPrefs.catalogLayout,
-                      presets: CATALOG_LAYOUTS,
-                      onChange: preset => {
-                        updateView({ catalogLayout: preset.id })
-                        setCatalogColumnPreset({ token: `${preset.id}:${Date.now()}`, keys: preset.columns })
-                      },
-                    }}
-                    isCustomised={
-                      viewPrefs.catalogShow !== DEFAULT_VIEW_PREFS.catalogShow
-                      || viewPrefs.condition !== DEFAULT_VIEW_PREFS.condition
-                      || viewPrefs.catalogSort !== DEFAULT_VIEW_PREFS.catalogSort
-                    }
-                    onReset={() => { resetView(); setCatalogColumnPreset({ token: `reset:${Date.now()}`, keys: CATALOG_LAYOUTS[CATALOG_LAYOUTS.length - 1].columns }) }}
-                  />
                   <DataTable
                     tableId="inventory-catalog"
                     applyColumnKeys={catalogColumnPreset}
@@ -2329,7 +2245,7 @@ function InventoryContent() {
                     page={catalogPage}
                     onPageChange={setCatalogPage}
                     primaryFilters={catalogPrimaryFilters}
-                    onClearFilters={() => patchInventoryUi({ catalogQ: null, category: null, page: null })}
+                    onClearFilters={() => { patchInventoryUi({ catalogQ: null, category: null, page: null }); resetView() }}
                     hideColumnFilters
                     emptyMessage={
                       priceReviewOnly
@@ -2347,10 +2263,19 @@ function InventoryContent() {
                     exportFilename="inventory-catalog"
                     perPage={20}
                     overflowActions={[
+                      ...CATALOG_LAYOUTS.map(preset => ({
+                        id: `layout-${preset.id}`,
+                        label: `${viewPrefs.catalogLayout === preset.id ? '✓ ' : ''}Columns: ${preset.label}`,
+                        onSelect: () => {
+                          updateView({ catalogLayout: preset.id })
+                          setCatalogColumnPreset({ token: `${preset.id}:${Date.now()}`, keys: preset.columns })
+                        },
+                      })),
                       { id: 'product-template', label: 'Download product template', onSelect: downloadProductTemplate },
                       { id: 'product-import', label: 'Import products (bulk)', onSelect: () => productImportRef.current?.click(), disabled: !canEditStock },
                       { id: 'price-template', label: 'Download price template', onSelect: downloadPriceUpdateTemplate },
                       { id: 'price-import', label: 'Import prices', onSelect: () => priceImportRef.current?.click(), disabled: !canUpdatePrice },
+                      ...(canMergeProducts ? [{ id: 'duplicates', label: 'Find duplicate products', onSelect: () => setShowDuplicates(true) }] : []),
                     ]}
                     rowActions={product => (
                       <div className="flex flex-wrap justify-end gap-1">
@@ -2368,20 +2293,19 @@ function InventoryContent() {
                             </button>
                           )
                         })()}
+                        {canUpdatePrice && (
+                          <button
+                            type="button"
+                            className="btn-secondary text-[10px] py-1 px-2"
+                            onClick={() => openPriceUpdate(product)}
+                          >
+                            Edit price
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className="btn-primary text-[10px] py-1 px-2"
-                          onClick={() => openPriceUpdate(product)}
-                          disabled={!canUpdatePrice}
-                          title={canUpdatePrice ? 'Edit price' : 'Price update not permitted'}
-                        >
-                          Edit price
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-secondary text-[10px] py-1 px-2"
+                          className="text-[10px] font-semibold text-[var(--text-3)] hover:text-[var(--primary)] px-1.5"
                           aria-label={`Price history for ${product.name}`}
-                          title="Price history"
                           onClick={() => setHistoryProduct(product)}
                         >
                           History
