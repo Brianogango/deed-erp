@@ -54,7 +54,7 @@ interface PurchaseCtxValue {
   // Local view state
   mainView: MainView; setMainView: (v: MainView) => void
   subView: SubView;   setSubView: (v: SubView) => void
-  activeId: string | null; setActiveId: (id: string | null) => void
+  activeId: string | null; setActiveId: (id: string | null, history?: 'push' | 'replace') => void
   typeFilter: string; setTypeFilter: (f: string) => void
   statusFilter: string; setStatusFilter: (f: string) => void
   // Derived

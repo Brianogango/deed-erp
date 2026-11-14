@@ -1,5 +1,7 @@
 'use client'
 import JobTrail from '@/components/erp/JobTrail'
+import { rememberRecordList } from '@/lib/record-pager'
+import { RecordPager } from '@/components/erp/RecordPager'
 import { isSellableSerial } from '@/lib/inventory/sellable-stock'
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Fragment, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -1011,7 +1013,7 @@ function SalesContent() {
 
   // Persist user navigation as real browser history. Canonical redirects still use
   // router.replace elsewhere; opening records, delivery and new forms must PUSH.
-  const syncOrderUrl = useCallback((id: string | null, nextView: SalesView = 'form') => {
+  const syncOrderUrl = useCallback((id: string | null, nextView: SalesView = 'form', history: 'push' | 'replace' = 'push') => {
     const params = new URLSearchParams(searchParams.toString())
     params.delete('crmTab')
     if (id) {
@@ -1024,7 +1026,7 @@ function SalesContent() {
       else params.delete('view')
     }
     const qs = params.toString()
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    router[history](qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [searchParams, router, pathname])
 
   useEffect(() => {
@@ -1050,11 +1052,16 @@ function SalesContent() {
   }, [searchParams, saleOrders]) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally omit view
 
   // ── Navigation ──────────────────────────────────────────────────────────
-  const openOrder = (id: string) => {
+  const openOrder = (id: string, history: 'push' | 'replace' = 'push') => {
     setActiveId(id)
     setView('form')
     setEditingLineId(null)
-    syncOrderUrl(id, 'form')
+    syncOrderUrl(id, 'form', history)
+  }
+  /** From the list: remember its order for the record pager (‹ ›). */
+  const openFromList = (id: string) => {
+    rememberRecordList(filtered.map(s => s.id))
+    openOrder(id)
   }
   const backToList = () => {
     setView('list')
@@ -2103,7 +2110,7 @@ function SalesContent() {
                               const cust = contacts.find(c => c.id === s.customerId)
                               const contactLabel = cust?.type === 'individual' ? (cust.name || '—') : (cust?.email || cust?.name || '—')
                               return (
-                                <tr key={s.id} className="sp-row-click" onClick={() => openOrder(s.id)} style={{ cursor: 'pointer' }}>
+                                <tr key={s.id} className="sp-row-click" onClick={() => openFromList(s.id)} style={{ cursor: 'pointer' }}>
                                   {listTab === 'quotations' && (
                                     <td data-col="select" onClick={e => e.stopPropagation()}>
                                       <input
@@ -2115,7 +2122,7 @@ function SalesContent() {
                                     </td>
                                   )}
                                   <td data-col="ref">
-                                    <button type="button" className="sp-linkish" onClick={e => { e.stopPropagation(); openOrder(s.id) }}>{s.ref}</button>
+                                    <button type="button" className="sp-linkish" onClick={e => { e.stopPropagation(); openFromList(s.id) }}>{s.ref}</button>
                                     {listTab === 'orders' && s.quotationRef ? (
                                       <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--sp-text-3)', fontWeight: 500 }}>
                                         was {s.quotationRef}
@@ -2156,7 +2163,7 @@ function SalesContent() {
                             {colOrders.map(s => (
                               <div
                                 key={s.id}
-                                onClick={() => openOrder(s.id)}
+                                onClick={() => openFromList(s.id)}
                                 className={`card p-3 cursor-pointer sales-kanban-card sales-kanban-card--${col}`}
                               >
                                 <div className="flex items-center justify-between mb-1">
@@ -2190,10 +2197,13 @@ function SalesContent() {
                   <div className="mb-2"><JobTrail start={{ kind: 'sale_order', id: activeOrder.id }} /></div>
                   <div className="sales-proto-page-header">
                     <div className="sales-proto-header-copy">
-                      <button type="button" className="sp-btn sp-btn-ghost sales-back-button" aria-label="Back to quotations" onClick={backToList}>
-                        <span className="sales-back-button__icon" aria-hidden="true">←</span>
-                        <span className="sales-back-button__label">Back</span>
-                      </button>
+                      <div className="flex items-center justify-between gap-3">
+                        <button type="button" className="sp-btn sp-btn-ghost sales-back-button" aria-label="Back to quotations" onClick={backToList}>
+                          <span className="sales-back-button__icon" aria-hidden="true">←</span>
+                          <span className="sales-back-button__label">Back</span>
+                        </button>
+                        <RecordPager currentId={activeOrder.id} onOpen={next => openOrder(next, 'replace')} />
+                      </div>
                       <div className="sp-ref-row">
                         <div className="sales-record-title-block">
                           <h1>{isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sales order'}</h1>

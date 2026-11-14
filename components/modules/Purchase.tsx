@@ -149,9 +149,9 @@ function PurchaseContent() {
   const [subView,  setLocalSubView]  = useState<SubView>('list')
   const [urlActiveId, setUrlActiveId] = useUrlRecordId({ whenOpen: PURCHASE_RECORD_QUERY })
   const [activeId, setLocalActiveId] = useState<string | null>(null)
-  const setActiveId = useCallback((id: string | null) => {
+  const setActiveId = useCallback((id: string | null, history?: 'push' | 'replace') => {
     setLocalActiveId(id)
-    setUrlActiveId(id)
+    setUrlActiveId(id, history ? { history } : undefined)
   }, [setUrlActiveId])
   const setSubView = useCallback((nextView: SubView) => {
     setLocalSubView(nextView)

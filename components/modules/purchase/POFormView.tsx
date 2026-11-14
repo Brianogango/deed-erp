@@ -9,6 +9,7 @@ import { invoiceDocState, invoicePaymentStatus, invoiceResidual, displayDocRef, 
 import { downloadPoPdf, downloadRfqPdf } from '@/lib/purchase-pdf'
 import Chatter from '@/components/erp/Chatter'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
+import { RecordPager } from '@/components/erp/RecordPager'
 import { SmartButtons } from '@/components/erp/SmartButtons'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { poStatusView } from '@/lib/purchase/po-status'
@@ -325,13 +326,16 @@ export default function POFormView() {
       <div className="purchase-order-detail">
         {/* ── Header ── */}
         <div className="purchase-order-detail__header">
-          <Breadcrumbs
-            items={[
-              { label: 'Purchase', onClick: backToList },
-              { label: 'Orders', onClick: backToList },
-              { label: activePO.ref },
-            ]}
-          />
+          <div className="flex items-center justify-between gap-3">
+            <Breadcrumbs
+              items={[
+                { label: 'Purchase', onClick: backToList },
+                { label: 'Orders', onClick: backToList },
+                { label: activePO.ref },
+              ]}
+            />
+            <RecordPager currentId={activePO.id} onOpen={next => setActiveId(next, 'replace')} />
+          </div>
           <div className="purchase-order-detail__title-row">
           <div className="purchase-order-detail__identity">
           <button type="button" className="btn-outline text-[11px] py-1 px-2.5" onClick={backToList} aria-label="Back to orders">← Orders</button>

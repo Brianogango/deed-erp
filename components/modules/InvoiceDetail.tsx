@@ -27,7 +27,7 @@ import { financePaymentPreview } from '@/lib/finance-payment-preview'
 import { suggestedWithholding, WITHHELD_INCOME_TAX, WITHHELD_VAT, WITHHOLDING_KINDS, type WithholdingMethod } from '@/lib/accounting/withholding'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, invoiceDueRelativeLabel, invoiceDueDateNeedsAlert, displayDocRef, creditNoteStatusLabel, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
-import { Breadcrumbs, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge } from '@/components/erp'
+import { Breadcrumbs, PrimaryActionButton, RecordHeader, RecordPager, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import Chatter from '@/components/erp/Chatter'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
@@ -768,12 +768,19 @@ export default function InvoiceDetail() {
   return (
     <div className="mod-page invoice-detail finance-workspace finance-invoice-detail">
       <div className="invoice-detail__chrome">
-        <Breadcrumbs
-          items={[
-            { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => goToDocumentList(invoice.type) },
-            { label: titleRef },
-          ]}
-        />
+        <div className="flex items-center justify-between gap-3">
+          <Breadcrumbs
+            items={[
+              { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => goToDocumentList(invoice.type) },
+              { label: titleRef },
+            ]}
+          />
+          {/* Step through the list this was opened from; Back still returns to that list. */}
+          <RecordPager
+            currentId={invoice.id}
+            onOpen={next => router.replace(financeInvoicePath(next, { listPage, listSearch, listFilter, listScroll }))}
+          />
+        </div>
 
         {invoice.type === 'customer_invoice' && (
           <div className="mb-2"><JobTrail start={{ kind: 'invoice', id: invoice.id }} /></div>

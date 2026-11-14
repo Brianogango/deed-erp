@@ -1,5 +1,6 @@
 'use client'
 import { rememberRecentRecord } from '@/lib/recent-records'
+import { RecordPager } from '@/components/erp/RecordPager'
 import CustomerSnapshot from '@/components/contacts/CustomerSnapshot'
 import CreditFacilityPanel, { CREDIT_STANDING_LABELS } from '@/components/credit/CreditFacilityPanel'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
@@ -646,6 +647,9 @@ function ContactsInner() {
             onClose={() => setViewContact(null)}
           >
             <div className="contacts-profile">
+            <div className="flex justify-end">
+              <RecordPager currentId={vc.id} onOpen={next => setViewContactId(next, { queryPatch: { contactTab: 'info' }, history: 'replace' })} />
+            </div>
             {/* Header */}
             <div className="contacts-profile__hero">
               <span className="contacts-avatar contacts-avatar--lg" aria-hidden="true">{contactInitials(vc.name)}</span>

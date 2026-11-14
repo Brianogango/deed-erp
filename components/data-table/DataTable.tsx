@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { rememberRecordList } from '@/lib/record-pager'
 import { Table } from '@/components/ui'
 import { exportToExcel, exportToPDF, type ExportRow } from '@/lib/export-utils'
 import { useTableBreakpoint } from '@/lib/data-table/use-breakpoint'
@@ -343,6 +344,12 @@ export default function DataTable<T>({
     return result
   }, [rows, search, filterRules, columns, clientSearch, sort])
 
+  // Opening a row remembers this list's order for the record pager (‹ ›).
+  const openRow = (row: T) => {
+    rememberRecordList(filteredRows.map(rowKey))
+    onRowClick?.(row)
+  }
+
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   useEffect(() => {
     if (page <= totalPages) return
@@ -519,7 +526,7 @@ export default function DataTable<T>({
               error={error}
               emptyMessage={emptyMessage}
               emptyAction={emptyAction}
-              onRowClick={onRowClick}
+              onRowClick={onRowClick ? openRow : undefined}
               rowActions={rowActions}
               cardAccent={cardAccent}
               renderCard={renderCard}
@@ -586,12 +593,12 @@ export default function DataTable<T>({
                     className={`table-row ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}
                     style={rowStyle ? rowStyle(row) : undefined}
                     onClick={onRowClick ? event => {
-                      if (!isInteractiveTarget(event.target, event.currentTarget)) onRowClick(row)
+                      if (!isInteractiveTarget(event.target, event.currentTarget)) openRow(row)
                     } : undefined}
                     onKeyDown={onRowClick ? event => {
                       if (event.key === 'Enter' && event.target === event.currentTarget) {
                         event.preventDefault()
-                        onRowClick(row)
+                        openRow(row)
                       }
                     } : undefined}
                   >
