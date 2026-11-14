@@ -37,7 +37,9 @@ describe('dashboard app-state hydration contract', () => {
   })
 
   it('exports useStoreHydrated because Dashboard gates KPIs on it', () => {
+    const sync = readFileSync(join(process.cwd(), 'lib/store/sync.ts'), 'utf8')
     const store = readFileSync(join(process.cwd(), 'lib/store.tsx'), 'utf8')
-    expect(store).toMatch(/export function useStoreHydrated\(\)/)
+    expect(sync).toMatch(/export function useStoreHydrated\(\)/)
+    expect(store).toMatch(/export \{[^}]*\buseStoreHydrated\b[^}]*\} from '\.\/store\/sync'/)
   })
 })
