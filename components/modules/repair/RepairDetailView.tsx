@@ -2,6 +2,7 @@
 'use client'
 
 import JobTrail from '@/components/erp/JobTrail'
+import { canAssignRepair } from '@/lib/repair/can-assign'
 import Link from 'next/link'
 import { useState, useRef } from 'react'
 import { useRepair } from './RepairContext'
@@ -175,9 +176,7 @@ export default function RepairDetailView() {
   const pendingOutsourceJob = outsourceJobs?.find(job => job.repairOrderId === r.id && job.status === 'sent')
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const canVerify   = r.status === 'pending_verification' && can('repair.verify')
-  const canAssign   = (isDirectorRole(currentRole) ? !!systemSettings?.repAdminAssignsJobs : can('repair.assign'))
-    && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
-    && !pendingOutsourceJob
+  const canAssign   = canAssignRepair({ user: currentUser, status: r.status, outsourced: Boolean(pendingOutsourceJob), adminAssignsJobs: systemSettings?.repAdminAssignsJobs })
   const canDiagnose = (
       r.status === 'assigned'
       || (r.status === 'diagnosed' && !hasDiagnosis)

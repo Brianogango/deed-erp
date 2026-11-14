@@ -31927,3 +31927,10 @@ button, [role="button"], [role="tab"] {
 @media (max-width: 767px) {
   .repair-detail__summary > div:nth-child(3) { grid-column: 1 / -1; }
 }
+
+/* Repairs list: assign / reassign from the Technician cell. */
+.repair-quick-assign {
+  display: inline-flex; max-width: 100%; align-items: center; border-radius: 0.4rem;
+  margin: -0.2rem -0.35rem; padding: 0.2rem 0.35rem; text-align: left;
+}
+.repair-quick-assign:hover { background: rgb(37 99 235 / 0.08); }

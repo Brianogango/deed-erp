@@ -1,5 +1,7 @@
 'use client'
-import { useMemo, type CSSProperties } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
+import { canAssignRepair } from '@/lib/repair/can-assign'
+import { AssignTechnicianModal } from './RepairModals'
 import { activeOutsourceJob, isOutsourceOverdue, outsourceBadgeLabel, outsourcedRepairCounts } from '@/lib/repair/outsource-visibility'
 import { DataTable, type ActiveFilterChip, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { useRepair } from './repair/RepairContext'
@@ -94,7 +96,7 @@ function PaidNotCollectedLine({ show }: { show: boolean }) {
   )
 }
 
-function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected }: any) {
+function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected, technician }: any) {
   const rowColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'
   const outJob   = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
   const locLabel = outJob ? outJob.vendorName
@@ -145,19 +147,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected }: any) 
       </div>
       <div className="repair-mobile-card__footer flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {r.assignedTechnicianName ? (
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-5 h-5 rounded-full text-white flex items-center justify-center text-[8px] font-black shrink-0"
-                style={{ background: NAVY }}
-              >
-                {r.assignedTechnicianName.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-[10px] font-bold text-[var(--text-2)] truncate max-w-[100px]">{r.assignedTechnicianName}</span>
-            </div>
-          ) : (
-            <span className="text-[10px] text-[var(--text-4)] italic">Unassigned</span>
-          )}
+          {technician}
           <span className="text-[10px] font-bold flex items-center gap-1" style={locStyle}>
             <Fa icon={faMapMarkerAlt} className="text-[9px] opacity-60" />
             {locLabel}
@@ -183,7 +173,37 @@ function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected }: any) 
 }
 
 export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) => void }) {
-  const { visibleRepairs, filter, setFilter, outsourceJobs } = useRepair()
+  const { visibleRepairs, filter, setFilter, outsourceJobs, currentUser, systemSettings } = useRepair()
+  // Assign or reassign from the list, without opening the job.
+  const [assigning, setAssigning] = useState<RepairRow | null>(null)
+  const canAssignRow = (r: RepairRow) => canAssignRepair({
+    user: currentUser,
+    status: r.status,
+    outsourced: Boolean(outsourceJobs?.some(job => job.repairOrderId === r.id && job.status === 'sent')),
+    adminAssignsJobs: systemSettings?.repAdminAssignsJobs,
+  })
+  const technicianCell = (r: RepairRow, compact = false) => {
+    const name = r.assignedTechnicianName
+    const label = name ? (
+      <span className="flex items-center gap-1.5 min-w-0">
+        <span className={`${compact ? 'w-5 h-5 text-[8px]' : 'w-6 h-6 text-[9px]'} rounded-full text-white flex items-center justify-center font-black shrink-0`} style={{ background: NAVY }}>
+          {name.charAt(0).toUpperCase()}
+        </span>
+        <span className={`${compact ? 'text-[10px] max-w-[100px]' : 'text-[11px]'} font-bold text-[var(--text-2)] truncate`}>{name}</span>
+      </span>
+    ) : <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-[var(--text-4)] italic`}>Unassigned</span>
+    if (!canAssignRow(r)) return label
+    return (
+      <button
+        type="button"
+        className="repair-quick-assign"
+        title={name ? `Reassign ${r.ref}` : `Assign ${r.ref}`}
+        onClick={e => { e.stopPropagation(); setAssigning(r) }}
+      >
+        {name ? label : <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-bold text-[var(--primary)]`}>+ Assign</span>}
+      </button>
+    )
+  }
   const { invoices } = useRepairStore()
   const paidUncollected = useMemo(
     () => new Set(visibleRepairs.filter(r => isPaidNotCollected(r as any, invoices as any)).map(r => r.id)),
@@ -473,15 +493,8 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
       exportValue: r => locationFor(r).label,
     },
     {
-      key: 'technician', label: 'Technician', priority: 3, width: '120px',
-      render: r => r.assignedTechnicianName ? (
-        <div className="flex items-center gap-1.5 min-w-0">
-          <div className="w-6 h-6 rounded-full text-white flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: NAVY }}>
-            {r.assignedTechnicianName.charAt(0).toUpperCase()}
-          </div>
-          <span className="text-[11px] font-bold text-[var(--text-2)] truncate">{r.assignedTechnicianName}</span>
-        </div>
-      ) : <span className="text-[11px] text-[var(--text-4)] italic">Unassigned</span>,
+      key: 'technician', label: 'Technician', priority: 3, width: '130px',
+      render: r => technicianCell(r),
       exportValue: r => r.assignedTechnicianName ?? 'Unassigned',
     },
     {
@@ -612,10 +625,11 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
             onRowClick={r => onSelect(r.id)}
             rowActions={repairRowActions}
             rowStyle={r => ({ borderLeft: `3px solid ${STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'}` })}
-            renderCard={r => <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} paidUncollected={paidUncollected} />}
+            renderCard={r => <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} paidUncollected={paidUncollected} technician={technicianCell(r, true)} />}
             exportTitle="Repair Jobs"
             exportFilename="repair-jobs"
           />
+          {assigning && <AssignTechnicianModal repair={assigning as never} onClose={() => setAssigning(null)} />}
         </div>
       </div>
     </div>
