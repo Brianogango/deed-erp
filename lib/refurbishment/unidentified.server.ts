@@ -8,6 +8,7 @@ import { postAdjustmentValuation } from '@/lib/inventory/valuation-hooks'
 import { formatAccountLabel } from '@/lib/product-accounts'
 import { awaitingIdentification, classifySerialMatch, harvestValues, isIntakeTag, nextIntakeTags, splitUnitCosts } from './unidentified'
 import { allocateAssetIds } from '@/lib/inventory/asset-id.server'
+import { moveUnitCost, moveUnitCount } from '@/lib/inventory/unit-product-move.server'
 import { isValidAssetId, normalizeAssetId } from '@/lib/inventory/asset-id'
 
 type Product = { id: string; name?: string; sku?: string; category?: string; stockQty?: number; requiresSerial?: boolean; trackingMethod?: string }
@@ -282,12 +283,7 @@ export async function identifyTaggedUnit(params: {
 
   const moved = target.id !== unit.productId
   if (moved) {
-    for (const [pid, d] of [[unit.productId, -1], [target.id, 1]] as const) {
-      const i = products.findIndex(p => p.id === pid)
-      if (i >= 0) products[i] = { ...products[i], stockQty: Math.max(0, Number(products[i].stockQty ?? 0) + d) }
-    }
-    moves.unshift(move({ type: 'transfer', productId: target.id, productName: target.name, qty: 1, reason: `Identified: tag ${tag} is ${real} (was filed under ${unit.productName})`, fromLocation: result.location, toLocation: result.location, serialNumbers: [real], userId: params.userId, documentRef: tag }))
-    await bumpPrismaOnHand(new Map([[unit.productId, -1], [target.id, 1]]))
+    await moveUnitCount({ products, moves, fromProductId: unit.productId, to: target, serial: real, location: result.location, reason: `Identified: tag ${tag} is ${real} (was filed under ${unit.productName})`, documentRef: tag, userId: params.userId })
   }
   await saveStoreKeys({
     ...(moved ? { deed_products: JSON.stringify(products), deed_stockMoves: JSON.stringify(moves) } : {}),
@@ -295,17 +291,7 @@ export async function identifyTaggedUnit(params: {
   })
 
   if (moved && result.status !== 'written_off') {
-    const out = await postAdjustmentValuation({
-      adjustmentRef: `${tag} ID-OUT ${Date.now()}`, productId: unit.productId, type: 'subtract', qty: 1, userId: params.userId,
-      expenseAccountLabel: ADJUSTMENT(), expenseLineText: `Identified ${tag} as ${real}`,
-    }).catch(() => null)
-    const cost = await valuationCost(out)
-    if (cost > 0) {
-      await postAdjustmentValuation({
-        adjustmentRef: `${tag} ID-IN ${Date.now()}`, productId: target.id, type: 'add', qty: 1, unitCost: cost, userId: params.userId,
-        reversesWriteOff: true, expenseAccountLabel: ADJUSTMENT(), expenseLineText: `Identified ${tag} as ${real}`,
-      }).catch(() => null)
-    }
+    await moveUnitCost({ fromProductId: unit.productId, toProductId: target.id, ref: `${tag} ID`, text: `Identified ${tag} as ${real}`, userId: params.userId })
   }
   return { ok: true, serial: result, ...(match.kind === 'returning' ? { removedSerialId: unit.id } : {}), ...(history ? { history } : {}) }
 }

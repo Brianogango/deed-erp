@@ -7,6 +7,8 @@ import { Fa } from '@/components/icons'
 import { faPrint, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { LOCATIONS, LocationId, Product, SerialNumber, useInventoryStore, fmtDate } from '@/lib/store'
 import { validateSerialEdit } from '@/lib/inventory/serial-edit'
+import { unitMoveBlocker } from '@/lib/inventory/unit-product-move'
+import { MoveSerialProductModal } from './MoveSerialProductModal'
 import { canIntakeOnHandSerials, canReleaseHeldSerial } from '@/lib/inventory/permissions'
 import { ON_HAND_LOCATIONS, parseSerialList, type OnHandLocation } from '@/lib/inventory/serial-intake'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
@@ -42,6 +44,7 @@ export default function SerialManageDrawer({
 }: SerialManageDrawerProps) {
   const {
     serials: allSerials,
+    products,
     saleOrders,
     updateSerial,
     releaseSerialToStock,
@@ -54,6 +57,7 @@ export default function SerialManageDrawer({
   } = useInventoryStore()
 
   const role = users.find(u => u.id === currentUserId)?.role
+  const [moveTarget, setMoveTarget] = useState<SerialNumber | null>(null)
   const canRelease = canReleaseHeldSerial(role)
   const canIntake = canIntakeOnHandSerials(role)
   const willUpgradeToSerial = !isSerialTracking(inferTrackingMethod(product))
@@ -486,11 +490,31 @@ export default function SerialManageDrawer({
                     Edit
                   </button>
                 )}
+                {canEdit && !unitMoveBlocker(row) && (
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded-lg border text-[10px] font-bold"
+                    title="Filed under the wrong model or specs? Move it to the right product"
+                    onClick={() => setMoveTarget(row)}
+                  >
+                    Move
+                  </button>
+                )}
               </div>
             )}
           />
         </div>
       </Modal>
+
+      {moveTarget && (
+        <MoveSerialProductModal
+          unit={moveTarget}
+          products={products}
+          showToast={showToast}
+          onClose={() => setMoveTarget(null)}
+          onMoved={() => setMoveTarget(null)}
+        />
+      )}
 
       {editTarget && (
         <Modal title={`Edit serial · ${editTarget.serial}`} onClose={() => setEditTarget(null)} width={480}>
