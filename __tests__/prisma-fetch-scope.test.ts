@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const store = readFileSync('lib/store.tsx', 'utf8')
+// The store's loading and polling code lives in the core hook.
+const store = readFileSync('lib/store/use-store-core.tsx', 'utf8')
 const crud = readFileSync('lib/server-store-crud.ts', 'utf8')
 const stream = readFileSync('app/api/store/stream/route.ts', 'utf8')
 const shell = readFileSync('components/AppShell.tsx', 'utf8')
