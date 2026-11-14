@@ -22,11 +22,11 @@ export type RepairStatus =
   | 'retained'           // Customer left / donated the device to Deed
   | 'cancelled'          // Job cancelled
 
-export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email'
+export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup'
 
 export type DeliveryMethod = 'pickup' | 'delivery' | 'courier'
 
-type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
+export type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
 export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'confirmed' | 'rejected'
 
 export interface RepairAccessory {
@@ -35,7 +35,7 @@ export interface RepairAccessory {
   notes?: string
 }
 
-type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
+export type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
 
 export interface RepairDiagnosis {
   id?: string
@@ -50,7 +50,7 @@ export interface RepairDiagnosis {
   diagnosedDate: string
 }
 
-interface RepairQuoteLine {
+export interface RepairQuoteLine {
   id: string
   type: 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service'
   description: string

@@ -17,6 +17,16 @@ const OPENING_EQUITY_LABEL = '4004 - Opening Balance Equity'
 /** Repair parts consumption posts to direct repair costs, not generic COGS. */
 const REPAIR_COST_LABEL = '6301 - Solutions and Expert Repair Services\' Costs'
 
+/** Store a product's new running average (quantity, value, unit cost). */
+const saveAverageValuation = (
+  productId: string,
+  next: { averageCost: number; totalQty: number; totalValue: number },
+  db: Pick<typeof prisma, 'productValuation'> = prisma,
+) => {
+  const values = { averageCost: next.averageCost, totalQty: next.totalQty, totalValue: next.totalValue }
+  return db.productValuation.upsert({ where: { productId }, create: { productId, ...values }, update: values })
+}
+
 async function persistStockJournal(params: {
   ref: string
   description: string
@@ -320,20 +330,7 @@ async function applyOutboundValuation(params: {
       qty,
     })
     unitCostUsed = applied.unitCostUsed
-    await prisma.productValuation.upsert({
-      where: { productId: params.productId },
-      create: {
-        productId: params.productId,
-        averageCost: applied.averageCost,
-        totalQty: applied.totalQty,
-        totalValue: applied.totalValue,
-      },
-      update: {
-        averageCost: applied.averageCost,
-        totalQty: applied.totalQty,
-        totalValue: applied.totalValue,
-      },
-    })
+    await saveAverageValuation(params.productId, applied)
   }
 
   if (params.movementId) {
@@ -512,20 +509,7 @@ export async function processStockReceipt(params: {
       qty,
       unitCost,
     })
-    await prisma.productValuation.upsert({
-      where: { productId: params.productId },
-      create: {
-        productId: params.productId,
-        averageCost: applied.averageCost,
-        totalQty: applied.totalQty,
-        totalValue: applied.totalValue,
-      },
-      update: {
-        averageCost: applied.averageCost,
-        totalQty: applied.totalQty,
-        totalValue: applied.totalValue,
-      },
-    })
+    await saveAverageValuation(params.productId, applied)
   }
 
   if (params.movementId) {
@@ -747,20 +731,7 @@ export async function processStockCustomerReturn(params: {
       qty,
       unitCost,
     })
-    await prisma.productValuation.upsert({
-      where: { productId: params.productId },
-      create: {
-        productId: params.productId,
-        averageCost: applied.averageCost,
-        totalQty: applied.totalQty,
-        totalValue: applied.totalValue,
-      },
-      update: {
-        averageCost: applied.averageCost,
-        totalQty: applied.totalQty,
-        totalValue: applied.totalValue,
-      },
-    })
+    await saveAverageValuation(params.productId, applied)
   }
 
   if (params.postJournal !== false && applied.totalCost > 0) {
@@ -933,20 +904,7 @@ export async function processStockAdjustment(params: {
       qty,
       unitCost,
     })
-    await prisma.productValuation.upsert({
-      where: { productId: params.productId },
-      create: {
-        productId: params.productId,
-        averageCost: applied.averageCost,
-        totalQty: applied.totalQty,
-        totalValue: applied.totalValue,
-      },
-      update: {
-        averageCost: applied.averageCost,
-        totalQty: applied.totalQty,
-        totalValue: applied.totalValue,
-      },
-    })
+    await saveAverageValuation(params.productId, applied)
   }
 
   if (params.postJournal !== false && applied.totalCost > 0) {

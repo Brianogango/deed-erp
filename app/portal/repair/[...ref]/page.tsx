@@ -615,39 +615,21 @@ export default function RepairPortalPage() {
 
 
         {/* ── Payment Confirmation (hidden while revised quote awaits re-approval) ── */}
-        {!awaitingRevisionApproval && (paymentConfirmed || repair.paymentStatus === 'pending_review' || (!paymentConfirmed && canPay)) && (
+        {!awaitingRevisionApproval && (canPay || paymentConfirmed || repair.paymentStatus === 'pending_review' || repair.paymentStatus === 'rejected') && (
           <Card accent={paymentConfirmed ? '#10B981' : repair.paymentStatus === 'pending_review' ? '#F59E0B' : '#00B0D7'} delay={320}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>{paymentConfirmed ? 'Payment Receipt' : 'Pay Now'}</SectionLabel>
               {paymentConfirmed ? (
                 <div style={{ padding: 16, borderRadius: 12, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.28)' }}>
-                  <p style={{ color: '#D1FAE5', fontSize: 13, lineHeight: 1.6 }}>Payment confirmed. Thank you — your receipt and invoice are ready to download below.</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12, marginBottom: 16 }}>
-                    <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Receipt No.</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{repair.paymentReceiptNumber ?? 'Confirmed'}</p></div>
+                  <p style={{ color: '#D1FAE5', fontSize: 13, lineHeight: 1.6 }}>Payment confirmed. Thank you — your receipt is available below.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12, marginBottom: 14 }}>
+                    <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Receipt</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{repair.paymentReceiptNumber ?? 'Confirmed'}</p></div>
                     <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount Paid</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{fmtKes(amountPaid > 0 ? amountPaid : invoiceOrQuoteTotal)}</p></div>
                   </div>
-                  <PortalPdfButton repairRef={ref} kind="receipt-pdf" phone={verifyPhone} filename={`receipt-${String(ref).replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      width: '100%', padding: '13px 0', borderRadius: 12, border: 'none',
-                      background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff',
-                      fontWeight: 800, fontSize: 14, textDecoration: 'none', marginBottom: 8,
-                    }}>
-                    Download Receipt PDF
-                  </PortalPdfButton>
-                  <PortalPdfButton repairRef={ref} kind="invoice-pdf" phone={verifyPhone} filename={`invoice-${String(ref).replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      width: '100%', padding: '13px 0', borderRadius: 12, border: 'none',
-                      background: 'linear-gradient(135deg, #10B981, #059669)',
-                      color: '#fff', fontWeight: 800, fontSize: 14, textDecoration: 'none',
-                      cursor: 'pointer', boxSizing: 'border-box',
-                    }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="7 10 12 15 17 10"/>
-                      <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Download Invoice PDF
-                  </PortalPdfButton>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <PortalPdfButton repairRef={ref} kind="receipt-pdf" phone={verifyPhone} filename={`receipt-${String(ref).replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`} style={{ textAlign: 'center', padding: '12px 10px', borderRadius: 12, background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff', fontWeight: 800, fontSize: 12, textDecoration: 'none' }}>Download Receipt</PortalPdfButton>
+                    <PortalPdfButton repairRef={ref} kind="invoice-pdf" phone={verifyPhone} filename={`invoice-${String(ref).replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`} style={{ textAlign: 'center', padding: '12px 10px', borderRadius: 12, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.16)', color: '#E5E7EB', fontWeight: 800, fontSize: 12, textDecoration: 'none' }}>Download Invoice</PortalPdfButton>
+                  </div>
                 </div>
               ) : repair.paymentStatus === 'pending_review' ? (
                 <div style={{ padding: 14, borderRadius: 12, background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.28)', color: '#FCD34D', fontSize: 13, lineHeight: 1.6 }}>

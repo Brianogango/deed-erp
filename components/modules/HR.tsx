@@ -193,6 +193,32 @@ function HRContent() {
   const [empForm, setEmpForm] = useState<EmpFormState>(blankEmp)
   const setEF = (k: keyof EmpFormState) => (v: string) => setEmpForm(p => ({ ...p, [k]: v }))
 
+  /** The employee form as the add / update calls expect it. */
+  const employeePayload = () => ({
+      fullName: empForm.fullName.trim(),
+      employeeNo: empForm.employeeNo.trim(),
+      email: empForm.email.trim(),
+      workEmail: empForm.workEmail.trim(),
+      phone: empForm.phone.trim(),
+      nationalId: empForm.nationalId.trim(),
+      kraPin: empForm.kraPin.trim(),
+      nssfNumber: empForm.nssfNumber.trim(),
+      gender: empForm.gender as 'male' | 'female' | '',
+      departmentId: empForm.departmentId,
+      jobTitle: empForm.jobTitle.trim(),
+      shift: empForm.shift.trim(),
+      startDate: empForm.startDate,
+      status: empForm.status,
+      basicSalary: Number(empForm.basicSalary) || 0,
+      housingAllowance: Number(empForm.housingAllowance) || 0,
+      transportAllowance: Number(empForm.transportAllowance) || 0,
+      bankName: empForm.bankName.trim(),
+      bankAccount: empForm.bankAccount.trim(),
+      paymentMode: empForm.paymentMode as 'bank' | 'mpesa' | 'cash',
+      mpesaNumber: empForm.mpesaNumber.trim(),
+      managerEmployeeId: empForm.managerEmployeeId || undefined,
+  })
+
   const handleAddEmployee = async () => {
     if (!empForm.fullName.trim() || !empForm.employeeNo.trim()) {
       showToast('Full name and employee number are required', 'error')
@@ -208,30 +234,7 @@ function HRContent() {
     if (saving) return
     setSaving(true)
     try {
-      await addEmployee({
-        fullName: empForm.fullName.trim(),
-        employeeNo: empForm.employeeNo.trim(),
-        email: empForm.email.trim(),
-        workEmail: empForm.workEmail.trim(),
-        phone: empForm.phone.trim(),
-        nationalId: empForm.nationalId.trim(),
-        kraPin: empForm.kraPin.trim(),
-        nssfNumber: empForm.nssfNumber.trim(),
-        gender: empForm.gender as 'male' | 'female' | '',
-        departmentId: empForm.departmentId,
-        jobTitle: empForm.jobTitle.trim(),
-        shift: empForm.shift.trim(),
-        startDate: empForm.startDate,
-        status: empForm.status,
-        basicSalary: Number(empForm.basicSalary) || 0,
-        housingAllowance: Number(empForm.housingAllowance) || 0,
-        transportAllowance: Number(empForm.transportAllowance) || 0,
-        bankName: empForm.bankName.trim(),
-        bankAccount: empForm.bankAccount.trim(),
-        paymentMode: empForm.paymentMode as 'bank' | 'mpesa' | 'cash',
-        mpesaNumber: empForm.mpesaNumber.trim(),
-        managerEmployeeId: empForm.managerEmployeeId || undefined,
-      })
+      await addEmployee(employeePayload())
       setShowEmployeeModal(false)
       setEmpForm(blankEmp())
     } catch {
@@ -252,30 +255,7 @@ function HRContent() {
     if (saving) return
     setSaving(true)
     try {
-      await updateEmployee(editEmpId, {
-        fullName: empForm.fullName.trim(),
-        employeeNo: empForm.employeeNo.trim(),
-        email: empForm.email.trim(),
-        workEmail: empForm.workEmail.trim(),
-        phone: empForm.phone.trim(),
-        nationalId: empForm.nationalId.trim(),
-        kraPin: empForm.kraPin.trim(),
-        nssfNumber: empForm.nssfNumber.trim(),
-        gender: empForm.gender as 'male' | 'female' | '',
-        departmentId: empForm.departmentId,
-        jobTitle: empForm.jobTitle.trim(),
-        shift: empForm.shift.trim(),
-        startDate: empForm.startDate,
-        status: empForm.status,
-        basicSalary: Number(empForm.basicSalary) || 0,
-        housingAllowance: Number(empForm.housingAllowance) || 0,
-        transportAllowance: Number(empForm.transportAllowance) || 0,
-        bankName: empForm.bankName.trim(),
-        bankAccount: empForm.bankAccount.trim(),
-        paymentMode: empForm.paymentMode as 'bank' | 'mpesa' | 'cash',
-        mpesaNumber: empForm.mpesaNumber.trim(),
-        managerEmployeeId: empForm.managerEmployeeId || undefined,
-      })
+      await updateEmployee(editEmpId, employeePayload())
       setEditEmpId(null)
       setViewEmpId(null)
       setEmpForm(blankEmp())
@@ -288,9 +268,6 @@ function HRContent() {
     const q = empSearch.toLowerCase()
     return !q || e.fullName.toLowerCase().includes(q) || e.employeeNo.toLowerCase().includes(q) || e.jobTitle.toLowerCase().includes(q)
   })
-
-  // Distinct employees whose approved leave covers today — not the all-time
-  // count of approved requests.
 
   const employeeColumns: ColumnDef<Employee>[] = [
     {

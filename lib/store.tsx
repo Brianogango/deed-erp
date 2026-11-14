@@ -348,6 +348,8 @@ import {
   shouldSyncQuoteCustomer,
   shouldSyncSaleOrderCustomer,
 } from '@/lib/sync-customer-documents'
+import type { IntakeChannel, RepairDiagnosis, RepairDiagnosisRevisionType, RepairPaymentConfirmationStatus, RepairQAItem, RepairQuote, RepairQuoteLine, RepairQuoteLineDecision, RepairStatus } from '@/lib/repair-types'
+export type { IntakeChannel, RepairDiagnosis, RepairPaymentConfirmationStatus, RepairQAItem, RepairQuote, RepairStatus } from '@/lib/repair-types'
 
 // Reuse Intl formatters for every toLocale*String call in the app (lib/intl-cache.ts).
 if (typeof window !== 'undefined') installIntlFormatCache()
@@ -1869,28 +1871,6 @@ export interface PurchaseReturn {
 }
 
 // Comprehensive Repair Status Flow
-export type RepairStatus =
-  | 'pending_verification' // Customer/self-service intake awaiting admin verification
-  | 'received'           // Admin verified, ready for assignment
-  | 'assigned'           // Technician assigned
-  | 'diagnosed'          // Diagnosis complete, findings logged
-  | 'awaiting_approval'  // Quote sent, waiting for client approval
-  | 'approved'           // Client approved, ready to start repair
-  | 'awaiting_parts'     // Waiting for parts to arrive
-  | 'in_repair'          // Repair in progress
-  | 'qc'                 // Quality control/testing
-  | 'ready'              // Ready for pickup/delivery
-  | 'verified_released'  // ORC gate passed — authoriser confirmed serial, awaiting pickup
-  | 'invoiced'           // Invoice generated
-  | 'delivered'          // Handed over to customer
-  | 'collected'          // ORC/customer handover complete
-  | 'closed'             // Job completed and closed
-  | 'cancelled'          // Job cancelled
-  | 'declined'           // Customer declined the quote
-  | 'unrepairable'       // Device cannot be repaired
-  | 'returned'           // Device returned to customer without repair
-  | 'retained'           // Customer left / donated the device to Deed
-
 const REPAIR_TERMINAL_STATUSES: RepairStatus[] = ['closed', 'cancelled', 'declined', 'unrepairable', 'returned', 'retained']
 
 const normalizeProductIdentity = (value: unknown) => String(value ?? '').trim().toLowerCase()
@@ -1916,71 +1896,6 @@ function productCreateLockKey(product: Partial<Product>) {
     normalizeProductIdentity(product.sku),
     normalizeProductIdentity(product.barcode),
   ].join('|')
-}
-
-export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup'
-
-type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
-
-export interface RepairDiagnosis {
-  id?: string
-  revision?: number
-  revisionType?: RepairDiagnosisRevisionType
-  revisionReason?: string
-  findings: string
-  faultDescription: string
-  recommendedAction: string
-  estimatedHours: number
-  diagnosedBy: string
-  diagnosedDate: string
-}
-
-type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
-export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'confirmed' | 'rejected'
-
-interface RepairQuoteLine {
-  id: string
-  type: 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service'
-  description: string
-  productId?: string
-  productName?: string
-  qty: number
-  unitPrice: number
-  subtotal: number
-  reserved: boolean
-  decision?: RepairQuoteLineDecision
-  /** Locked Diagnosis First fee line — not removable; 0% VAT. */
-  isDiagnosisFee?: boolean
-}
-
-export interface RepairQuote {
-  id: string
-  lines: RepairQuoteLine[]
-  subtotal: number
-  tax: number
-  total: number
-  validUntil: string
-  sentDate: string
-  approvedDate?: string
-  approvedBy?: string
-  rejectedDate?: string
-  rejectionReason?: string
-  partiallyApproved?: boolean
-  approvedTotal?: number
-  // Populated on revisions — human-readable line-by-line diff vs previous quote
-  changeSummary?: string
-  prevTotal?: number
-  diagnosisRevision?: number
-  diagnosisFaultSummary?: string
-}
-
-export interface RepairQAItem {
-  id: string
-  description: string
-  passed: boolean
-  testedBy?: string
-  testedDate?: string
-  notes?: string
 }
 
 export interface RepairOrder {
@@ -2985,6 +2900,36 @@ type VendorJournalOpts = {
   poLines?: Array<{ productId?: string; unitPrice?: number }>
 }
 
+/** Bill / vendor credit lines as the perpetual-inventory journal builders expect them. */
+const vendorJournalLineInputs = (
+  doc: Invoice,
+  resolveProduct: ((productId: string) => AccountableProduct | undefined) | undefined,
+  opts: VendorJournalOpts,
+  absolute = false,
+) => doc.lines.map(l => {
+  const product = l.productId ? resolveProduct?.(l.productId) as any : undefined
+  const kind = inferProductKind({
+    productKind: product?.productKind,
+    category: product?.category,
+    unit: product?.unit,
+    trackingMethod: product?.trackingMethod,
+    requiresSerial: product?.requiresSerial,
+  })
+  const amount = (v: unknown) => absolute ? Math.abs(Number(v) || 0) : Number(v) || 0
+  const poLine = opts.poLines?.find(p => p.productId && l.productId && p.productId === l.productId)
+  const ppeAccountCode = ppeAccountCodeFromLine(l.accountCode)
+  return {
+    productId: l.productId,
+    qty: amount(l.qty),
+    unitPrice: amount(l.unitPrice),
+    subtotal: amount(l.subtotal),
+    accountCode: l.accountCode,
+    ppeAccountCode,
+    isStocked: !ppeAccountCode && (kind === 'storable' || kind === 'consumable'),
+    receiptUnitCost: Math.max(0, Number(poLine?.unitPrice ?? l.unitPrice) || 0),
+  }
+})
+
 const buildInvoicePostingJournal = (
   inv: Invoice,
   resolveProduct?: (productId: string) => AccountableProduct | undefined,
@@ -3025,28 +2970,7 @@ const buildInvoicePostingJournal = (
     total: inv.total,
     perpetual,
     chartAccounts,
-    lines: inv.lines.map(l => {
-      const product = l.productId ? resolveProduct?.(l.productId) : undefined
-      const kind = inferProductKind({
-        productKind: (product as any)?.productKind,
-        category: (product as any)?.category,
-        unit: (product as any)?.unit,
-        trackingMethod: (product as any)?.trackingMethod,
-        requiresSerial: (product as any)?.requiresSerial,
-      })
-      const poLine = opts.poLines?.find(p => p.productId && l.productId && p.productId === l.productId)
-      const ppeAccountCode = ppeAccountCodeFromLine(l.accountCode)
-      return {
-        productId: l.productId,
-        qty: Number(l.qty) || 0,
-        unitPrice: Number(l.unitPrice) || 0,
-        subtotal: Number(l.subtotal) || 0,
-        accountCode: l.accountCode,
-        ppeAccountCode,
-        isStocked: !ppeAccountCode && (kind === 'storable' || kind === 'consumable'),
-        receiptUnitCost: Math.max(0, Number(poLine?.unitPrice ?? l.unitPrice) || 0),
-      }
-    }),
+    lines: vendorJournalLineInputs(inv, resolveProduct, opts),
   })
   const lines = vendorLines.map(l => accountLine(l.account, l.description, l.debit, l.credit))
   const totalCredit = lines.reduce((s, l) => s + l.credit, 0)
@@ -3071,28 +2995,7 @@ const buildVendorCreditJournal = (
     total: credit.total,
     perpetual,
     chartAccounts,
-    lines: credit.lines.map(l => {
-      const product = l.productId ? resolveProduct?.(l.productId) : undefined
-      const kind = inferProductKind({
-        productKind: (product as any)?.productKind,
-        category: (product as any)?.category,
-        unit: (product as any)?.unit,
-        trackingMethod: (product as any)?.trackingMethod,
-        requiresSerial: (product as any)?.requiresSerial,
-      })
-      const poLine = opts.poLines?.find(p => p.productId && l.productId && p.productId === l.productId)
-      const ppeAccountCode = ppeAccountCodeFromLine(l.accountCode)
-      return {
-        productId: l.productId,
-        qty: Math.abs(Number(l.qty) || 0),
-        unitPrice: Math.abs(Number(l.unitPrice) || 0),
-        subtotal: Math.abs(Number(l.subtotal) || 0),
-        accountCode: l.accountCode,
-        ppeAccountCode,
-        isStocked: !ppeAccountCode && (kind === 'storable' || kind === 'consumable'),
-        receiptUnitCost: Math.max(0, Number(poLine?.unitPrice ?? l.unitPrice) || 0),
-      }
-    }),
+    lines: vendorJournalLineInputs(credit, resolveProduct, opts, true),
   })
   const lines = vendorLines.map(l => accountLine(l.account, l.description, l.debit, l.credit))
   const totalCredit = lines.reduce((s, l) => s + l.credit, 0)
