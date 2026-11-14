@@ -136,6 +136,7 @@ export default function RepairDetailView() {
   const [showConsolidateModal, setShowConsolidateModal] = useState(false)
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
+  const [showAllSteps, setShowAllSteps] = useState(false)
   const [activeRepairTab, setActiveRepairTab] = useState<'overview' | 'diagnosis' | 'quote' | 'parts' | 'work' | 'handover' | 'activity'>('overview')
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
   const [paymentRejectReason, setPaymentRejectReason] = useState('')
@@ -174,7 +175,7 @@ export default function RepairDetailView() {
   const pendingOutsourceJob = outsourceJobs?.find(job => job.repairOrderId === r.id && job.status === 'sent')
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const canVerify   = r.status === 'pending_verification' && can('repair.verify')
-  const canAssign   = isDirectorRole(currentRole) ? !!systemSettings?.repAdminAssignsJobs : can('repair.assign')
+  const canAssign   = (isDirectorRole(currentRole) ? !!systemSettings?.repAdminAssignsJobs : can('repair.assign'))
     && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
     && !pendingOutsourceJob
   const canDiagnose = (
@@ -404,6 +405,8 @@ export default function RepairDetailView() {
     : r.status === 'diagnosed' && !hasDiagnosis ? 'Diagnosis stage has no findings — log diagnosis to continue'
     : r.status === 'diagnosed' && billingExempt ? 'No-charge job — assign/start repair without quoting'
     : r.status === 'diagnosed' ? 'Generate or edit the quote to continue past diagnosis'
+    : linkedInvoice && Number(linkedInvoice.amountPaid ?? 0) < Number(linkedInvoice.total ?? 0) - 0.5
+      ? `Payment still due on ${linkedInvoice.ref} — record it on the invoice`
     : null
 
   // Exactly one dominant workflow CTA. Routine secondary actions live inside
@@ -423,7 +426,8 @@ export default function RepairDetailView() {
     // Corrections after approval stay in their tabs, never the main action.
     canUpdateDiagnosis: canUpdateDiagnosis && !quoteAlreadyApproved,
     canQuote: canQuote && !awaitingAssignedTech && !otherTechWorking && !quoteAlreadyApproved,
-    canAssign,
+    // Assigning is the main action only while nobody is assigned; Reassign is the link in the facts row.
+    canAssign: canAssign && !r.assignedTechnicianId,
     quoteDeclinedReopenable: isQuoteDeclinedReopenable(r.status),
     noCharge,
     serialNumber: r.serialNumber,
@@ -752,20 +756,31 @@ export default function RepairDetailView() {
       </div>
 
       <section className="repair-detail__progress" aria-label="Repair progress">
-        <div className="repair-detail__desktop-progress">
+        {(() => {
+          const steps = repairProgressOrderFor(r)
+          const at = steps.indexOf(r.status) + 1
+          return (
+            <div className="repair-detail__stage-line">
+              <div className="min-w-0">
+                <span>{at > 0 ? `Stage ${at} of ${steps.length}` : 'Stage'}</span>
+                <strong>{STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status.replace(/_/g, ' ')}</strong>
+              </div>
+              <div className="repair-detail__mobile-track"><i style={{ width: `${Math.max(8, (Math.max(at, 1) / Math.max(steps.length, 1)) * 100)}%` }} /></div>
+              {nextActionHint && <p><b>Next:</b> {nextActionHint}</p>}
+              <button type="button" className="repair-detail__steps-toggle" aria-expanded={showAllSteps} onClick={() => setShowAllSteps(v => !v)}>
+                {showAllSteps ? 'Hide steps' : 'Show all steps'}
+              </button>
+            </div>
+          )
+        })()}
+        {showAllSteps && (
           <StatusStepper
             currentStatus={r.status}
             history={r.statusHistory || []}
             steps={repairProgressOrderFor(r)}
           />
-        </div>
-        <div className="repair-detail__mobile-stage">
-          <span>Current stage</span>
-          <strong>{STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status.replace(/_/g, ' ')}</strong>
-          <div className="repair-detail__mobile-track"><i style={{ width: `${Math.max(12, ((repairProgressOrderFor(r).indexOf(r.status) + 1) / Math.max(repairProgressOrderFor(r).length, 1)) * 100)}%` }} /></div>
-          <p><b>Next:</b> {nextActionHint || 'Continue the repair workflow'}</p>
-        </div>
-        {canMoveBack && (
+        )}
+        {canMoveBack && showAllSteps && (
           <div className="flex justify-end px-3 sm:px-5 pb-2">
             <button
               type="button"
@@ -892,10 +907,18 @@ export default function RepairDetailView() {
       )}
 
       <section className="repair-detail__summary" aria-label="Repair summary">
-        <div><span>Next action</span><strong>{nextActionHint || 'Review job activity'}</strong></div>
-        <div><span>Age</span><strong>{repairAgeDays} day{repairAgeDays === 1 ? '' : 's'}</strong></div>
+        <div>
+          <span>Technician</span>
+          <strong>{r.assignedTechnicianName || 'Unassigned'}</strong>
+          <small>
+            {pendingOutsourceJob ? `At ${pendingOutsourceJob.vendorName}` : 'In shop'}
+            {canAssign && primaryActionId !== 'assign' && (
+              <> · <button type="button" className="repair-detail__inline-link" onClick={() => setShowAssignModal(true)}>{r.assignedTechnicianId ? 'Reassign' : 'Assign'}</button></>
+            )}
+          </small>
+        </div>
         <div><span>{r.quote ? 'Approved total' : 'Estimate'}</span><strong>{fmtKes(r.quote?.approvedTotal ?? r.quote?.total ?? r.total ?? 0)}</strong></div>
-        <div><span>Technician</span><strong>{r.assignedTechnicianName || 'Unassigned'}</strong><small>{pendingOutsourceJob ? pendingOutsourceJob.vendorName : 'In shop'}</small></div>
+        <div><span>Age</span><strong>{repairAgeDays} day{repairAgeDays === 1 ? '' : 's'}</strong></div>
       </section>
 
       <nav className="repair-detail__tabs" aria-label="Repair record sections">
@@ -950,25 +973,7 @@ export default function RepairDetailView() {
                 <InfoField label="Laptop Password" value={r.clientLaptopPassword} mono />
                 <InfoField label="Priority"    value={r.priority}    highlight={['high','urgent'].includes(r.priority)} />
                 <InfoField label="Channel"     value={r.intakeChannel?.replace(/_/g,' ')} />
-                {canAssign ? (
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Technician</span>
-                    <button
-                      onClick={() => setShowAssignModal(true)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 -ml-2.5 rounded-lg cursor-pointer hover:bg-[rgba(37,99,235,0.08)] transition-colors text-left w-fit"
-                    >
-                      <Fa icon={faUserPlus} className="text-blue-500 text-[9px] shrink-0" />
-                      <span className={`text-[13px] font-black ${r.assignedTechnicianId ? 'text-[var(--text-1)]' : 'text-amber-500'}`}>
-                        {r.assignedTechnicianName ?? 'Unassigned'}
-                      </span>
-                      <span className="text-[9px] font-black text-blue-600 px-1.5 py-0.5 rounded-md bg-[rgba(37,99,235,0.1)] border border-blue-500/20 uppercase tracking-wide whitespace-nowrap">
-                        {r.assignedTechnicianId ? 'Reassign' : 'Assign'}
-                      </span>
-                    </button>
-                  </div>
-                ) : (
-                  <InfoField label="Technician" value={r.assignedTechnicianName ?? 'Unassigned'} highlight={!!r.assignedTechnicianId} />
-                )}
+                <InfoField label="Technician" value={r.assignedTechnicianName ?? 'Unassigned'} highlight={!!r.assignedTechnicianId} />
                 <InfoField
                   label="Booked At"
                   value={(() => {
@@ -1725,42 +1730,22 @@ export default function RepairDetailView() {
               </div>
             </SectionCard>
 
-            {/* Follow-up Portal */}
-            <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-sm border" style={{ borderColor: 'var(--border)', background: 'var(--navy)' }}>
-              <div className="absolute inset-0 opacity-30 pointer-events-none"
-                style={{ background: `radial-gradient(circle at 70% 30%, ${accentColor}50 0%, transparent 70%)` }} />
-              <Fa icon={faLink} className="absolute -right-4 -top-4 text-white/5 text-[6rem] sm:text-[8rem] rotate-12 pointer-events-none" />
-              <div className="relative z-10 p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <div>
-                    <h3 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.6)' }}>Follow-up Portal</h3>
-                    <p className="text-[9px] sm:text-[10px] font-bold mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>Customer tracking link</p>
-                  </div>
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
-                    <Fa icon={faExternalLinkAlt} style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
-                  </div>
-                </div>
-                <div className="rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 mb-3 sm:mb-4" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
-                  <p className="text-[10px] font-mono break-all leading-relaxed" style={{ color: 'var(--accent-cyan)' }}>{portalUrl}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  <button onClick={copyLink}
-                    className="py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
-                    style={copiedLink
-                      ? { background: '#10B981', color: '#fff' }
-                      : { background: '#fff', color: '#1A1F5E' }
-                    }>
-                    {copiedLink ? 'Copied!' : 'Copy Link'}
-                  </button>
-                  <a href={portalUrl} target="_blank" rel="noopener noreferrer"
-                    className="py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5"
-                    style={{ background: 'var(--accent-cyan)', color: '#fff' }}>
-                    <Fa icon={faExternalLinkAlt} className="text-xs" />
-                    Open
+            {/* Customer tracking link: secondary, so a compact row that opens on request. */}
+            <details className="repair-section-card repair-detail__portal">
+              <summary>
+                <span><Fa icon={faLink} className="mr-2 text-[11px]" />Customer tracking link</span>
+                <span className="repair-detail__portal-hint">Copy or open</span>
+              </summary>
+              <div className="px-4 pb-4">
+                <p className="mb-3 break-all rounded-lg bg-[var(--bg-surface)] px-3 py-2 font-mono text-[10px] text-[var(--text-2)]">{portalUrl}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={copyLink} className="btn-secondary text-[11px]">{copiedLink ? 'Copied' : 'Copy link'}</button>
+                  <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary flex items-center justify-center gap-1.5 text-[11px]">
+                    <Fa icon={faExternalLinkAlt} className="text-[10px]" /> Open
                   </a>
                 </div>
               </div>
-            </div>
+            </details>
 
             {/* Financials */}
             <SectionCard delay={100} id={!hasDiagnosis ? 'repair-diagnosis' : undefined} className={activeRepairTab === 'quote' ? '' : 'hidden'}>

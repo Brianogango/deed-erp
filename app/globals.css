@@ -17109,61 +17109,9 @@ button.repair-metric:hover {
   padding: 12px 16px;
 }
 
-.repair-detail__desktop-progress .repair-status-stepper__track,
-.repair-detail__desktop-progress .repair-status-stepper__fill {
-  display: none;
-}
-
-.repair-detail__desktop-progress .repair-status-stepper__steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
-  gap: 4px;
-}
-
-.repair-detail__desktop-progress .repair-status-stepper__step {
-  position: relative;
-  min-width: 0;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-  padding: 2px 4px;
-  text-align: center;
-}
-
-.repair-detail__desktop-progress .repair-status-stepper__step::after {
-  position: absolute;
-  top: 13px;
-  left: calc(50% + 18px);
-  width: calc(100% - 36px);
-  border-top: 1px dashed #b9c5d2;
-  content: "";
-}
-
-.repair-detail__desktop-progress .repair-status-stepper__step:last-child::after {
-  display: none;
-}
-
-.repair-detail__desktop-progress .repair-status-stepper__step > div:last-child {
-  width: 100%;
-}
-
-.repair-detail__desktop-progress .repair-status-stepper__step p {
-  justify-content: center;
-  font-size: var(--fs-micro) !important;
-  letter-spacing: 0.035em !important;
-}
-
-.repair-detail__desktop-progress .repair-status-stepper__step [class*="mt-1.5"] {
-  display: none;
-}
-
-.repair-detail__mobile-stage {
-  display: none;
-}
-
 .repair-detail__summary {
   display: grid;
-  grid-template-columns: 1.35fr repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1.35fr repeat(2, minmax(0, 1fr));
   margin-top: 10px;
   overflow: hidden;
   border: 1px solid var(--repair-border);
@@ -17905,28 +17853,6 @@ button.repair-metric:hover {
     padding: 13px;
   }
 
-  .repair-detail__desktop-progress {
-    display: none;
-  }
-
-  .repair-detail__mobile-stage {
-    display: block;
-  }
-
-  .repair-detail__mobile-stage > span {
-    display: block;
-    color: var(--repair-muted);
-    font-size: 11px;
-  }
-
-  .repair-detail__mobile-stage > strong {
-    display: block;
-    margin-top: 3px;
-    color: var(--repair-navy);
-    font-size: 17px;
-    font-weight: 750;
-  }
-
   .repair-detail__mobile-track {
     height: 4px;
     margin-top: 10px;
@@ -17941,17 +17867,6 @@ button.repair-metric:hover {
     height: 100%;
     border-radius: inherit;
     background: var(--repair-cyan);
-  }
-
-  .repair-detail__mobile-stage p {
-    margin-top: 9px;
-    color: #526178;
-    font-size: 12px;
-    line-height: 1.4;
-  }
-
-  .repair-detail__mobile-stage p b {
-    color: var(--repair-navy);
   }
 
   .repair-detail__summary {
@@ -31986,4 +31901,29 @@ button, [role="button"], [role="tab"] {
   .dash2-hero { padding: 1.1rem 1.15rem; }
   .dash2-kpi-stack { grid-auto-rows: auto; gap: 0.5rem; }
   .dash2 .dashboard-stat-card { min-height: 0; height: auto; padding-top: 0.7rem; padding-bottom: 0.7rem; }
+}
+
+
+/* Repair record: one-line progress (full step list on request), inline
+   reassign, compact customer tracking link. */
+.repair-detail__stage-line {
+  display: grid; grid-template-columns: auto minmax(8rem, 1fr) auto; align-items: center; gap: 0.5rem 1rem;
+}
+.repair-detail__stage-line > div > span { display: block; color: var(--repair-muted); font-size: var(--fs-micro); }
+.repair-detail__stage-line > div > strong { color: var(--repair-navy); font-size: 15px; font-weight: 750; }
+.repair-detail__stage-line .repair-detail__mobile-track { height: 4px; margin: 0; overflow: hidden; border-radius: 999px; background: #dce4ec; }
+.repair-detail__stage-line .repair-detail__mobile-track i { display: block; max-width: 100%; height: 100%; border-radius: inherit; background: var(--repair-cyan); }
+.repair-detail__stage-line > p { grid-column: 1 / -1; color: #526178; font-size: 12px; line-height: 1.4; }
+.repair-detail__stage-line > p b { color: var(--repair-navy); }
+.repair-detail__steps-toggle { grid-column: 3; grid-row: 1; color: var(--repair-cyan, var(--primary)); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.repair-detail__progress .repair-status-stepper { margin-top: 12px; }
+.repair-detail__inline-link { color: var(--primary); font-weight: 700; }
+.repair-detail__portal > summary {
+  display: flex; cursor: pointer; list-style: none; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.85rem 1rem; color: var(--text-1); font-size: 12px; font-weight: 700;
+}
+.repair-detail__portal > summary::-webkit-details-marker { display: none; }
+.repair-detail__portal-hint { color: var(--text-4); font-size: 11px; font-weight: 600; }
+@media (max-width: 767px) {
+  .repair-detail__summary > div:nth-child(3) { grid-column: 1 / -1; }
 }
