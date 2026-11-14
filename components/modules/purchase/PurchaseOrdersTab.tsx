@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
 import { usePurchase } from './PurchaseContext'
-import { PanelHeader, RecordCard } from '@/components/ui'
+import { RecordCard } from '@/components/ui'
 import { StatusBadge } from '@/components/erp'
 import { poStatusView } from '@/lib/purchase/po-status'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -85,7 +85,7 @@ export default function PurchaseOrdersTab() {
       value: typeFilter,
       allValue: 'all',
       options: [
-        { value: 'all', label: `All (${filterCounts.type.all})` },
+        { value: 'all', label: `All types (${filterCounts.type.all})` },
         { value: 'rfq', label: `RFQ (${filterCounts.type.rfq})` },
         { value: 'po', label: `PO (${filterCounts.type.po})` },
       ],
@@ -98,7 +98,7 @@ export default function PurchaseOrdersTab() {
       value: statusFilter,
       allValue: 'all',
       options: [
-        { value: 'all', label: `All (${filterCounts.status.all})` },
+        { value: 'all', label: `All statuses (${filterCounts.status.all})` },
         ...PURCHASE_LIFECYCLE_STATUSES.map(status => ({
           value: status,
           label: `${PURCHASE_STATUS_FILTER_LABELS[status]} (${filterCounts.status[status]})`,
@@ -139,16 +139,15 @@ export default function PurchaseOrdersTab() {
 
   const columns: ColumnDef<PurchaseOrder>[] = [
     {
-      key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: po => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{po.ref}</span>,
-    },
-    {
-      key: 'type', label: 'Type', priority: 1, width: '90px',
-      render: po => {
-        const isRFQ = purchaseDocType(po.status) === 'rfq'
-        return <span className="text-[10px] font-semibold" style={{ color: isRFQ ? 'var(--warning)' : 'var(--primary)' }}>{isRFQ ? 'RFQ' : 'PO'}</span>
-      },
-      exportValue: po => purchaseDocType(po.status) === 'rfq' ? 'RFQ' : 'PO',
+      key: 'ref', label: 'Number', priority: 1, width: '130px',
+      // RFQs are tagged; a purchase order needs no label.
+      render: po => (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{po.ref}</span>
+          {purchaseDocType(po.status) === 'rfq' && <span className="rounded px-1 text-[9px] font-bold" style={{ color: 'var(--warning-text)', background: 'var(--warning-bg)' }}>RFQ</span>}
+        </span>
+      ),
+      exportValue: po => `${po.ref}${purchaseDocType(po.status) === 'rfq' ? ' (RFQ)' : ''}`,
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.5fr',
@@ -196,7 +195,6 @@ export default function PurchaseOrdersTab() {
 
   return (
     <section className="card overflow-hidden purchase-directory purchase-orders-panel" aria-label="Purchase orders and requests for quotation">
-      <PanelHeader title="Purchase Orders / RFQs" count={filteredPOs.length} />
       <DataTable
         tableId="purchase_orders"
         columns={columns}

@@ -20619,93 +20619,6 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 /* Purchase overview */
-.purchase-summary {
-  display: grid;
-  width: 100%;
-  margin-bottom: 0.875rem;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--erp-line);
-  border-radius: 0.75rem;
-  background: var(--erp-surface);
-  box-shadow: 0 1px 2px rgb(16 24 40 / 0.03);
-}
-
-.purchase-summary__item {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  min-height: 6rem;
-  padding: 0.9rem 1rem;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 0.22rem;
-  border: 0;
-  border-right: 1px solid var(--erp-line);
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.purchase-summary__item:last-child {
-  border-right: 0;
-}
-
-.purchase-summary__item:hover,
-.purchase-summary__item:focus-visible {
-  background: #fafbfc;
-  outline: none;
-}
-
-.purchase-summary__item:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--erp-accent);
-}
-
-.purchase-summary__label {
-  color: var(--erp-muted);
-  font-size: var(--fs-micro);
-  font-weight: 750;
-  line-height: 1.2;
-  letter-spacing: 0.075em;
-  text-transform: uppercase;
-}
-
-.purchase-summary__value {
-  max-width: 100%;
-  color: var(--erp-brand);
-  font-size: clamp(1.2rem, 1rem + 0.55vw, 1.65rem);
-  font-weight: 790;
-  line-height: 1.1;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
-}
-
-.purchase-summary__value--money {
-  font-size: clamp(1.05rem, 0.94rem + 0.38vw, 1.4rem);
-}
-
-.purchase-summary__hint {
-  color: #8a93a3;
-  font-size: var(--fs-micro);
-  line-height: 1.35;
-}
-
-.purchase-summary__item--attention::before {
-  position: absolute;
-  top: 0.75rem;
-  left: 1rem;
-  width: 0.38rem;
-  height: 0.38rem;
-  border-radius: 999px;
-  background: var(--erp-warning);
-  content: "";
-}
-
-.purchase-summary__item--attention .purchase-summary__label {
-  padding-left: 0.75rem;
-}
 
 /* Purchase tables and mobile records */
 .purchase-directory {
@@ -21338,13 +21251,11 @@ body:has(.crm-workspace) [role="dialog"] > div {
     padding: 0.75rem;
   }
 
-  .purchase-summary,
   .operations-summary,
   .purchase-order-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .purchase-summary__item,
   .purchase-order-summary__item {
     min-height: 4.9rem;
     padding: 0.7rem 0.75rem;
@@ -21352,18 +21263,12 @@ body:has(.crm-workspace) [role="dialog"] > div {
     border-bottom: 1px solid var(--erp-line);
   }
 
-  .purchase-summary__item:nth-child(2n),
   .purchase-order-summary__item:nth-child(2n) {
     border-right: 0;
   }
 
-  .purchase-summary__item:nth-last-child(-n+2),
   .purchase-order-summary__item:nth-last-child(-n+2) {
     border-bottom: 0;
-  }
-
-  .purchase-summary__hint {
-    display: none;
   }
 
   .purchase-directory {
@@ -21614,8 +21519,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
     grid-template-columns: minmax(0, 1fr) minmax(5.5rem, auto);
   }
 
-  .purchase-order-summary__item > strong,
-  .purchase-summary__value {
+  .purchase-order-summary__item > strong {
     font-size: clamp(0.95rem, 4.6vw, 1.2rem);
   }
 
@@ -21695,19 +21599,16 @@ body:has(.crm-workspace) [role="dialog"] > div {
     justify-content: flex-start;
   }
 
-  .purchase-summary,
   .operations-summary,
   .purchase-order-summary {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .purchase-summary__item,
   .purchase-order-summary__item {
     border-right: 0;
     border-bottom: 1px solid var(--erp-line) !important;
   }
 
-  .purchase-summary__item:last-child,
   .purchase-order-summary__item:last-child {
     border-bottom: 0 !important;
   }

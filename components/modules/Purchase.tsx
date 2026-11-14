@@ -1,5 +1,7 @@
 'use client'
 import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react'
+import { newestDocumentFirst } from '@/lib/document-order'
+import { OperationalSummary } from '@/components/erp/OperationalSummary'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useFinanceStore, type Product, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
@@ -322,7 +324,7 @@ function PurchaseContent() {
   }, [urlActiveId, purchaseOrders, receipts, activeId, activeReceiptId, subView, mainView, setActiveId, setMainView])
 
   const filteredPOs = useMemo(
-    () => filterPurchaseOrders(purchaseOrders, typeFilter, statusFilter),
+    () => [...filterPurchaseOrders(purchaseOrders, typeFilter, statusFilter)].sort(newestDocumentFirst),
     [purchaseOrders, typeFilter, statusFilter],
   )
 
@@ -1396,28 +1398,15 @@ function PurchaseContent() {
       />
 
       <div className="mod-body purchase-body">
-        <section className="purchase-summary" aria-label="Purchase overview">
-          <button type="button" className="purchase-summary__item purchase-summary__item--attention" onClick={() => navigateMainView('orders')}>
-            <span className="purchase-summary__label">Needs action</span>
-            <strong className="purchase-summary__value tabular-nums">{(stats.rfqs + stats.pendingGRNs).toLocaleString()}</strong>
-            <span className="purchase-summary__hint">RFQs and receipts waiting</span>
-          </button>
-          <button type="button" className="purchase-summary__item" onClick={() => navigateMainView('orders')}>
-            <span className="purchase-summary__label">Open orders</span>
-            <strong className="purchase-summary__value tabular-nums">{stats.activePOs.toLocaleString()}</strong>
-            <span className="purchase-summary__hint">Confirmed or partially received</span>
-          </button>
-          <button type="button" className="purchase-summary__item" onClick={() => navigateMainView('receipts')}>
-            <span className="purchase-summary__label">Awaiting receipt</span>
-            <strong className="purchase-summary__value tabular-nums">{stats.pendingGRNs.toLocaleString()}</strong>
-            <span className="purchase-summary__hint">Draft GRNs to validate</span>
-          </button>
-          <button type="button" className="purchase-summary__item purchase-summary__item--money" onClick={() => navigateMainView('bills')}>
-            <span className="purchase-summary__label">Bills due</span>
-            <strong className="purchase-summary__value purchase-summary__value--money">{fmtKes(stats.unpaid)}</strong>
-            <span className="purchase-summary__hint">Outstanding vendor balance</span>
-          </button>
-        </section>
+        {/* What needs doing, as one line; only what is non-zero. */}
+        <OperationalSummary
+          items={[
+            ...(stats.rfqs > 0 ? [{ id: 'rfqs', label: `RFQ${stats.rfqs === 1 ? '' : 's'} to confirm`, value: stats.rfqs.toLocaleString(), tone: 'warning' as const, onClick: () => { navigateMainView('orders'); setTypeFilter('rfq') } }] : []),
+            ...(stats.pendingGRNs > 0 ? [{ id: 'grns', label: `receipt${stats.pendingGRNs === 1 ? '' : 's'} to validate`, value: stats.pendingGRNs.toLocaleString(), tone: 'warning' as const, onClick: () => navigateMainView('receipts') }] : []),
+            ...(stats.activePOs > 0 ? [{ id: 'open', label: `open order${stats.activePOs === 1 ? '' : 's'}`, value: stats.activePOs.toLocaleString(), onClick: () => { navigateMainView('orders'); setTypeFilter('po') } }] : []),
+            ...(stats.unpaid > 0 ? [{ id: 'bills', label: 'in bills due', value: fmtKes(stats.unpaid), onClick: () => navigateMainView('bills') }] : []),
+          ]}
+        />
 
       <TabContent active={true}>
 
