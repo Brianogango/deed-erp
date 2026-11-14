@@ -24,7 +24,7 @@ const ChatDock = dynamic(() => import('@/components/chat/ChatDock'), { ssr: fals
 const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/':            { label: 'Dashboard',      desc: 'Business overview' },
   '/dashboard':   { label: 'Dashboard',      desc: 'Business overview' },
-  '/sales':       { label: 'Selling · Sales', desc: '' },
+  '/sales':       { label: 'Sales', desc: 'Quotations, orders & customers' },
   '/crm':         { label: 'CRM',            desc: 'Customers, opportunities & pipeline' },
   '/pos':         { label: 'Point of Sale',  desc: 'Retail till & transactions' },
   '/ecommerce':   { label: 'E-commerce',     desc: 'Online store management' },
@@ -1510,7 +1510,8 @@ export default function Topbar() {
           </button>
         </div>
       )}
-      <header className={`app-topbar ${pathname?.startsWith('/sales') ? 'app-topbar--sales' : ''} ${pathname?.startsWith('/finance') || pathname?.startsWith('/accounting') ? 'app-topbar--finance' : ''}
+      {/* One top bar for every module. */}
+      <header className={`app-topbar
         flex items-center gap-2 sm:gap-3 md:gap-4 px-3 sm:px-4 md:px-5 py-0 flex-shrink-0
         border-b border-[var(--topbar-border)]
         bg-[var(--topbar-bg)] h-14
@@ -1560,7 +1561,7 @@ export default function Topbar() {
 
         {/* Page Title */}
         <div className="app-topbar-title flex-1 min-w-0">
-          <h1 className="text-sm font-bold text-[var(--text-1)]">{pathname?.startsWith('/sales') ? 'Sales' : displayTitle.label}</h1>
+          <h1 className="text-sm font-bold text-[var(--text-1)]">{displayTitle.label}</h1>
           <p className="text-[10px] hidden sm:block text-[var(--text-4)]">
             {displayTitle.desc}
           </p>

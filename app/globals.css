@@ -1481,65 +1481,6 @@
    Matches the Sales redesign: quiet white surfaces, Deed navy hierarchy,
    cyan only for active navigation/progress, semantic colour only for state. */
 
-.app-topbar--finance {
-  height: 3.75rem !important;
-  gap: 1rem !important;
-  padding-inline: 1.5rem !important;
-  box-shadow: none !important;
-}
-
-.app-topbar--finance .app-topbar-title {
-  flex: 0 0 8.5rem;
-}
-
-.app-topbar--finance .app-topbar-title h1 {
-  color: var(--navy);
-  font-size: 0.9375rem;
-  font-weight: 750;
-}
-
-.app-topbar--finance .app-topbar-title p {
-  display: none !important;
-}
-
-.app-topbar--finance .app-topbar-controls {
-  flex: 1 1 auto;
-  justify-content: flex-end;
-}
-
-.app-topbar--finance .app-topbar-controls > *:not(.app-topbar-search):not(.app-topbar-account) {
-  display: none !important;
-}
-
-.app-topbar--finance .app-topbar-search {
-  /* Stops short of the centred clock pill instead of sliding underneath it. */
-  width: clamp(8rem, 18vw, 14rem);
-  min-height: 2.25rem;
-  margin-right: auto;
-  justify-content: flex-start;
-  border-color: #e5e7eb;
-  background: #f9fafb;
-  border-radius: 0.5rem;
-  box-shadow: none;
-}
-
-.app-topbar--finance .app-topbar-search kbd {
-  display: none !important;
-}
-
-.app-topbar--finance .app-topbar-account {
-  width: 2.25rem;
-  height: 2.25rem;
-  justify-content: center;
-  padding: 0 !important;
-  border-color: #e5e7eb;
-  background: #fff;
-}
-
-.app-topbar--finance .app-topbar-account > :not(:first-child) {
-  display: none !important;
-}
-
 .finance-workspace {
   --finance-page: #f6f7f9;
   --finance-surface: #fff;
@@ -2016,17 +1957,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 }
 
 @media (min-width: 768px) and (max-width: 1199px) {
-  .app-topbar--finance {
-    padding-inline: 1.125rem !important;
-  }
-
-  .app-topbar--finance .app-topbar-title {
-    flex-basis: 7.5rem;
-  }
-
-  .app-topbar--finance .app-topbar-search {
-    width: min(15.625rem, 38vw);
-  }
 
   .finance-workspace > .mod-header {
     min-height: 6.625rem;
@@ -2071,30 +2001,6 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 }
 
 @media (max-width: 767px) {
-  .app-topbar--finance {
-    height: 3.375rem !important;
-    gap: 0.5rem !important;
-    padding-inline: 0.75rem !important;
-  }
-
-  .app-topbar--finance .app-topbar-title {
-    flex: 1 1 auto;
-  }
-
-  .app-topbar--finance .app-topbar-search {
-    width: 2.25rem;
-    min-width: 2.25rem;
-    margin-left: auto;
-    margin-right: 0;
-    justify-content: center;
-    padding: 0 !important;
-    border: 0;
-    background: transparent;
-  }
-
-  .app-topbar--finance .app-topbar-search span {
-    display: none !important;
-  }
 
   .finance-workspace > .mod-header {
     min-height: 7.875rem;
@@ -11073,65 +10979,6 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
    Quiet white chrome, one Deed-navy action, cyan only for active progress.
    These rules intentionally preserve the existing Sales DOM and handlers. */
 
-.app-topbar--sales {
-  height: 3.75rem !important;
-  gap: 1rem !important;
-  padding-inline: 1.5rem !important;
-  box-shadow: none !important;
-}
-
-.app-topbar--sales .app-topbar-title {
-  flex: 0 0 8.5rem;
-}
-
-.app-topbar--sales .app-topbar-title h1 {
-  color: var(--navy);
-  font-size: 0.9375rem;
-  font-weight: 750;
-}
-
-.app-topbar--sales .app-topbar-title p {
-  display: none !important;
-}
-
-.app-topbar--sales .app-topbar-controls {
-  flex: 1 1 auto;
-  justify-content: flex-end;
-}
-
-.app-topbar--sales .app-topbar-controls > *:not(.app-topbar-search):not(.app-topbar-account) {
-  display: none !important;
-}
-
-.app-topbar--sales .app-topbar-search {
-  /* Stops short of the centred clock pill instead of sliding underneath it. */
-  width: clamp(8rem, calc(50vw - 30.5rem), 20rem);
-  min-height: 2.25rem;
-  margin-right: auto;
-  justify-content: flex-start;
-  border-color: var(--border-lt);
-  background: #f9fafb;
-  border-radius: 0.5rem;
-  box-shadow: none;
-}
-
-.app-topbar--sales .app-topbar-search kbd {
-  display: none !important;
-}
-
-.app-topbar--sales .app-topbar-account {
-  width: 2.25rem;
-  height: 2.25rem;
-  justify-content: center;
-  padding: 0 !important;
-  border-color: var(--border-lt);
-  background: var(--bg-card);
-}
-
-.app-topbar--sales .app-topbar-account > :not(:first-child) {
-  display: none !important;
-}
-
 .sales-pilot.sales-doc {
   --sd-bg: #f6f7f9;
   --sd-surface: #ffffff;
@@ -11696,34 +11543,6 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 @media (max-width: 767px) {
-  .app-topbar--sales {
-    height: 3.375rem !important;
-    gap: 0.625rem !important;
-    padding-inline: 0.75rem !important;
-  }
-
-  .app-topbar--sales .app-topbar-title {
-    flex: 1 1 auto;
-  }
-
-  .app-topbar--sales .app-topbar-controls {
-    flex: 0 0 auto;
-  }
-
-  .app-topbar--sales .app-topbar-search {
-    width: 2.25rem;
-    min-height: 2.25rem;
-    margin: 0;
-    padding: 0 !important;
-    justify-content: center;
-    border-color: transparent;
-    background: transparent;
-  }
-
-  .app-topbar--sales .app-topbar-search span,
-  .app-topbar--sales .app-topbar-search kbd {
-    display: none !important;
-  }
 
   .sales-pilot.sales-doc .sales-workbench {
     padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px)) !important;
