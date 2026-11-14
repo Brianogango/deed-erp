@@ -1,4 +1,5 @@
 import 'server-only'
+import { isWithholdingMethod, WITHHOLDING_KINDS } from '@/lib/accounting/withholding'
 import prisma from '@/lib/prisma'
 import { createJournalEntry, persistStoreJournalEntry, reverseJournalEntry, type CreateJournalEntryInput } from '@/lib/accounting/journal-service'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel, aggregateLinesByAccount } from '@/lib/product-accounts'
@@ -324,7 +325,7 @@ export async function postInvoicePaymentJournalToPrisma(params: {
     }, { createdById: params.createdById, journalCode: 'SAL' })
   }
 
-  const bank = methodAccountLabel(params.method)
+  const bank = !isVendor && isWithholdingMethod(method) ? WITHHOLDING_KINDS[method].accountLabel : methodAccountLabel(params.method)
   const lines = isVendor
     ? [
         { account: labelForRole('ap'), description: `AP settlement: ${partner}`, debit: amount, credit: 0 },

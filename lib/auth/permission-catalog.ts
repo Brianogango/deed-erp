@@ -128,6 +128,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       route('invoices.manage', 'accounting', 'Send invoices, record their payments and supplier credits', ['director', 'admin_officer', 'finance_officer']),
       route('invoices.edit', 'accounting', 'Create and edit invoices', ['director', 'admin_officer', 'finance_officer', 'technical_lead']),
       route('invoices.payments.reverse', 'accounting', 'Reverse an invoice payment', ['director', 'finance_officer']),
+      route('invoices.credit_note', 'accounting', 'Issue a credit note on a customer invoice (work not done, overcharge)', ['director', 'finance_officer']),
+      route('customer_credits.refund', 'accounting', 'Refund a customer’s credit as money', ['director', 'finance_officer']),
       route('accounting.recurring_bills.manage', 'accounting', 'Manage recurring bills', ['director', 'finance_officer']),
       route('invoices.price_variance', 'accounting', 'Accept a bill price that differs from the order', ['director', 'finance_officer']),
       // Screen actions (were role lists)

@@ -13,6 +13,28 @@ type CreditNoteLineInput = {
   returnToStock?: boolean
 }
 
+/**
+ * A credit of an amount (no lines picked): spread over the invoice lines in
+ * order, as part-quantities, so it is still a line-level document. Null when
+ * the lines cannot carry the amount.
+ */
+export function creditLinesForAmount(
+  items: Array<{ id: string; qty: unknown; lineTotal: unknown }>,
+  amount: number,
+): CreditNoteLineInput[] | null {
+  let remaining = money(amount)
+  const lines: CreditNoteLineInput[] = []
+  for (const item of items) {
+    if (remaining <= 0.009) break
+    const lineTotal = Number(item.lineTotal)
+    if (lineTotal <= 0) continue
+    const take = Math.min(remaining, lineTotal)
+    lines.push({ invoiceItemId: item.id, qty: Number(item.qty) * (take / lineTotal), returnToStock: false })
+    remaining = money(remaining - take)
+  }
+  return remaining > 0.009 || !lines.length ? null : lines
+}
+
 export async function createCustomerCreditNote(input: {
   invoiceId: string
   creditNoteNumber: string

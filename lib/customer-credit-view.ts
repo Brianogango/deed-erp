@@ -17,6 +17,8 @@ export type CustomerCreditLike = {
   status?: string
   createdAt?: string
   notes?: string
+  /** Money paid back to the customer out of this credit. */
+  refunds?: Array<{ id: string; date: string; amount: number; method: string; reference?: string; refundedBy?: string }>
 }
 
 export function isOpenCustomerCredit(status?: string | null): boolean {

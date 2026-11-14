@@ -24,6 +24,7 @@ import {
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
 import { canCancelOrResetInvoice, canApplyCustomerCredit } from '@/lib/finance-controls'
 import { financePaymentPreview } from '@/lib/finance-payment-preview'
+import { suggestedWithholding, WITHHELD_INCOME_TAX, WITHHELD_VAT, WITHHOLDING_KINDS, type WithholdingMethod } from '@/lib/accounting/withholding'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, invoiceDueRelativeLabel, invoiceDueDateNeedsAlert, displayDocRef, creditNoteStatusLabel, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Breadcrumbs, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge } from '@/components/erp'
@@ -34,6 +35,7 @@ import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
+import { InvoiceCreditNoteModal } from '@/components/finance/InvoiceCreditNoteModal'
 import { canScheduleInvoiceDelivery, findInvoiceDeliveryJob } from '@/lib/invoice-delivery-job'
 import { financeInvoiceListPath, financeInvoicePath, parseFinanceListPage } from '@/lib/finance-invoice'
 import { isVendorCreditNote, vendorCreditSummary } from '@/lib/finance/vendor-credit-note'
@@ -118,6 +120,7 @@ export default function InvoiceDetail() {
   const invoice = invoices.find(i => i.id === id)
 
   const [showPayModal, setShowPayModal] = useState(false)
+  const [showCreditNote, setShowCreditNote] = useState(false)
   const [reversingPaymentId, setReversingPaymentId] = useState<string | null>(null)
   const [reversalReason, setReversalReason] = useState('')
   const [reversalBusy, setReversalBusy] = useState(false)
@@ -133,6 +136,10 @@ export default function InvoiceDetail() {
   const [chequeDate, setChequeDate] = useState('')
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payReference, setPayReference] = useState('')
+  // Tax the customer withheld and paid to KRA (they hand over a certificate).
+  const [whtKind, setWhtKind] = useState<WithholdingMethod | ''>('')
+  const [whtAmount, setWhtAmount] = useState('')
+  const [whtCert, setWhtCert] = useState('')
   const [payDate, setPayDate] = useState('')
   const [payPhone, setPayPhone] = useState('')
   const [darajaReady, setDarajaReady] = useState(false)
@@ -469,16 +476,23 @@ export default function InvoiceDetail() {
     if (balance <= 0) { showToast(`${docLabel} is already fully settled`, 'info'); return }
     const missing: string[] = []
     if (!payDate) missing.push(invoice.type === 'customer_invoice' ? 'Receipt date' : 'Payment date')
-    if (!payAmount || !Number.isFinite(Number(payAmount)) || Number(payAmount) <= 0) missing.push('Amount (greater than 0)')
-    if (!payMethod) missing.push(invoice.type === 'customer_invoice' ? 'Receipt method' : 'Payment method')
+    const receiving = Number(payAmount) > 0
+    if (!receiving && withheld <= 0) missing.push('Amount (greater than 0)')
+    if (receiving && !payMethod) missing.push(invoice.type === 'customer_invoice' ? 'Receipt method' : 'Payment method')
+    if (withheld > 0 && !whtCert.trim()) missing.push('Withholding certificate number')
     const byCheque = payMethod === 'cheque' && !!chequeDirectionForDoc(invoice.type)
     if (byCheque && !chequeNumber.trim()) missing.push('Cheque number')
     if (missing.length) { showToast(`Required: ${missing.join(', ')}`, 'error'); return }
     if (payMethod === 'bank_transfer' && !payBankAccountId) { showToast('Select a bank account for bank transfer payments', 'error'); return }
     const applied = financePaymentPreview(payAmount, balance).applied
     const reference = payReference.trim() || (byCheque ? `Cheque ${chequeNumber.trim()}` : payReference)
-    const paid = await registerPayment(invoice.id, applied, payMethod, payBankAccountId || undefined, reference, payDate)
-    if (paid && byCheque) {
+    const paid = receiving ? await registerPayment(invoice.id, applied, payMethod, payBankAccountId || undefined, reference, payDate) : true
+    if (paid && withheld > 0 && whtKind) {
+      const recorded = await registerPayment(invoice.id, withheld, whtKind, undefined, whtCert.trim(), payDate)
+      if (!recorded && receiving) showToast(`The receipt was recorded, but not the ${WITHHOLDING_KINDS[whtKind].label.toLowerCase()} — record it again with amount received 0`, 'error')
+      if (!recorded && !receiving) return
+    }
+    if (paid && receiving && byCheque) {
       // The same cheque goes into the cheque register, linked to this document,
       // so nobody types it in a second time.
       const direction = chequeDirectionForDoc(invoice.type)!
@@ -509,6 +523,9 @@ export default function InvoiceDetail() {
     setChequeBank('')
     setChequeDate('')
     setStkStatus('')
+    setWhtKind('')
+    setWhtAmount('')
+    setWhtCert('')
   }
 
   const handleSendStk = async () => {
@@ -641,7 +658,8 @@ export default function InvoiceDetail() {
 
   const paymentPreview = financePaymentPreview(payAmount, balance)
   const paying = paymentPreview.applied
-  const willFullyPay = paymentPreview.fullySettles
+  const withheld = whtKind ? Math.max(0, Math.min(Number(whtAmount) || 0, balance - paying)) : 0
+  const willFullyPay = paymentPreview.fullySettles || (withheld > 0 && paying + withheld >= balance - 0.009)
   const overpay = paymentPreview.isOverpayment
   const invoiceIsVat = documentHasVat(invoice)
   const titleRef = invoice.ref.startsWith('DRAFT/') ? displayDocRef(invoice.ref) : invoice.ref
@@ -688,6 +706,12 @@ export default function InvoiceDetail() {
       label: invoice.paymentBlocked ? 'Release payment block' : 'Block payment (dispute)',
       onClick: () => setInvoicePaymentBlocked(invoice.id, !invoice.paymentBlocked),
       hidden: !(docState === 'posted' && payState !== 'paid' && canManageFullFinance && !isCreditNote),
+    },
+    {
+      id: 'credit-note',
+      label: 'Credit note (work not done / overcharge)',
+      onClick: () => setShowCreditNote(true),
+      hidden: !(invoice.type === 'customer_invoice' && docState === 'posted' && userCan(currentUser, 'invoices.credit_note')),
     },
     {
       id: 'reset',
@@ -1497,6 +1521,22 @@ export default function InvoiceDetail() {
       )}
 
       {/* ── Register Payment modal ─────────────────────────────────────────── */}
+      {showCreditNote && (
+        <InvoiceCreditNoteModal
+          invoiceId={invoice.id}
+          invoiceRef={displayDocRef(invoice.ref)}
+          partnerName={invoice.partnerName}
+          balance={balance}
+          onClose={() => setShowCreditNote(false)}
+          onDone={result => {
+            setShowCreditNote(false)
+            showToast(result.customerCredit > 0
+              ? `Credit note ${result.ref} issued. ${fmtKes(result.customerCredit)} is now ${invoice.partnerName}'s credit — refund it from Customer credits or keep it for their next purchase.`
+              : `Credit note ${result.ref} issued for ${fmtKes(result.amount)}.`, 'success')
+          }}
+        />
+      )}
+
       {showPayModal && (
         <Modal title={invoice.type === 'customer_invoice' ? 'Record customer receipt' : 'Record vendor payment'} onClose={() => setShowPayModal(false)} width={460}>
           <div className="flex flex-col gap-4">
@@ -1536,13 +1576,50 @@ export default function InvoiceDetail() {
               </div>
               <div className="text-center">
                 <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">{invoice.type === 'customer_invoice' ? 'Receiving' : 'Paying'}</p>
-                <p className="text-xs font-bold font-mono text-[var(--primary)]">− {fmtKes(paying)}</p>
+                <p className="text-xs font-bold font-mono text-[var(--primary)]">− {fmtKes(paying + withheld)}</p>
+                {withheld > 0 && <p className="text-[9px] text-[var(--text-4)]">incl. {fmtKes(withheld)} withheld</p>}
               </div>
               <div className="text-right">
                 <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">After</p>
-                <p className="text-xs font-bold font-mono text-[var(--text-1)]">{fmtKes(Math.max(0, balance - paying))}</p>
+                <p className="text-xs font-bold font-mono text-[var(--text-1)]">{fmtKes(Math.max(0, balance - paying - withheld))}</p>
               </div>
             </div>
+
+            {invoice.type === 'customer_invoice' && (
+              <div className="flex flex-col gap-3 rounded-xl border border-[var(--border-lt)] p-3">
+                <Field label="Customer withheld tax">
+                  <Select
+                    value={whtKind}
+                    onChange={value => {
+                      const kind = value as WithholdingMethod | ''
+                      setWhtKind(kind)
+                      setWhtAmount(kind ? String(suggestedWithholding(kind, { ...invoice, amountPaid: invoice.amountPaid + paying })) : '')
+                    }}
+                    options={[
+                      { value: '', label: 'No — nothing withheld' },
+                      { value: WITHHELD_VAT, label: 'Withholding VAT (usually 2% before VAT)' },
+                      { value: WITHHELD_INCOME_TAX, label: 'Withholding income tax' },
+                    ]}
+                  />
+                </Field>
+                {whtKind && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Amount withheld">
+                      <Input type="number" value={whtAmount} onChange={setWhtAmount} placeholder="0.00" />
+                    </Field>
+                    <Field label="Certificate number *">
+                      <Input value={whtCert} onChange={setWhtCert} placeholder="From the KRA certificate" />
+                    </Field>
+                    <p className="col-span-2 text-[10px] text-[var(--text-4)]">
+                      {whtKind === WITHHELD_VAT
+                        ? 'Settles this part of the invoice without money in the bank; it is deducted from the VAT you owe in the return.'
+                        : 'Settles this part of the invoice without money in the bank; it is a credit against income tax.'}
+                      {' '}Leave the amount received empty if only the certificate came in.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <Field label={invoice.type === 'customer_invoice' ? 'Receipt method *' : 'Payment method *'}>
               <Select
@@ -1623,7 +1700,7 @@ export default function InvoiceDetail() {
               )}
               <button
                 className="btn-primary disabled:opacity-40"
-                disabled={!payAmount || Number(payAmount) <= 0 || balance <= 0 || stkBusy}
+                disabled={(Number(payAmount) <= 0 && withheld <= 0) || balance <= 0 || stkBusy}
                 onClick={() => { void handlePayment() }}
               >
                 {invoice.type === 'customer_invoice' ? (willFullyPay || overpay ? 'Confirm full receipt' : 'Record partial receipt') : (willFullyPay || overpay ? 'Confirm full payment' : 'Record partial payment')}

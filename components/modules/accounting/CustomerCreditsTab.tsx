@@ -7,7 +7,8 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCreditCard } from '@fortawesome/free-solid-svg-icons'
 import { EmptyState, StatusBadge } from '@/components/erp'
-import { Modal } from '@/components/ui'
+import { Modal, Field, Input, Select } from '@/components/ui'
+import { useCan } from '@/hooks/useCan'
 import { useUrlUiState } from '@/hooks/useUrlRecordId'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import {
@@ -18,8 +19,12 @@ import {
 } from '@/lib/customer-credit-view'
 
 export default function CustomerCreditsTab() {
-  const { customerCredits, invoices } = useFinanceStore()
+  const { customerCredits, invoices, bankAccounts, showToast } = useFinanceStore()
   const router = useRouter()
+  const can = useCan()
+  const [refund, setRefund] = useState({ amount: '', method: '', bankAccountId: '', reference: '', date: '' })
+  const [refunding, setRefunding] = useState(false)
+  const activeBanks = bankAccounts.filter(a => a.active)
   const [creditSearch, setCreditSearch] = useUrlUiState('creditQ', '')
   const [creditStatus, setCreditStatus] = useUrlUiState('creditStatus', 'all')
   const [selectedCredit, setSelectedCredit] = useState<CustomerCreditLike | null>(null)
@@ -115,7 +120,7 @@ export default function CustomerCreditsTab() {
           <p className="text-base font-semibold text-t1">{clientsWithCredit}</p>
         </div>
         <p className="max-w-xl self-center text-[11px] text-t3">
-          Credit from buy-backs, returns, and cancelled paid invoices. Apply it on a posted unpaid invoice.
+          Credit from buy-backs, returns, credit notes and cancelled paid invoices. Apply it on a posted unpaid invoice, or refund it.
         </p>
       </div>
 
@@ -199,9 +204,82 @@ export default function CustomerCreditsTab() {
               {selectedCredit.notes && <p className="mt-2 text-[11px] text-t2">{selectedCredit.notes}</p>}
             </div>
 
+            {(selectedCredit.refunds?.length ?? 0) > 0 && (
+              <div className="rounded-lg border border-[var(--border-lt)] px-3 py-3 text-[11px]">
+                <p className="text-[9px] uppercase tracking-wide font-semibold text-t4">Refunded</p>
+                {selectedCredit.refunds!.map(r => (
+                  <p key={r.id} className="mt-1 text-t2">
+                    {fmtDate(r.date)} · <span className="font-mono">{fmtKes(r.amount)}</span> · {r.method.replace('_', ' ')}{r.reference ? ` · ${r.reference}` : ''}{r.refundedBy ? ` · ${r.refundedBy}` : ''}
+                  </p>
+                ))}
+              </div>
+            )}
+
             <p className="text-[11px] text-t3">
-              Available credit is applied from an eligible posted customer invoice. This screen remains read-only.
+              Use the credit on a posted unpaid invoice of this customer (Apply credit on the invoice), or pay it back below.
             </p>
+
+            {can('customer_credits.refund') && (selectedCredit.status === 'available' || selectedCredit.status === 'partially_used') && (Number(selectedCredit.balance) || 0) > 0 && (
+              <div className="grid grid-cols-1 gap-3 rounded-lg border border-[var(--border-lt)] p-3 sm:grid-cols-2">
+                <p className="text-[9px] uppercase tracking-wide font-semibold text-t4 sm:col-span-2">Refund to the customer</p>
+                <Field label={`Amount (up to ${fmtKes(selectedCredit.balance)})`}>
+                  <Input type="number" value={refund.amount} onChange={v => setRefund(r => ({ ...r, amount: v }))} placeholder="0.00" />
+                </Field>
+                <Field label="Date">
+                  <Input type="date" value={refund.date} onChange={v => setRefund(r => ({ ...r, date: v }))} />
+                </Field>
+                <Field label="Paid by *">
+                  <Select value={refund.method} onChange={v => setRefund(r => ({ ...r, method: v }))} options={[
+                    { value: '', label: 'Select…' },
+                    { value: 'mpesa', label: 'M-Pesa' },
+                    { value: 'bank_transfer', label: 'Bank transfer' },
+                    { value: 'cash', label: 'Cash' },
+                    { value: 'cheque', label: 'Cheque' },
+                  ]} />
+                </Field>
+                {activeBanks.length > 0 && (
+                  <Field label="Paid from">
+                    <Select value={refund.bankAccountId} onChange={v => setRefund(r => ({ ...r, bankAccountId: v }))} options={[
+                      { value: '', label: 'Select account…' },
+                      ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id })),
+                    ]} />
+                  </Field>
+                )}
+                <div className="sm:col-span-2">
+                  <Field label="Reference">
+                    <Input value={refund.reference} onChange={v => setRefund(r => ({ ...r, reference: v }))} placeholder="M-Pesa code, cheque no…" />
+                  </Field>
+                </div>
+                <div className="flex justify-end sm:col-span-2">
+                  <button
+                    type="button"
+                    className="btn-primary text-[11px] disabled:opacity-40"
+                    disabled={refunding || !(Number(refund.amount) > 0) || !refund.method}
+                    onClick={async () => {
+                      setRefunding(true)
+                      try {
+                        const res = await fetch(`/api/customer-credits/${encodeURIComponent(String(selectedCredit.id))}/refund`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ amount: Number(refund.amount), method: refund.method, bankAccountId: refund.bankAccountId || undefined, reference: refund.reference || undefined, date: refund.date || undefined }),
+                        })
+                        const data = await res.json().catch(() => null) as { error?: string; refunded?: number; balance?: number } | null
+                        if (!res.ok) throw new Error(data?.error || `Refund failed (${res.status})`)
+                        showToast(`Refunded ${fmtKes(data?.refunded ?? 0)} to ${selectedCredit.customerName || 'the customer'}`, 'success')
+                        setRefund({ amount: '', method: '', bankAccountId: '', reference: '', date: '' })
+                        setSelectedCredit(null)
+                      } catch (err) {
+                        showToast(err instanceof Error ? err.message : 'Refund failed', 'error')
+                      } finally {
+                        setRefunding(false)
+                      }
+                    }}
+                  >
+                    {refunding ? 'Refunding…' : 'Record refund'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2">
               {selectedCredit.customerId && (

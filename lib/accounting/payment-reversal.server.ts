@@ -1,4 +1,5 @@
 import 'server-only'
+import { WITHHELD_VAT } from '@/lib/accounting/withholding'
 
 import prisma from '@/lib/prisma'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
@@ -93,6 +94,10 @@ export async function reverseInvoicePayment(params: {
       data: { isVoided: true, voidedAt: now, voidedById: params.actor.id, voidReason: reason.slice(0, 500) },
     })
     await tx.paymentAllocation.updateMany({ where: { paymentId: fresh.id, reversedAt: null }, data: { reversedAt: now } })
+    // Withholding VAT on this payment leaves the VAT return with it.
+    if (String(fresh.notes ?? '').includes(`method:${WITHHELD_VAT}`)) {
+      await tx.taxTransaction.deleteMany({ where: { sourceType: 'payment_withholding', sourceId: fresh.id } })
+    }
 
     const invoiceIds = [...new Set([...fresh.allocations.map(a => a.invoiceId), ...(fresh.invoiceId ? [fresh.invoiceId] : [])])]
     const amountPaidByInvoice: Record<string, number> = {}

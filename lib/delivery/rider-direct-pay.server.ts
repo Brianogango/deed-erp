@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { loadAppState, loadAppStateForWrite, notifyStoreKeysChanged, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
+import { addCustomerCreditBalance } from '@/lib/accounting/customer-credit-balance.server'
 import { computeInvoiceLineMoney, computeInvoiceTotals } from '@/lib/finance-invoice'
 import { updateDeliveryJob } from './rider-portal.server'
 import { deliveryLineCut, isDeliveryChargeLine, needsOffBooksFix, riderPayForJob } from './rider-direct-pay'
@@ -112,23 +113,11 @@ async function creditPostedLine(job: Record<string, any>, invoice: InvoiceWithIt
   const result = await createCustomerCreditNote({ invoiceId: invoice.id, creditNoteNumber: ref, lines: [{ invoiceItemId: item.id, qty: cut.qty }], reason, actorId })
 
   // Already paid to us in full: the credit is the customer's, to refund or use.
-  if (result.customerCredit > 0) {
-    await withAppStateKeyLock('deed_customerCredits', async () => {
-      const fresh = await loadAppStateForWrite(['deed_customerCredits'])
-      const list = Array.isArray(fresh.deed_customerCredits) ? fresh.deed_customerCredits as any[] : []
-      if (list.some(c => c?.ref === result.ref)) return
-      list.unshift({
-        id: randomUUID(), ref: result.ref,
-        customerId: invoice.clientId, customerName: invoice.client?.name ?? job.customerName ?? '',
-        sourceType: 'invoice', sourceInvoiceId: invoice.id, sourceInvoiceRef: invoice.invoiceNumber,
-        amount: result.customerCredit, balance: result.customerCredit, status: 'available',
-        createdAt: new Date().toISOString(), createdBy: actorName,
-        notes: `${reason}. The customer had already paid it to us — refund it or keep it as credit.`,
-        applications: [],
-      })
-      await saveStoreKeys({ deed_customerCredits: JSON.stringify(list) })
-    })
-  }
+  await addCustomerCreditBalance({
+    ref: result.ref, customerId: invoice.clientId, customerName: invoice.client?.name ?? job.customerName ?? '',
+    sourceInvoiceId: invoice.id, sourceInvoiceRef: invoice.invoiceNumber, amount: result.customerCredit, createdBy: actorName,
+    notes: `${reason}. The customer had already paid it to us — refund it or keep it as credit.`,
+  })
   return { kind: 'credit_note', invoiceId: invoice.id, invoiceRef: invoice.invoiceNumber, creditNoteRef: result.ref, amount: result.amount, customerCredit: result.customerCredit }
 }
 

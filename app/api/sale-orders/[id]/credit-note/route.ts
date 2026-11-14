@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { withApiErrorHandling, requirePermission } from '@/lib/auth/api'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
-import { createCustomerCreditNote } from '@/lib/accounting/credit-note-service'
+import { createCustomerCreditNote, creditLinesForAmount } from '@/lib/accounting/credit-note-service'
 
 export async function POST(
   request: NextRequest,
@@ -52,19 +52,9 @@ export async function POST(
     // Compatibility for the old amount-only UI: convert the amount into a
     // proportional line credit, but still persist a real line-level document.
     if (!lines.length && Number(body.amount) > 0) {
-      let remaining = Math.round(Number(body.amount) * 100) / 100
-      for (const item of invoice.items) {
-        if (remaining <= 0.009) break
-        const lineTotal = Number(item.lineTotal)
-        if (lineTotal <= 0) continue
-        const take = Math.min(remaining, lineTotal)
-        const ratio = take / lineTotal
-        lines.push({ invoiceItemId: item.id, qty: Number(item.qty) * ratio, returnToStock: false })
-        remaining = Math.round((remaining - take) * 100) / 100
-      }
-      if (remaining > 0.009) {
-        return NextResponse.json({ error: 'Credit amount exceeds eligible invoice lines' }, { status: 409 })
-      }
+      const spread = creditLinesForAmount(invoice.items, Number(body.amount))
+      if (!spread) return NextResponse.json({ error: 'Credit amount exceeds eligible invoice lines' }, { status: 409 })
+      lines = spread.map(l => ({ ...l, returnToStock: false }))
     }
     if (!lines.length || lines.some(l => !l.invoiceItemId || !Number.isFinite(l.qty) || l.qty <= 0)) {
       return NextResponse.json({ error: 'Credit note requires valid invoice line quantities' }, { status: 400 })

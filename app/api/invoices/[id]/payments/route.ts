@@ -17,6 +17,8 @@ import { BankAccountRefError, cashLabelForBankAccount } from '@/lib/accounting/b
 import { invoiceDocumentType } from '@/lib/accounting/invoice-document-type'
 import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { PAID_TO_RIDER, RIDER_FEE_ACCOUNTS, riderFeeAccount } from '@/lib/delivery/rider-direct-pay'
+import { isWithholdingMethod, WITHHELD_VAT, WITHHOLDING_KINDS } from '@/lib/accounting/withholding'
+import { ensureTemplateAccounts } from '@/lib/accounting/ensure-template-accounts'
 
 
 // A DB status is payable when it represents a validated (posted) AR document.
@@ -162,14 +164,24 @@ export async function POST(
     const riderAccount = isPaidToRider
       ? riderFeeAccount((await prisma.accountCode.findMany({ where: { code: { in: RIDER_FEE_ACCOUNTS.map(a => a.code) }, isActive: true }, select: { code: true } })).map(a => a.code))
       : null
-    let cashAccountLabel = riderAccount ? riderAccount.label : isCreditApplication
+    // The customer withheld tax and paid it to KRA (certificate number as the
+    // reference): it settles the receivable against a tax credit, no cash.
+    const withheld = !isBill && isWithholdingMethod(method) ? WITHHOLDING_KINDS[method] : null
+    if (isWithholdingMethod(method) && isBill) {
+      return NextResponse.json({ error: 'Withholding is recorded on customer invoices only' }, { status: 422 })
+    }
+    if (withheld && !String(reference || '').trim()) {
+      return NextResponse.json({ error: 'Enter the withholding certificate number' }, { status: 422 })
+    }
+    if (withheld) await ensureTemplateAccounts([withheld.accountCode])
+    let cashAccountLabel = withheld ? withheld.accountLabel : riderAccount ? riderAccount.label : isCreditApplication
       ? labelForRole('customer_credits')
       : method === 'bank_transfer'
         ? labelForRole('bank_absa')
         : labelForRole('cash_mobile')
     // A credit application is never re-pointed at a bank GL, whatever the
     // caller sent as bankAccountId.
-    if (!isCreditApplication && !isPaidToRider && bankAccountId) {
+    if (!isCreditApplication && !isPaidToRider && !withheld && bankAccountId) {
       try {
         cashAccountLabel = await cashLabelForBankAccount(prisma, bankAccountId)
       } catch (err) {
@@ -192,7 +204,7 @@ export async function POST(
       invoiceId,
       paymentType: isBill ? 'vendor_payment' : 'customer_receipt',
       partnerId: invoice.clientId,
-      bankAccountId: bankAccountId || null,
+      bankAccountId: withheld ? null : bankAccountId || null,
       currencyCode: invoice.currencyCode,
       exchangeRateToBase: Number(invoice.exchangeRateToBase || 1),
       idempotencyKey: typeof idempotencyKey === 'string' && idempotencyKey.trim()
@@ -202,11 +214,13 @@ export async function POST(
       journal: paymentId => ({
         ref: `JRN/PAY/${invoice.invoiceNumber}/${paymentId}`.slice(0, 80),
         // A credit application belongs in the general journal, not a cash book.
-        journalCode: isCreditApplication || isPaidToRider
+        journalCode: isCreditApplication || isPaidToRider || withheld
           ? 'MISC'
           : method === 'cash' || method === 'mpesa' ? 'CSH' : 'BNK',
         date: paymentDate,
-        description: `${isBill ? 'Supplier payment' : 'Customer receipt'} for ${invoice.invoiceNumber}`,
+        description: withheld
+          ? `${withheld.label} withheld by the customer on ${invoice.invoiceNumber} (certificate ${reference})`
+          : `${isBill ? 'Supplier payment' : 'Customer receipt'} for ${invoice.invoiceNumber}`,
         sourceType: 'payment',
         sourceId: paymentId,
         invoiceId,
@@ -248,6 +262,26 @@ export async function POST(
             ],
       }),
       audit: async (tx, paymentRow, allocationRows) => {
+        // Withholding VAT is deducted from the VAT we owe: the return reads it here.
+        if (method === WITHHELD_VAT) {
+          await tx.taxTransaction.create({
+            data: {
+              sourceType: 'payment_withholding',
+              sourceId: paymentRow.id,
+              sourceLineId: invoiceId,
+              direction: 'withheld',
+              taxCategory: 'withholding_vat',
+              taxRate: WITHHOLDING_KINDS[WITHHELD_VAT].defaultRatePct,
+              taxableBase: 0,
+              taxAmount: 0,
+              withholdingVat: capped,
+              taxPoint: paymentDate,
+              taxPeriod: paymentDate.toISOString().slice(0, 7),
+              transmissionStatus: 'not_applicable',
+              inputClaimEligible: false,
+            },
+          })
+        }
         await writeFinancialAuditInTx(tx, {
           userId: actor.id,
           action: 'record_invoice_payment',
@@ -293,7 +327,7 @@ export async function POST(
     // Automation #2: customer payment confirmation (email + WhatsApp when phone exists).
     // Never fail the payment if messaging fails. Skip on idempotent retries above.
     // A supplier is not sent a "we received your payment" message.
-    if (!result.idempotent && !isBill && !silent) try {
+    if (!result.idempotent && !isBill && !silent && !withheld) try {
       const { notifyCustomerPaymentReceived } = await import('@/lib/finance/payment-receipt-notify')
       await notifyCustomerPaymentReceived({
         invoiceId,

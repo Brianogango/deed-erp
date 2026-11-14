@@ -22,6 +22,7 @@ import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { PAID_TO_RIDER, riderFeeAccount, riderPayForJob } from '@/lib/delivery/rider-direct-pay'
+import { isWithholdingMethod, WITHHOLDING_KINDS } from '@/lib/accounting/withholding'
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
@@ -1454,6 +1455,8 @@ interface CustomerCredit {
   createdAt: string
   createdBy: string
   notes?: string
+  /** Money paid back to the customer out of this credit (server: /api/customer-credits/[id]/refund). */
+  refunds?: Array<{ id: string; date: string; amount: number; method: string; reference?: string; bankAccountId?: string; journalRef?: string; refundedBy?: string }>
   applications: {
     invoiceId: string
     invoiceRef: string
@@ -15024,8 +15027,11 @@ const storeCtx: AppState = {
       const capped = Math.min(amount, balance)
       const paymentId = crypto.randomUUID()
       const paidToRider = method === PAID_TO_RIDER && inv.type !== 'vendor_bill'
+      const withheld = isWithholdingMethod(method) && inv.type !== 'vendor_bill' ? WITHHOLDING_KINDS[method] : null
+      if (isWithholdingMethod(method) && !withheld) { showToast('Withholding is recorded on customer invoices only', 'error'); return false }
+      if (withheld && !reference?.trim()) { showToast('Enter the withholding certificate number', 'error'); return false }
       const journal = buildInvoicePaymentJournal(inv, capped, method, bankAccountId, paymentDate, paymentId,
-        paidToRider ? riderFeeAccount(accounts.map(a => a.code)).label : undefined)
+        withheld ? withheld.accountLabel : paidToRider ? riderFeeAccount(accounts.map(a => a.code)).label : undefined)
       if (journalEntries.some(j => j.ref === journal.ref)) {
         showToast('This payment journal was already posted', 'info'); return false
       }
@@ -15036,7 +15042,7 @@ const storeCtx: AppState = {
         amount: capped,
         method: method || 'cash',
         reference: reference || undefined,
-        bankAccountId: paidToRider ? undefined : bankAccountIdForMethod(method, bankAccountId),
+        bankAccountId: paidToRider || withheld ? undefined : bankAccountIdForMethod(method, bankAccountId),
         recordedBy: actor?.name || 'Finance',
       }
       const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
@@ -15059,7 +15065,7 @@ const storeCtx: AppState = {
             paymentMethod: method || 'cash',
             reference: reference || undefined,
             paidAt: paymentDate,
-            bankAccountId,
+            bankAccountId: withheld ? undefined : bankAccountId,
             idempotencyKey: paymentId,
           }),
         })

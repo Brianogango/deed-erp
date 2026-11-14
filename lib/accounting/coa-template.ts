@@ -140,6 +140,8 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
 
   a.push(
     { code: '1150', name: 'VAT Input', type: 'asset', group: 'Receivables - Tax', subGroup: 'VAT', balance: 0, notes: 'Input VAT recoverable on vendor bills' },
+    { code: '1151', name: 'VAT Withheld by Customers', type: 'asset', group: 'Receivables - Tax', subGroup: 'VAT', balance: 0, notes: 'Withholding VAT customers paid to KRA for us (certificates); deducted from VAT payable in the return' },
+    { code: '1152', name: 'Withholding Tax Credits', type: 'asset', group: 'Receivables - Tax', subGroup: 'Income Tax', balance: 0, notes: 'Withholding income tax customers deducted (certificates); credited against income tax' },
     { code: '1200', name: 'Inventory', type: 'asset', group: 'Inventory - Closing', subGroup: 'Finished Products', balance: 0 },
     // PPE cost + accumulated depreciation + intangibles
     { code: '1701', name: 'Computer & Accessories', type: 'asset', group: 'PPE - Cost', subGroup: 'Cost', balance: 0 },
