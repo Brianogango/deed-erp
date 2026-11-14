@@ -118,7 +118,7 @@ function linesOf(inv: DbInvoice, screen: Row | undefined) {
   })
 }
 
-export function toScreenInvoice(inv: DbInvoice, screen?: Row, postedByName?: string): Row {
+function toScreenInvoice(inv: DbInvoice, screen?: Row, postedByName?: string): Row {
   const { active, voided } = paymentsOf(inv)
   // A document from before the payments table keeps its listed payments for display.
   const payments = active.length || voided.length ? active : (Array.isArray(screen?.payments) ? screen!.payments : [])

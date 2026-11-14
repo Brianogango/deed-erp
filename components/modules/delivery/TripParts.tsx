@@ -27,7 +27,7 @@ export const emptyItem = (direction: 'out' | 'in') => ({ key: key(), direction, 
 /** Drop off hands items over, collect brings them back; an exchange line says which. */
 const directionFor = (kind: StopKind, d: 'out' | 'in') => (kind === 'drop' ? 'out' : kind === 'collect' ? 'in' : d)
 
-export function stopsToDrafts(stops: Stop[]): StopDraft[] {
+function stopsToDrafts(stops: Stop[]): StopDraft[] {
   return stops.map(s => ({
     key: s.id, kind: s.kind, address: s.address, contactName: s.contactName ?? '', contactPhone: s.contactPhone ?? '', notes: s.notes ?? '',
     items: s.items.filter(i => !i.unplanned).map(i => ({ key: i.id, direction: i.direction, description: i.description, serial: i.serial ?? '', qty: String(i.qty) })),

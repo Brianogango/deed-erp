@@ -37,7 +37,7 @@ export const BUILT_IN_ROLE_LABELS: Record<UserRole, string> = {
   technician: 'Technician',
 }
 
-export const builtInRoleId = (role: UserRole) => `builtin:${role}`
+const builtInRoleId = (role: UserRole) => `builtin:${role}`
 
 /** The eight original roles, expressed as permission sets so they can be viewed and copied. */
 export const BUILT_IN_ROLES: AccessRole[] = USER_ROLES.map(role => ({
@@ -55,7 +55,7 @@ export const BUILT_IN_ROLES: AccessRole[] = USER_ROLES.map(role => ({
  * Director. (Managing users can be given — to HR — within the limits of
  * userAccessChangeViolation.)
  */
-export const DIRECTOR_ONLY_PERMISSIONS = ['manageRoles'] as const
+const DIRECTOR_ONLY_PERMISSIONS = ['manageRoles'] as const
 
 /** Modules that are open to every signed-in user and so need no switch. */
 const ALWAYS_OPEN = new Set<string>(['hr', 'sops', 'sop_documents', 'expenses', 'leave', 'my_documents'])

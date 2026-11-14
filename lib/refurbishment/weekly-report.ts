@@ -80,11 +80,11 @@ export const partsCost = (job: Pick<ReportJob, 'partsNeeded'>) =>
   Math.round(job.partsNeeded.reduce((s, p) => s + (Number(p.estimatedCost) || 0) * (Number(p.qty) || 0), 0))
 
 /** Parts the job is still waiting for (asked for, on order) — the usual reason a machine sits. */
-export const partsWaiting = (job: Pick<ReportJob, 'partsNeeded'>) =>
+const partsWaiting = (job: Pick<ReportJob, 'partsNeeded'>) =>
   job.partsNeeded.filter(p => p.status === 'requested' || p.status === 'ordered')
 
 /** Where an open job stands, in words. */
-export function pendingStage(job: ReportJob): string {
+function pendingStage(job: ReportJob): string {
   if (job.status === 'queued') return job.assignedTechnicianName ? 'Queued (restored)' : 'Waiting for a technician'
   if (job.identityPending) return 'Waiting for identification'
   if (partsWaiting(job).length) return 'Waiting for parts'

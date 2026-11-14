@@ -37,11 +37,6 @@ export function auditAreasFor(viewer: Viewer): 'all' | Set<AuditArea> {
   return new Set(AUDIT_AREAS.filter(area => userCan(viewer, `audit.view.${area}`)))
 }
 
-export const canReadAuditArea = (viewer: Viewer, area: AuditArea) => {
-  const areas = auditAreasFor(viewer)
-  return areas === 'all' || areas.has(area)
-}
-
 /** The keys of a save this viewer may see; empty when the whole entry is outside their areas. */
 export function visibleAuditKeys(keys: readonly string[] | undefined, areas: 'all' | Set<AuditArea>): string[] {
   const list = keys ?? []

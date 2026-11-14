@@ -78,7 +78,7 @@ export type SaleForWarranty = {
   lines: Array<{ serialId?: string; productId: string; productName?: string }>
 }
 
-export function toDocWarranty(w: WarrantyRow): DocWarranty {
+function toDocWarranty(w: WarrantyRow): DocWarranty {
   return {
     id: w.id, ref: w.ref, customerId: w.customerId, customerName: w.customerName,
     productName: w.productName, serialNumber: w.serialNumber,

@@ -2,7 +2,7 @@ import { userCan } from '@/lib/auth/can'
 import { isDirector } from '@/lib/auth/roles'
 
 /** Stages at which a repair can be (re)assigned to a technician. */
-export const ASSIGNABLE_REPAIR_STATUSES = ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready']
+const ASSIGNABLE_REPAIR_STATUSES = ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready']
 
 /**
  * Who may assign a repair, and when. One rule for the job page and the list.

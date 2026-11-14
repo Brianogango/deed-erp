@@ -22,7 +22,7 @@ function pick(row: Row, fields: readonly string[]): Row {
   return out
 }
 
-export function leanSaleOrder(order: Row): Row {
+function leanSaleOrder(order: Row): Row {
   const lean = pick(order, ORDER_FIELDS)
   lean.lines = (Array.isArray(order.lines) ? order.lines : []).map((line: Row) => pick(line ?? {}, LINE_FIELDS))
   return lean

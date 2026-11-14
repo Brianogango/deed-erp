@@ -10,12 +10,12 @@
 export type ChequeDirection = 'received' | 'given'
 export type ChequeStatus = 'pending' | 'deposited' | 'cleared' | 'bounced' | 'cancelled'
 
-export const CHEQUE_DIRECTIONS: ChequeDirection[] = ['received', 'given']
+const CHEQUE_DIRECTIONS: ChequeDirection[] = ['received', 'given']
 export const CHEQUE_STATUSES: ChequeStatus[] = ['pending', 'deposited', 'cleared', 'bounced', 'cancelled']
 
 /** Roles that can see and work the register (and receive its reminders). */
 /** In Kenya a cheque is stale six months after the date written on it. */
-export const CHEQUE_STALE_MONTHS = 6
+const CHEQUE_STALE_MONTHS = 6
 
 export const STATUS_LABEL: Record<ChequeDirection, Record<ChequeStatus, string>> = {
   received: { pending: 'Held', deposited: 'Deposited', cleared: 'Cleared', bounced: 'Bounced', cancelled: 'Cancelled' },
@@ -36,7 +36,7 @@ export function canMoveTo(from: ChequeStatus, to: ChequeStatus): boolean {
 }
 
 /** A cheque still waiting on someone: not banked/presented, not closed. */
-export function isOpenCheque(status: ChequeStatus): boolean {
+function isOpenCheque(status: ChequeStatus): boolean {
   return status === 'pending'
 }
 

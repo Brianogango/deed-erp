@@ -52,7 +52,7 @@ export type ClaimPlan = {
   uncertain?: boolean
 }
 
-export function journalKind(ref: string): { kind: JournalKind; claimRef: string } | null {
+function journalKind(ref: string): { kind: JournalKind; claimRef: string } | null {
   if (ref.startsWith('JRN/EXPPAY/')) return { kind: 'payment', claimRef: ref.slice('JRN/EXPPAY/'.length) }
   if (ref.startsWith('JRN/RIM/')) return { kind: 'reimbursement', claimRef: ref.slice('JRN/RIM/'.length) }
   if (ref.startsWith('JRN/EXP/')) return { kind: 'approval', claimRef: ref.slice('JRN/EXP/'.length) }
@@ -60,7 +60,7 @@ export function journalKind(ref: string): { kind: JournalKind; claimRef: string 
 }
 
 /** The journals a claim in this status should have. */
-export function requiredJournals(claim: Pick<PlanClaim, 'status' | 'paymentMethod'>): JournalKind[] {
+function requiredJournals(claim: Pick<PlanClaim, 'status' | 'paymentMethod'>): JournalKind[] {
   if (claim.status === 'approved') return ['approval']
   if (claim.status === 'paid') return ['approval', 'payment']
   if (claim.status === 'reimbursed') return ['approval', 'reimbursement']

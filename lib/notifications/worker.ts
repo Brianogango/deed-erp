@@ -322,7 +322,7 @@ async function deadLetter(delivery: any, reason: string) {
  * WhatsApp setup does not go unnoticed. Bad addresses are not a provider
  * failure, and the alert never reports on itself.
  */
-export async function reportIntegrationFailure(channel: string, eventType: string, error: string, errorCode?: string | null) {
+async function reportIntegrationFailure(channel: string, eventType: string, error: string, errorCode?: string | null) {
   if (!['email', 'sms', 'whatsapp'].includes(channel)) return
   if (eventType === 'system.integration_failure') return
   if (errorCode === 'missing_destination') return

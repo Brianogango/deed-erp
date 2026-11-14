@@ -30,7 +30,7 @@ export function useCompactViewport(query: string = COMPACT_PICKER_QUERY): boolea
  * resizes-content) the layout viewport shrinks. `keyboardInset` is how far the
  * bottom of the visible area sits above the layout viewport's bottom.
  */
-export function useVisibleViewport(active: boolean) {
+function useVisibleViewport(active: boolean) {
   const [state, setState] = useState({ height: 0, keyboardInset: 0 })
   useEffect(() => {
     if (!active || typeof window === 'undefined') return

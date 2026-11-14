@@ -22,7 +22,7 @@ export type ReconfigTransactionType = (typeof RECONFIG_TRANSACTION_TYPES)[number
  * Bench jobs (pull / swap / add) write `completed` in one post and skip the
  * middle states.
  */
-export const RECONFIG_STATUSES = [
+const RECONFIG_STATUSES = [
   'draft',
   'pending_stock_check',
   'components_reserved',
@@ -213,16 +213,6 @@ export interface DiffResult {
   proposed: DeviceConfigFields
   issues: CompatibilityIssue[]
 }
-
-export const ACTIVE_RECONFIG_STATUSES: ReconfigStatus[] = [
-  'draft',
-  'pending_stock_check',
-  'components_reserved',
-  'pending_approval',
-  'approved',
-  'in_progress',
-  'pending_qa',
-]
 
 export const TRANSACTION_TYPE_LABELS: Record<ReconfigTransactionType, string> = {
   downgrade_for_sale: 'Downgrade for sale',

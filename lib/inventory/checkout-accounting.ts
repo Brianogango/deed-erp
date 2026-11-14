@@ -11,7 +11,7 @@
 export type CheckoutBookedOutcome = 'consumed' | 'missing'
 
 /** 6301 direct repair costs; 6599 other operating expenses; 6306 inventory write-off. */
-export const CHECKOUT_EXPENSE_BY_PURPOSE: Record<string, { code: string; text: string }> = {
+const CHECKOUT_EXPENSE_BY_PURPOSE: Record<string, { code: string; text: string }> = {
   Repair: { code: '6301', text: 'Parts consumed on repair' },
   Refurbishment: { code: '6301', text: 'Parts consumed on refurbishment' },
   Testing: { code: '6599', text: 'Stock consumed in testing' },
@@ -19,7 +19,7 @@ export const CHECKOUT_EXPENSE_BY_PURPOSE: Record<string, { code: string; text: s
   Other: { code: '6599', text: 'Stock consumed' },
 }
 
-export const CHECKOUT_MISSING_EXPENSE = { code: '6306', text: 'Checkout stock missing' }
+const CHECKOUT_MISSING_EXPENSE = { code: '6306', text: 'Checkout stock missing' }
 
 export function checkoutExpenseFor(outcome: CheckoutBookedOutcome, purpose: string): { code: string; text: string } {
   if (outcome === 'missing') return CHECKOUT_MISSING_EXPENSE

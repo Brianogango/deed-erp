@@ -3,7 +3,7 @@
  * everything received is not "partially received": the goods went back.
  */
 
-export const PO_STATUS_LABEL: Record<string, string> = {
+const PO_STATUS_LABEL: Record<string, string> = {
   draft: 'RFQ',
   sent: 'RFQ Sent',
   confirmed: 'Purchase Order',

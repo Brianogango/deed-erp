@@ -42,7 +42,7 @@ const BUTTON: Record<NonNullable<BrandedAction['tone']>, { bg: string; fg: strin
 }
 
 /** A table-cell button: Outlook ignores padding and background on a bare link. */
-export function emailButtonHtml(action: BrandedAction): string {
+function emailButtonHtml(action: BrandedAction): string {
   const href = absoluteUrl(action.url)
   if (!href) return ''
   const c = BUTTON[action.tone || 'primary']

@@ -154,7 +154,7 @@ export function riderJobView(job: JobLike) {
  * (scheduled, or created when there is no date) are not shown to riders,
  * and their trips and weeks start there.
  */
-export const RIDER_LINK_START = '2026-10-19'
+const RIDER_LINK_START = '2026-10-19'
 
 export function onRiderLink(job: Pick<JobLike, 'scheduledDate'> & { createdAt?: string }, start = RIDER_LINK_START): boolean {
   const day = String(job.scheduledDate || job.createdAt || '').slice(0, 10)

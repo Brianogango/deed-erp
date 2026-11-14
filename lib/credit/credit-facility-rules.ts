@@ -44,7 +44,7 @@ export const MIN_PAID_TRANSACTIONS = 3
 /** Standard terms (credit application form): 30 days from invoice date. */
 export const STANDARD_TERMS_DAYS = 30
 /** Approved credit is reviewed this many months after the decision. */
-export const REVIEW_MONTHS = 12
+const REVIEW_MONTHS = 12
 
 export type DocumentKind =
   | 'application_form'

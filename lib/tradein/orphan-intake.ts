@@ -11,7 +11,7 @@
 type Any = Record<string, any>
 
 /** Screens whose serial intake should end in a trade-in record. */
-export const TRADE_IN_INTAKE_SOURCES = new Set(['buyback', 'buyback-bulk', 'exchange', 'exchange-bulk', 'donation-in', 'trade-in'])
+const TRADE_IN_INTAKE_SOURCES = new Set(['buyback', 'buyback-bulk', 'exchange', 'exchange-bulk', 'donation-in', 'trade-in'])
 
 const DAY = 86_400_000
 const time = (v: unknown) => {

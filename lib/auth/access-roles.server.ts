@@ -100,7 +100,7 @@ const toRole = (row: RoleRow): AccessRole => ({
 // picks the change up within the TTL.
 const CACHE_TTL_MS = 5_000
 let cache: { at: number; roles: Map<string, AccessRole> } | null = null
-export const clearAccessRoleCache = () => { cache = null }
+const clearAccessRoleCache = () => { cache = null }
 
 export async function getAccessRoleMap(): Promise<Map<string, AccessRole>> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.roles

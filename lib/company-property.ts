@@ -18,7 +18,7 @@ export type CompanyAssetCategory = (typeof COMPANY_ASSET_CATEGORIES)[number]
 export const COMPANY_ASSET_CLASSES = ['capital', 'expensed'] as const
 export type CompanyAssetClass = (typeof COMPANY_ASSET_CLASSES)[number]
 
-export const COMPANY_ASSET_STATUSES = [
+const COMPANY_ASSET_STATUSES = [
   'draft',
   'in_use',
   'in_storage',

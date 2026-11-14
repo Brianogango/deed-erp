@@ -44,7 +44,7 @@ export type WarrantyCandidate = Omit<WarrantyRow, 'id' | 'ref' | 'issuedAt'>
 const day = (v?: string) => (v ? String(v).slice(0, 10) : '')
 
 /** The source key of a warranty made before sources were recorded (deliveries only). */
-export const sourceKeyOf = (w: Pick<WarrantyRow, 'sourceKey' | 'deliveryId'>) => w.sourceKey || (w.deliveryId ? `delivery:${w.deliveryId}` : '')
+const sourceKeyOf = (w: Pick<WarrantyRow, 'sourceKey' | 'deliveryId'>) => w.sourceKey || (w.deliveryId ? `delivery:${w.deliveryId}` : '')
 
 /**
  * The warranties still to issue. A machine gets one per sale, only while it

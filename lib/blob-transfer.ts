@@ -80,7 +80,7 @@ async function productExists(id: string): Promise<boolean> {
  * (the screen id, exact status and product name included) is kept in
  * screen_extras so the serial reads back as the screens saved it.
  */
-export const SERIAL_COLUMN_FIELDS = ['serial', 'serialNumber', 'productId', 'barcode', 'location'] as const
+const SERIAL_COLUMN_FIELDS = ['serial', 'serialNumber', 'productId', 'barcode', 'location'] as const
 
 function serialRow(row: Record<string, unknown>) {
   const extras: Record<string, unknown> = {}

@@ -10,7 +10,7 @@ export const DOCUMENT_LAYOUT_IDS = [
 
 export type DocumentLayoutId = typeof DOCUMENT_LAYOUT_IDS[number]
 
-export const DOCUMENT_FONT_IDS = [
+const DOCUMENT_FONT_IDS = [
   'lato',
   'roboto',
   'open_sans',

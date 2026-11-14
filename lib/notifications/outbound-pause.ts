@@ -26,7 +26,7 @@ function channelPaused(own: string | undefined, env: NotificationPauseEnv): bool
   return isOn(env.NOTIFICATIONS_PAUSE_EMAIL_SMS ?? 'true')
 }
 
-export function isEmailPaused(env: NotificationPauseEnv = process.env): boolean {
+function isEmailPaused(env: NotificationPauseEnv = process.env): boolean {
   return channelPaused(env.NOTIFICATIONS_PAUSE_EMAIL, env)
 }
 

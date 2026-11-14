@@ -16,7 +16,7 @@ function barcode(code: string): string {
     : `<div class="ml-bar ml-bar-text">${esc(code)}</div>`
 }
 
-export function machineLabelHtml(v: MachineLabelView): string {
+function machineLabelHtml(v: MachineLabelView): string {
   if (v.variant === 'with_issues') {
     return `
   <div class="ml ml-internal">

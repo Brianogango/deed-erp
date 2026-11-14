@@ -20,7 +20,7 @@ export type LeadActivity = {
 /** Contact (not a note) moves a new lead on to "contacted". */
 const CONTACT_TYPES: ReadonlySet<LeadActivityType> = new Set(['call', 'email', 'whatsapp', 'meeting'])
 
-export function leadActivityList(raw: unknown): LeadActivity[] {
+function leadActivityList(raw: unknown): LeadActivity[] {
   return Array.isArray(raw) ? (raw as LeadActivity[]).filter(a => a && typeof a === 'object' && a.id) : []
 }
 

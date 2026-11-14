@@ -53,7 +53,7 @@ export function machineLabelVariant(input: Pick<MachineLabelInput, 'location' | 
 }
 
 /** "LAPTOP" from "Laptops"; "DESKTOP" from "Complete Desktops". */
-export function categoryLabel(category: string | null | undefined): string {
+function categoryLabel(category: string | null | undefined): string {
   const c = String(category ?? '').trim()
   if (/laptop/i.test(c)) return 'LAPTOP'
   if (/desktop/i.test(c)) return 'DESKTOP'

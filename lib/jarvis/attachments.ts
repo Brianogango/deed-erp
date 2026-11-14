@@ -1,9 +1,9 @@
 import type { JarvisAttachment } from './provider/types'
 
-export const DIA_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'] as const
-export const DIA_MAX_ATTACHMENTS = 4
+const DIA_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'] as const
+const DIA_MAX_ATTACHMENTS = 4
 /** Base64 characters per file (about 7.5 MB of data). */
-export const DIA_MAX_ATTACHMENT_CHARS = 10_000_000
+const DIA_MAX_ATTACHMENT_CHARS = 10_000_000
 const MAX_TOTAL_CHARS = 24_000_000
 
 /** Photos and PDFs sent with a DIA message, checked before they reach the model. */

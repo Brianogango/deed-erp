@@ -50,7 +50,7 @@ function estimateTableMinWidth(
 }
 
 /** Lists show 50 rows a page. */
-export const STANDARD_PAGE_SIZE = 50
+const STANDARD_PAGE_SIZE = 50
 
 function operationalPageSize(requested: number) {
   const safe = Math.max(1, Math.floor(Number(requested) || STANDARD_PAGE_SIZE))

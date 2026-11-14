@@ -17,7 +17,7 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 /** Kenyan numbers: 07… / 01… → 2547… / 2541… for wa.me links. */
-export function whatsappNumber(phone?: string | null): string | null {
+function whatsappNumber(phone?: string | null): string | null {
   const digits = String(phone ?? '').replace(/\D/g, '')
   if (!digits) return null
   if (digits.startsWith('0') && digits.length === 10) return `254${digits.slice(1)}`

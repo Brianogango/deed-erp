@@ -4734,7 +4734,7 @@ export function announceIssuedWarranties(out: { added?: unknown[] } | null | und
   if (typeof window === 'undefined' || !Array.isArray(out?.added) || !out.added.length) return
   window.dispatchEvent(new CustomEvent('deed:warranties-issued', { detail: out.added }))
 }
-export function requestWarrantySync() {
+function requestWarrantySync() {
   if (typeof window === 'undefined') return
   warrantySyncTimers.forEach(clearTimeout)
   const run = () => { void fetch('/api/warranties/sync', { method: 'POST' }).then(r => r.json()).then(announceIssuedWarranties).catch(() => {}) }

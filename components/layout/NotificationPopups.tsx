@@ -17,8 +17,8 @@ export interface PopupNotification {
 
 /** Pop-ups appear only for notifications that arrived this recently, so a reload or reconnect never replays old ones. */
 export const POPUP_MAX_AGE_MS = 2 * 60 * 1000
-export const POPUP_MAX_VISIBLE = 3
-export const POPUP_AUTO_DISMISS_MS = 10_000
+const POPUP_MAX_VISIBLE = 3
+const POPUP_AUTO_DISMISS_MS = 10_000
 
 const PREF_KEY = 'deed-popups'
 

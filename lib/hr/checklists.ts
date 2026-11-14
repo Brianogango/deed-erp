@@ -112,5 +112,3 @@ export function dueState(item: Pick<EmployeeChecklistItem, 'done' | 'dueDate'>, 
 }
 
 // Plain label lists, kept for places that only need the wording.
-export const ONBOARDING_ITEMS = ONBOARDING_TEMPLATES.map(t => t.label)
-export const EXIT_ITEMS = EXIT_TEMPLATES.map(t => t.label)

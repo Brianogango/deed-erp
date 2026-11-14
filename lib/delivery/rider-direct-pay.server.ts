@@ -126,7 +126,7 @@ async function creditPostedLine(job: Record<string, any>, invoice: InvoiceWithIt
  * delivery line, or by a credit note on a posted invoice. Never throws;
  * anything that stops it comes back as `pending` for the office to finish.
  */
-export async function takeDeliveryChargeOffBooks(job: Record<string, any>, amount: number, actor?: { id: string; name: string }): Promise<OffBooksResult> {
+async function takeDeliveryChargeOffBooks(job: Record<string, any>, amount: number, actor?: { id: string; name: string }): Promise<OffBooksResult> {
   try {
     if (!(amount > 0)) return { kind: 'none', note: 'no amount' }
     const found = await findDeliveryLine(job)

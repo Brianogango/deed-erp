@@ -10,7 +10,7 @@ import { mergeScreenExtras, readScreenExtras } from '@/lib/screen-extras'
  * the table has no column for are kept in screen_extras.
  */
 
-export const OPP_ACTIVITY_EXTRA_KEYS = ['subject', 'outcome', 'status', 'completedDate', 'createdByName', 'createdDate'] as const
+const OPP_ACTIVITY_EXTRA_KEYS = ['subject', 'outcome', 'status', 'completedDate', 'createdByName', 'createdDate'] as const
 
 type Row = Record<string, any>
 

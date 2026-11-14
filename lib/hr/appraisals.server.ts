@@ -13,7 +13,7 @@ async function loadRows(where: object) {
   })
 }
 
-export const toClientAppraisal = (a: Row) => ({
+const toClientAppraisal = (a: Row) => ({
   id: a.id,
   cycleId: a.cycleId,
   employeeId: a.employeeId,

@@ -1,6 +1,6 @@
 import type { HRDocument } from '@/lib/store'
 
-export const EXPIRY_WARNING_DAYS = 60
+const EXPIRY_WARNING_DAYS = 60
 
 export type DocumentExpiry = { status: 'active' | 'expiring' | 'expired'; daysLeft: number | null }
 

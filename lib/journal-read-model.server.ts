@@ -29,7 +29,7 @@ async function loadRows(where?: Prisma.JournalEntryWhereInput, take?: number) {
   })
 }
 
-export function mapJournalForScreen(e: DbJournal) {
+function mapJournalForScreen(e: DbJournal) {
   return {
     id: e.id,
     ref: e.ref,

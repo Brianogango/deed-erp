@@ -474,7 +474,7 @@ let staffFromRefusedUntil = 0
  * company's own domain (never an outside address), and not while the server
  * is known to refuse it. EMAIL_SEND_AS_STAFF=false keeps names only.
  */
-export function staffFromAddress(senderEmail: string | undefined, mailbox: Pick<MailboxConfig, 'user' | 'from'>, now = Date.now()): string | undefined {
+function staffFromAddress(senderEmail: string | undefined, mailbox: Pick<MailboxConfig, 'user' | 'from'>, now = Date.now()): string | undefined {
   const email = (senderEmail || '').trim().toLowerCase()
   if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email)) return undefined
   if (process.env.EMAIL_SEND_AS_STAFF === 'false' || now < staffFromRefusedUntil) return undefined

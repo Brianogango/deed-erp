@@ -1,6 +1,6 @@
 import { matchCatalogPhotoPack } from '@/lib/catalog-photos'
 
-export const PRODUCT_IMAGE_SLOTS = [1, 2] as const
+const PRODUCT_IMAGE_SLOTS = [1, 2] as const
 export type ProductImageSlot = (typeof PRODUCT_IMAGE_SLOTS)[number]
 export type ProductImageRole = 'hero' | 'detail'
 

@@ -124,9 +124,6 @@ export function carriedItems(job: TripJob): Array<StopItem & { stopId: string; s
   return out
 }
 
-/** Items to bring back once every stop is finished (what the office checks in). */
-export const itemsToReturn = (job: TripJob) => (stopsFinished(job) ? carriedItems(job) : [])
-
 export const stopsFinished = (job: TripJob) => jobStops(job).every(s => s.status !== 'pending')
 
 /** Cash and M-Pesa the customers paid the rider on this trip. */

@@ -22,7 +22,7 @@ const longDate = (iso: string) => {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 }
 
-export const WELCOME_BRING_LIST = [
+const WELCOME_BRING_LIST = [
   'Original national ID (or passport)',
   'KRA PIN certificate',
   'NSSF number and SHA (SHIF) number',

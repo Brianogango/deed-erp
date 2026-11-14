@@ -28,7 +28,7 @@ const isoDay = (v: Date | null | undefined) => (v ? v.toISOString().slice(0, 10)
 const roleOf = (actor: Actor) => canonicalRole(actor.role)
 
 /** Fully paid customer invoices — the payment policy's "successful transactions". */
-export async function paidTransactionCount(clientId: string): Promise<number> {
+async function paidTransactionCount(clientId: string): Promise<number> {
   const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`
     SELECT count(*) AS n FROM invoices
     WHERE client_id = ${clientId}::uuid AND document_type = 'customer_invoice'
@@ -275,7 +275,7 @@ async function notifyCreditAction(app: AppRow, action: CreditAction, actor: Acto
 // ── Documents ─────────────────────────────────────────────────────────────
 
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
-export const ALLOWED_DOCUMENT_TYPES = new Set([
+const ALLOWED_DOCUMENT_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
   'image/png',
@@ -348,7 +348,7 @@ export async function readDocument(id: string, docId: string) {
 // ── Client link (portal) ──────────────────────────────────────────────────
 
 /** How long a client link stays open. */
-export const PORTAL_LINK_DAYS = 30
+const PORTAL_LINK_DAYS = 30
 /** Statuses in which the client can still fill in and upload. */
 const CLIENT_EDITABLE = new Set(['draft', 'sent', 'info_requested'])
 /** A client can add at most this many files to one application. */
@@ -480,7 +480,7 @@ export async function portalRemoveDocument(token: string, docId: string) {
 }
 
 /** What the client must provide before submitting (Application for Credit, sections A–J). */
-export function portalSubmitBlockers(
+function portalSubmitBlockers(
   form: Record<string, any>,
   docs: Array<{ kind: string; status: string }>,
   requestedLimit?: number | null,

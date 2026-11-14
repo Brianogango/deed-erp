@@ -4,7 +4,7 @@
  * reload a deal had lost its number, contact, source, won value, lost reason
  * and linked quotations.
  */
-export const OPPORTUNITY_EXTRA_KEYS = [
+const OPPORTUNITY_EXTRA_KEYS = [
   'ref',
   'companyName',
   'contactPersonId',

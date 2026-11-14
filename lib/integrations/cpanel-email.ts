@@ -88,7 +88,7 @@ export function generateMailboxPassword(length = 16): string {
   return chars.join('')
 }
 
-export async function mailboxExists(cfg: CpanelConfig, local: string): Promise<boolean> {
+async function mailboxExists(cfg: CpanelConfig, local: string): Promise<boolean> {
   const { data } = await uapi(cfg, 'list_pops', { regex: `^${local.replace(/[.]/g, '\\.')}@`, domain: cfg.domain })
   const rows = Array.isArray(data) ? data as Array<{ email?: string; login?: string }> : []
   const want = `${local}@${cfg.domain}`

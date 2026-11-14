@@ -44,7 +44,7 @@ export const CHAT_LIMITS = { body: 4000, groupName: 80, groupMembers: 60, fileBy
 let ready: Promise<void> | null = null
 
 /** The tables, created on first use (also in database/migrations/20261110_internal_chat.sql). */
-export function ensureChatTables(): Promise<void> {
+function ensureChatTables(): Promise<void> {
   if (ready && process.env.NODE_ENV !== 'test') return ready
   ready = (async () => {
     await sql`

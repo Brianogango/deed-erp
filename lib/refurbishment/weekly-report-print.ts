@@ -12,7 +12,7 @@ function table(title: string, head: string[], rows: string[][], empty: string): 
 }
 
 /** The weekly report as a standalone printable page (print or save as PDF). */
-export function refurbWeeklyReportHtml(r: RefurbWeeklyReport, generatedBy: string): string {
+function refurbWeeklyReportHtml(r: RefurbWeeklyReport, generatedBy: string): string {
   const t = r.totals
   const tiles = [
     ['Completed', t.completed], ['Sent for retest', t.sentForRetest], ['Written off', t.writeOffValue ? `${t.writtenOff} · ${kes(t.writeOffValue)}` : t.writtenOff],

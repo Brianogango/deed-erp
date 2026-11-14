@@ -27,7 +27,7 @@ const GROUPS: string[][] = [
 
 let started = false
 
-export async function warmReadModels(): Promise<void> {
+async function warmReadModels(): Promise<void> {
   if (started) return
   started = true
   const t0 = Date.now()
@@ -56,7 +56,7 @@ export async function warmReadModels(): Promise<void> {
 }
 
 /** Tells PM2 (wait_ready) this worker may take traffic. Harmless elsewhere. */
-export function signalReady(): void {
+function signalReady(): void {
   try {
     if (typeof process.send === 'function') process.send('ready')
   } catch { /* not under PM2 */ }

@@ -59,7 +59,7 @@ export const blankProduct = () => {
   }
 }
 
-export const normalizeBarcodeSeed = (value: string) => value.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
+const normalizeBarcodeSeed = (value: string) => value.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
 export const buildProductSku = (name: string, existing: Product[] = [], salt = 0) => {
   const seed = normalizeBarcodeSeed(name).slice(0, 18) || 'PRODUCT'
   // Include salt so bulk rows generated in the same millisecond never collide.
