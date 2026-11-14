@@ -5,6 +5,8 @@ import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
 import { allocateCheque, chequeLinkedRefs, chequeLinkedType, docBalance, findDocByRef, openDocsForCheque } from '@/lib/cheques/cheque-link'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Modal } from '@/components/ui'
+import { WithholdingFields, NO_WITHHOLDING, type WithholdingEntry } from '@/components/finance/WithholdingFields'
+import { suggestedWithholding, WITHHOLDING_KINDS } from '@/lib/accounting/withholding'
 import {
   STATUS_LABEL,
   alertLabel,
@@ -347,6 +349,15 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
   const linkedTotal = useMemo(() => Math.round(linkedDocs.reduce((s, d) => s + docBalance(d), 0) * 100) / 100, [linkedDocs])
   const allocation = useMemo(() => allocateCheque(Number(form.amount) || 0, linkedDocs as any[]), [form.amount, linkedDocs])
   const [recordPayment, setRecordPayment] = useState(true)
+  // A customer who withholds tax writes the cheque for less than the invoice:
+  // the difference settles the first invoice the cheque leaves short.
+  const [wht, setWht] = useState<WithholdingEntry>(NO_WITHHOLDING)
+  const shortDoc = useMemo(
+    () => allocation.map(a => ({ doc: a.doc, left: Math.round((docBalance(a.doc) - a.amount) * 100) / 100 })).find(a => a.left > 0.009),
+    [allocation],
+  )
+  const canWithhold = form.direction === 'received' && recordPayment && !!shortDoc
+  const withheld = canWithhold && wht.kind ? Math.max(0, Math.min(Number(wht.amount) || 0, shortDoc!.left)) : 0
   const [payBankId, setPayBankId] = useState('')
   const activeBanks = bankAccounts.filter(b => b.active)
 
@@ -412,6 +423,7 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
   const alert = form.chequeDate ? chequeAlert({ status: 'pending', chequeDate: form.chequeDate }, today()) : null
 
   const save = async () => {
+    if (withheld > 0 && !wht.certificate.trim()) { showToast('Required: Withholding certificate number', 'error'); return }
     setSaving(true)
     try {
       await readJson(await fetch('/api/cheques', {
@@ -442,6 +454,11 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
         }
         if (recorded > 0) showToast(`${fmtKes(recorded)} recorded on ${allocation.filter(a => a.amount > 0 && !failed.includes(a.doc.ref)).map(a => a.doc.ref).join(', ')}`, 'success')
         if (failed.length) showToast(`The cheque is in the register, but the payment on ${failed.join(', ')} was not recorded — record it from the ${linkedDocs[0].type === 'vendor_bill' ? 'bill' : 'invoice'}`, 'error')
+        if (withheld > 0 && wht.kind && shortDoc && !failed.includes(shortDoc.doc.ref)) {
+          const kind = WITHHOLDING_KINDS[wht.kind].label
+          const done = await registerPayment(shortDoc.doc.id, withheld, wht.kind, undefined, wht.certificate.trim(), form.receivedDate || today())
+          showToast(done ? `${kind} of ${fmtKes(withheld)} recorded on ${shortDoc.doc.ref}` : `The ${kind.toLowerCase()} on ${shortDoc.doc.ref} was not recorded — record it from the invoice`, done ? 'success' : 'error')
+        }
       }
       await onSaved()
     } catch (err) {
@@ -590,6 +607,16 @@ function AddCheque({ showToast, onClose, onSaved }: { showToast: Toast; onClose:
                 <option value="">{form.direction === 'received' ? 'Bank account it will be banked into…' : 'Bank account it is drawn on…'}</option>
                 {activeBanks.map(b => <option key={b.id} value={b.id}>{b.bankName || b.name}</option>)}
               </select>
+            )}
+            {canWithhold && (
+              <div className="mt-3">
+                <p className="mb-2 text-t3">The cheque leaves {fmtKes(shortDoc!.left)} owing on {shortDoc!.doc.ref}. If the customer withheld tax, record it here.</p>
+                <WithholdingFields
+                  value={wht}
+                  onChange={setWht}
+                  suggest={kind => Math.min(shortDoc!.left, suggestedWithholding(kind, shortDoc!.doc as any))}
+                />
+              </div>
             )}
           </div>
         )}

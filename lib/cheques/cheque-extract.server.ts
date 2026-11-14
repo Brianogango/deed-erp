@@ -1,6 +1,5 @@
 import 'server-only'
-import Anthropic from '@anthropic-ai/sdk'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
+import { hasClaudeKey, readDocumentWithClaude } from '@/lib/ai/read-document.server'
 import { GoogleGenerativeAI, SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { z } from 'zod'
 import { normalizeChequeDate } from './cheque-rules'
@@ -68,24 +67,11 @@ function toResult(data: z.infer<typeof ChequeSchema>, engine: string): ChequeExt
 }
 
 async function readWithAnthropic(base64: string, mimeType: string): Promise<ChequeExtract> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const model = process.env.ANTHROPIC_DOCUMENT_MODEL || 'claude-opus-5-5'
-  const response = await client.messages.parse({
-    model,
-    max_tokens: 2000,
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/webp', data: base64 } },
-        { type: 'text', text: INSTRUCTIONS },
-      ],
-    }],
-    output_config: { format: zodOutputFormat(ChequeSchema) },
+  const { data, engine } = await readDocumentWithClaude({
+    base64, mimeType, schema: ChequeSchema, instructions: INSTRUCTIONS, maxTokens: 2000,
+    unreadable: 'The cheque could not be read — take a clearer photo or type the details in',
   })
-  if (response.stop_reason === 'refusal' || !response.parsed_output) {
-    throw Object.assign(new Error('The cheque could not be read — take a clearer photo or type the details in'), { status: 422 })
-  }
-  return toResult(response.parsed_output, model)
+  return toResult(data, engine)
 }
 
 const GEMINI_SCHEMA: ResponseSchema = {
@@ -117,7 +103,7 @@ async function readWithGemini(base64: string, mimeType: string): Promise<ChequeE
 }
 
 export async function readChequeImage(base64: string, mimeType: string): Promise<ChequeExtract> {
-  if ((process.env.ANTHROPIC_API_KEY || '').trim()) return readWithAnthropic(base64, mimeType)
+  if (hasClaudeKey()) return readWithAnthropic(base64, mimeType)
   if ((process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '').trim()) return readWithGemini(base64, mimeType)
   throw Object.assign(new Error('Scanning a cheque needs an AI key on the server (ANTHROPIC_API_KEY or GEMINI_API_KEY). Type the details in instead.'), { status: 503 })
 }

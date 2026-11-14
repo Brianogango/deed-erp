@@ -24,7 +24,8 @@ import {
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
 import { canCancelOrResetInvoice, canApplyCustomerCredit } from '@/lib/finance-controls'
 import { financePaymentPreview } from '@/lib/finance-payment-preview'
-import { suggestedWithholding, WITHHELD_INCOME_TAX, WITHHELD_VAT, WITHHOLDING_KINDS, type WithholdingMethod } from '@/lib/accounting/withholding'
+import { suggestedWithholding, WITHHOLDING_KINDS } from '@/lib/accounting/withholding'
+import { WithholdingFields, NO_WITHHOLDING, type WithholdingEntry } from '@/components/finance/WithholdingFields'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, invoiceDueRelativeLabel, invoiceDueDateNeedsAlert, displayDocRef, creditNoteStatusLabel, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Breadcrumbs, PrimaryActionButton, RecordHeader, RecordPager, SecondaryActionMenu, StatusBadge } from '@/components/erp'
@@ -136,9 +137,7 @@ export default function InvoiceDetail() {
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payReference, setPayReference] = useState('')
   // Tax the customer withheld and paid to KRA (they hand over a certificate).
-  const [whtKind, setWhtKind] = useState<WithholdingMethod | ''>('')
-  const [whtAmount, setWhtAmount] = useState('')
-  const [whtCert, setWhtCert] = useState('')
+  const [wht, setWht] = useState<WithholdingEntry>(NO_WITHHOLDING)
   const [payDate, setPayDate] = useState('')
   const [payPhone, setPayPhone] = useState('')
   const [darajaReady, setDarajaReady] = useState(false)
@@ -478,7 +477,7 @@ export default function InvoiceDetail() {
     const receiving = Number(payAmount) > 0
     if (!receiving && withheld <= 0) missing.push('Amount (greater than 0)')
     if (receiving && !payMethod) missing.push(invoice.type === 'customer_invoice' ? 'Receipt method' : 'Payment method')
-    if (withheld > 0 && !whtCert.trim()) missing.push('Withholding certificate number')
+    if (withheld > 0 && !wht.certificate.trim()) missing.push('Withholding certificate number')
     const byCheque = payMethod === 'cheque' && !!chequeDirectionForDoc(invoice.type)
     if (byCheque && !chequeNumber.trim()) missing.push('Cheque number')
     if (missing.length) { showToast(`Required: ${missing.join(', ')}`, 'error'); return }
@@ -486,9 +485,9 @@ export default function InvoiceDetail() {
     const applied = financePaymentPreview(payAmount, balance).applied
     const reference = payReference.trim() || (byCheque ? `Cheque ${chequeNumber.trim()}` : payReference)
     const paid = receiving ? await registerPayment(invoice.id, applied, payMethod, payBankAccountId || undefined, reference, payDate) : true
-    if (paid && withheld > 0 && whtKind) {
-      const recorded = await registerPayment(invoice.id, withheld, whtKind, undefined, whtCert.trim(), payDate)
-      if (!recorded && receiving) showToast(`The receipt was recorded, but not the ${WITHHOLDING_KINDS[whtKind].label.toLowerCase()} — record it again with amount received 0`, 'error')
+    if (paid && withheld > 0 && wht.kind) {
+      const recorded = await registerPayment(invoice.id, withheld, wht.kind, undefined, wht.certificate.trim(), payDate)
+      if (!recorded && receiving) showToast(`The receipt was recorded, but not the ${WITHHOLDING_KINDS[wht.kind].label.toLowerCase()} — record it again with amount received 0`, 'error')
       if (!recorded && !receiving) return
     }
     if (paid && receiving && byCheque) {
@@ -522,9 +521,7 @@ export default function InvoiceDetail() {
     setChequeBank('')
     setChequeDate('')
     setStkStatus('')
-    setWhtKind('')
-    setWhtAmount('')
-    setWhtCert('')
+    setWht(NO_WITHHOLDING)
   }
 
   const handleSendStk = async () => {
@@ -657,7 +654,7 @@ export default function InvoiceDetail() {
 
   const paymentPreview = financePaymentPreview(payAmount, balance)
   const paying = paymentPreview.applied
-  const withheld = whtKind ? Math.max(0, Math.min(Number(whtAmount) || 0, balance - paying)) : 0
+  const withheld = wht.kind ? Math.max(0, Math.min(Number(wht.amount) || 0, balance - paying)) : 0
   const willFullyPay = paymentPreview.fullySettles || (withheld > 0 && paying + withheld >= balance - 0.009)
   const overpay = paymentPreview.isOverpayment
   const invoiceIsVat = documentHasVat(invoice)
@@ -1592,39 +1589,12 @@ export default function InvoiceDetail() {
             </div>
 
             {invoice.type === 'customer_invoice' && (
-              <div className="flex flex-col gap-3 rounded-xl border border-[var(--border-lt)] p-3">
-                <Field label="Customer withheld tax">
-                  <Select
-                    value={whtKind}
-                    onChange={value => {
-                      const kind = value as WithholdingMethod | ''
-                      setWhtKind(kind)
-                      setWhtAmount(kind ? String(suggestedWithholding(kind, { ...invoice, amountPaid: invoice.amountPaid + paying })) : '')
-                    }}
-                    options={[
-                      { value: '', label: 'No — nothing withheld' },
-                      { value: WITHHELD_VAT, label: 'Withholding VAT (usually 2% before VAT)' },
-                      { value: WITHHELD_INCOME_TAX, label: 'Withholding income tax' },
-                    ]}
-                  />
-                </Field>
-                {whtKind && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Amount withheld">
-                      <Input type="number" value={whtAmount} onChange={setWhtAmount} placeholder="0.00" />
-                    </Field>
-                    <Field label="Certificate number *">
-                      <Input value={whtCert} onChange={setWhtCert} placeholder="From the KRA certificate" />
-                    </Field>
-                    <p className="col-span-2 text-[10px] text-[var(--text-4)]">
-                      {whtKind === WITHHELD_VAT
-                        ? 'Settles this part of the invoice without money in the bank; it is deducted from the VAT you owe in the return.'
-                        : 'Settles this part of the invoice without money in the bank; it is a credit against income tax.'}
-                      {' '}Leave the amount received empty if only the certificate came in.
-                    </p>
-                  </div>
-                )}
-              </div>
+              <WithholdingFields
+                value={wht}
+                onChange={setWht}
+                suggest={kind => suggestedWithholding(kind, { ...invoice, amountPaid: invoice.amountPaid + paying })}
+                hint="Leave the amount received empty if only the certificate came in."
+              />
             )}
 
             <Field label={invoice.type === 'customer_invoice' ? 'Receipt method *' : 'Payment method *'}>

@@ -1,6 +1,5 @@
 import 'server-only'
-import Anthropic from '@anthropic-ai/sdk'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
+import { hasClaudeKey, readDocumentWithClaude } from '@/lib/ai/read-document.server'
 import { GoogleGenerativeAI, SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { z } from 'zod'
 import type { InboundSourceRow } from '@/lib/inventory/inbound-import'
@@ -55,21 +54,11 @@ function toResult(data: z.infer<typeof DeliverySchema>, engine: string): Deliver
 }
 
 async function readWithAnthropic(base64: string, mimeType: string): Promise<DeliveryExtract> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const model = process.env.ANTHROPIC_DOCUMENT_MODEL || 'claude-opus-5-5'
-  const source = mimeType === 'application/pdf'
-    ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } }
-    : { type: 'image' as const, source: { type: 'base64' as const, media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/webp', data: base64 } }
-  const response = await client.messages.parse({
-    model,
-    max_tokens: 16000,
-    messages: [{ role: 'user', content: [source, { type: 'text', text: INSTRUCTIONS }] }],
-    output_config: { format: zodOutputFormat(DeliverySchema) },
+  const { data, engine } = await readDocumentWithClaude({
+    base64, mimeType, schema: DeliverySchema, instructions: INSTRUCTIONS, maxTokens: 16000,
+    unreadable: 'The document could not be read',
   })
-  if (response.stop_reason === 'refusal') throw Object.assign(new Error('The document could not be read'), { status: 422 })
-  if (response.stop_reason === 'max_tokens') throw Object.assign(new Error('The document is too long to read in one go — split it, or use the Excel template'), { status: 422 })
-  if (!response.parsed_output) throw Object.assign(new Error('The document could not be read'), { status: 422 })
-  return toResult(response.parsed_output, model)
+  return toResult(data, engine)
 }
 
 const GEMINI_SCHEMA: ResponseSchema = {
@@ -110,7 +99,7 @@ async function readWithGemini(base64: string, mimeType: string): Promise<Deliver
 }
 
 export async function readDeliveryDocument(base64: string, mimeType: string): Promise<DeliveryExtract> {
-  if ((process.env.ANTHROPIC_API_KEY || '').trim()) return readWithAnthropic(base64, mimeType)
+  if (hasClaudeKey()) return readWithAnthropic(base64, mimeType)
   if ((process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '').trim()) return readWithGemini(base64, mimeType)
   throw Object.assign(new Error('Reading PDFs and photos needs an AI key on the server (ANTHROPIC_API_KEY or GEMINI_API_KEY). Use the Excel template instead.'), { status: 503 })
 }

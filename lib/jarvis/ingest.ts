@@ -3,6 +3,8 @@ import 'server-only'
 import crypto from 'node:crypto'
 import prisma from '@/lib/prisma'
 import { loadAppState } from '@/lib/server-store'
+import { hasClaudeKey, transcribeWithClaude } from '@/lib/ai/read-document.server'
+import { prepareScanImage } from '@/lib/scan/prepare-image.server'
 
 interface SOPDocStep {
   id: string
@@ -99,12 +101,12 @@ export function htmlToPlainText(html: string): string {
 }
 
 async function extractImageText(buffer: Buffer): Promise<string | null> {
+  if (!hasClaudeKey()) return null
   try {
-    const { recognize } = await import('tesseract.js')
-    const result = await recognize(buffer, 'eng', { logger: () => undefined })
-    return result.data.text ?? null
+    const image = await prepareScanImage(buffer)
+    return (await transcribeWithClaude(image.base64, image.mimeType)) || null
   } catch (err) {
-    console.error('[jarvis] OCR extraction failed:', err)
+    console.error('[jarvis] attachment text extraction failed:', err)
     return null
   }
 }

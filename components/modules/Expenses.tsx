@@ -271,7 +271,7 @@ function ExpensesContent() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        showToast(err.error ?? 'Deed OCR could not read this receipt — fill in details manually', res.status === 422 ? 'info' : 'error')
+        showToast(err.error ?? 'The receipt could not be read — fill in details manually', res.status === 422 ? 'info' : 'error')
         return
       }
 
@@ -279,15 +279,14 @@ function ExpensesContent() {
       setForm(prev => ({
         ...prev,
         amount:      prev.amount      || (data.amount ? String(data.amount) : prev.amount),
-        // OCR only fills fields the user has not set yet.
+        // The scan only fills fields the user has not set yet.
         expenseDate: prev.expenseDate || data.date || prev.expenseDate,
         category:    prev.category || ((data.category as ExpenseCategory) ?? prev.category),
         description: prev.description || data.description || prev.description,
       }))
-      const confidence = typeof data.confidence === 'number' ? ` (${data.confidence}% confidence)` : ''
-      showToast(`Deed OCR extracted receipt details${confidence}`, 'success')
+      showToast('Receipt read — check the details before submitting', 'success')
     } catch {
-      showToast('Deed OCR could not scan this receipt — fill in details manually', 'info')
+      showToast('The receipt could not be scanned — fill in details manually', 'info')
     } finally {
       setIsScanning(false)
     }
