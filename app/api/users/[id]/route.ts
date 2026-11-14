@@ -6,6 +6,7 @@ import { userUpdateSchema, validate } from '@/lib/validation'
 import { assertPermission } from '@/lib/auth/authorization'
 import { lastDirectorViolation, diffAccess, snapshotAccess } from '@/lib/auth/access-control'
 import { recordAccessChange } from '@/lib/auth/access-audit.server'
+import { assertUserAccessChange } from '@/lib/auth/user-admin.server'
 import { getAccessRoleMap } from '@/lib/auth/access-roles.server'
 import { USER_ROLES } from '@/lib/auth/types'
 import { sendEmail } from '@/lib/integrations/email'
@@ -51,6 +52,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const existingUser = await findAuthUserById(resolvedParams.id)
     if (!existingUser) {
       throw Object.assign(new Error('User not found'), { status: 404 })
+    }
+    if (actor.id !== resolvedParams.id) {
+      const changesAccess = validated.role !== undefined || validated.modules !== undefined
+        || validated.accessRoleId !== undefined || validated.actsAsTechnician === true
+      await assertUserAccessChange(actor, existingUser, changesAccess ? {
+        role: validated.role ?? existingUser.role,
+        modules: validated.modules ?? existingUser.modules,
+        actsAsTechnician: validated.actsAsTechnician === true && !existingUser.actsAsTechnician,
+        accessRoleId: validated.accessRoleId ?? null,
+      } : undefined)
     }
 
     // Security: Prevent privilege escalation
@@ -161,6 +172,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     }
     
     const target = await findAuthUserById(resolvedParams.id)
+    if (target) await assertUserAccessChange(actor, target)
     if (target) await refuseIfLastDirector(target, { removed: true })
     const before = target ? snapshotAccess(target) : null
 
@@ -192,6 +204,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     let body: any = {}
     try { body = await request.json() } catch { /* no body */ }
     const action = body?.action as string | undefined
+    const subject = await findAuthUserById(resolvedParams.id)
+    if (subject) await assertUserAccessChange(actor, subject)
 
     if (action === 'deactivate') {
       const target = await findAuthUserById(resolvedParams.id)

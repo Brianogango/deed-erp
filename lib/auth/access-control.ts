@@ -3,6 +3,7 @@
  * the Settings screen.
  */
 import { ROLE_DEFAULT_MODULES, type ModuleId, type UserRole } from './types'
+import { isDirector as isDirectorRole } from './roles'
 
 export interface AccessSnapshot {
   role: string
@@ -69,7 +70,6 @@ export function describeAccessDiff(diff: AccessDiff): string {
 }
 
 /** Old role names that still mean Director. */
-const isDirectorRole = (role: string) => ['director', 'admin', 'super_admin'].includes(role)
 
 export const LAST_DIRECTOR_MESSAGE =
   'This is the last active Director. Make another user a Director first, otherwise nobody could manage users or settings.'
@@ -110,4 +110,43 @@ export function modulesOutsideRole(role: string, modules: readonly string[]): st
   if (isDirectorRole(role)) return []
   const normal = new Set<string>(roleDefaultModules(role))
   return modules.filter(m => !normal.has(m) && !DEFAULT_SELF_SERVICE.has(m))
+}
+
+/**
+ * What someone who manages users (manageUsers) but is not a Director may do.
+ * The Director decides what each role holds; user managers (HR) hand those
+ * roles out. They may never:
+ *  - change, reset, deactivate or delete a Director's account,
+ *  - make anyone a Director,
+ *  - give a role that itself manages users or roles,
+ *  - tick modules the chosen built-in role does not normally have, or set
+ *    "acts as technician" (both widen what the role allows).
+ * Returns the reason a change is refused, or null when it is allowed.
+ */
+export function userAccessChangeViolation(args: {
+  actor: { role?: string | null }
+  /** The account being changed (absent when creating one). */
+  target?: { role?: string | null } | null
+  /** What the account would be given. */
+  next?: {
+    role?: string | null
+    /** Ticked modules on a built-in role (a custom role brings its own). */
+    modules?: readonly string[] | null
+    actsAsTechnician?: boolean | null
+    /** The role holds manageUsers or manageRoles. */
+    grantsUserAdmin?: boolean
+  }
+}): string | null {
+  if (isDirectorRole(args.actor.role)) return null
+  if (args.target && isDirectorRole(args.target.role)) return 'Only a Director can change a Director’s account'
+  const next = args.next
+  if (!next) return null
+  if (next.role && isDirectorRole(next.role)) return 'Only a Director can make someone a Director'
+  if (next.grantsUserAdmin) return 'Only a Director can give a role that manages users or roles'
+  if (next.actsAsTechnician) return 'Only a Director can let someone act as a technician'
+  if (next.role && next.modules?.length) {
+    const extra = modulesOutsideRole(next.role, next.modules)
+    if (extra.length) return `Only a Director can open modules a role does not normally have (${extra.join(', ')})`
+  }
+  return null
 }

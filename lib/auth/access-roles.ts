@@ -23,6 +23,8 @@ export interface AccessRole {
   modules: ModuleId[]
   permissions: string[]
   builtIn: boolean
+  /** Saved by the role editor: holds exactly what it lists (no base-role fallback). */
+  exactPermissions?: boolean
 }
 
 export const BUILT_IN_ROLE_LABELS: Record<UserRole, string> = {
@@ -49,8 +51,12 @@ export const BUILT_IN_ROLES: AccessRole[] = USER_ROLES.map(role => ({
   builtIn: true,
 }))
 
-/** Never grantable to a custom role: it lets the holder create users and roles. */
-export const DIRECTOR_ONLY_PERMISSIONS = ['manageUsers'] as const
+/**
+ * Never grantable to a custom role: deciding what roles may do stays with the
+ * Director. (Managing users can be given — to HR — within the limits of
+ * userAccessChangeViolation.)
+ */
+export const DIRECTOR_ONLY_PERMISSIONS = ['manageRoles'] as const
 
 /** Modules that are open to every signed-in user and so need no switch. */
 const ALWAYS_OPEN = new Set<string>(['hr', 'sops', 'sop_documents', 'expenses', 'leave', 'my_documents'])

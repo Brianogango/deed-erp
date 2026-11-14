@@ -9,6 +9,7 @@ import { buildCredentialMessage, sendMultiChannelMessage } from '@/lib/integrati
 import { generateTemporaryPassword } from '@/lib/auth/temporary-credentials'
 import { snapshotAccess } from '@/lib/auth/access-control'
 import { recordAccessChange } from '@/lib/auth/access-audit.server'
+import { assertUserAccessChange } from '@/lib/auth/user-admin.server'
 
 const sanitizeUsername = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9_.-]+/g, '.').replace(/^\.+|\.+$/g, '')
 
@@ -66,6 +67,12 @@ export async function POST(request: Request) {
     }
 
     const requested = normalizeCreateUserInput(body)
+    await assertUserAccessChange(actor, null, {
+      role: requested.role,
+      modules: requested.modules,
+      actsAsTechnician: requested.actsAsTechnician,
+      accessRoleId: requested.accessRoleId,
+    })
     if (!requested.employeeId) {
       throw Object.assign(new Error('Select an active HR employee before creating a system user'), { status: 400 })
     }

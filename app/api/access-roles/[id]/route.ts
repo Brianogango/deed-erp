@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    const actor = await requirePermission('manageUsers')
+    const actor = await requirePermission('manageRoles')
     const { id } = await params
     const before = await getCustomRole(id)
     if (!before) return NextResponse.json({ error: 'Role not found. Built-in roles cannot be changed.' }, { status: 404 })
@@ -35,7 +35,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withApiErrorHandling(async () => {
-    const actor = await requirePermission('manageUsers')
+    const actor = await requirePermission('manageRoles')
     const { id } = await params
     const before = await getCustomRole(id)
     if (!before) return NextResponse.json({ error: 'Role not found. Built-in roles cannot be deleted.' }, { status: 404 })

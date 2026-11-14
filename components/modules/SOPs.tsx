@@ -12,7 +12,7 @@ import { PrimaryActionButton } from '@/components/erp'
 import { Fa, faBullseye, faCircleCheck, faCircleXmark, faTriangleExclamation, faUserSlash, faPlus } from '@/components/icons'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
-import { canManageHRRole } from '@/lib/auth/access'
+import { userCan } from '@/lib/auth/can'
 import {
   currentTargetPeriodKey,
   nairobiDateKey,
@@ -191,9 +191,9 @@ function SOPsContent() {
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   
-  const canViewTeamHR  = canManageHRRole(currentUser?.role)
-  const canEditTargets = canManageHRRole(currentUser?.role)
-  const isAdmin        = canManageHRRole(currentUser?.role)
+  const canViewTeamHR  = userCan(currentUser, 'manageHR')
+  const canEditTargets = userCan(currentUser, 'manageHR')
+  const isAdmin        = userCan(currentUser, 'manageHR')
 
   const evalData: EvalInput = { repairs, expenses, outsourceJobs, leaveRequests, employees, sopActuals, saleOrders }
 

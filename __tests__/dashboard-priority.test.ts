@@ -10,7 +10,9 @@ import {
   visibleDashboardSalesOrders,
 } from '@/lib/dashboard-priority'
 import { ROLE_DEFAULT_MODULES, USER_ROLES } from '@/lib/auth/types'
-import { canApproveLeaveRole, canManageHRRole } from '@/lib/auth/access'
+import { canApproveLeaveRole } from '@/lib/auth/access'
+import { userCan } from '@/lib/auth/can'
+const canManageHRRole = (role: string) => userCan({ role }, 'manageHR')
 
 describe('dashboardSectionsForRole — role → widget matrix', () => {
   it('director sees organisation-wide sections', () => {

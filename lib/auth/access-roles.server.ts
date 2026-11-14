@@ -29,6 +29,9 @@ export const ensureAccessRoleStore = async () => {
       `
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS access_roles_name_lower_idx ON access_roles (lower(name))`
       await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS access_role_id TEXT`
+      // Roles saved by the editor from now on hold exactly what they list (no
+      // fallback to the base role for route permissions). Older roles: false.
+      await sql`ALTER TABLE access_roles ADD COLUMN IF NOT EXISTS exact_permissions BOOLEAN NOT NULL DEFAULT FALSE`
     })().catch(error => {
       ready = null
       throw error
@@ -44,6 +47,7 @@ type RoleRow = {
   base_role: string
   modules_json: string | null
   permissions_json: string | null
+  exact_permissions?: boolean | null
 }
 
 const parseList = (value: string | null | undefined): string[] => {
@@ -63,6 +67,7 @@ const toRole = (row: RoleRow): AccessRole => ({
   modules: parseList(row.modules_json) as ModuleId[],
   permissions: parseList(row.permissions_json),
   builtIn: false,
+  exactPermissions: row.exact_permissions === true,
 })
 
 // Roles are read on almost every request, so they are kept for a few seconds.
@@ -75,7 +80,7 @@ export const clearAccessRoleCache = () => { cache = null }
 export async function getAccessRoleMap(): Promise<Map<string, AccessRole>> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.roles
   await ensureAccessRoleStore()
-  const { rows } = await sql`SELECT id, name, description, base_role, modules_json, permissions_json FROM access_roles ORDER BY lower(name)`
+  const { rows } = await sql`SELECT id, name, description, base_role, modules_json, permissions_json, exact_permissions FROM access_roles ORDER BY lower(name)`
   const roles = new Map((rows as unknown as RoleRow[]).map(row => [row.id, toRole(row)]))
   cache = { at: Date.now(), roles }
   return roles
@@ -108,11 +113,11 @@ export async function createCustomRole(fields: RoleFields, createdBy: string): P
   const id = randomUUID()
   const nowTs = new Date().toISOString()
   await sql`
-    INSERT INTO access_roles (id, name, description, base_role, modules_json, permissions_json, created_by, created_at, updated_at)
-    VALUES (${id}, ${fields.name}, ${fields.description}, ${fields.baseRole}, ${JSON.stringify(fields.modules)}, ${JSON.stringify(fields.permissions)}, ${createdBy}, ${nowTs}, ${nowTs})
+    INSERT INTO access_roles (id, name, description, base_role, modules_json, permissions_json, exact_permissions, created_by, created_at, updated_at)
+    VALUES (${id}, ${fields.name}, ${fields.description}, ${fields.baseRole}, ${JSON.stringify(fields.modules)}, ${JSON.stringify(fields.permissions)}, TRUE, ${createdBy}, ${nowTs}, ${nowTs})
   `
   clearAccessRoleCache()
-  return { id, ...fields, builtIn: false }
+  return { id, ...fields, builtIn: false, exactPermissions: true }
 }
 
 /**
@@ -126,7 +131,7 @@ export async function updateCustomRole(id: string, fields: RoleFields): Promise<
   const { rows } = await sql`
     UPDATE access_roles
     SET name = ${fields.name}, description = ${fields.description}, base_role = ${fields.baseRole},
-        modules_json = ${JSON.stringify(fields.modules)}, permissions_json = ${JSON.stringify(fields.permissions)},
+        modules_json = ${JSON.stringify(fields.modules)}, permissions_json = ${JSON.stringify(fields.permissions)}, exact_permissions = TRUE,
         updated_at = ${nowTs}
     WHERE id = ${id}
     RETURNING id
@@ -134,7 +139,7 @@ export async function updateCustomRole(id: string, fields: RoleFields): Promise<
   if (!rows.length) return null
   await sql`UPDATE users SET role = ${fields.baseRole}, modules_json = ${JSON.stringify(fields.modules)}, updated_at = ${nowTs} WHERE access_role_id = ${id}`
   clearAccessRoleCache()
-  return { id, ...fields, builtIn: false }
+  return { id, ...fields, builtIn: false, exactPermissions: true }
 }
 
 /** Deletes a role nobody holds. Returns how many people still hold it, if any. */

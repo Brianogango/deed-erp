@@ -4,6 +4,7 @@ import { hashPassword } from '@/lib/auth/password'
 import { clearFailedLogin, findAuthUserById, updateAuthUser, toPublicAuthUser } from '@/lib/auth/users-repository'
 import { buildCredentialMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
 import { generateTemporaryPassword } from '@/lib/auth/temporary-credentials'
+import { assertUserAccessChange } from '@/lib/auth/user-admin.server'
 
 /**
  * POST /api/users/[id]/resend-credentials
@@ -21,6 +22,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (!user) {
       throw Object.assign(new Error('User not found'), { status: 404 })
     }
+    await assertUserAccessChange(actor, user)
 
     const temporaryPassword = generateTemporaryPassword()
     const passwordHash = await hashPassword(temporaryPassword)

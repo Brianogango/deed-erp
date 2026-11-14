@@ -1,4 +1,5 @@
 import { canonicalRole } from './roles'
+import { userCan } from './can'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 
 type StoreUser = {
@@ -6,16 +7,20 @@ type StoreUser = {
   modules?: unknown
   /** users.acts_as_technician — writes what a technician may write (see hasTechnicianCapability). */
   actsAsTechnician?: unknown
+  /** A custom role's exact permissions. */
+  permissions?: unknown
 }
 
 type StoreWritePolicy = {
   roles: readonly string[]
   modules?: readonly string[]
+  /** Also allowed for whoever holds this permission (e.g. an HR custom role). */
+  permission?: string
 }
 
 const DIRECTOR = ['director'] as const
 const ADMIN = [...DIRECTOR, 'admin_officer'] as const
-// HR records: Director only (Admin Officer has no HR rights).
+// HR records: the Director, and whoever holds manageHR (an HR custom role).
 const HR = DIRECTOR
 const FINANCE = [...ADMIN, 'finance_officer'] as const
 const SALES = [...FINANCE, 'sales_rep', 'kilimall_officer', 'technical_lead'] as const
@@ -25,6 +30,7 @@ const OPERATIONS = [...ADMIN, 'finance_officer', 'inventory_officer', 'technical
 const ALL_OPERATIONAL = [...FINANCE, 'inventory_officer', 'kilimall_officer', 'sales_rep', 'technical_lead', 'technician'] as const
 
 const policy = (roles: readonly string[], modules?: readonly string[]): StoreWritePolicy => ({ roles, modules })
+const hrPolicy = (modules: readonly string[]): StoreWritePolicy => ({ roles: HR, modules, permission: 'manageHR' })
 
 /**
  * Explicit legacy app-state write ACL.
@@ -42,20 +48,20 @@ export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = 
   deed_profileImages: policy(ALL_OPERATIONAL),
 
   deed_departments: policy(ADMIN, ['hr']),
-  deed_contracts: policy(HR, ['hr']),
+  deed_contracts: hrPolicy(['hr']),
   deed_customerContracts: policy([...ADMIN, 'sales_rep'], ['crm', 'sales']),
-  deed_hrDocuments: policy(HR, ['hr', 'my_documents']),
+  deed_hrDocuments: hrPolicy(['hr', 'my_documents']),
   deed_workflowApprovals: policy(FINANCE, ['sales', 'accounting']),
-  deed_employeeAssets: policy(HR, ['hr']),
-  deed_leaveBalances: policy(HR, ['hr']),
-  deed_leaveRequests: policy(HR, ['hr', 'leave']),
-  deed_salaryAdvances: policy(HR, ['hr']),
-  deed_jobPostings: policy(HR, ['hr']),
-  deed_candidates: policy(HR, ['hr']),
-  deed_trainingPrograms: policy(HR, ['hr']),
-  deed_employeeTrainings: policy(HR, ['hr']),
+  deed_employeeAssets: hrPolicy(['hr']),
+  deed_leaveBalances: hrPolicy(['hr']),
+  deed_leaveRequests: hrPolicy(['hr', 'leave']),
+  deed_salaryAdvances: hrPolicy(['hr']),
+  deed_jobPostings: hrPolicy(['hr']),
+  deed_candidates: hrPolicy(['hr']),
+  deed_trainingPrograms: hrPolicy(['hr']),
+  deed_employeeTrainings: hrPolicy(['hr']),
   deed_hr_sops: policy(ADMIN, ['hr', 'sops']),
-  deed_hr_perf_targets: policy(HR, ['hr']),
+  deed_hr_perf_targets: hrPolicy(['hr']),
 
   deed_products: policy(INVENTORY, ['inventory']),
   deed_productPriceHistory: policy(INVENTORY, ['inventory']),
@@ -168,7 +174,11 @@ export function canWriteStoreKey(user: StoreUser, key: string): boolean {
   // A user acting as a technician writes what a technician writes; they need
   // the module like anyone else (the repair module comes with the flag).
   const asTechnician = user.actsAsTechnician === true && roles.has('technician')
-  if (!role || !(roles.has(role) || asTechnician)) return false
+  const byPermission = !!entry.permission && userCan({
+    role,
+    permissions: Array.isArray(user.permissions) ? user.permissions.filter((p): p is string => typeof p === 'string') : null,
+  }, entry.permission)
+  if (!role || !(roles.has(role) || asTechnician || byPermission)) return false
   if (!entry.modules?.length) return true
   if (role === 'director') return true
 

@@ -59,7 +59,7 @@ describe('custom roles API', () => {
   })
 
   it('refuses a Director-only permission, a built-in name and a duplicate name', async () => {
-    expect((await post({ ...body, permissions: ['manageUsers'] })).status).toBe(422)
+    expect((await post({ ...body, permissions: ['manageRoles'] })).status).toBe(422)
     expect((await post({ ...body, name: 'Technician' })).status).toBe(422)
     await post(body)
     expect((await post({ ...body, name: 'cheque CLERK' })).status).toBe(409)

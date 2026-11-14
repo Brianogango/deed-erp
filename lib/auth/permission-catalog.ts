@@ -82,6 +82,15 @@ const screen = (key: string, group: string, label: string, roles: readonly UserR
   followsBaseRole: true,
 })
 
+/** Read the audit trail for one area of the business. */
+const auditArea = (area: string, what: string, roles: readonly UserRole[]): PermissionDef => ({
+  key: `audit.view.${area}`,
+  group: 'admin',
+  label: `Read the audit trail: ${what}`,
+  enforcement: 'server',
+  builtIn: roles,
+})
+
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     id: 'accounting',
@@ -382,10 +391,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     id: 'admin',
     label: 'Settings & administration',
     items: [
-      action('manageUsers', 'admin', 'Create users and manage roles', { sensitive: true }),
+      action('manageUsers', 'admin', 'Create users, change their role, deactivate them and reset passwords (never a Director)', { sensitive: true }),
+      action('manageRoles', 'admin', 'Create and change roles (what each role may do)', { sensitive: true }),
       action('viewUsers', 'admin', 'See the user list'),
       action('manageMasterData', 'admin', 'Change master data (contacts, products setup)'),
-      action('viewAuditLog', 'admin', 'Read the audit trail', { sensitive: true }),
+      action('viewAuditLog', 'admin', 'Read the whole audit trail (every area)', { sensitive: true }),
+      auditArea('users', 'User accounts and access changes', ['director', 'admin_officer']),
+      auditArea('inventory', 'Inventory, purchases and delivery', ['director', 'admin_officer']),
+      auditArea('sales', 'Sales, CRM, POS and repairs', ['director', 'admin_officer']),
+      auditArea('finance', 'Accounting, expenses and deposits', ['director', 'finance_officer']),
+      auditArea('hr', 'HR, leave and payroll', ['director']),
       action('appendAuditLog', 'admin', 'Write audit entries'),
       // Server routes (were role lists)
       route('admin.notifications', 'admin', 'Manage notification rules and templates; sign users out', ['director', 'admin_officer']),

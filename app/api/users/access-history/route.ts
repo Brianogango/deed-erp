@@ -1,5 +1,6 @@
 /**
- * GET — who changed whose access, newest first. Directors only (manageUsers).
+ * GET — who changed whose access, newest first. Needs audit.view.users
+ * (the Director, Admin Officer, or an HR role given it).
  * Reads the audit_logs rows written by lib/auth/access-audit.server.ts.
  */
 import { NextResponse } from 'next/server'
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
-    await requirePermission('manageUsers')
+    await requirePermission('audit.view.users')
     const url = new URL(request.url)
     const userId = url.searchParams.get('userId')
     const rows = await prisma.auditLog.findMany({

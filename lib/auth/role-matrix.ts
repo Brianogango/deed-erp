@@ -54,6 +54,8 @@ export const ROLE_MATRIX = {
   // Append commercial/finance audit rows (not director-only; reading remains director).
   appendAuditLog:            ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],
   viewAuditLog:              ['director'] as UserRole[],
+  // Decide what each role may do (the role editor). Never held by a custom role.
+  manageRoles:               ['director'] as UserRole[],
   // Commercial document creation: invoices, standalone payments, POS orders and
   // after-sales refunds. Every role that legitimately sells or refunds is
   // included; purely operational roles (technician, inventory_officer,

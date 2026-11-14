@@ -26,7 +26,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requirePermission('manageUsers')
+    const actor = await requirePermission('manageRoles')
     const body = await request.json().catch(() => ({}))
     const checked = validateRoleInput(body)
     if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 422 })

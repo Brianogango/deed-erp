@@ -14,6 +14,8 @@ type Subject = {
   role?: string | null
   modules?: readonly string[] | null
   permissions?: readonly string[] | null
+  /** The custom role holds exactly its list (no base-role fallback). */
+  permissionsExact?: boolean | null
   /** users.acts_as_technician: passes wherever technicians do. */
   actsAsTechnician?: boolean | null
 }
@@ -25,7 +27,7 @@ export function userCan(user: Subject | null | undefined, key: string): boolean 
   if (!user) return false
   const def = PERMISSION_BY_KEY[key]
   if (!def) return false // an unknown permission is never granted
-  if (Array.isArray(user.permissions) && (user.permissions.includes(key) || !def.followsBaseRole)) return user.permissions.includes(key)
+  if (Array.isArray(user.permissions) && (user.permissions.includes(key) || !def.followsBaseRole || user.permissionsExact === true)) return user.permissions.includes(key)
   const role = canonicalRole(user.role)
   if (role === 'director') return true
   if (def.builtIn === 'module') {

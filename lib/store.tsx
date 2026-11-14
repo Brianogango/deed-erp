@@ -22,7 +22,7 @@ import { scheduleCatalogHealOnce } from '@/lib/catalog-boot-heal'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
 import { PAID_TO_RIDER, riderFeeAccount, riderPayForJob } from '@/lib/delivery/rider-direct-pay'
-import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
+import { canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
@@ -2883,8 +2883,7 @@ const canValidatePurchaseReceiptAction = (user: User | null) => userCan(user, 'v
 
 const canManageInventoryControl = (user: User | null) => userCan(user, 'inventory.stock_requests')
 
-export const canManageHR = (user: User | null) =>
-  !!user && canManageHRRole(user.role)
+export const canManageHR = (user: User | null) => userCan(user, 'manageHR')
 
 const canApprovePayroll = (user: User | null) => userCan(user, 'approvePayroll')
 

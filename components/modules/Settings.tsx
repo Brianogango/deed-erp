@@ -10,9 +10,11 @@ import { ModuleChrome } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { modulesOutsideRole, roleDefaultModules } from '@/lib/auth/access-control'
+import { auditAreasFor } from '@/lib/auth/audit-areas'
+import AuditLogPanel from '@/components/settings/AuditLogPanel'
 import AccessHistory from '@/components/settings/AccessHistory'
 import AccessRoles, { useAccessRoles } from '@/components/settings/AccessRoles'
-import { formatModuleLabel, formatRoleLabel, isAdmin } from '@/lib/auth/access'
+import { formatModuleLabel, formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
@@ -39,7 +41,7 @@ import { isDirector } from '@/lib/auth/roles'
 type Section =
   | 'general' | 'document_layout' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
-  | 'accounting' | 'hr_config' | 'pos' | 'notifications' | 'security' | 'partner_api' | 'data_cutover'
+  | 'accounting' | 'hr_config' | 'pos' | 'notifications' | 'security' | 'partner_api' | 'data_cutover' | 'audit'
 
 type UserFormState = {
   id: string; employeeId: string; username: string; name: string; role: string
@@ -269,7 +271,12 @@ export default function Settings() {
   const currentUser = users.find(user => user.id === currentUserId)
   const normalizedRole = canonicalRole(currentUser?.role)
   const canAccessSettings = userCan(currentUser, 'admin.settings.open')
-  const canManageSystemUsers = isAdmin(currentUser?.role)
+  // Managing user accounts: the Director, or an HR role given manageUsers.
+  const canManageSystemUsers = userCan(currentUser, 'manageUsers')
+  const iAmDirector = isDirector(currentUser?.role)
+  const canRunSystemTools = userCan(currentUser, 'admin.system')
+  const auditAreas = auditAreasFor(currentUser)
+  const canReadAudit = auditAreas === 'all' || auditAreas.size > 0
   const canManageBanks = userCan(currentUser, 'accounting.manage')
   const canManageNotifications = userCan(currentUser, 'admin.notifications')
 
@@ -497,8 +504,10 @@ export default function Settings() {
   }
 
   const accessRoles = useAccessRoles(userCan(currentUser, 'viewUsers'))
-  const customRoles = accessRoles.data?.custom ?? []
-  const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
+  const customRoles = (accessRoles.data?.custom ?? []).filter(r => iAmDirector || !r.permissions.some(p => p === 'manageUsers' || p === 'manageRoles'))
+  // A user manager who is not the Director cannot make Directors or hand out
+  // roles that manage users (the server refuses it too).
+  const roleOptions = USER_ROLES.filter(r => iAmDirector || !isDirector(r)).map(r => ({ value: r, label: formatRoleLabel(r) }))
   const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: formatModuleLabel(m) }))
 
   const nav: { id: Section; label: string; icon: any; group?: string }[] = [
@@ -517,8 +526,9 @@ export default function Settings() {
     { id: 'pos',        label: 'Point of Sale', icon: faCashRegister,    group: 'Modules' },
     ...(canManageNotifications ? [{ id: 'notifications' as Section, label: 'Notifications', icon: faBell, group: 'System' }] : []),
     { id: 'security',   label: 'Security',      icon: faShieldHalved, group: 'System' },
-    ...(canManageSystemUsers ? [{ id: 'data_cutover' as Section, label: 'Data Cutover', icon: faShieldHalved, group: 'System' }] : []),
-    ...(canManageSystemUsers ? [{ id: 'partner_api' as Section, label: 'Partner API', icon: faKey, group: 'System' }] : []),
+    ...(canReadAudit ? [{ id: 'audit' as Section, label: 'Audit Log', icon: faShieldHalved, group: 'System' }] : []),
+    ...(canRunSystemTools ? [{ id: 'data_cutover' as Section, label: 'Data Cutover', icon: faShieldHalved, group: 'System' }] : []),
+    ...(userCan(currentUser, 'admin.partner_keys') ? [{ id: 'partner_api' as Section, label: 'Partner API', icon: faKey, group: 'System' }] : []),
   ]
 
   const activeNav = nav.find(n => n.id === section)
@@ -727,7 +737,7 @@ export default function Settings() {
                 <SettingRow label="Migrate to Postgres" desc="Upload all local browser data to your PostgreSQL database.">
                   <button
                     className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-navy-500 hover:bg-navy-600 text-white border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
-                    onClick={handleForceSync} disabled={syncingDB || !canManageSystemUsers}
+                    onClick={handleForceSync} disabled={syncingDB || !canRunSystemTools}
                   >
                     {syncingDB ? 'Syncing…' : 'Start Migration'}
                   </button>
@@ -940,8 +950,8 @@ export default function Settings() {
                   ))}
                 </div>
               </div>
-              <AccessRoles roles={accessRoles.data} canManage={canManageSystemUsers} onChanged={() => { void accessRoles.reload() }} />
-              {isDirector(normalizedRole) && <AccessHistory />}
+              <AccessRoles roles={accessRoles.data} canManage={userCan(currentUser, 'manageRoles')} onChanged={() => { void accessRoles.reload() }} />
+              {userCan(currentUser, 'audit.view.users') && <AccessHistory />}
             </div>
           )}
 
@@ -1378,15 +1388,16 @@ export default function Settings() {
                 secPortalRequirePhoneVerification: ss.secPortalRequirePhoneVerification,
               }}
               showToast={showToast}
-              onOpenPartnerApi={canManageSystemUsers ? () => setSection('partner_api') : undefined}
+              onOpenPartnerApi={userCan(currentUser, 'admin.partner_keys') ? () => setSection('partner_api') : undefined}
             />
           )}
 
           {/* ════ PARTNER API ════ */}
-          {section === 'partner_api' && canManageSystemUsers && <PartnerApiKeys />}
+          {section === 'partner_api' && userCan(currentUser, 'admin.partner_keys') && <PartnerApiKeys />}
+          {section === 'audit' && canReadAudit && <AuditLogPanel areas={auditAreas} />}
 
           {/* ════ DATA CUTOVER ════ */}
-          {section === 'data_cutover' && canManageSystemUsers && (
+          {section === 'data_cutover' && canRunSystemTools && (
             <SectionCard title="Blob cutover (gated)">
               <BlobCutoverPanel
                 canWrite={userCan(currentUser, 'admin.system')}
@@ -1467,7 +1478,7 @@ export default function Settings() {
                 <Select value={userForm.active ? 'active' : 'inactive'} onChange={v => setUserForm(p => ({ ...p, active: v === 'active' }))} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
               </Field>
             )}
-            <Field label="Acts as technician" hint="Lets this user be assigned repair jobs without changing their primary role. Auto-enables the Repair module when on.">
+            {iAmDirector && <Field label="Acts as technician" hint="Lets this user be assigned repair jobs without changing their primary role. Auto-enables the Repair module when on.">
               <Select
                 value={userForm.actsAsTechnician ? 'yes' : 'no'}
                 onChange={v => setUserForm(p => ({
@@ -1477,7 +1488,7 @@ export default function Settings() {
                 }))}
                 options={[{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes — assignable for repairs' }]}
               />
-            </Field>
+            </Field>}
             {userForm.id && (
               <div className="sm:col-span-2">
                 <Field label="Reset Password" hint="Leave blank to keep current.">

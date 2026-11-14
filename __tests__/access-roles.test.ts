@@ -101,7 +101,7 @@ describe('creating a custom role', () => {
     expect(error({ baseRole: 'wizard' })).toContain('based on')
     expect(error({ modules: ['accounting', 'nonsense'] })).toContain('Unknown module')
     expect(error({ permissions: ['accounting.invoices', 'nonsense'] })).toContain('Unknown permission')
-    expect(error({ permissions: ['manageUsers'] })).toContain('Director')
+    expect(error({ permissions: ['manageRoles'] })).toContain('Director')
     expect(error({ modules: 'accounting' })).toContain('modules')
   })
 

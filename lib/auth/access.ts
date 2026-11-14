@@ -112,9 +112,6 @@ export const LEAVE_APPROVER_ROLES: readonly UserRole[] = [
   'finance_officer',
 ]
 
-export const canManageHRRole = (role?: string | null) =>
-  HR_MANAGER_ROLES.includes(canonicalRole(role) as UserRole)
-
 export const canApproveLeaveRole = (role?: string | null) =>
   LEAVE_APPROVER_ROLES.includes(canonicalRole(role) as UserRole)
 

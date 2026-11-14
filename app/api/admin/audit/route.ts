@@ -1,4 +1,4 @@
-import { userCan } from '@/lib/auth/can'
+import { auditAreasFor, visibleAuditKeys } from '@/lib/auth/audit-areas'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState } from '@/lib/server-store'
@@ -24,13 +24,16 @@ function matchesQuery(row: CombinedAuditRow, q: string): boolean {
 }
 
 /**
- * Director-only combined audit search (live timeline + archive).
+ * Combined audit search (live timeline + archive), by area: the Director sees
+ * everything; others see the saves that touched their areas, only those keys,
+ * and not the saved payload.
  * GET /api/admin/audit?from=&to=&q=&limit=&offset=&format=csv
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!userCan(session.user, 'viewAuditLog')) {
+  const areas = auditAreasFor(session.user)
+  if (areas !== 'all' && areas.size === 0) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -80,7 +83,17 @@ export async function GET(request: NextRequest) {
   const merged = [
     ...liveRows,
     ...archiveRows.filter(r => !seen.has(r.id)),
-  ].sort((a, b) => b.at.localeCompare(a.at))
+  ]
+    .map(row => areas === 'all' ? row : {
+      ...row,
+      savedKeys: visibleAuditKeys(row.savedKeys, areas),
+      skippedKeys: visibleAuditKeys(row.skippedKeys, areas),
+      deniedKeys: visibleAuditKeys(row.deniedKeys, areas),
+      rejectedPostedInvoiceEdits: areas.has('finance') ? row.rejectedPostedInvoiceEdits : undefined,
+      payload: undefined,
+    })
+    .filter(row => areas === 'all' || (row.savedKeys?.length ?? 0) + (row.skippedKeys?.length ?? 0) + (row.deniedKeys?.length ?? 0) > 0)
+    .sort((a, b) => b.at.localeCompare(a.at))
 
   const total = merged.length
   const page = merged.slice(Math.max(offset, 0), Math.max(offset, 0) + Math.min(Math.max(limit, 1), 500))

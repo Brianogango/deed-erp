@@ -27,6 +27,20 @@ export function useAccessRoles(enabled: boolean) {
 
 type Draft = { id: string; name: string; description: string; baseRole: UserRole; modules: ModuleId[]; permissions: string[] }
 const blank: Draft = { id: '', name: '', description: '', baseRole: 'sales_rep', modules: ['dashboard'], permissions: [] }
+/**
+ * A starting point for HR: employee records, leave, user accounts and the HR
+ * and user-account audit trail. Payroll and salary details are left for the
+ * Director to tick. Based on Admin Officer (office notifications; what it can
+ * save is limited by the modules ticked here).
+ */
+const HR_TEMPLATE: Draft = {
+  id: '',
+  name: 'HR Officer',
+  description: 'Employee records, leave, user accounts (never Directors) and the HR audit trail.',
+  baseRole: 'admin_officer',
+  modules: ['dashboard', 'hr', 'leave', 'my_documents'],
+  permissions: ['manageHR', 'viewHrRecords', 'approveLeave', 'manageUsers', 'viewUsers', 'admin.settings.open', 'audit.view.users', 'audit.view.hr'],
+}
 
 const BASE_ROLES = USER_ROLES.filter(r => r !== 'director')
 
@@ -86,7 +100,12 @@ export default function AccessRoles({ roles, canManage, onChanged }: { roles: Ro
             “Screen” items hide the part from the menu and tabs.
           </p>
         </div>
-        {canManage && !draft && <button className="btn-primary" onClick={() => setDraft({ ...blank })}>New role</button>}
+        {canManage && !draft && (
+          <div className="flex gap-2">
+            <button className="btn-outline" onClick={() => setDraft({ ...HR_TEMPLATE, modules: [...HR_TEMPLATE.modules], permissions: [...HR_TEMPLATE.permissions] })}>New HR role</button>
+            <button className="btn-primary" onClick={() => setDraft({ ...blank })}>New role</button>
+          </div>
+        )}
       </div>
       {message && <p className="text-[11px] rounded-lg px-3 py-2" style={{ background: message.bad ? 'var(--danger-bg, #fee2e2)' : 'var(--success-bg, #dcfce7)' }} role="status">{message.text}</p>}
 
