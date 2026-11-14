@@ -46,7 +46,8 @@ async function loadRows(ids?: string[]) {
       payments: { include: { createdBy: { select: { username: true } }, voidedBy: { select: { username: true } } } },
       paymentAllocations: { include: { payment: { include: { createdBy: { select: { username: true } }, voidedBy: { select: { username: true } } } } } },
     },
-    orderBy: { invoiceDate: 'desc' },
+    // Same day: highest number first (INV/2026/0429 before 0428).
+    orderBy: [{ invoiceDate: 'desc' }, { invoiceNumber: 'desc' }],
   })
 }
 

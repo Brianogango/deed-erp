@@ -1,6 +1,7 @@
 'use client'
 
 import { planMigrationImport } from '@/lib/finance/migration-import'
+import { newestDocumentFirst } from '@/lib/document-order'
 import { isOpeningBalanceDocument } from '@/lib/finance/opening-balance'
 import OpeningBalanceCorrection from '@/components/finance/OpeningBalanceCorrection'
 import AgentCommissions from '@/components/finance/AgentCommissions'
@@ -924,7 +925,7 @@ function AccountingContent() {
         }
       }
     }
-    return res.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return res.sort(newestDocumentFirst)
   }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
 
   const sourceReferenceForInvoice = (invoice: Invoice): string => {

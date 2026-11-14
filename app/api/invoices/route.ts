@@ -208,7 +208,8 @@ export async function GET(request: Request) {
         where,
         // Returned as raw rows, so line order has to come from the query.
         include: { items: { orderBy: { sortOrder: 'asc' } } },
-        orderBy: { [sort ?? 'invoiceDate']: order },
+        // Ties (same day, same amount…) by number, so the order is stable.
+        orderBy: [{ [sort ?? 'invoiceDate']: order }, { invoiceNumber: order }],
         skip,
         take: limit,
       }),
