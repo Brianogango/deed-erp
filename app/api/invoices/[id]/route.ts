@@ -17,22 +17,7 @@ import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
 import { allowedOnlyAsTechnician, canReadInvoiceRow } from '@/lib/auth/authorization'
 import { invoiceEditChanges } from '@/lib/finance/invoice-history'
-
-
-
-// The stored status is a pure document state; payment progress
-// ('paid'/'partially_paid') is derived from amount_paid at read time, so
-// legacy payment statuses collapse onto the posted state.
-const INVOICE_STATUS_MAP: Record<string, string> = {
-  posted:         'approved',
-  paid:           'approved',
-  partially_paid: 'approved',
-  overdue:        'approved',
-  partial:        'approved',
-  pending:        'pending_approval',
-  sent:           'pending_approval',
-  open:           'approved',
-}
+import { INVOICE_STATUS_MAP } from '@/lib/api-shared/invoices'
 
 const VALID_STATUSES = new Set([
   'draft', 'pending_approval', 'approved', 'rejected', 'invoiced',

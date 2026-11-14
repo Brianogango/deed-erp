@@ -346,6 +346,122 @@ function HRContent() {
 
   if (!mounted) return <ModuleSkeleton />
 
+  /** Employee form fields, shared by the Add and Edit modals. */
+  const employeeFormFields = (isNew: boolean) => (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Full Name" required>
+          <Input value={empForm.fullName} onChange={setEF('fullName')} placeholder="e.g. Jane Wanjiku" />
+        </Field>
+        <Field label="Employee No." required>
+          <Input value={empForm.employeeNo} onChange={setEF('employeeNo')} placeholder="e.g. EMP-001" />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Personal email">
+          <Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" />
+        </Field>
+        <Field label="Work email">
+          <Input type="email" value={empForm.workEmail} onChange={setEF('workEmail')} placeholder="jane@deedtechnologies.com" />
+        </Field>
+        <Field label="Phone">
+          <Input value={empForm.phone} onChange={setEF('phone')} placeholder="+254 7xx xxx xxx" />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="National ID">
+          <Input value={empForm.nationalId} onChange={setEF('nationalId')} placeholder="National ID number" />
+        </Field>
+        <Field label="KRA PIN">
+          <Input value={empForm.kraPin} onChange={setEF('kraPin')} placeholder="e.g. A012345678B" />
+        </Field>
+        <Field label="NSSF Number">
+          <Input value={empForm.nssfNumber} onChange={setEF('nssfNumber')} placeholder="e.g. 123456789" />
+        </Field>
+        <Field label="SHIF Number">
+          <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Gender">
+          <Select
+            value={empForm.gender}
+            onChange={setEF('gender')}
+            options={[
+              { value: '', label: 'Not specified' },
+              { value: 'male', label: 'Male' },
+              { value: 'female', label: 'Female' },
+            ]}
+          />
+        </Field>
+        <Field label="Department" required>
+          <Select
+            value={empForm.departmentId}
+            onChange={setEF('departmentId')}
+            options={isNew ? [{ value: '', label: 'Select department…' }, ...DEPARTMENTS] : DEPARTMENTS}
+          />
+        </Field>
+        <Field label="Job Title">
+          <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Start Date" required={isNew}>
+          <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
+        </Field>
+        <Field label="Status">
+          <Select
+            value={empForm.status}
+            onChange={setEF('status')}
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'on_leave', label: 'On Leave' },
+              { value: 'exited', label: 'Exited' },
+            ]}
+          />
+        </Field>
+      </div>
+      <div className="pt-2 border-t border-[var(--border-lt)]">
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Basic Salary (KES)">
+            <Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" />
+          </Field>
+          <Field label="Housing Allowance">
+            <Input type="number" value={empForm.housingAllowance} onChange={setEF('housingAllowance')} placeholder="0" />
+          </Field>
+          <Field label="Transport Allowance">
+            <Input type="number" value={empForm.transportAllowance} onChange={setEF('transportAllowance')} placeholder="0" />
+          </Field>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Reports to">
+          <Select value={empForm.managerEmployeeId} onChange={setEF('managerEmployeeId')} options={[
+            { value: '', label: 'No one (top of the chart)' },
+            ...employees.filter(x => x.status !== 'exited' && x.id !== editEmpId).map(x => ({ value: x.id, label: `${x.fullName}${x.jobTitle ? ` · ${x.jobTitle}` : ''}` })),
+          ]} />
+        </Field>
+        <Field label="Salary paid by">
+          <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
+            { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
+          ]} />
+        </Field>
+        <Field label="M-Pesa number">
+          <Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} placeholder="07xx xxx xxx" />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Bank Name">
+          <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
+        </Field>
+        <Field label="Bank Account Number">
+          <Input value={empForm.bankAccount} onChange={setEF('bankAccount')} placeholder="e.g. 1234567890" />
+        </Field>
+      </div>
+    </>
+  )
+
   return (
     <div className="mod-page hr-workspace">
       <ModuleHeader
@@ -658,116 +774,7 @@ function HRContent() {
           width={580}
         >
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Full Name" required>
-                <Input value={empForm.fullName} onChange={setEF('fullName')} placeholder="e.g. Jane Wanjiku" />
-              </Field>
-              <Field label="Employee No." required>
-                <Input value={empForm.employeeNo} onChange={setEF('employeeNo')} placeholder="e.g. EMP-001" />
-              </Field>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Personal email">
-                <Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" />
-              </Field>
-              <Field label="Work email">
-                <Input type="email" value={empForm.workEmail} onChange={setEF('workEmail')} placeholder="jane@deedtechnologies.com" />
-              </Field>
-              <Field label="Phone">
-                <Input value={empForm.phone} onChange={setEF('phone')} placeholder="+254 7xx xxx xxx" />
-              </Field>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="National ID">
-                <Input value={empForm.nationalId} onChange={setEF('nationalId')} placeholder="National ID number" />
-              </Field>
-              <Field label="KRA PIN">
-                <Input value={empForm.kraPin} onChange={setEF('kraPin')} placeholder="e.g. A012345678B" />
-              </Field>
-              <Field label="NSSF Number">
-                <Input value={empForm.nssfNumber} onChange={setEF('nssfNumber')} placeholder="e.g. 123456789" />
-              </Field>
-              <Field label="SHIF Number">
-                <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" />
-              </Field>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Gender">
-                <Select
-                  value={empForm.gender}
-                  onChange={setEF('gender')}
-                  options={[
-                    { value: '', label: 'Not specified' },
-                    { value: 'male', label: 'Male' },
-                    { value: 'female', label: 'Female' },
-                  ]}
-                />
-              </Field>
-              <Field label="Department" required>
-                <Select
-                  value={empForm.departmentId}
-                  onChange={setEF('departmentId')}
-                  options={[{ value: '', label: 'Select department…' }, ...DEPARTMENTS]}
-                />
-              </Field>
-              <Field label="Job Title">
-                <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
-              </Field>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Start Date" required>
-                <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
-              </Field>
-              <Field label="Status">
-                <Select
-                  value={empForm.status}
-                  onChange={setEF('status')}
-                  options={[
-                    { value: 'active', label: 'Active' },
-                    { value: 'on_leave', label: 'On Leave' },
-                    { value: 'exited', label: 'Exited' },
-                  ]}
-                />
-              </Field>
-            </div>
-            <div className="pt-2 border-t border-[var(--border-lt)]">
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Field label="Basic Salary (KES)">
-                  <Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" />
-                </Field>
-                <Field label="Housing Allowance">
-                  <Input type="number" value={empForm.housingAllowance} onChange={setEF('housingAllowance')} placeholder="0" />
-                </Field>
-                <Field label="Transport Allowance">
-                  <Input type="number" value={empForm.transportAllowance} onChange={setEF('transportAllowance')} placeholder="0" />
-                </Field>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Reports to">
-                <Select value={empForm.managerEmployeeId} onChange={setEF('managerEmployeeId')} options={[
-                  { value: '', label: 'No one (top of the chart)' },
-                  ...employees.filter(x => x.status !== 'exited' && x.id !== editEmpId).map(x => ({ value: x.id, label: `${x.fullName}${x.jobTitle ? ` · ${x.jobTitle}` : ''}` })),
-                ]} />
-              </Field>
-              <Field label="Salary paid by">
-                <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
-                  { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
-                ]} />
-              </Field>
-              <Field label="M-Pesa number">
-                <Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} placeholder="07xx xxx xxx" />
-              </Field>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Bank Name">
-                <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
-              </Field>
-              <Field label="Bank Account Number">
-                <Input value={empForm.bankAccount} onChange={setEF('bankAccount')} placeholder="e.g. 1234567890" />
-              </Field>
-            </div>
+            {employeeFormFields(true)}
             <div className="flex gap-3 justify-end pt-2">
               <button className="btn-secondary px-6" onClick={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}>Cancel</button>
               <button className="btn-primary px-8" onClick={handleAddEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save Employee'}</button>
@@ -787,116 +794,7 @@ function HRContent() {
             {editEmpId === viewEmployee.id ? (
               // Edit Mode
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Full Name" required>
-                    <Input value={empForm.fullName} onChange={setEF('fullName')} placeholder="e.g. Jane Wanjiku" />
-                  </Field>
-                  <Field label="Employee No." required>
-                    <Input value={empForm.employeeNo} onChange={setEF('employeeNo')} placeholder="e.g. EMP-001" />
-                  </Field>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Personal email">
-                    <Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" />
-                  </Field>
-                  <Field label="Work email">
-                    <Input type="email" value={empForm.workEmail} onChange={setEF('workEmail')} placeholder="jane@deedtechnologies.com" />
-                  </Field>
-                  <Field label="Phone">
-                    <Input value={empForm.phone} onChange={setEF('phone')} placeholder="+254 7xx xxx xxx" />
-                  </Field>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="National ID">
-                    <Input value={empForm.nationalId} onChange={setEF('nationalId')} placeholder="National ID number" />
-                  </Field>
-                  <Field label="KRA PIN">
-                    <Input value={empForm.kraPin} onChange={setEF('kraPin')} placeholder="e.g. A012345678B" />
-                  </Field>
-                  <Field label="NSSF Number">
-                    <Input value={empForm.nssfNumber} onChange={setEF('nssfNumber')} placeholder="e.g. 123456789" />
-                  </Field>
-                  <Field label="SHIF Number">
-                    <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" />
-                  </Field>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Gender">
-                    <Select
-                      value={empForm.gender}
-                      onChange={setEF('gender')}
-                      options={[
-                        { value: '', label: 'Not specified' },
-                        { value: 'male', label: 'Male' },
-                        { value: 'female', label: 'Female' },
-                      ]}
-                    />
-                  </Field>
-                  <Field label="Department" required>
-                    <Select
-                      value={empForm.departmentId}
-                      onChange={setEF('departmentId')}
-                      options={DEPARTMENTS}
-                    />
-                  </Field>
-                  <Field label="Job Title">
-                    <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
-                  </Field>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Start Date">
-                    <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
-                  </Field>
-                  <Field label="Status">
-                    <Select
-                      value={empForm.status}
-                      onChange={setEF('status')}
-                      options={[
-                        { value: 'active', label: 'Active' },
-                        { value: 'on_leave', label: 'On Leave' },
-                        { value: 'exited', label: 'Exited' },
-                      ]}
-                    />
-                  </Field>
-                </div>
-                <div className="pt-2 border-t border-[var(--border-lt)]">
-                  <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Field label="Basic Salary (KES)">
-                      <Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" />
-                    </Field>
-                    <Field label="Housing Allowance">
-                      <Input type="number" value={empForm.housingAllowance} onChange={setEF('housingAllowance')} placeholder="0" />
-                    </Field>
-                    <Field label="Transport Allowance">
-                      <Input type="number" value={empForm.transportAllowance} onChange={setEF('transportAllowance')} placeholder="0" />
-                    </Field>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Reports to">
-                <Select value={empForm.managerEmployeeId} onChange={setEF('managerEmployeeId')} options={[
-                  { value: '', label: 'No one (top of the chart)' },
-                  ...employees.filter(x => x.status !== 'exited' && x.id !== editEmpId).map(x => ({ value: x.id, label: `${x.fullName}${x.jobTitle ? ` · ${x.jobTitle}` : ''}` })),
-                ]} />
-              </Field>
-              <Field label="Salary paid by">
-                    <Select value={empForm.paymentMode} onChange={setEF('paymentMode')} options={[
-                      { value: 'mpesa', label: 'M-Pesa' }, { value: 'bank', label: 'Bank transfer' }, { value: 'cash', label: 'Cash' },
-                    ]} />
-                  </Field>
-                  <Field label="M-Pesa number">
-                    <Input value={empForm.mpesaNumber} onChange={setEF('mpesaNumber')} placeholder="07xx xxx xxx" />
-                  </Field>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Bank Name">
-                    <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
-                  </Field>
-                  <Field label="Bank Account Number">
-                    <Input value={empForm.bankAccount} onChange={setEF('bankAccount')} placeholder="e.g. 1234567890" />
-                  </Field>
-                </div>
+                {employeeFormFields(false)}
                 <div className="flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => { setEditEmpId(null); setEmpForm(blankEmp()) }}>Cancel</button>
                   <button className="btn-primary px-8" onClick={handleUpdateEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>

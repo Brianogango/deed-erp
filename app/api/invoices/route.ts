@@ -19,6 +19,7 @@ import { resolveVendorBillPoItem } from '@/lib/purchase/bill-po-line-match'
 import { OPENING_BALANCE_MARKER } from '@/lib/finance/opening-balance'
 import { ensureOpeningBalanceEquityAccount } from '@/lib/accounting/opening-balance-account'
 import { serialInvoiceGateError } from '@/lib/sales/serial-invoice-gate.server'
+import { INVOICE_STATUS_MAP } from '@/lib/api-shared/invoices'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 // Repair staff trigger repair invoices from the Repair module; those syncs
@@ -32,21 +33,6 @@ function invoiceWritePermission(body: any) {
   if (isRepairLinked(body)) return 'repair.invoice.edit'
   if (isPosInvoiceWrite(body)) return 'recordSales'
   return 'invoices.edit'
-}
-
-// Map frontend status aliases to valid DocumentStatus enum values. The stored
-// status is a pure document state; payment progress ('paid'/'partially_paid')
-// is derived from amount_paid at read time, so legacy payment statuses
-// collapse onto the posted state.
-const INVOICE_STATUS_MAP: Record<string, string> = {
-  posted:         'approved',
-  paid:           'approved',
-  partially_paid: 'approved',
-  overdue:        'approved',
-  partial:        'approved',
-  pending:        'pending_approval',
-  sent:           'pending_approval',
-  open:           'approved',
 }
 
 // A vendor credit/debit note (e.g. a Return-to-Vendor credit) is booked as a

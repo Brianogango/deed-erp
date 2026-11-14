@@ -2,39 +2,15 @@ import { userCan } from '@/lib/auth/can'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
+import { resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
-import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { mergeScreenExtras, QUOTE_EXTRA_KEYS } from '@/lib/screen-extras'
-
-async function broadcastQuotes() {
-  try {
-    const all = await prisma.quote.findMany({ include: { items: true, client: true, opportunity: true }, orderBy: { quoteDate: 'desc' } })
-    void saveStoreKeys({ deed_quotes: JSON.stringify(normalizeQuotesForClient(all)) })
-  } catch {}
-}
+import { broadcastQuotes, isRepairLinked, QUOTE_STATUS_MAP, VALID_STATUSES, mapQuoteItems } from '@/lib/api-shared/quotes'
 
 // Repair staff generate repair quotes in the Repair module; those syncs must
 // not be rejected or the server copy silently goes stale (causing duplicates).
-
-function isRepairLinked(body: any) {
-  return Boolean(body?.repairId || body?.repairRef || body?.source === 'repair' || /repair/i.test(String(body?.opportunityName ?? '')))
-}
-
-const QUOTE_STATUS_MAP: Record<string, string> = {
-  sent:     'pending_approval',
-  viewed:   'pending_approval',
-  accepted: 'approved',
-  expired:  'cancelled',
-  revised:  'draft',
-}
-
-const VALID_STATUSES = new Set([
-  'draft', 'pending_approval', 'approved', 'rejected', 'invoiced',
-  'dispatched', 'delivered', 'paid', 'partially_paid', 'cancelled', 'voided',
-])
 
 function mapQuoteBodyToDb(body: any, clientId: string) {
   const rawStatus = body.status ?? 'draft'
@@ -63,34 +39,6 @@ function mapQuoteBodyToDb(body: any, clientId: string) {
     internalNotes: body.internalNotes ?? null,
     terms: body.terms ?? null,
   }
-}
-
-function mapQuoteItems(lines: any[]) {
-  return lines.map((l: any) => {
-    const qty = Number(l.qty ?? 1)
-    if (!Number.isFinite(qty) || qty <= 0) {
-      throw Object.assign(new Error('Quote line quantity must be greater than zero'), { status: 400 })
-    }
-    const unitPrice = Number(l.unitPrice ?? 0)
-    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-      throw Object.assign(new Error('Quote line unit price cannot be negative'), { status: 400 })
-    }
-    const discountPct = Number(l.discount ?? l.discountPct ?? 0)
-    const taxRate = Number(l.taxRate ?? 0)
-    const lineSubtotal = Number(l.subtotal ?? l.lineSubtotal ?? Math.round(qty * unitPrice * (1 - discountPct / 100)))
-    const lineTax = Number(l.lineTax ?? l.taxAmount ?? Math.round(lineSubtotal * taxRate / 100))
-    return {
-      description: l.description ?? l.productName ?? '',
-      qty,
-      unitPrice,
-      discountPct,
-      taxRate,
-      lineSubtotal,
-      lineTax,
-      lineTotal: Number(l.lineTotal ?? lineSubtotal + lineTax),
-      ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
-    }
-  })
 }
 
 export async function GET() {
