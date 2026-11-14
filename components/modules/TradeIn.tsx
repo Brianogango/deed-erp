@@ -250,7 +250,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, creditBuyBack, stockBuyBack, deleteBuyBack,
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
-  const currentRole = users.find(u => u.id === currentUserId)?.role
+  const currentUser = users.find(u => u.id === currentUserId)
   const canApprove = userCan(currentUser, 'sales.buyback.approve')
 
   const [showNew, setShowNew] = useState(false)
@@ -1278,7 +1278,7 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
   const { clientExchanges, createExchange, approveExchange, completeExchange, cancelExchange,
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
-  const currentRole = users.find(u => u.id === currentUserId)?.role
+  const currentUser = users.find(u => u.id === currentUserId)
   const canApprove = userCan(currentUser, 'sales.buyback.approve')
 
   const [showNew, setShowNew] = useState(false)

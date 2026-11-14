@@ -127,7 +127,7 @@ import {
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
-import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
+import { normalizeOpportunitiesForClient, normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
 import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
 import { fulfillmentSaleOrderPatch } from '@/lib/sales/fulfillment-sale-order-patch'
@@ -171,6 +171,7 @@ import {
   openDeliveryDemandByProduct,
   saleOrderLooksConfirmed,
   canReverseConfirmedSale,
+  isQuotationStage,
 } from '@/lib/odoo-sales-flow'
 import {
   applyConfirmLineSelection,
