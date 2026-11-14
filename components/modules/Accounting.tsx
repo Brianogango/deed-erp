@@ -3159,31 +3159,6 @@ function AccountingContent() {
           />
         )}
 
-        {showCreatePartner && (
-          <ContactFormModal
-            key={createPartnerKey}
-            forceCustomer={tab !== 'bills'}
-            forceVendor={tab === 'bills'}
-            initial={tab === 'bills'
-              ? blankCompanyContact({
-                  name: createPartnerSeed,
-                  isCustomer: false,
-                  isVendor: true,
-                })
-              : blankIndividualContact({ name: createPartnerSeed })}
-            onClose={() => {
-              setShowCreatePartner(false)
-              setCreatePartnerSeed('')
-            }}
-            onSaved={(contact) => {
-              setNewPartnerId(contact.id)
-              setNewPartnerName(contact.name)
-              setChangingPartner(false)
-              setShowCreatePartner(false)
-              setCreatePartnerSeed('')
-            }}
-          />
-        )}
 
         </div>{/* mod-body */}
       </div>

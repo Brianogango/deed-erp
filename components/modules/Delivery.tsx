@@ -29,32 +29,44 @@ import { carriedItems, hasStops, jobStops, openFollowUps, STOP_KIND_LABELS, stop
 import { userCan } from '@/lib/auth/can'
 
 // ── Print Components ───────────────────────────────────────────────────────────
-function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
+/** Print the page once it has rendered, then close it. */
+function usePrintThenClose(onDone: () => void) {
   useEffect(() => {
     const handleAfterPrint = () => { onDone(); window.removeEventListener('afterprint', handleAfterPrint) }
     window.addEventListener('afterprint', handleAfterPrint)
     const timer = setTimeout(() => window.print(), 300)
     return () => { clearTimeout(timer); window.removeEventListener('afterprint', handleAfterPrint) }
   }, [onDone])
+}
+
+/** Company letterhead on the left, document title, number and date on the right. */
+function PrintHeader({ companySettings, title, docRef, dateLabel, date, showPhone = false }: { companySettings: any; title: string; docRef: string; dateLabel: string; date: string; showPhone?: boolean }) {
+  return (
+    <div className="flex justify-between items-start border-b pb-6 mb-6" style={{ borderColor: 'var(--border-lt)' }}>
+      <div>
+        {companySettings?.logoUrl ? (
+          <img src={companySettings?.logoUrl} style={{ maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Logo" />
+        ) : (
+          <h2 className="text-xl font-bold mb-1">{companySettings?.name || 'Deed Technologies'}</h2>
+        )}
+        <p className="text-sm text-gray-600">{[companySettings?.address, companySettings?.city].filter(Boolean).join(', ') || '—'}</p>
+        {showPhone && <p className="text-sm text-gray-600">Tel: {companySettings?.phone || '—'}</p>}
+      </div>
+      <div className="text-right">
+        <h2 className="text-2xl font-bold tracking-widest text-gray-800 uppercase mb-2">{title}</h2>
+        <p className="text-lg font-mono font-bold text-gray-900">{docRef}</p>
+        <p className="text-sm text-gray-600 mt-1">{dateLabel} {date}</p>
+      </div>
+    </div>
+  )
+}
+
+function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
+  usePrintThenClose(onDone)
 
   return (
     <div className="print-document-container bg-white text-black p-8 min-h-screen" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, sans-serif' }}>
-      <div className="flex justify-between items-start border-b pb-6 mb-6" style={{ borderColor: 'var(--border-lt)' }}>
-        <div>
-          {companySettings?.logoUrl ? (
-             <img src={companySettings?.logoUrl} style={{ maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Logo" />
-          ) : (
-             <h2 className="text-xl font-bold mb-1">{companySettings?.name || 'Deed Technologies'}</h2>
-          )}
-          <p className="text-sm text-gray-600">{[companySettings?.address, companySettings?.city].filter(Boolean).join(', ') || '—'}</p>
-          <p className="text-sm text-gray-600">Tel: {companySettings?.phone || '—'}</p>
-        </div>
-        <div className="text-right">
-          <h2 className="text-2xl font-bold tracking-widest text-gray-800 uppercase mb-2">DELIVERY JOB SHEET</h2>
-          <p className="text-lg font-mono font-bold text-gray-900">{job.ref}</p>
-          <p className="text-sm text-gray-600 mt-1">Date: {fmtDate(job.scheduledDate)}</p>
-        </div>
-      </div>
+      <PrintHeader companySettings={companySettings} title="DELIVERY JOB SHEET" docRef={job.ref} dateLabel="Date:" date={fmtDate(job.scheduledDate)} showPhone />
 
       <div className="grid grid-cols-2 gap-8 mb-8">
         <div>
@@ -136,30 +148,11 @@ function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, com
 }
 
 function PrintPaySlip({ pay, companySettings, onDone }: { pay: RiderWeeklyPay, companySettings: any, onDone: () => void }) {
-  useEffect(() => {
-    const handleAfterPrint = () => { onDone(); window.removeEventListener('afterprint', handleAfterPrint) }
-    window.addEventListener('afterprint', handleAfterPrint)
-    const timer = setTimeout(() => window.print(), 300)
-    return () => { clearTimeout(timer); window.removeEventListener('afterprint', handleAfterPrint) }
-  }, [onDone])
+  usePrintThenClose(onDone)
 
   return (
     <div className="print-document-container bg-white text-black p-8 min-h-screen" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, sans-serif' }}>
-      <div className="flex justify-between items-start border-b pb-6 mb-6" style={{ borderColor: 'var(--border-lt)' }}>
-        <div>
-          {companySettings?.logoUrl ? (
-             <img src={companySettings?.logoUrl} style={{ maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Logo" />
-          ) : (
-             <h2 className="text-xl font-bold mb-1">{companySettings?.name || 'Deed Technologies'}</h2>
-          )}
-          <p className="text-sm text-gray-600">{[companySettings?.address, companySettings?.city].filter(Boolean).join(', ') || '—'}</p>
-        </div>
-        <div className="text-right">
-          <h2 className="text-2xl font-bold tracking-widest text-gray-800 uppercase mb-2">RIDER PAY STATEMENT</h2>
-          <p className="text-lg font-mono font-bold text-gray-900">{pay.ref}</p>
-          <p className="text-sm text-gray-600 mt-1">Generated: {fmtDate(pay.createdAt.slice(0, 10))}</p>
-        </div>
-      </div>
+      <PrintHeader companySettings={companySettings} title="RIDER PAY STATEMENT" docRef={pay.ref} dateLabel="Generated:" date={fmtDate(pay.createdAt.slice(0, 10))} />
 
       <div className="grid grid-cols-2 gap-8 mb-8">
         <div>

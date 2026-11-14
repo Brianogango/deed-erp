@@ -55,6 +55,27 @@ import type { PurchaseOrder } from '../purchasing'
 
 /** sales actions of the store. `store` reads the provider's current state, setters and helpers. */
 export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKilimallOrder' | 'updateKilimallOrder' | 'returnKilimallOrder' | 'confirmKilimallDispatch' | 'createKilimallSettlement' | 'updateKilimallSettlement' | 'reconcileKilimallSettlement' | 'matchKilimallSettlementLine' | 'addContact' | 'updateContact' | 'deleteContact' | 'createCompany' | 'updateCompany' | 'deleteCompany' | 'createContactPerson' | 'updateContactPerson' | 'deleteContactPerson' | 'createOpportunity' | 'ingestOpportunity' | 'updateOpportunity' | 'moveOpportunityStage' | 'markOpportunityWon' | 'markOpportunityLost' | 'deleteOpportunity' | 'logActivity' | 'completeActivity' | 'createCustomerContract' | 'updateCustomerContract' | 'renewCustomerContract' | 'terminateCustomerContract' | 'createQuote' | 'updateQuote' | 'addQuoteLine' | 'removeQuoteLine' | 'sendQuote' | 'acceptQuote' | 'rejectQuote' | 'convertQuoteToSaleOrder' | 'convertRepairQuoteToSOAndInvoice' | 'reviseQuote' | 'deleteQuote' | 'createSaleOrder' | 'updateSaleOrder' | 'addSOLine' | 'assignSerialToSOLine' | 'assignSerialsToSOLine' | 'unassignSerialFromSOLine' | 'removeSOLine' | 'moveSOLine' | 'addSOSection' | 'confirmSO' | 'ensureWaitingDeliveryForSO' | 'markQuotationSent' | 'setSaleOrderLock' | 'prepareDelivery' | 'reverseDelivery' | 'validateDelivery' | 'markDeliveryNoteGenerated' | 'updateDelivery' | 'createInvoiceFromSO' | 'deleteSaleOrder' | 'resetSOToDraft' | 'cancelSO' | 'createNewSOVersion' | 'openPOSSession' | 'closePOSSession' | 'createPOSOrder' | 'checkDiscountApproval' | 'requestApproval' | 'checkCreditLimit' | 'getCustomerCreditStatus' | 'issueCreditNoteFromSaleOrder' | 'approveRequest' | 'getPendingApprovalsForUser'> {
+  /** Replace a quote's lines, recompute its totals and save it. */
+  const saveQuoteLines = (quoteId: string, updatedLines: Quote['lines']) => {
+    const newSubtotal = updatedLines.reduce((sum, l) => sum + l.subtotal, 0)
+    const newTaxTotal = updatedLines.reduce((sum, l) => sum + l.taxAmount, 0)
+    const newTotal = newSubtotal + newTaxTotal
+    const totalDiscount = updatedLines.reduce((sum, l) => sum + l.discountAmount, 0)
+    
+    store.setQuotes(prev => {
+      const next = prev.map(q => q.id === quoteId ? {
+        ...q,
+        lines: updatedLines,
+        subtotal: newSubtotal, taxTotal: newTaxTotal, total: newTotal,
+        discountAmount: totalDiscount,
+        discountPercent: newSubtotal > 0 ? Math.round((totalDiscount / (newSubtotal + totalDiscount)) * 100 * 100) / 100 : 0,
+      } : q)
+      const updated = next.find(q => q.id === quoteId)
+      if (updated) sync(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      return next
+    })
+  }
+
   return {
     createKilimallOrder: async (p) => {
         const user = store.currentUser()
@@ -921,23 +942,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         }
         
         const updatedLines = [...quote.lines, line]
-        const newSubtotal = updatedLines.reduce((sum, l) => sum + l.subtotal, 0)
-        const newTaxTotal = updatedLines.reduce((sum, l) => sum + l.taxAmount, 0)
-        const newTotal = newSubtotal + newTaxTotal
-        const totalDiscount = updatedLines.reduce((sum, l) => sum + l.discountAmount, 0)
-        
-        store.setQuotes(prev => {
-          const next = prev.map(q => q.id === quoteId ? {
-            ...q,
-            lines: updatedLines,
-            subtotal: newSubtotal, taxTotal: newTaxTotal, total: newTotal,
-            discountAmount: totalDiscount,
-            discountPercent: newSubtotal > 0 ? Math.round((totalDiscount / (newSubtotal + totalDiscount)) * 100 * 100) / 100 : 0,
-          } : q)
-          const updated = next.find(q => q.id === quoteId)
-          if (updated) sync(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-          return next
-        })
+        saveQuoteLines(quoteId, updatedLines)
         
         store.showToast('Line item added to quote')
       },
@@ -947,23 +952,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
         if (!quote) return
         
         const updatedLines = quote.lines.filter(l => l.id !== lineId)
-        const newSubtotal = updatedLines.reduce((sum, l) => sum + l.subtotal, 0)
-        const newTaxTotal = updatedLines.reduce((sum, l) => sum + l.taxAmount, 0)
-        const newTotal = newSubtotal + newTaxTotal
-        const totalDiscount = updatedLines.reduce((sum, l) => sum + l.discountAmount, 0)
-        
-        store.setQuotes(prev => {
-          const next = prev.map(q => q.id === quoteId ? {
-            ...q,
-            lines: updatedLines,
-            subtotal: newSubtotal, taxTotal: newTaxTotal, total: newTotal,
-            discountAmount: totalDiscount,
-            discountPercent: newSubtotal > 0 ? Math.round((totalDiscount / (newSubtotal + totalDiscount)) * 100 * 100) / 100 : 0,
-          } : q)
-          const updated = next.find(q => q.id === quoteId)
-          if (updated) sync(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-          return next
-        })
+        saveQuoteLines(quoteId, updatedLines)
         
         store.showToast('Line item removed')
       },

@@ -51,6 +51,25 @@ import type { StoreDeps } from './deps'
 
 /** repairs actions of the store. `store` reads the provider's current state, setters and helpers. */
 export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOutsourceJobBill' | 'addOutsourceVendor' | 'updateOutsourceVendor' | 'addOutsourceJob' | 'returnOutsourceJob' | 'recordOutsourcePayment' | 'createRepair' | 'updateRepair' | 'deleteRepair' | 'checkWarrantyForRepair' | 'fileWarrantyClaim' | 'verifyRepairIntake' | 'assignTechnicianToRepair' | 'logDiagnosis' | 'stopAtDiagnosis' | 'markDiagnosisFeePaid' | 'generateRepairQuote' | 'sendQuoteToCustomer' | 'approveRepairQuote' | 'startRepair' | 'markRepairComplete' | 'addRepairQAItem' | 'completeRepairQA' | 'markPartsArrived' | 'markRepairReady' | 'scheduleDelivery' | 'deliverRepair' | 'closeRepairJob' | 'createInvoiceFromRepair' | 'consolidateRepairInvoices' | 'reviewPortalPayment' | 'canViewRepair' | 'getVisibleRepairs' | 'updateRepairProgress' | 'moveRepairToPreviousProgress' | 'requestProcurement' | 'correctPartsCount' | 'raisePartsPurchaseOrder' | 'appendRepairHistory' | 'declineQuote' | 'waiveDiagnosisFee' | 'markRepairNoCharge' | 'markUnrepairable' | 'returnToCustomer' | 'leaveDeviceWithDeed' | 'convertRetainedRepairToDonation' | 'convertRetainedRepairToBuyBack' | 'createTradeInFromRepair'> {
+  /** Move the planned parts to the repair unit: serials are assigned to the repair, bulk stock is transferred. */
+  const applyReserveSteps = (steps: ReturnType<typeof planRepairPartReserve>['steps'], repairId: string, repairRef: string) => {
+    for (const step of steps) {
+      if (step.kind === 'assign_serial') {
+        store.setSerials(p => p.map(s => s.id === step.serialId
+          ? { ...s, status: 'assigned' as const, repairId, location: 'repair_unit' as LocationId }
+          : s))
+        store.addMove(step.productId, step.productName, 1, 'transfer', step.reason, repairRef, step.from, 'repair_unit', [step.serialNumber])
+      } else {
+        store.setBulkStock(prev => {
+          let next = store.upsertBulkStock(prev, step.productId, step.from, -step.qty)
+          next = store.upsertBulkStock(next, step.productId, step.to, step.qty)
+          return next
+        })
+        store.addMove(step.productId, step.productName, step.qty, 'transfer', step.reason, repairRef, step.from, step.to, [])
+      }
+    }
+  }
+
   return {
     createOutsourceJobBill: (jobId) => {
         const job = store.outsourceJobsRef.current.find(j => j.id === jobId)
@@ -1622,21 +1641,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
               && (s.location === 'warehouse' || s.location === 'shop' || s.location === 'repair_unit'))
             .map(s => ({ id: s.id, serial: s.serial, location: s.location })),
         })
-        for (const step of reservePlan.steps) {
-          if (step.kind === 'assign_serial') {
-            store.setSerials(p => p.map(s => s.id === step.serialId
-              ? { ...s, status: 'assigned' as const, repairId, location: 'repair_unit' as LocationId }
-              : s))
-            store.addMove(step.productId, step.productName, 1, 'transfer', step.reason, repair.ref, step.from, 'repair_unit', [step.serialNumber])
-          } else {
-            store.setBulkStock(prev => {
-              let next = store.upsertBulkStock(prev, step.productId, step.from, -step.qty)
-              next = store.upsertBulkStock(next, step.productId, step.to, step.qty)
-              return next
-            })
-            store.addMove(step.productId, step.productName, step.qty, 'transfer', step.reason, repair.ref, step.from, step.to, [])
-          }
-        }
+        applyReserveSteps(reservePlan.steps, repairId, repair.ref)
   
         const partsUsedNow = partLines.map(line => ({
           productId: line.productId ?? '',
@@ -2074,21 +2079,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
             .filter(s => s.productId === productId && s.status === 'available')
             .map(s => ({ id: s.id, serial: s.serial, location: s.location })),
         })
-        for (const step of arrivedReserve.steps) {
-          if (step.kind === 'assign_serial') {
-            store.setSerials(p => p.map(s => s.id === step.serialId
-              ? { ...s, status: 'assigned' as const, repairId, location: 'repair_unit' as LocationId }
-              : s))
-            store.addMove(step.productId, step.productName, 1, 'transfer', step.reason, repair.ref, step.from, 'repair_unit', [step.serialNumber])
-          } else {
-            store.setBulkStock(prev => {
-              let next = store.upsertBulkStock(prev, step.productId, step.from, -step.qty)
-              next = store.upsertBulkStock(next, step.productId, step.to, step.qty)
-              return next
-            })
-            store.addMove(step.productId, step.productName, step.qty, 'transfer', step.reason, repair.ref, step.from, step.to, [])
-          }
-        }
+        applyReserveSteps(arrivedReserve.steps, repairId, repair.ref)
   
         const updatedLines = (repair.quote?.lines ?? []).map(l => ({
           ...l,

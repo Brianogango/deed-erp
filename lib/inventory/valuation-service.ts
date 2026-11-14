@@ -17,6 +17,18 @@ const OPENING_EQUITY_LABEL = '4004 - Opening Balance Equity'
 /** Repair parts consumption posts to direct repair costs, not generic COGS. */
 const REPAIR_COST_LABEL = '6301 - Solutions and Expert Repair Services\' Costs'
 
+/** What a stock event returns when it was already applied: the valuation as it stands, untouched. */
+async function skippedAsProcessed(productId: string) {
+  const valuation = await prisma.productValuation.findUnique({ where: { productId } })
+  return {
+    skipped: true as const,
+    reason: 'already_processed',
+    averageCost: Number(valuation?.averageCost ?? 0),
+    totalQty: valuation?.totalQty ?? 0,
+    totalValue: Number(valuation?.totalValue ?? 0),
+  }
+}
+
 /** Store a product's new running average (quantity, value, unit cost). */
 const saveAverageValuation = (
   productId: string,
@@ -461,16 +473,7 @@ export async function processStockReceipt(params: {
 
   const costingMethod = await resolveCostingMethod(params.productId)
   const eventKey = stockValuationEventKey('receipt', params.reference || params.movementId || '', params.productId)
-  if (await alreadyProcessed(eventKey)) {
-    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
-    return {
-      skipped: true as const,
-      reason: 'already_processed',
-      averageCost: Number(valuation?.averageCost ?? 0),
-      totalQty: valuation?.totalQty ?? 0,
-      totalValue: Number(valuation?.totalValue ?? 0),
-    }
-  }
+  if (await alreadyProcessed(eventKey)) return skippedAsProcessed(params.productId)
 
   const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
   const receiptCost = Math.max(0, Number(params.unitCost) || 0)
@@ -685,16 +688,7 @@ export async function processStockCustomerReturn(params: {
   }
   const costingMethod = await resolveCostingMethod(params.productId)
   const eventKey = stockValuationEventKey('customer_return', params.reference || '', params.productId)
-  if (await alreadyProcessed(eventKey)) {
-    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
-    return {
-      skipped: true as const,
-      reason: 'already_processed',
-      averageCost: Number(valuation?.averageCost ?? 0),
-      totalQty: valuation?.totalQty ?? 0,
-      totalValue: Number(valuation?.totalValue ?? 0),
-    }
-  }
+  if (await alreadyProcessed(eventKey)) return skippedAsProcessed(params.productId)
 
   const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
   if (qty <= 0) throw new Error('Return qty must be positive')
@@ -861,16 +855,7 @@ export async function processStockAdjustment(params: {
   }
   const costingMethod = await resolveCostingMethod(params.productId)
   const eventKey = stockValuationEventKey('adjustment_add', params.reference || '', params.productId)
-  if (await alreadyProcessed(eventKey)) {
-    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
-    return {
-      skipped: true as const,
-      reason: 'already_processed',
-      averageCost: Number(valuation?.averageCost ?? 0),
-      totalQty: valuation?.totalQty ?? 0,
-      totalValue: Number(valuation?.totalValue ?? 0),
-    }
-  }
+  if (await alreadyProcessed(eventKey)) return skippedAsProcessed(params.productId)
 
   const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
   const unitCost = Math.max(

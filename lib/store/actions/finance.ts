@@ -351,6 +351,37 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
           store.setExpenses(prev => prev.map(e => e.id === id ? expense : e))
           store.setJournalEntries(prev => prev.filter(j => j.ref !== journalRef))
         }
+        // Post the approval journal here and on the server; undo the approval if the server refuses it.
+        const postApprovalJournal = (reviewedExpense: Expense) => {
+          const journal = buildExpenseApprovalJournal(reviewedExpense)
+          store.setJournalEntries(prev => [journal, ...prev])
+          store.addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
+          void fetch('/api/expenses/post-journal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              kind: 'approval',
+              expenseId: reviewedExpense.id,
+              ref: reviewedExpense.ref,
+              amount: reviewedExpense.amount,
+              description: reviewedExpense.description,
+              category: reviewedExpense.category,
+              paymentMethod: reviewedExpense.paymentMethod,
+              submittedByName: reviewedExpense.submittedByName,
+              bankAccountId: journal.bankAccountId,
+              date: journal.date,
+            }),
+          }).then(async res => {
+            if (!res.ok) {
+              const payload = await res.json().catch(() => null) as { error?: string } | null
+              undoApproval(journal.ref)
+              store.showToast(`${payload?.error || 'Expense journal posting failed'} — the approval was undone`, 'error')
+            }
+          }).catch(() => {
+            undoApproval(journal.ref)
+            store.showToast('Expense journal posting failed — the approval was undone', 'error')
+          })
+        }
   
         const chain = expense.approvalChain
         if (chain?.length) {
@@ -377,34 +408,7 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
           }
           store.setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
           if (fullyApproved && !store.journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
-            const journal = buildExpenseApprovalJournal(reviewedExpense)
-            store.setJournalEntries(prev => [journal, ...prev])
-            store.addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
-            void fetch('/api/expenses/post-journal', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                kind: 'approval',
-                expenseId: reviewedExpense.id,
-                ref: reviewedExpense.ref,
-                amount: reviewedExpense.amount,
-                description: reviewedExpense.description,
-                category: reviewedExpense.category,
-                paymentMethod: reviewedExpense.paymentMethod,
-                submittedByName: reviewedExpense.submittedByName,
-                bankAccountId: journal.bankAccountId,
-                date: journal.date,
-              }),
-            }).then(async res => {
-              if (!res.ok) {
-                const payload = await res.json().catch(() => null) as { error?: string } | null
-                undoApproval(journal.ref)
-                store.showToast(`${payload?.error || 'Expense journal posting failed'} — the approval was undone`, 'error')
-              }
-            }).catch(() => {
-              undoApproval(journal.ref)
-              store.showToast('Expense journal posting failed — the approval was undone', 'error')
-            })
+            postApprovalJournal(reviewedExpense)
           }
           if (expense?.submittedByUserId) {
             const pending = nextChain.find(s => s.status === 'pending')
@@ -437,34 +441,7 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
         const reviewedExpense: Expense = { ...expense, status: approved ? 'approved' : 'rejected', reviewedByUserId: user.id, reviewedByName: user.name, reviewedDate: now(), reviewNotes: notes }
         store.setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
         if (approved && !store.journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
-          const journal = buildExpenseApprovalJournal(reviewedExpense)
-          store.setJournalEntries(prev => [journal, ...prev])
-          store.addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
-          void fetch('/api/expenses/post-journal', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              kind: 'approval',
-              expenseId: reviewedExpense.id,
-              ref: reviewedExpense.ref,
-              amount: reviewedExpense.amount,
-              description: reviewedExpense.description,
-              category: reviewedExpense.category,
-              paymentMethod: reviewedExpense.paymentMethod,
-              submittedByName: reviewedExpense.submittedByName,
-              bankAccountId: journal.bankAccountId,
-              date: journal.date,
-            }),
-          }).then(async res => {
-            if (!res.ok) {
-              const payload = await res.json().catch(() => null) as { error?: string } | null
-              undoApproval(journal.ref)
-              store.showToast(`${payload?.error || 'Expense journal posting failed'} — the approval was undone`, 'error')
-            }
-          }).catch(() => {
-            undoApproval(journal.ref)
-            store.showToast('Expense journal posting failed — the approval was undone', 'error')
-          })
+          postApprovalJournal(reviewedExpense)
         }
         if (expense?.submittedByUserId) {
           store.notifyUsers({
