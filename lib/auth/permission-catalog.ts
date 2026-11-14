@@ -11,6 +11,7 @@
  */
 import type { ModuleId, UserRole } from './types'
 import { ROLE_MATRIX, type PermissionAction } from './role-matrix'
+import { SAVE_AREAS } from './save-areas'
 
 export type Enforcement = 'server' | 'screen'
 
@@ -29,9 +30,9 @@ export interface PermissionDef {
    */
   builtIn: readonly UserRole[] | 'module'
   /**
-   * A route permission that replaced a role list. Someone on a custom role is
-   * decided by their base role for it, as before, until the role editor
-   * lists it explicitly.
+   * A route permission that replaced a role list. Custom roles stored before
+   * the editor kept exact lists were given it by their base role; the one-time
+   * role upgrade (upgradeRolePermissions) writes it into those roles.
    */
   followsBaseRole?: boolean
 }
@@ -423,6 +424,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
 ]
+
+// "Save …": saving straight from the screens, one per area (lib/auth/save-areas.ts).
+// Its own group with no module gate: each area names the modules it needs.
+const existingKeys = new Set(PERMISSION_GROUPS.flatMap(g => g.items.map(i => i.key)))
+PERMISSION_GROUPS.splice(PERMISSION_GROUPS.length - 1, 0, {
+  id: 'save',
+  label: 'Saving data from the screens',
+  items: SAVE_AREAS.filter(area => !existingKeys.has(area.key)) // manageHR is listed under HR
+    .map(area => ({ key: area.key, group: 'save', label: area.label, enforcement: 'server' as const, builtIn: area.roles })),
+})
 
 export const PERMISSION_CATALOG: PermissionDef[] = PERMISSION_GROUPS.flatMap(group => group.items)
 

@@ -1,187 +1,47 @@
 import { canonicalRole } from './roles'
 import { userCan } from './can'
+import { SAVE_AREAS } from './save-areas'
 import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
 
 type StoreUser = {
   role?: unknown
   modules?: unknown
-  /** users.acts_as_technician — writes what a technician may write (see hasTechnicianCapability). */
+  /** users.acts_as_technician — writes what a technician may write. */
   actsAsTechnician?: unknown
-  /** A custom role's exact permissions. */
+  /** A custom role's permissions. */
   permissions?: unknown
 }
 
 type StoreWritePolicy = {
-  roles: readonly string[]
+  /** The "Save …" permission (lib/auth/save-areas.ts). */
+  permission: string
   modules?: readonly string[]
-  /** Also allowed for whoever holds this permission (e.g. an HR custom role). */
-  permission?: string
 }
 
-const DIRECTOR = ['director'] as const
-const ADMIN = [...DIRECTOR, 'admin_officer'] as const
-// HR records: the Director, and whoever holds manageHR (an HR custom role).
-const HR = DIRECTOR
-const FINANCE = [...ADMIN, 'finance_officer'] as const
-const SALES = [...FINANCE, 'sales_rep', 'kilimall_officer', 'technical_lead'] as const
-const INVENTORY = [...ADMIN, 'inventory_officer', 'technical_lead'] as const
-const REPAIR = [...FINANCE, 'technical_lead', 'technician'] as const
-const OPERATIONS = [...ADMIN, 'finance_officer', 'inventory_officer', 'technical_lead'] as const
-const ALL_OPERATIONAL = [...FINANCE, 'inventory_officer', 'kilimall_officer', 'sales_rep', 'technical_lead', 'technician'] as const
+/** Who may save each store key from the screens: one entry per key, from SAVE_AREAS. */
+export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = Object.freeze(Object.fromEntries(
+  SAVE_AREAS.flatMap(area => area.storeKeys.map(entry => {
+    const [key, modules] = typeof entry === 'string' ? [entry, area.modules] : entry
+    return [key, { permission: area.key, modules }]
+  })),
+))
 
-const policy = (roles: readonly string[], modules?: readonly string[]): StoreWritePolicy => ({ roles, modules })
-const hrPolicy = (modules: readonly string[]): StoreWritePolicy => ({ roles: HR, modules, permission: 'manageHR' })
-
-/**
- * Explicit legacy app-state write ACL.
- *
- * This list is intentionally exhaustive for every client-writable key registered
- * in app-state-hydration.ts. A new key is DENIED until it is deliberately added
- * here. Dedicated APIs remain responsible for finer row/field/state-transition
- * authorization; this is the outer wholesale-store guard.
- */
-export const STORE_WRITE_POLICIES: Readonly<Record<string, StoreWritePolicy>> = Object.freeze({
-  // No module named 'settings' exists, so this refused every Admin Officer
-  // edit although Settings opens for them. The role list is the rule.
-  deed_companySettings: policy(ADMIN),
-  deed_systemSettings: policy(DIRECTOR),
-  deed_profileImages: policy(ALL_OPERATIONAL),
-
-  deed_departments: policy(ADMIN, ['hr']),
-  deed_contracts: hrPolicy(['hr']),
-  deed_customerContracts: policy([...ADMIN, 'sales_rep'], ['crm', 'sales']),
-  deed_hrDocuments: hrPolicy(['hr', 'my_documents']),
-  deed_workflowApprovals: policy(FINANCE, ['sales', 'accounting']),
-  deed_employeeAssets: hrPolicy(['hr']),
-  deed_leaveBalances: hrPolicy(['hr']),
-  deed_leaveRequests: hrPolicy(['hr', 'leave']),
-  deed_salaryAdvances: hrPolicy(['hr']),
-  deed_jobPostings: hrPolicy(['hr']),
-  deed_candidates: hrPolicy(['hr']),
-  deed_trainingPrograms: hrPolicy(['hr']),
-  deed_employeeTrainings: hrPolicy(['hr']),
-  deed_hr_sops: policy(ADMIN, ['hr', 'sops']),
-  deed_hr_perf_targets: hrPolicy(['hr']),
-
-  deed_products: policy(INVENTORY, ['inventory']),
-  deed_productPriceHistory: policy(INVENTORY, ['inventory']),
-  // A repair trade-in registers the customer's device serial from the repair
-  // screen; same inventory roles, reached through repair access too.
-  deed_serials: policy(INVENTORY, ['inventory', 'repair']),
-  deed_bulkStock: policy(INVENTORY, ['inventory']),
-  deed_stockTransfers: policy(OPERATIONS, ['inventory']),
-  deed_stockAdjustments: policy(OPERATIONS, ['inventory']),
-  deed_stockReservations: policy([...INVENTORY, 'sales_rep'], ['inventory', 'sales', 'pos']),
-  deed_openingStockPosted: policy(INVENTORY, ['inventory']),
-  deed_stockMoves: policy(OPERATIONS, ['inventory', 'pos']),
-  deed_refurbishmentJobs: policy(REPAIR, ['refurbishment', 'repair']),
-  deed_receipts: policy(INVENTORY, ['purchase', 'inventory']),
-
-  deed_saleOrders: policy(SALES, ['sales']),
-  deed_quotes: policy(SALES, ['sales', 'crm']),
-  deed_invoices: policy([...FINANCE, 'sales_rep', 'technical_lead', 'lead_tech'], ['sales', 'accounting', 'repair']),
-  deed_payments: policy(FINANCE, ['accounting', 'sales']),
-  deed_deliveries: policy([...INVENTORY, 'sales_rep'], ['delivery', 'sales']),
-  deed_warranties: policy([...SALES, 'technician'], ['sales', 'repair', 'after_sales']),
-  deed_approvalRequests: policy(SALES, ['sales']),
-  // The payment details printed on a quotation or invoice (which bank, which
-  // M-PESA till) are chosen by whoever prepares the document, and sales reps
-  // prepare quotations. Finance-only meant a rep's choice was refused.
-  deed_documentPaymentDetails: policy([...FINANCE, 'sales', 'sales_rep'], ['accounting', 'sales']),
-  deed_customerCredits: policy(FINANCE, ['accounting', 'sales']),
-
-  deed_contacts: policy([...SALES, 'inventory_officer'], ['contacts', 'crm', 'sales', 'purchase', 'pos', 'repair', 'delivery', 'after_sales', 'outsource', 'accounting']),
-  deed_companies: policy(SALES, ['crm']),
-  deed_contactPersons: policy(SALES, ['crm']),
-  deed_opportunities: policy(SALES, ['crm']),
-
-  deed_purchaseOrders: policy([...INVENTORY, 'finance_officer'], ['purchase']),
-  deed_purchaseReturns: policy(INVENTORY, ['purchase']),
-
-  // Outsourcing a repair also saves the repair (it is held "in repair" while at
-  // the vendor, and moved to QC when it comes back), so the roles that send
-  // repairs out must be able to save it.
-  deed_repairs_v2: policy([...REPAIR, 'inventory', 'inventory_officer'], ['repair', 'outsource']),
-  deed_outboundReleases: policy(REPAIR, ['repair', 'after_sales']),
-  // Inventory officers send laptops out too (stock units as well as repairs),
-  // and the Outsource screen lets them. Leaving them off this list meant every
-  // job they created was refused here and silently discarded by the browser —
-  // machines went to a vendor with no record anywhere but that one tab.
-  deed_outsourceJobs: policy([...REPAIR, 'inventory', 'inventory_officer'], ['repair', 'outsource']),
-  // The job form can add a vendor in place, so whoever may create a job must be
-  // able to save the vendor it names.
-  deed_outsourceVendors: policy([...ADMIN, 'technical_lead', 'inventory', 'inventory_officer'], ['outsource', 'repair']),
-  deed_outsourcePayments: policy(FINANCE, ['outsource', 'accounting']),
-
-  deed_accounts: policy(FINANCE, ['accounting']),
-  deed_bankAccounts: policy(FINANCE, ['accounting']),
-  deed_bankRecons: policy(['director', 'finance_officer'], ['accounting']),
-  deed_bankStatementLines: policy(['director', 'finance_officer'], ['accounting']),
-  deed_journalEntries: policy(FINANCE, ['accounting']),
-  deed_expenses: policy(ALL_OPERATIONAL, ['expenses', 'accounting']),
-  deed_deposits: policy(FINANCE, ['deposits', 'accounting']),
-  deed_refundPayments: policy([...FINANCE, 'sales_rep'], ['after_sales', 'accounting']),
-  deed_payrollRuns: policy(FINANCE, ['hr', 'accounting']),
-
-  deed_posOrders: policy([...FINANCE, 'sales_rep', 'kilimall_officer'], ['pos']),
-  deed_posSessionOpen: policy([...FINANCE, 'sales_rep', 'kilimall_officer'], ['pos']),
-  deed_posSessionOpeningCash: policy([...FINANCE, 'sales_rep', 'kilimall_officer'], ['pos']),
-  deed_posSessionId: policy([...FINANCE, 'sales_rep', 'kilimall_officer'], ['pos']),
-  deed_posSessions: policy([...FINANCE, 'sales_rep', 'kilimall_officer'], ['pos']),
-
-  deed_riders: policy(ADMIN, ['delivery']),
-  deed_deliveryJobs: policy([...ADMIN, 'sales_rep', 'inventory_officer', 'technical_lead'], ['delivery']),
-  deed_riderWeeklyPays: policy(FINANCE, ['delivery', 'hr']),
-
-  deed_returnOrders: policy([...FINANCE, 'sales_rep', 'technical_lead'], ['after_sales']),
-  // Trade-ins are booked by the desk and by inventory (the device comes into
-  // stock) as well as After Sales, and raised from the repair screen by
-  // technical leads. Approving and paying stay Finance's (enforced in the
-  // actions); this only lets the draft and its stocking save.
-  deed_buyBacks: policy(
-    [...FINANCE, 'sales_rep', 'technical_lead', 'lead_tech', 'inventory', 'inventory_officer'],
-    ['after_sales', 'repair', 'inventory'],
-  ),
-  deed_donations: policy(ADMIN, ['after_sales']),
-  deed_clientExchanges: policy([...FINANCE, 'sales_rep', 'technical_lead'], ['after_sales']),
-
-  deed_kilimallOrders: policy([...ADMIN, 'kilimall', 'kilimall_officer'], ['kilimall']),
-  deed_kilimallDispatches: policy([...ADMIN, 'kilimall', 'kilimall_officer', 'inventory_officer'], ['kilimall']),
-  deed_kilimallSettlements: policy([...FINANCE, 'kilimall', 'kilimall_officer'], ['kilimall']),
-
-  deed_sops: policy(ADMIN, ['sops']),
-  deed_sopActuals: policy(ALL_OPERATIONAL, ['sops']),
-  deed_ref_sops: policy(REPAIR, ['sops', 'refurbishment']),
-
-  deed_holdovers: policy([...SALES, 'inventory_officer'], ['holdovers']),
-  // The module is company_property. 'property' matched no one, so every Admin
-  // Officer save of the register was refused (11 Nov: the whole register lost).
-  deed_companyAssets: policy(ADMIN, ['company_property']),
-})
-
-
-function normalizeRoles(roles: readonly string[]): Set<string> {
-  return new Set(roles.map(canonicalRole))
-}
+const list = (value: unknown) => Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : null
 
 export function canWriteStoreKey(user: StoreUser, key: string): boolean {
   if (!isKnownClientAppStateKey(key)) return false
   const entry = STORE_WRITE_POLICIES[key]
   if (!entry) return false
-
   const role = canonicalRole(user.role)
-  const roles = normalizeRoles(entry.roles)
-  // A user acting as a technician writes what a technician writes; they need
-  // the module like anyone else (the repair module comes with the flag).
-  const asTechnician = user.actsAsTechnician === true && roles.has('technician')
-  const byPermission = !!entry.permission && userCan({
+  if (!role) return false
+  const subject = {
     role,
-    permissions: Array.isArray(user.permissions) ? user.permissions.filter((p): p is string => typeof p === 'string') : null,
-  }, entry.permission)
-  if (!role || !(roles.has(role) || asTechnician || byPermission)) return false
-  if (!entry.modules?.length) return true
-  if (role === 'director') return true
-
-  const modules = new Set(Array.isArray(user.modules) ? user.modules.filter((m): m is string => typeof m === 'string') : [])
+    modules: list(user.modules),
+    permissions: list(user.permissions),
+    actsAsTechnician: user.actsAsTechnician === true,
+  }
+  if (!userCan(subject, entry.permission)) return false
+  if (!entry.modules?.length || role === 'director') return true
+  const modules = new Set(subject.modules ?? [])
   return entry.modules.some(module => modules.has(module))
 }

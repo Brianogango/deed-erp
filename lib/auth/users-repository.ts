@@ -72,7 +72,6 @@ const withAccessRole = <T extends AuthUserRecord>(user: T, accessRoleId: string 
     role: role.baseRole,
     modules: [...role.modules],
     permissions: effectivePermissions(role.modules, role.permissions),
-    permissionsExact: role.exactPermissions === true,
     accessRole: { id: role.id, name: role.name },
   }
 }
@@ -111,7 +110,7 @@ const toPublicUser = (user: AuthUserRecord): PublicUser => ({
   employeeId: user.employeeId ?? null,
   email: user.email ?? null,
   actsAsTechnician: Boolean(user.actsAsTechnician),
-  ...(user.permissions ? { permissions: [...user.permissions], permissionsExact: user.permissionsExact === true } : {}),
+  ...(user.permissions ? { permissions: [...user.permissions] } : {}),
   ...(user.accessRole ? { accessRole: { ...user.accessRole } } : {}),
 })
 

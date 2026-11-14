@@ -14,8 +14,6 @@ type Subject = {
   role?: string | null
   modules?: readonly string[] | null
   permissions?: readonly string[] | null
-  /** The custom role holds exactly its list (no base-role fallback). */
-  permissionsExact?: boolean | null
   /** users.acts_as_technician: passes wherever technicians do. */
   actsAsTechnician?: boolean | null
 }
@@ -27,7 +25,9 @@ export function userCan(user: Subject | null | undefined, key: string): boolean 
   if (!user) return false
   const def = PERMISSION_BY_KEY[key]
   if (!def) return false // an unknown permission is never granted
-  if (Array.isArray(user.permissions) && (user.permissions.includes(key) || !def.followsBaseRole || user.permissionsExact === true)) return user.permissions.includes(key)
+  const asTechnician = user.actsAsTechnician === true && def.builtIn !== 'module' && def.builtIn.includes('technician')
+  // A custom role holds exactly its list.
+  if (Array.isArray(user.permissions)) return user.permissions.includes(key) || asTechnician
   const role = canonicalRole(user.role)
   if (role === 'director') return true
   if (def.builtIn === 'module') {
@@ -35,6 +35,6 @@ export function userCan(user: Subject | null | undefined, key: string): boolean 
     if (!module) return false
     return SELF_SERVICE.has(module) || (user.modules ?? []).includes(module)
   }
-  return def.builtIn.includes(role as never) || (user.actsAsTechnician === true && def.builtIn.includes('technician'))
+  return def.builtIn.includes(role as never) || asTechnician
 }
 

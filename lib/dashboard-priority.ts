@@ -63,7 +63,7 @@ export function dashboardSectionsForRole(role: UserRole | string | null | undefi
   }
 }
 
-type DashboardUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician' | 'permissions' | 'permissionsExact'>
+type DashboardUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician' | 'permissions'>
 
 const DASHBOARD_SECTION_MODULES: Record<keyof DashboardSections, ModuleId> = {
   finance: 'accounting',

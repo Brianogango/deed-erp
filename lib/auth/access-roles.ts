@@ -6,6 +6,7 @@
 import { MODULE_IDS, ROLE_DEFAULT_MODULES, USER_ROLES, type ModuleId, type UserRole } from './types'
 import {
   PERMISSION_BY_KEY,
+  PERMISSION_CATALOG,
   PERMISSION_GROUPS,
   builtInPermissions,
   isKnownPermission,
@@ -23,8 +24,6 @@ export interface AccessRole {
   modules: ModuleId[]
   permissions: string[]
   builtIn: boolean
-  /** Saved by the role editor: holds exactly what it lists (no base-role fallback). */
-  exactPermissions?: boolean
 }
 
 export const BUILT_IN_ROLE_LABELS: Record<UserRole, string> = {
@@ -78,6 +77,32 @@ export function effectivePermissions(modules: readonly string[], permissions: re
       return module === null || open.has(module)
     })
     .map(def => def.key)
+}
+
+/** Bumped when permissions are added that existing custom roles must keep holding. */
+export const ROLE_CATALOG_VERSION = 1
+
+/**
+ * A stored custom role brought up to the current list (run once per role,
+ * on the server, when the role store opens).
+ *  v1: saving from the screens became "Save …" permissions — a role gets the
+ *      ones its base role held. A role saved before the editor stored exact
+ *      lists also gets every route permission its base role held, which it
+ *      used to receive by falling back to the base role.
+ */
+export function upgradeRolePermissions(
+  role: { baseRole: UserRole; modules: readonly string[]; permissions: readonly string[] },
+  fromVersion: number,
+  savedExact: boolean,
+): string[] {
+  const has = new Set(role.permissions)
+  if (fromVersion < 1) {
+    const base = new Set(builtInPermissions(role.baseRole, role.modules))
+    for (const def of PERMISSION_CATALOG) {
+      if (base.has(def.key) && (def.group === 'save' || (!savedExact && def.followsBaseRole))) has.add(def.key)
+    }
+  }
+  return effectivePermissions(role.modules, [...has])
 }
 
 export interface RoleInput {

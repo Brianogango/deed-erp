@@ -110,7 +110,7 @@ describe('dashboard role + per-user module gating', () => {
 
   it('aligns leave approval visibility with all dedicated API approver roles', () => {
     expect(dashboardSectionsForUser(user('director', ['hr'])).leaveApprovals).toBe(true)
-    expect(dashboardSectionsForUser({ ...user('admin_officer', ['hr']), permissions: ['approveLeave'], permissionsExact: true }).leaveApprovals, 'HR role').toBe(true)
+    expect(dashboardSectionsForUser({ ...user('admin_officer', ['hr']), permissions: ['approveLeave'] }).leaveApprovals, 'HR role').toBe(true)
     for (const role of ['finance_officer', 'admin_officer', 'technical_lead', 'sales_rep', 'inventory_officer', 'kilimall_officer', 'technician']) {
       expect(dashboardSectionsForUser(user(role, ['hr'])).leaveApprovals, role).toBe(false)
     }

@@ -6,7 +6,7 @@ import { userCan } from '@/lib/auth/can'
 import { validateRoleInput } from '@/lib/auth/access-roles'
 
 // An HR person on a custom role (based on Admin Officer).
-const hr = { role: 'admin_officer', modules: ['dashboard', 'hr', 'leave', 'my_documents'], permissions: ['manageHR', 'manageUsers', 'viewUsers', 'audit.view.users', 'audit.view.hr'], permissionsExact: true }
+const hr = { role: 'admin_officer', modules: ['dashboard', 'hr', 'leave', 'my_documents'], permissions: ['manageHR', 'manageUsers', 'viewUsers', 'audit.view.users', 'audit.view.hr'] }
 
 describe('HR manages user accounts', () => {
   it('can create users on the roles the Director set up', () => {
@@ -36,10 +36,8 @@ describe('HR manages user accounts', () => {
     expect(validateRoleInput({ name: 'HR', baseRole: 'admin_officer', modules: ['hr'], permissions: ['manageRoles'] }).ok).toBe(false)
   })
 
-  it('a role saved by the editor holds exactly its list', () => {
-    // Admin Officer may edit contacts through the base role…
-    expect(userCan({ role: 'admin_officer', permissions: [] }, 'sales.contacts.edit')).toBe(true)
-    // …but not once the role was saved with an exact list.
+  it('a custom role holds exactly its list', () => {
+    expect(userCan({ role: 'admin_officer' }, 'sales.contacts.edit')).toBe(true)
     expect(userCan(hr, 'sales.contacts.edit')).toBe(false)
   })
 })

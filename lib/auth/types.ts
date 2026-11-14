@@ -65,8 +65,6 @@ export interface PublicUser {
    */
   accessRole?: { id: string; name: string } | null
   permissions?: string[]
-  /** The custom role was saved by the role editor: no fallback to the base role. */
-  permissionsExact?: boolean
 }
 
 export interface AuthUserRecord extends PublicUser {

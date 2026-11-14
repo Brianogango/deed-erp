@@ -39,7 +39,7 @@ const HR_TEMPLATE: Draft = {
   description: 'Employee records, leave, user accounts (never Directors) and the HR audit trail.',
   baseRole: 'admin_officer',
   modules: ['dashboard', 'hr', 'leave', 'my_documents'],
-  permissions: ['manageHR', 'viewHrRecords', 'approveLeave', 'manageUsers', 'viewUsers', 'admin.settings.open', 'audit.view.users', 'audit.view.hr'],
+  permissions: ['manageHR', 'viewHrRecords', 'approveLeave', 'manageUsers', 'viewUsers', 'admin.settings.open', 'audit.view.users', 'audit.view.hr', 'save.hr.departments', 'save.expenses', 'save.profile_images', 'save.sops.actuals'],
 }
 
 const BASE_ROLES = USER_ROLES.filter(r => r !== 'director')
@@ -157,7 +157,7 @@ export default function AccessRoles({ roles, canManage, onChanged }: { roles: Ro
             </label>
           </div>
           <p className="text-[11px] text-gray-500">
-            The base role only decides which of a person’s own records they see (for example a sales rep’s own orders) and how screens not yet split into parts behave.
+            What they can do and save is exactly what is ticked below. The base role still decides which of their own records they see (for example a sales rep’s own orders), which notifications reach them, where approvals are routed, and their dashboard sections.
             Everything you tick below is what they can actually use.
           </p>
 
