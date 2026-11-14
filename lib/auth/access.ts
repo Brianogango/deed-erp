@@ -91,12 +91,9 @@ export const formatRoleLabel = (role: string | null | undefined) => {
 
 // Convenience role-group helpers used across modules.
 // Keep client-side HR controls aligned with the server permission matrix.
-// HR is run by the Director; leave can also be decided by Finance.
-// Admin Officer and Technical Lead have self-service only.
+// HR and leave decisions belong to the Director and to HR (a custom role
+// holding manageHR / approveLeave). Everyone else has self-service only.
 export const HR_MANAGER_ROLES: readonly UserRole[] = ['director']
-export const LEAVE_APPROVER_ROLES: readonly UserRole[] = [
-  'director',
-  'finance_officer',
-]
+export const LEAVE_APPROVER_ROLES: readonly UserRole[] = ['director']
 
 

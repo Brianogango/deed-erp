@@ -14,6 +14,8 @@ export type ExternalNotificationRecipient = {
 export type NotificationPolicy = {
   channels: NotificationChannel[]
   recipientRoles?: string[]
+  /** Everyone who holds this permission (custom roles included, e.g. HR). */
+  recipientPermission?: string
   severity: NotificationSeverity
   priority: NotificationPriority
   requiresAcknowledgement?: boolean

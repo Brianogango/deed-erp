@@ -1,4 +1,5 @@
 import 'server-only'
+import { userCan } from '@/lib/auth/can'
 
 import { createHash } from 'crypto'
 
@@ -68,6 +69,13 @@ async function resolveUserIds(
       select: { id: true },
     })
     for (const row of rows) ids.add(row.id)
+  }
+
+  if (policy.recipientPermission) {
+    const { listPublicUsers } = await import('@/lib/auth/users-repository')
+    for (const user of await listPublicUsers()) {
+      if (user.active !== false && userCan(user, policy.recipientPermission)) ids.add(user.id)
+    }
   }
 
   if (input.excludeActor !== false && input.actorUserId) ids.delete(input.actorUserId)

@@ -63,7 +63,7 @@ export function dashboardSectionsForRole(role: UserRole | string | null | undefi
   }
 }
 
-type DashboardUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician'>
+type DashboardUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician' | 'permissions' | 'permissionsExact'>
 
 const DASHBOARD_SECTION_MODULES: Record<keyof DashboardSections, ModuleId> = {
   finance: 'accounting',
@@ -152,6 +152,8 @@ export function dashboardSectionsForUser(
   const roleSections = dashboardSectionsForRole(user?.role)
   // Acting as a technician brings the workshop section (their own jobs).
   if (user?.actsAsTechnician === true) roleSections.workshop = true
+  // Leave decisions follow the person's permissions (HR is a custom role).
+  roleSections.leaveApprovals = userCan(user, 'approveLeave')
   return Object.fromEntries(
     (Object.keys(roleSections) as (keyof DashboardSections)[]).map(section => [
       section,
