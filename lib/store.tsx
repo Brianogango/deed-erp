@@ -1,5 +1,6 @@
 // @ts-nocheck
 'use client'
+import { createSopActions } from './store/actions/sop'
 import { createHrActions } from './store/actions/hr'
 import { createPurchasingActions } from './store/actions/purchasing'
 import { createDeliveryActions } from './store/actions/delivery'
@@ -3138,6 +3139,9 @@ const setSerialCapitalised = (serialId: string | undefined, restore = false) => 
 }
 
 const storeDeps: StoreDeps = {
+  get setRefSops() { return setRefSops },
+  get setSopActuals() { return setSopActuals },
+  get setSops() { return setSops },
   get assetRef() { return assetRef },
   get empRef() { return empRef },
   get journalEntries() { return journalEntries },
@@ -3917,51 +3921,9 @@ const storeCtx: AppState = {
     saveHrSops: setHrSops,
     saveHrPerfTargets: setHrPerfTargets,
 
-    createSOP: (s) => {
-      const user = currentUser()
-      if (!user) { showToast('Please log in to continue', 'error'); return null }
-      const sop: SOP = { ...s, id: uid(), createdByUserId: user.id, createdByName: user.name, createdAt: now() }
-      setSops(prev => [...prev, sop])
-      showToast('SOP created', 'success')
-      return sop
-    },
-
-    updateSOP: (id, p) => {
-      setSops(prev => prev.map(s => s.id === id ? { ...s, ...p } : s))
-      showToast('SOP updated', 'success')
-    },
-
-    deleteSOP: (id) => {
-      setSops(prev => prev.filter(s => s.id !== id))
-      showToast('SOP deleted', 'info')
-    },
-
-    setSopActual: (sopId, metricId, periodKey, actual, notes) => {
-      const user = currentUser()
-      if (!user) return
-      setSopActuals(prev => {
-        const existing = prev.findIndex(a => a.sopId === sopId && a.metricId === metricId && a.periodKey === periodKey)
-        const entry: SOPActual = { id: uid(), sopId, metricId, periodKey, actual, notes, updatedByUserId: user.id, updatedByName: user.name, updatedDate: now() }
-        if (existing >= 0) return prev.map((a, i) => i === existing ? entry : a)
-        return [...prev, entry]
-      })
-    },
+    ...createSopActions(storeDeps),
 
     refSops,
-    addRefSop: (s) => {
-      const user = currentUser()
-      const doc: RefSOP = { ...s, id: uid(), updatedAt: now(), createdByName: user?.name ?? 'Admin' }
-      setRefSops(p => [doc, ...p])
-      showToast('Document added to Reference Library')
-    },
-    updateRefSop: (id, p) => {
-      setRefSops(prev => prev.map(s => s.id === id ? { ...s, ...p, updatedAt: now() } : s))
-      showToast('Document updated')
-    },
-    deleteRefSop: (id) => {
-      setRefSops(p => p.filter(s => s.id !== id))
-      showToast('Document deleted')
-    },
 
     expenses,
 
