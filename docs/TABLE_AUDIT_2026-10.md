@@ -56,7 +56,7 @@ Per-module counts are source occurrences (one definition may render on several t
   `components/data-table/MobileCardView.tsx`, `lib/data-table/fit.ts` (+ tests),
   `components/erp/horizon-table-alignment.css` (now the single master layer).
 - Removed competing geometry from 30 module rules in `app/globals.css`, `odoo-record-designs.css`,
-  `sales-prototype.css`, `contacts-financial-hierarchy.css`.
+  `sales-workbench.css`, `contacts-financial-hierarchy.css`.
 
 ## Not verified
 

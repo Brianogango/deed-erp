@@ -188,7 +188,6 @@ flowchart TB
 | `app/(app)/` | Authenticated page routes (thin wrappers) and the persistent shell layout | `layout.tsx`, `*/page.tsx` | all |
 | `app/api/` | 270 route handlers | see API reference | all |
 | `app/login`, `app/portal`, `app/track` | Public/customer pages | `portal/repair/[ref]/page.tsx` | Repair portal, quotes |
-| `app/sales-prototype/` | Static demo/look-alike pages (not production flows) | | Sales (design review) |
 | `components/modules/` | Module UIs (`Sales`, `Accounting`, `Repair`, `Inventory`, …) and sub-folders (`accounting/`, `purchase/`, `sales/`, `settings/`, `hr/`, `repair/`) | `Accounting.tsx`, `Repair.tsx` | all |
 | `components/` (other) | Shell, layout, ui kit, data-table, pdf, portal, pos, jarvis, reconfiguration | `AppShell.tsx`, `layout/Sidebar.tsx` | shell |
 | `lib/store.tsx` | **Client application store** (21 848 lines): state, actions, business rules, numbering, sync | | all legacy domains |
@@ -999,14 +998,6 @@ See [`ERP_MODULE_INVENTORY.md`](./ERP_MODULE_INVENTORY.md) §§2–4 (62 request
 | `/portal/repair/[...ref]` | `app/portal/repair/[...ref]/page.tsx` |
 | `/portal/repair/[ref]` | `app/portal/repair/[ref]/page.tsx` |
 | `/portal/repair/new` | `app/portal/repair/new/page.tsx` |
-| `/sales-prototype/deliveries/[id]` | `app/sales-prototype/deliveries/[id]/page.tsx` |
-| `/sales-prototype/invoices/[id]` | `app/sales-prototype/invoices/[id]/page.tsx` |
-| `/sales-prototype/invoices/new` | `app/sales-prototype/invoices/new/page.tsx` |
-| `/sales-prototype/orders/[id]` | `app/sales-prototype/orders/[id]/page.tsx` |
-| `/sales-prototype` | `app/sales-prototype/page.tsx` |
-| `/sales-prototype/quotations/[id]` | `app/sales-prototype/quotations/[id]/page.tsx` |
-| `/sales-prototype/quotations/new` | `app/sales-prototype/quotations/new/page.tsx` |
-| `/sales-prototype/quotations` | `app/sales-prototype/quotations/page.tsx` |
 | `/track/[...ref]` | `app/track/[...ref]/page.tsx` |
 | `/track` | `app/track/page.tsx` |
 
@@ -1464,9 +1455,7 @@ Variables read by application code or scripts. "Template" = present in `.env.exa
 | `VAPID_PRIVATE_KEY` | yes | Web-push private key (secret) | `app/api/notifications/push-test/route.ts` |
 | `VAPID_PUBLIC_KEY` | yes | Web-push public key | `app/api/notifications/push-test/route.ts` |
 | `VAPID_SUBJECT` | yes | Web-push contact subject | `lib/notifications/web-push.ts` |
-| `VISREG_BASE_URL` | **no** | Visual-regression base URL | `scripts/capture-sales-prototypes.mjs` |
 | `VISREG_BYPASS_AUTH` | **no** | Dev-only auth bypass; ignored when `NODE_ENV=production` | `app/(app)/layout.tsx` |
-| `VISREG_OUT_DIR` | **no** | Screenshot output | `scripts/capture-sales-prototypes.mjs` |
 | `VISREG_PASSWORD` | **no** | Visual-regression login (secret) | `scripts/capture-visual-regression.mjs` |
 | `VISREG_SKIP_LOGIN` | **no** | Skip login in capture script | `scripts/capture-visual-regression.mjs` |
 | `VISREG_USERNAME` | **no** | Visual-regression login | `scripts/capture-visual-regression.mjs` |

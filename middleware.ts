@@ -38,8 +38,6 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/portal/warranty',
   // Provider status callbacks authenticate themselves (Twilio signature, Telerivet secret, …).
   '/api/webhooks/notifications',
-  // High-fidelity Sales UX review pack (demo data only — no production writes)
-  '/sales-prototype',
 ]
 const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
 

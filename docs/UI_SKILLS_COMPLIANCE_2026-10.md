@@ -113,7 +113,7 @@ Remaining 390px items: 1 input and 31 targets, dominated by compact in-card text
 ## 7. Business logic is unchanged
 
 Files changed: `app/globals.css`, `components/erp/mobile-chrome.css`, `components/erp/mobile-operational.css`,
-`components/modules/odoo-record-designs.css`, `components/sales-prototype/sales-prototype.css`, `app/layout.tsx`,
+`components/modules/odoo-record-designs.css`, `components/modules/sales/sales-workbench.css`, `app/layout.tsx`,
 `components/erp/PrimaryActionButton.tsx`, `components/ui/index.tsx`, `tailwind.config.js`, plus this doc and screenshots.
 
 The complete non-CSS diff is `className` strings, `title` attributes, the viewport `themeColor` metadata, one

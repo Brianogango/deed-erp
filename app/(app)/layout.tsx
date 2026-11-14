@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getServerSession } from '@/lib/auth/server'
-import { PUBLIC_USERS } from '@/lib/auth/public-users'
+import type { PublicUser } from '@/lib/auth/types'
+import { MODULE_IDS } from '@/lib/auth/types'
 import AppShell from '@/components/AppShell'
 
 /**
@@ -9,6 +10,12 @@ import AppShell from '@/components/AppShell'
  * decode; store data hydrates on the client so this layout does not block on
  * a full app_state read.
  */
+/** Local screenshots only (VISREG_BYPASS_AUTH, never in production): one Director, no data. */
+const VISUAL_REGRESSION_USER: PublicUser = {
+  id: 'visreg', username: 'visreg', name: 'Visual Check', role: 'director',
+  modules: [...MODULE_IDS], active: true, createdAt: '2026-01-01',
+}
+
 export default async function AppGroupLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession()
   const visregBypassAuth =
@@ -19,9 +26,8 @@ export default async function AppGroupLayout({ children }: { children: React.Rea
     redirect('/login')
   }
 
-  const fallbackUser = PUBLIC_USERS.find(user => user.username === 'brian') ?? PUBLIC_USERS[0]
-  const shellUser = session?.user ?? fallbackUser
-  const initialUsers = visregBypassAuth ? PUBLIC_USERS : [shellUser]
+  const shellUser = session?.user ?? VISUAL_REGRESSION_USER
+  const initialUsers = [shellUser]
 
   return (
     <AppShell initialUser={shellUser} initialUsers={initialUsers} serverState={{}}>

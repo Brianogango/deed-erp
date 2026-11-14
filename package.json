@@ -46,7 +46,6 @@
     "postinstall": "prisma generate",
     "test:e2e": "playwright test",
     "parity:check": "node scripts/check-blob-parity.mjs",
-    "seed:final-b974": "node scripts/seed-products-final-b974.mjs",
     "typecheck": "tsc --noEmit",
     "migrate:product-name-width:safe": "node scripts/run-safe-product-name-width.mjs",
     "backfill:notifications": "node scripts/backfill-notifications-to-prisma.mjs",

@@ -70,7 +70,7 @@ Authenticated shell (`app/(app)/layout.tsx`, session required):
 | `/account/password-change` | `PasswordChangeScreen` | any |
 | `/operations` | — | redirects to `/inventory` (`LEGACY_ROUTE_REDIRECTS`); `app/(app)/operations/page.tsx` still exists |
 
-Public/other routes: `/login`; `/track`, `/track/[...ref]` (public repair tracking); `/portal/repair/[ref]`, `/portal/repair/[...ref]`, `/portal/repair/new` (customer intake), `/portal/quotes/[id]`; `/sales-prototype/**` (static look-alike pages with demo data — **not production routes**; `AGENTS.md` says to test `/sales`, not `/sales-prototype`, and middleware lists `/sales-prototype` as public).
+Public/other routes: `/login`; `/track`, `/track/[...ref]` (public repair tracking); `/portal/repair/[ref]`, `/portal/repair/[...ref]`, `/portal/repair/new` (customer intake), `/portal/quotes/[id]`.
 
 Legacy redirects (`middleware.ts`): `/dashboard→/`, `/purchase→/purchases`, `/operations→/inventory`, `/accounting→/finance`, `/after_sales→/aftersales`, `/hr/documents→/documents`.
 

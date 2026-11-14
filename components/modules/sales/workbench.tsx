@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import { FormField, WorkflowStageBar } from '@/components/erp'
 import { normalizeDeliveryStatus } from '@/lib/odoo-sales-flow'
-import '@/components/sales-prototype/sales-prototype.css'
+import './sales-workbench.css'
 import '@/components/modules/odoo-record-designs.css'
 
 type SalesDocPillTone =

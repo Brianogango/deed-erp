@@ -194,9 +194,7 @@
 | `VAPID_PRIVATE_KEY` | yes | Web-push private key (secret) | `app/api/notifications/push-test/route.ts` |
 | `VAPID_PUBLIC_KEY` | yes | Web-push public key | `app/api/notifications/push-test/route.ts` |
 | `VAPID_SUBJECT` | yes | Web-push contact subject | `lib/notifications/web-push.ts` |
-| `VISREG_BASE_URL` | **no** | Visual-regression base URL | `scripts/capture-sales-prototypes.mjs` |
 | `VISREG_BYPASS_AUTH` | **no** | Dev-only auth bypass; ignored when `NODE_ENV=production` | `app/(app)/layout.tsx` |
-| `VISREG_OUT_DIR` | **no** | Screenshot output | `scripts/capture-sales-prototypes.mjs` |
 | `VISREG_PASSWORD` | **no** | Visual-regression login (secret) | `scripts/capture-visual-regression.mjs` |
 | `VISREG_SKIP_LOGIN` | **no** | Skip login in capture script | `scripts/capture-visual-regression.mjs` |
 | `VISREG_USERNAME` | **no** | Visual-regression login | `scripts/capture-visual-regression.mjs` |
@@ -249,7 +247,7 @@ Trigger: push to `master` or manual dispatch (`.github/workflows/deploy.yml`, co
 3. `deploy` job (needs 1+2; master only), using repository secrets `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`:
    a. Scrub known ops-script copies and generated files from the server worktree so the clean-tree check passes; configure GitHub SSH over port 443.
    b. `/usr/local/bin/deed-erp-deploy.sh` (installed root-owned copy of `scripts/deploy/deed-erp-deploy.sh`).
-   c. Apply the fixed list of `database/migrations/*.sql` files, run `fix-coa-blob-alignment.mjs`, `zero-contact-payment-terms.mjs --apply`, `seed-products-final-b974.mjs` (step is named "Seed Final_b974 products" but also performs migrations — idempotent by design).
+   c. Apply the fixed list of `database/migrations/*.sql` files, run `fix-coa-blob-alignment.mjs` and `zero-contact-payment-terms.mjs --apply` (step "Apply database migrations" — idempotent by design).
    d. Verify: production commit is the trigger commit or a descendant; `scripts/security/verify-production-config.mjs` (secrets present/long enough/not placeholders, `MFA_ENFORCE_PRIVILEGED=true`, `SETUP_ADMIN_SECRET` removed, rotation date set); `scripts/security/audit-production-host.sh`; `scripts/security/live-penetration-smoke.mjs` (non-intrusive smoke).
 
 ### 6.2 What `deed-erp-deploy.sh` does
@@ -271,7 +269,7 @@ sudo install -m 0750 -o root -g root scripts/deploy/deed-erp-deploy.sh /usr/loca
 
 - **First admin:** set `SETUP_ADMIN_SECRET`, call `POST /api/setup-admin` with header `x-setup-secret` and a strong initial password (refused once any user exists), then **remove `SETUP_ADMIN_SECRET`** (the deploy verification fails while it is set). Do not paste the secret or password into shared logs.
 - **Chart of accounts:** `POST /api/accounting/bootstrap-coa` (DIR/FIN/ADM) or SQL `20260828_official_coa_alignment_safe.sql`; `scripts/fix-coa-blob-alignment.mjs`.
-- **Products:** `scripts/seed-products-final-b974.mjs` (idempotent by name), `scripts/download-catalog-photos.ts`, `data/catalog-photos/`.
+- **Products:** no seed data; product photos via `scripts/download-catalog-photos.ts`, `data/catalog-photos/`.
 - **Client store seeds** in `lib/store.tsx` are intentionally empty arrays (except departments and default settings/bank-account templates).
 
 ## 8. Backups

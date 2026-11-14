@@ -31678,7 +31678,7 @@ button, [role="button"], [role="tab"] {
 
 /* Sales list header follows the master module header geometry (tablet and up):
    same padding, title size/weight and subtitle size as every ModuleHeader. The extra
-   classes outrank the `!important` rules in sales-prototype.css / odoo-record-designs.css. */
+   classes outrank the `!important` rules in sales-workbench.css / odoo-record-designs.css. */
 @media (min-width: 768px) {
   .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header.sales-list-page-header {
     padding: var(--mod-header-pad-y) var(--mod-header-pad-x) !important;

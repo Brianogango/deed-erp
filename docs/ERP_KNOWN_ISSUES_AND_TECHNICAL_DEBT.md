@@ -49,7 +49,7 @@
 | KI-33 | Medium | Platform | Legacy client journal blob still written; retirement flags default off | No |
 | KI-34 | Low | Auth | Three alias tables, three role lists; Prisma `UserRole` enum diverges | No |
 | KI-35 | Medium | Customer portal | Public endpoints rely on phone/ref verification and rate limits | No |
-| KI-36 | Low | Security | Placeholder users in `lib/auth/public-users.ts`; visual-regression bypass | No |
+| KI-36 | Low | Security | Visual-regression bypass (one placeholder Director, dev only) | No |
 | KI-37 | Medium | Finance | Payment-route segregation-of-duties check swallows errors | No |
 | KI-38 | Medium | Finance | Payments: `PAY/<uuid8>` references, unused `RCT` counter, no void path | Yes |
 | KI-39 | Medium | Finance | Credit notes always reverse revenue on 5000 regardless of the original revenue accounts | Yes |
@@ -236,12 +236,12 @@
 Three alias tables (`normalizePermissionRole`, `normalizeClientRole`, store-policy `normalizedRole`), TypeScript union (8 roles), Prisma `UserRole` enum (17 values incl. `release_authoriser`). **Remediation.** One shared module generated into all consumers. **Changes business logic?** No.
 
 ### KI-36 — Placeholder users and bypass
-`lib/auth/public-users.ts` contains seeded Director/other placeholder users used by the layout only when `VISREG_BYPASS_AUTH=true` and `NODE_ENV !== 'production'`; `middleware.ts` refuses the bypass in production. Keep out of production bundles. **Changes business logic?** No.
+`app/(app)/layout.tsx` supplies one placeholder Director only when `VISREG_BYPASS_AUTH=true` and `NODE_ENV !== 'production'`; `middleware.ts` refuses the bypass in production. Keep out of production bundles. **Changes business logic?** No.
 
 ## Technical-debt themes (not individually numbered)
 
 - `lib/store.tsx` at 21 848 lines mixes UI state, business rules, numbering, journal building and network sync; changes there are the highest-risk edits in the system.
 - Hard-coded business constants: default bank-account templates and company settings in `lib/store.tsx` (`DEFAULT_BANK_ACCOUNTS`, `DEFAULT_COMPANY_SETTINGS`), category account defaults (`lib/product-accounts.ts`), policy values such as the KES 1 000 diagnosis fee and effective date (`lib/diagnosis-fee.ts`), tax rate 16 %, admin-officer invoice limit default.
-- Placeholder/demo data: `/sales-prototype/**` pages (public, demo data), seed arrays (now empty), `data/catalog-photos` fixtures.
+- Placeholder/demo data: removed (sales prototype pages, product seed, demo users). `data/catalog-photos` holds real product photos.
 - Pagination: blob-backed collections paginate in memory; `GET /api/store` returns whole collections; the 2026-09-21 incident (paginated 200-row pages saved over whole collections) is why the bulk-delete guard exists.
 - Duplicate implementations: three PDF builders (shared template + older `invoice-pdf.ts`, `pdf-quote.ts`, `pdf.ts`), two quotation models, two bank-reconciliation models, two company-settings stores, two payment write paths, three audit trails, two deploy scripts, two lockfiles.
