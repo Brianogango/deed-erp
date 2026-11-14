@@ -270,3 +270,56 @@ export interface OutsourcePayment {
   postedToAccounts?: boolean
   billRefs?: string[]
 }
+
+
+// ── Outsource Repair ────────────────────────────────────────────────────────
+export const OUTSOURCE_SERVICE_TYPES = [
+  { value: 'bios_repair',         label: 'BIOS Repair' },
+  { value: 'power_repair',        label: 'Power Repair' },
+  { value: 'body_works',          label: 'Body Works' },
+  { value: 'laptop_skin',         label: 'Laptop Skin' },
+  { value: 'screen_replacement',  label: 'Screen Replacement' },
+  { value: 'keyboard_repair',     label: 'Keyboard Repair' },
+  { value: 'motherboard_repair',  label: 'Motherboard Repair' },
+  { value: 'data_recovery',       label: 'Data Recovery' },
+  { value: 'charging_port',       label: 'Charging Port Repair' },
+  { value: 'other',               label: 'Other' },
+] as const
+
+export type OutsourceServiceType = typeof OUTSOURCE_SERVICE_TYPES[number]['value']
+
+export interface OutsourceVendor {
+  id: string
+  name: string
+  phone: string
+  email?: string
+  address?: string
+  specializations: OutsourceServiceType[]
+  notes?: string
+  createdAt: string
+}
+
+export interface OutsourceJob {
+  id: string
+  ref: string
+  vendorId: string
+  vendorName: string
+  deviceDescription: string   // e.g. "Dell Latitude 7490 – SN 4XZ7K"
+  serial?: string
+  repairOrderId?: string      // optional link to a repair order
+  previousRepairStatus?: RepairStatus
+  serviceType: OutsourceServiceType
+  issueDescription: string
+  sentDate: string
+  sentByUserId: string
+  sentByName: string
+  returnedDate?: string
+  isResolved?: boolean
+  returnNotes?: string
+  quotedCost?: number
+  finalCost?: number
+  billId?: string
+  status: OutsourceJobStatus
+  notes?: string
+  createdAt: string
+}
