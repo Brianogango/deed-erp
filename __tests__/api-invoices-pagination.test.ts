@@ -76,7 +76,7 @@ describe('GET /api/invoices pagination (PERF-001)', () => {
       expect.objectContaining({
         skip: 200,
         take: 200,
-        orderBy: { totalAmount: 'asc' },
+        orderBy: [{ totalAmount: 'asc' }, { invoiceNumber: 'asc' }],
         where: expect.objectContaining({
           status: 'approved',
           OR: expect.any(Array),
