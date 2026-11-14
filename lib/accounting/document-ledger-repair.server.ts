@@ -1,6 +1,7 @@
 import 'server-only'
 
 import prisma from '@/lib/prisma'
+import { isTillSale } from '@/lib/accounting/till-sale'
 import { reverseJournalEntry } from '@/lib/accounting/journal-service'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { ensureInvoiceBooked } from '@/lib/accounting/ensure-invoice-booked.server'
@@ -33,7 +34,7 @@ const SKIP_REF = /^JRN\/(PAY|PAY-AP|DEL|CAPP|DEP|REFUND)\//
 async function findStalePostings(): Promise<StalePosting[]> {
   const docs = await prisma.invoice.findMany({
     where: { status: { in: [...POSTED] }, NOT: { totalAmount: 0 }, isPosInvoice: false },
-    select: { id: true, invoiceNumber: true, totalAmount: true, internalNotes: true },
+    select: { id: true, invoiceNumber: true, totalAmount: true, internalNotes: true, saleOrderId: true },
   })
   const entries = await prisma.journalEntry.findMany({
     where: { invoiceId: { in: docs.map(d => d.id) }, sourceType: { in: ['invoice', 'bill'] }, isReversed: false, reversalOfId: null },
@@ -41,7 +42,7 @@ async function findStalePostings(): Promise<StalePosting[]> {
   })
   const out: StalePosting[] = []
   for (const d of docs) {
-    if (d.invoiceNumber.startsWith('POS') || String(d.internalNotes ?? '').includes(OPENING_BALANCE_MARKER)) continue
+    if (isTillSale(d) || String(d.internalNotes ?? '').includes(OPENING_BALANCE_MARKER)) continue
     const live = entries.filter(e => e.invoiceId === d.id && isPostingRef(e.ref, d.invoiceNumber))
     if (live.length !== 1) continue
     const booked = Number(live[0].totalDebit)
@@ -173,7 +174,7 @@ async function findBillsBookedAsSales(): Promise<BillAsSale[]> {
 export async function findDocumentLedgerRepairs(): Promise<{ extraPayments: ExtraPaymentPlan[]; unbooked: UnbookedDoc[]; review: ReviewDoc[]; unlinkedReversals: UnlinkedReversal[]; billsAsSales: BillAsSale[]; stalePostings: StalePosting[]; misattached: Misattached[]; tillAsInvoice: TillAsInvoice[] }> {
   const docs = await prisma.invoice.findMany({
     where: { status: { in: [...POSTED] }, NOT: { totalAmount: 0 }, isPosInvoice: false },
-    select: { id: true, invoiceNumber: true, documentType: true, invoiceDate: true, totalAmount: true, amountPaid: true, internalNotes: true },
+    select: { id: true, invoiceNumber: true, documentType: true, invoiceDate: true, totalAmount: true, amountPaid: true, internalNotes: true, saleOrderId: true, isPosInvoice: true },
   })
   const docIds = docs.map(d => d.id)
   const entries = await prisma.journalEntry.findMany({
@@ -225,7 +226,7 @@ export async function findDocumentLedgerRepairs(): Promise<{ extraPayments: Extr
     const base = { invoiceId: d.id, ref: d.invoiceNumber, kind, total, paid: Number(d.amountPaid) }
 
     const livePosting = list.some(e => !e.isReversed && !e.reversalOfId && ['invoice', 'bill'].includes(String(e.sourceType)) && isPostingRef(e.ref, d.invoiceNumber))
-    if (!livePosting && Math.abs(booked) < 1 && !String(d.internalNotes ?? '').includes(OPENING_BALANCE_MARKER) && !d.invoiceNumber.startsWith('POS')) {
+    if (!livePosting && Math.abs(booked) < 1 && !String(d.internalNotes ?? '').includes(OPENING_BALANCE_MARKER) && !isTillSale(d)) {
       unbooked.push({ ...base, date: d.invoiceDate ? d.invoiceDate.toISOString().slice(0, 10) : '' })
     }
 

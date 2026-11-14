@@ -1,4 +1,5 @@
 import { userCan } from '@/lib/auth/can'
+import { isPosNumber } from '@/lib/accounting/till-sale'
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling, requirePermission } from '@/lib/auth/api'
@@ -343,7 +344,7 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
         where: { invoiceNumber: chosenNumber, id: { not: id } },
         select: { id: true },
       })
-      if (numberClash) {
+      if (numberClash || (isPosNumber(chosenNumber) && !before.isPosInvoice)) {
         const kind = (body.type === 'vendor_bill' || before.documentType === 'vendor_bill') ? 'vendor_bill' : 'invoice'
         const { getNextDocNumber } = await import('@/lib/doc-ref-counter')
         data.invoiceNumber = await getNextDocNumber(kind)

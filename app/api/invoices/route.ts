@@ -10,6 +10,7 @@ import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney, inferIn
 import { assertBillableQty } from '@/lib/purchase/three-way-match'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
+import { isPosNumber } from '@/lib/accounting/till-sale'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { isPosInvoiceWrite, salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
@@ -293,7 +294,8 @@ export async function POST(request: Request) {
     }
 
     let invoiceNumber = body.invoiceNumber ?? body.ref
-    if (!invoiceNumber) {
+    // Only till sales are numbered POS/…; anything else gets an invoice number.
+    if (!invoiceNumber || (isPosNumber(invoiceNumber) && body.isPosInvoice !== true)) {
       invoiceNumber = await getNextDocNumber('invoice')
     }
 

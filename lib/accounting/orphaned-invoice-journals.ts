@@ -158,7 +158,9 @@ export async function listNeverPostedSince(since: string) {
       status: { in: Array.from(PRISMA_POSTED_INVOICE_STATUSES) as any },
       postingStatus: 'unposted',
       invoiceDate: { gte: new Date(`${since}T00:00:00Z`) },
-      NOT: { invoiceNumber: { startsWith: 'POS' } },
+      isPosInvoice: false,
+      // Older till sales carry POS/… with no sale order (lib/accounting/till-sale.ts).
+      NOT: { invoiceNumber: { startsWith: 'POS/' }, saleOrderId: null },
     },
     select: { id: true, invoiceNumber: true, invoiceDate: true, totalAmount: true, documentType: true, internalNotes: true },
     orderBy: { invoiceDate: 'asc' },
