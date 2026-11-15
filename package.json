@@ -74,8 +74,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
-    "googleapis": "^171.4.0",
-    "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
     "imapflow": "^1.6.6",
     "jspdf": "^4.2.1",
@@ -93,9 +91,7 @@
     "recharts": "^2.12.7",
     "sharp": "^0.35.4",
     "swr": "^2.4.1",
-    "tesseract.js": "^7.0.0",
     "twilio": "^5.13.1",
-    "whatsapp-web.js": "^1.34.7",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.4.3",
     "zustand": "^5.0.12"
@@ -105,9 +101,7 @@
       "@prisma/engines",
       "core-js",
       "prisma",
-      "puppeteer",
-      "sharp",
-      "tesseract.js"
+      "sharp"
     ]
   },
   "devDependencies": {
