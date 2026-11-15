@@ -128,6 +128,11 @@ export async function POST(request: NextRequest) {
       reply: result.reply,
       sources: result.sources,
       actions: result.actions,
+      // Which model actually answered. Without it, "DIA is not accurate" could
+      // not be told apart from "DIA is running on the small model today", or
+      // from a silent fallback to the other provider.
+      provider: result.provider,
+      model: result.model,
       toolCalls: result.toolCalls.map(tc => ({
         toolName: tc.toolName,
         allowed: tc.allowed,

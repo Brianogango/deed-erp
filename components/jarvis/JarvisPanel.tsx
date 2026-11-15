@@ -32,6 +32,22 @@ interface ChatMessage {
   sources?: AnswerSource[]
   actions?: DiaActionCard[]
   toolCalls?: { toolName: string; allowed: boolean; error?: string | null }[]
+  /** Which model answered. Shown when it changes, so a fallback is visible. */
+  model?: string
+}
+
+/**
+ * The model that answered the previous assistant message, so the panel can
+ * name the model only when it changes — once at the start of a conversation,
+ * and again if the provider falls back mid-conversation, which otherwise
+ * happened silently and changed the quality of every answer after it.
+ */
+function modelBefore(messages: ChatMessage[], id: string): string | undefined {
+  const index = messages.findIndex(m => m.id === id)
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (messages[i].role === 'assistant' && messages[i].model) return messages[i].model
+  }
+  return undefined
 }
 
 interface JarvisPanelProps {
@@ -432,6 +448,7 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
           id: `a-${Date.now()}`,
           role: 'assistant',
           content: data.reply,
+          model: typeof data.model === 'string' ? data.model : undefined,
           sources: data.sources,
           actions: Array.isArray(data.actions) ? data.actions : [],
           toolCalls: data.toolCalls,
@@ -668,6 +685,9 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
                       </span>
                     ))}
                   </div>
+                )}
+                {m.model && m.model !== modelBefore(messages, m.id) && (
+                  <p className="mt-1.5 text-[10px] text-[var(--text-4)]">Answered by {m.model}</p>
                 )}
               </div>
             </div>
