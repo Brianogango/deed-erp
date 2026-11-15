@@ -11,6 +11,8 @@ import type { OrcLogEntry, SerialNumber } from '../inventory'
 import type { Invoice, CustomerCredit, JournalEntry, RefundPayment, InvoiceLine } from '../finance'
 import { bankAccountIdForMethod, bankAccountLabel, accountLine } from '../journals'
 import { userCan } from '@/lib/auth/can'
+import { donationAccount, donationOutJournalLines, exchangeSettlement, exchangeCreditJournalLines } from '@/lib/after-sales/value-journals'
+import { resolveProductAccounts } from '@/lib/product-accounts'
 import { canPayBuyBackCash, buildBuyBackPayoutBillLines, canCreditBuyBack, buyBackStoreCreditAmount, buildBuyBackStoreCreditJournalLines, BUYBACK_STORE_CREDIT_METHOD, resolveBuyBackProduct } from '@/lib/buyback-credit'
 import { canManageFinance } from '../permissions'
 import { awaitingIdentification } from '@/lib/refurbishment/unidentified'
@@ -894,6 +896,49 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
             store.addMove(line.productId, line.productName, line.qty, 'out', `Donation out ${don.ref}`, don.ref, don.location, 'customer', line.serialIds.map(id => store.serialRef.current.find(s => s.id === id)?.serial ?? id))
           }
         })
+        // Stock given away is still stock we paid for: the value has to leave
+        // the balance sheet. Valued at what each unit cost us -- the unit's own
+        // intake cost where it has one, else the product's cost price.
+        if (don.type === 'out') {
+          const expense = donationAccount(store.accounts.map(a => a.code))
+          const lines = donationOutJournalLines({
+            donationRef: don.ref,
+            party: don.party,
+            expenseAccount: expense.label,
+            lines: don.lines.map(line => {
+              const product = store.prodRef.current.find(x => x.id === line.productId)
+              const serialCosts = line.serialIds
+                .map(sid => store.serialRef.current.find(x => x.id === sid)?.intakeCost)
+                .filter((c): c is number => typeof c === 'number' && c > 0)
+              const unitCost = serialCosts.length === line.qty && line.qty > 0
+                ? serialCosts.reduce((t, c) => t + c, 0) / line.qty
+                : Number(product?.costPrice) || 0
+              return {
+                productName: line.productName,
+                qty: line.qty,
+                unitCost,
+                inventoryAccount: product ? `${resolveProductAccounts(product).inventoryAccountCode} - Inventory` : undefined,
+              }
+            }),
+          }).map(line => accountLine(line.account, line.description, line.debit, line.credit))
+          const journalRef = `JRN/${don.ref}`
+          if (lines.length && !store.journalEntries.some(j => j.ref === journalRef)) {
+            const journal: JournalEntry = {
+              id: uid(),
+              ref: journalRef,
+              date: now(),
+              source: 'manual',
+              description: `Donation ${don.ref} to ${don.party}`,
+              status: 'posted',
+              lines,
+              totalDebit: lines.reduce((t, l) => t + l.debit, 0),
+              totalCredit: lines.reduce((t, l) => t + l.credit, 0),
+            }
+            store.setJournalEntries(prev => [journal, ...prev])
+            store.postSystemJournal('donation', journal, message => store.showToast(message, 'error'))
+          }
+        }
+
         // Donated machines with no readable serial go to Refurbishment to be identified.
         const toRefurb = don.type === 'in'
           ? store.openTradeInRefurbJobs(don.lines.flatMap(line => line.serialIds
@@ -1012,10 +1057,69 @@ export function createAfterSalesActions(store: StoreDeps): Pick<AppState, 'creat
           store.addMove(line.productId, line.productName, line.qty, 'out', `Exchange issue ${exc.ref}`, exc.ref, 'warehouse', 'customer', line.serialIds.map(id => store.serialRef.current.find(s => s.id === id)?.serial ?? id))
         })
   
+        // The screen has been telling staff "customer pays additional" or "we
+        // owe customer" without any of it reaching Finance. An exchange that is
+        // not even is ordinary trade, so settle the balance the way the rest of
+        // the system does: a draft invoice they can pay, or store credit.
+        const balance = exchangeSettlement(exc.priceDiff)
+        const at = now()
+        let settlement = ''
+        if (balance.owed === 'customer') {
+          const invoice: Invoice = {
+            id: uid(), ref: store.draftInvoiceRef('customer_invoice'), type: 'customer_invoice', status: 'draft',
+            partnerId: exc.customerId, partnerName: exc.customerName,
+            date: at, dueDate: at,
+            lines: [{
+              id: uid(),
+              description: `Exchange ${exc.ref} — balance after returning ${store.fmtKes(exc.returnTotal)} of goods for ${store.fmtKes(exc.newTotal)}`,
+              accountCode: '5000',
+              qty: 1,
+              unitPrice: balance.amount,
+              taxRate: 0,
+              subtotal: balance.amount,
+            }],
+            subtotal: balance.amount, taxTotal: 0, total: balance.amount,
+            amountPaid: 0,
+            notes: `From exchange ${exc.ref} · completed by ${user.name}`,
+          }
+          store.invRef.current = [invoice, ...store.invRef.current]
+          store.setInvoices(p => [invoice, ...p])
+          void store.saveInvoiceToServer(invoice, msg => store.showToast(msg, 'error'))
+          store.addAuditLog('create_invoice', invoice.ref, `Exchange ${exc.ref} balance ${store.fmtKes(balance.amount)} billed to ${exc.customerName}`)
+          settlement = ` — draft invoice ${invoice.ref} for ${store.fmtKes(balance.amount)}`
+        } else if (balance.owed === 'us') {
+          const creditRef = `CR/${exc.ref}`
+          const credit: CustomerCredit = {
+            id: uid(), ref: creditRef,
+            customerId: exc.customerId, customerName: exc.customerName,
+            amount: balance.amount, balance: balance.amount,
+            status: 'available',
+            createdAt: at,
+            createdBy: user.name,
+            notes: `Balance owed on exchange ${exc.ref}`,
+            applications: [],
+          }
+          const lines = exchangeCreditJournalLines({
+            exchangeRef: exc.ref, creditRef, customerName: exc.customerName, amount: balance.amount,
+          }).map(line => accountLine(line.account, line.description, line.debit, line.credit))
+          const journal: JournalEntry = {
+            id: uid(), ref: `JRN/${creditRef}`, date: at, source: 'manual',
+            description: `Exchange ${exc.ref} balance owed to ${exc.customerName}`,
+            status: 'posted', lines,
+            totalDebit: lines.reduce((t, l) => t + l.debit, 0),
+            totalCredit: lines.reduce((t, l) => t + l.credit, 0),
+          }
+          store.setCustomerCredits(prev => [credit, ...prev])
+          store.setJournalEntries(prev => [journal, ...prev])
+          store.postSystemJournal('exchange_settlement', journal, message => store.showToast(message, 'error'))
+          store.addAuditLog('exchange_credit', exc.ref, `Store credit ${creditRef} for ${store.fmtKes(balance.amount)} — ${exc.customerName}`)
+          settlement = ` — store credit ${creditRef} for ${store.fmtKes(balance.amount)}`
+        }
+
         store.setClientExchanges(p => p.map(e => e.id === id ? { ...e, status: 'completed', completedDate: now(), completedByName: user.name } : e))
         store.addAuditLog('exchange_complete', exc.ref, `Completed exchange ${exc.ref} for ${exc.customerName} — returns to ${store.LOCATIONS[returnLocation].name}`)
         store.cancelWarrantiesForTradeIn(exc.returnLines.flatMap(l => l.serialIds), exc.ref, `Handed back by ${exc.customerName} on exchange ${exc.ref}`)
-        store.showToast(`Exchange ${exc.ref} completed — returned items moved to ${store.LOCATIONS[returnLocation].name}`)
+        store.showToast(`Exchange ${exc.ref} completed — returned items moved to ${store.LOCATIONS[returnLocation].name}${settlement}`)
       },
 
     cancelExchange: (id) => {

@@ -43,6 +43,7 @@ import { normalizeCreateInvoiceMode, isDownPaymentMode } from '@/lib/sales/down-
 import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
 import { hasActivePosSession, resolveOpenPosSessionId, posOrdersForSession, isPosBankPayment } from '@/lib/pos-session'
 import { accountLine, bankAccountIdForMethod, bankAccountLabel, buildCustomerCreditJournal } from '../journals'
+import { marketplaceFeeAccount, marketplaceSettlementJournalLines } from '@/lib/after-sales/value-journals'
 import { isProvisionalDocRef } from '@/lib/doc-number-repair'
 import { canApplyCustomerCredit } from '@/lib/finance-controls'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
@@ -386,6 +387,40 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           item.id === settlementId ? { ...item, lines: updatedLines, status: nextStatus } : item
         ))
   
+        // The week's money: Kilimall collected the gross from buyers, kept its
+        // cut and paid us the rest. None of that used to reach the ledger, so
+        // the bank line for a settlement had nothing to match and the
+        // marketplace's cut was never an expense. Posted once the settlement
+        // and the orders agree, and only once.
+        const journalRef = `JRN/${settlement.ref}`
+        if (allMatched && !store.journalEntries.some(j => j.ref === journalRef)) {
+          const feeAccount = marketplaceFeeAccount(store.accounts.map(a => a.code))
+          const lines = marketplaceSettlementJournalLines({
+            settlementRef: settlement.ref,
+            period: settlement.weekPeriod,
+            gross: settlement.grossAmount,
+            deductions: settlement.deductions,
+            netPaid: settlement.netPaid,
+            bankAccount: bankAccountLabel(undefined, settlement.paymentMethod),
+            feeAccount: feeAccount.label,
+          }).map(line => accountLine(line.account, line.description, line.debit, line.credit))
+          if (lines.length) {
+            const journal: JournalEntry = {
+              id: uid(),
+              ref: journalRef,
+              date: settlement.paymentDate || now(),
+              source: 'manual',
+              description: `Kilimall settlement ${settlement.ref} — ${settlement.weekPeriod}`,
+              status: 'posted',
+              lines,
+              totalDebit: lines.reduce((t, l) => t + l.debit, 0),
+              totalCredit: lines.reduce((t, l) => t + l.credit, 0),
+            }
+            store.setJournalEntries(prev => [journal, ...prev])
+            store.postSystemJournal('marketplace_settlement', journal, message => store.showToast(message, 'error'))
+          }
+        }
+
         const matched = updatedLines.filter(line => line.status === 'matched').length
         const unresolved = updatedLines.length - matched
         store.showToast(

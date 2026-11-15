@@ -200,13 +200,13 @@ export const syncOrWarn = (
  * Balance, the P&L and the Balance Sheet. The route dedupes on ref, so the
  * local copy and this post describe the same entry rather than two.
  */
-export type SystemJournalKind =
-  | 'fixed_asset'
-  | 'pos_session'
-  | 'rma_refund'
-  | 'buyback_credit'
-  | 'sale_order_credit_note'
-  | 'invoice_adjustment'
+/**
+ * The kinds the ledger accepts, from the route that defines them: a second
+ * copy here could fall behind and let a caller post a kind the server rejects.
+ * Type-only, so none of the route's server code is pulled into the browser.
+ */
+export type { SystemJournalKind } from '@/app/api/accounting/system-journals/route'
+import type { SystemJournalKind } from '@/app/api/accounting/system-journals/route'
 
 export const postSystemJournal = (
   kind: SystemJournalKind,

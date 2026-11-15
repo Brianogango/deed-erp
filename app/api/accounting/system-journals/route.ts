@@ -44,6 +44,9 @@ const SYSTEM_JOURNAL_KINDS = {
   buyback_credit: { source: 'manual', governingKey: 'deed_buyBacks' },
   sale_order_credit_note: { source: 'manual', governingKey: 'deed_customerCredits' },
   invoice_adjustment: { source: 'invoice', governingKey: 'deed_invoices' },
+  donation: { source: 'adjustment', governingKey: 'deed_donations' },
+  marketplace_settlement: { source: 'payment', governingKey: 'deed_kilimallSettlements' },
+  exchange_settlement: { source: 'manual', governingKey: 'deed_clientExchanges' },
 } as const
 
 export type SystemJournalKind = keyof typeof SYSTEM_JOURNAL_KINDS
