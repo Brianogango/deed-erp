@@ -339,27 +339,6 @@ export default function InvoiceDetail() {
     || order.ref === (invoice as any).salesOrderRef
     || order.ref === (invoice as any).sourceRef
   )) ?? ((invoice as any).saleOrderId ? { id: String((invoice as any).saleOrderId), ref: (invoice as any).saleOrderRef } : undefined)
-  const invoiceWorkflowSteps = (() => {
-    const isPosted = docState === 'posted'
-    const isPartPaid = isPosted && (payState === 'partially_paid' || payState === 'in_payment')
-    const isPaid = isPosted && payState === 'paid'
-    if (isCreditNote) {
-      const applied = isPosted && payState === 'paid'
-      const part = isPosted && payState === 'partially_paid'
-      return [
-        { key: 'draft', label: 'Draft', state: docState === 'draft' ? 'current' : isPosted ? 'done' : 'todo' },
-        { key: 'posted', label: 'Confirmed', state: docState === 'draft' ? 'todo' : part || applied ? 'done' : isPosted ? 'current' : 'todo' },
-        { key: 'part-paid', label: 'Part applied', state: applied ? 'done' : part ? 'current' : 'todo' },
-        { key: 'paid', label: 'Applied', state: applied ? 'current' : 'todo' },
-      ] as Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>
-    }
-    return [
-      { key: 'draft', label: 'Draft', state: docState === 'draft' ? 'current' : isPosted ? 'done' : 'todo' },
-      { key: 'posted', label: 'Confirmed', state: docState === 'draft' ? 'todo' : isPartPaid || isPaid ? 'done' : isPosted ? 'current' : 'todo' },
-      { key: 'part-paid', label: invoice.type === 'customer_invoice' ? 'Part received' : 'Part paid', state: isPaid ? 'done' : isPartPaid ? 'current' : 'todo' },
-      { key: 'paid', label: invoice.type === 'customer_invoice' ? 'Received' : 'Paid', state: isPaid ? 'current' : 'todo' },
-    ] as Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>
-  })()
   const invoicePaidKey = invoice ? `${invoice.id}:${invoice.amountPaid}:${(invoice.voidedPayments || []).length}` : ''
   useEffect(() => {
     if (!invoicePaidKey || !canManageFullFinance) return
@@ -392,14 +371,10 @@ export default function InvoiceDetail() {
       document.getElementById('invoice-supporting-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }
-  const invoiceSmartButtons = [
-    {
-      key: 'customer',
-      label: invoice.type === 'customer_invoice' ? 'Customer' : 'Vendor',
-      value: invoice.partnerName || 'Not set',
-      onClick: () => router.push(`/contacts?id=${encodeURIComponent(invoice.partnerId)}`),
-      hint: `Open ${invoice.partnerName || 'contact'}`,
-    },
+  // Only what this document actually has. Six tiles reading Payments 0,
+  // Delivery 0, Credit Notes 0 told the reader nothing and took a full band of
+  // the page; the customer is named in the header already.
+  const invoiceSmartButtons = ([
     {
       key: 'payments',
       label: 'Payments',
@@ -437,7 +412,8 @@ export default function InvoiceDetail() {
       onClick: () => focusDetailTab('activity'),
       hint: 'View document history and internal activity',
     },
-  ]
+  ] as Array<{ key: string; label: string; value: string; onClick?: () => void; disabled?: boolean; hint: string }>)
+    .filter(item => item.value !== '0')
 
   const documentHistory = [
     {
@@ -779,7 +755,7 @@ export default function InvoiceDetail() {
         </div>
 
         {invoice.type === 'customer_invoice' && (
-          <div className="mb-2"><JobTrail start={{ kind: 'invoice', id: invoice.id }} /></div>
+          <div className="mb-2"><JobTrail start={{ kind: 'invoice', id: invoice.id }} showNext={false} /></div>
         )}
         <div className="invoice-detail__header">
           <div className="invoice-detail__header-main">
@@ -797,13 +773,13 @@ export default function InvoiceDetail() {
               {docState === 'cancelled' && (
                 <StatusBadge status="cancelled" label={INVOICE_DOC_STATE_LABELS[docState]} />
               )}
+              {/* One chip for where the money stands. "Not paid" next to
+                  "Overdue" said the same thing twice. */}
               {docState === 'posted' && (
-                <StatusBadge
-                  status={badgeStatus as string}
-                  label={payStateLabel}
-                />
+                overdue
+                  ? <StatusBadge status="cancelled" label="Overdue" />
+                  : <StatusBadge status={badgeStatus as string} label={payStateLabel} />
               )}
-              {overdue && <StatusBadge status="cancelled" label="Overdue" />}
             </div>
             <p className="invoice-detail__customer">{invoice.partnerName}</p>
             {invoice.type === 'customer_invoice' && availableCredit > 0 && (
@@ -864,20 +840,6 @@ export default function InvoiceDetail() {
             {journeyNotice.message}
           </div>
         )}
-
-        <div className="invoice-detail__workflow" role="list" aria-label="Invoice workflow">
-          {invoiceWorkflowSteps.map(step => (
-            <span
-              key={step.key}
-              className="invoice-detail__workflow-step"
-              role="listitem"
-              data-state={step.state}
-              aria-current={step.state === 'current' ? 'step' : undefined}
-            >
-              {step.label}
-            </span>
-          ))}
-        </div>
 
         <div className="invoice-detail__smart-row" aria-label="Related invoice records">
           {invoiceSmartButtons.map(item => (
@@ -944,9 +906,6 @@ export default function InvoiceDetail() {
           <div className="invoice-detail__summary-primary">
             <div className="invoice-detail__summary-label-row">
               <p className="invoice-detail__summary-label">{balance > 0 ? 'Balance due' : 'Invoice total'}</p>
-              <span className={`invoice-detail__summary-status ${balance > 0 ? 'is-due' : 'is-paid'}`}>
-                {PAYMENT_STATUS_LABELS[payState]}
-              </span>
             </div>
             <p className="invoice-detail__summary-amount">{fmtKes(balance > 0 ? balance : invoice.total)}</p>
             <p className="invoice-detail__summary-context">
@@ -966,10 +925,6 @@ export default function InvoiceDetail() {
             <div>
               <dt>Received</dt>
               <dd>{fmtKes(invoice.amountPaid)}</dd>
-            </div>
-            <div>
-              <dt>Due date</dt>
-              <dd className={overdue && balance > 0 ? 'is-overdue' : ''}>{fmtDate(invoice.dueDate)}</dd>
             </div>
           </dl>
 

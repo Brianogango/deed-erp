@@ -399,52 +399,11 @@ main#main-content:has(.finance-invoice-detail) {
   white-space: nowrap;
 }
 
-.finance-invoice-detail .invoice-detail__workflow {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid var(--odoo-border);
-  border-radius: 6px;
-  background: #fff;
-}
-
-.finance-invoice-detail .invoice-detail__workflow-step {
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: -12px;
-  padding: 8px 22px;
-  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%);
-  background: #f8fafc;
-  color: #475569;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.finance-invoice-detail .invoice-detail__workflow-step:first-child {
-  margin-left: 0;
-  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%);
-}
-
-.finance-invoice-detail .invoice-detail__workflow-step[data-state='done'] {
-  background: #e8f8ef;
-  color: #087543;
-}
-
-.finance-invoice-detail .invoice-detail__workflow-step[data-state='current'] {
-  background: linear-gradient(180deg, #0bb6ec, #057fd1);
-  color: #fff;
-}
-
 .finance-invoice-detail .invoice-detail__smart-row {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  /* Only the records this document has, so the row sizes to however many that is. */
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   overflow: hidden;
   border: 1px solid var(--odoo-border);
   border-radius: 6px;
@@ -1191,22 +1150,6 @@ main#main-content:has(.finance-invoice-detail) {
   .sales-pilot.sales-doc .sales-doc-smart-button {
     min-width: 100px;
     flex: 0 0 auto;
-  }
-
-  .finance-invoice-detail .invoice-detail__workflow {
-    display: flex;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .finance-invoice-detail .invoice-detail__workflow::-webkit-scrollbar {
-    display: none;
-  }
-
-  .finance-invoice-detail .invoice-detail__workflow-step {
-    min-width: 112px;
-    flex: 0 0 auto;
-    font-size: var(--fs-micro);
   }
 
   .finance-invoice-detail .invoice-detail__smart-row {
@@ -2112,29 +2055,25 @@ main#main-content:has(.finance-invoice-detail) {
   background: #067fc2 !important;
 }
 
-.sales-pilot.sales-doc .sp-workflow,
-.finance-invoice-detail .invoice-detail__workflow {
+.sales-pilot.sales-doc .sp-workflow {
   min-height: 38px;
   border-color: var(--doc-border) !important;
   border-radius: 6px !important;
   box-shadow: none !important;
 }
 
-.sales-pilot.sales-doc .sp-workflow-step,
-.finance-invoice-detail .invoice-detail__workflow-step {
+.sales-pilot.sales-doc .sp-workflow-step {
   min-height: 38px !important;
   background: var(--doc-soft) !important;
   color: #506079 !important;
 }
 
-.sales-pilot.sales-doc .sp-workflow-step[data-state='done'],
-.finance-invoice-detail .invoice-detail__workflow-step[data-state='done'] {
+.sales-pilot.sales-doc .sp-workflow-step[data-state='done'] {
   background: var(--doc-green-soft) !important;
   color: var(--doc-green) !important;
 }
 
-.sales-pilot.sales-doc .sp-workflow-step[data-state='current'],
-.finance-invoice-detail .invoice-detail__workflow-step[data-state='current'] {
+.sales-pilot.sales-doc .sp-workflow-step[data-state='current'] {
   background: var(--doc-blue) !important;
   color: #fff !important;
 }
@@ -2300,7 +2239,6 @@ main#main-content:has(.finance-invoice-detail) {
   min-height: 68px;
 }
 
-.finance-invoice-detail .invoice-detail__workflow,
 .finance-invoice-detail .invoice-detail__smart-row {
   grid-column: 1 / -1;
 }
@@ -2591,15 +2529,13 @@ main#main-content:has(.finance-invoice-detail) {
   }
 
   .sales-pilot.sales-doc .sp-workflow,
-  .finance-invoice-detail .invoice-detail__workflow,
   .sales-pilot.sales-doc .sales-doc-smart-row,
   .finance-invoice-detail .invoice-detail__smart-row {
     margin-inline: 8px !important;
     width: auto !important;
   }
 
-  .sales-pilot.sales-doc .sp-workflow-step,
-  .finance-invoice-detail .invoice-detail__workflow-step {
+  .sales-pilot.sales-doc .sp-workflow-step {
     min-width: 96px !important;
     padding-inline: 16px !important;
   }

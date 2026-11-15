@@ -15,7 +15,7 @@ const TRAIL_KEYS = ['deed_repairs_v2', 'deed_saleOrders', 'deed_invoices']
  * One customer job across modules — Repair → Quote → Sale order → Invoice →
  * Payment → Delivery — with links, and the one thing to do next.
  */
-export default function JobTrail({ start }: { start: TrailStart }) {
+export default function JobTrail({ start, showNext = true }: { start: TrailStart; showNext?: boolean }) {
   const { repairs, saleOrders, quotes, invoices, deliveries, currentUserId } = useApp() as any
   // Screens that load repairs, sale orders and invoices (Sales, Repairs) build
   // the trail here; others (Finance) ask the server, which has the lists.
@@ -74,7 +74,7 @@ export default function JobTrail({ start }: { start: TrailStart }) {
           </Link>
         </span>
       ))}
-      {trail.next && (
+      {trail.next && showNext && (
         <Link
           href={trail.next.href}
           className={`ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold no-underline ${trail.next.tone === 'action'
