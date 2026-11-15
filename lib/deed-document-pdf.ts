@@ -19,6 +19,7 @@ import {
   type DocumentLayoutId,
   type DocumentPaperFormat,
 } from '@/lib/document-layout'
+import { layoutSpec, layoutDensity } from '@/lib/document-layout-spec'
 
 export interface DeedPdfLine {
   lineType?: 'item' | 'section'
@@ -465,13 +466,23 @@ export function buildDeedDocumentPdf(
   // Dates are presented once in the document metadata block below. The former
   // top-right date repeated Due Date / Valid Until and created conflicting facts.
   y += 28
-  const boxed = layout === 'boxed' || layout === 'bubble' || layout === 'folder'
+  const spec = layoutSpec(layout)
+  const density = layoutDensity(layout)
+  const boxed = spec.party === 'card'
+  const stacked = spec.party === 'stacked'
+  const mirrored = spec.party === 'mirrored'
   // Party block starts on the page margin (in line with the title and the
-  // table); inside a box it is padded.
-  const leftX = boxed ? MARGIN + 10 : MARGIN
-  const splitX = MARGIN + 240
-  const rightX = splitX + 16
-  const partyW = splitX - leftX - 14
+  // table); inside a panel it is padded.
+  const pad = boxed ? 10 : 0
+  const columnW = (contentW(doc) - 32) / 2
+  // Mirrored puts the references down the left edge, which is what a filed
+  // copy is found by; stacked gives the customer the full width.
+  const partyX = stacked ? MARGIN + pad : mirrored ? MARGIN + columnW + 32 + pad : MARGIN + pad
+  const metaX = stacked ? MARGIN + pad : mirrored ? MARGIN + pad : MARGIN + columnW + 32 + pad
+  const leftX = partyX
+  const splitX = MARGIN + columnW + 16
+  const rightX = metaX
+  const partyW = stacked ? contentW(doc) - pad * 2 - 12 : columnW - pad - 14
   const meta: Array<[string, string]> = [
     ['Issue date', fmtDate(input.date)],
     ...(input.sourceRef ? [['Source document', input.sourceRef] as [string, string]] : []),
@@ -496,15 +507,20 @@ export function buildDeedDocumentPdf(
     input.customerEmail ? `Email: ${input.customerEmail}` : '',
     input.customerTaxId ? `PIN: ${input.customerTaxId}` : '',
   ].filter(Boolean).map(value => (doc.splitTextToSize(value, partyW) as string[]).slice(0, 3))
-  const metaValueW = right(doc) - (rightX + 92)
+  const metaValueW = (stacked ? columnW : right(doc) - rightX - pad) - 92
   const metaBlocks = meta.map(([label, value]) => ({ label, lines: (doc.splitTextToSize(value || '—', metaValueW) as string[]).slice(0, 2) }))
   const partyH = 17 + nameLines.length * NAME_LH + 3 + partyBlocks.reduce((h, lines) => h + lines.length * VALUE_LH + 2, 0)
-  const metaH = metaBlocks.reduce((h, m) => h + Math.max(18, m.lines.length * VALUE_LH + 8), 0)
-  const blockH = Math.max(partyH, metaH, 60)
+  const metaRowH = (m: { lines: string[] }) => Math.max(18, m.lines.length * VALUE_LH + 8)
+  // Stacked runs the references in two columns beneath the customer, so it is
+  // half as tall and the two blocks add up instead of sitting side by side.
+  const metaColumns = stacked ? 2 : 1
+  const metaSplit = Math.ceil(metaBlocks.length / metaColumns)
+  const metaH = metaBlocks.slice(0, metaSplit).reduce((h, m) => h + metaRowH(m), 0)
+  const blockH = stacked ? partyH + metaH + 14 : Math.max(partyH, metaH, 60)
 
   if (boxed) {
     doc.setFillColor(...(layout === 'bubble' ? [242, 249, 249] as [number, number, number] : SOFT))
-    doc.setDrawColor(...accent).setLineWidth(.55).roundedRect(MARGIN, y - 12, contentW(doc), blockH + 18, layout === 'bubble' ? 12 : 3, layout === 'bubble' ? 12 : 3, 'FD')
+    doc.setDrawColor(...accent).setLineWidth(.55).roundedRect(MARGIN, y - 12, contentW(doc), blockH + 18, spec.radius, spec.radius, 'FD')
   }
   writeLabel(doc, customerLabel, leftX, y)
   doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...INK)
@@ -516,15 +532,23 @@ export function buildDeedDocumentPdf(
     partyY += lines.length * VALUE_LH + 2
   })
 
-  doc.setDrawColor(...BORDER).setLineWidth(.5)
-  doc.line(splitX, y - 6, splitX, y + blockH - 6)
-  let metaY = y
-  metaBlocks.forEach(m => {
+  if (stacked) {
+    // A rule separates the customer from the references rather than a column.
+    line(doc, MARGIN, y + partyH + 2, right(doc), BORDER, .5)
+  } else {
+    doc.setDrawColor(...BORDER).setLineWidth(.5)
+    doc.line(splitX, y - 6, splitX, y + blockH - 6)
+  }
+  const metaTop = stacked ? y + partyH + 20 : y
+  metaBlocks.forEach((m, index) => {
+    const column = Math.floor(index / metaSplit)
+    const x = stacked ? MARGIN + pad + column * (columnW + 32) : rightX
+    const rowsAbove = metaBlocks.slice(column * metaSplit, index)
+    const rowY = metaTop + rowsAbove.reduce((h, prev) => h + metaRowH(prev), 0)
     doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...MUTED)
-    doc.text(m.label, rightX, metaY)
+    doc.text(m.label, x, rowY)
     doc.setFont('helvetica', 'normal').setFontSize(8.3).setTextColor(...INK)
-    m.lines.forEach((text, i) => doc.text(text, rightX + 92, metaY + i * VALUE_LH))
-    metaY += Math.max(18, m.lines.length * VALUE_LH + 8)
+    m.lines.forEach((text, i) => doc.text(text, x + 92, rowY + i * VALUE_LH))
   })
   y += blockH + (boxed ? 14 : 8)
 
@@ -571,31 +595,40 @@ export function buildDeedDocumentPdf(
     ]
   })
 
+  const unruledHead = spec.table === 'hairline' || spec.table === 'open'
   autoTable(doc, {
     startY: y,
     margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
     head: delivery ? deliveryHead : commercialHead,
     body: body as any,
-    theme: layout === 'standard' ? 'plain' : 'grid',
+    // One rule under every row, fully ruled cells, banded rows, a filled
+    // heading, or nothing but a rule under the heading — the table is most of
+    // what a reader sees, so it is where the layouts differ most.
+    theme: spec.table === 'grid' || spec.table === 'solid' ? 'grid' : 'plain',
     styles: {
       font: 'helvetica',
-      fontSize: 7.8,
+      fontSize: density.fontSize,
       textColor: INK,
-      lineColor: layout === 'boxed' ? accent : BORDER,
-      lineWidth: layout === 'boxed' ? .65 : .45,
-      cellPadding: { top: 7, right: 6, bottom: 7, left: 6 },
+      lineColor: spec.table === 'grid' ? accent : BORDER,
+      lineWidth: spec.table === 'open' ? 0 : spec.table === 'grid' ? .65 : .45,
+      cellPadding: { top: density.cellPadding, right: 6, bottom: density.cellPadding, left: 6 },
       valign: 'middle',
       overflow: 'linebreak',
     },
+    // Only the keys this style needs: handing autoTable an undefined lineWidth
+    // overwrote its own default and the heading row stopped drawing.
     headStyles: {
-      fillColor: layout === 'standard' ? [255, 255, 255] : accent,
-      textColor: layout === 'standard' ? accent : [255, 255, 255],
+      fillColor: unruledHead ? [255, 255, 255] : accent,
+      textColor: unruledHead ? accent : [255, 255, 255],
+      ...(spec.table === 'open' ? { lineWidth: { bottom: 1 } as never, lineColor: accent } : {}),
       fontStyle: 'bold',
       fontSize: 6.8,
       minCellHeight: 24,
       halign: 'center',
     },
-    alternateRowStyles: { fillColor: layout === 'striped' ? stripeFill : [252, 253, 255] },
+    alternateRowStyles: {
+      fillColor: spec.table === 'zebra' ? stripeFill : spec.table === 'open' ? [255, 255, 255] : [252, 253, 255],
+    },
     columnStyles: delivery
       ? {
           0: { cellWidth: 24, halign: 'center' },
@@ -643,6 +676,8 @@ export function buildDeedDocumentPdf(
     const balance = Math.max(0, Number(input.total || 0) - Number(input.amountPaid || 0))
     const partlyPaid = Number(input.amountPaid) > 0
 
+    const band = spec.totals === 'band'
+
     // What to pay, and by when, in one band. Both used to read at the weight of
     // "Customer PO" halfway down the page.
     const dueBand = closingFigure(kind, balance, Number(input.amountPaid) || 0, partlyPaid)
@@ -652,34 +687,46 @@ export function buildDeedDocumentPdf(
     // a plain rung of the ladder rather than printing the same number twice.
     totalRows.push(['Total', `${currency} ${money(input.total || 0)}`, dueBand ? 'normal' : 'total'])
     if (partlyPaid) totalRows.push(['Paid', `- ${money(input.amountPaid || 0)}`, 'normal'])
-    const totalH = totalRows.length * 19 + 6 + (dueBand ? 44 : 0)
-    const notesLines = notes ? doc.splitTextToSize(notes, 250) as string[] : []
+    const ROW = density.totalsRow
+    const totalH = totalRows.length * ROW + 6 + (dueBand ? 44 : 0) + (spec.totals === 'card' ? 16 : 0)
+    const notesLines = notes ? doc.splitTextToSize(notes, band ? contentW(doc) - 10 : 250) as string[] : []
     const notesH = notesLines.length ? Math.max(46, notesLines.length * 10 + 26) : 0
     y = ensureRoom(doc, company, input, y, Math.max(totalH, notesH) + 12)
 
+    // Totals that run the full width leave no room beside them, so the notes
+    // go above rather than underneath them.
     if (notesLines.length) {
       writeLabel(doc, kind === 'sales-order' ? 'Fulfilment notes' : 'Notes', MARGIN, y + 10)
       doc.setFont('helvetica', 'normal').setFontSize(7.7).setTextColor(...INK)
       doc.text(notesLines, MARGIN, y + 27)
+      if (band) y += notesH
     }
 
-    const totalsX = right(doc) - 220
+    // A column on the right, a framed card, or the full width of the page.
+    const panelW = band ? contentW(doc) : 228
+    const panelX = band ? MARGIN : right(doc) - 220 - 8
+    const totalsX = panelX + 8
+    const padTop = spec.totals === 'card' ? 8 : 0
+    if (spec.totals === 'card') {
+      doc.setFillColor(255, 255, 255).setDrawColor(...BORDER).setLineWidth(.55)
+      doc.roundedRect(panelX, y - 2, panelW, totalRows.length * ROW + 16 + (dueBand ? 42 : 0), spec.radius, spec.radius, 'FD')
+    }
     totalRows.forEach((item, index) => {
-      const rowY = y + 14 + index * 19
+      const rowY = y + 14 + padTop + index * ROW
       const strong = item[2] !== 'normal'
       if (strong) {
         doc.setFillColor(...SOFT)
-        doc.rect(totalsX - 8, rowY - 13, 228, 19, 'F')
-        if (index > 0) line(doc, totalsX - 8, rowY - 13, right(doc), BORDER, .55)
+        doc.rect(panelX, rowY - 13, panelW, ROW, 'F')
+        if (index > 0) line(doc, panelX, rowY - 13, panelX + panelW, BORDER, .55)
       }
       doc.setFont('helvetica', strong ? 'bold' : 'normal').setFontSize(strong ? 9.5 : 8).setTextColor(...INK)
       doc.text(item[0], totalsX, rowY)
-      doc.text(item[1], right(doc) - 6, rowY, { align: 'right' })
+      doc.text(item[1], panelX + panelW - 14, rowY, { align: 'right' })
     })
 
     if (dueBand) {
-      const bandY = y + 14 + totalRows.length * 19 - 9
-      doc.setFillColor(...accent).roundedRect(totalsX - 8, bandY, 228, 38, 4, 4, 'F')
+      const bandY = y + 14 + padTop + totalRows.length * ROW - 9
+      doc.setFillColor(...accent).roundedRect(panelX, bandY, panelW, 38, spec.radius || 4, spec.radius || 4, 'F')
       doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(255, 255, 255)
       doc.text(dueBand.label.toUpperCase(), totalsX + 4, bandY + 14)
       if (dueBand.when) {
@@ -687,9 +734,9 @@ export function buildDeedDocumentPdf(
         doc.text(dueBand.when, totalsX + 4, bandY + 29)
       }
       doc.setFont('helvetica', 'bold').setFontSize(13)
-      doc.text(`${currency} ${money(dueBand.amount)}`, right(doc) - 14, bandY + 25, { align: 'right' })
+      doc.text(`${currency} ${money(dueBand.amount)}`, panelX + panelW - 14, bandY + 25, { align: 'right' })
     }
-    y += Math.max(totalH, notesH) + 12
+    y += (band ? totalH : Math.max(totalH, notesH)) + 12
   } else if (notes) {
     const wrapped = doc.splitTextToSize(notes, contentW(doc) - 10) as string[]
     y = ensureRoom(doc, company, input, y, wrapped.length * 10 + 34)
