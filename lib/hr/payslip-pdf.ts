@@ -1,24 +1,28 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import {
+  startLetterheadDocument,
+  finishLetterheadDocument,
+  drawDocumentIntro,
+  money,
+  MARGIN,
+  contentW,
+  right,
+  INK,
+  MUTED,
+  SOFT,
+  BORDER,
+  type DeedPdfCompanyInput,
+} from '@/lib/deed-document-pdf'
 import type { PayslipDetail } from '@/lib/hr/payroll-report-types'
 
-export interface PayslipCompany {
-  name: string
-  address?: string
-  city?: string
-  phone?: string
-  email?: string
-  kraPin?: string
-}
-
-const NAVY: [number, number, number] = [18, 52, 86]
-const INK: [number, number, number] = [30, 41, 59]
-const MUTED: [number, number, number] = [100, 116, 139]
-const LINE: [number, number, number] = [226, 232, 240]
-const SOFT: [number, number, number] = [241, 245, 249]
+/**
+ * Payslips and the P9 tax card, on the same letterhead as every other document
+ * the company issues — logo, accent colour, print template and font come from
+ * Settings via lib/deed-document-pdf.
+ */
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const kes = (n: number) => `KSh ${(Number(n) || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const mask = (v: string) => (v && v.length > 4 ? `${'*'.repeat(v.length - 4)}${v.slice(-4)}` : v)
 
 export function payslipFileName(d: PayslipDetail) {
@@ -26,189 +30,177 @@ export function payslipFileName(d: PayslipDetail) {
 }
 
 /** A4 payslip with the full earnings and deduction breakdown, employer cost, and year-to-date. */
-export function buildPayslipPdf(d: PayslipDetail, company: PayslipCompany): jsPDF {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-  const W = doc.internal.pageSize.getWidth()
-  const M = 40
+export function buildPayslipPdf(d: PayslipDetail, company: DeedPdfCompanyInput): jsPDF {
+  const { doc, accent, shell } = startLetterheadDocument(company, 'Payslip', d.reference)
+  const currency = company.currency || 'KES'
+  const width = contentW(doc)
   const monthName = MONTHS[(Number(d.period.month) || 1) - 1] ?? d.period.month
-
-  // Header: company on the left, document title on the right.
-  doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...NAVY)
-  doc.text(company.name || 'Company', M, 52)
-  doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...MUTED)
-  const sub = [[company.address, company.city].filter(Boolean).join(', '), company.phone, company.email].filter(Boolean)
-  sub.forEach((t, i) => doc.text(String(t), M, 66 + i * 11))
-  if (company.kraPin) doc.text(`KRA PIN: ${company.kraPin}`, M, 66 + sub.length * 11)
-
-  doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(...INK)
-  doc.text('PAYSLIP', W - M, 52, { align: 'right' })
-  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...MUTED)
-  doc.text(`${monthName} ${d.period.year}`, W - M, 66, { align: 'right' })
-  doc.text(`Ref: ${d.reference}`, W - M, 78, { align: 'right' })
-
-  doc.setDrawColor(...NAVY).setLineWidth(1.2).line(M, 104, W - M, 104)
-
-  // Employee block (two columns of label / value pairs).
+  const amount = (n: number) => money(n)
   const e = d.employee
-  const left: Array<[string, string]> = [
-    ['Employee', e.name],
+
+  let y = drawDocumentIntro(doc, accent, {
+    title: 'Payslip',
+    partyLabel: 'Employee',
+    partyName: e.name || '—',
+    meta: [
+      ['Pay period', `${monthName} ${d.period.year}`],
+      ['Reference', d.reference],
+      ['Paid by', e.paymentMode === 'mpesa' ? `M-Pesa ${e.mpesaNumber || ''}`.trim() : `${e.bankName || 'Bank'} ${mask(e.bankAccount)}`.trim()],
+    ],
+  })
+
+  const facts: Array<[string, string]> = [
     ['Employee No.', e.number],
     ['Job title', e.jobTitle || '—'],
     ['Department', e.department || '—'],
-    ['Pay period', `${d.period.start} to ${d.period.end}`],
-  ]
-  const right: Array<[string, string]> = [
     ['KRA PIN', e.kraPin || '—'],
     ['NSSF No.', e.nssfNumber || '—'],
     ['SHA No.', e.shaNumber || '—'],
-    ['ID No.', e.idNumber || '—'],
-    ['Paid by', e.paymentMode === 'mpesa' ? `M-Pesa ${e.mpesaNumber || ''}`.trim() : `${e.bankName || 'Bank'} ${mask(e.bankAccount)}`.trim()],
   ]
-  const drawPairs = (pairs: Array<[string, string]>, x: number) => {
-    pairs.forEach(([k, v], i) => {
-      const y = 124 + i * 14
-      doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...MUTED).text(k, x, y)
-      doc.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(...INK).text(v, x + 72, y, { maxWidth: 160 })
-    })
-  }
-  drawPairs(left, M)
-  drawPairs(right, W / 2 + 10)
+  const factW = width / 3
+  facts.forEach(([label, value], index) => {
+    const x = MARGIN + (index % 3) * factW
+    const rowY = y + Math.floor(index / 3) * 26
+    doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+    doc.text(label, x, rowY)
+    doc.setFont('helvetica', 'bold').setFontSize(8.3).setTextColor(...INK)
+    doc.text(value, x, rowY + 11, { maxWidth: factW - 12 })
+  })
+  y += 26 * Math.ceil(facts.length / 3) + 10
 
-  const tableOpts = {
+  const table = {
     theme: 'plain' as const,
-    styles: { font: 'helvetica', fontSize: 9, cellPadding: { top: 4, bottom: 4, left: 6, right: 6 }, textColor: INK },
-    headStyles: { fillColor: SOFT, textColor: NAVY, fontStyle: 'bold' as const, lineColor: LINE, lineWidth: { bottom: 0.7 } },
+    styles: { font: 'helvetica', fontSize: 8, cellPadding: 5, textColor: INK, lineColor: BORDER, lineWidth: { bottom: .4 } as never },
+    headStyles: { fillColor: accent, textColor: [255, 255, 255] as [number, number, number], fontStyle: 'bold' as const, fontSize: 6.6 },
     footStyles: { fillColor: SOFT, textColor: INK, fontStyle: 'bold' as const },
-    columnStyles: { 1: { halign: 'right' as const, cellWidth: 100 } },
+    columnStyles: { 1: { halign: 'right' as const, cellWidth: 92 } },
     showFoot: 'lastPage' as const,
   }
-  const half = (W - M * 2 - 16) / 2
-
-  const startY = 124 + 5 * 14 + 14
-  autoTable(doc, {
-    ...tableOpts,
-    startY,
-    margin: { left: M, right: W - M - half },
-    head: [['Earnings', { content: 'Amount', styles: { halign: 'right' as const } }]],
-    body: d.earnings.map(r => [r.label, kes(r.amount)]),
-    foot: [['Gross pay', kes(d.gross)]],
-  })
-  const leftEnd = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+  const half = (width - 16) / 2
+  const finalY = () => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
 
   autoTable(doc, {
-    ...tableOpts,
-    startY,
-    margin: { left: M + half + 16, right: M },
-    head: [['Deductions', { content: 'Amount', styles: { halign: 'right' as const } }]],
-    body: d.deductions.length ? d.deductions.map(r => [r.label, kes(r.amount)]) : [['None', kes(0)]],
-    foot: [['Total deductions', kes(d.totalDeductions)]],
+    ...table,
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN + half + 16 },
+    head: [['EARNINGS', { content: `AMOUNT (${currency})`, styles: { halign: 'right' as const } }]],
+    body: d.earnings.map(r => [r.label, amount(r.amount)]),
+    foot: [['Gross pay', amount(d.gross)]],
   })
-  const rightEnd = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+  const leftEnd = finalY()
 
-  // Net pay band.
-  let y = Math.max(leftEnd, rightEnd) + 18
-  doc.setFillColor(...NAVY).roundedRect(M, y, W - M * 2, 34, 4, 4, 'F')
-  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(255, 255, 255)
-  doc.text('NET PAY', M + 14, y + 21)
-  doc.setFontSize(14).text(kes(d.net), W - M - 14, y + 22, { align: 'right' })
+  autoTable(doc, {
+    ...table,
+    startY: y,
+    margin: { left: MARGIN + half + 16, right: MARGIN },
+    head: [['DEDUCTIONS', { content: `AMOUNT (${currency})`, styles: { halign: 'right' as const } }]],
+    body: d.deductions.length ? d.deductions.map(r => [r.label, amount(r.amount)]) : [['None', amount(0)]],
+    foot: [['Total deductions', amount(d.totalDeductions)]],
+  })
+  y = Math.max(leftEnd, finalY()) + 18
+
+  // What actually reaches the employee, in the accent colour.
+  doc.setFillColor(...accent).roundedRect(MARGIN, y, width, 34, 4, 4, 'F')
+  doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(255, 255, 255)
+  doc.text('NET PAY', MARGIN + 14, y + 21)
+  doc.setFontSize(14).text(`${currency} ${amount(d.net)}`, right(doc) - 14, y + 22, { align: 'right' })
   y += 52
 
-  // Salary advance recovery detail, when present.
   if (d.advances.length) {
     autoTable(doc, {
-      ...tableOpts,
+      ...table,
       startY: y,
-      margin: { left: M, right: M },
+      margin: { left: MARGIN, right: MARGIN },
       columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
-      head: [['Salary advance', { content: 'Recovered this month', styles: { halign: 'right' as const } }, { content: 'Balance after', styles: { halign: 'right' as const } }]],
-      body: d.advances.map(a => [a.ref, kes(a.amount), kes(a.remainingAfter)]),
+      head: [['SALARY ADVANCE', { content: 'RECOVERED THIS MONTH', styles: { halign: 'right' as const } }, { content: 'BALANCE AFTER', styles: { halign: 'right' as const } }]],
+      body: d.advances.map(a => [a.ref, amount(a.amount), amount(a.remainingAfter)]),
     })
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 14
+    y = finalY() + 14
   }
 
-  // Employer contributions and year-to-date side by side.
-  const boxY = y
+  const sideBySide = y
   autoTable(doc, {
-    ...tableOpts,
-    startY: boxY,
-    margin: { left: M, right: W - M - half },
-    head: [['Employer contributions', { content: 'Amount', styles: { halign: 'right' as const } }]],
-    body: d.employer.length ? d.employer.map(r => [r.label, kes(r.amount)]) : [['None', kes(0)]],
+    ...table,
+    startY: sideBySide,
+    margin: { left: MARGIN, right: MARGIN + half + 16 },
+    head: [['EMPLOYER CONTRIBUTIONS', { content: `AMOUNT (${currency})`, styles: { halign: 'right' as const } }]],
+    body: d.employer.length ? d.employer.map(r => [r.label, amount(r.amount)]) : [['None', amount(0)]],
   })
-  const erEnd = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+  const employerEnd = finalY()
   autoTable(doc, {
-    ...tableOpts,
-    startY: boxY,
-    margin: { left: M + half + 16, right: M },
-    head: [[`Year to date (${d.period.year})`, { content: 'Amount', styles: { halign: 'right' as const } }]],
+    ...table,
+    startY: sideBySide,
+    margin: { left: MARGIN + half + 16, right: MARGIN },
+    head: [[`YEAR TO DATE (${d.period.year})`, { content: `AMOUNT (${currency})`, styles: { halign: 'right' as const } }]],
     body: [
-      ['Gross pay', kes(d.ytd.gross)],
-      ['PAYE', kes(d.ytd.paye)],
-      ['NSSF', kes(d.ytd.nssf)],
-      ['Net pay', kes(d.ytd.net)],
+      ['Gross pay', amount(d.ytd.gross)],
+      ['PAYE', amount(d.ytd.paye)],
+      ['NSSF', amount(d.ytd.nssf)],
+      ['Net pay', amount(d.ytd.net)],
     ],
   })
-  const ytdEnd = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+  y = Math.max(employerEnd, finalY())
 
-  let notesEnd = Math.max(erEnd, ytdEnd)
   if (d.taxNotes?.length) {
     autoTable(doc, {
-      ...tableOpts,
-      startY: notesEnd + 12,
-      margin: { left: M, right: M },
-      columnStyles: { 1: { halign: 'right' } },
-      head: [['Tax notes', { content: 'Amount', styles: { halign: 'right' as const } }]],
-      body: d.taxNotes.map(r => [r.label, kes(r.amount)]),
+      ...table,
+      startY: y + 12,
+      margin: { left: MARGIN, right: MARGIN },
+      head: [['TAX NOTES', { content: `AMOUNT (${currency})`, styles: { halign: 'right' as const } }]],
+      body: d.taxNotes.map(r => [r.label, amount(r.amount)]),
     })
-    notesEnd = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+    y = finalY()
   }
-  const footY = notesEnd + 28
-  doc.setFont('helvetica', 'italic').setFontSize(7.5).setTextColor(...MUTED)
-  doc.text('This is a computer-generated payslip and does not require a signature.', M, Math.min(footY, 790))
-  doc.text(`Run ${d.period.runReference}${d.paymentStatus === 'paid' ? ' · Paid' : ''}`, W - M, Math.min(footY, 790), { align: 'right' })
-  return doc
+
+  doc.setFont('helvetica', 'italic').setFontSize(7.2).setTextColor(...MUTED)
+  doc.text('This is a computer-generated payslip and does not require a signature.', MARGIN, y + 22, { maxWidth: width * .7 })
+  doc.text(`Run ${d.period.runReference}${d.paymentStatus === 'paid' ? ' · Paid' : ''}`, right(doc), y + 22, { align: 'right' })
+
+  return finishLetterheadDocument(doc, company, shell)
 }
 
-export function downloadPayslipPdfFile(d: PayslipDetail, company: PayslipCompany) {
+export function downloadPayslipPdfFile(d: PayslipDetail, company: DeedPdfCompanyInput) {
   buildPayslipPdf(d, company).save(payslipFileName(d))
 }
 
-export function openPayslipPdfForPrint(d: PayslipDetail, company: PayslipCompany): boolean {
+export function openPayslipPdfForPrint(d: PayslipDetail, company: DeedPdfCompanyInput): boolean {
   const url = buildPayslipPdf(d, company).output('bloburl')
   return Boolean(window.open(url, '_blank'))
 }
 
-/** KRA P9 tax deduction card (annual, one employee). */
+/** KRA P9 tax deduction card (annual, one employee). Landscape: twelve months across ten columns. */
 export function buildP9Pdf(
   emp: { employeeNo: string; employeeName: string; kraPin: string; months: Array<{ month: number; basic: number; benefits: number; gross: number; nssf: number; shif: number; housingLevy: number; pension: number; taxablePay: number; taxCharged: number; personalRelief: number; insuranceRelief: number; paye: number }> },
   year: number,
-  company: PayslipCompany,
+  company: DeedPdfCompanyInput,
 ): jsPDF {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape' })
-  const W = doc.internal.pageSize.getWidth()
-  const M = 36
-  doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...NAVY)
-  doc.text('TAX DEDUCTION CARD (P9)', M, 42)
-  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...INK)
-  doc.text(`Year: ${year}`, W - M, 42, { align: 'right' })
-  doc.setFontSize(9)
-  doc.text(`Employer: ${company.name}${company.kraPin ? `   PIN: ${company.kraPin}` : ''}`, M, 62)
-  doc.text(`Employee: ${emp.employeeName} (${emp.employeeNo})   PIN: ${emp.kraPin || '—'}`, M, 76)
+  const { doc, accent, shell } = startLetterheadDocument(company, 'Tax deduction card (P9)', `P9/${year}/${emp.employeeNo}`, 'landscape')
+  const y = drawDocumentIntro(doc, accent, {
+    title: 'Tax deduction card (P9)',
+    partyLabel: 'Employee',
+    partyName: `${emp.employeeName} (${emp.employeeNo})`,
+    partyLines: [`Employee PIN: ${emp.kraPin || '—'}`],
+    meta: [['Year of income', String(year)], ['Employer PIN', company.kraPin || '—']],
+    metaRatio: .66,
+  })
 
-  const n = (v: number) => (Number(v) || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  const body = emp.months.map(x => [MONTHS[x.month - 1], n(x.basic), n(x.benefits), n(x.gross), n(x.nssf + x.pension), n(x.shif + x.housingLevy), n(x.taxablePay), n(x.taxCharged), n(x.personalRelief + x.insuranceRelief), n(x.paye)])
+  const n = (v: number) => money(v)
   const sum = (f: (x: typeof emp.months[number]) => number) => emp.months.reduce((s, x) => s + f(x), 0)
   autoTable(doc, {
-    startY: 92,
-    margin: { left: M, right: M },
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
     theme: 'grid',
-    styles: { font: 'helvetica', fontSize: 8, cellPadding: 4, textColor: INK, lineColor: LINE },
-    headStyles: { fillColor: SOFT, textColor: NAVY, fontStyle: 'bold' },
-    columnStyles: Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => [i, { halign: 'right' }])),
-    head: [['Month', 'Basic salary', 'Benefits', 'Gross pay', 'NSSF + pension', 'SHIF + housing levy', 'Taxable pay', 'Tax charged', 'Personal + insurance relief', 'PAYE']],
-    body,
-    foot: [['TOTAL', n(sum(x => x.basic)), n(sum(x => x.benefits)), n(sum(x => x.gross)), n(sum(x => x.nssf + x.pension)), n(sum(x => x.shif + x.housingLevy)), n(sum(x => x.taxablePay)), n(sum(x => x.taxCharged)), n(sum(x => x.personalRelief + x.insuranceRelief)), n(sum(x => x.paye))]],
+    styles: { font: 'helvetica', fontSize: 8, cellPadding: 4, textColor: INK, lineColor: BORDER, lineWidth: .45 },
+    headStyles: { fillColor: accent, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 6.6 },
     footStyles: { fillColor: SOFT, textColor: INK, fontStyle: 'bold' },
+    columnStyles: Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => [i, { halign: 'right' }])),
+    head: [['MONTH', 'BASIC SALARY', 'BENEFITS', 'GROSS PAY', 'NSSF + PENSION', 'SHIF + HOUSING LEVY', 'TAXABLE PAY', 'TAX CHARGED', 'PERSONAL + INSURANCE RELIEF', 'PAYE']],
+    body: emp.months.map(x => [MONTHS[x.month - 1], n(x.basic), n(x.benefits), n(x.gross), n(x.nssf + x.pension), n(x.shif + x.housingLevy), n(x.taxablePay), n(x.taxCharged), n(x.personalRelief + x.insuranceRelief), n(x.paye)]),
+    foot: [['TOTAL', ...[
+      sum(x => x.basic), sum(x => x.benefits), sum(x => x.gross), sum(x => x.nssf + x.pension), sum(x => x.shif + x.housingLevy),
+      sum(x => x.taxablePay), sum(x => x.taxCharged), sum(x => x.personalRelief + x.insuranceRelief), sum(x => x.paye),
+    ].map(v => ({ content: n(v), styles: { halign: 'right' as const } }))]],
   })
-  return doc
+
+  return finishLetterheadDocument(doc, company, shell)
 }

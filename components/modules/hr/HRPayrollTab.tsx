@@ -12,6 +12,7 @@ import { StatutoryFilesModal, AnnualP9Modal } from './HRStatutoryPanel'
 import { PayrollVarianceModal } from './HRPayrollVariance'
 import { PayrollAdjustmentsPanel, StaffLoansPanel, EmailPayslipsModal } from './HRPayrollExtras'
 import { downloadPayslipPdfFile, openPayslipPdfForPrint } from '@/lib/hr/payslip-pdf'
+import { companyForPdf } from '@/lib/commercial-pdf'
 import { useCan } from '@/hooks/useCan'
 
 export default function HRPayrollTab() {
@@ -149,13 +150,13 @@ export default function HRPayrollTab() {
   const downloadPayslipPdf = async (id: string) => {
     if (!buildPayslipLines(id)) { showToast('You can only download a published payslip you are allowed to see', 'error'); return }
     const detail = await fetchPayslipDetail(id)
-    if (detail) { downloadPayslipPdfFile(detail, companySettings); return }
+    if (detail) { downloadPayslipPdfFile(detail, await companyForPdf(companySettings)); return }
     const p = buildPayslipLines(id); if (p) downloadPdf(p.fileName, p.lines)
   }
   const printPayslipPdf = async (id: string) => {
     if (!buildPayslipLines(id)) { showToast('You can only print a published payslip you are allowed to see', 'error'); return }
     const detail = await fetchPayslipDetail(id)
-    if (detail) { if (!openPayslipPdfForPrint(detail, companySettings)) showToast('Allow pop-ups to print the payslip', 'error'); return }
+    if (detail) { if (!openPayslipPdfForPrint(detail, await companyForPdf(companySettings))) showToast('Allow pop-ups to print the payslip', 'error'); return }
     const p = buildPayslipLines(id); if (p) printPdf(p.fileName, p.lines)
   }
 

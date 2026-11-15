@@ -762,12 +762,17 @@ export const BODY_TOP = 112
  * `shell` stands in for the document the flow helpers expect: ensureRoom, pageBreak and
  * the footer only ever read its title and ref.
  */
-export function startLetterheadDocument(company: DeedPdfCompany, title: string, ref: string): {
+export function startLetterheadDocument(
+  company: DeedPdfCompany,
+  title: string,
+  ref: string,
+  orientation: 'portrait' | 'landscape' = 'portrait',
+): {
   doc: jsPDF
   accent: [number, number, number]
   shell: DeedPdfInput
 } {
-  const doc = new jsPDF({ unit: 'pt', format: normalizePaperFormat(company.printPaperFormat) })
+  const doc = new jsPDF({ unit: 'pt', format: normalizePaperFormat(company.printPaperFormat), orientation })
   // Every later setFont('helvetica', style) draws in the company's chosen family.
   const selectedFont = pdfFont(company.printFont)
   const originalSetFont = doc.setFont.bind(doc)
@@ -779,6 +784,53 @@ export function startLetterheadDocument(company: DeedPdfCompany, title: string, 
     accent: layoutAccent(normalizeDocumentLayout(company.printTemplate), company),
     shell: { title, ref } as DeedPdfInput,
   }
+}
+
+/**
+ * The opening band every letterhead document shares: the title in the accent colour,
+ * who the document is about on the left, and the reference rows on the right.
+ * Returns the y to carry on from.
+ */
+export function drawDocumentIntro(
+  doc: jsPDF,
+  accent: [number, number, number],
+  opts: {
+    title: string
+    /** Small blue label above the party, e.g. "Employee" or "To whom it may concern". */
+    partyLabel: string
+    partyName?: string
+    /** Smaller lines under the name, e.g. "Employee No. EMP-001". */
+    partyLines?: string[]
+    meta?: Array<[string, string]>
+    /** Where the meta column starts, as a share of the content width. */
+    metaRatio?: number
+  },
+): number {
+  const width = contentW(doc)
+  const metaX = MARGIN + width * (opts.metaRatio ?? .58)
+  const top = BODY_TOP
+
+  doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...accent)
+  doc.text(opts.title.toUpperCase(), MARGIN, top)
+
+  const y = top + 26
+  writeLabel(doc, opts.partyLabel, MARGIN, y)
+  let partyY = y + 16
+  if (opts.partyName) {
+    doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...INK)
+    doc.text(opts.partyName, MARGIN, partyY, { maxWidth: metaX - MARGIN - 20 })
+    partyY += 15
+  }
+  doc.setFont('helvetica', 'normal').setFontSize(8.3).setTextColor(...INK)
+  for (const text of (opts.partyLines ?? []).filter(Boolean)) {
+    doc.text(text, MARGIN, partyY, { maxWidth: metaX - MARGIN - 20 })
+    partyY += 13
+  }
+
+  const meta = opts.meta ?? []
+  meta.forEach(([label, value], index) => drawMetaRow(doc, label, value, metaX, y + index * 17, 84))
+
+  return Math.max(partyY, y + Math.max(meta.length - 1, 0) * 17 + 16) + 10
 }
 
 /** Close a letterhead document: the standard footer on every page. */

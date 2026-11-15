@@ -3,16 +3,14 @@ import autoTable from 'jspdf-autotable'
 import {
   startLetterheadDocument,
   finishLetterheadDocument,
+  drawDocumentIntro,
   ensureRoom,
   writeLabel,
-  writeValue,
-  drawMetaRow,
   line,
   money,
   MARGIN,
   contentW,
   right,
-  BODY_TOP,
   INK,
   MUTED,
   SOFT,
@@ -79,17 +77,14 @@ export function buildCertificateOfService(emp: ExitEmployee, company: DeedPdfCom
   const reference = emp.employeeNo ? `${emp.employeeNo}/COS` : 'Certificate of service'
   const { doc, accent, shell } = startLetterheadDocument(company, 'Certificate of service', reference)
   const width = contentW(doc)
-  const metaX = MARGIN + width * .58
-  let y = BODY_TOP
-
-  doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...accent)
-  doc.text('CERTIFICATE OF SERVICE', MARGIN, y)
-  y += 26
-
-  writeLabel(doc, 'To whom it may concern', MARGIN, y)
-  if (emp.employeeNo) drawMetaRow(doc, 'Reference', reference, metaX, y, 84)
-  drawMetaRow(doc, 'Date issued', longDate(issuedOn), metaX, emp.employeeNo ? y + 17 : y, 84)
-  y += 38
+  let y = drawDocumentIntro(doc, accent, {
+    title: 'Certificate of service',
+    partyLabel: 'To whom it may concern',
+    meta: [
+      ...(emp.employeeNo ? [['Reference', reference] as [string, string]] : []),
+      ['Date issued', longDate(issuedOn)],
+    ],
+  })
 
   doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(...INK)
   const intro = doc.splitTextToSize(
@@ -153,27 +148,19 @@ export function buildFinalDuesPdf(emp: ExitEmployee, company: DeedPdfCompanyInpu
   const { doc, accent, shell } = startLetterheadDocument(company, 'Final dues statement', reference)
   const currency = company.currency || 'KES'
   const width = contentW(doc)
-  const metaX = MARGIN + width * .58
-  let y = BODY_TOP
-
-  doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...accent)
-  doc.text('FINAL DUES STATEMENT', MARGIN, y)
-  y += 26
-
-  writeLabel(doc, 'Employee', MARGIN, y)
-  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...INK)
-  doc.text(emp.name || '—', MARGIN, y + 16, { maxWidth: metaX - MARGIN - 20 })
-  let partyY = y + 31
-  ;[emp.employeeNo ? `Employee No. ${emp.employeeNo}` : '', emp.jobTitle, emp.department]
-    .filter(Boolean)
-    .forEach(value => { writeValue(doc, String(value), MARGIN, partyY, { maxWidth: metaX - MARGIN - 20 }); partyY += 12 })
-
   // Joined and the last day are separate rows: drawMetaRow caps a value at 175pt,
   // which a whole date range would overrun at this column.
-  drawMetaRow(doc, 'Joined', longDate(emp.startDate), metaX, y, 84)
-  drawMetaRow(doc, 'Last working day', longDate(emp.exitDate), metaX, y + 17, 84)
-  drawMetaRow(doc, 'Reason for exit', emp.exitReason || '—', metaX, y + 34, 84)
-  y = Math.max(partyY, y + 48) + 12
+  let y = drawDocumentIntro(doc, accent, {
+    title: 'Final dues statement',
+    partyLabel: 'Employee',
+    partyName: emp.name || '—',
+    partyLines: [emp.employeeNo ? `Employee No. ${emp.employeeNo}` : '', emp.jobTitle, emp.department],
+    meta: [
+      ['Joined', longDate(emp.startDate)],
+      ['Last working day', longDate(emp.exitDate)],
+      ['Reason for exit', emp.exitReason || '—'],
+    ],
+  })
 
   const boxes: Array<[string, number, boolean?]> = [
     ['GROSS TERMINAL PAY', s.gross],

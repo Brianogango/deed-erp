@@ -8,6 +8,7 @@ import {
   buildBankPaymentFile, buildMpesaPaymentFile, buildP9, buildAnnualSummary, type CsvTable,
 } from '@/lib/hr/statutory-exports'
 import { buildP9Pdf } from '@/lib/hr/payslip-pdf'
+import { companyForPdf } from '@/lib/commercial-pdf'
 import type { StatutoryReport, AnnualEmployeeRow } from '@/lib/hr/payroll-report-types'
 
 const save = (t: CsvTable) => exportToCsv(t.headers, t.rows, t.filename)
@@ -118,9 +119,9 @@ export function AnnualP9Modal({ onClose }: { onClose: () => void }) {
               ]} />
             </Field>
             <div className="flex flex-wrap gap-2">
-              <button className="btn-primary text-[11px]" disabled={!selected} onClick={() => {
+              <button className="btn-primary text-[11px]" disabled={!selected} onClick={async () => {
                 if (!selected) return
-                buildP9Pdf(selected, y, companySettings).save(`P9-${y}-${selected.employeeNo}.pdf`)
+                buildP9Pdf(selected, y, await companyForPdf(companySettings)).save(`P9-${y}-${selected.employeeNo}.pdf`)
               }}>P9 card (PDF)</button>
               <button className="btn-outline text-[11px]" disabled={!selected} onClick={() => selected && save(buildP9(selected, y))}>P9 (CSV)</button>
               <button className="btn-outline text-[11px]" onClick={() => { save(buildAnnualSummary(data, y)); showToast('Annual PAYE summary downloaded', 'success') }}>All employees summary (CSV)</button>

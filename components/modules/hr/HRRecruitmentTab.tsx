@@ -12,6 +12,7 @@ import {
 } from '@/lib/hr/recruitment'
 import { ONBOARDING_TEMPLATES, buildChecklist } from '@/lib/hr/checklists'
 import { buildOfferLetterPdf } from '@/lib/hr/offer-letter'
+import { companyForPdf } from '@/lib/commercial-pdf'
 
 type JobForm = {
   title: string; departmentId: string; location: string; type: JobPosting['type'] | ''
@@ -408,13 +409,13 @@ function CandidateDetail({ candidate: c, jobTitle, job, departmentName, canManag
     reportsTo: c.offer.reportsTo, additionalTerms: c.offer.additionalTerms, department: departmentName, location: job?.location, employmentType: job?.type,
   })
 
-  const downloadOfferLetter = () => {
+  const downloadOfferLetter = async () => {
     if (!c.offer) { showToast('Record the offer first', 'error'); return }
     buildOfferLetterPdf({
       candidateName: `${c.firstName} ${c.lastName}`.trim(), jobTitle, department: departmentName, location: job?.location, employmentType: job?.type,
       startDate: c.offer.startDate, monthlyBasicSalary: c.offer.salary, probationMonths: c.offer.probationMonths, reportsTo: c.offer.reportsTo,
       validUntil: c.offer.validUntil, additionalTerms: c.offer.additionalTerms, issuedOn: today(),
-    }, { name: companySettings.name, address: companySettings.address, city: companySettings.city, phone: companySettings.phone, email: companySettings.email, kraPin: companySettings.kraPin })
+    }, await companyForPdf(companySettings))
       .save(`Offer letter - ${c.firstName} ${c.lastName}.pdf`)
   }
 
