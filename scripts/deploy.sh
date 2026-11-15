@@ -96,9 +96,17 @@ git pull --ff-only
 LOCK_AFTER=$(sha1sum package-lock.json 2>/dev/null | cut -d' ' -f1 || echo none)
 
 # Installing dependencies mid-deploy can leave node_modules broken with no way
-# back, so this stops and hands the decision over rather than doing it.
+# back, so this stops and hands the decision over rather than doing it. The
+# pull has already landed, so the next run has nothing left to fetch.
 if [[ "$LOCK_BEFORE" != "$LOCK_AFTER" ]]; then
-  die "package-lock.json changed. Run 'npm ci' yourself, then re-run this script."
+  die "package-lock.json changed, so the dependencies on this server are out of date.
+    The new code is pulled but nothing else was touched; the site is still serving the old build.
+
+    Install, then deploy:
+      cd $APP_DIR && sudo npm ci
+      sudo bash scripts/deploy.sh --no-backup
+
+    --no-backup because the backup above was taken moments ago. Drop it to take another."
 fi
 
 say "Building into .next-build — the live site keeps serving from .next"
