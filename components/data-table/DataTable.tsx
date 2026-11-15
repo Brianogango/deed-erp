@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { buildExportRows } from '@/lib/data-table/export-rows'
+import {
+  DATE_RANGE_LABELS, DATE_RANGE_PRESETS, describeDateRange, filterByDateRange, isOpenRange,
+  type DateFilterConfig, type DateRangePreset,
+} from '@/lib/data-table/date-filter'
 import { rememberRecordList } from '@/lib/record-pager'
 import { Table } from '@/components/ui'
 import { exportToExcel, exportToPDF } from '@/lib/export-utils'
@@ -98,6 +102,13 @@ interface DataTableProps<T> {
   onPageChange?: (page: number) => void
 
   primaryFilters?: PrimaryFilterConfig[]
+  /**
+   * A period to narrow the list to. Every list of dated records wants the
+   * same thing, so the control, the periods and the arithmetic are here
+   * rather than rebuilt on each screen. Give `accessor` and the table filters
+   * the rows itself; leave it out to filter server-side from `value`.
+   */
+  dateFilter?: DateFilterConfig<T>
   advancedFilters?: ReactNode
   activeFilters?: ActiveFilterChip[]
   onClearFilters?: () => void
@@ -171,6 +182,7 @@ export default function DataTable<T>({
   page: pageProp,
   onPageChange,
   primaryFilters,
+  dateFilter,
   advancedFilters,
   activeFilters,
   onClearFilters,
@@ -315,8 +327,33 @@ export default function DataTable<T>({
     [minTableWidth, visibleColumns, selectable, rowActions],
   )
 
+  // The period select sits with the other filters, so it gets the active-filter
+  // chip and the Reset that those already have.
+  const toolbarFilters = useMemo<PrimaryFilterConfig[] | undefined>(() => {
+    if (!dateFilter) return primaryFilters
+    const periodFilter: PrimaryFilterConfig = {
+      key: '__date',
+      label: dateFilter.label,
+      value: dateFilter.value.preset,
+      allValue: 'all',
+      options: DATE_RANGE_PRESETS.map(preset => ({
+        value: preset,
+        label: preset === 'all' ? `${dateFilter.label}: any` : DATE_RANGE_LABELS[preset],
+      })),
+      onChange: next => dateFilter.onChange(
+        next === 'custom'
+          ? { ...dateFilter.value, preset: 'custom' }
+          : { preset: next as DateRangePreset },
+      ),
+    }
+    return [periodFilter, ...(primaryFilters ?? [])]
+  }, [dateFilter, primaryFilters])
+
   const filteredRows = useMemo(() => {
     let result = rows
+    if (dateFilter?.accessor && !isOpenRange(dateFilter.value)) {
+      result = filterByDateRange(result, dateFilter.accessor, dateFilter.value)
+    }
     if (clientSearch && search.trim()) {
       // Every word must appear somewhere in the row ("dell wanjiku" finds
       // Wanjiku's Dell), across all columns — including ones hidden on
@@ -343,7 +380,7 @@ export default function DataTable<T>({
       }
     }
     return result
-  }, [rows, search, filterRules, columns, clientSearch, sort])
+  }, [rows, search, filterRules, columns, clientSearch, sort, dateFilter])
 
   // Opening a row remembers this list's order for the record pager (‹ ›).
   const openRow = (row: T) => {
@@ -477,7 +514,7 @@ export default function DataTable<T>({
           onSearchChange={v => { setSearch(v); goToPage(1) }}
           searchPlaceholder={searchPlaceholder}
           hideSearch={hideSearch}
-          primaryFilters={primaryFilters}
+          primaryFilters={toolbarFilters}
           advancedFilters={advancedFilters}
           activeFilters={activeFilters}
           onClearFilters={(primaryFilters?.length || activeFilters?.length || filterRules.length) ? clearFilters : undefined}
@@ -501,6 +538,32 @@ export default function DataTable<T>({
           bulkActions={bulkActions ? bulkActions({ rows: selectedRows, clear: () => setSelectedKeys(new Set()) }) : undefined}
           loading={isLoading}
         />
+      )}
+
+      {/* The two boxes appear only once a custom range is asked for, so the
+          common case stays a single select. */}
+      {dateFilter && dateFilter.value.preset === 'custom' && (
+        <div className="dt-date-range" role="group" aria-label={`${dateFilter.label} range`}>
+          <label>
+            <span>From</span>
+            <input
+              type="date"
+              value={dateFilter.value.from ?? ''}
+              max={dateFilter.value.to || undefined}
+              onChange={e => { dateFilter.onChange({ ...dateFilter.value, preset: 'custom', from: e.target.value }); goToPage(1) }}
+            />
+          </label>
+          <label>
+            <span>To</span>
+            <input
+              type="date"
+              value={dateFilter.value.to ?? ''}
+              min={dateFilter.value.from || undefined}
+              onChange={e => { dateFilter.onChange({ ...dateFilter.value, preset: 'custom', to: e.target.value }); goToPage(1) }}
+            />
+          </label>
+          <span className="dt-date-range__summary">{describeDateRange(dateFilter.value)}</span>
+        </div>
       )}
 
       {filtersOpen && (

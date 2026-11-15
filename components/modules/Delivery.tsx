@@ -21,6 +21,7 @@ import {
   isGeneralDeliveryJob,
 } from '@/lib/delivery-job-type'
 import { useUrlQueryState, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useUrlDateRange } from '@/hooks/useUrlDateRange'
 import {
   CheckInModal, draftsToStops, EditStopsModal, emptyItem, emptyStop, FollowUpModal, StopsEditor, TripSummary, type StopDraft,
 } from '@/components/modules/delivery/TripParts'
@@ -617,6 +618,7 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
   const [jobsSearch, setJobsSearchValue] = useUrlUiState('q', '')
   const [jobsPageValue, setJobsPageValue] = useUrlUiState('page', '1')
   const jobsPage = Math.max(1, Number.parseInt(jobsPageValue, 10) || 1)
+  const [jobsPeriod, setJobsPeriod] = useUrlDateRange({ resets: { page: null } })
 
   const setFilterStatus = (value: DeliveryJobStatus | 'all') =>
     setFilterStatusValue(value, { queryPatch: { page: null } })
@@ -955,7 +957,8 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
           page={jobsPage}
           onPageChange={setJobsPage}
           primaryFilters={deliveryPrimaryFilters}
-          onClearFilters={() => patchJobsUi({ q: null, status: null, type: null, page: null })}
+          dateFilter={{ label: 'Scheduled', value: jobsPeriod, onChange: setJobsPeriod, accessor: j => j.scheduledDate }}
+          onClearFilters={() => patchJobsUi({ q: null, status: null, type: null, page: null, period: null, from: null, to: null })}
           hideColumnFilters
           emptyMessage="No delivery jobs found"
           rowActions={jobRowActions}

@@ -72,6 +72,7 @@ import { DEFAULT_DOCUMENT_PAYMENT_DETAILS, alignPaymentDetailsToTax, normalizeDo
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useUrlDateRange } from '@/hooks/useUrlDateRange'
 import { contactPaymentTermsDays, customerPaymentTermsDays, dueDateFromTerms } from '@/lib/due-date'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -489,9 +490,15 @@ function AccountingContent() {
     setInvoiceListPageState(1)
     setInvSearchValue(value, { queryPatch: { page: null } })
   }, [setInvSearchValue])
+  // The period sits in the URL beside the search and the status, so a filtered
+  // list can be sent to someone and survives a reload.
+  const [invoiceDateRange, setInvoiceDateRange] = useUrlDateRange({
+    resets: { page: null },
+    onChange: () => setInvoiceListPageState(1),
+  })
   const clearInvoiceFilters = useCallback(() => {
     setInvoiceListPageState(1)
-    patchInvoiceUi({ q: null, filter: null, page: null })
+    patchInvoiceUi({ q: null, filter: null, page: null, period: null, from: null, to: null })
   }, [patchInvoiceUi])
   const setInvoiceListPage = useCallback((nextPage: number) => {
     const page = parseFinanceListPage(nextPage)
@@ -1725,6 +1732,12 @@ function AccountingContent() {
                 page={invoiceListPage}
                 onPageChange={setInvoiceListPage}
                 primaryFilters={invoicePrimaryFilters}
+                dateFilter={{
+                  label: tab === 'invoices' ? 'Invoice date' : 'Bill date',
+                  value: invoiceDateRange,
+                  onChange: setInvoiceDateRange,
+                  accessor: (row: Invoice) => row.date,
+                }}
                 onClearFilters={clearInvoiceFilters}
                 hideColumnFilters
                 selectable

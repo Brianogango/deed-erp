@@ -5,9 +5,11 @@ import { EmptyState, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { LOCATIONS, type Receipt } from '@/lib/store'
 import { receiptSearchBlob, receiptSerialCount } from '@/lib/purchase/receipt-contents'
+import { useUrlDateRange } from '@/hooks/useUrlDateRange'
 
 export default function PurchaseReceiptsTab() {
   const { receipts, fmtDate, openReceiptDetail } = usePurchase()
+  const [period, setPeriod] = useUrlDateRange({ keys: { preset: 'grnPeriod', from: 'grnFrom', to: 'grnTo' } })
   const rows = [...receipts].reverse()
 
   const receiptStatus = (r: Receipt) => r.status === 'validated' ? 'done' : 'pending'
@@ -70,6 +72,7 @@ export default function PurchaseReceiptsTab() {
           columns={columns}
           rows={rows}
           rowKey={r => r.id}
+          dateFilter={{ label: 'Receipt date', value: period, onChange: setPeriod, accessor: r => r.date }}
           emptyMessage="No receipts match the current search or filters"
           searchPlaceholder="Search receipts by ref, vendor, product, or serial…"
           onRowClick={r => openReceiptDetail(r.id, 'list')}

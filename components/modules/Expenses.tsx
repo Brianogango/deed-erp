@@ -10,7 +10,7 @@ import { canUserReviewExpense } from '@/lib/expense-approval-chain'
 import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { OperationalSummary } from '@/components/erp/OperationalSummary'
-import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
+import { DataTable, type ColumnDef, type DateFilterConfig, type PrimaryFilterConfig } from '@/components/data-table'
 import {
   Fa, faBox, faCar, faComputer, faDesktop, faDroplet, faFileLines, faLightbulb,
   faPrint, faScrewdriverWrench, faUtensils, faImage, faPaperclip, faTriangleExclamation,
@@ -19,6 +19,7 @@ import { faClipboardList, faPlus } from '@fortawesome/free-solid-svg-icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useUrlDateRange } from '@/hooks/useUrlDateRange'
 import { useCan } from '@/hooks/useCan'
 import { newestDocumentFirst } from '@/lib/document-order'
 
@@ -204,6 +205,15 @@ function ExpensesContent() {
   const [reviewUser, setReviewUserValue] = useUrlUiState('staff', 'all')
   const setReviewUser = (value: string) =>
     setReviewUserValue(value, { queryPatch: { reviewPage: null } })
+
+  // One period for whichever tab is open — only one list shows at a time.
+  const [period, setPeriod] = useUrlDateRange({ resets: { minePage: null, reviewPage: null } })
+  const dateFilter: DateFilterConfig<Expense> = {
+    label: 'Expense date',
+    value: period,
+    onChange: setPeriod,
+    accessor: e => e.expenseDate || e.submittedDate,
+  }
 
   const uniqueSubmitters: [string, string][] = canReviewExpenses
     ? Array.from(new Map(expenses.map(e => [e.submittedByUserId, e.submittedByName] as [string, string])))
@@ -479,6 +489,8 @@ function ExpensesContent() {
             onSearchChange={setMineSearch}
             page={minePage}
             onPageChange={setMinePage}
+            dateFilter={dateFilter}
+            onClearFilters={() => patchExpenseUi({ mineQ: null, minePage: null, period: null, from: null, to: null })}
             onPreview={openReceiptPreview}
             onView={e => setReviewingId(e.id)}
           />
@@ -498,6 +510,7 @@ function ExpensesContent() {
             onSearchChange={setReviewSearch}
             page={reviewPage}
             onPageChange={setReviewPage}
+            dateFilter={dateFilter}
             primaryFilters={[
               {
                 key: 'status',
@@ -526,7 +539,7 @@ function ExpensesContent() {
                 onChange: setReviewUser,
               },
             ]}
-            onClearFilters={() => patchExpenseUi({ status: 'all', staff: null, reviewPage: null })}
+            onClearFilters={() => patchExpenseUi({ status: 'all', staff: null, reviewPage: null, period: null, from: null, to: null })}
             onPreview={openReceiptPreview}
             onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
             onReimburse={e => {
@@ -989,6 +1002,7 @@ function ExpenseTable({
   onSearchChange,
   page,
   onPageChange,
+  dateFilter,
   primaryFilters,
   onClearFilters,
   onPreview,
@@ -1004,6 +1018,7 @@ function ExpenseTable({
   onSearchChange?: (value: string) => void
   page?: number
   onPageChange?: (page: number) => void
+  dateFilter?: DateFilterConfig<Expense>
   primaryFilters?: PrimaryFilterConfig[]
   onClearFilters?: () => void
   onPreview: (e: Expense) => void
@@ -1146,6 +1161,7 @@ function ExpenseTable({
       searchPlaceholder={searchPlaceholder ?? 'Search reference or description…'}
       page={page}
       onPageChange={onPageChange}
+      dateFilter={dateFilter}
       primaryFilters={primaryFilters}
       onClearFilters={onClearFilters}
       hideColumnFilters={Boolean(primaryFilters?.length)}

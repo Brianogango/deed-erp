@@ -1,5 +1,6 @@
 'use client'
 import { createContext, useContext } from 'react'
+import type { DateRange } from '@/lib/data-table/date-filter'
 import type { ReactNode } from 'react'
 import {
   useFinanceStore, fmtKes, fmtDate,
@@ -128,8 +129,7 @@ interface PurchaseCtxValue {
   retFilterStatus: string; setRetFilterStatus: (v: string) => void
   retFilterReason: string; setRetFilterReason: (v: string) => void
   retFilterVendor: string; setRetFilterVendor: (v: string) => void
-  retDateFrom: string; setRetDateFrom: (v: string) => void
-  retDateTo: string; setRetDateTo: (v: string) => void
+  retPeriod: DateRange; setRetPeriod: (v: DateRange) => void
   retExpandedId: string | null; setRetExpandedId: (v: string | null) => void
   showPickupModal: boolean; setShowPickupModal: (v: boolean) => void
   pickupReturnId: string; setPickupReturnId: (v: string) => void

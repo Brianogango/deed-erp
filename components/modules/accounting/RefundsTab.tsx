@@ -3,8 +3,10 @@
 import { useMemo, useState } from 'react'
 import { useFinanceStore, fmtDate, fmtKes, type RefundPayment } from '@/lib/store'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { isWithinRange } from '@/lib/data-table/date-filter'
 import { Modal } from '@/components/ui'
-import { useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useUrlDateRange } from '@/hooks/useUrlDateRange'
 import NumberCheckNotice from '@/components/accounting/NumberCheckNotice'
 
 const refundMethodLabel = (method: string) => {
@@ -18,17 +20,17 @@ export default function RefundsTab() {
   const { refundPayments } = useFinanceStore()
   const [refundSearch, setRefundSearch] = useUrlUiState('refundQ', '')
   const [refundMethod, setRefundMethod] = useUrlUiState('refundMethod', 'all')
-  const [refundFrom, setRefundFrom] = useUrlUiState('refundFrom', '')
-  const [refundTo, setRefundTo] = useUrlUiState('refundTo', '')
+  const [refundPeriod, setRefundPeriod] = useUrlDateRange({
+    keys: { preset: 'refundPeriod', from: 'refundFrom', to: 'refundTo' },
+  })
+  const patchUi = useUrlUiPatch()
   const [selectedRefund, setSelectedRefund] = useState<RefundPayment | null>(null)
 
   const filteredRefunds = useMemo(() => {
     const query = refundSearch.trim().toLowerCase()
     return refundPayments.filter(refund => {
       if (refundMethod !== 'all' && refund.paymentMethod !== refundMethod) return false
-      const paymentDate = String(refund.paymentDate || '')
-      if (refundFrom && paymentDate < refundFrom) return false
-      if (refundTo && paymentDate > refundTo) return false
+      if (!isWithinRange(refund.paymentDate, refundPeriod)) return false
       if (!query) return true
       return [
         refund.ref,
@@ -38,7 +40,7 @@ export default function RefundsTab() {
         refund.notes,
       ].some(value => String(value || '').toLowerCase().includes(query))
     })
-  }, [refundFrom, refundMethod, refundPayments, refundSearch, refundTo])
+  }, [refundMethod, refundPayments, refundPeriod, refundSearch])
 
   const filteredTotal = useMemo(
     () => filteredRefunds.reduce((sum, refund) => sum + (Number(refund.amount) || 0), 0),
@@ -83,14 +85,7 @@ export default function RefundsTab() {
     },
   ]
 
-  const hasFilters = Boolean(refundSearch || refundFrom || refundTo || refundMethod !== 'all')
-
-  const clearFilters = () => {
-    setRefundSearch('')
-    setRefundMethod('all')
-    setRefundFrom('')
-    setRefundTo('')
-  }
+  const clearFilters = () => patchUi({ refundQ: null, refundMethod: null, refundPeriod: null, refundFrom: null, refundTo: null })
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -109,40 +104,6 @@ export default function RefundsTab() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-2 border-b px-4 py-2.5" style={{ borderColor: 'var(--border-lt)' }}>
-        <label className="flex min-w-[230px] flex-col gap-1">
-          <span className="text-[9px] font-semibold uppercase tracking-wide text-t4">Search</span>
-          <input
-            className="form-input text-[11px]"
-            value={refundSearch}
-            onChange={event => setRefundSearch(event.target.value)}
-            placeholder="Refund, RMA, customer or notes…"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[9px] font-semibold uppercase tracking-wide text-t4">Method</span>
-          <select className="form-select text-[11px]" value={refundMethod} onChange={event => setRefundMethod(event.target.value)}>
-            <option value="all">All methods</option>
-            <option value="cash">Cash</option>
-            <option value="mpesa">M-Pesa</option>
-            <option value="bank_transfer">Bank transfer</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[9px] font-semibold uppercase tracking-wide text-t4">From</span>
-          <input className="form-input text-[11px]" type="date" value={refundFrom} onChange={event => setRefundFrom(event.target.value)} />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[9px] font-semibold uppercase tracking-wide text-t4">To</span>
-          <input className="form-input text-[11px]" type="date" value={refundTo} onChange={event => setRefundTo(event.target.value)} />
-        </label>
-        {hasFilters && (
-          <button type="button" className="btn-secondary text-[11px]" onClick={clearFilters}>
-            Clear filters
-          </button>
-        )}
-      </div>
-
       <DataTable
         tableId="finance-refunds"
         columns={columns}
@@ -151,7 +112,26 @@ export default function RefundsTab() {
         onRowClick={refund => setSelectedRefund(refund)}
         rowLabel={refund => `${refund.ref} ${refund.customerName || ''} ${refund.rmaRef || ''}`}
         emptyMessage={refundPayments.length === 0 ? 'No refunds recorded' : 'No refunds match these filters'}
-        hideSearch
+        searchValue={refundSearch}
+        onSearchChange={setRefundSearch}
+        searchPlaceholder="Refund, RMA, customer or notes…"
+        clientSearch={false}
+        dateFilter={{ label: 'Refund date', value: refundPeriod, onChange: setRefundPeriod }}
+        primaryFilters={[{
+          key: 'refundMethod',
+          label: 'Method',
+          value: refundMethod,
+          allValue: 'all',
+          options: [
+            { value: 'all', label: 'All methods' },
+            { value: 'cash', label: 'Cash' },
+            { value: 'mpesa', label: 'M-Pesa' },
+            { value: 'bank_transfer', label: 'Bank transfer' },
+          ],
+          onChange: setRefundMethod,
+        }]}
+        onClearFilters={clearFilters}
+        hideColumnFilters
         exportTitle="Refund payments"
         exportFilename="refunds"
       />

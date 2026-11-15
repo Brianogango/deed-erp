@@ -31,6 +31,7 @@ import {
 } from '@/lib/purchases-filter'
 import { invoiceResidual, isOpenInvoice } from '@/lib/odoo-sales-flow'
 import { userCan } from '@/lib/auth/can'
+import { ALL_DATES, type DateRange } from '@/lib/data-table/date-filter'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills'
 type SubView  = 'list' | 'form' | 'receive' | 'receipt'
@@ -247,8 +248,7 @@ function PurchaseContent() {
   const [retFilterStatus,  setRetFilterStatus]  = useState('all')
   const [retFilterReason,  setRetFilterReason]  = useState('all')
   const [retFilterVendor,  setRetFilterVendor]  = useState('all')
-  const [retDateFrom,      setRetDateFrom]      = useState('')
-  const [retDateTo,        setRetDateTo]        = useState('')
+  const [retPeriod,        setRetPeriod]        = useState<DateRange>(ALL_DATES)
   const [retExpandedId,    setRetExpandedId]    = useState<string | null>(null)
   const [showPickupModal,  setShowPickupModal]  = useState(false)
   const [pickupReturnId,   setPickupReturnId]   = useState('')
@@ -1295,7 +1295,7 @@ function PurchaseContent() {
     returnCollectedDate, setReturnCollectedDate, returnPickupNotes, setReturnPickupNotes,
     // Return filters
     retSearchSerial, setRetSearchSerial, retFilterStatus, setRetFilterStatus, retFilterReason, setRetFilterReason,
-    retFilterVendor, setRetFilterVendor, retDateFrom, setRetDateFrom, retDateTo, setRetDateTo,
+    retFilterVendor, setRetFilterVendor, retPeriod, setRetPeriod,
     retExpandedId, setRetExpandedId, showPickupModal, setShowPickupModal, pickupReturnId, setPickupReturnId,
     pickupCollectedBy, setPickupCollectedBy, pickupCollectedDate, setPickupCollectedDate, pickupNotes, setPickupNotes,
     // Delete

@@ -8,6 +8,7 @@ import type { Invoice } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { financeInvoicePath } from '@/lib/finance-invoice'
 import { userCan } from '@/lib/auth/can'
+import { useUrlDateRange } from '@/hooks/useUrlDateRange'
 
 type VendorBill = Invoice
 
@@ -18,6 +19,7 @@ export default function PurchaseBillsTab() {
     fmtKes, fmtDate,
   } = usePurchase()
   const canValidateBills = userCan(currentUser, 'postFinancial')
+  const [period, setPeriod] = useUrlDateRange({ keys: { preset: 'billPeriod', from: 'billFrom', to: 'billTo' } })
 
   const linkedPORef = (b: VendorBill) => b.purchaseOrderId ? (purchaseOrders.find(p => p.id === b.purchaseOrderId)?.ref ?? '—') : '—'
   const billStatus = (b: VendorBill) => invoiceDocState(b.status) === 'posted' ? invoicePaymentStatus(b) : invoiceDocState(b.status)
@@ -135,6 +137,7 @@ export default function PurchaseBillsTab() {
           columns={columns}
           rows={vendorBills}
           rowKey={b => b.id}
+          dateFilter={{ label: 'Bill date', value: period, onChange: setPeriod, accessor: b => b.date }}
           emptyMessage="No vendor bills match the current search or filters"
           onRowClick={openBill}
           rowActions={rowActions}

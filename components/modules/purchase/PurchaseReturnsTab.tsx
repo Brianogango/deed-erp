@@ -3,6 +3,7 @@ import { usePurchase } from './PurchaseContext'
 import { Badge, PanelHeader, RecordCard } from '@/components/ui'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab, type PrimaryFilterConfig } from '@/components/data-table'
 import type { PurchaseReturn } from '@/lib/store'
+import { ALL_DATES, isWithinRange } from '@/lib/data-table/date-filter'
 import { Fa, faBox } from '@/components/icons'
 import { userCan } from '@/lib/auth/can'
 
@@ -20,8 +21,7 @@ export default function PurchaseReturnsTab() {
     retFilterStatus, setRetFilterStatus,
     retFilterReason, setRetFilterReason,
     retFilterVendor, setRetFilterVendor,
-    retDateFrom, setRetDateFrom,
-    retDateTo, setRetDateTo,
+    retPeriod, setRetPeriod,
     retExpandedId, setRetExpandedId,
     setShowPickupModal, setPickupReturnId,
     setPickupCollectedBy, setPickupCollectedDate, setPickupNotes,
@@ -37,8 +37,7 @@ export default function PurchaseReturnsTab() {
     if (retFilterStatus !== 'all' && r.status !== retFilterStatus) return false
     if (retFilterReason !== 'all' && r.reason !== retFilterReason) return false
     if (retFilterVendor !== 'all' && r.vendorId !== retFilterVendor) return false
-    if (retDateFrom && r.date < retDateFrom) return false
-    if (retDateTo   && r.date > retDateTo)   return false
+    if (!isWithinRange(r.date, retPeriod)) return false
     if (retSearchSerial.trim()) {
       const q = retSearchSerial.trim().toUpperCase()
       const hasSerial = r.lines.some(l => l.serialIds.some(sid => {
@@ -262,19 +261,8 @@ export default function PurchaseReturnsTab() {
           searchPlaceholder="Search returns by serial..."
           clientSearch={false}
           primaryFilters={returnPrimaryFilters}
-          advancedFilters={
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-t3">From</span>
-                <input className="form-input text-xs py-1.5" type="date" value={retDateFrom} onChange={e => setRetDateFrom(e.target.value)} />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-t3">To</span>
-                <input className="form-input text-xs py-1.5" type="date" value={retDateTo} onChange={e => setRetDateTo(e.target.value)} />
-              </label>
-            </div>
-          }
-          onClearFilters={() => { setRetSearchSerial(''); setRetFilterStatus('all'); setRetFilterReason('all'); setRetFilterVendor('all'); setRetDateFrom(''); setRetDateTo('') }}
+          dateFilter={{ label: 'Return date', value: retPeriod, onChange: setRetPeriod }}
+          onClearFilters={() => { setRetSearchSerial(''); setRetFilterStatus('all'); setRetFilterReason('all'); setRetFilterVendor('all'); setRetPeriod(ALL_DATES) }}
           hideColumnFilters
           emptyMessage="No returns match the filters"
           onRowClick={r => setRetExpandedId(r.id)}

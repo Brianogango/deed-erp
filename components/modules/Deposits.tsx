@@ -8,6 +8,7 @@ import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa, faBoxOpen, faCreditCard, faMoneyBillWave, faPlus } from '@/components/icons'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useUrlDateRange } from '@/hooks/useUrlDateRange'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<DepositStatus, { label: string; badgeStatus: string }> = {
@@ -589,6 +590,7 @@ function DepositsContent() {
   const [pageValue, setPageValue] = useUrlUiState('page', '1')
   const page = Math.max(1, Number.parseInt(pageValue, 10) || 1)
   const setPage = (value: number) => setPageValue(String(Math.max(1, value)))
+  const [period, setPeriod] = useUrlDateRange({ resets: { page: null } })
   const [activeId, setActiveId] = useUrlRecordId()
   const [showNew, setShowNew] = useState(false)
   const [addPaymentFor, setAddPaymentFor] = useState<Deposit | null>(null)
@@ -827,7 +829,8 @@ function DepositsContent() {
           page={page}
           onPageChange={setPage}
           primaryFilters={depositPrimaryFilters}
-          onClearFilters={() => patchListUi({ q: null, status: null, page: null })}
+          dateFilter={{ label: 'Taken on', value: period, onChange: setPeriod, accessor: dep => dep.createdAt }}
+          onClearFilters={() => patchListUi({ q: null, status: null, page: null, period: null, from: null, to: null })}
           hideColumnFilters
           emptyMessage={search || statusFilter !== 'all' ? 'No matching deposits' : 'No deposits yet'}
           emptyAction={!search && statusFilter === 'all' ? (

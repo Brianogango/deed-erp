@@ -6,3 +6,4 @@ export type {
   PrimaryFilterConfig,
   ActiveFilterChip
 } from '@/lib/data-table/toolbar-types'
+export type { DateFilterConfig, DateRange } from '@/lib/data-table/date-filter'

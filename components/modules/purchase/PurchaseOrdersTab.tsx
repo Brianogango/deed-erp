@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef } from 'react'
 import { useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
+import { useUrlDateRange } from '@/hooks/useUrlDateRange'
 import { usePurchase } from './PurchaseContext'
 import { RecordCard } from '@/components/ui'
 import { StatusBadge } from '@/components/erp'
@@ -40,6 +41,7 @@ export default function PurchaseOrdersTab() {
   const currentPage = Math.max(1, Number.parseInt(pageValue, 10) || 1)
   const setSearch = (value: string) => setSearchValue(value, { queryPatch: { page: null } })
   const setPage = (page: number) => setPageValue(String(Math.max(1, page)))
+  const [period, setPeriod] = useUrlDateRange({ resets: { page: null } })
 
   useEffect(() => {
     // Saved-view hydration is a one-time mount concern. patchUi changes identity
@@ -202,7 +204,8 @@ export default function PurchaseOrdersTab() {
         page={currentPage}
         onPageChange={setPage}
         primaryFilters={primaryFilters}
-        onClearFilters={() => patchUi({ type: null, status: null, page: null })}
+        dateFilter={{ label: 'Order date', value: period, onChange: setPeriod, accessor: po => po.date }}
+        onClearFilters={() => patchUi({ type: null, status: null, page: null, period: null, from: null, to: null })}
         hideColumnFilters
         selectable
         emptyMessage={purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match this view'}

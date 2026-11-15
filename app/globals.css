@@ -29405,3 +29405,47 @@ button, [role="button"], [role="tab"] {
   from { opacity: 0; transform: translateY(3px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Date range, under the toolbar ─────────────────────────────────────────
+   Only rendered once a custom range is chosen; the periods themselves are a
+   single select in the toolbar beside the other filters. */
+.dt-date-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-lt);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+.dt-date-range label {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+.dt-date-range input {
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-lt);
+  border-radius: 7px;
+  background: var(--bg-1, #fff);
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 600;
+}
+.dt-date-range input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.dt-date-range__summary {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+}

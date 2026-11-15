@@ -80,6 +80,8 @@ import {
 import { canApprove, isSalesConfirmGatingApproval } from '@/lib/sales-approvals'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 import { SALE_STATUS_LABELS, SO_INVOICE_STATUS_LABELS, SO_FULFILMENT_STATUS_LABELS, INVOICE_POLICY_LABELS, PAYMENT_STATUS_LABELS, DELIVERY_STATE_LABELS, isQuotationStage, isQuotationDraft, matchesSalesListFilter, matchesSalesListTab, hasValidatedDeliveryForInvoice, effectiveDeliveryLineQty, deliveryDeliveredTotal, canGenerateDeliveryNote, reconcileInvoicedQty, saleOrderInvoiceStatus, saleOrderInvoicePrimaryAction, saleOrderFulfilmentStatus, saleOrderIsOperationallyComplete, saleOrderIsAccepted, invoiceableQty, invoicePaymentStatus, isOpenDeliveryStatus, normalizeDeliveryStatus, shouldReplaceCancelledDelivery, deliveriesForSaleOrder, saleOrderLooksConfirmed, canReverseConfirmedSale, type SalesListFilter } from '@/lib/odoo-sales-flow'
+import { DATE_RANGE_LABELS, DATE_RANGE_PRESETS, isWithinRange, type DateRangePreset } from '@/lib/data-table/date-filter'
+import { useUrlDateRange } from '@/hooks/useUrlDateRange'
 import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
 import { isNonStockSaleLine, isDeliveryNoteLine } from '@/lib/sales/non-stock-line'
 import { sumUnappliedDownPayments } from '@/lib/sales/down-payment'
@@ -342,6 +344,9 @@ function SalesContent() {
     ? filterValue as SalesListFilter
     : 'all'
   const [search, setSearchValue] = useUrlUiState('q', '')
+  // The period lives in the URL with the search and the status, so a filtered
+  // list can be shared and survives a reload.
+  const [dateRange, setDateRange] = useUrlDateRange()
   const setFilterAndReset = (v: SalesListFilter) => { setFilterValue(v) }
   const setSearchAndReset = (v: string) => { setSearchValue(v) }
   const setListTabAndReset = (t: 'quotations' | 'orders') => {
@@ -730,8 +735,8 @@ function SalesContent() {
       || s.ref.toLowerCase().includes(q)
       || s.customerName.toLowerCase().includes(q)
       || (s.quotationRef || '').toLowerCase().includes(q)
-    return tabMatch && mf && ms
-  }), [salesOrderViews, listTab, filter, search, currentUserId])
+    return tabMatch && mf && ms && isWithinRange(s.date, dateRange)
+  }), [salesOrderViews, listTab, filter, search, currentUserId, dateRange])
   const stats = useMemo(() => ({
     quotations: salesOrderViews.filter(s => s.status === 'quotation').length,
     quotationsSent: salesOrderViews.filter(s => s.status === 'quotation_sent').length,
@@ -1960,6 +1965,39 @@ function SalesContent() {
                       )}
                       <option value="cancelled">Cancelled</option>
                     </select>
+                    <select
+                      aria-label="Filter by date"
+                      value={dateRange.preset}
+                      onChange={e => setDateRange(
+                        e.target.value === 'custom'
+                          ? { ...dateRange, preset: 'custom' }
+                          : { preset: e.target.value as DateRangePreset },
+                      )}
+                    >
+                      {DATE_RANGE_PRESETS.map(preset => (
+                        <option key={preset} value={preset}>
+                          {preset === 'all' ? 'Any date' : DATE_RANGE_LABELS[preset]}
+                        </option>
+                      ))}
+                    </select>
+                    {dateRange.preset === 'custom' && (
+                      <>
+                        <input
+                          type="date"
+                          aria-label="From date"
+                          value={dateRange.from ?? ''}
+                          max={dateRange.to || undefined}
+                          onChange={e => setDateRange({ ...dateRange, preset: 'custom', from: e.target.value })}
+                        />
+                        <input
+                          type="date"
+                          aria-label="To date"
+                          value={dateRange.to ?? ''}
+                          min={dateRange.from || undefined}
+                          onChange={e => setDateRange({ ...dateRange, preset: 'custom', to: e.target.value })}
+                        />
+                      </>
+                    )}
                     <MoreActionsMenu
                       items={[
                         { label: 'Export CSV', icon: faDownload, onClick: exportFilteredOrdersCsv },
