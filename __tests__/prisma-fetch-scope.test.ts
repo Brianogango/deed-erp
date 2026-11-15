@@ -1,8 +1,13 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-// The store's loading and polling code lives in the core hook.
-const store = readFileSync('lib/store/use-store-core.tsx', 'utf8')
+// The store's loading and polling code is spread over lib/store (the core hook,
+// the realtime sync hook, the action modules). Read the directory as one body
+// so these rules survive the code moving between those files.
+const store = readdirSync('lib/store')
+  .filter(name => name.endsWith('.ts') || name.endsWith('.tsx'))
+  .map(name => readFileSync(`lib/store/${name}`, 'utf8'))
+  .join('\n')
 const crud = readFileSync('lib/server-store-crud.ts', 'utf8')
 const stream = readFileSync('app/api/store/stream/route.ts', 'utf8')
 const shell = readFileSync('components/AppShell.tsx', 'utf8')
