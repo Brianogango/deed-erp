@@ -98,7 +98,10 @@ export function buildJobTrail(start: TrailStart, data: TrailData): { steps: Trai
       const total = Number(inv.total ?? 0)
       const paid = Number(inv.amountPaid ?? 0)
       const state = total > 0 && paid >= total - 0.5 ? 'done' : 'current'
-      steps.push({ kind: 'payment', label: 'Payment', ref: String(inv.ref ?? ''), status: paid <= 0 ? 'unpaid' : state === 'done' ? 'paid' : `KES ${Math.round(paid).toLocaleString('en-KE')} of ${Math.round(total).toLocaleString('en-KE')}`, href: data.invoiceHref(inv.id), state })
+      // No reference of its own: this is the payment of the invoice named in
+      // the step before it, and printing that number twice in a row read as
+      // two documents. The status is what this step is here to say.
+      steps.push({ kind: 'payment', label: 'Payment', ref: '', status: paid <= 0 ? 'unpaid' : state === 'done' ? 'paid' : `KES ${Math.round(paid).toLocaleString('en-KE')} of ${Math.round(total).toLocaleString('en-KE')}`, href: data.invoiceHref(inv.id), state })
     }
   }
   for (const dn of deliveries) {

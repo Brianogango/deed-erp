@@ -69,7 +69,7 @@ export default function JobTrail({ start, showNext = true }: { start: TrailStart
             title={`${step.label} ${step.ref} — ${step.status}`}
           >
             <span className="text-[var(--text-3)]">{step.label}</span>
-            <span className="font-mono">{step.ref}</span>
+            {step.ref ? <span className="font-mono">{step.ref}</span> : null}
             <span className="text-[10px] font-medium capitalize text-[var(--text-3)]">{step.status}</span>
           </Link>
         </span>

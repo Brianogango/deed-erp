@@ -312,6 +312,8 @@ export default function InvoiceDetail() {
   const isCancelledDoc = String(invoice.status) === 'cancelled'
   const balance = isCancelledDoc ? 0 : Math.max(0, invoice.total - invoice.amountPaid)
   const pct = invoice.total > 0 ? Math.min(100, (invoice.amountPaid / invoice.total) * 100) : 0
+  /** Some of it is paid, but not all: the only state where a breakdown says anything. */
+  const partPaid = invoice.amountPaid > 0 && balance > 0
   // Odoo semantics: document state + separately computed payment status.
   const docState = invoiceDocState(invoice.status)
   const payState = invoicePaymentStatus(invoice)
@@ -876,6 +878,7 @@ export default function InvoiceDetail() {
             </p>
           </div>
 
+          {credit.applied > 0 && credit.remaining > 0 && (
           <dl className="invoice-detail__summary-stats">
             <div>
               <dt>Credit</dt>
@@ -890,7 +893,9 @@ export default function InvoiceDetail() {
               <dd>{fmtKes(credit.remaining)}</dd>
             </div>
           </dl>
+          )}
 
+          {credit.applied > 0 && credit.remaining > 0 && (
           <div className="invoice-detail__summary-progress" aria-label={`${credit.amount > 0 ? Math.round((credit.applied / credit.amount) * 100) : 0}% applied`}>
             <div className="invoice-detail__summary-progress-copy">
               <span>Applied</span>
@@ -900,6 +905,7 @@ export default function InvoiceDetail() {
               <span style={{ width: `${credit.amount > 0 ? Math.min(100, (credit.applied / credit.amount) * 100) : 0}%` }} />
             </div>
           </div>
+          )}
         </section>
         ) : (
         <section className={`invoice-detail__summary ${balance > 0 ? 'has-balance' : 'is-settled'}`} aria-label="Invoice financial summary">
@@ -917,26 +923,34 @@ export default function InvoiceDetail() {
             </p>
           </div>
 
-          <dl className="invoice-detail__summary-stats">
-            <div>
-              <dt>{balance > 0 ? 'Invoice total' : 'Balance'}</dt>
-              <dd>{fmtKes(balance > 0 ? invoice.total : balance)}</dd>
-            </div>
-            <div>
-              <dt>Received</dt>
-              <dd>{fmtKes(invoice.amountPaid)}</dd>
-            </div>
-          </dl>
+          {/* The breakdown only says something while a payment is part way
+              through. On an untouched invoice it read "Invoice total 4,800"
+              under a headline of "Balance due 4,800", then "Received 0" and a
+              bar at 0% — four ways of saying nothing has been paid. */}
+          {partPaid && (
+            <>
+              <dl className="invoice-detail__summary-stats">
+                <div>
+                  <dt>Invoice total</dt>
+                  <dd>{fmtKes(invoice.total)}</dd>
+                </div>
+                <div>
+                  <dt>Received</dt>
+                  <dd>{fmtKes(invoice.amountPaid)}</dd>
+                </div>
+              </dl>
 
-          <div className="invoice-detail__summary-progress" aria-label={`${Math.round(pct)}% paid`}>
-            <div className="invoice-detail__summary-progress-copy">
-              <span>Payment progress</span>
-              <strong>{Math.round(pct)}%</strong>
-            </div>
-            <div className="invoice-detail__summary-track" aria-hidden="true">
-              <span style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
-            </div>
-          </div>
+              <div className="invoice-detail__summary-progress" aria-label={`${Math.round(pct)}% paid`}>
+                <div className="invoice-detail__summary-progress-copy">
+                  <span>Payment progress</span>
+                  <strong>{Math.round(pct)}%</strong>
+                </div>
+                <div className="invoice-detail__summary-track" aria-hidden="true">
+                  <span style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+                </div>
+              </div>
+            </>
+          )}
         </section>
         )}
 

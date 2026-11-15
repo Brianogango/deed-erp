@@ -35,6 +35,19 @@ describe('the invoice screen says each thing once', () => {
     expect(detail).not.toContain('<dt>Due date</dt>')
   })
 
+  it('breaks the money down only while a payment is part way through', () => {
+    // Untouched, the card said "Balance due 4,800", then "Invoice total
+    // 4,800", then "Received 0", then a bar at 0%.
+    expect(detail).toContain('const partPaid = invoice.amountPaid > 0 && balance > 0')
+    expect(detail).toContain('{partPaid && (')
+  })
+
+  it('names the document once in the trail, not again on its payment', () => {
+    const trailSrc = readFileSync('lib/job-trail.ts', 'utf8')
+    expect(trailSrc).toContain("kind: 'payment', label: 'Payment', ref: ''")
+    expect(trail).toContain('{step.ref ? <span className="font-mono">{step.ref}</span> : null}')
+  })
+
   it('lists only the related records this document actually has', () => {
     expect(detail).toContain("filter(item => item.value !== '0')")
     // The customer is named in the header; it had a tile of its own as well.
