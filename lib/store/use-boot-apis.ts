@@ -1,6 +1,6 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { useHrStore as useHrDomainStore } from '@/hooks/useHrStore'
-import { bootApiGroupsForRoute, type BootApiGroup } from '@/lib/boot-apis'
+import { bootApiGroupsForRoute, STORE_KEY_BOOT_GROUPS, type BootApiGroup } from '@/lib/boot-apis'
 import { fetchCollection } from '@/lib/api-pagination'
 import { userCan } from '@/lib/auth/can'
 import { fetchAndApplyStoreKeys } from '@/lib/client-store-hydrate'
@@ -55,46 +55,6 @@ export function useBootApis({
             refreshProductCatalog()
             break
           }
-          case 'contacts': {
-            const result = await fetchAndApplyStoreKeys({
-              keys: ['deed_contacts', 'deed_companies', 'deed_contactPersons'],
-              etagStorageKey: 'deed_boot_etag_contacts',
-            })
-            if (result === 'error') throw new Error('contacts hydrate failed')
-            break
-          }
-          case 'sales': {
-            const result = await fetchAndApplyStoreKeys({
-              keys: ['deed_quotes', 'deed_saleOrders', 'deed_payments', 'deed_deliveries'],
-              etagStorageKey: 'deed_boot_etag_sales',
-            })
-            if (result === 'error') throw new Error('sales hydrate failed')
-            break
-          }
-          case 'crm': {
-            const result = await fetchAndApplyStoreKeys({
-              keys: ['deed_opportunities', 'deed_oppActivities'],
-              etagStorageKey: 'deed_boot_etag_crm',
-            })
-            if (result === 'error') throw new Error('crm hydrate failed')
-            break
-          }
-          case 'repairs': {
-            const result = await fetchAndApplyStoreKeys({
-              keys: ['deed_repairs_v2'],
-              etagStorageKey: 'deed_boot_etag_repairs',
-            })
-            if (result === 'error') throw new Error('repairs hydrate failed')
-            break
-          }
-          case 'purchases': {
-            const result = await fetchAndApplyStoreKeys({
-              keys: ['deed_purchaseOrders', 'deed_receipts'],
-              etagStorageKey: 'deed_boot_etag_purchases',
-            })
-            if (result === 'error') throw new Error('purchases hydrate failed')
-            break
-          }
           case 'employees': {
             const d = await fetchCollection('/api/employees?limit=200')
             const prev = useHrDomainStore.getState().employees ?? []
@@ -133,29 +93,28 @@ export function useBootApis({
             if (Array.isArray(data)) setDbApprovalRules(data)
             break
           }
-          case 'stock_moves': {
-            // deed_stockMoves / deed_serials are saved back as WHOLE collections.
-            // Hydrating them from a paginated REST page (?limit=200) put a
-            // partial list into synced state, and the next save replaced the
-            // stored collection with it (production truncation, 21 Sep 2026).
-            // Load the complete collections as a remote update, which neither
-            // marks the keys dirty nor syncs them back to the server.
-            const result = await fetchAndApplyStoreKeys({
-              keys: ['deed_stockMoves', 'deed_serials'],
-              etagStorageKey: 'deed_boot_etag_stock_moves',
-            })
-            if (result === 'error') throw new Error('stock_moves hydrate failed')
-            break
-          }
         }
       } catch {
         bootedApiGroupsRef.current.delete(group)
       }
     }
 
+    /** Every store-key group for a route in one download, then the rest. */
+    const runGroups = async (groups: BootApiGroup[]) => {
+      const keyGroups = groups.filter(g => STORE_KEY_BOOT_GROUPS[g] && !bootedApiGroupsRef.current.has(g))
+      const keys = [...new Set(keyGroups.flatMap(g => STORE_KEY_BOOT_GROUPS[g] ?? []))]
+      if (keys.length) {
+        keyGroups.forEach(g => bootedApiGroupsRef.current.add(g))
+        void fetchAndApplyStoreKeys({ keys }).then(
+          result => { if (result === 'error') keyGroups.forEach(g => bootedApiGroupsRef.current.delete(g)) },
+          () => keyGroups.forEach(g => bootedApiGroupsRef.current.delete(g)),
+        )
+      }
+      await Promise.all(groups.filter(g => !STORE_KEY_BOOT_GROUPS[g]).map(runGroup))
+    }
+
     const path = typeof window !== 'undefined' ? (window.location.pathname || '/') : '/'
-    const immediate = bootApiGroupsForRoute(path)
-    void Promise.all(immediate.map(runGroup))
+    void runGroups(bootApiGroupsForRoute(path))
     scheduleCatalogHealOnce()
 
     // Leave lists belong on HR. Polling them on every screen re-fetched
@@ -176,7 +135,7 @@ export function useBootApis({
     const onRoute = (e: Event) => {
       const nextPath = (e as CustomEvent).detail?.pathname
       if (typeof nextPath !== 'string') return
-      void Promise.all(bootApiGroupsForRoute(nextPath).map(runGroup))
+      void runGroups(bootApiGroupsForRoute(nextPath))
       if (nextPath.startsWith('/hr')) startLeavePoll(nextPath)
       else stopLeavePoll()
     }

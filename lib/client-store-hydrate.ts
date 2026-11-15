@@ -142,11 +142,9 @@ export async function preloadCachedCollections(keys: string[]): Promise<void> {
 
 export async function fetchAndApplyStoreKeys(opts: {
   keys: string[]
-  /** Legacy: whole-set ETag slot. Per-key versions (below) replaced it. */
-  etagStorageKey: string
   signal?: AbortSignal
 }): Promise<'applied' | 'not-modified' | 'error'> {
-  const { etagStorageKey, signal } = opts
+  const { signal } = opts
   if (opts.keys.length === 0) return 'not-modified'
 
   // Another part of the page may already be downloading some of these: take
@@ -159,7 +157,7 @@ export async function fetchAndApplyStoreKeys(opts: {
     await others
     if (signal?.aborted) return
     const missed = keysNeedingDownload(delegated)
-    if (missed.length) await fetchAndApplyStoreKeys({ keys: missed, etagStorageKey, signal })
+    if (missed.length) await fetchAndApplyStoreKeys({ keys: missed, signal })
   }
   if (keys.length === 0) {
     await settleOthers()
@@ -200,7 +198,7 @@ export async function fetchAndApplyStoreKeys(opts: {
     if (unpatched.length) {
       // Without a version claimed, the server sends these whole.
       writeKeyVersions({}, unpatched)
-      await fetchAndApplyStoreKeys({ keys: unpatched, etagStorageKey, signal })
+      await fetchAndApplyStoreKeys({ keys: unpatched, signal })
     }
     return unchanged.length === keys.length ? 'not-modified' as const : 'applied' as const
   })()

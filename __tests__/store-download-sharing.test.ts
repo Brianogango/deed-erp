@@ -30,8 +30,8 @@ describe('fetchAndApplyStoreKeys — one download per collection', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { fetchAndApplyStoreKeys } = await import('@/lib/client-store-hydrate')
     await Promise.all([
-      fetchAndApplyStoreKeys({ keys: ['deed_saleOrders', 'deed_invoices'], etagStorageKey: 'a' }),
-      fetchAndApplyStoreKeys({ keys: ['deed_saleOrders', 'deed_deliveries'], etagStorageKey: 'b' }),
+      fetchAndApplyStoreKeys({ keys: ['deed_saleOrders', 'deed_invoices'] }),
+      fetchAndApplyStoreKeys({ keys: ['deed_saleOrders', 'deed_deliveries'] }),
     ])
     const all = requestedKeys(fetchMock).flat()
     expect(all.filter(k => k === 'deed_saleOrders')).toHaveLength(1)
@@ -42,8 +42,8 @@ describe('fetchAndApplyStoreKeys — one download per collection', () => {
     const fetchMock = vi.fn(async (url: string) => respond(decodeURIComponent(url.split('keys=')[1]).split(',')))
     vi.stubGlobal('fetch', fetchMock)
     const { fetchAndApplyStoreKeys } = await import('@/lib/client-store-hydrate')
-    await fetchAndApplyStoreKeys({ keys: ['deed_invoices'], etagStorageKey: 'a' })
-    expect(await fetchAndApplyStoreKeys({ keys: ['deed_invoices'], etagStorageKey: 'b' })).toBe('not-modified')
+    await fetchAndApplyStoreKeys({ keys: ['deed_invoices'] })
+    expect(await fetchAndApplyStoreKeys({ keys: ['deed_invoices'] })).toBe('not-modified')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
@@ -56,8 +56,8 @@ describe('fetchAndApplyStoreKeys — one download per collection', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
     const { fetchAndApplyStoreKeys } = await import('@/lib/client-store-hydrate')
-    const cancelled = fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2'], etagStorageKey: 'a' }).catch(() => 'cancelled')
-    const waiting = fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2'], etagStorageKey: 'b' })
+    const cancelled = fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2'] }).catch(() => 'cancelled')
+    const waiting = fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2'] })
     expect(await cancelled).toBe('cancelled')
     await waiting
     expect(requestedKeys(fetchMock)).toEqual([['deed_repairs_v2'], ['deed_repairs_v2']])
@@ -79,17 +79,17 @@ describe('fetchAndApplyStoreKeys — one download per collection', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { fetchAndApplyStoreKeys } = await import('@/lib/client-store-hydrate')
     const { FRESH_WINDOW_MS } = await import('@/lib/store-freshness')
-    await fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2', 'deed_invoices'], etagStorageKey: 'route' })
+    await fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2', 'deed_invoices'] })
     const realNow = Date.now
     vi.spyOn(Date, 'now').mockReturnValue(realNow() + FRESH_WINDOW_MS + 1000)
     // Server-side, invoices changed (v1 -> v2); repairs did not.
-    const result = await fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2', 'deed_invoices'], etagStorageKey: 'route' })
+    const result = await fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2', 'deed_invoices'] })
     expect(sentHave[0]).toEqual({})
     expect(sentHave[1]).toEqual({ deed_repairs_v2: 'v1#me', deed_invoices: 'v1#me' })
     expect(result).toBe('applied')
     const third = await (async () => {
       vi.spyOn(Date, 'now').mockReturnValue(realNow() + 2 * FRESH_WINDOW_MS + 2000)
-      return fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2', 'deed_invoices'], etagStorageKey: 'route' })
+      return fetchAndApplyStoreKeys({ keys: ['deed_repairs_v2', 'deed_invoices'] })
     })()
     expect(sentHave[2]).toEqual({ deed_repairs_v2: 'v1#me', deed_invoices: 'v2#me' })
     expect(third).toBe('not-modified')

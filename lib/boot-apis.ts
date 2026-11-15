@@ -81,3 +81,26 @@ export function bootApiGroupsForRoute(pathname: string): BootApiGroup[] {
   return Array.from(new Set([...ALWAYS_BOOT, ...matched]))
 }
 
+/**
+ * Boot groups that are nothing but a store-key download. A route's groups go
+ * out in one request instead of one per group — three round trips on /sales
+ * became one.
+ *
+ * deed_stockMoves / deed_serials are hydrated this way, as a remote update
+ * that neither marks the keys dirty nor syncs them back, because they are
+ * saved as WHOLE collections: loading them from a paginated REST page once put
+ * a partial list into synced state and truncated the stored collection.
+ */
+export const STORE_KEY_BOOT_GROUPS: Partial<Record<BootApiGroup, string[]>> = {
+  contacts: ['deed_contacts', 'deed_companies', 'deed_contactPersons'],
+  sales: ['deed_quotes', 'deed_saleOrders', 'deed_payments', 'deed_deliveries'],
+  crm: ['deed_opportunities', 'deed_oppActivities'],
+  repairs: ['deed_repairs_v2'],
+  purchases: ['deed_purchaseOrders', 'deed_receipts'],
+  stock_moves: ['deed_stockMoves', 'deed_serials'],
+}
+
+/** Every store key this route boots, in one list. */
+export function bootStoreKeysForRoute(pathname: string): string[] {
+  return [...new Set(bootApiGroupsForRoute(pathname).flatMap(g => STORE_KEY_BOOT_GROUPS[g] ?? []))]
+}

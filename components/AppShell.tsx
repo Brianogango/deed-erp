@@ -407,10 +407,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       const route = pathname || '/'
       const keys = criticalAppStateKeysForRoute(route)
       if (!keys.length) return
-      void fetchAndApplyStoreKeys({
-        keys,
-        etagStorageKey: `deed_store_etag_${currentUserId}_${route}`,
-      })
+      void fetchAndApplyStoreKeys({ keys })
     }
     window.addEventListener('focus', refreshActiveRoute)
     document.addEventListener('visibilitychange', refreshActiveRoute)
@@ -454,8 +451,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
     lastRouteRefreshRef.current = Date.now()
     const controller = new AbortController()
     const paintCap = window.setTimeout(() => markRouteDataReady(route), 10_000)
-    const etagCritical = `deed_store_etag_${currentUserId}_${route}`
-    const etagDeferred = `deed_store_etag_${currentUserId}_${route}_deferred`
 
     const settlePaint = () => {
       markRouteWarmed(route)
@@ -482,7 +477,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
         if (criticalKeys.length > 0) {
           const result = await fetchAndApplyStoreKeys({
             keys: criticalKeys,
-            etagStorageKey: etagCritical,
             signal: controller.signal,
           })
           endCritical()
@@ -495,7 +489,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
         if (deferredKeys.length > 0 && !controller.signal.aborted) {
           await fetchAndApplyStoreKeys({
             keys: deferredKeys,
-            etagStorageKey: etagDeferred,
             signal: controller.signal,
           })
         }

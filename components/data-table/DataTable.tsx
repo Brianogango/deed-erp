@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { buildExportRows } from '@/lib/data-table/export-rows'
 import { rememberRecordList } from '@/lib/record-pager'
 import { Table } from '@/components/ui'
-import { exportToExcel, exportToPDF, type ExportRow } from '@/lib/export-utils'
+import { exportToExcel, exportToPDF } from '@/lib/export-utils'
 import { useTableBreakpoint } from '@/lib/data-table/use-breakpoint'
 import { columnFloor, fitColumnsToWidth } from '@/lib/data-table/fit'
 import { useTablePreferences } from '@/lib/data-table/use-table-preferences'
@@ -430,32 +431,28 @@ export default function DataTable<T>({
     })
   }
 
-  const exportHeaders = exportTitle ? eligibleColumns.map(c => c.label) : undefined
-  const exportRows: ExportRow[] | undefined = exportTitle
-    ? filteredRows.map(row =>
-        eligibleColumns.map(col => {
-          const value = getColumnValue(col, row, 'export')
-          return typeof value === 'number' || typeof value === 'string' ? value : String(value ?? '')
-        }),
-      )
-    : undefined
+  const exportHeaders = useMemo(
+    () => (exportTitle ? eligibleColumns.map(c => c.label) : undefined),
+    [exportTitle, eligibleColumns],
+  )
+  const exportRows = useCallback(() => buildExportRows(filteredRows, eligibleColumns), [filteredRows, eligibleColumns])
 
   const exportOptions: ExportMenuOption[] | undefined = useMemo(() => {
-    if (!exportTitle || !exportHeaders || !exportRows) return undefined
+    if (!exportTitle || !exportHeaders) return undefined
     const filename = exportFilename ?? exportTitle
     const options: ExportMenuOption[] = []
     if (exportFormats.includes('pdf')) {
       options.push({
         id: 'pdf',
         label: 'Export PDF',
-        onSelect: () => exportToPDF(exportTitle, exportHeaders, exportRows, filename),
+        onSelect: () => exportToPDF(exportTitle, exportHeaders, exportRows(), filename),
       })
     }
     if (exportFormats.includes('excel')) {
       options.push({
         id: 'excel',
         label: 'Export Excel',
-        onSelect: () => { void exportToExcel(exportTitle, exportHeaders, exportRows, filename) },
+        onSelect: () => { void exportToExcel(exportTitle, exportHeaders, exportRows(), filename) },
       })
     }
     return options

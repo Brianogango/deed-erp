@@ -140,7 +140,7 @@ export function createSalesActions(store: StoreDeps): Pick<AppState, 'createKili
           // The server changed the order and the stock: take its copies.
           const keys = ['deed_kilimallOrders', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves', 'deed_products']
           noteStoreChanges(Object.fromEntries(keys.map(k => [k, new Date().toISOString()])))
-          void fetchAndApplyStoreKeys({ keys, etagStorageKey: 'deed_kilimall_return' })
+          void fetchAndApplyStoreKeys({ keys })
           const o = data.order
           store.showToast(input.outcome === 'exchange'
             ? `${o.ref} returned — back in Pending Dispatch to ship a replacement`

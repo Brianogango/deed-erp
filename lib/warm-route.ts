@@ -29,23 +29,12 @@ export function warmRoute(pathname: string, currentUserId?: string | null): void
     const deferredKeys = deferredAppStateKeysForRoute(route)
     if (criticalKeys.length === 0 && deferredKeys.length === 0) return
 
-    const etagCritical = currentUserId
-      ? `deed_store_etag_${currentUserId}_${route}`
-      : `deed_store_etag_${route}`
-    const etagDeferred = `${etagCritical}_deferred`
-
     try {
       if (criticalKeys.length > 0) {
-        await fetchAndApplyStoreKeys({
-          keys: criticalKeys,
-          etagStorageKey: etagCritical,
-        })
+        await fetchAndApplyStoreKeys({ keys: criticalKeys })
       }
       if (deferredKeys.length > 0) {
-        await fetchAndApplyStoreKeys({
-          keys: deferredKeys,
-          etagStorageKey: etagDeferred,
-        })
+        await fetchAndApplyStoreKeys({ keys: deferredKeys })
       }
       warmedRoutes.add(route)
       void bootApiGroupsForRoute(route)
