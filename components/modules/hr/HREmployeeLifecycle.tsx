@@ -9,6 +9,7 @@ import { ONBOARDING_TEMPLATES, EXIT_TEMPLATES, OWNER_LABELS, LINK_LABELS, buildC
 import { USER_ROLES } from '@/lib/auth/types'
 import { Modal } from '@/components/ui'
 import { buildCertificateOfService, buildFinalDuesPdf, lengthOfService } from '@/lib/hr/exit-documents'
+import { companyForPdf } from '@/lib/commercial-pdf'
 
 const EXIT_REASONS = [
   { value: '', label: 'Select reason…' },
@@ -247,12 +248,11 @@ function WelcomeEmailModal({ employee, onClose, onSent }: { employee: Employee; 
 
 export default function EmployeeLifecyclePanel({ employee, canManage }: { employee: Employee; canManage: boolean }) {
   const { showToast, companySettings, employeeAssetAssignments } = useApp()
-  const { updateEmployee } = useHrStore()
+  const { updateEmployee, departments } = useHrStore()
   const router = useRouter()
   const [modal, setModal] = useState<null | { kind: 'login' | 'welcome' | 'mailbox' | 'suspend'; itemId: string }>(null)
   const [tab, setTab] = useState<Tab>(employee.status === 'exited' ? 'exit' : 'onboarding')
 
-  const company = { name: companySettings.name, address: companySettings.address, city: companySettings.city, phone: companySettings.phone, email: companySettings.email, kraPin: companySettings.kraPin }
 
   // ── Checklists ───────────────────────────────────────────────────────────
   const onboarding = employee.onboardingChecklist?.length ? employee.onboardingChecklist : null
@@ -313,9 +313,29 @@ export default function EmployeeLifecyclePanel({ employee, canManage }: { employ
   const setDue = (k: keyof FinalDuesInput) => (v: string) => setDues(d => d ? { ...d, [k]: Number(v) || 0 } : d)
 
   const exitPerson = {
-    name: employee.fullName, employeeNo: employee.employeeNo, jobTitle: employee.jobTitle, department: employee.departmentId,
+    name: employee.fullName, employeeNo: employee.employeeNo, jobTitle: employee.jobTitle,
+    department: departments.find(d => d.id === employee.departmentId)?.name || employee.departmentId,
     idNumber: employee.nationalId, startDate: employee.startDate, exitDate,
     exitReason: EXIT_REASONS.find(r => r.value === exitReason)?.label,
+  }
+
+  // Both exit papers go out on the company letterhead, so they need the full
+  // settings — logo included — not just the name and address.
+  const [exitPdf, setExitPdf] = useState<null | 'certificate' | 'dues'>(null)
+  const downloadExitPdf = async (kind: 'certificate' | 'dues') => {
+    if (exitPdf) return
+    setExitPdf(kind)
+    try {
+      const company = await companyForPdf(companySettings)
+      const doc = kind === 'certificate'
+        ? buildCertificateOfService(exitPerson, company, today())
+        : buildFinalDuesPdf(exitPerson, company, statement!)
+      doc.save(`${kind === 'certificate' ? 'Certificate-of-service' : 'Final-dues'}-${employee.employeeNo}.pdf`)
+    } catch {
+      showToast('The document could not be built — try again', 'error')
+    } finally {
+      setExitPdf(null)
+    }
   }
 
   const recordExit = () => {
@@ -412,7 +432,7 @@ export default function EmployeeLifecyclePanel({ employee, canManage }: { employ
                   ? <button className="btn-primary text-[11px]" onClick={recordExit}>Record exit</button>
                   : <button className="btn-outline text-[11px]" onClick={reinstate}>Reinstate employee</button>}
                 {employee.status === 'exited' && <button className="btn-outline text-[11px]" onClick={() => updateEmployee(employee.id, { exitDate, exitReason, exitNotes })}>Save exit details</button>}
-                <button className="btn-outline text-[11px]" disabled={!exitDate} onClick={() => buildCertificateOfService(exitPerson, company, today()).save(`Certificate-of-service-${employee.employeeNo}.pdf`)}>Certificate of service</button>
+                <button className="btn-outline text-[11px]" disabled={!exitDate || exitPdf !== null} onClick={() => void downloadExitPdf('certificate')}>{exitPdf === 'certificate' ? 'Preparing…' : 'Certificate of service'}</button>
               </div>
               <p className="text-[11px]" style={{ color: 'var(--text-3)' }}>Length of service: {lengthOfService(employee.startDate, exitDate)}</p>
 
@@ -448,7 +468,7 @@ export default function EmployeeLifecyclePanel({ employee, canManage }: { employ
                         <span className="font-mono" style={{ color: statement.net >= 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtKes(Math.abs(statement.net))}</span>
                       </div>
                     </div>
-                    <button className="btn-primary text-[11px] self-start" onClick={() => buildFinalDuesPdf(exitPerson, company, statement).save(`Final-dues-${employee.employeeNo}.pdf`)}>Download statement (PDF)</button>
+                    <button className="btn-primary text-[11px] self-start" disabled={exitPdf !== null} onClick={() => void downloadExitPdf('dues')}>{exitPdf === 'dues' ? 'Preparing…' : 'Download statement (PDF)'}</button>
                   </div>
                 )}
               </div>

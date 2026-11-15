@@ -1,16 +1,35 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import {
+  startLetterheadDocument,
+  finishLetterheadDocument,
+  ensureRoom,
+  writeLabel,
+  writeValue,
+  drawMetaRow,
+  line,
+  money,
+  MARGIN,
+  contentW,
+  right,
+  BODY_TOP,
+  INK,
+  MUTED,
+  SOFT,
+  BORDER,
+  type DeedPdfCompanyInput,
+} from '@/lib/deed-document-pdf'
 import type { FinalDuesStatement } from '@/lib/hr/final-dues'
 
-export interface ExitCompany { name: string; address?: string; city?: string; phone?: string; email?: string; kraPin?: string }
+/**
+ * The documents an employee leaves with, on the same letterhead as every other
+ * document the company issues: logo, accent colour, print template, font and
+ * paper size all come from Settings via lib/deed-document-pdf.
+ */
+
 export interface ExitEmployee { name: string; employeeNo: string; jobTitle: string; department: string; idNumber: string; startDate: string; exitDate: string; exitReason?: string }
 
-const NAVY: [number, number, number] = [18, 52, 86]
-const INK: [number, number, number] = [30, 41, 59]
-const MUTED: [number, number, number] = [100, 116, 139]
-const LINE: [number, number, number] = [226, 232, 240]
-const SOFT: [number, number, number] = [241, 245, 249]
-const kes = (n: number) => `${n < 0 ? '-' : ''}KSh ${Math.abs(Number(n) || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+/** Dates are written out in full on these documents: "4 November 2026", not "04 Nov 2026". */
 const longDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 
 /** Length of service as "X years, Y months, Z days". */
@@ -33,41 +52,55 @@ export function lengthOfService(startIso: string, endIso: string): string {
   return parts.length ? parts.join(', ') : 'less than a day'
 }
 
-function header(doc: jsPDF, company: ExitCompany, title: string) {
-  const W = doc.internal.pageSize.getWidth()
-  doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...NAVY).text(company.name, 40, 52)
-  doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...MUTED)
-  const sub = [[company.address, company.city].filter(Boolean).join(', '), company.phone, company.email, company.kraPin ? `KRA PIN: ${company.kraPin}` : ''].filter(Boolean)
-  sub.forEach((t, i) => doc.text(String(t), 40, 66 + i * 11))
-  doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(...INK).text(title, W - 40, 52, { align: 'right' })
-  doc.setDrawColor(...NAVY).setLineWidth(1.2).line(40, 112, W - 40, 112)
+/** Signature rule, who signs, and room for the company stamp. */
+function signOff(doc: jsPDF, company: DeedPdfCompanyInput, y: number) {
+  line(doc, MARGIN, y, right(doc), BORDER, .55)
+  writeLabel(doc, 'Authorised by', MARGIN, y + 18)
+
+  line(doc, MARGIN, y + 74, MARGIN + 210, MUTED, .6)
+  doc.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(...INK)
+  doc.text('Authorised signatory', MARGIN, y + 88)
+  doc.setFont('helvetica', 'normal').setFontSize(7.7).setTextColor(...MUTED)
+  doc.text(`For ${company.name}`, MARGIN, y + 100)
+  doc.text('Name and designation:', MARGIN, y + 120)
+  line(doc, MARGIN + 102, y + 122, MARGIN + 290, BORDER, .55)
+
+  // Dashed, so it reads as a space to stamp rather than a drawn box. The pattern
+  // must be cleared again or every later rule — the page footer included — is dashed.
+  doc.setLineDashPattern([3, 3], 0).setDrawColor(...BORDER).setLineWidth(.55)
+  doc.roundedRect(right(doc) - 140, y + 14, 140, 100, 4, 4)
+  doc.setLineDashPattern([], 0)
+  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+  doc.text('Company stamp', right(doc) - 70, y + 68, { align: 'center' })
 }
 
 /** Certificate of service (Employment Act, s.51). States the facts of employment only. */
-export function buildCertificateOfService(emp: ExitEmployee, company: ExitCompany, issuedOn: string): jsPDF {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-  const W = doc.internal.pageSize.getWidth()
-  const H = doc.internal.pageSize.getHeight()
-  const L = 56
-  const R = W - 56
+export function buildCertificateOfService(emp: ExitEmployee, company: DeedPdfCompanyInput, issuedOn: string): jsPDF {
+  const reference = emp.employeeNo ? `${emp.employeeNo}/COS` : 'Certificate of service'
+  const { doc, accent, shell } = startLetterheadDocument(company, 'Certificate of service', reference)
+  const width = contentW(doc)
+  const metaX = MARGIN + width * .58
+  let y = BODY_TOP
 
-  // Letterhead: name on the left, contact details on the right, one rule.
-  doc.setFont('helvetica', 'bold').setFontSize(18).setTextColor(...NAVY).text(company.name, L, 62)
-  doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...MUTED)
-  const contact = [[company.address, company.city].filter(Boolean).join(', '), [company.phone, company.email].filter(Boolean).join('  ·  '), company.kraPin ? `KRA PIN ${company.kraPin}` : ''].filter(Boolean)
-  contact.forEach((t, i) => doc.text(t, R, 48 + i * 12, { align: 'right' }))
-  doc.setDrawColor(...NAVY).setLineWidth(1.2).line(L, 84, R, 84)
+  doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...accent)
+  doc.text('CERTIFICATE OF SERVICE', MARGIN, y)
+  y += 26
 
-  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...MUTED)
-  if (emp.employeeNo) doc.text(`Ref: ${emp.employeeNo}/COS`, L, 116)
-  doc.text(longDate(issuedOn), R, 116, { align: 'right' })
+  writeLabel(doc, 'To whom it may concern', MARGIN, y)
+  if (emp.employeeNo) drawMetaRow(doc, 'Reference', reference, metaX, y, 84)
+  drawMetaRow(doc, 'Date issued', longDate(issuedOn), metaX, emp.employeeNo ? y + 17 : y, 84)
+  y += 38
 
-  doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...INK).text('CERTIFICATE OF SERVICE', W / 2, 168, { align: 'center' })
-  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...MUTED).text('To whom it may concern', W / 2, 186, { align: 'center' })
+  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(...INK)
+  const intro = doc.splitTextToSize(
+    `This is to certify that the person named below was employed by ${company.name}. The particulars of the employment are as follows.`,
+    width,
+  ) as string[]
+  doc.text(intro, MARGIN, y)
+  y += intro.length * 14 + 18
 
-  doc.setFontSize(11).setTextColor(...INK)
-  const intro = doc.splitTextToSize(`This is to certify that the person named below was employed by ${company.name}. The particulars of the employment are as follows.`, R - L) as string[]
-  doc.text(intro, L, 228, { lineHeightFactor: 1.5 })
+  writeLabel(doc, 'Particulars of employment', MARGIN, y)
+  y += 8
 
   const rows: Array<[string, string]> = ([
     ['Name', emp.name],
@@ -79,75 +112,148 @@ export function buildCertificateOfService(emp: ExitEmployee, company: ExitCompan
     ['Last day of service', longDate(emp.exitDate)],
     ['Length of service', lengthOfService(emp.startDate, emp.exitDate)],
   ] as Array<[string, string]>).filter(([, value]) => Boolean(value))
+
   autoTable(doc, {
-    startY: 228 + intro.length * 17 + 8,
-    margin: { left: L, right: 56 },
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
     theme: 'plain',
-    styles: { font: 'helvetica', fontSize: 11, cellPadding: { top: 8, bottom: 8, left: 0, right: 8 }, textColor: INK, lineColor: LINE, lineWidth: { bottom: 0.6 } as never },
-    columnStyles: { 0: { cellWidth: 150, textColor: MUTED }, 1: { fontStyle: 'bold' } },
+    styles: {
+      font: 'helvetica',
+      fontSize: 9,
+      textColor: INK,
+      lineColor: BORDER,
+      lineWidth: { bottom: .4 } as never,
+      cellPadding: { top: 7, right: 6, bottom: 7, left: 0 },
+    },
+    columnStyles: {
+      0: { cellWidth: 150, fontSize: 7.5, fontStyle: 'bold', textColor: MUTED },
+      1: { fontStyle: 'bold' },
+    },
     body: rows,
   })
-  let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 32
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24
 
-  doc.setFont('helvetica', 'normal').setFontSize(11).setTextColor(...INK)
-  doc.text('This certificate is issued in accordance with Section 51 of the Employment Act, 2007.', L, y)
-  y += 78
+  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(...INK)
+  doc.text('This certificate is issued in accordance with Section 51 of the Employment Act, 2007.', MARGIN, y, { maxWidth: width })
+  // Sits low on the page, like the payment block on an invoice, so a short
+  // certificate does not leave the signature stranded under the text.
+  y = ensureRoom(doc, company, shell, Math.max(y + 34, 560), 150)
 
-  // Signature on the left, room for the company stamp on the right.
-  doc.setDrawColor(...MUTED).setLineWidth(0.6).line(L, y, L + 200, y)
-  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...INK).text('Authorised signatory', L, y + 15)
-  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(...MUTED)
-  doc.text(`For ${company.name}`, L, y + 29)
-  doc.text('Name and designation:', L, y + 52)
-  doc.setDrawColor(...LINE).line(L + 108, y + 54, L + 260, y + 54)
-  doc.setLineDashPattern([3, 3], 0).setDrawColor(...MUTED).roundedRect(R - 130, y - 62, 130, 92, 6, 6)
-  doc.setLineDashPattern([], 0)
-  doc.setFontSize(8).text('Company stamp', R - 65, y - 12, { align: 'center' })
+  signOff(doc, company, y)
 
-  doc.setDrawColor(...LINE).setLineWidth(0.6).line(L, H - 54, R, H - 54)
-  doc.setFontSize(8).setTextColor(...MUTED).text(`${company.name} — this certificate states the facts of employment only.`, W / 2, H - 40, { align: 'center' })
-  return doc
+  doc.setFont('helvetica', 'italic').setFontSize(7.2).setTextColor(...MUTED)
+  doc.text('This certificate states the facts of employment only.', MARGIN, y + 150, { maxWidth: width })
+
+  return finishLetterheadDocument(doc, company, shell)
 }
 
 /** Final dues statement for the exit file and for the employee to sign. */
-export function buildFinalDuesPdf(emp: ExitEmployee, company: ExitCompany, s: FinalDuesStatement): jsPDF {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-  const W = doc.internal.pageSize.getWidth()
-  header(doc, company, 'FINAL DUES STATEMENT')
-  const pairs: Array<[string, string]> = [
-    ['Employee', `${emp.name} (${emp.employeeNo})`],
-    ['Position', emp.jobTitle || '—'],
-    ['Service', `${longDate(emp.startDate)} to ${longDate(emp.exitDate)}`],
-    ['Reason for exit', emp.exitReason || '—'],
+export function buildFinalDuesPdf(emp: ExitEmployee, company: DeedPdfCompanyInput, s: FinalDuesStatement): jsPDF {
+  const reference = emp.employeeNo ? `${emp.employeeNo}/FDS` : 'Final dues statement'
+  const { doc, accent, shell } = startLetterheadDocument(company, 'Final dues statement', reference)
+  const currency = company.currency || 'KES'
+  const width = contentW(doc)
+  const metaX = MARGIN + width * .58
+  let y = BODY_TOP
+
+  doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...accent)
+  doc.text('FINAL DUES STATEMENT', MARGIN, y)
+  y += 26
+
+  writeLabel(doc, 'Employee', MARGIN, y)
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...INK)
+  doc.text(emp.name || '—', MARGIN, y + 16, { maxWidth: metaX - MARGIN - 20 })
+  let partyY = y + 31
+  ;[emp.employeeNo ? `Employee No. ${emp.employeeNo}` : '', emp.jobTitle, emp.department]
+    .filter(Boolean)
+    .forEach(value => { writeValue(doc, String(value), MARGIN, partyY, { maxWidth: metaX - MARGIN - 20 }); partyY += 12 })
+
+  // Joined and the last day are separate rows: drawMetaRow caps a value at 175pt,
+  // which a whole date range would overrun at this column.
+  drawMetaRow(doc, 'Joined', longDate(emp.startDate), metaX, y, 84)
+  drawMetaRow(doc, 'Last working day', longDate(emp.exitDate), metaX, y + 17, 84)
+  drawMetaRow(doc, 'Reason for exit', emp.exitReason || '—', metaX, y + 34, 84)
+  y = Math.max(partyY, y + 48) + 12
+
+  const boxes: Array<[string, number, boolean?]> = [
+    ['GROSS TERMINAL PAY', s.gross],
+    ['TOTAL DEDUCTIONS', s.totalDeductions],
+    [s.net >= 0 ? 'NET PAYABLE' : 'OWED BY EMPLOYEE', Math.abs(s.net), true],
   ]
-  pairs.forEach(([k, v], i) => {
-    doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...MUTED).text(k, 40, 134 + i * 14)
-    doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...INK).text(v, 130, 134 + i * 14)
+  const gap = 8
+  const boxW = (width - gap * (boxes.length - 1)) / boxes.length
+  boxes.forEach(([label, value, strong], index) => {
+    const x = MARGIN + index * (boxW + gap)
+    doc.setFillColor(...(strong ? accent : SOFT))
+    doc.setDrawColor(...(strong ? accent : BORDER)).setLineWidth(.5).roundedRect(x, y, boxW, 44, 4, 4, 'FD')
+    doc.setFont('helvetica', 'bold').setFontSize(6.6).setTextColor(...(strong ? [255, 255, 255] as [number, number, number] : MUTED))
+    doc.text(label, x + 9, y + 14)
+    doc.setFont('helvetica', 'bold').setFontSize(strong ? 12 : 10.5).setTextColor(...(strong ? [255, 255, 255] as [number, number, number] : INK))
+    doc.text(`${currency} ${money(value)}`, x + 9, y + 33, { maxWidth: boxW - 14 })
   })
-  const right = { halign: 'right' as const }
-  const amt = (n: number) => kes(n)
+  y += 58
+
   const rows: Array<Array<string | { content: string; styles: Record<string, unknown> }>> = []
-  const section = (title: string) => rows.push([{ content: title, styles: { fontStyle: 'bold', fillColor: SOFT, textColor: NAVY } }, { content: '', styles: { fillColor: SOFT } }])
+  const section = (title: string) => rows.push(
+    [{ content: title, styles: { fontStyle: 'bold', fontSize: 7, fillColor: SOFT, textColor: accent } },
+     { content: '', styles: { fillColor: SOFT } }],
+  )
+  const right_ = { halign: 'right' as const }
+
   section('Earnings')
-  s.earnings.forEach(e => rows.push([e.label, { content: amt(e.amount), styles: right }]))
-  if (!s.earnings.length) rows.push(['No amounts due', { content: amt(0), styles: right }])
-  rows.push([{ content: 'Gross terminal pay', styles: { fontStyle: 'bold' } }, { content: amt(s.gross), styles: { ...right, fontStyle: 'bold' } }])
-  if (s.statutory.length) { section('Statutory deductions (estimate)'); s.statutory.forEach(r => rows.push([r.label, { content: amt(-r.amount), styles: right }])) }
-  if (s.recoveries.length) { section('Recoveries'); s.recoveries.forEach(r => rows.push([r.label, { content: amt(-r.amount), styles: right }])) }
-  rows.push([{ content: s.net >= 0 ? 'NET PAYABLE TO EMPLOYEE' : 'BALANCE OWED BY EMPLOYEE', styles: { fontStyle: 'bold', fillColor: NAVY, textColor: [255, 255, 255] } }, { content: amt(Math.abs(s.net)), styles: { ...right, fontStyle: 'bold', fillColor: NAVY, textColor: [255, 255, 255] } }])
+  s.earnings.forEach(e => rows.push([e.label, { content: money(e.amount), styles: right_ }]))
+  if (!s.earnings.length) rows.push(['No amounts due', { content: money(0), styles: right_ }])
+  rows.push([
+    { content: 'Gross terminal pay', styles: { fontStyle: 'bold' } },
+    { content: money(s.gross), styles: { ...right_, fontStyle: 'bold' } },
+  ])
+  if (s.statutory.length) {
+    section('Statutory deductions (estimate)')
+    s.statutory.forEach(r => rows.push([r.label, { content: `- ${money(r.amount)}`, styles: right_ }]))
+  }
+  if (s.recoveries.length) {
+    section('Recoveries')
+    s.recoveries.forEach(r => rows.push([r.label, { content: `- ${money(r.amount)}`, styles: right_ }]))
+  }
+  rows.push([
+    { content: s.net >= 0 ? 'NET PAYABLE TO EMPLOYEE' : 'BALANCE OWED BY EMPLOYEE', styles: { fontStyle: 'bold', fontSize: 9, fillColor: SOFT } },
+    { content: money(Math.abs(s.net)), styles: { ...right_, fontStyle: 'bold', fontSize: 9, fillColor: SOFT } },
+  ])
+
   autoTable(doc, {
-    startY: 206, margin: { left: 40, right: 40 }, theme: 'plain',
-    styles: { font: 'helvetica', fontSize: 9.5, cellPadding: 5, textColor: INK, lineColor: LINE },
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
+    theme: 'plain',
+    head: [['DESCRIPTION', `AMOUNT (${currency})`]],
+    headStyles: { fillColor: accent, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 6.6 },
+    styles: { font: 'helvetica', fontSize: 8, textColor: INK, lineColor: BORDER, lineWidth: { bottom: .4 } as never, cellPadding: 5 },
+    columnStyles: { 1: { cellWidth: 110, halign: 'right' } },
+    didParseCell: data => { if (data.section === 'head' && data.column.index === 1) data.cell.styles.halign = 'right' },
     body: rows as never,
   })
-  const y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 18
-  doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(...MUTED)
-  const note = doc.splitTextToSize('Statutory deductions are an estimate; the final PAYE position is confirmed on the payroll run that pays this statement. Daily rate for leave and notice = basic salary / 30.', W - 80) as string[]
-  doc.text(note, 40, y)
-  const sy = y + note.length * 10 + 50
-  doc.setDrawColor(...MUTED).setLineWidth(0.6).line(40, sy, 230, sy).line(W - 230, sy, W - 40, sy)
-  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...INK)
-  doc.text('Prepared by (HR)', 40, sy + 12)
-  doc.text('Received by (employee)', W - 230, sy + 12)
-  return doc
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 18
+
+  doc.setFont('helvetica', 'italic').setFontSize(7.2).setTextColor(...MUTED)
+  const note = doc.splitTextToSize(
+    'Statutory deductions are an estimate; the final PAYE position is confirmed on the payroll run that pays this statement. Daily rate for leave and notice = basic salary / 30.',
+    width,
+  ) as string[]
+  doc.text(note, MARGIN, y)
+  y = ensureRoom(doc, company, shell, Math.max(y + note.length * 10 + 24, 600), 108)
+
+  // Both sides sign: HR prepared it, the employee acknowledges the amount.
+  line(doc, MARGIN, y, right(doc), BORDER, .55)
+  const columnX = [MARGIN, MARGIN + width / 2 + 14]
+  writeLabel(doc, 'Prepared by (HR)', columnX[0], y + 18)
+  writeLabel(doc, 'Received by (employee)', columnX[1], y + 18)
+  ;['Signature', 'Name', 'Date'].forEach((field, index) => {
+    const rowY = y + 42 + index * 18
+    columnX.forEach(x => {
+      doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...MUTED)
+      doc.text(field, x, rowY)
+      line(doc, x + 46, rowY + 2, x + width / 2 - 20, BORDER, .5)
+    })
+  })
+
+  return finishLetterheadDocument(doc, company, shell)
 }

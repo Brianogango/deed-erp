@@ -32,7 +32,7 @@ export interface DeedPdfLine {
   specs?: string
 }
 
-interface DeedPdfCompany {
+export interface DeedPdfCompany {
   name: string
   address?: string
   city?: string
@@ -113,20 +113,20 @@ export interface DeedPdfWarranty {
   url: string
 }
 
-const MARGIN = 34
+export const MARGIN = 34
 const pageW = (doc: jsPDF) => doc.internal.pageSize.getWidth()
 const pageH = (doc: jsPDF) => doc.internal.pageSize.getHeight()
-const right = (doc: jsPDF) => pageW(doc) - MARGIN
-const contentW = (doc: jsPDF) => pageW(doc) - MARGIN * 2
+export const right = (doc: jsPDF) => pageW(doc) - MARGIN
+export const contentW = (doc: jsPDF) => pageW(doc) - MARGIN * 2
 const bodyBottom = (doc: jsPDF) => pageH(doc) - 54
 
 const NAVY: [number, number, number] = [32, 22, 77]
-const INK: [number, number, number] = [7, 22, 76]
+export const INK: [number, number, number] = [7, 22, 76]
 const CYAN: [number, number, number] = [0, 174, 239]
 const BLUE: [number, number, number] = [7, 139, 212]
-const MUTED: [number, number, number] = [91, 107, 128]
-const BORDER: [number, number, number] = [205, 219, 232]
-const SOFT: [number, number, number] = [246, 250, 253]
+export const MUTED: [number, number, number] = [91, 107, 128]
+export const BORDER: [number, number, number] = [205, 219, 232]
+export const SOFT: [number, number, number] = [246, 250, 253]
 function hexRgb(value: unknown, fallback: string): [number, number, number] {
   const color = normalizeHexColor(value, fallback)
   return [
@@ -159,10 +159,10 @@ function drawDocumentBackground(doc: jsPDF, company: DeedPdfCompany) {
   doc.text(company.name, pageW(doc) / 2, pageH(doc) / 2, { align: 'center', angle: 32 })
 }
 
-const money = (value: number) =>
+export const money = (value: number) =>
   Number(value || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const fmtDate = (value?: string) => {
+export const fmtDate = (value?: string) => {
   if (!value) return '—'
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return value
@@ -192,17 +192,17 @@ const partyLabelFor = (input: DeedPdfInput) => {
   return 'BILL TO'
 }
 
-const line = (doc: jsPDF, x1: number, y: number, x2: number, color = BORDER, width = .55) => {
+export const line = (doc: jsPDF, x1: number, y: number, x2: number, color = BORDER, width = .55) => {
   doc.setDrawColor(...color).setLineWidth(width)
   doc.line(x1, y, x2, y)
 }
 
-const writeLabel = (doc: jsPDF, text: string, x: number, y: number) => {
+export const writeLabel = (doc: jsPDF, text: string, x: number, y: number) => {
   doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...BLUE)
   doc.text(text.toUpperCase(), x, y)
 }
 
-const writeValue = (doc: jsPDF, text: string, x: number, y: number, options: Record<string, unknown> = {}) => {
+export const writeValue = (doc: jsPDF, text: string, x: number, y: number, options: Record<string, unknown> = {}) => {
   doc.setFont('helvetica', 'normal').setFontSize(8.3).setTextColor(...INK)
   doc.text(text || '—', x, y, options as any)
 }
@@ -313,11 +313,11 @@ function pageBreak(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput) {
   return 108
 }
 
-function ensureRoom(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, y: number, needed: number) {
+export function ensureRoom(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, y: number, needed: number) {
   return y + needed > bodyBottom(doc) ? pageBreak(doc, company, input) : y
 }
 
-function drawMetaRow(doc: jsPDF, label: string, value: string, x: number, y: number, labelW = 82) {
+export function drawMetaRow(doc: jsPDF, label: string, value: string, x: number, y: number, labelW = 82) {
   doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...MUTED)
   doc.text(label, x, y)
   doc.setFont('helvetica', 'normal').setFontSize(8.3).setTextColor(...INK)
@@ -752,6 +752,45 @@ export interface DeedStatementInput {
   creditAvailable?: number
 }
 
+/** Where body content starts on the first page, below the letterhead. */
+export const BODY_TOP = 112
+
+/**
+ * A blank page on the company letterhead — paper size, font, watermark and header, all
+ * from the company's print settings. Body content starts at BODY_TOP.
+ *
+ * `shell` stands in for the document the flow helpers expect: ensureRoom, pageBreak and
+ * the footer only ever read its title and ref.
+ */
+export function startLetterheadDocument(company: DeedPdfCompany, title: string, ref: string): {
+  doc: jsPDF
+  accent: [number, number, number]
+  shell: DeedPdfInput
+} {
+  const doc = new jsPDF({ unit: 'pt', format: normalizePaperFormat(company.printPaperFormat) })
+  // Every later setFont('helvetica', style) draws in the company's chosen family.
+  const selectedFont = pdfFont(company.printFont)
+  const originalSetFont = doc.setFont.bind(doc)
+  doc.setFont = ((_: string, style?: string) => originalSetFont(selectedFont, style)) as typeof doc.setFont
+  drawDocumentBackground(doc, company)
+  drawLetterhead(doc, company)
+  return {
+    doc,
+    accent: layoutAccent(normalizeDocumentLayout(company.printTemplate), company),
+    shell: { title, ref } as DeedPdfInput,
+  }
+}
+
+/** Close a letterhead document: the standard footer on every page. */
+export function finishLetterheadDocument(doc: jsPDF, company: DeedPdfCompany, shell: DeedPdfInput): jsPDF {
+  const pages = doc.getNumberOfPages()
+  for (let page = 1; page <= pages; page += 1) {
+    doc.setPage(page)
+    drawFooter(doc, company, shell, page, pages)
+  }
+  return doc
+}
+
 /** A statement of account on the company letterhead: summary, aging, every movement, and what is still open. */
 export function buildDeedStatementPdf(
   input: DeedStatementInput,
@@ -759,24 +798,15 @@ export function buildDeedStatementPdf(
   bankAccountsInput: DeedPdfBank[] = [],
 ): jsPDF {
   const banks: DeedPdfBank[] = Array.isArray(bankAccountsInput) ? bankAccountsInput.filter(Boolean) : []
-  const doc = new jsPDF({ unit: 'pt', format: normalizePaperFormat(company.printPaperFormat) })
-  const selectedFont = pdfFont(company.printFont)
-  const originalSetFont = doc.setFont.bind(doc)
-  doc.setFont = ((_: string, style?: string) => originalSetFont(selectedFont, style)) as typeof doc.setFont
   const currency = company.currency || 'KES'
-  const layout = normalizeDocumentLayout(company.printTemplate)
-  const accent = layoutAccent(layout, company)
   const customer = input.side === 'customer'
   const title = customer ? 'Statement of account' : 'Supplier statement'
-  const pseudo = { title, ref: input.ref } as DeedPdfInput
+  const { doc, accent, shell: pseudo } = startLetterheadDocument(company, title, input.ref)
   const words = customer
     ? { charge: 'INVOICED', payment: 'RECEIVED', closing: 'BALANCE DUE', party: 'Statement for' }
     : { charge: 'BILLED', payment: 'PAID', closing: 'WE OWE', party: 'Supplier' }
 
-  drawDocumentBackground(doc, company)
-  drawLetterhead(doc, company)
-
-  let y = 112
+  let y = BODY_TOP
   doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...accent)
   doc.text(title.toUpperCase(), MARGIN, y)
   y += 26
@@ -925,10 +955,5 @@ export function buildDeedStatementPdf(
     ? 'If your records differ from this statement, please contact our accounts team within 14 days.'
     : 'Please let us know if your records differ from this statement.', MARGIN, y + 10, { maxWidth: contentW(doc) })
 
-  const pages = doc.getNumberOfPages()
-  for (let page = 1; page <= pages; page += 1) {
-    doc.setPage(page)
-    drawFooter(doc, company, pseudo, page, pages)
-  }
-  return doc
+  return finishLetterheadDocument(doc, company, pseudo)
 }

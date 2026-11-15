@@ -44,6 +44,9 @@ describe('final dues', () => {
 })
 
 import { lengthOfService, buildCertificateOfService, buildFinalDuesPdf } from '@/lib/hr/exit-documents'
+import { DOCUMENT_LAYOUT_IDS } from '@/lib/document-layout'
+
+const exitEmp = { name: 'Jane Wanjiku', employeeNo: 'E1', jobTitle: 'Senior Technician', department: 'Repairs', idNumber: '12345678', startDate: '2024-01-01', exitDate: '2026-09-15', exitReason: 'Resigned' }
 
 describe('exit documents', () => {
   it('computes length of service inclusively', () => {
@@ -52,9 +55,28 @@ describe('exit documents', () => {
     expect(lengthOfService('2026-09-01', '2026-09-01')).toBe('1 day')
   })
   it('builds one-page certificate and statement', () => {
-    const emp = { name: 'Jane', employeeNo: 'E1', jobTitle: 'Tech', department: 'Repairs', idNumber: '1', startDate: '2024-01-01', exitDate: '2026-09-15', exitReason: 'Resigned' }
-    const co = { name: 'Deed' }
-    expect(buildCertificateOfService(emp, co, '2026-09-16').getNumberOfPages()).toBe(1)
-    expect(buildFinalDuesPdf(emp, co, calculateFinalDues(base)).getNumberOfPages()).toBe(1)
+    expect(buildCertificateOfService(exitEmp, { name: 'Deed' }, '2026-09-16').getNumberOfPages()).toBe(1)
+    expect(buildFinalDuesPdf(exitEmp, { name: 'Deed' }, calculateFinalDues(base)).getNumberOfPages()).toBe(1)
+  })
+
+  // Both documents sit on the shared letterhead, so every print template and paper
+  // size a company can choose has to stay inside one page.
+  it.each(DOCUMENT_LAYOUT_IDS)('stays one branded page on the %s template', layout => {
+    const co = {
+      name: 'Deed Technologies LTD', address: 'Sanlam House', city: 'Nairobi', phone: '0113407964',
+      email: 'info@deed.africa', website: 'https://deed.africa', kraPin: 'P051999898X',
+      printTemplate: layout, printBackground: 'demo_logo' as const, printTagline: 'Technology that works for you',
+      printPrimaryColor: '#0F766E', printSecondaryColor: '#14B8A6', invoiceFooter: 'Thank you.',
+    }
+    for (const doc of [buildCertificateOfService(exitEmp, co, '2026-09-16'), buildFinalDuesPdf(exitEmp, co, calculateFinalDues(base))]) {
+      expect(doc.getNumberOfPages()).toBe(1)
+      expect(String.fromCharCode(...new Uint8Array(doc.output('arraybuffer')).slice(0, 5))).toBe('%PDF-')
+    }
+  })
+
+  it.each(['a4', 'letter'] as const)('stays one page on %s paper', printPaperFormat => {
+    const co = { name: 'Deed Technologies LTD', printPaperFormat }
+    expect(buildCertificateOfService(exitEmp, co, '2026-09-16').getNumberOfPages()).toBe(1)
+    expect(buildFinalDuesPdf(exitEmp, co, calculateFinalDues(base)).getNumberOfPages()).toBe(1)
   })
 })
