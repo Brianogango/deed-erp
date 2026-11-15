@@ -107,6 +107,10 @@ export async function allocateDocNumber(kind: string): Promise<string> {
 export function allocateDocNumberSync(prefix: string): string {
   const year = new Date().getFullYear()
   const stamp = Date.now().toString(36).toUpperCase()
-  const salt = Math.floor(Math.random() * 36 * 36).toString(36).toUpperCase().padStart(2, '0')
+  // Two base-36 characters is 1,296 numbers inside one millisecond, and a
+  // burst of fifty draws collides about once by birthday odds. Four is 1.7
+  // million, and the ref still fits well inside the 30 characters a document
+  // number is allowed.
+  const salt = Math.floor(Math.random() * 36 ** 4).toString(36).toUpperCase().padStart(4, '0')
   return `${prefix}/${year}/L${stamp}${salt}`
 }

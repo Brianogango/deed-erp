@@ -15,3 +15,13 @@ describe('local document number fallback', () => {
     expect(seen.size).toBeGreaterThan(45)
   })
 })
+
+describe('local number collisions', () => {
+  // Birthday odds: with a two-character salt a burst inside one millisecond
+  // repeated a number often enough to fail this suite at random.
+  it('survives a thousand draws in the same instant', () => {
+    const seen = new Set(Array.from({ length: 1000 }, () => allocateDocNumberSync('INV')))
+    expect(seen.size).toBeGreaterThan(995)
+    expect([...seen][0].length).toBeLessThanOrEqual(30)
+  })
+})

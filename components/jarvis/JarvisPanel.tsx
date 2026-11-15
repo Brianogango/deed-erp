@@ -14,6 +14,8 @@ import {
   type DiaMode,
   type DiaPageContext,
 } from '@/lib/jarvis/modes'
+import { useDiaVoice } from '@/lib/jarvis/use-dia-voice'
+import { DiaVoiceState } from './DiaVoiceState'
 
 interface AnswerSource {
   label: string
@@ -37,26 +39,6 @@ interface JarvisPanelProps {
   onClose: () => void
   onOpen?: () => void
   pathname?: string
-}
-
-type SpeechRecognitionLike = {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start: () => void
-  stop: () => void
-  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void) | null
-  onerror: ((event: { error?: string }) => void) | null
-  onend: (() => void) | null
-}
-
-function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
-  if (typeof window === 'undefined') return null
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike
-  }
-  return w.SpeechRecognition || w.webkitSpeechRecognition || null
 }
 
 function formatSourceChip(s: AnswerSource): string {
@@ -369,17 +351,21 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [listening, setListening] = useState(false)
-  const [speakReplies, setSpeakReplies] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusNote, setStatusNote] = useState<string | null>(null)
-  const [voiceSupported, setVoiceSupported] = useState(false)
   const [files, setFiles] = useState<PendingFile[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
-  const speakRepliesRef = useRef(speakReplies)
+  const sendRef = useRef<(text?: string) => void>(() => {})
   const modeRef = useRef(mode)
+
+  const voice = useDiaVoice({
+    thinking: sending,
+    onTranscript: text => sendRef.current(text),
+  })
+  // A finished sentence from the microphone goes straight out, without ever
+  // passing through the typing box and overwriting what is being typed there.
+  sendRef.current = (text?: string) => { void sendMessage(text) }
 
   const pageContext: DiaPageContext = useMemo(
     () => ({
@@ -393,47 +379,18 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
   const starters = useMemo(() => startersForMode(mode, pageContext), [mode, pageContext])
 
   useEffect(() => {
-    speakRepliesRef.current = speakReplies
-  }, [speakReplies])
-
-  useEffect(() => {
     modeRef.current = mode
   }, [mode])
 
-  useEffect(() => {
-    setVoiceSupported(Boolean(getSpeechRecognitionCtor()))
-  }, [])
-
   // Voice mode defaults to spoken replies; leaving Voice does not force-off if user enabled it.
   useEffect(() => {
-    if (mode === 'voice') setSpeakReplies(true)
+    if (mode === 'voice') voice.setSpeakReplies(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
   useEffect(() => {
     if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, open, statusNote])
-
-  useEffect(() => {
-    return () => {
-      try {
-        recognitionRef.current?.stop()
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [])
-
-  function speakText(text: string) {
-    if (!speakRepliesRef.current || typeof window === 'undefined' || !window.speechSynthesis) return
-    try {
-      window.speechSynthesis.cancel()
-      const utter = new SpeechSynthesisUtterance(text.slice(0, 600))
-      utter.rate = 1
-      window.speechSynthesis.speak(utter)
-    } catch {
-      /* ignore */
-    }
-  }
 
   async function sendMessage(overrideText?: string) {
     const text = (overrideText ?? input).trim()
@@ -480,59 +437,11 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
           toolCalls: data.toolCalls,
         },
       ])
-      if (typeof data.reply === 'string') speakText(data.reply)
+      if (typeof data.reply === 'string') voice.speak(data.reply)
     } catch {
       setError(`Could not reach ${DIA_SHORT_NAME}. Check your connection and try again.`)
     } finally {
       setSending(false)
-    }
-  }
-
-  function toggleMic() {
-    const Ctor = getSpeechRecognitionCtor()
-    if (!Ctor) {
-      setError('Speech recognition is not supported in this browser. Use Chrome/Edge, or type your question.')
-      return
-    }
-
-    if (listening && recognitionRef.current) {
-      recognitionRef.current.stop()
-      setListening(false)
-      return
-    }
-
-    const recognition = new Ctor()
-    recognition.continuous = false
-    recognition.interimResults = true
-    recognition.lang = 'en-KE'
-    recognition.onresult = event => {
-      let transcript = ''
-      for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript
-      }
-      setInput(transcript.trim())
-      const last = event.results[event.results.length - 1]
-      if (last?.isFinal) {
-        const finalText = transcript.trim()
-        if (finalText) void sendMessage(finalText)
-      }
-    }
-    recognition.onerror = event => {
-      setListening(false)
-      if (event.error && event.error !== 'aborted' && event.error !== 'no-speech') {
-        setError(`Microphone error: ${event.error}`)
-      }
-    }
-    recognition.onend = () => setListening(false)
-    recognitionRef.current = recognition
-    try {
-      recognition.start()
-      setListening(true)
-      setError(null)
-      setStatusNote('Listening…')
-    } catch {
-      setError('Could not start the microphone.')
-      setListening(false)
     }
   }
 
@@ -581,14 +490,9 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
     setMode(next)
     setStatusNote(null)
     setError(null)
-    if (listening && recognitionRef.current) {
-      try {
-        recognitionRef.current.stop()
-      } catch {
-        /* ignore */
-      }
-      setListening(false)
-    }
+    // Changing what DIA is for mid-sentence should not leave it talking or listening.
+    if (voice.listening) voice.toggleMic()
+    voice.stopSpeaking()
   }
 
   if (!open) return null
@@ -696,7 +600,7 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
           )}
 
           {messages.map(m => (
-            <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+            <div key={m.id} className={m.role === 'user' ? 'dia-message-in flex justify-end' : 'dia-message-in flex justify-start'}>
               <div
                 className={
                   m.role === 'user'
@@ -771,8 +675,8 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
 
           {sending && (
             <div className="flex justify-start">
-              <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-4)]">
-                Thinking…
+              <div className="dia-message-in rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-4)]">
+                <DiaVoiceState state="thinking" />
               </div>
             </div>
           )}
@@ -791,18 +695,52 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
         </div>
 
         <div className="border-t border-[var(--border-lt)] p-3 space-y-2">
-          {(mode === 'voice' || speakReplies) && (
-            <label className="flex items-center gap-2 text-[10px] text-[var(--text-4)]">
-              <input
-                type="checkbox"
-                checked={speakReplies}
-                onChange={e => setSpeakReplies(e.target.checked)}
-              />
-              Speak replies (browser voice)
-            </label>
+          {(mode === 'voice' || voice.speakReplies) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <label className="flex items-center gap-2 text-[10px] text-[var(--text-4)]">
+                <input
+                  type="checkbox"
+                  checked={voice.speakReplies}
+                  onChange={e => {
+                    voice.setSpeakReplies(e.target.checked)
+                    if (!e.target.checked) voice.stopSpeaking()
+                  }}
+                />
+                Speak replies
+              </label>
+              {voice.speakReplies && voice.voices.length > 1 && (
+                <label className="flex items-center gap-1 text-[10px] text-[var(--text-4)]">
+                  <span className="sr-only">Reply voice</span>
+                  <select
+                    className="rounded-md border border-[var(--border-lt)] bg-[var(--bg-surface)] px-1 py-0.5 text-[10px] text-[var(--text-2)]"
+                    value={voice.voiceURI ?? ''}
+                    onChange={e => voice.setVoiceURI(e.target.value || null)}
+                  >
+                    {voice.voices.map(v => (
+                      <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {voice.state !== 'idle' && <DiaVoiceState state={voice.state} className="ml-auto" />}
+              {voice.speaking && (
+                <button
+                  type="button"
+                  className="btn-secondary px-2 py-0.5 text-[10px]"
+                  onClick={voice.stopSpeaking}
+                >
+                  Stop speaking
+                </button>
+              )}
+            </div>
           )}
-          {mode === 'voice' && listening && (
-            <p className="text-[10px] font-semibold text-[var(--danger)]">Listening…</p>
+          {voice.interim && (
+            <p className="dia-interim text-[11px] italic text-[var(--text-3)]">
+              {voice.interim}
+            </p>
+          )}
+          {voice.error && (
+            <p className="text-[10px] font-semibold text-[var(--danger-text)]">{voice.error}</p>
           )}
           {files.length > 0 && (
             <div className="flex flex-wrap gap-1">
@@ -842,22 +780,22 @@ export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProp
               onKeyDown={handleKeyDown}
               disabled={sending}
             />
-            {(mode === 'voice' || voiceSupported) && voiceSupported && (
+            {voice.supported && (
               <button
                 type="button"
                 className={
-                  listening
+                  voice.listening
                     ? 'btn-danger px-3 py-2 text-xs'
                     : mode === 'voice'
                       ? 'btn-primary px-3 py-2 text-xs'
                       : 'btn-secondary px-3 py-2 text-xs'
                 }
-                onClick={toggleMic}
+                onClick={voice.toggleMic}
                 disabled={sending}
-                aria-label={listening ? 'Stop listening' : `Speak to ${DIA_SHORT_NAME}`}
-                title={listening ? 'Listening… click to stop' : 'Speak your question'}
+                aria-label={voice.listening ? 'Stop listening' : `Speak to ${DIA_SHORT_NAME}`}
+                title={voice.listening ? 'Listening — click to stop' : voice.speaking ? 'Speak now; this stops DIA' : 'Speak your question'}
               >
-                {listening ? '●' : 'Mic'}
+                {voice.listening ? 'Stop' : 'Mic'}
               </button>
             )}
             <button

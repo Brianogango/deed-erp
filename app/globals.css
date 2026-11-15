@@ -29314,3 +29314,94 @@ button, [role="button"], [role="tab"] {
   margin: -0.2rem -0.35rem; padding: 0.2rem 0.35rem; text-align: left;
 }
 .repair-quick-assign:hover { background: rgb(37 99 235 / 0.08); }
+
+/* ── DIA voice state ────────────────────────────────────────────────────────
+   Three bars that say whether DIA is listening, working or talking. Voice has
+   nothing else on screen to read, so this is state indication, not decoration:
+   the colour and the label carry the same meaning where motion is off.
+   Only transform and opacity animate, so the bars keep moving while the panel
+   is fetching a reply. */
+.dia-voice-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--text-4);
+  transition: color var(--motion-fast) var(--ease-out);
+}
+.dia-voice-state[data-state="listening"] { color: var(--danger); }
+.dia-voice-state[data-state="thinking"],
+.dia-voice-state[data-state="speaking"] { color: var(--primary); }
+.dia-voice-state[data-state="idle"] .dia-voice-label { opacity: .7; }
+
+.dia-voice-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+.dia-voice-bars > span {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transform: scaleY(.28);
+  transform-origin: bottom center;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+.dia-voice-bars > span:nth-child(2) { animation-delay: .12s; }
+.dia-voice-bars > span:nth-child(3) { animation-delay: .24s; }
+
+/* Loops, not UI transitions: an ambient rhythm reads as "still going", which is
+   the whole point, so these are longer than the 300ms a transition gets. */
+.dia-voice-state[data-state="listening"] .dia-voice-bars > span {
+  animation: diaVoiceListen 1.4s ease-in-out infinite;
+}
+.dia-voice-state[data-state="thinking"] .dia-voice-bars > span {
+  animation: diaVoiceThink 1.2s ease-in-out infinite;
+}
+.dia-voice-state[data-state="speaking"] .dia-voice-bars > span {
+  animation: diaVoiceSpeak .9s ease-in-out infinite;
+}
+
+@keyframes diaVoiceListen {
+  0%, 100% { transform: scaleY(.28); }
+  50%      { transform: scaleY(.62); }
+}
+@keyframes diaVoiceThink {
+  0%, 100% { transform: scaleY(.22); }
+  50%      { transform: scaleY(.9); }
+}
+@keyframes diaVoiceSpeak {
+  0%, 100% { transform: scaleY(.34); }
+  50%      { transform: scaleY(1); }
+}
+
+/* With motion off the bars hold a height per state, so the three states still
+   look different from each other without anything moving. */
+@media (prefers-reduced-motion: reduce) {
+  .dia-voice-state .dia-voice-bars > span { animation: none; }
+  .dia-voice-state[data-state="listening"] .dia-voice-bars > span { transform: scaleY(.62); }
+  .dia-voice-state[data-state="thinking"] .dia-voice-bars > span  { transform: scaleY(.5); }
+  .dia-voice-state[data-state="speaking"] .dia-voice-bars > span  { transform: scaleY(.85); }
+}
+
+/* A reply arriving should not snap into place under the one you just read. */
+.dia-message-in {
+  animation: diaMessageIn var(--motion-base) var(--ease-out) both;
+}
+@keyframes diaMessageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* What the microphone has heard so far, kept out of the typing box. */
+.dia-interim {
+  animation: diaInterimIn var(--motion-fast) var(--ease-out) both;
+}
+@keyframes diaInterimIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
