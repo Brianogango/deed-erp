@@ -173,7 +173,9 @@ describe('buildDeedDocumentPdf', () => {
     // Invoices render no signature block — the template reserves it for
     // quotations/orders; receipt acknowledgement is delivery-note only.
     expect(asString).toContain('Subtotal')
-    expect(asString).toContain('TOTAL')
+    expect(asString).toContain('Total')
+    // Nothing paid, so the document closes on what is owed.
+    expect(asString).toContain('AMOUNT DUE')
     // Fallback wordmark watermark is present when no logo bytes are supplied.
     expect(asString.toLowerCase()).toContain('deed')
   })

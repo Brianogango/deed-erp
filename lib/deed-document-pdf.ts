@@ -183,6 +183,36 @@ const titleKind = (title: string) => {
   return 'invoice'
 }
 
+/**
+ * The one figure a document closes on, if it has one.
+ *
+ * An invoice closes on what is still owed; a receipt closes on what was
+ * received, which is the whole reason the reader keeps it. A quotation is not
+ * a demand for money and an invoice settled in full has nothing outstanding,
+ * so neither gets a band — it would be a claim on the reader that is not true.
+ */
+export function closingFigure(
+  kind: ReturnType<typeof titleKind>,
+  balance: number,
+  paid: number,
+  partlyPaid: boolean,
+): { label: string; when: string; amount: number } | null {
+  if (kind === 'receipt') {
+    return paid > 0 ? { label: 'Amount received', when: '', amount: paid } : null
+  }
+  if (kind === 'quotation' || kind === 'proforma' || kind === 'delivery') return null
+  if (!(balance > 0)) return null
+  return { label: partlyPaid ? 'Balance due' : 'Amount due', when: '', amount: balance }
+}
+
+/** Height still owed to the page after payment instructions: an acknowledgement, a signature, or nothing. */
+function closingBlockHeight(input: DeedPdfInput, kind: ReturnType<typeof titleKind>, delivery: boolean): number {
+  if (input.showReceiptAcknowledgement ?? delivery) return 108
+  const signed = (input.showSignature ?? true)
+    && kind !== 'quotation' && kind !== 'proforma' && kind !== 'invoice' && kind !== 'bill' && kind !== 'receipt'
+  return signed ? 102 : 0
+}
+
 const partyLabelFor = (input: DeedPdfInput) => {
   if (input.partyLabel) return input.partyLabel
   const kind = titleKind(input.title)
@@ -498,14 +528,17 @@ export function buildDeedDocumentPdf(
   })
   y += blockH + (boxed ? 14 : 8)
 
-  const commercialHead = [['#', 'DESCRIPTION', 'QTY', 'UNIT', `UNIT PRICE (${currency})`, 'VAT', `AMOUNT (${currency})`]]
+  // No "UNIT" column: every row said "Unit(s)", so it cost width and told the
+  // reader nothing. The width goes to the description, which carries the serial
+  // and any discount instead.
+  const commercialHead = [['#', 'DESCRIPTION', 'QTY', `UNIT PRICE (${currency})`, 'VAT', `AMOUNT (${currency})`]]
   const deliveryHead = [['#', 'ITEM DESCRIPTION', 'QTY', 'SERIAL / IMEI', 'SPECS', 'CONDITION']]
   let rowNo = 0
   const body = input.lines.map(item => {
     if (item.lineType === 'section') {
       return [{
         content: item.description,
-        colSpan: delivery ? 6 : 7,
+        colSpan: 6,
         styles: { fontStyle: 'bold' as const, textColor: NAVY, fillColor: SOFT },
       }]
     }
@@ -520,11 +553,18 @@ export function buildDeedDocumentPdf(
         '',
       ]
     }
+    // A customer could not check the arithmetic on a discounted line: the
+    // amount was already net of the discount but nothing on the page said so.
+    // The serial matters too — it is what a warranty claim is made against.
+    const discount = Number(item.discountPct) || 0
+    const detail = [
+      item.serial ? `Serial ${item.serial}` : '',
+      discount > 0 ? `Less ${discount}% discount` : '',
+    ].filter(Boolean).join('  ·  ')
     return [
       String(rowNo),
-      item.description,
+      detail ? `${item.description}\n${detail}` : item.description,
       String(item.qty),
-      'Unit(s)',
       money(item.unitPrice || 0),
       item.taxRate ? `${item.taxRate}%` : '0%',
       money(item.subtotal || 0),
@@ -569,10 +609,9 @@ export function buildDeedDocumentPdf(
           0: { cellWidth: 24, halign: 'center' },
           1: { cellWidth: 'auto' },
           2: { cellWidth: 34, halign: 'center' },
-          3: { cellWidth: 48, halign: 'center' },
-          4: { cellWidth: 82, halign: 'right' },
-          5: { cellWidth: 38, halign: 'center' },
-          6: { cellWidth: 86, halign: 'right' },
+          3: { cellWidth: 86, halign: 'right' },
+          4: { cellWidth: 38, halign: 'center' },
+          5: { cellWidth: 92, halign: 'right' },
         },
     // Headings line up with their column: text left, numbers right, short codes centred.
     didParseCell: data => {
@@ -580,7 +619,7 @@ export function buildDeedDocumentPdf(
       const col = data.column.index
       data.cell.styles.halign = delivery
         ? (col === 0 || col === 2 || col === 5 ? 'center' : 'left')
-        : (col === 1 ? 'left' : col === 4 || col === 6 ? 'right' : 'center')
+        : (col === 1 ? 'left' : col === 3 || col === 5 ? 'right' : 'center')
     },
     didDrawPage: data => {
       if (data.pageNumber > 1) drawLetterhead(doc, company, `${input.title.toUpperCase()} · ${input.ref}`)
@@ -591,20 +630,29 @@ export function buildDeedDocumentPdf(
   const notes = customerFacingNotes(input.notes) || ''
 
   if (showAmounts) {
-    const totalRows: Array<[string, string, boolean?]> = []
+    // The currency belongs on the figures a reader acts on, not on every row:
+    // repeating it six times made none of them stand out.
+    type TotalWeight = 'normal' | 'total' | 'due'
+    const totalRows: Array<[string, string, TotalWeight]> = []
     const lineDiscount = Number(input.discountTotal) || 0
     const subtotal = Number(input.subtotal) || 0
-    totalRows.push(['Subtotal', `${currency} ${money(lineDiscount > 0 ? subtotal + lineDiscount : subtotal)}`])
-    if (lineDiscount > 0) totalRows.push(['Discount', `- ${currency} ${money(lineDiscount)}`])
-    totalRows.push(['VAT', `${currency} ${money(input.taxTotal || 0)}`])
-    if (Number(input.postTaxDiscountTotal) > 0) totalRows.push(['Order discount', `- ${currency} ${money(input.postTaxDiscountTotal || 0)}`])
-    totalRows.push(['TOTAL', `${currency} ${money(input.total || 0)}`, true])
-    if (Number(input.amountPaid) > 0) {
-      totalRows.push(['Paid', `- ${currency} ${money(input.amountPaid || 0)}`])
-      totalRows.push(['BALANCE DUE', `${currency} ${money(Math.max(0, Number(input.total || 0) - Number(input.amountPaid || 0)))}`, true])
-    }
+    totalRows.push(['Subtotal', money(lineDiscount > 0 ? subtotal + lineDiscount : subtotal), 'normal'])
+    if (lineDiscount > 0) totalRows.push(['Discount', `- ${money(lineDiscount)}`, 'normal'])
+    totalRows.push(['VAT', money(input.taxTotal || 0), 'normal'])
+    if (Number(input.postTaxDiscountTotal) > 0) totalRows.push(['Order discount', `- ${money(input.postTaxDiscountTotal || 0)}`, 'normal'])
+    const balance = Math.max(0, Number(input.total || 0) - Number(input.amountPaid || 0))
+    const partlyPaid = Number(input.amountPaid) > 0
 
-    const totalH = totalRows.length * 19 + 6
+    // What to pay, and by when, in one band. Both used to read at the weight of
+    // "Customer PO" halfway down the page.
+    const dueBand = closingFigure(kind, balance, Number(input.amountPaid) || 0, partlyPaid)
+    if (dueBand && input.dueDate && kind !== 'receipt') dueBand.when = `${input.dueLabel || 'Due'} ${fmtDate(input.dueDate)}`
+
+    // With nothing paid the band already carries the figure, so the total stays
+    // a plain rung of the ladder rather than printing the same number twice.
+    totalRows.push(['Total', `${currency} ${money(input.total || 0)}`, dueBand ? 'normal' : 'total'])
+    if (partlyPaid) totalRows.push(['Paid', `- ${money(input.amountPaid || 0)}`, 'normal'])
+    const totalH = totalRows.length * 19 + 6 + (dueBand ? 44 : 0)
     const notesLines = notes ? doc.splitTextToSize(notes, 250) as string[] : []
     const notesH = notesLines.length ? Math.max(46, notesLines.length * 10 + 26) : 0
     y = ensureRoom(doc, company, input, y, Math.max(totalH, notesH) + 12)
@@ -618,15 +666,29 @@ export function buildDeedDocumentPdf(
     const totalsX = right(doc) - 220
     totalRows.forEach((item, index) => {
       const rowY = y + 14 + index * 19
-      if (item[2]) {
+      const strong = item[2] !== 'normal'
+      if (strong) {
         doc.setFillColor(...SOFT)
         doc.rect(totalsX - 8, rowY - 13, 228, 19, 'F')
+        if (index > 0) line(doc, totalsX - 8, rowY - 13, right(doc), BORDER, .55)
       }
-      if (item[2] && index > 0) line(doc, totalsX - 8, rowY - 13, right(doc), BORDER, .55)
-      doc.setFont('helvetica', item[2] ? 'bold' : 'normal').setFontSize(item[2] ? 9.5 : 8).setTextColor(...INK)
+      doc.setFont('helvetica', strong ? 'bold' : 'normal').setFontSize(strong ? 9.5 : 8).setTextColor(...INK)
       doc.text(item[0], totalsX, rowY)
       doc.text(item[1], right(doc) - 6, rowY, { align: 'right' })
     })
+
+    if (dueBand) {
+      const bandY = y + 14 + totalRows.length * 19 - 9
+      doc.setFillColor(...accent).roundedRect(totalsX - 8, bandY, 228, 38, 4, 4, 'F')
+      doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(255, 255, 255)
+      doc.text(dueBand.label.toUpperCase(), totalsX + 4, bandY + 14)
+      if (dueBand.when) {
+        doc.setFont('helvetica', 'normal').setFontSize(7)
+        doc.text(dueBand.when, totalsX + 4, bandY + 29)
+      }
+      doc.setFont('helvetica', 'bold').setFontSize(13)
+      doc.text(`${currency} ${money(dueBand.amount)}`, right(doc) - 14, bandY + 25, { align: 'right' })
+    }
     y += Math.max(totalH, notesH) + 12
   } else if (notes) {
     const wrapped = doc.splitTextToSize(notes, contentW(doc) - 10) as string[]
@@ -643,10 +705,15 @@ export function buildDeedDocumentPdf(
     const payment = defaultPaymentLines(input, company, bankAccounts)
     if (payment.length) {
       const paymentH = Math.max(56, Math.ceil(payment.length / 2) * 14 + 30)
-      // Keep payment instructions visually separate from invoice totals. Short
-      // invoices place this block lower on the page; longer invoices still flow
-      // naturally or move to a continuation page through ensureRoom().
-      y = Math.max(y, 540)
+      // Sit the block on the foot of the page when the document is short, so a
+      // four-line invoice closes as deliberately as a forty-line one. It used
+      // to be pushed to a fixed y, which left it stranded mid-page with a band
+      // of nothing beneath it. A long document keeps its natural flow and
+      // ensureRoom() carries it to a continuation page as before.
+      // Reserve whatever still has to follow, or anchoring the payment block
+      // pushes the acknowledgement or signature onto a second page.
+      const footOfPage = bodyBottom(doc) - paymentH - 12 - closingBlockHeight(input, kind, delivery)
+      if (footOfPage > y) y = footOfPage
       y = ensureRoom(doc, company, input, y, paymentH + 12)
       line(doc, MARGIN, y, right(doc), BORDER, .55)
       writeLabel(doc, 'Payment instructions', MARGIN, y + 18)
