@@ -238,21 +238,39 @@ export const writeValue = (doc: jsPDF, text: string, x: number, y: number, optio
   doc.text(text || '—', x, y, options as any)
 }
 
-function drawLogo(doc: jsPDF, company: DeedPdfCompany, inverse = false) {
-  const maxW = 154
-  const maxH = 56
+/** The band the letterhead occupies, and where the logo sits inside it. */
+export const LETTERHEAD_H = 96
+const LOGO_TOP = 14
+const LOGO_MAX_W = 190
+const LOGO_MAX_H = 68
+
+/**
+ * The company mark, as large as the letterhead allows.
+ *
+ * A square logo is the common case (the default file is 595x595) and used to
+ * come out at 56pt, barely a third of the width it was given, because the box
+ * was far wider than it was tall. The box is squarer now and the band taller.
+ *
+ * On a letterhead that fills with the accent colour, a dark logo on a dark
+ * band is close to invisible, so it is laid on a white plate. That works for
+ * any logo a tenant uploads, which a second inverted file would not.
+ *
+ * Returns the height drawn, so the tagline can follow it instead of landing on it.
+ */
+function drawLogo(doc: jsPDF, company: DeedPdfCompany, inverse = false, radius = 3): number {
+  // A tagline needs a line under the mark, so the mark gives some height back.
+  const maxH = company.printTagline ? LOGO_MAX_H - 18 : LOGO_MAX_H
   if (company.logoDataUrl && company.logoWidth && company.logoHeight) {
-    const scale = Math.min(maxW / company.logoWidth, maxH / company.logoHeight)
+    const scale = Math.min(LOGO_MAX_W / company.logoWidth, maxH / company.logoHeight)
+    const w = company.logoWidth * scale
+    const h = company.logoHeight * scale
     try {
-      doc.addImage(
-        company.logoDataUrl,
-        company.logoFormat || 'PNG',
-        MARGIN,
-        15,
-        company.logoWidth * scale,
-        company.logoHeight * scale,
-      )
-      return
+      if (inverse) {
+        doc.setFillColor(255, 255, 255)
+        doc.roundedRect(MARGIN - 5, LOGO_TOP - 4, w + 10, h + 8, radius, radius, 'F')
+      }
+      doc.addImage(company.logoDataUrl, company.logoFormat || 'PNG', MARGIN, LOGO_TOP, w, h)
+      return h
     } catch {
       // Fall through to the clean text mark only if the configured image is unreadable.
     }
@@ -261,6 +279,7 @@ function drawLogo(doc: jsPDF, company: DeedPdfCompany, inverse = false) {
   doc.text('deed', MARGIN, 50)
   doc.setFontSize(6.5).setTextColor(...(inverse ? [255, 255, 255] as [number, number, number] : CYAN))
   doc.text('TECHNOLOGIES', MARGIN + 8, 61)
+  return 47
 }
 
 function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: string) {
@@ -270,10 +289,10 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
   const inverse = layout === 'bold' || layout === 'folder'
 
   if (layout === 'bold') {
-    doc.setFillColor(...primary).rect(0, 0, pageW(doc), 84, 'F')
-    doc.setFillColor(...secondary).rect(0, 80, pageW(doc), 4, 'F')
+    doc.setFillColor(...primary).rect(0, 0, pageW(doc), LETTERHEAD_H, 'F')
+    doc.setFillColor(...secondary).rect(0, LETTERHEAD_H - 4, pageW(doc), 4, 'F')
   } else if (layout === 'boxed') {
-    doc.setDrawColor(...primary).setLineWidth(1.1).roundedRect(MARGIN - 8, 14, contentW(doc) + 16, 62, 3, 3, 'S')
+    doc.setDrawColor(...primary).setLineWidth(1.1).roundedRect(MARGIN - 8, 9, contentW(doc) + 16, LETTERHEAD_H - 20, 3, 3, 'S')
   } else if (layout === 'striped') {
     doc.setFillColor(...primary).rect(0, 0, pageW(doc), 5, 'F')
     doc.setFillColor(...secondary).rect(0, 8, pageW(doc) * .68, 2, 'F')
@@ -285,12 +304,12 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
     doc.setFillColor(...primary).ellipse(pageW(doc) - 70, -40, 150, 54, 'F')
     doc.setFillColor(...secondary).ellipse(pageW(doc) - 18, -30, 112, 42, 'F')
   } else if (layout === 'folder') {
-    doc.setFillColor(...primary).rect(0, 0, pageW(doc) * .43, 84, 'F')
-    doc.setFillColor(...secondary).rect(pageW(doc) * .43, 0, pageW(doc) * .57, 84, 'F')
-    doc.setFillColor(...primary).lines([[28, 0], [-20, 84], [-28, 0]], pageW(doc) * .4, 0, [1, 1], 'F', true)
+    doc.setFillColor(...primary).rect(0, 0, pageW(doc) * .43, LETTERHEAD_H, 'F')
+    doc.setFillColor(...secondary).rect(pageW(doc) * .43, 0, pageW(doc) * .57, LETTERHEAD_H, 'F')
+    doc.setFillColor(...primary).lines([[28, 0], [-20, LETTERHEAD_H], [-28, 0]], pageW(doc) * .4, 0, [1, 1], 'F', true)
   }
 
-  drawLogo(doc, company, inverse)
+  const logoH = drawLogo(doc, company, inverse, normalizeDocumentLayout(company.printTemplate) === 'bubble' ? 10 : 3)
   const details = [
     [company.address, company.city].filter(Boolean).join(', '),
     company.phone,
@@ -303,23 +322,25 @@ function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: stri
   doc.setFont(pdfFont(company.printFont), 'normal').setFontSize(7.4).setTextColor(...headerText)
   details.slice(0, 5).forEach((item, index) => doc.text(item, right(doc), 25 + index * 11, { align: 'right' }))
 
+  // Under the mark, wherever the mark ended: a fixed baseline landed on top
+  // of a tall logo.
   if (company.printTagline) {
     doc.setFont(pdfFont(company.printFont), 'italic').setFontSize(7).setTextColor(...(inverse ? [255, 255, 255] as [number, number, number] : secondary))
-    doc.text(company.printTagline, MARGIN, 70, { maxWidth: 240 })
+    doc.text(company.printTagline, MARGIN, Math.min(LOGO_TOP + logoH + 12, LETTERHEAD_H - 8), { maxWidth: 240 })
   }
 
   if (layout === 'standard') {
-    line(doc, MARGIN, 76, right(doc), primary, 1.15)
+    line(doc, MARGIN, LETTERHEAD_H - 8, right(doc), primary, 1.15)
   } else if (layout === 'striped') {
-    line(doc, MARGIN, 76, right(doc), primary, 2.8)
-    line(doc, MARGIN, 81, right(doc), secondary, .9)
+    line(doc, MARGIN, LETTERHEAD_H - 8, right(doc), primary, 2.8)
+    line(doc, MARGIN, LETTERHEAD_H - 3, right(doc), secondary, .9)
   } else if (!inverse && layout !== 'boxed') {
     line(doc, MARGIN, 78, right(doc), primary, 1)
   }
 
   if (continuation) {
     doc.setFont(pdfFont(company.printFont), 'bold').setFontSize(8).setTextColor(...primary)
-    doc.text(continuation, MARGIN, 96)
+    doc.text(continuation, MARGIN, LETTERHEAD_H + 12)
   }
 }
 function drawFooter(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, page: number, pages: number) {
@@ -451,7 +472,7 @@ export function buildDeedDocumentPdf(
   drawDocumentBackground(doc, company)
   drawLetterhead(doc, company)
 
-  let y = 112
+  let y = BODY_TOP
   if (layout === 'bold') {
     doc.setFillColor(...accent).roundedRect(MARGIN, y - 22, contentW(doc), 34, 3, 3, 'F')
     doc.setFont('helvetica', 'bold').setFontSize(19).setTextColor(255, 255, 255)
@@ -598,7 +619,7 @@ export function buildDeedDocumentPdf(
   const unruledHead = spec.table === 'hairline' || spec.table === 'open'
   autoTable(doc, {
     startY: y,
-    margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
+    margin: { left: MARGIN, right: MARGIN, top: BODY_TOP, bottom: 62 },
     head: delivery ? deliveryHead : commercialHead,
     body: body as any,
     // One rule under every row, fully ruled cells, banded rows, a filled
@@ -867,7 +888,7 @@ export interface DeedStatementInput {
 }
 
 /** Where body content starts on the first page, below the letterhead. */
-export const BODY_TOP = 112
+export const BODY_TOP = LETTERHEAD_H + 28
 
 /**
  * A blank page on the company letterhead — paper size, font, watermark and header, all
@@ -1016,7 +1037,7 @@ export function buildDeedStatementPdf(
   if (input.overdue > 0.005 || input.aging.some(([, v]) => v > 0.005)) {
     autoTable(doc, {
       startY: y,
-      margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
+      margin: { left: MARGIN, right: MARGIN, top: BODY_TOP, bottom: 62 },
       head: [input.aging.map(([label]) => label.toUpperCase())],
       body: [input.aging.map(([, v]) => money(v))],
       theme: 'grid',
@@ -1046,7 +1067,7 @@ export function buildDeedStatementPdf(
   ])
   autoTable(doc, {
     startY: y,
-    margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
+    margin: { left: MARGIN, right: MARGIN, top: BODY_TOP, bottom: 62 },
     head: [['DATE', 'TYPE', 'DOCUMENT', 'DETAILS', words.charge, words.payment, 'BALANCE']],
     body,
     theme: 'plain',
@@ -1072,7 +1093,7 @@ export function buildDeedStatementPdf(
     y += 6
     autoTable(doc, {
       startY: y,
-      margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
+      margin: { left: MARGIN, right: MARGIN, top: BODY_TOP, bottom: 62 },
       head: [['DOCUMENT', 'DATE', 'DUE', 'OVERDUE BY', 'TOTAL', words.payment, 'STILL OWED']],
       body: [
         ...input.openItems.map(o => [o.ref, fmtDate(o.date), fmtDate(o.dueDate), o.daysOverdue > 0 ? `${o.daysOverdue} days` : 'Not yet due', money(o.total), o.paid ? money(o.paid) : '', money(o.balance)]),
