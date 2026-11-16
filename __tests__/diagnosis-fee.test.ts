@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildDiagnosisFeeQuoteLine, DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT, diagnosisFeeLineBadge, diagnosisFeeCustomerNotice, ensureDiagnosisFeeInQuoteLines, isDiagnosisFeeLine, portalDiagnosisFeeFields, isDiagnosisFeePolicyInEffect, isDiagnosisFeeSettled, resolveDiagnosisFee, shouldChargeDiagnosisFee, taxableQuoteSubtotal } from '@/lib/diagnosis-fee'
+import { diagnosisFeeExitPatch, diagnosisFeeListCell, buildDiagnosisFeeQuoteLine, DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT, diagnosisFeeLineBadge, diagnosisFeeCustomerNotice, ensureDiagnosisFeeInQuoteLines, isDiagnosisFeeLine, portalDiagnosisFeeFields, isDiagnosisFeePolicyInEffect, isDiagnosisFeeSettled, resolveDiagnosisFee, shouldChargeDiagnosisFee, taxableQuoteSubtotal } from '@/lib/diagnosis-fee'
 
 const AFTER = '2026-08-03T15:00:00+03:00'
 const JUST_BEFORE = '2026-08-03T14:59:59+03:00'
@@ -178,5 +178,70 @@ describe('diagnosisFeeLineBadge', () => {
     expect(diagnosisFeeLineBadge({ diagnosisFeeStatus: 'applicable', diagnosisFeePaidAt: '2026-10-01' }).label).toBe('Paid')
     expect(diagnosisFeeLineBadge({ diagnosisFeeStatus: 'waived' }).label).toBe('Waived')
     expect(diagnosisFeeLineBadge({ diagnosisFeeStatus: 'not_applicable' }).label).toBe('No fee')
+  })
+})
+
+describe('diagnosisFeeExitPatch — a job that ends without a repair', () => {
+  const settings = { diagnosisFeeKes: 1000 }
+  const diagnosed = {
+    repairPath: 'diagnosis_first' as const,
+    intakeDate: '2026-11-13T10:00:00+03:00',
+    diagnosis: { findings: 'dead board' },
+  }
+
+  it('stamps the fee so the job can be billed after a decline or a return', () => {
+    expect(diagnosisFeeExitPatch(diagnosed, settings)).toMatchObject({
+      diagnosisFee: 1000,
+      diagnosisFeeStatus: 'applicable',
+    })
+  })
+
+  it('keeps a fee the customer already settled as paid', () => {
+    expect(diagnosisFeeExitPatch({ ...diagnosed, diagnosisFeeStatus: 'paid' }, settings).diagnosisFeeStatus).toBe('paid')
+    expect(diagnosisFeeExitPatch({ ...diagnosed, diagnosisFeePaidAt: '2026-11-14T09:00:00+03:00' }, settings).diagnosisFeeStatus).toBe('paid')
+  })
+
+  it('stamps nothing when no diagnosis was done', () => {
+    expect(diagnosisFeeExitPatch({ ...diagnosed, diagnosis: undefined }, settings)).toEqual({})
+  })
+
+  it('stamps nothing on a direct repair, a waived fee or a no-charge job', () => {
+    expect(diagnosisFeeExitPatch({ ...diagnosed, repairPath: 'direct_repair' }, settings)).toEqual({})
+    expect(diagnosisFeeExitPatch({ ...diagnosed, diagnosisFeeStatus: 'waived' }, settings)).toEqual({})
+    expect(diagnosisFeeExitPatch({ ...diagnosed, billingExempt: true }, settings)).toEqual({})
+  })
+
+  it('keeps the billing route already chosen on the job', () => {
+    expect(diagnosisFeeExitPatch({ ...diagnosed, diagnosisFeeBilling: 'upfront', customerBillingType: 'corporate' }, settings))
+      .toMatchObject({ diagnosisFeeBilling: 'upfront', customerBillingType: 'corporate' })
+  })
+})
+
+describe('diagnosisFeeListCell — the Amount column on a job with no total', () => {
+  const settings = { diagnosisFeeKes: 1000 }
+  const booked = { repairPath: 'diagnosis_first' as const, intakeDate: '2026-11-13T10:00:00+03:00' }
+
+  it('shows the fee in the due tone from the moment the job is booked', () => {
+    expect(diagnosisFeeListCell(booked, settings)).toEqual({ amount: 1000, label: 'Fee due', tone: 'due' })
+  })
+
+  it('prefers the amount stamped on the job over the current policy', () => {
+    expect(diagnosisFeeListCell({ ...booked, diagnosisFee: 1500 }, settings)?.amount).toBe(1500)
+  })
+
+  it('turns settled once the fee is paid or invoiced', () => {
+    expect(diagnosisFeeListCell({ ...booked, diagnosisFeeStatus: 'paid' }, settings)).toMatchObject({ label: 'Paid', tone: 'settled' })
+    expect(diagnosisFeeListCell({ ...booked, diagnosisFeeStatus: 'invoiced' }, settings)).toMatchObject({ label: 'Invoiced', tone: 'settled' })
+  })
+
+  it('shows nothing for a direct repair, a waived fee or a no-charge job', () => {
+    expect(diagnosisFeeListCell({ ...booked, repairPath: 'direct_repair' }, settings)).toBeNull()
+    expect(diagnosisFeeListCell({ ...booked, diagnosisFeeStatus: 'waived' }, settings)).toBeNull()
+    expect(diagnosisFeeListCell({ ...booked, billingExempt: true }, settings)).toBeNull()
+    expect(diagnosisFeeListCell(booked, { diagnosisFeeKes: 0 })).toBeNull()
+  })
+
+  it('shows nothing on a job booked before the fee policy began', () => {
+    expect(diagnosisFeeListCell({ ...booked, intakeDate: '2026-01-04T10:00:00+03:00' }, settings)).toBeNull()
   })
 })

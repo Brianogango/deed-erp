@@ -428,3 +428,60 @@ export function taxableQuoteSubtotal(lines: { subtotal: number; isDiagnosisFee?:
     .filter(l => !isDiagnosisFeeLine(l))
     .reduce((sum, l) => sum + (Number(l.subtotal) || 0), 0)
 }
+
+/**
+ * The diagnosis-fee fields to stamp when a job ends without a repair — quote
+ * declined, device returned, or unrepairable.
+ *
+ * One definition because the exits disagreed: declining through the quote
+ * approval stamped nothing at all, and marking a job unrepairable only wrote
+ * an audit note while texting the customer that a fee applied. A fee nobody
+ * stamps is a fee nobody can bill, so the money was simply never asked for.
+ *
+ * It stamps the intention only. Raising the invoice stays a decision someone
+ * makes on the job.
+ */
+export function diagnosisFeeExitPatch(
+  repair: DiagnosisFeeRepair & { diagnosis?: unknown },
+  settings?: DiagnosisFeeSettings | null,
+): {
+  diagnosisFee?: number
+  diagnosisFeeStatus?: DiagnosisFeeStatus
+  diagnosisFeeBilling?: DiagnosisFeeBilling
+  customerBillingType?: CustomerBillingType
+} {
+  const resolved = resolveDiagnosisFee(repair, settings)
+  // No diagnosis means no diagnosis fee, whatever the policy says.
+  if (!repair.diagnosis || !shouldChargeDiagnosisFee(repair) || resolved.amount <= 0) return {}
+  const settled = repair.diagnosisFeeStatus === 'paid' || !!repair.diagnosisFeePaidAt
+  return {
+    diagnosisFee: resolved.amount,
+    diagnosisFeeStatus: settled ? 'paid' : 'applicable',
+    diagnosisFeeBilling: repair.diagnosisFeeBilling === 'upfront' || repair.diagnosisFeeBilling === 'invoice'
+      ? repair.diagnosisFeeBilling
+      : resolved.billing,
+    customerBillingType: repair.customerBillingType === 'corporate' || repair.customerBillingType === 'walk_in'
+      ? repair.customerBillingType
+      : resolved.customerType,
+  }
+}
+
+/**
+ * What the Amount column shows for a job with no total of its own. A
+ * Diagnosis First job owes the fee from the moment it is booked, so a dash
+ * there read as "nothing to collect" on a job that always owes something.
+ *
+ * Null means there is genuinely nothing to show: a direct repair, a waived or
+ * not-applicable fee, or a policy amount of zero.
+ */
+export function diagnosisFeeListCell(
+  repair: DiagnosisFeeRepair,
+  settings?: DiagnosisFeeSettings | null,
+): { amount: number; label: string; tone: 'due' | 'settled' } | null {
+  if (!shouldChargeDiagnosisFee(repair)) return null
+  const amount = Number(repair.diagnosisFee) || resolveDiagnosisFee(repair, settings).amount
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const badge = diagnosisFeeLineBadge(repair)
+  if (badge.tone === 'none') return null
+  return { amount, label: badge.label, tone: badge.tone }
+}

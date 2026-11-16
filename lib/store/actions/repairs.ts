@@ -9,7 +9,7 @@ import { canManageFinance, canManageProcurement } from '../permissions'
 import { invoiceDocState, canReverseConfirmedSale } from '@/lib/odoo-sales-flow'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 import { repairDatesWriteError } from '@/lib/data-validation'
-import { shouldChargeDiagnosisFee, resolveDiagnosisFee, isDiagnosisFeeSettled, ensureDiagnosisFeeInQuoteLines, isDiagnosisFeeLine, taxableQuoteSubtotal } from '@/lib/diagnosis-fee'
+import { shouldChargeDiagnosisFee, resolveDiagnosisFee, diagnosisFeeExitPatch, isDiagnosisFeeSettled, ensureDiagnosisFeeInQuoteLines, isDiagnosisFeeLine, taxableQuoteSubtotal } from '@/lib/diagnosis-fee'
 import { formatCustomerAddress } from '@/lib/sync-customer-documents'
 import { isDirector, canonicalRole } from '@/lib/auth/roles'
 import { resolveRepairWarranty } from '@/lib/repair-warranty'
@@ -1415,6 +1415,10 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         }
         
         if (!approved) {
+          // The same stamp the Decline action makes. Without it this path left
+          // the fee unset, so the job could not be billed for the diagnosis
+          // that was already done.
+          const feePatch = diagnosisFeeExitPatch(repair, store.systemSettings)
           store.setRepairs(p => p.map(r => r.id === repairId ? {
             ...r,
             quote: {
@@ -1423,10 +1427,19 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
               rejectionReason: reason,
             },
             status: 'declined',
+            ...feePatch,
           } : r))
   
-          store.addAuditLog('reject_quote', repairId, `Quote rejected: ${reason || 'No reason provided'}`)
-          store.showToast('Quote rejected — repair job declined')
+          store.addAuditLog(
+            'reject_quote',
+            repairId,
+            `Quote rejected: ${reason || 'No reason provided'}${feePatch.diagnosisFee && feePatch.diagnosisFeeStatus !== 'paid' ? ` — diagnosis fee KES ${feePatch.diagnosisFee} still due` : ''}`,
+          )
+          store.showToast(
+            feePatch.diagnosisFee && feePatch.diagnosisFeeStatus !== 'paid'
+              ? `Quote rejected — diagnosis fee KES ${feePatch.diagnosisFee.toLocaleString('en-KE')} still to bill`
+              : 'Quote rejected — repair job declined',
+          )
           return
         }
         
@@ -3284,7 +3297,8 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         const trimmedReason = String(reason ?? '').trim() || 'Declined by customer'
   
         const resolved = resolveDiagnosisFee(repair, store.systemSettings)
-        const feeApplies = shouldChargeDiagnosisFee(repair) && resolved.amount > 0 && !!repair.diagnosis
+        const feePatch = diagnosisFeeExitPatch(repair, store.systemSettings)
+        const feeApplies = !!feePatch.diagnosisFee
   
         // Soft-terminal: stay on `declined` so staff can revise & re-send another
         // quote OR return the device. Diagnosis fee (if due) is stamped for collection
@@ -3298,15 +3312,7 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
           quote: r.quote
             ? { ...r.quote, rejectedDate: now(), rejectionReason: trimmedReason }
             : r.quote,
-          ...(feeApplies ? {
-            diagnosisFee: resolved.amount,
-            // Keep paid if walk-in already settled; otherwise mark applicable for collection
-            diagnosisFeeStatus: (r.diagnosisFeeStatus === 'paid' || r.diagnosisFeePaidAt)
-              ? 'paid' as const
-              : 'applicable' as const,
-            diagnosisFeeBilling: r.diagnosisFeeBilling ?? resolved.billing,
-            customerBillingType: r.customerBillingType ?? resolved.customerType,
-          } : {}),
+          ...feePatch,
         } : r))
   
         store.addAuditLog(
@@ -3538,17 +3544,22 @@ export function createRepairActions(store: StoreDeps): Pick<AppState, 'createOut
         // Linked invoices are immutable here. Finance handles cancellation or
         // credit/debit notes explicitly in the Invoice module.
   
+        // The fee is stamped here, not just mentioned: the customer is told by
+        // SMS below that it applies, and until this was written nothing on the
+        // job carried the amount, so it could never be billed.
+        const feePatch = diagnosisFeeExitPatch(repair, store.systemSettings)
         store.setRepairs(p => p.map(r => r.id === repairId ? {
           ...r,
           status: 'unrepairable',
           notes: r.notes + `\n\nUnrepairable: ${reason}`,
+          ...feePatch,
         } : r))
   
         // The message used to promise "No charges apply" unconditionally, in the
         // same action that leaves a diagnosis fee owing. Say what is actually
         // true, so the customer is not told one thing and invoiced another.
-        const unrepairableFeeDue = shouldChargeDiagnosisFee(repair) && !isDiagnosisFeeSettled(repair)
-          ? Math.max(0, Number(repair.diagnosisFee) || 0)
+        const unrepairableFeeDue = feePatch.diagnosisFeeStatus === 'applicable'
+          ? (feePatch.diagnosisFee ?? 0)
           : 0
   
         store.addAuditLog(

@@ -9,6 +9,7 @@ import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 import { fmtKes, fmtDateTime, useRepairStore } from '@/lib/store'
 import { isPaidNotCollected } from '@/lib/repair/paid-not-collected'
 import { printRepairSticker } from '@/lib/repair-sticker'
+import { diagnosisFeeListCell } from '@/lib/diagnosis-fee'
 import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
 import { inNairobiDateRange, nairobiDateKey } from '@/lib/workspace-integrity'
 import { StatusBadge } from '@/components/erp'
@@ -130,7 +131,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected, technic
               {r.repairPath === 'direct_repair' ? 'Direct' : 'Diagnosis'}
             </span>
             {r.priority && r.priority !== 'normal' && (
-              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full" style={priorityChipStyle(r.priority)}>
                 {r.priority}
               </span>
             )}
@@ -171,6 +172,19 @@ function MobileRepairCard({ r, onSelect, outsourceJobs, paidUncollected, technic
     </div>
   )
 }
+
+// The app's own status colours. Tailwind's amber/red SHADES do not exist here
+// — tailwind.config overrides `amber` and `red` with flat values, so
+// `text-amber-600` silently renders as plain ink.
+const FEE_TONE: Record<'due' | 'settled', string> = {
+  due:     'var(--warning)',
+  settled: 'var(--success)',
+}
+
+/** Urgent reads red, anything else above normal reads amber. */
+const priorityChipStyle = (priority?: string): CSSProperties => priority === 'urgent'
+  ? { background: 'var(--danger-bg)', color: 'var(--danger-text)' }
+  : { background: 'var(--warning-bg)', color: 'var(--warning-text)' }
 
 export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) => void }) {
   const { visibleRepairs, filter, setFilter, outsourceJobs, currentUser, systemSettings } = useRepair()
@@ -430,6 +444,8 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
     return { label, color }
   }
 
+  const diagnosisFeeFor = (r: RepairRow) => diagnosisFeeListCell(r as never, systemSettings as never)
+
   const repairColumns: ColumnDef<RepairRow>[] = [
     {
       key: 'ref', label: 'Reference', priority: 1, width: '110px',
@@ -440,7 +456,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
             {r.repairPath === 'direct_repair' ? 'Direct' : 'Diagnosis'}
           </span>
           {r.priority && r.priority !== 'normal' && (
-            <span className={`self-start text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+            <span className="self-start text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full" style={priorityChipStyle(r.priority)}>
               {r.priority}
             </span>
           )}
@@ -504,9 +520,23 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
       exportValue: r => r.intakeDate,
     },
     {
-      key: 'amount', label: 'Amount', priority: 1, width: '100px', align: 'right',
-      render: r => <span className="text-[12px] font-black text-[var(--text-1)]">{r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}</span>,
-      exportValue: r => r.total ?? '',
+      key: 'amount', label: 'Amount', priority: 1, width: '120px', align: 'right',
+      render: r => {
+        if (r.total) return <span className="text-[12px] font-black text-[var(--text-1)]">{fmtKes(r.total)}</span>
+        // A Diagnosis First job carries a fee from the moment it is booked,
+        // whatever the repair ends up costing. Showing a dash here read as
+        // "nothing to collect" on a job that always owes at least the fee.
+        const fee = diagnosisFeeFor(r)
+        if (!fee) return <span className="text-[12px] font-black text-[var(--text-4)]">—</span>
+        return (
+          <div className="flex flex-col items-end gap-0.5" style={{ color: FEE_TONE[fee.tone] }}>
+            <span className="text-[12px] font-black">{fmtKes(fee.amount)}</span>
+            <span className="text-[8px] font-black uppercase tracking-wide">{fee.label}</span>
+          </div>
+        )
+      },
+      sortValue: r => r.total || diagnosisFeeFor(r)?.amount || 0,
+      exportValue: r => r.total || diagnosisFeeFor(r)?.amount || '',
     },
   ]
 

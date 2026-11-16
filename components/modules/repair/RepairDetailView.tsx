@@ -34,7 +34,7 @@ import { diagnosisFeeLineBadge, isDiagnosisFeeLine, resolveDiagnosisFee, shouldC
 import { pickRepairPrimaryAction } from '@/lib/repair-handover'
 import { isPaidNotCollected, repairInvoiceFor } from '@/lib/repair/paid-not-collected'
 import InvoiceReissuePanel from '@/components/repair/InvoiceReissuePanel'
-import { buildRepairInvoiceCharges, isDeclinedRepair, repairBillingNeedsSync, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, repairBillingNeedsSync, repairBillsFeeOnly, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import { isRepairTechActor } from '@/lib/repair/assignable-technicians'
 import { canonicalRole, isDirector as isDirectorRole } from '@/lib/auth/roles'
@@ -244,7 +244,7 @@ export default function RepairDetailView() {
     && r.diagnosisFeeStatus !== 'invoiced'
     && r.diagnosisFeeStatus !== 'paid'
     && r.diagnosisFeeStatus !== 'not_applicable'
-    && (!TERMINAL.includes(r.status) || isQuoteDeclinedReopenable(r.status))
+    && (!TERMINAL.includes(r.status) || isQuoteDeclinedReopenable(r.status) || !!r.diagnosisStopped)
   const canMarkDiagnosisFeePaid = can('repair.fee.mark_paid')
     && !isDirectRepairPath(r.repairPath)
     && feeApplies
@@ -295,18 +295,22 @@ export default function RepairDetailView() {
   // the fee alone and Finance decides what else belongs on it.
   // A declined quote leaves the diagnosis fee billable on its own (nothing else
   // was done). Offered only while a fee is actually still due.
-  const declinedFeeDue = isDeclinedRepair(r)
+  // Any exit without a repair — declined, returned, unrepairable, stopped at
+  // diagnosis — still owes the diagnosis fee. This used to read `declined`
+  // alone, so returning the device removed the only way left to bill it and
+  // the job closed with the fee marked applicable and never charged.
+  const feeOnlyBillDue = repairBillsFeeOnly(r)
     && buildRepairInvoiceCharges(r, false, 0).length > 0
   // The server lets only these roles create invoices. The button used to show
   // for everyone, so a technician / tech lead got a refusal every time —
   // part of why billing "works at times and at times not".
   const canBillRole = can('createCustomerInvoiceFromSO')
-  const billingDue = (['ready', 'unrepairable'].includes(r.status) || declinedFeeDue) && !noCharge
+  const billingDue = (['ready', 'unrepairable', 'returned'].includes(r.status) || feeOnlyBillDue) && !noCharge
   // Billing is offered only while the invoice still needs creating or
   // aligning: a posted invoice that matches the job needs nothing more.
   // (These conditions were once split off onto the button label by mistake,
   // so every Ready / Invoiced repair kept asking for a draft invoice.)
-  const canInvoice = (['ready', 'invoiced', 'unrepairable'].includes(r.status) || declinedFeeDue)
+  const canInvoice = (['ready', 'invoiced', 'unrepairable', 'returned'].includes(r.status) || feeOnlyBillDue)
     && !noCharge
     && canBillRole
     && billingSync.needed
@@ -867,7 +871,7 @@ export default function RepairDetailView() {
                     <Fa icon={faSync} className="text-[10px]" /> Revise &amp; re-send quote
                   </button>
                 )}
-                {canInvoice && declinedFeeDue && (
+                {canInvoice && feeOnlyBillDue && (
                   <button type="button" className="btn-secondary flex min-h-10 w-full items-center justify-center gap-2 px-4 text-[11px]" onClick={() => { void createInvoiceFromRepair(r.id, false) }}>
                     <Fa icon={faFileInvoiceDollar} className="text-[10px]" /> Create diagnosis-fee invoice
                   </button>
