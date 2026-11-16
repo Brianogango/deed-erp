@@ -127,7 +127,18 @@ async function transferSerials(rows: unknown[]): Promise<{ upserted: number; ski
     const row = raw as Record<string, unknown>
     const data = { ...serialRow(row), removedAt: null }
     if (data.serialNumber) listed.add(data.serialNumber)
-    if (!data.serialNumber || !isUuid(data.productId) || !products.has(data.productId)) { skipped += 1; continue }
+    // Name the row and the reason. "1 row(s) the table cannot hold" repeated
+    // on every save with nothing to identify it, so the one serial holding
+    // the whole list in the legacy copy could not be found and fixed.
+    const why = !data.serialNumber ? 'no serial number'
+      : !isUuid(data.productId) ? `productId is not a uuid (${String(row.productId ?? '')})`
+      : !products.has(data.productId) ? `no product ${data.productId} in the products table`
+      : ''
+    if (why) {
+      skipped += 1
+      if (errors.length < 3) errors.push(`${data.serialNumber || String(row.id ?? 'unknown')}: ${why}`)
+      continue
+    }
     const id = isUuid(row.id) ? String(row.id) : undefined
     const current = bySerial.get(data.serialNumber) ?? (id ? byId.get(id) : undefined)
     if (current

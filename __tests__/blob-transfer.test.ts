@@ -74,7 +74,7 @@ vi.mock('@/lib/purchase/po-prisma-sync', () => ({
   ensurePrismaPurchaseOrder: vi.fn().mockResolvedValue('po-1'),
 }))
 
-import { countLiveAppStateKeys, transferBlobsToPrisma } from '@/lib/blob-transfer'
+import { countLiveAppStateKeys, mirrorKnownDomain, transferBlobsToPrisma } from '@/lib/blob-transfer'
 import { POST as blobTransferPost } from '@/app/api/admin/blob-transfer/route'
 
 vi.mock('@/lib/auth/server', () => ({
@@ -152,5 +152,44 @@ describe('POST /api/admin/blob-transfer', () => {
     expect(res!.status).toBe(400)
     const body = await res!.json()
     expect(body.error).toMatch(/RETIRE_APP_STATE/)
+  })
+})
+
+
+/**
+ * A serial the table cannot hold keeps the whole list in the legacy copy and
+ * is re-logged on every save. The message has to name it, or there is nothing
+ * to go and fix.
+ */
+describe('a serial the serials table cannot hold', () => {
+  const serials = (rows: unknown[]) => mirrorKnownDomain('deed_serials', JSON.stringify(rows), null)
+
+  it('names the serial whose product is missing', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([])
+    const result = await serials([{ id: 's1', serial: 'SN-ORPHAN', productId: '22222222-2222-4222-8222-222222222222' }])
+    expect(result.skipped).toBe(1)
+    expect(result.error).toContain('SN-ORPHAN')
+    expect(result.error).toContain('no product 22222222-2222-4222-8222-222222222222')
+  })
+
+  it('names a product reference that is not an id at all', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([])
+    const result = await serials([{ id: 's1', serial: 'SN-BADREF', productId: 'laptop-hp-840' }])
+    expect(result.error).toContain('SN-BADREF: productId is not a uuid (laptop-hp-840)')
+  })
+
+  it('falls back to the row id when the serial number itself is blank', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([])
+    const result = await serials([{ id: 's-blank', serial: '   ', productId: '22222222-2222-4222-8222-222222222222' }])
+    expect(result.error).toContain('s-blank: no serial number')
+  })
+
+  it('says nothing when every row lands in the table', async () => {
+    const productId = '33333333-3333-4333-8333-333333333333'
+    mockPrisma.product.findMany.mockResolvedValue([{ id: productId }])
+    mockPrisma.serialNumber.findMany.mockResolvedValue([])
+    const result = await serials([{ id: '44444444-4444-4444-8444-444444444444', serial: 'SN-OK', productId }])
+    expect(result.skipped).toBe(0)
+    expect(result.error).toBeUndefined()
   })
 })
