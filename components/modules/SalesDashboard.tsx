@@ -10,6 +10,7 @@ import {
   describeWindow, monthsInWindow, topCustomerRevenue, REVENUE_WINDOWS,
   type RevenueWindowMonths,
 } from '@/lib/dashboard/sales-analytics'
+import { useCustomerRevenue } from '@/hooks/useCustomerRevenue'
 
 function pct(a: number, b: number) { return b === 0 ? 0 : Math.round((a / b) * 100) }
 
@@ -170,7 +171,13 @@ export default function SalesDashboard() {
     return sales
   }, [visibleOrders, posSales, windowKeys])
 
-  const customerRanking = useMemo(() => topCustomerRevenue(customerSales, 5), [customerSales])
+  const ordersRanking = useMemo(() => topCustomerRevenue(customerSales, 5), [customerSales])
+  // Posted invoices are the whole revenue picture — repairs and anything
+  // Finance raised directly included — so they win when the server answers.
+  // The order-based ranking stays as the fallback when it does not.
+  const invoiceRanking = useCustomerRevenue(selectedMonth, windowMonths, 5)
+  const customerRanking = invoiceRanking.data ?? ordersRanking
+  const customersFromInvoices = Boolean(invoiceRanking.data)
   const topCustomers = customerRanking.rows
 
   // ── Sales pipeline (Odoo stages) ───────────────────────────────────────────
@@ -349,8 +356,10 @@ export default function SalesDashboard() {
           <p className="text-[11px] font-semibold text-t2 mb-3">
             Top Customers by Revenue <span className="font-medium text-t3">· {windowLabel}</span>
           </p>
-          {topCustomers.length === 0 ? (
-            <p className="text-[11px] text-t3 py-6 text-center">No invoiced orders yet</p>
+          {invoiceRanking.loading && topCustomers.length === 0 ? (
+            <p className="text-[11px] text-t3 py-6 text-center">Working out customer revenue…</p>
+          ) : topCustomers.length === 0 ? (
+            <p className="text-[11px] text-t3 py-6 text-center">No invoiced revenue in this period</p>
           ) : (
             <div className="space-y-3">
               {topCustomers.map((c, i) => (
@@ -377,6 +386,9 @@ export default function SalesDashboard() {
                   {customerRanking.customers > topCustomers.length
                     ? `Top ${topCustomers.length} of ${customerRanking.customers} customers · ${fmtKes(customerRanking.others)} from the rest`
                     : `All ${customerRanking.customers} customer${customerRanking.customers === 1 ? '' : 's'}`}
+                  {customersFromInvoices
+                    ? ' · posted invoices'
+                    : ' · orders and till sales only'}
                 </span>
                 <span style={{ fontSize: 9, fontWeight: 700, color: '#6B7280', whiteSpace: 'nowrap' }}>
                   {fmtKes(customerRanking.total)} total
