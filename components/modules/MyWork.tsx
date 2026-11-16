@@ -48,6 +48,8 @@ export default function MyWork() {
     stockAdjustments: app.stockAdjustments ?? [],
     serials: app.serials ?? [],
     purchaseOrders: app.purchaseOrders ?? [],
+    expenses: app.expenses ?? [],
+    approvalRequests: app.approvalRequests ?? [],
     products: app.products ?? [],
     clientExchanges: app.clientExchanges ?? [],
     donations: app.donations ?? [],
@@ -56,7 +58,7 @@ export default function MyWork() {
     opportunities: crm.deals,
     opportunityActivities: crm.activities,
     invoiceHref: id => financeInvoicePath(id),
-  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders, app.products, app.clientExchanges, app.donations, app.returnOrders, crm])
+  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders, app.products, app.expenses, app.approvalRequests, app.clientExchanges, app.donations, app.returnOrders, crm])
 
   const total = queues.reduce((s, q) => s + q.count, 0)
   const firstName = String(user?.name ?? '').split(/\s+/)[0]

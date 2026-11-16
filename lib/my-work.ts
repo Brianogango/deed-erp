@@ -10,6 +10,8 @@
  */
 
 import { findInvoicedNotDelivered } from '@/lib/sales/invoiced-not-delivered'
+import { canApprove, approvalDocumentPath } from '@/lib/sales-approvals'
+import { canUserReviewExpense } from '@/lib/expense-approval-chain'
 import { canonicalRole } from '@/lib/auth/roles'
 import { findOrphanTradeInSerials } from '@/lib/tradein/orphan-intake'
 import { userCan } from '@/lib/auth/can'
@@ -44,6 +46,10 @@ export type MyWorkInput = {
   clientExchanges?: Any[]
   donations?: Any[]
   returnOrders?: Any[]
+  /** Staff expense claims — to review, and once approved, to pay. */
+  expenses?: Any[]
+  /** Discount and price approvals raised from Sales. */
+  approvalRequests?: Any[]
   /** CRM: the leads this person may see (from /api/leads), deals and their activities. */
   leads?: Any[]
   opportunities?: Any[]
@@ -70,11 +76,74 @@ const repairHref = (r: Any) => `/repairs?id=${encodeURIComponent(r.id)}`
 
 export function buildMyWork(input: MyWorkInput): WorkQueue[] {
   const role = canonicalRole(input.role)
-  const is = (...roles: string[]) => role === 'director' || roles.includes(role)
+  /**
+   * The roles that do this work — and only those.
+   *
+   * A Director used to match every queue, so the page filled with other
+   * people's jobs (parts to order, devices to test, leads to call) while the
+   * decisions only a Director can make were not on it at all. My work is what
+   * is blocked on you; a backlog someone else owns belongs in their module.
+   */
+  const is = (...roles: string[]) => roles.includes(role)
   // Sales reps see only their own records (sales.view_all).
   const ownOnly = !userCan({ role }, 'sales.view_all')
   const { now } = input
   const out: WorkQueue[] = []
+
+  // ── Waiting on this person ────────────────────────────────────────────
+  // Approvals and payments come first: the business is stopped until the
+  // person who must decide, decides.
+  const approvals = (input.approvalRequests ?? []).filter(r => canApprove(r as never, input.userId, role))
+  out.push(queue('approvals-mine', 'Approvals waiting on you', 'Discounts and prices that cannot go ahead until you decide', '/sales',
+    approvals.map(r => ({
+      id: r.id,
+      title: r.documentRef || r.ref,
+      subtitle: `${String(r.type ?? 'approval').replace(/_/g, ' ')} · ${r.requestedByName ?? ''}${r.details?.reason ? ` · ${r.details.reason}` : ''}`,
+      href: approvalDocumentPath(r as never),
+      ageDays: ageDays(r.requestedDate, now),
+    })), 'urgent'))
+
+  const claims = (input.expenses ?? []).filter(e =>
+    String(e.status) === 'submitted' && canUserReviewExpense(role, e.approvalChain))
+  out.push(queue('expense-claims', 'Expense claims to review', 'Staff money spent, waiting for your decision', '/expenses?tab=review',
+    claims.map(e => ({
+      id: e.id,
+      title: e.ref,
+      subtitle: `${e.submittedByName ?? ''} · ${kes(e.amount)} · ${e.description ?? ''}`,
+      href: `/expenses?tab=review&id=${encodeURIComponent(e.id)}`,
+      ageDays: ageDays(e.submittedDate, now),
+    })), 'urgent'))
+
+  if (is('director', 'finance_officer')) {
+    // Money the business has agreed to pay and has not paid yet: approved
+    // claims, then supplier bills that are due.
+    const toPay: WorkItem[] = []
+    for (const e of input.expenses ?? []) {
+      if (String(e.status) !== 'approved') continue
+      toPay.push({
+        id: `expense:${e.id}`,
+        title: e.ref,
+        subtitle: `Expense claim · ${e.submittedByName ?? ''} · ${kes(e.amount)}`,
+        href: `/expenses?tab=review&id=${encodeURIComponent(e.id)}`,
+        ageDays: ageDays(e.reviewedDate ?? e.submittedDate, now),
+      })
+    }
+    for (const bill of input.invoices) {
+      if (bill.type !== 'vendor_bill') continue
+      if (['draft', 'cancelled'].includes(String(bill.status))) continue
+      const balance = Number(bill.total ?? 0) - Number(bill.amountPaid ?? 0)
+      if (balance <= 1) continue
+      if (!bill.dueDate || new Date(bill.dueDate).getTime() > now.getTime()) continue
+      toPay.push({
+        id: `bill:${bill.id}`,
+        title: bill.ref,
+        subtitle: `Supplier bill · ${bill.partnerName ?? ''} · ${kes(balance)} due`,
+        href: input.invoiceHref(bill.id),
+        ageDays: ageDays(bill.dueDate, now),
+      })
+    }
+    out.push(queue('payments-due', 'Payments to release', 'Approved claims and supplier bills that are due', '/finance?tab=bills', toPay, 'urgent'))
+  }
 
   // ── Repairs ───────────────────────────────────────────────────────────
   if (role === 'technician' || role === 'technical_lead' || input.actsAsTechnician === true) {
