@@ -6,6 +6,10 @@ import { visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
 import { saleOrderInvoiceStatus, SALE_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import {
+  describeWindow, monthsInWindow, topCustomerRevenue, REVENUE_WINDOWS,
+  type RevenueWindowMonths,
+} from '@/lib/dashboard/sales-analytics'
 
 function pct(a: number, b: number) { return b === 0 ? 0 : Math.round((a / b) * 100) }
 
@@ -46,6 +50,14 @@ export default function SalesDashboard() {
 
   // Period starts empty — the user picks the month to report on.
   const [selectedMonth, setSelectedMonth] = useState<string>('')
+  // How far back the two revenue rankings reach, ending at that month. One
+  // month is rarely enough to see who the real customers are.
+  const [windowMonths, setWindowMonths] = useState<RevenueWindowMonths>(1)
+  const windowKeys = useMemo(
+    () => new Set(selectedMonth ? monthsInWindow(selectedMonth, windowMonths) : []),
+    [selectedMonth, windowMonths],
+  )
+  const windowLabel = selectedMonth ? describeWindow(selectedMonth, windowMonths) : ''
 
   const availableMonths = useMemo(() => {
     const set = new Set<string>()
@@ -122,42 +134,44 @@ export default function SalesDashboard() {
   const topProducts = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; qty: number }>()
     for (const o of visibleOrders) {
-      if (!isFullyInvoiced(o) || monthKey(o.date) !== selectedMonth) continue
+      if (!isFullyInvoiced(o) || !windowKeys.has(monthKey(o.date))) continue
       for (const l of o.lines) {
         const e = map.get(l.productId) ?? { name: l.productName, revenue: 0, qty: 0 }
         map.set(l.productId, { name: l.productName, revenue: e.revenue + l.subtotal, qty: e.qty + l.qty })
       }
     }
     for (const o of posSales) {
-      if (monthKey(o.date) !== selectedMonth) continue
+      if (!windowKeys.has(monthKey(o.date))) continue
       for (const l of o.lines) {
         const e = map.get(l.productId) ?? { name: l.productName, revenue: 0, qty: 0 }
         map.set(l.productId, { name: l.productName, revenue: e.revenue + l.subtotal, qty: e.qty + l.qty })
       }
     }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
-  }, [visibleOrders, posSales, selectedMonth])
+  }, [visibleOrders, posSales, windowKeys])
 
   const maxProdRev = Math.max(...topProducts.map(p => p.revenue), 1)
 
-  // ── Top 5 customers by revenue ──────────────────────────────────────────────
-  const topCustomers = useMemo(() => {
-    const map = new Map<string, { name: string; revenue: number; orders: number }>()
+  // ── Top customers by revenue ────────────────────────────────────────────────
+  // Every sale the revenue figures count is offered to the ranking, including
+  // till sales with no customer on them: those used to be dropped in silence,
+  // so the panel disagreed with the revenue beside it and a customer's total
+  // could come out short.
+  const customerSales = useMemo(() => {
+    const sales: { customerId?: string; customerName?: string; total: number }[] = []
     for (const o of visibleOrders) {
-      if (!isFullyInvoiced(o) || monthKey(o.date) !== selectedMonth) continue
-      const e = map.get(o.customerId) ?? { name: o.customerName, revenue: 0, orders: 0 }
-      map.set(o.customerId, { ...e, revenue: e.revenue + o.total, orders: e.orders + 1 })
+      if (!isFullyInvoiced(o) || !windowKeys.has(monthKey(o.date))) continue
+      sales.push({ customerId: o.customerId, customerName: o.customerName, total: o.total })
     }
-    // Walk-in POS sales with no recorded customer don't have anywhere
-    // meaningful to attribute in a "top customers" ranking — only counted
-    // when a customerId was captured at the till.
     for (const o of posSales) {
-      if (!o.customerId || monthKey(o.date) !== selectedMonth) continue
-      const e = map.get(o.customerId) ?? { name: o.customerName ?? 'Walk-in', revenue: 0, orders: 0 }
-      map.set(o.customerId, { ...e, revenue: e.revenue + o.total, orders: e.orders + 1 })
+      if (!windowKeys.has(monthKey(o.date))) continue
+      sales.push({ customerId: o.customerId, customerName: o.customerName, total: o.total })
     }
-    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
-  }, [visibleOrders, posSales, selectedMonth])
+    return sales
+  }, [visibleOrders, posSales, windowKeys])
+
+  const customerRanking = useMemo(() => topCustomerRevenue(customerSales, 5), [customerSales])
+  const topCustomers = customerRanking.rows
 
   // ── Sales pipeline (Odoo stages) ───────────────────────────────────────────
   const pipeline = useMemo(() => {
@@ -203,18 +217,33 @@ export default function SalesDashboard() {
           </div>
           <h2 className="text-sm font-extrabold text-text-1">Sales Dashboard</h2>
         </div>
-        <select
-          aria-label="Sales dashboard month"
-          className="form-select text-xs py-1.5 font-medium"
-          style={{ width: 160 }}
-          value={selectedMonth}
-          onChange={e => setSelectedMonth(e.target.value)}
-        >
-          <option value="" disabled>Select month…</option>
-          {availableMonths.map(m => (
-            <option key={m} value={m}>{fmtMonthFull(m)}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Sales dashboard month"
+            className="form-select text-xs py-1.5 font-medium"
+            style={{ width: 160 }}
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(e.target.value)}
+          >
+            <option value="" disabled>Select month…</option>
+            {availableMonths.map(m => (
+              <option key={m} value={m}>{fmtMonthFull(m)}</option>
+            ))}
+          </select>
+          <select
+            aria-label="Revenue ranking range"
+            className="form-select text-xs py-1.5 font-medium"
+            style={{ width: 150 }}
+            value={windowMonths}
+            onChange={e => setWindowMonths(Number(e.target.value) as RevenueWindowMonths)}
+            disabled={!selectedMonth}
+            title="How far back the top products and top customers reach"
+          >
+            {REVENUE_WINDOWS.map(w => (
+              <option key={w.months} value={w.months}>{w.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {!selectedMonth ? (
@@ -285,7 +314,9 @@ export default function SalesDashboard() {
 
         {/* Top Products */}
         <div className="card p-4">
-          <p className="text-[11px] font-semibold text-t2 mb-3">Top Products by Revenue</p>
+          <p className="text-[11px] font-semibold text-t2 mb-3">
+            Top Products by Revenue <span className="font-medium text-t3">· {windowLabel}</span>
+          </p>
           {topProducts.length === 0 ? (
             <p className="text-[11px] text-t3 py-6 text-center">No invoiced orders yet</p>
           ) : (
@@ -315,13 +346,15 @@ export default function SalesDashboard() {
 
         {/* Top Customers */}
         <div className="card p-4">
-          <p className="text-[11px] font-semibold text-t2 mb-3">Top Customers by Revenue</p>
+          <p className="text-[11px] font-semibold text-t2 mb-3">
+            Top Customers by Revenue <span className="font-medium text-t3">· {windowLabel}</span>
+          </p>
           {topCustomers.length === 0 ? (
             <p className="text-[11px] text-t3 py-6 text-center">No invoiced orders yet</p>
           ) : (
             <div className="space-y-3">
               {topCustomers.map((c, i) => (
-                <div key={c.name} className="flex items-center gap-3">
+                <div key={c.key} className="flex items-center gap-3">
                   <div style={{
                     width: 32, height: 32, borderRadius: '50%', background: CHART_COLORS[i] ?? '#E5E7EB',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -336,6 +369,19 @@ export default function SalesDashboard() {
                   <p style={{ fontSize: 11, fontWeight: 700, color: '#1B2762', whiteSpace: 'nowrap' }}>{fmtKes(c.revenue)}</p>
                 </div>
               ))}
+              {/* The five on their own used to read as the whole figure. Say
+                  what they are out of, so this panel and the revenue beside
+                  it can be reconciled. */}
+              <div className="flex items-center justify-between border-t pt-2 mt-1" style={{ borderColor: 'var(--border-lt)' }}>
+                <span style={{ fontSize: 9, color: '#9CA3AF' }}>
+                  {customerRanking.customers > topCustomers.length
+                    ? `Top ${topCustomers.length} of ${customerRanking.customers} customers · ${fmtKes(customerRanking.others)} from the rest`
+                    : `All ${customerRanking.customers} customer${customerRanking.customers === 1 ? '' : 's'}`}
+                </span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#6B7280', whiteSpace: 'nowrap' }}>
+                  {fmtKes(customerRanking.total)} total
+                </span>
+              </div>
             </div>
           )}
         </div>
