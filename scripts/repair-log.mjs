@@ -85,21 +85,7 @@ const readable = action => {
 }
 
 async function main() {
-  // The job itself lives in the shared state blob, keyed by ref or id.
-  const [job] = await q(
-    `SELECT r->>'id'            AS id,
-            r->>'ref'           AS ref,
-            r->>'productName'   AS device,
-            r->>'customerName'  AS customer,
-            r->>'status'        AS status,
-            r->>'intakeDate'    AS intake_date,
-            r->>'assignedToName' AS technician
-       FROM app_state, jsonb_array_elements(value::jsonb) AS r
-      WHERE key = 'deed_repairs_v2'
-        AND (upper(r->>'ref') = upper($1) OR r->>'id' = $1)
-      LIMIT 1`,
-    [target],
-  )
+  const job = await findRepair(target)
   if (!job) fail(`No repair found for "${target}"`)
 
   // Entries were written against the reference on some actions and the id on
@@ -207,6 +193,53 @@ async function main() {
     }
   }
   console.log('')
+}
+
+/**
+ * Where a repair lives, newest storage first — the same order the app reads
+ * in: one row per record in erp_state_records, then the whole-list row in
+ * store_records, then the legacy app_state blob.
+ */
+async function findRepair(wanted) {
+  const shape = `r->>'id'             AS id,
+                 r->>'ref'            AS ref,
+                 r->>'productName'    AS device,
+                 r->>'customerName'   AS customer,
+                 r->>'status'         AS status,
+                 r->>'intakeDate'     AS intake_date,
+                 r->>'assignedToName' AS technician`
+  const match = `(upper(r->>'ref') = upper($1) OR r->>'id' = $1)`
+
+  // A row may hold one repair or the whole list; take both as a list.
+  const asList = column => `jsonb_array_elements(
+    CASE WHEN jsonb_typeof(${column}) = 'array' THEN ${column} ELSE jsonb_build_array(${column}) END
+  ) AS r`
+
+  const sources = [
+    // One row per repair.
+    `SELECT ${shape}
+       FROM erp_state_records, ${asList('payload')}
+      WHERE key = 'deed_repairs_v2' AND ${match}
+      LIMIT 1`,
+    // The whole list in one row.
+    `SELECT ${shape}
+       FROM store_records, ${asList('value')}
+      WHERE key = 'deed_repairs_v2' AND ${match}
+      LIMIT 1`,
+    // The legacy blob, kept as text.
+    `SELECT ${shape}
+       FROM app_state, ${asList('value::jsonb')}
+      WHERE key = 'deed_repairs_v2' AND ${match}
+      LIMIT 1`,
+  ]
+
+  for (const text of sources) {
+    // A table that does not exist on this server is simply the wrong place
+    // to look, not a failure.
+    const rows = await q(text, [wanted]).catch(() => [])
+    if (rows.length) return rows[0]
+  }
+  return null
 }
 
 /** The browser string is a later addition; older databases do not have it. */
