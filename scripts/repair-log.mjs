@@ -216,29 +216,49 @@ async function findRepair(wanted) {
   ) AS r`
 
   const sources = [
-    // One row per repair.
-    `SELECT ${shape}
-       FROM erp_state_records, ${asList('payload')}
-      WHERE key = 'deed_repairs_v2' AND ${match}
-      LIMIT 1`,
+    // The authoritative table. It keeps the whole repair in `payload`, and
+    // falls back to its own columns for a row mirrored before payload existed.
+    [`repairs`, `
+      SELECT COALESCE(r.payload->>'id', r.id::text)      AS id,
+             COALESCE(r.payload->>'ref', r.job_number)   AS ref,
+             COALESCE(r.payload->>'productName',
+                      NULLIF(trim(concat_ws(' ', r.device_brand, r.device_model)), ''),
+                      r.device_type)                     AS device,
+             COALESCE(r.payload->>'customerName', c.name, '')            AS customer,
+             COALESCE(r.payload->>'status', r.status::text)              AS status,
+             COALESCE(r.payload->>'intakeDate',
+                      to_char(r.intake_date, 'YYYY-MM-DD'))              AS intake_date,
+             COALESCE(r.payload->>'assignedToName', u.name, '')          AS technician
+        FROM repairs r
+        LEFT JOIN clients c ON c.id = r.client_id
+        LEFT JOIN users   u ON u.id = r.assigned_to
+       WHERE upper(r.job_number) = upper($1)
+          OR r.payload->>'ref' = $1
+          OR r.payload->>'id' = $1
+          OR r.id::text = $1
+       LIMIT 1`],
+    // One row per repair in the row store.
+    [`erp_state_records`, `SELECT ${shape} FROM erp_state_records, ${asList('payload')}
+       WHERE key = 'deed_repairs_v2' AND ${match} LIMIT 1`],
     // The whole list in one row.
-    `SELECT ${shape}
-       FROM store_records, ${asList('value')}
-      WHERE key = 'deed_repairs_v2' AND ${match}
-      LIMIT 1`,
+    [`store_records`, `SELECT ${shape} FROM store_records, ${asList('value')}
+       WHERE key = 'deed_repairs_v2' AND ${match} LIMIT 1`],
     // The legacy blob, kept as text.
-    `SELECT ${shape}
-       FROM app_state, ${asList('value::jsonb')}
-      WHERE key = 'deed_repairs_v2' AND ${match}
-      LIMIT 1`,
+    [`app_state`, `SELECT ${shape} FROM app_state, ${asList('value::jsonb')}
+       WHERE key = 'deed_repairs_v2' AND ${match} LIMIT 1`],
   ]
 
-  for (const text of sources) {
+  const searched = []
+  for (const [table, text] of sources) {
     // A table that does not exist on this server is simply the wrong place
     // to look, not a failure.
-    const rows = await q(text, [wanted]).catch(() => [])
-    if (rows.length) return rows[0]
+    const rows = await q(text, [wanted]).catch(() => null)
+    searched.push([table, rows === null ? 'not on this server' : `${rows.length} match`])
+    if (rows?.length) return rows[0]
   }
+  // Say where it looked, so a miss points at the next thing to check rather
+  // than at nothing at all.
+  console.error(`Looked in: ${searched.map(([t, outcome]) => `${t} (${outcome})`).join(', ')}`)
   return null
 }
 
