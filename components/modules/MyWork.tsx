@@ -18,7 +18,19 @@ export default function MyWork() {
   // Leads live in their own table, not the app store: fetch the ones this
   // person may see (the server scopes a rep to their own and unassigned).
   const crmRole = userCan(user, 'sales.opportunities.edit')
+  const leaveRole = userCan(user, 'approveLeave')
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([])
   const [crm, setCrm] = useState<{ leads: any[]; deals: any[]; activities: any[] }>({ leads: [], deals: [], activities: [] })
+  useEffect(() => {
+    if (!leaveRole) { setLeaveRequests([]); return }
+    let live = true
+    fetch('/api/leave-requests')
+      .then(res => (res.ok ? res.json() : []))
+      // The route answers { requests, balances } for an approver.
+      .then(data => { if (live) setLeaveRequests(Array.isArray(data?.requests) ? data.requests : []) })
+      .catch(() => { /* the queue simply stays empty */ })
+    return () => { live = false }
+  }, [leaveRole])
   useEffect(() => {
     if (!crmRole) return
     let live = true
@@ -50,6 +62,8 @@ export default function MyWork() {
     purchaseOrders: app.purchaseOrders ?? [],
     expenses: app.expenses ?? [],
     approvalRequests: app.approvalRequests ?? [],
+    payrollRuns: app.payrollRuns ?? [],
+    leaveRequests,
     products: app.products ?? [],
     clientExchanges: app.clientExchanges ?? [],
     donations: app.donations ?? [],
@@ -58,7 +72,7 @@ export default function MyWork() {
     opportunities: crm.deals,
     opportunityActivities: crm.activities,
     invoiceHref: id => financeInvoicePath(id),
-  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders, app.products, app.expenses, app.approvalRequests, app.clientExchanges, app.donations, app.returnOrders, crm])
+  }), [user?.role, user?.id, app.repairs, app.saleOrders, app.invoices, app.deliveries, app.buyBacks, app.stockAdjustments, app.serials, app.purchaseOrders, app.products, app.expenses, app.approvalRequests, app.payrollRuns, leaveRequests, app.clientExchanges, app.donations, app.returnOrders, crm])
 
   const total = queues.reduce((s, q) => s + q.count, 0)
   const firstName = String(user?.name ?? '').split(/\s+/)[0]

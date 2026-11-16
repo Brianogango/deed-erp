@@ -142,3 +142,36 @@ describe('My work', () => {
     })
   })
 })
+
+describe('decisions people are waiting on', () => {
+  const NOW2 = new Date('2026-10-04T08:00:00Z')
+  const input = (over: Partial<MyWorkInput> = {}): MyWorkInput => ({
+    role: 'director', userId: 'u-1', now: NOW2,
+    repairs: [], saleOrders: [], invoices: [], deliveries: [], buyBacks: [],
+    stockAdjustments: [], serials: [], purchaseOrders: [],
+    invoiceHref: id => `/finance?invoice=${id}`,
+    ...over,
+  })
+
+  it('puts a payroll run waiting for approval in front of whoever approves payroll', () => {
+    const payrollRuns = [
+      { id: 'p1', ref: 'PAY/2026/10', status: 'pending_approval', month: '10', year: 2026, totalNet: 480000, lines: [{}, {}, {}], createdAt: '2026-10-01' },
+      { id: 'p2', ref: 'PAY/2026/09', status: 'paid', month: '09', year: 2026, totalNet: 470000, lines: [{}] },
+    ]
+    const q = buildMyWork(input({ payrollRuns })).find(x => x.id === 'payroll-approval')!
+    expect(q.items.map(i => i.title)).toEqual(['PAY/2026/10'])
+    expect(q.items[0].subtitle).toBe('3 employees · KES 480,000 net')
+    // A technician cannot approve payroll, so it is not their work.
+    expect(buildMyWork(input({ role: 'technician', payrollRuns })).map(x => x.id)).not.toContain('payroll-approval')
+  })
+
+  it('shows leave still waiting on a decision, and only that', () => {
+    const leaveRequests = [
+      { id: 'l1', ref: 'LV/1', employeeName: 'Asha Mwangi', leaveType: 'annual', days: 3, startDate: '2026-10-12', status: 'pending_hr', createdAt: '2026-10-02' },
+      { id: 'l2', ref: 'LV/2', employeeName: 'Ken Otieno', leaveType: 'sick', days: 1, startDate: '2026-10-05', status: 'approved', createdAt: '2026-10-01' },
+    ]
+    const q = buildMyWork(input({ leaveRequests })).find(x => x.id === 'leave-approval')!
+    expect(q.items.map(i => i.title)).toEqual(['Asha Mwangi'])
+    expect(q.items[0].subtitle).toBe('annual · 3 days · from 2026-10-12')
+  })
+})

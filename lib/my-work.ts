@@ -48,6 +48,10 @@ export type MyWorkInput = {
   returnOrders?: Any[]
   /** Staff expense claims — to review, and once approved, to pay. */
   expenses?: Any[]
+  /** Payroll runs waiting for approval before anyone can be paid. */
+  payrollRuns?: Any[]
+  /** Leave requests waiting on a decision (fetched for approvers only). */
+  leaveRequests?: Any[]
   /** Discount and price approvals raised from Sales. */
   approvalRequests?: Any[]
   /** CRM: the leads this person may see (from /api/leads), deals and their activities. */
@@ -143,6 +147,29 @@ export function buildMyWork(input: MyWorkInput): WorkQueue[] {
       })
     }
     out.push(queue('payments-due', 'Payments to release', 'Approved claims and supplier bills that are due', '/finance?tab=bills', toPay, 'urgent'))
+  }
+
+  if (userCan({ role }, 'approvePayroll')) {
+    const runs = (input.payrollRuns ?? []).filter(r => String(r.status) === 'pending_approval')
+    out.push(queue('payroll-approval', 'Payroll to approve', 'Nobody is paid until this is approved', '/hr?tab=payroll',
+      runs.map(r => ({
+        id: r.id,
+        title: r.ref ?? `${r.month}/${r.year}`,
+        subtitle: `${(r.lines ?? []).length} employee${(r.lines ?? []).length === 1 ? '' : 's'} · ${kes(r.totalNet)} net`,
+        href: '/hr?tab=payroll',
+        ageDays: ageDays(r.createdAt ?? `${r.year}-${String(r.month).padStart(2, '0')}-28`, now),
+      })), 'urgent'))
+  }
+  if (userCan({ role }, 'approveLeave')) {
+    const pending = (input.leaveRequests ?? []).filter(r => String(r.status) === 'pending_hr')
+    out.push(queue('leave-approval', 'Leave to decide', 'Staff waiting to know whether they can take the days', '/hr?tab=leave',
+      pending.map(r => ({
+        id: r.id,
+        title: r.employeeName ?? r.ref,
+        subtitle: `${String(r.leaveType ?? '').replace(/_/g, ' ')} · ${r.days} day${Number(r.days) === 1 ? '' : 's'} · from ${String(r.startDate ?? '').slice(0, 10)}`,
+        href: '/hr?tab=leave',
+        ageDays: ageDays(r.createdAt ?? r.requestedDate ?? r.startDate, now),
+      })), 'urgent'))
   }
 
   // ── Repairs ───────────────────────────────────────────────────────────

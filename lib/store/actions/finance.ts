@@ -29,6 +29,51 @@ import type { AppState } from '../state'
 import type { StoreDeps } from './deps'
 
 /** finance actions of the store. `store` reads the provider's current state, setters and helpers. */
+/**
+ * Who to tell when a claim moves. The submitter was always told; nobody was
+ * told the two things that actually block the money — that it is now someone
+ * else's turn to approve, and that an approved claim is waiting to be paid.
+ */
+function notifyExpenseMoved(store: StoreDeps, params: {
+  expense: Expense
+  reviewerName: string
+  reviewerId: string
+  fullyApproved: boolean
+  nextApproverRole?: string
+}) {
+  const { expense, fullyApproved, nextApproverRole } = params
+  if (fullyApproved) {
+    store.notifyUsers({
+      // The people who may release the money — the same audience the claim
+      // was raised to in the first place.
+      recipientRoles: ['director', 'finance_officer'],
+      recipients: userIdsWithRoles(store.users, ['director', 'finance_officer'], params.reviewerId),
+      type: 'expense',
+      title: `Ready to pay · ${expense.ref}`,
+      body: `${expense.description} · KES ${Number(expense.amount || 0).toLocaleString('en-KE')} — approved${expense.submittedByName ? ` for ${expense.submittedByName}` : ''} and waiting for payment.`,
+      module: 'expenses',
+      path: `?tab=review&id=${expense.id}`,
+      icon: '💸',
+      entityKey: `expense:${expense.id}:ready_to_pay`,
+      excludeUserId: params.reviewerId,
+    })
+    return
+  }
+  if (!nextApproverRole) return
+  store.notifyUsers({
+    recipientRoles: [nextApproverRole],
+    recipients: userIdsWithRoles(store.users, [nextApproverRole], params.reviewerId),
+    type: 'expense',
+    title: `Your approval · ${expense.ref}`,
+    body: `${expense.description} · KES ${Number(expense.amount || 0).toLocaleString('en-KE')} — approved by ${params.reviewerName}, now waiting for you.`,
+    module: 'expenses',
+    path: `?tab=review&id=${expense.id}`,
+    icon: '⏳',
+    entityKey: `expense:${expense.id}:awaiting:${nextApproverRole}`,
+    excludeUserId: params.reviewerId,
+  })
+}
+
 export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocatePaymentToInvoice' | 'generateReceipt' | 'getCustomerCreditBalance' | 'applyCustomerCreditToInvoice' | 'addStatementLine' | 'updateStatementLine' | 'deleteStatementLine' | 'matchStatementLine' | 'unmatchStatementLine' | 'autoMatchStatements' | 'saveBankRecon' | 'updateBankRecon' | 'updateBankAccount' | 'addBankAccount' | 'deleteBankAccount' | 'getDocumentPaymentDetails' | 'setDocumentPaymentDetails' | 'submitExpense' | 'reviewExpense' | 'payExpense' | 'reimburseExpense' | 'createDeposit' | 'addDepositPayment' | 'completeDeposit' | 'cancelDeposit' | 'createCompanyAsset' | 'updateCompanyAsset' | 'deleteCompanyAsset' | 'moveCompanyAsset' | 'setCompanyAssetCustodian' | 'setCompanyAssetStatus' | 'disposeCompanyAsset' | 'writeOffCompanyAsset' | 'runCompanyAssetDepreciation' | 'linkSerialToCompanyAsset' | 'addAccount' | 'updateAccount' | 'createManualInvoice' | 'importOpeningBalances' | 'moveInvoiceLine' | 'addInvoiceSection' | 'updateInvoice' | 'postInvoice' | 'setInvoicePaymentBlocked' | 'registerPayment' | 'reverseInvoicePayment' | 'resetInvoiceToDraft' | 'cancelInvoice' | 'deleteInvoice' | 'addAuditLog' | 'allocateDocRef'> {
   return {
     allocatePaymentToInvoice: (paymentId, invoiceId, amount) => {
@@ -428,6 +473,15 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
               excludeUserId: user.id,
             })
           }
+          if (approved) {
+            notifyExpenseMoved(store, {
+              expense: reviewedExpense,
+              reviewerName: user.name,
+              reviewerId: user.id,
+              fullyApproved,
+              nextApproverRole: nextChain.find(step => step.status === 'pending')?.role,
+            })
+          }
           if (!approved) {
             store.showToast('Expense rejected', 'error')
           } else if (fullyApproved) {
@@ -454,6 +508,11 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
             icon: approved ? '💰' : '❌',
             entityKey: `expense:${expense.id}:review`,
             excludeUserId: user.id,
+          })
+        }
+        if (approved) {
+          notifyExpenseMoved(store, {
+            expense: reviewedExpense, reviewerName: user.name, reviewerId: user.id, fullyApproved: true,
           })
         }
         store.showToast(approved ? 'Expense approved and posted' : 'Expense rejected', approved ? 'success' : 'error')
