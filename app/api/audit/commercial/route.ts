@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { hasPermission } from '@/lib/auth/authorization'
 import { appendInventoryAuditLog } from '@/lib/inventory/audit'
+import { clientIpOrNull } from '@/lib/client-ip'
 
 /**
  * Server-authored commercial audit append (P0-SEC-002).
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest) {
     details,
     userId: session.user.id,
     username: session.user.username || session.user.name,
+    ipAddress: clientIpOrNull(request.headers),
+    userAgent: request.headers.get('user-agent'),
   })
 
   return NextResponse.json({ ok: true })

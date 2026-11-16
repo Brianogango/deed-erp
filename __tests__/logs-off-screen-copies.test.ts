@@ -22,7 +22,23 @@ describe('audit log entries go to audit_logs', () => {
     mockPrisma.user.findUnique.mockResolvedValue({ id: USER })
     await appendInventoryAuditLog({ action: 'serial_edit', documentRef: 'SN-1', details: 'moved', userId: USER, username: 'ann' })
     expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
-      data: { userId: USER, action: 'serial_edit', entityType: 'document', entityKey: 'SN-1', newValues: { details: 'moved', username: 'ann' } },
+      data: {
+        userId: USER, action: 'serial_edit', entityType: 'document', entityKey: 'SN-1',
+        newValues: { details: 'moved', username: 'ann' },
+        ipAddress: null, userAgent: null,
+      },
+    })
+  })
+
+  it('keeps the address and the browser the change came from', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({ id: USER })
+    await appendInventoryAuditLog({
+      action: 'serial_edit', documentRef: 'SN-1', details: 'moved', userId: USER, username: 'ann',
+      ipAddress: '41.90.64.12', userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0',
+    })
+    expect(mockPrisma.auditLog.create.mock.calls[0][0].data).toMatchObject({
+      ipAddress: '41.90.64.12',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0',
     })
   })
 

@@ -339,6 +339,10 @@ model AuditLog {
   oldValues  Json?    @map("old_values")
   newValues  Json?    @map("new_values")
   ipAddress  String?  @map("ip_address")
+  /// The browser that made the change: operating system and browser, plus a
+  /// phone model where the browser sends one. A desktop browser never reports
+  /// the machine's make or model.
+  userAgent  String?  @map("user_agent")
   createdAt  DateTime @default(now()) @map("created_at")
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)

@@ -4528,12 +4528,14 @@ exports[`access snapshot > matches today, role by role 1`] = `
   },
   "repair_tech": {
     "actions": [
+      "appendAuditLog",
       "manageExpenses",
       "performReconfigInstallation",
       "performReconfigRemoval",
       "viewReconfiguration",
     ],
     "can": [
+      "appendAuditLog",
       "manageExpenses",
       "performReconfigInstallation",
       "performReconfigRemoval",
@@ -4572,6 +4574,7 @@ exports[`access snapshot > matches today, role by role 1`] = `
       "accounting.partner_ledger",
       "accounting.refunds",
       "accounting.reports",
+      "appendAuditLog",
       "inventory.adjustments",
       "inventory.catalog",
       "inventory.movements",
@@ -6364,12 +6367,14 @@ exports[`access snapshot > matches today, role by role 1`] = `
   },
   "technician": {
     "actions": [
+      "appendAuditLog",
       "manageExpenses",
       "performReconfigInstallation",
       "performReconfigRemoval",
       "viewReconfiguration",
     ],
     "can": [
+      "appendAuditLog",
       "manageExpenses",
       "performReconfigInstallation",
       "performReconfigRemoval",
@@ -6408,6 +6413,7 @@ exports[`access snapshot > matches today, role by role 1`] = `
       "accounting.partner_ledger",
       "accounting.refunds",
       "accounting.reports",
+      "appendAuditLog",
       "inventory.adjustments",
       "inventory.catalog",
       "inventory.movements",

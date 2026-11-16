@@ -14,6 +14,10 @@ export async function appendInventoryAuditLog(entry: {
   details: string
   userId?: string | null
   username?: string | null
+  /** The address the change came from, as nginx vouched for it. */
+  ipAddress?: string | null
+  /** The raw browser string; read back through lib/user-agent. */
+  userAgent?: string | null
 }) {
   const userId = entry.userId && /^[0-9a-f-]{36}$/i.test(entry.userId)
     ? (await prisma.user.findUnique({ where: { id: entry.userId }, select: { id: true } }))?.id ?? null
@@ -25,6 +29,8 @@ export async function appendInventoryAuditLog(entry: {
       entityType: 'document',
       entityKey: String(entry.documentRef).slice(0, 120) || null,
       newValues: { details: entry.details, username: entry.username || 'system' },
+      ipAddress: entry.ipAddress ?? null,
+      userAgent: entry.userAgent?.slice(0, 500) ?? null,
     },
   })
 }

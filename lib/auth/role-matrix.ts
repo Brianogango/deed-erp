@@ -51,8 +51,11 @@ export const ROLE_MATRIX = {
   // Request sales approvals (includes sales_rep so requests persist via store sync).
   requestSalesApproval:      ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'kilimall_officer', 'technical_lead'] as UserRole[],
   manageMasterData:          ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  // Append commercial/finance audit rows (not director-only; reading remains director).
-  appendAuditLog:            ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],
+  // Append commercial/finance audit rows (not director-only; reading remains
+  // director). Technicians are included: they do the diagnosis, the work and
+  // the QC on a repair, and without this their actions were silently dropped
+  // from the job log.
+  appendAuditLog:            ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'inventory_officer', 'technical_lead', 'technician', 'kilimall_officer'] as UserRole[],
   viewAuditLog:              ['director'] as UserRole[],
   // Decide what each role may do (the role editor). Never held by a custom role.
   manageRoles:               ['director'] as UserRole[],

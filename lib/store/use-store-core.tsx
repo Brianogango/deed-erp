@@ -1148,7 +1148,11 @@ export function useStoreCore({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, documentRef, details }),
-    }).catch(() => { /* offline — local mirror remains until sync */ })
+    })
+      // A refused append means the trail is missing this action, which is
+      // worse than noisy: say so rather than drop it in silence.
+      .then(res => { if (!res.ok) console.warn(`Audit entry not recorded (${res.status}): ${action} ${documentRef}`) })
+      .catch(() => { /* offline — local mirror remains until sync */ })
   }
 
   /**
