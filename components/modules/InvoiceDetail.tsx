@@ -94,9 +94,11 @@ export default function InvoiceDetail() {
     reverseInvoicePayment,
     setInvoicePaymentBlocked,
     resetInvoiceToDraft,
+    restoreCancelledInvoice,
     cancelInvoice,
     applyCustomerCreditToInvoice,
     getCustomerCreditBalance,
+    customerCredits,
     deleteInvoice,
     postInvoice,
     updateInvoice,
@@ -146,6 +148,7 @@ export default function InvoiceDetail() {
   const [showDelete, setShowDelete] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
   const [showResetDraft, setShowResetDraft] = useState(false)
+  const [showRestore, setShowRestore] = useState(false)
   const [showOrc, setShowOrc] = useState(false)
   const [showDeliveryModal, setShowDeliveryModal] = useState(false)
   const [sendingInvoice, setSendingInvoice] = useState(false)
@@ -662,6 +665,12 @@ export default function InvoiceDetail() {
             }
           : null
 
+  // The credit note this document raised when it was cancelled, if any — named
+  // in the restore confirmation so nobody is surprised by it being voided.
+  const creditFromThisInvoice = (customerCredits ?? []).find(
+    (c: { sourceInvoiceId?: string; status?: string }) => c.sourceInvoiceId === invoice.id && c.status !== 'void',
+  )
+
   const moreActions = [
     {
       id: 'download',
@@ -692,6 +701,12 @@ export default function InvoiceDetail() {
       label: 'Reset to Draft',
       onClick: () => setShowResetDraft(true),
       hidden: !(invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canCancelOrReset),
+    },
+    {
+      id: 'restore',
+      label: `Restore ${docLabel.toLowerCase()}`,
+      onClick: () => setShowRestore(true),
+      hidden: !(invoice.status === 'cancelled' && canCancelOrReset),
     },
     {
       id: 'cancel',
@@ -1693,6 +1708,22 @@ export default function InvoiceDetail() {
             setShowResetDraft(false)
           }}
           onCancel={() => setShowResetDraft(false)}
+        />
+      )}
+
+      {/* Restore from cancelled */}
+      {showRestore && (
+        <Confirm
+          message={`Bring this cancelled ${docLabel.toLowerCase()} back as a draft? It returns out of the books — check it, then confirm it to post it again.${
+            creditFromThisInvoice ? ` Credit note ${creditFromThisInvoice.ref} will be voided with it.` : ''
+          }`}
+          confirmLabel={`Restore ${docLabel.toLowerCase()}`}
+          confirmColor="bg-emerald-600 hover:bg-emerald-700"
+          onConfirm={() => {
+            restoreCancelledInvoice(invoice.id)
+            setShowRestore(false)
+          }}
+          onCancel={() => setShowRestore(false)}
         />
       )}
 

@@ -1,6 +1,7 @@
 import { canManageFinance, canManageFullFinanceAction } from '../permissions'
 import { sync } from '../sync'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
+import { restoreCancelledInvoiceDecision, restoreSummary } from '@/lib/finance/restore-cancelled-invoice'
 import { canApplyCustomerCredit, canPostOrPayCustomerInvoice, DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES, canPayOwnPostedInvoice, paymentJournalRef, canCancelOrResetInvoice } from '@/lib/finance-controls'
 import { now, uid } from '../ids'
 import type { InvoicePayment, Invoice, BankRecon, Deposit, DepositPayment, DepositStatus, InvoiceLine, JournalEntry, CustomerCredit } from '../finance'
@@ -74,7 +75,7 @@ function notifyExpenseMoved(store: StoreDeps, params: {
   })
 }
 
-export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocatePaymentToInvoice' | 'generateReceipt' | 'getCustomerCreditBalance' | 'applyCustomerCreditToInvoice' | 'addStatementLine' | 'updateStatementLine' | 'deleteStatementLine' | 'matchStatementLine' | 'unmatchStatementLine' | 'autoMatchStatements' | 'saveBankRecon' | 'updateBankRecon' | 'updateBankAccount' | 'addBankAccount' | 'deleteBankAccount' | 'getDocumentPaymentDetails' | 'setDocumentPaymentDetails' | 'submitExpense' | 'reviewExpense' | 'payExpense' | 'reimburseExpense' | 'createDeposit' | 'addDepositPayment' | 'completeDeposit' | 'cancelDeposit' | 'createCompanyAsset' | 'updateCompanyAsset' | 'deleteCompanyAsset' | 'moveCompanyAsset' | 'setCompanyAssetCustodian' | 'setCompanyAssetStatus' | 'disposeCompanyAsset' | 'writeOffCompanyAsset' | 'runCompanyAssetDepreciation' | 'linkSerialToCompanyAsset' | 'addAccount' | 'updateAccount' | 'createManualInvoice' | 'importOpeningBalances' | 'moveInvoiceLine' | 'addInvoiceSection' | 'updateInvoice' | 'postInvoice' | 'setInvoicePaymentBlocked' | 'registerPayment' | 'reverseInvoicePayment' | 'resetInvoiceToDraft' | 'cancelInvoice' | 'deleteInvoice' | 'addAuditLog' | 'allocateDocRef'> {
+export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocatePaymentToInvoice' | 'generateReceipt' | 'getCustomerCreditBalance' | 'applyCustomerCreditToInvoice' | 'addStatementLine' | 'updateStatementLine' | 'deleteStatementLine' | 'matchStatementLine' | 'unmatchStatementLine' | 'autoMatchStatements' | 'saveBankRecon' | 'updateBankRecon' | 'updateBankAccount' | 'addBankAccount' | 'deleteBankAccount' | 'getDocumentPaymentDetails' | 'setDocumentPaymentDetails' | 'submitExpense' | 'reviewExpense' | 'payExpense' | 'reimburseExpense' | 'createDeposit' | 'addDepositPayment' | 'completeDeposit' | 'cancelDeposit' | 'createCompanyAsset' | 'updateCompanyAsset' | 'deleteCompanyAsset' | 'moveCompanyAsset' | 'setCompanyAssetCustodian' | 'setCompanyAssetStatus' | 'disposeCompanyAsset' | 'writeOffCompanyAsset' | 'runCompanyAssetDepreciation' | 'linkSerialToCompanyAsset' | 'addAccount' | 'updateAccount' | 'createManualInvoice' | 'importOpeningBalances' | 'moveInvoiceLine' | 'addInvoiceSection' | 'updateInvoice' | 'postInvoice' | 'setInvoicePaymentBlocked' | 'registerPayment' | 'reverseInvoicePayment' | 'resetInvoiceToDraft' | 'restoreCancelledInvoice' | 'cancelInvoice' | 'deleteInvoice' | 'addAuditLog' | 'allocateDocRef'> {
   return {
     allocatePaymentToInvoice: (paymentId, invoiceId, amount) => {
         if (!canManageFinance(store.currentUser())) {
@@ -1787,6 +1788,87 @@ export function createFinanceActions(store: StoreDeps): Pick<AppState, 'allocate
               store.setJournalEntries(prev => prev.filter(j => !reversals.some(r => r.id === j.id)))
             }
             store.showToast(`Could not reset ${inv.type === 'vendor_bill' ? 'bill' : 'invoice'} to draft — check your connection`, 'error')
+          }
+        })()
+      },
+
+    restoreCancelledInvoice: (id) => {
+        const actor = store.currentUser()
+        const inv = store.invRef.current.find(i => i.id === id)
+        if (!inv) return
+        const decision = restoreCancelledInvoiceDecision({
+          invoice: inv as never,
+          credits: store.customerCredits as never,
+          allowed: canCancelOrResetInvoice(actor?.role),
+        })
+        if (!decision.ok) { store.showToast(decision.error, 'error'); return }
+
+        const noun = inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'
+        const creditToVoid = decision.creditToVoid
+        // Back as a draft: the cancellation's reversal stands, and confirming
+        // it again posts a fresh journal. Payments cannot ride along — the
+        // decision above refuses a paid document.
+        const draft: Invoice = {
+          ...inv,
+          status: 'draft',
+          amountPaid: 0,
+          payments: [],
+          notes: `${inv.notes || ''}\nRestored from cancelled by ${actor?.name ?? 'Finance'}${creditToVoid ? `; credit note ${creditToVoid.ref} voided.` : '.'}`.trim(),
+        }
+        const previousCredits = store.customerCredits
+        const previousJournals = store.journalEntries
+
+        // A credit raised by the cancellation is taken back with it, and its
+        // journal reversed, or the customer would keep money for a document
+        // that is live again.
+        let creditReversal: JournalEntry | null = null
+        if (creditToVoid) {
+          const creditJournal = store.journalEntries.find(j => j.ref === `JRN/${creditToVoid.ref}` || j.ref.endsWith(creditToVoid.ref))
+          if (creditJournal && !store.journalEntries.some(j => j.ref === `REV/${creditJournal.ref}`)) {
+            creditReversal = buildReversalJournal(creditJournal, inv.ref, `${noun} restored from cancelled`)
+            store.setJournalEntries(prev => [creditReversal!, ...prev])
+          }
+          store.setCustomerCredits(prev => prev.map(c => c.id === creditToVoid.id
+            ? { ...c, status: 'void' as const, balance: 0, notes: `${c.notes || ''}\nVoided when ${inv.ref} was restored.`.trim() }
+            : c))
+        }
+        store.setInvoices(prev => {
+          const next = prev.map(i => i.id === id ? draft : i)
+          store.invRef.current = next
+          return next
+        })
+
+        void (async () => {
+          const undo = () => {
+            store.setInvoices(prev => {
+              const next = prev.map(i => i.id === id ? inv : i)
+              store.invRef.current = next
+              return next
+            })
+            store.setCustomerCredits(previousCredits)
+            store.setJournalEntries(previousJournals)
+          }
+          try {
+            const res = await fetch(`/api/invoices/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...draft, restoreFromCancelled: true }),
+            })
+            if (!res.ok) {
+              const data = await res.json().catch(() => null) as { error?: string } | null
+              undo()
+              store.showToast(data?.error || `Could not restore ${noun.toLowerCase()} ${inv.ref}`, 'error')
+              return
+            }
+            store.addAuditLog(
+              'restore_cancelled_invoice',
+              inv.ref,
+              `${noun} ${inv.ref} restored from cancelled to draft${creditToVoid ? ` — credit note ${creditToVoid.ref} voided` : ''}`,
+            )
+            store.showToast(restoreSummary(inv as never, creditToVoid))
+          } catch {
+            undo()
+            store.showToast(`Could not restore ${noun.toLowerCase()} ${inv.ref} — check your connection`, 'error')
           }
         })()
       },

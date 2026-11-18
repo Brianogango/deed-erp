@@ -18,6 +18,8 @@ import { recordInvoiceTax } from '@/lib/accounting/invoice-tax.server'
 import { allowedOnlyAsTechnician, canReadInvoiceRow } from '@/lib/auth/authorization'
 import { invoiceEditChanges } from '@/lib/finance/invoice-history'
 import { INVOICE_STATUS_MAP } from '@/lib/api-shared/invoices'
+import { restoreFromCancelledGuard } from '@/lib/finance/restore-cancelled-invoice'
+import { canCancelOrResetInvoice } from '@/lib/finance-controls'
 
 const VALID_STATUSES = new Set([
   'draft', 'pending_approval', 'approved', 'rejected', 'invoiced',
@@ -187,6 +189,17 @@ export async function PUT(request: Request, { params }: { params: RouteParams<{ 
 
     if (allowedOnlyAsTechnician(actor, 'repair.invoice.edit') && !before.repairId) {
       return NextResponse.json({ error: 'Technicians may only update invoices linked to an actual Repair record' }, { status: 403 })
+    }
+
+    // A cancelled document comes back only when someone says so.
+    const restoreGuard = restoreFromCancelledGuard({
+      beforeStatus: String(before.status),
+      nextStatus: typeof body.status === 'string' ? body.status : undefined,
+      restoreRequested: body.restoreFromCancelled === true,
+      allowed: canCancelOrResetInvoice(actor.role),
+    })
+    if (!restoreGuard.ok) {
+      return NextResponse.json({ error: restoreGuard.error }, { status: restoreGuard.status })
     }
 
     const beforeIsPosted = PRISMA_POSTED_INVOICE_STATUSES.has(String(before.status))

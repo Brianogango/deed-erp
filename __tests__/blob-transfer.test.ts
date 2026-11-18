@@ -162,7 +162,7 @@ describe('POST /api/admin/blob-transfer', () => {
  * to go and fix.
  */
 describe('a serial the serials table cannot hold', () => {
-  const serials = (rows: unknown[]) => mirrorKnownDomain('deed_serials', JSON.stringify(rows), null)
+  const serials = async (rows: unknown[]) => (await mirrorKnownDomain('deed_serials', JSON.stringify(rows), null))!
 
   it('names the serial whose product is missing', async () => {
     mockPrisma.product.findMany.mockResolvedValue([])

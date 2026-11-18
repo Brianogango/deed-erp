@@ -423,6 +423,8 @@ export interface AppState {
   /** Reverse a payment registered by mistake; the invoice owes the money again. */
   reverseInvoicePayment: (invoiceId: string, paymentId: string, reason: string) => Promise<boolean>
   resetInvoiceToDraft: (id: string) => void
+  /** Bring a cancelled invoice or bill back as a draft, to check and confirm again. */
+  restoreCancelledInvoice: (id: string) => void
   cancelInvoice: (id: string, forcedCreditRef?: string) => void
   deleteInvoice: (id: string) => void
 
@@ -1020,6 +1022,7 @@ export type FinanceStoreState = Pick<AppState,
   | 'reimburseExpense'
   | 'removePOLine'
   | 'resetInvoiceToDraft'
+  | 'restoreCancelledInvoice'
   | 'returnOutsourceJob'
   | 'revertPOToDraft'
   | 'reviewExpense'
