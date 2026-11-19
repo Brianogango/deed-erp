@@ -267,7 +267,7 @@ function ContactsInner() {
       || c.phone.includes(q)
       || (c.mobile ?? '').includes(q)
       || (c.vatNumber ?? '').toLowerCase().includes(q)
-      || (c.idNumber ?? '').includes(q)
+      || (c.idNumber ?? '').toLowerCase().includes(q)
       || (c.city ?? '').toLowerCase().includes(q)
     const matchTab =
       tab === 'all'         ? true :

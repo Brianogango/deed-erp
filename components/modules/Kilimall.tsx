@@ -612,7 +612,9 @@ function KilimallContent() {
     if (useSubstitution && !substituteProductId) {
       showToast('Select the product to ship as a substitute', 'error'); return
     }
-    const serial = serials.find(s => s.serial === dispatchSerial.trim() || s.id === dispatchSerial.trim())
+    const typedSerial = dispatchSerial.trim()
+    // Serials are matched whatever their capitals: "5cg123" finds "5CG123".
+    const serial = serials.find(s => s.serial.toLowerCase() === typedSerial.toLowerCase() || s.id === typedSerial)
     if (!serial) { showToast('Serial not found in inventory', 'error'); return }
     if (dispatching) return
     setDispatching(true)

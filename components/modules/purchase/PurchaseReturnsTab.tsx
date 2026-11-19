@@ -39,10 +39,10 @@ export default function PurchaseReturnsTab() {
     if (retFilterVendor !== 'all' && r.vendorId !== retFilterVendor) return false
     if (!isWithinRange(r.date, retPeriod)) return false
     if (retSearchSerial.trim()) {
-      const q = retSearchSerial.trim().toUpperCase()
+      const q = retSearchSerial.trim().toLowerCase()
       const hasSerial = r.lines.some(l => l.serialIds.some(sid => {
         const sn = serials.find(s => s.id === sid)
-        return sn?.serial.includes(q)
+        return String(sn?.serial ?? '').toLowerCase().includes(q)
       }))
       if (!hasSerial) return false
     }
