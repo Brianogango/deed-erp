@@ -102,6 +102,7 @@ interface PurchaseCtxValue {
   scanFileRef: React.RefObject<HTMLInputElement>
   // GRN
   activeReceiptId: string | null; setActiveReceiptId: (id: string | null) => void
+  billRequestPoId: string | null; setBillRequestPoId: (id: string | null) => void
   receiptOrigin: ReceiptOrigin
   openReceiptDetail: (receiptId: string, origin?: ReceiptOrigin) => void
   closeReceiptDetail: (to?: ReceiptOrigin) => void
