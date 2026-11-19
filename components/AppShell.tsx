@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
 import { AppProvider, useShellStore, User } from '@/lib/store'
@@ -9,6 +9,7 @@ import { markRouteWarmed } from '@/lib/warm-route'
 import { Toast } from '@/components/ui'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
+import MobileTabBar from '@/components/layout/MobileTabBar'
 import JarvisPanel from '@/components/jarvis/JarvisPanel'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { markRouteDataReady, useRouteDataReady } from '@/lib/route-data-ready'
@@ -745,6 +746,11 @@ function AppContent({ children }: { children: React.ReactNode }) {
             </ModuleRenderBoundary>
           </div>
         </main>
+
+        {/* Phone tab bar: under the content (not floating over it). */}
+        <Suspense fallback={null}>
+          <MobileTabBar />
+        </Suspense>
       </div>
 
       {/* Toast Notifications */}
