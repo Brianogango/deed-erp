@@ -2690,7 +2690,7 @@ function SalesContent() {
                       )}
 
                       {activeOrder.status === 'sale' && (
-                        <div className="sp-banner-ok" role="status">
+                        <div className="sp-banner-ok sales-same-document-banner" role="status">
                           <span aria-hidden>✓</span>
                           <div>
                             <strong>Same document — now in Sales Order stage</strong>
@@ -2806,19 +2806,25 @@ function SalesContent() {
                           <SalesDocField label="Currency"><input readOnly value="KES" /></SalesDocField>
                           {activeOrder.status === 'sale' && (
                             <SalesDocField label="Related">
-                              <div style={{ fontSize: 12.5, paddingTop: 4 }}>
-                                Deliveries:{' '}
-                                {visibleDeliveries.length
-                                  ? visibleDeliveries.map(d => (
-                                      <button key={d.id} type="button" className="sp-linkish" style={{ marginRight: 6 }} onClick={() => void openDeliveryView(d.id)}>{d.ref}</button>
-                                    ))
-                                  : '—'}
-                                {' · '}Invoices:{' '}
-                                {activeInvoices.length
-                                  ? activeInvoices.map(inv => (
-                                      <button key={inv.id} type="button" className="sp-linkish" style={{ marginRight: 6 }} onClick={() => router.push('/finance?tab=invoices')}>{inv.ref}</button>
-                                    ))
-                                  : 'None yet'}
+                              {/* One line each: run together as one sentence they wrapped
+                                  mid-list on a phone, the label stranded from its links. */}
+                              <div className="flex flex-col gap-1 pt-1 text-[12.5px]">
+                                <span className="flex flex-wrap items-baseline gap-x-1.5">
+                                  <span className="text-[var(--text-3)]">Deliveries</span>
+                                  {visibleDeliveries.length
+                                    ? visibleDeliveries.map(d => (
+                                        <button key={d.id} type="button" className="sp-linkish" onClick={() => void openDeliveryView(d.id)}>{d.ref}</button>
+                                      ))
+                                    : <span>—</span>}
+                                </span>
+                                <span className="flex flex-wrap items-baseline gap-x-1.5">
+                                  <span className="text-[var(--text-3)]">Invoices</span>
+                                  {activeInvoices.length
+                                    ? activeInvoices.map(inv => (
+                                        <button key={inv.id} type="button" className="sp-linkish" onClick={() => router.push(financeInvoicePath(inv.id))}>{inv.ref}</button>
+                                      ))
+                                    : <span>None yet</span>}
+                                </span>
                               </div>
                             </SalesDocField>
                           )}
@@ -2938,7 +2944,10 @@ function SalesContent() {
                                           </div>
                                         )}
                                       </td>
-                                      <td data-col="description">{l.description || '—'}</td>
+                                      <td
+                                        data-col="description"
+                                        data-same={!isEditing && (!l.description || String(l.description).trim() === String(l.productName ?? '').trim()) ? '1' : undefined}
+                                      >{l.description || '—'}</td>
                                       <td className="num" data-col="qty">
                                         {isEditing ? <input type="number" aria-label="Line item quantity" min={1} value={editLineQty} onChange={e => setEditLineQty(e.target.value)} className="w-14 text-center" />
                                         : l.qty}
@@ -2968,7 +2977,7 @@ function SalesContent() {
                                         {isEditing ? <input type="number" aria-label="Line item unit price" min={0} value={editLinePrice} onChange={e => setEditLinePrice(e.target.value)} className="w-20 text-right" />
                                         : salesKes(l.unitPrice)}
                                       </td>
-                                      <td className="num" data-col="discount">
+                                      <td className="num" data-col="discount" data-zero={!isEditing && !Number(l.discount ?? l.discountPercent ?? 0) ? '1' : undefined}>
                                         {isEditing ? <input type="number" aria-label="Line item discount percentage" min={0} max={100} value={editLineDiscount} onChange={e => setEditLineDiscount(e.target.value)} className="w-14 text-right" />
                                         : `${l.discount ?? l.discountPercent ?? 0}%`}
                                       </td>

@@ -69,16 +69,12 @@
   .repair-detail .repair-detail__job-trail {
     padding: 10px 12px 0;
   }
+  /* The steps wrap side by side (each was a full-width row: five rows for
+     one job); only the next step takes its own line. */
   .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] {
-    align-items: stretch;
-    gap: 8px;
-  }
-  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > span {
-    width: 100%;
-    flex: 1 1 100%;
-  }
-  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > span > a {
-    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 10px;
   }
   .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > a:last-child {
     width: 100%;
@@ -103,10 +99,33 @@
     flex: 0 0 auto;
     align-self: stretch;
   }
-  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] {
-    flex-direction: column;
+  /* On a phone the main action is not shown in this row, so it held nothing
+     but the record menu: a full-width band with its own divider for one
+     button. The menu sits in the header's corner instead. */
+  .repair-detail .repair-detail__header-row:has(.repair-detail__primary-action.hidden) {
+    position: relative !important;
   }
-  .repair-detail .repair-detail__job-trail nav[aria-label="Job trail"] > span > span[aria-hidden="true"] {
-    display: none;
+  .repair-detail .repair-detail__actions:has(.repair-detail__primary-action.hidden) {
+    position: absolute !important;
+    inset: 0.375rem 0 auto auto !important;
+    width: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    z-index: 2 !important;
+  }
+  .repair-detail .repair-detail__actions:has(.repair-detail__primary-action.hidden) .repair-detail__action-controls {
+    width: auto !important;
+  }
+  /* Room beside the title only: the reference and chips below it use the
+     full width. */
+  .repair-detail .repair-detail__header-row:has(.repair-detail__primary-action.hidden) .repair-detail__identity-content > h2 {
+    margin-right: 5.25rem;
+  }
+  .repair-detail .repair-detail__actions:has(.repair-detail__primary-action.hidden) .repair-detail__more-action button {
+    min-height: 2.25rem !important;
+    height: 2.25rem !important;
+    padding: 0 0.75rem !important;
   }
 }

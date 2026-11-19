@@ -36,8 +36,30 @@ export function WorkflowStageBar({
   const wrapped = layout === 'wrap'
 
   return (
-    <section className={`rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-3 sm:px-4 ${className}`.trim()} aria-label="Workflow progress">
-      <div className={wrapped ? 'overflow-visible' : 'overflow-x-auto pb-1'}>
+    <section className={`rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-2.5 sm:px-4 sm:py-3 ${className}`.trim()} aria-label="Workflow progress">
+      {/* Phone: where the record is, as one line and a segmented bar. The full
+          row of steps scrolled sideways there, hiding the later steps and
+          cutting labels in half. */}
+      <div className="sm:hidden">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="min-w-0 truncate text-[12px] font-semibold text-[var(--text-1)]">
+            <span className="font-medium text-[var(--text-3)]">Step {currentIndex + 1} of {stages.length} · </span>
+            {stages[currentIndex]?.label}
+          </p>
+          {stages[currentIndex + 1] && (
+            <p className="shrink-0 text-[11px] text-[var(--text-3)]">Next: {stages[currentIndex + 1].label}</p>
+          )}
+        </div>
+        <div className="mt-2 flex gap-1" aria-hidden="true">
+          {stages.map((stage, index) => (
+            <span
+              key={stage.id}
+              className={`h-1.5 flex-1 rounded-full ${index < currentIndex ? 'bg-[var(--success)]' : index === currentIndex ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`}
+            />
+          ))}
+        </div>
+      </div>
+      <div className={`hidden sm:block ${wrapped ? 'overflow-visible' : 'overflow-x-auto pb-1'}`}>
         <ol
           className={wrapped
             ? 'grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7'
