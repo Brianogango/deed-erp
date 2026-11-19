@@ -38,6 +38,7 @@ import { DocumentLayoutConfigurator } from './settings/DocumentLayoutConfigurato
 import { canonicalRole } from '@/lib/auth/roles'
 import { userCan } from '@/lib/auth/can'
 import { isDirector } from '@/lib/auth/roles'
+import { resolveBankMpesa } from '@/lib/document-payment-details'
 type Section =
   | 'general' | 'document_layout' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
@@ -194,7 +195,7 @@ export default function Settings() {
     setSectionValue(next, opts)
   }, [setSectionValue])
 
-  const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: '', openingBalance: '', openingDate: '' })
+  const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: '', openingBalance: '', openingDate: '', mpesaPaybill: '', mpesaAccount: '' })
   const [editingBankId, setEditingBankId] = useState<string | null>(null)
   const [showBankModal, setShowBankModal] = useState(false)
 
@@ -290,7 +291,7 @@ export default function Settings() {
       showToast('Only Finance or the Director can manage bank accounts.', 'error')
       return
     }
-    setBankForm({ name: '', bankName: '', accountNo: '', currency: '', openingBalance: '', openingDate: '' })
+    setBankForm({ name: '', bankName: '', accountNo: '', currency: '', openingBalance: '', openingDate: '', mpesaPaybill: '', mpesaAccount: '' })
     setEditingBankId(null); setShowBankModal(true)
   }
   const openEditBank = (id: string) => {
@@ -300,7 +301,10 @@ export default function Settings() {
     }
     const a = bankAccounts.find(b => b.id === id)
     if (!a) return
-    setBankForm({ name: a.name, bankName: a.bankName, accountNo: a.accountNo, currency: a.currency, openingBalance: String(a.openingBalance), openingDate: a.openingDate })
+    // Start from the Paybill the documents print today — saved on the bank, or
+    // the standard one for that bank — so what is edited is what customers see.
+    const mpesa = resolveBankMpesa(a, companySettings)
+    setBankForm({ name: a.name, bankName: a.bankName, accountNo: a.accountNo, currency: a.currency, openingBalance: String(a.openingBalance), openingDate: a.openingDate, mpesaPaybill: mpesa?.paybill ?? '', mpesaAccount: mpesa?.account ?? '' })
     setEditingBankId(id); setShowBankModal(true)
   }
   const saveBank = () => {
@@ -330,6 +334,8 @@ export default function Settings() {
       accountNo: bankForm.accountNo.trim(),
       openingBalance,
       openingDate: bankForm.openingDate,
+      mpesaPaybill: bankForm.mpesaPaybill.replace(/\s+/g, ''),
+      mpesaAccount: bankForm.mpesaAccount.replace(/\s+/g, ''),
     }
     if (editingBankId) updateBankAccount(editingBankId, data)
     else addBankAccount({ ...data, currency: bankForm.currency, active: true })
@@ -720,8 +726,9 @@ export default function Settings() {
                   <Field label="M-Pesa Account"><Input value={companySettings.mpesaAccount} onChange={v => updateCompanySettings({ mpesaAccount: v })} /></Field>
                   <p className="sm:col-span-2 text-[11px] text-t3">
                     STK prompts on POS and invoices use Daraja keys on the server
-                    (MPESA_CONSUMER_KEY, MPESA_PASSKEY, MPESA_SHORTCODE). The paybill
-                    above is what prints on documents.
+                    (MPESA_CONSUMER_KEY, MPESA_PASSKEY, MPESA_SHORTCODE). The Paybill
+                    printed on invoices and quotations belongs to the bank chosen for
+                    the document — change it on that bank under Bank Accounts below.
                   </p>
                   <div className="sm:col-span-2">
                     <Field label="Invoice Footer"><Textarea value={companySettings.invoiceFooter} onChange={v => updateCompanySettings({ invoiceFooter: v })} /></Field>
@@ -805,6 +812,7 @@ export default function Settings() {
                   { key: 'name', label: 'Account name', priority: 1, width: '1.4fr', render: a => <span className="font-semibold text-gray-900">{a.name}</span>, exportValue: a => a.name },
                   { key: 'bank', label: 'Bank', priority: 2, width: '1.3fr', render: a => <span className="text-[11px] text-gray-500">{a.bankName}</span>, exportValue: a => a.bankName },
                   { key: 'accountNo', label: 'Account no', priority: 2, width: '1.1fr', render: a => <span className="font-mono text-[11px] text-gray-500">{a.accountNo}</span>, exportValue: a => a.accountNo },
+                  { key: 'mpesa', label: 'M-Pesa Paybill', priority: 3, width: '1.1fr', render: a => { const m = resolveBankMpesa(a, companySettings); return <span className="font-mono text-[11px] text-gray-500">{m ? `${m.paybill}${m.account ? ` · ${m.account}` : ''}` : '—'}</span> }, exportValue: a => { const m = resolveBankMpesa(a, companySettings); return m ? `${m.paybill} ${m.account}`.trim() : '' } },
                   { key: 'currency', label: 'Currency', priority: 3, width: '0.5fr', render: a => <span className="text-[11px] text-gray-500">{a.currency}</span>, exportValue: a => a.currency },
                   { key: 'balance', label: 'Opening bal', align: 'right' as const, priority: 1, width: '1fr', render: a => <span className="font-mono text-[12px] font-semibold text-gray-900">{fmtKes(a.openingBalance)}</span>, exportValue: a => a.openingBalance },
                   { key: 'status', label: 'Status', priority: 1, width: '0.6fr', render: a => <Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} />, accessor: a => a.active ? 'Active' : 'Inactive', exportValue: a => a.active ? 'Active' : 'Inactive' },
@@ -1434,6 +1442,10 @@ export default function Settings() {
             <Field label="Opening Date" required><Input type="date" value={bankForm.openingDate} onChange={v => setBankForm(p => ({ ...p, openingDate: v }))} /></Field>
           </div>
           <Field label="Opening Balance (KES)" required hint="Enter 0 if the account opens empty."><Input type="number" value={bankForm.openingBalance} onChange={v => setBankForm(p => ({ ...p, openingBalance: v }))} /></Field>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="M-Pesa Paybill" hint="Printed under M-PESA on documents paid into this bank."><Input value={bankForm.mpesaPaybill} onChange={v => setBankForm(p => ({ ...p, mpesaPaybill: v }))} placeholder="e.g. 303030" /></Field>
+            <Field label="M-Pesa Account Number"><Input value={bankForm.mpesaAccount} onChange={v => setBankForm(p => ({ ...p, mpesaAccount: v }))} placeholder="e.g. 2043953071" /></Field>
+          </div>
           <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowBankModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={saveBank}>
