@@ -318,7 +318,9 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
                 className="dt-toolbar-search"
               />
             )}
-            <div className={`dt-toolbar-mobile-actions ${!hasFilterSurface ? 'is-single' : ''}`.trim()}>
+            {/* With no search and no filters the menu is the only control: it
+                sits right-aligned at its own size, not as a full-width bar. */}
+            <div className={`dt-toolbar-mobile-actions ${!hasFilterSurface ? 'is-single' : ''} ${props.hideSearch && !hasFilterSurface ? 'is-menu-only' : ''}`.trim()}>
               {hasFilterSurface && (
                 <button
                   type="button"

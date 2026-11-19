@@ -27,7 +27,9 @@ export function RecordPager({ currentId, onOpen }: { currentId: string | null | 
   if (!pager) return null
   const btn = 'inline-flex h-7 w-7 items-center justify-center rounded-md border text-sm text-[var(--text-2)] hover:bg-[var(--bg-surface)]'
   return (
-    <div className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-3)]" aria-label="Record pager">
+    // Hidden on phones: squeezed beside the back button it overlapped the
+    // record's reference, and Back already returns to the list there.
+    <div className="hidden items-center gap-1.5 text-[11px] text-[var(--text-3)] sm:inline-flex" aria-label="Record pager">
       <span className="tabular-nums">{pager.position} / {pager.total}</span>
       <button type="button" className={btn} style={{ borderColor: 'var(--border-lt)' }} onClick={() => onOpen(pager.prevId)} aria-label="Previous record" title="Previous (Alt+←)">‹</button>
       <button type="button" className={btn} style={{ borderColor: 'var(--border-lt)' }} onClick={() => onOpen(pager.nextId)} aria-label="Next record" title="Next (Alt+→)">›</button>

@@ -308,6 +308,23 @@ export default function HRLeaveTab() {
 
   type BalanceRow = typeof balanceRows[number]
 
+  // Phone view: one card per person with every leave type as a chip. The
+  // table's own phone cards gave each person one tall card per leave type —
+  // six screens of cards for a single employee.
+  const [balanceSearch, setBalanceSearch] = useState('')
+  const balanceAvailable = (bal: BalanceRow) => bal.entitlement + bal.carryForward - bal.used - bal.pending
+  const balancesByPerson = (() => {
+    const q = balanceSearch.trim().toLowerCase()
+    const groups = new Map<string, { name: string; rows: BalanceRow[] }>()
+    for (const bal of balanceRows) {
+      if (q && !bal.employeeName.toLowerCase().includes(q)) continue
+      const g = groups.get(bal.employeeId) ?? { name: bal.employeeName, rows: [] }
+      g.rows.push(bal)
+      groups.set(bal.employeeId, g)
+    }
+    return [...groups.entries()]
+  })()
+
   const balanceColumns: ColumnDef<BalanceRow>[] = [
     ...(canViewTeamHR ? [{
       key: 'employee', label: 'Employee', priority: 1 as const, width: '150px',
@@ -423,15 +440,56 @@ export default function HRLeaveTab() {
             ? leaveBalances.filter(b => b.year === new Date().getFullYear()).length
             : myLeaveBalances.length}
         />
-        <DataTable
-          tableId="hr_leave_balances"
-          columns={balanceColumns}
-          rows={balanceRows}
-          rowKey={bal => bal.id}
-          emptyMessage="No leave balances found"
-          exportTitle="Leave Balances"
-          exportFilename="leave-balances"
-        />
+        <div className="md:hidden">
+          {balanceRows.length > 0 && canViewTeamHR && (
+            <div className="border-b px-3 py-2" style={{ borderColor: 'var(--border-lt)' }}>
+              <input
+                className="form-input w-full text-[12px]"
+                placeholder="Search employee…"
+                value={balanceSearch}
+                onChange={e => setBalanceSearch(e.target.value)}
+              />
+            </div>
+          )}
+          {balancesByPerson.length === 0 ? (
+            <p className="px-4 py-6 text-center text-[12px] text-t3">No leave balances found</p>
+          ) : (
+            <ul className="flex flex-col divide-y" style={{ borderColor: 'var(--border-lt)' }}>
+              {balancesByPerson.map(([employeeId, group]) => (
+                <li key={employeeId} className="px-3 py-2.5">
+                  {canViewTeamHR && <p className="mb-1.5 text-[12px] font-semibold text-t1">{group.name}</p>}
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.rows.map(bal => {
+                      const left = balanceAvailable(bal)
+                      return (
+                        <span
+                          key={bal.id}
+                          className="inline-flex items-baseline gap-1 rounded-md border px-2 py-0.5 text-[11px]"
+                          style={{ borderColor: 'var(--border-lt)' }}
+                          title={`${bal.entitlement}d entitled · ${bal.carryForward}d carried · ${bal.used}d used · ${bal.pending}d pending`}
+                        >
+                          <span className="capitalize text-t2">{bal.leaveType.replace(/_/g, ' ')}</span>
+                          <span className="font-semibold" style={{ color: left > 0 ? 'var(--success)' : 'var(--danger)' }}>{left}d</span>
+                        </span>
+                      )
+                    })}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="hidden md:block">
+          <DataTable
+            tableId="hr_leave_balances"
+            columns={balanceColumns}
+            rows={balanceRows}
+            rowKey={bal => bal.id}
+            emptyMessage="No leave balances found"
+            exportTitle="Leave Balances"
+            exportFilename="leave-balances"
+          />
+        </div>
       </div>
 
       {/* HR-side leave modal (admin creates on behalf of employee) */}

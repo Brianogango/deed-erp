@@ -319,6 +319,12 @@ export default function RepairDetailView() {
     // (a credit or debit note), not the job's next step: it used to take the
     // main action with no button, so the device could not be released.
     && !billingSync.requiresCreditNote
+    // The invoice is posted and bills exactly the approved quote: there is no
+    // draft left to align. A quote or sale order still flagged open behind it
+    // is bookkeeping — it kept "Align the draft invoice with the approved
+    // quote" as the next step on a job already invoiced and paid, while the
+    // job trail rightly said to hand the device over.
+    && !(billingSync.matchesInvoice && !billingSync.missingInvoice && String(linkedInvoice?.status ?? '').toLowerCase() !== 'draft')
     && !pendingOutsourceJob
   // Fee-only jobs (unrepairable / declined / stopped) bill the diagnosis fee, not the quote.
   const billsFeeOnly = repairBillsFeeOnly(r)
