@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findRepairForInvoice, repairDeviceHeading, withRepairDeviceSection } from '@/lib/repair-invoice-device-section'
+import { findRepairForInvoice, repairDeviceHeading, withDeviceHeading, withRepairDeviceSection } from '@/lib/repair-invoice-device-section'
 
 const line = (description: string) => ({ description, qty: 1, unitPrice: 1500, subtotal: 1500 })
 
@@ -30,5 +30,11 @@ describe('repair invoice device heading', () => {
     expect(findRepairForInvoice({ id: 'x' }, repairs, 'b')?.id).toBe('b')
     expect(findRepairForInvoice({ id: 'i9' }, repairs)?.id).toBe('c')
     expect(findRepairForInvoice({ id: 'none' }, repairs)).toBeUndefined()
+  })
+
+  it('takes a heading the server worked out', () => {
+    const lines = withDeviceHeading([line('Service')], 'Epson L3250 · S/N X9')
+    expect(lines[0]).toMatchObject({ lineType: 'section', description: 'Epson L3250 · S/N X9' })
+    expect(withDeviceHeading([line('Service')], null)).toHaveLength(1)
   })
 })

@@ -1,5 +1,5 @@
 import { Invoice, SaleOrder, Contact, CompanySettings, BankAccount } from '@/lib/store'
-import { findRepairForInvoice, withRepairDeviceSection, type RepairDeviceLike } from '@/lib/repair-invoice-device-section'
+import { findRepairForInvoice, withDeviceHeading, withRepairDeviceSection, type RepairDeviceLike } from '@/lib/repair-invoice-device-section'
 import { displayDocRef, invoiceDocState } from '@/lib/odoo-sales-flow'
 import {
   buildCommercialPdf,
@@ -22,6 +22,24 @@ async function withWarranties(inv: Invoice, input: CommercialPdfInput): Promise<
 }
 
 const isCustomerInvoice = (inv: Invoice) => inv.type === 'customer_invoice'
+
+/**
+ * The device heading for a repair invoice, from the server when this page has
+ * not loaded the repair. The Finance screens never load the repair list, so
+ * without this the heading appeared only for someone who had opened Repairs
+ * earlier in the session. A failed lookup just leaves the PDF without it.
+ */
+async function withServerDeviceHeading(inv: Invoice, input: CommercialPdfInput): Promise<CommercialPdfInput> {
+  if (!isCustomerInvoice(inv) || input.lines.some(l => l.lineType === 'section')) return input
+  try {
+    const res = await fetch(`/api/invoices/${encodeURIComponent(inv.id)}/repair-device`, { cache: 'no-store' })
+    if (!res.ok) return input
+    const body = await res.json().catch(() => null) as { heading?: string | null } | null
+    return body?.heading ? { ...input, lines: withDeviceHeading(input.lines, body.heading) } : input
+  } catch {
+    return input
+  }
+}
 
 /** Map an invoice onto the shared Odoo-style PDF input. */
 function invoicePdfInput(
@@ -107,7 +125,7 @@ export async function downloadInvoicePdf(
   paymentDetails?: Partial<DocumentPaymentDetails> | null,
   repairs: RepairDeviceLike[] = [],
 ) {
-  const input = await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs))
+  const input = await withServerDeviceHeading(inv, await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs)))
   await downloadCommercialPdf(input, companySettings, bankAccounts, `${input.title} - ${input.ref}.pdf`)
 }
 
@@ -121,7 +139,7 @@ export async function invoicePdfBase64(
   paymentDetails?: Partial<DocumentPaymentDetails> | null,
   repairs: RepairDeviceLike[] = [],
 ): Promise<{ pdfBase64: string; pdfFilename: string }> {
-  const input = await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs))
+  const input = await withServerDeviceHeading(inv, await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs)))
   const doc = await buildCommercialPdf(input, companySettings, bankAccounts)
   const dataUri = doc.output('datauristring')
   return {
