@@ -10,7 +10,7 @@ import ProductFormModal from '@/components/inventory/ProductFormModal'
 import { canCreateProductFromSales } from '@/lib/sales/similar-products'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { Fa, faClipboardCheck, faPrint, faClipboardList, faPlus, faBarcode, faTriangleExclamation, faFolderOpen, faFileLines, faImage, faMagnifyingGlass, faCheck, faXmark } from '@/components/icons'
-import { printSerialLabels, printProductLabels } from '@/lib/product-label'
+import { printSerialLabels, printProductLabelsBatch, type ProductLabelRequest } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import ContactFormModal, { blankCompanyContact } from '@/components/contacts/ContactFormModal'
 import { PurchaseProvider } from './purchase/PurchaseContext'
@@ -721,14 +721,18 @@ function PurchaseContent() {
 
   const handlePrintReceivedLabels = () => {
     const serialItems: Array<{ serial: string; barcode?: string; productName: string; sku: string; salePrice?: number; category?: string }> = []
+    const bulk: ProductLabelRequest[] = []
     for (const line of grnLines) {
       const prod = products.find(p => p.id === line.productId)
       if (line.requiresSerial) {
         line.serials.forEach(s => serialItems.push({ serial: s, barcode: s, productName: line.productName, sku: prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }))
       } else if (line.qtyReceived > 0 && prod) {
-        printProductLabels(prod, line.qtyReceived)
+        bulk.push({ product: prod, qty: line.qtyReceived })
       }
     }
+    // All bulk lines in one print job (product stock); serial machines print
+    // on their own sticker stock, so they are a second job.
+    if (bulk.length) printProductLabelsBatch(bulk, 'Received Goods — Product Labels')
     if (serialItems.length) void printSerialLabels(serialItems, { serials, products })
   }
 

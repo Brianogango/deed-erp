@@ -32,7 +32,7 @@ describe('shared 80x40 thermal label renderer', () => {
   it('machines print the 58 × 38 machine sticker; other products the shared 80 × 40 label', () => {
     expect(serialSource).toContain('printMachineLabels(views)')
     expect(productSource).toContain('printMachineLabels(')
-    expect(productSource).toContain('printThermalLabelBatch(Array.from({ length: count }, () => label)')
+    expect(productSource).toContain('printThermalLabelBatch(labels, documentTitle)')
   })
 
   it('keeps product labels free of QR codes and serial blocks', () => {
