@@ -61,9 +61,12 @@ export function withRepairDeviceSection<L extends SectionableLine>(
   lines: L[],
   repair: RepairDeviceLike | null | undefined,
 ): L[] {
-  if (!repair || !lines.length) return lines
+  return withDeviceHeading(lines, repair ? repairDeviceHeading(repair) : '')
+}
+
+/** The same, from a heading already worked out (by the server, for example). */
+export function withDeviceHeading<L extends SectionableLine>(lines: L[], heading: string | null | undefined): L[] {
+  if (!heading || !lines.length) return lines
   if (lines.some(line => line.lineType === 'section')) return lines
-  const heading = repairDeviceHeading(repair)
-  if (!heading) return lines
   return [{ lineType: 'section', description: heading, qty: 0, unitPrice: 0, subtotal: 0 } as unknown as L, ...lines]
 }
