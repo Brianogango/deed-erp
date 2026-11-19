@@ -21,9 +21,18 @@ import {
 import { canArchiveProduct, canEditSerialNumber, canPrintInventoryLabels } from '@/lib/inventory/permissions'
 import { inferTrackingMethod, isSerialTracking, productOffersOnHandSerials, type TrackingMethod } from '@/lib/inventory-identifiers'
 import SerialManageDrawer from './SerialManageDrawer'
+import { ON_HAND_LOCATIONS } from '@/lib/inventory/serial-intake'
 import InventoryViewBar from './InventoryViewBar'
 import { useInventoryView } from '@/lib/inventory/use-inventory-view'
 import { DEFAULT_VIEW_PREFS, PRODUCT_LAYOUTS, conditionOf, matchesCondition } from '@/lib/inventory/view-prefs'
+
+/** One product in a label print: a count, or — for serial products — which units. */
+type LabelPlanEntry = {
+  row: ProductListRow
+  qty: string
+  serialIds: string[]
+  units: SerialNumber[]
+}
 
 type ProductListRow = {
   id: string
@@ -75,7 +84,7 @@ export default function InventoryProductsPanel({
   const [serialProduct, setSerialProduct] = useState<Product | null>(null)
   const [labelBusy, setLabelBusy] = useState(false)
   // Products chosen for one label print, with how many labels each.
-  const [labelPlan, setLabelPlan] = useState<Array<{ row: ProductListRow; qty: string }> | null>(null)
+  const [labelPlan, setLabelPlan] = useState<LabelPlanEntry[] | null>(null)
 
   useEffect(() => {
     if (!openArchivedToken) return
@@ -553,56 +562,111 @@ export default function InventoryProductsPanel({
   const productSerialCount = (productId: string) =>
     serials.filter(s => s.productId === productId).length
 
+  /**
+   * Units of a product that are still with us — what a label is printed for.
+   * Sold and written-off machines have left; their stickers are not reprinted
+   * from here.
+   */
+  const labelSerialsFor = (productId: string) =>
+    (serials as SerialNumber[]).filter(s =>
+      s.productId === productId
+      && s.status !== 'sold'
+      && s.status !== 'written_off'
+      && (ON_HAND_LOCATIONS as string[]).includes(String(s.location)))
+
   const openLabelPlan = (selected: ProductListRow[]) => {
     if (!canLabels) {
       showToast('You do not have permission to print labels', 'error')
       return
     }
     if (!selected.length) return
-    setLabelPlan(selected.map(row => ({ row, qty: '1' })))
+    setLabelPlan(selected.map(row => {
+      const units = labelSerialsFor(row.product.id)
+      // A machine is labelled by its own serial, so serial products start with
+      // none ticked: the person picks which units.
+      return units.length
+        ? { row, qty: '0', serialIds: [], units }
+        : { row, qty: '1', serialIds: [], units: [] }
+    }))
   }
 
   const labelQty = (qty: string) => Math.max(0, Math.floor(Number(qty) || 0))
+  const planCount = (plan: LabelPlanEntry[]) =>
+    plan.reduce((n, p) => n + (p.units.length ? p.serialIds.length : labelQty(p.qty)), 0)
 
-  /** Every selected product, with its own label count, in one print job or one PDF. */
-  const runProductLabels = async (plan: Array<{ row: ProductListRow; qty: string }>, mode: 'print' | 'pdf') => {
+  const toggleLabelSerial = (entryIdx: number, serialId: string) =>
+    setLabelPlan(p => p && p.map((x, i) => i !== entryIdx ? x : {
+      ...x,
+      serialIds: x.serialIds.includes(serialId) ? x.serialIds.filter(id => id !== serialId) : [...x.serialIds, serialId],
+    }))
+
+  /**
+   * Everything chosen — some serials of one machine, a count of an accessory —
+   * printed together: one job for machine stickers, one for product labels
+   * (they are different label stock), never one per product.
+   */
+  const runProductLabels = async (plan: LabelPlanEntry[], mode: 'print' | 'pdf') => {
     if (!canLabels) {
       showToast('You do not have permission to print labels', 'error')
       return
     }
-    const requests = plan
+    const bulk = plan
+      .filter(p => !p.units.length)
       .map(({ row, qty }) => ({ product: row.product, qty: labelQty(qty) }))
       .filter(r => r.qty > 0)
-    if (!requests.length) {
-      showToast('Enter how many labels to print for at least one product', 'error')
+    const serialItems = plan.flatMap(p => p.units
+      .filter(u => p.serialIds.includes(u.id))
+      .map(u => ({
+        serial: u.serial,
+        barcode: u.barcode || u.serial,
+        productName: p.row.product.name,
+        sku: p.row.product.sku,
+        salePrice: p.row.product.salePrice,
+        category: p.row.product.category,
+        productType: p.row.product.productType,
+        specs: u.specs || undefined,
+      })))
+    if (!bulk.length && !serialItems.length) {
+      showToast('Tick the serials or enter how many labels to print', 'error')
       return
     }
     setLabelBusy(true)
     try {
       let count = 0
       if (mode === 'print') {
-        const { printed, skipped } = printProductLabelsBatch(requests)
-        count = printed
-        if (skipped.length) {
-          showToast(`No barcode or SKU, not printed: ${skipped.map(p => p.name).join(', ')}`, 'error')
+        if (bulk.length) {
+          const { printed, skipped } = printProductLabelsBatch(bulk)
+          count += printed
+          if (skipped.length) showToast(`No barcode or SKU, not printed: ${skipped.map(p => p.name).join(', ')}`, 'error')
+        }
+        if (serialItems.length) {
+          await printSerialLabels(serialItems, { serials: serials as SerialNumber[], products })
+          count += serialItems.length
         }
       } else {
-        const items = requests.flatMap(({ product, qty }) => Array.from({ length: qty }, () => ({
-          name: product.name,
-          sku: product.sku,
-          barcode: product.barcode,
-          salePrice: product.salePrice,
-          category: product.category,
-        })))
-        const filename = await downloadProductLabelsPdf(items)
-        count = items.length
-        showToast(`Downloaded ${filename}`, 'success')
+        const files: string[] = []
+        if (bulk.length) {
+          const items = bulk.flatMap(({ product, qty }) => Array.from({ length: qty }, () => ({
+            name: product.name,
+            sku: product.sku,
+            barcode: product.barcode,
+            salePrice: product.salePrice,
+            category: product.category,
+          })))
+          files.push(await downloadProductLabelsPdf(items))
+          count += items.length
+        }
+        if (serialItems.length) {
+          files.push(await downloadSerialLabelsPdf(serialItems))
+          count += serialItems.length
+        }
+        showToast(`Downloaded ${files.join(' and ')}`, 'success')
       }
       if (count) setLabelPlan(null)
       addAuditLog(
         mode === 'print' ? 'labels_print' : 'labels_download',
         'inventory-products',
-        `${mode} ${count} label(s) for ${requests.length} product(s)`,
+        `${mode} ${count} label(s) for ${plan.length} product(s)`,
       )
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Label action failed', 'error')
@@ -786,40 +850,70 @@ export default function InventoryProductsPanel({
 
       {labelPlan && (
         <Modal
-          title="Print product labels"
-          subtitle={`${labelPlan.length} product${labelPlan.length === 1 ? '' : 's'} · ${labelPlan.reduce((n, p) => n + labelQty(p.qty), 0)} labels in one print`}
+          title="Print labels"
+          subtitle={`${labelPlan.length} product${labelPlan.length === 1 ? '' : 's'} · ${planCount(labelPlan)} label${planCount(labelPlan) === 1 ? '' : 's'} chosen`}
           onClose={() => setLabelPlan(null)}
-          width={560}
+          width={600}
         >
-          <div className="flex flex-wrap gap-2 mb-3">
-            <button type="button" className="dt-toolbar-btn" onClick={() => setLabelPlan(p => p && p.map(x => ({ ...x, qty: '1' })))}>1 each</button>
-            <button type="button" className="dt-toolbar-btn" onClick={() => setLabelPlan(p => p && p.map(x => ({ ...x, qty: String(Math.max(0, Math.floor(x.row.onHand || 0))) })))}>Match stock on hand</button>
-          </div>
-          <div className="flex flex-col divide-y divide-[var(--border-lt)] max-h-[50vh] overflow-y-auto">
-            {labelPlan.map(({ row, qty }, i) => (
-              <div key={row.id} className="flex items-center gap-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-text-1 truncate">{row.product.name}</p>
-                  <p className="text-[10px] text-text-3">
-                    {row.product.sku || row.product.barcode || 'No barcode or SKU — cannot print'} · On hand {row.onHand}
-                  </p>
-                </div>
-                <div className="w-20 shrink-0">
-                  <Input
-                    type="number"
-                    value={qty}
-                    min="0"
-                    onChange={v => setLabelPlan(p => p && p.map((x, j) => j === i ? { ...x, qty: v } : x))}
-                  />
-                </div>
-              </div>
-            ))}
+          <p className="text-[11px] text-text-3 mb-3">
+            Tick the serial numbers to label on machines; enter a count for other products. Everything prints together.
+          </p>
+          <div className="flex flex-col gap-3 max-h-[55vh] overflow-y-auto">
+            {labelPlan.map((entry, i) => {
+              const { row, qty, units, serialIds } = entry
+              return (
+                <section key={row.id} className="rounded-lg border border-[var(--border-lt)]">
+                  <div className="flex items-center gap-3 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-text-1 truncate">{row.product.name}</p>
+                      <p className="text-[10px] text-text-3">
+                        {units.length
+                          ? `${serialIds.length} of ${units.length} serial${units.length === 1 ? '' : 's'} in stock ticked`
+                          : `${row.product.sku || row.product.barcode || 'No barcode or SKU — cannot print'} · On hand ${row.onHand}`}
+                      </p>
+                    </div>
+                    {units.length ? (
+                      <div className="flex gap-1.5 shrink-0">
+                        <button type="button" className="dt-toolbar-btn" onClick={() => setLabelPlan(p => p && p.map((x, j) => j === i ? { ...x, serialIds: x.units.map(u => u.id) } : x))}>All</button>
+                        <button type="button" className="dt-toolbar-btn" onClick={() => setLabelPlan(p => p && p.map((x, j) => j === i ? { ...x, serialIds: [] } : x))}>None</button>
+                      </div>
+                    ) : (
+                      <div className="w-20 shrink-0">
+                        <Input
+                          type="number"
+                          min="0"
+                          value={qty}
+                          onChange={v => setLabelPlan(p => p && p.map((x, j) => j === i ? { ...x, qty: v } : x))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {units.length > 0 && (
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 border-t border-[var(--border-lt)] px-3 py-2">
+                      {units.map(unit => (
+                        <li key={unit.id}>
+                          <label className="flex items-center gap-2 py-1 cursor-pointer text-[11px]">
+                            <input
+                              type="checkbox"
+                              checked={serialIds.includes(unit.id)}
+                              onChange={() => toggleLabelSerial(i, unit.id)}
+                            />
+                            <span className="font-mono font-semibold text-text-1">{unit.serial}</span>
+                            <span className="text-text-3 truncate">{LOCATIONS[unit.location as LocationId]?.name ?? ''}</span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )
+            })}
           </div>
           <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
             <button type="button" className="btn-outline" onClick={() => setLabelPlan(null)}>Cancel</button>
-            <button type="button" className="btn-outline" disabled={labelBusy} onClick={() => { void runProductLabels(labelPlan, 'pdf') }}>Download PDF</button>
-            <button type="button" className="btn-primary" disabled={labelBusy} onClick={() => { void runProductLabels(labelPlan, 'print') }}>
-              <Fa icon={faPrint} /> {labelBusy ? 'Preparing…' : `Print ${labelPlan.reduce((n, p) => n + labelQty(p.qty), 0)} labels`}
+            <button type="button" className="btn-outline" disabled={labelBusy || !planCount(labelPlan)} onClick={() => { void runProductLabels(labelPlan, 'pdf') }}>Download PDF</button>
+            <button type="button" className="btn-primary" disabled={labelBusy || !planCount(labelPlan)} onClick={() => { void runProductLabels(labelPlan, 'print') }}>
+              <Fa icon={faPrint} /> {labelBusy ? 'Preparing…' : `Print ${planCount(labelPlan)} label${planCount(labelPlan) === 1 ? '' : 's'}`}
             </button>
           </div>
         </Modal>
