@@ -1777,11 +1777,13 @@ function AccountingContent() {
                       amount={fmtKes(balance || i.total)}
                       status={<span className="inline-flex items-center gap-1"><Badge status={badge.status as any} label={badge.label} size="xs" />{badge.overdue && <Badge status="cancelled" label="Overdue" size="xs" />}</span>}
                       accent={balance > 0 ? 'var(--danger)' : 'var(--success)'}
-                      meta={[
+                      // The amount above is the balance (or the total once
+                      // settled) and the badge says paid / not paid, so the
+                      // breakdown only adds anything while part paid.
+                      meta={balance > 0 && i.amountPaid > 0 ? [
                         { label: 'Total', value: fmtKes(i.total) },
-                        { label: 'Paid', value: fmtKes(i.amountPaid) },
-                        { label: 'Paid %', value: `${Math.round(pct)}%` },
-                      ]}
+                        { label: `Paid (${Math.round(pct)}%)`, value: fmtKes(i.amountPaid) },
+                      ] : []}
                       onClick={() => openInvoiceRecord(i.id)}
                     />
                   )

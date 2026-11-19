@@ -538,16 +538,15 @@ function ContactsInner() {
             {c.isVendor && <span className="contacts-badge contacts-badge--vendor">Vendor</span>}
           </div>
         </div>
-        <div className="contacts-mobile-card__channels">
-          <span className={!c.phone && !c.mobile ? 'is-muted' : ''}>{c.phone || c.mobile || 'No phone'}</span>
-          <span className={!c.email ? 'is-muted' : ''}>{c.email || 'No email'}</span>
-        </div>
-        <div className="contacts-mobile-card__footer">
-          <span>{[c.city, c.country].filter(Boolean).join(', ') || 'Location not set'}</span>
-          <span className={(creditByCustomer.get(c.id) ?? 0) > 0 ? 'contacts-money--positive' : ''}>
-            {(creditByCustomer.get(c.id) ?? 0) > 0 ? `${fmtKes(creditByCustomer.get(c.id))} credit` : activity}
-          </span>
-        </div>
+        {/* One line of what is known — phone, place, activity — instead of
+            a row each with "No email" / "Location not set" placeholders. */}
+        <p className="contacts-mobile-card__line">
+          {[
+            c.phone || c.mobile,
+            c.city || c.country,
+            (creditByCustomer.get(c.id) ?? 0) > 0 ? `${fmtKes(creditByCustomer.get(c.id))} credit` : activity,
+          ].filter(Boolean).join(' · ')}
+        </p>
       </article>
     )
   }

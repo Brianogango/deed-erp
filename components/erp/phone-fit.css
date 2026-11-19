@@ -327,3 +327,354 @@ html {
     bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
+
+/* ── Module headers, tabs, list toolbars: less chrome above the data ────── */
+/* On a phone the first record started two thirds of the way down the screen
+   (Repairs) or below it (Delivery): a repeated module title, a full-height
+   action band, roomy tab rows, stacked status boxes and a search row plus a
+   separate Filters/More row all came first. */
+@media (max-width: 767px) {
+  /* The top bar already names the module and the active tab names the
+     section, so the page header keeps only its buttons. A header with no
+     buttons has nothing left to show. */
+  .mod-page > .mod-header .mod-header__identity,
+  .repair-module-header > .mod-header .mod-header__identity {
+    display: none !important;
+  }
+  .mod-page > .mod-header:not(:has(.section-actions)),
+  .repair-module-header > .mod-header:not(:has(.section-actions)) {
+    display: none !important;
+  }
+  .mod-page > .mod-header,
+  .repair-module-header > .mod-header {
+    min-height: 0 !important;
+    padding: 0.5rem 0.75rem !important;
+  }
+  .mod-page > .mod-header .section-actions,
+  .repair-module-header > .mod-header .section-actions {
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+  }
+  .mod-page > .mod-header .section-actions > :first-child {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
+  .mod-page > .mod-header .section-actions :is(button, a) {
+    min-height: 2.5rem !important;
+  }
+
+  /* Tab rows: the same tabs, half the height. */
+  .mod-tabs .mod-tab {
+    min-height: 2.5rem !important;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.4rem !important;
+  }
+  .mod-tabs {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Status counts as a compact grid of label + number, not one box per row. */
+  .repair-metric-strip,
+  .delivery-kpi-strip {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(6.25rem, 1fr)) !important;
+    gap: 0.375rem !important;
+  }
+  /* Delivery's four counts fit one row. */
+  .delivery-kpi-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+  .repair-metric-strip > .repair-metric,
+  .delivery-kpi-strip > .delivery-kpi-card {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0.4rem 0.55rem !important;
+    border: 1px solid var(--border-lt) !important;
+    border-radius: var(--radius-sm, 0.5rem) !important;
+  }
+  .delivery-kpi-strip > .delivery-kpi-card > span {
+    display: none !important;
+  }
+  .delivery-kpi-strip > .delivery-kpi-card strong,
+  .repair-metric-strip > .repair-metric strong {
+    font-size: 0.8125rem !important;
+    line-height: 1.2 !important;
+  }
+  .delivery-kpi-strip > .delivery-kpi-card small,
+  .repair-metric-strip > .repair-metric span {
+    font-size: 0.6875rem !important;
+    line-height: 1.2 !important;
+  }
+
+  /* List toolbar: search, Filters and More on one row; the two buttons are
+     icons (their names stay for screen readers, the count badge stays). */
+  .dt-toolbar-row.dt-toolbar-row-mobile {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-search {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    gap: 0.375rem !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn {
+    position: relative !important;
+    flex: 0 0 auto !important;
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn > span:not(.dt-toolbar-badge) {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    white-space: nowrap !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions .dt-toolbar-btn .dt-toolbar-badge {
+    position: absolute !important;
+    top: -0.3rem !important;
+    right: -0.3rem !important;
+  }
+  /* A menu-only toolbar (no search) keeps its "More" label. */
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions.is-menu-only .dt-toolbar-btn {
+    width: auto !important;
+    padding: 0 0.75rem !important;
+  }
+  .dt-toolbar-row-mobile > .dt-toolbar-mobile-actions.is-menu-only .dt-toolbar-btn > span:not(.dt-toolbar-badge) {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    clip: auto !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Drawn breadcrumbs ("FINANCE / CUSTOMER DOCUMENTS") above a header that no
+     longer shows its title. */
+  .mod-page > .mod-header::before {
+    display: none !important;
+  }
+  /* The header's main button spans the row, so it has room for its words —
+     an icon-only "+" told no one what it creates. */
+  .mod-page > .mod-header .section-actions > :first-child > span.hidden {
+    display: inline !important;
+  }
+
+  /* Sales lists: the top bar says Sales and the tabs say Quotations / Sales
+     orders; the eyebrow, title, count and workflow tagline repeated them. */
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header.sales-list-page-header .sales-proto-header-copy {
+    display: none !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header.sales-list-page-header {
+    display: block !important;
+    min-height: 0 !important;
+    padding: 0.5rem 0.75rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header.sales-list-page-header .sales-proto-actions {
+    width: 100% !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header.sales-list-page-header .sales-proto-actions .sp-btn {
+    width: 100% !important;
+    min-height: 2.5rem !important;
+  }
+
+  /* Delivery filters: Status and Type side by side, labels inside the
+     choices, the List / Calendar switch slimmer. */
+  .delivery-toolbar .delivery-filter-group {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.4rem !important;
+  }
+  .delivery-toolbar .delivery-filter {
+    min-width: 0 !important;
+    gap: 0.15rem !important;
+  }
+  .delivery-toolbar .delivery-filter .form-input {
+    min-height: 2.5rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* ── Sales record: one compact summary card ──────────────────────────── */
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.6rem !important;
+    padding: 0.75rem 0.9rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary > * {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary dl.sales-record-summary__facts {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__facts > div {
+    grid-column: auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__facts dt {
+    font-size: 0.625rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__facts dd {
+    overflow: hidden !important;
+    font-size: 0.75rem !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  /* A confirmed order's delivery / invoice / payment state is in the journey
+     row just below, which can be tapped; here it only repeated it. */
+  .sales-pilot.sales-doc .sales-record-view[data-document-kind='sales-order'] .sales-record-summary dl.sales-record-summary__facts {
+    display: none !important;
+  }
+  /* Next action as one line: the button for it is in the bar at the bottom. */
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+    align-items: baseline !important;
+    gap: 0.35rem !important;
+    padding-top: 0.55rem !important;
+    border-top: 1px solid var(--border-lt) !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next > span {
+    font-size: 0.6875rem !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next > span::after {
+    content: ':';
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary .sales-record-summary__next > :is(span, strong) {
+    display: inline !important;
+    margin: 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next > strong {
+    font-size: 0.8125rem !important;
+    line-height: 1.3 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-record-summary__next > small {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* ── Invoice record ──────────────────────────────────────────────────── */
+  /* The header grid put the action buttons in its first row, above the
+     invoice number. Details first, then the buttons. */
+  .finance-invoice-detail .invoice-detail__header {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__header-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    order: 2 !important;
+    grid-row: auto !important;
+    gap: 0.5rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__header-actions > * {
+    flex: 1 1 auto !important;
+  }
+
+  /* Line items as compact cards: description, then Qty / Unit price / Tax
+     with the amount on the right (seven label rows per line before). */
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: flex-end !important;
+    gap: 0.4rem 1rem !important;
+    padding: 0.75rem 0.85rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td {
+    display: none !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='description'] {
+    display: block !important;
+    flex: 1 1 100% !important;
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
+    overflow-wrap: anywhere !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td:is([data-col='qty'], [data-col='price'], [data-col='tax']),
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='discount']:not([data-zero]) {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.1rem !important;
+    font-size: 0.8125rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td:is([data-col='qty'], [data-col='price'], [data-col='tax'], [data-col='discount'])::before {
+    display: block !important;
+    position: static !important;
+    font-size: 0.625rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    color: var(--text-3) !important;
+  }
+  .finance-invoice-detail tr.invoice-detail__item-row > td[data-col='qty']::before { content: 'Qty' !important; }
+  .finance-invoice-detail tr.invoice-detail__item-row > td[data-col='price']::before { content: 'Unit price' !important; }
+  .finance-invoice-detail tr.invoice-detail__item-row > td[data-col='tax']::before { content: 'Tax' !important; }
+  .finance-invoice-detail tr.invoice-detail__item-row > td[data-col='discount']::before { content: 'Disc' !important; }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='amount'] {
+    display: block !important;
+    margin-left: auto !important;
+    font-size: 0.8125rem !important;
+    font-weight: 800 !important;
+    text-align: right !important;
+    white-space: nowrap !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='amount']::before {
+    content: none !important;
+  }
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='actions'] {
+    display: flex !important;
+    flex: 1 1 100% !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .finance-invoice-detail .invoice-detail__table tr.invoice-detail__item-row > td[data-col='description']::before {
+    content: none !important;
+    display: none !important;
+  }
+}
+
+/* ── Contacts: phone cards ─────────────────────────────────────────────── */
+.contacts-mobile-card__line {
+  margin: 0.4rem 0 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

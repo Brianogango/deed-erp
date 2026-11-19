@@ -63,6 +63,11 @@ export default function MobileCardView<T>({
   const amountCol = others.find(c => c.align === 'right' && c !== statusCol)
   const subtitleCol = others.find(c => c !== statusCol && c !== amountCol && c.align !== 'right')
   const metaCols = others.filter(c => c !== statusCol && c !== amountCol && c !== subtitleCol)
+  // A card that opens its record is a summary: two more facts at most, the
+  // rest are a tap away. Every extra column used to become another label row,
+  // so a phone showed two or three records at a time. A card that cannot be
+  // opened keeps all of them — it is the only place they appear.
+  const cardMetaCols = onRowClick ? metaCols.slice(0, 2) : metaCols
 
   return (
     <div className="flex flex-col gap-2.5 p-3 sm:p-4">
@@ -77,7 +82,7 @@ export default function MobileCardView<T>({
             subtitle={subtitleCol ? subtitleCol.render(row) : undefined}
             amount={amountCol ? amountCol.render(row) : undefined}
             status={statusCol ? statusCol.render(row) : undefined}
-            meta={metaCols.map(c => ({ label: c.label, value: c.render(row) }))}
+            meta={cardMetaCols.map(c => ({ label: c.label, value: c.render(row) }))}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
             actions={rowActions ? rowActions(row) : undefined}
             accent={cardAccent ? cardAccent(row) : undefined}
