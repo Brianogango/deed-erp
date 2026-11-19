@@ -33,6 +33,7 @@ import Chatter from '@/components/erp/Chatter'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
+import { findRepairForInvoice, repairDeviceHeading } from '@/lib/repair-invoice-device-section'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
@@ -121,6 +122,32 @@ export default function InvoiceDetail() {
   const canCancelOrReset = canCancelOrResetInvoice(currentUser?.role)
   const canApplyCredit = canApplyCustomerCredit(currentUser?.role)
   const invoice = invoices.find(i => i.id === id)
+
+  // The device a repair invoice was for, shown above its lines as on the PDF.
+  // Found from the repairs this page has, else asked of the server: the
+  // Finance pages do not load the repair list.
+  const localDeviceHeading = (() => {
+    if (!invoice || invoice.type !== 'customer_invoice') return ''
+    const so = saleOrders.find(o => o.id === invoice.saleOrderId)
+    const repair = findRepairForInvoice(invoice, repairs, so?.repairId)
+    return repair ? repairDeviceHeading(repair) : ''
+  })()
+  const [serverDeviceHeading, setServerDeviceHeading] = useState('')
+  const invoiceIsCustomer = invoice?.type === 'customer_invoice'
+  useEffect(() => {
+    setServerDeviceHeading('')
+    if (!id || !invoiceIsCustomer || localDeviceHeading) return
+    const controller = new AbortController()
+    fetch(`/api/invoices/${encodeURIComponent(id)}/repair-device`, { signal: controller.signal, cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : null))
+      .then((body: { heading?: string | null } | null) => { if (body?.heading) setServerDeviceHeading(body.heading) })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [id, invoiceIsCustomer, localDeviceHeading])
+  const deviceHeading = localDeviceHeading || serverDeviceHeading
+  // Lines that already carry headings (a combined repair invoice, or ones
+  // Finance added) keep their own; the device heading is not added on top.
+  const showDeviceHeading = !!deviceHeading && !(invoice?.lines ?? []).some(l => l.lineType === 'section')
 
   const [showPayModal, setShowPayModal] = useState(false)
   const [showCreditNote, setShowCreditNote] = useState(false)
@@ -1007,6 +1034,14 @@ export default function InvoiceDetail() {
                   </tr>
                 </thead>
                 <tbody>
+                  {showDeviceHeading && (
+                    <tr className="invoice-detail__section-row">
+                      <td className="is-num" />
+                      <td colSpan={invoice.status === 'draft' && canManageFinance ? 7 : 6}>
+                        <span className="font-bold">{deviceHeading}</span>
+                      </td>
+                    </tr>
+                  )}
                   {(invoice.lines || []).map((line, idx) => {
                     const canReorder = invoice.status === 'draft' && canManageFinance
                     const moveButtons = canReorder ? (
