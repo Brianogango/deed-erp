@@ -1099,15 +1099,15 @@ export default function InvoiceDetail() {
                       ? 'Rider delivery'
                       : (rawDesc || '—')
                     return (
-                      <tr key={line.id || idx}>
-                        <td className="is-num">{idx + 1}</td>
-                        <td><span className="invoice-detail__line-desc">{desc}</span></td>
-                        <td className="is-num">{line.qty}</td>
-                        <td className="is-num">{fmtKes(line.unitPrice)}</td>
-                        <td className="is-num">{(line.discountPct ?? 0) > 0 ? `${line.discountPct}%` : '0%'}</td>
-                        <td className="is-num">{(line.taxRate ?? 0) > 0 ? `${line.taxRate}%` : '0%'}</td>
-                        <td className="is-num is-strong">{fmtKes(line.subtotal)}</td>
-                        {canReorder && <td>{moveButtons}</td>}
+                      <tr key={line.id || idx} className="invoice-detail__item-row">
+                        <td className="is-num" data-col="index">{idx + 1}</td>
+                        <td data-col="description"><span className="invoice-detail__line-desc">{desc}</span></td>
+                        <td className="is-num" data-col="qty">{line.qty}</td>
+                        <td className="is-num" data-col="price">{fmtKes(line.unitPrice)}</td>
+                        <td className="is-num" data-col="discount" data-zero={(line.discountPct ?? 0) > 0 ? undefined : '1'}>{(line.discountPct ?? 0) > 0 ? `${line.discountPct}%` : '0%'}</td>
+                        <td className="is-num" data-col="tax">{(line.taxRate ?? 0) > 0 ? `${line.taxRate}%` : '0%'}</td>
+                        <td className="is-num is-strong" data-col="amount">{fmtKes(line.subtotal)}</td>
+                        {canReorder && <td data-col="actions">{moveButtons}</td>}
                       </tr>
                     )
                   })}
