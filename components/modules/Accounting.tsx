@@ -27,6 +27,7 @@ import { faArrowDown, faMoneyBillWave, faArrowUp, faBook, faBalanceScale, faChar
 import { useFinanceStore, Invoice, JournalEntry, Account, fmtKes, fmtDate } from '@/lib/store'
 import { PdfLine } from '@/lib/pdf'
 import { downloadInvoicePdf } from '@/components/modules/invoice-pdf'
+import { textMatchesSearch } from '@/lib/text-search'
 import { CO } from '@/lib/company'
 import {
   invoiceDocState,
@@ -799,9 +800,12 @@ function AccountingContent() {
     }
   }, [invoices, localInvoices])
 
+  const saleOrderRefById = useMemo(() => new Map(saleOrders.map(o => [o.id, o.ref])), [saleOrders])
+  const purchaseOrderRefById = useMemo(() => new Map(purchaseOrders.map(o => [o.id, o.ref])), [purchaseOrders])
+
   const filteredInvoices = useMemo(() => {
     const list = tab === 'invoices' ? customerInvoices : vendorBills
-    const q = invSearch.toLowerCase()
+    const q = invSearch.trim()
     const res: Invoice[] = []
     for (const i of list) {
       // Odoo semantics: document state (Draft/Posted/Cancelled) is separate
@@ -821,17 +825,32 @@ function AccountingContent() {
       else pass = docState === invFilter
 
       if (pass) {
+        // Any capitals, any word order, any separators in the number — and the
+        // sale/purchase order, customer PO and amount, not only number and name.
+        const sourceRef = (i as Invoice & { sourceRef?: string; saleOrderRef?: string; purchaseOrderRef?: string })
         if (
           !q ||
-          i.ref.toLowerCase().includes(q) ||
-          i.partnerName.toLowerCase().includes(q)
+          textMatchesSearch(
+            q,
+            i.ref,
+            displayDocRef(i.ref),
+            i.partnerName,
+            sourceRef.sourceRef,
+            sourceRef.saleOrderRef,
+            sourceRef.purchaseOrderRef,
+            i.saleOrderId ? saleOrderRefById.get(i.saleOrderId) : '',
+            i.purchaseOrderId ? purchaseOrderRefById.get(i.purchaseOrderId) : '',
+            i.customerPoNumber,
+            i.subject,
+            Math.round(Number(i.total) || 0),
+          )
         ) {
           res.push(i)
         }
       }
     }
     return res.sort(newestDocumentFirst)
-  }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
+  }, [tab, customerInvoices, vendorBills, invFilter, invSearch, saleOrderRefById, purchaseOrderRefById])
 
   const sourceReferenceForInvoice = (invoice: Invoice): string => {
     const explicit = String(
