@@ -1,4 +1,5 @@
 import { Invoice, SaleOrder, Contact, CompanySettings, BankAccount } from '@/lib/store'
+import { findRepairForInvoice, withRepairDeviceSection, type RepairDeviceLike } from '@/lib/repair-invoice-device-section'
 import { displayDocRef, invoiceDocState } from '@/lib/odoo-sales-flow'
 import {
   buildCommercialPdf,
@@ -20,6 +21,8 @@ async function withWarranties(inv: Invoice, input: CommercialPdfInput): Promise<
   return { ...input, warranties: list.map(w => ({ ref: w.ref, productName: w.productName, serialNumber: w.serialNumber, endDate: w.endDate, months: w.months, url: w.checkUrl })) }
 }
 
+const isCustomerInvoice = (inv: Invoice) => inv.type === 'customer_invoice'
+
 /** Map an invoice onto the shared Odoo-style PDF input. */
 function invoicePdfInput(
   inv: Invoice,
@@ -28,15 +31,16 @@ function invoicePdfInput(
   paymentDetails?: Partial<DocumentPaymentDetails> | null,
   company?: Pick<CompanySettings, 'name' | 'mpesaPaybill' | 'mpesaAccount' | 'currency'>,
   bankAccounts: BankAccount[] = [],
+  repairs: RepairDeviceLike[] = [],
 ): CommercialPdfInput {
   const so = saleOrders?.find(s => s.id === inv.saleOrderId)
+  const repair = isCustomerInvoice(inv) ? findRepairForInvoice(inv, repairs, so?.repairId) : undefined
   const contact = contacts.find(c => c.id === inv.partnerId)
-  const isCustomerInvoice = inv.type === 'customer_invoice'
-  const paymentCommunication = isCustomerInvoice && invoiceDocState(inv.status) === 'posted'
+  const paymentCommunication = isCustomerInvoice(inv) && invoiceDocState(inv.status) === 'posted'
   const base: CommercialPdfInput = {
     // VAT remains itemised in the totals, but the customer-facing document
     // name is consistently "Invoice" rather than switching to "Tax Invoice".
-    title: isCustomerInvoice ? 'Invoice' : 'Bill',
+    title: isCustomerInvoice(inv) ? 'Invoice' : 'Bill',
     ref: displayDocRef(inv.ref),
     date: inv.date,
     dueLabel: 'Due Date',
@@ -49,7 +53,8 @@ function invoicePdfInput(
     customerPhone: contact?.phone || contact?.mobile || undefined,
     customerEmail: contact?.email || undefined,
     customerTaxId: contact?.vatNumber || undefined,
-    lines: inv.lines.map(l => ({
+    // A repair invoice is headed by the device the work was done on.
+    lines: withRepairDeviceSection(inv.lines.map(l => ({
       lineType: l.lineType,
       description: l.description,
       qty: l.qty,
@@ -57,7 +62,7 @@ function invoicePdfInput(
       taxRate: l.taxRate,
       discountPct: l.discountPct,
       subtotal: l.subtotal,
-    })),
+    })), repair),
     subtotal: inv.subtotal,
     // Pre-tax line discounts (manually-entered invoices, e.g. Accounting.tsx's
     // invoice form, which sets discountPct per line) — distinct from the
@@ -77,10 +82,10 @@ function invoicePdfInput(
     // Odoo prints the payment communication on posted customer invoices.
     paymentCommunication,
     // Vendor bills do not show customer payment instructions.
-    showPaymentDetails: isCustomerInvoice,
+    showPaymentDetails: isCustomerInvoice(inv),
   }
 
-  if (isCustomerInvoice && company) {
+  if (isCustomerInvoice(inv) && company) {
     base.paymentDetailLines = buildPaymentDetailLines({
       details: paymentDetails,
       company,
@@ -100,8 +105,9 @@ export async function downloadInvoicePdf(
   companySettings: CompanySettings,
   bankAccounts: BankAccount[],
   paymentDetails?: Partial<DocumentPaymentDetails> | null,
+  repairs: RepairDeviceLike[] = [],
 ) {
-  const input = await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts))
+  const input = await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs))
   await downloadCommercialPdf(input, companySettings, bankAccounts, `${input.title} - ${input.ref}.pdf`)
 }
 
@@ -113,8 +119,9 @@ export async function invoicePdfBase64(
   companySettings: CompanySettings,
   bankAccounts: BankAccount[],
   paymentDetails?: Partial<DocumentPaymentDetails> | null,
+  repairs: RepairDeviceLike[] = [],
 ): Promise<{ pdfBase64: string; pdfFilename: string }> {
-  const input = await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts))
+  const input = await withWarranties(inv, invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts, repairs))
   const doc = await buildCommercialPdf(input, companySettings, bankAccounts)
   const dataUri = doc.output('datauristring')
   return {

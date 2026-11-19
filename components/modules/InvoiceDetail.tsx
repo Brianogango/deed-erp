@@ -110,6 +110,7 @@ export default function InvoiceDetail() {
     getDocumentPaymentDetails,
     setDocumentPaymentDetails,
     scheduleInvoiceDelivery,
+    repairs,
   } = useFinanceStore()
 
   const { deliveryJobs, riders, recordCustomerPaidRider } = useDeliveryStore()
@@ -592,6 +593,7 @@ export default function InvoiceDetail() {
           companySettings,
           bankAccounts,
           getDocumentPaymentDetails(invoice.id),
+          repairs,
         )
       } catch { /* the email still sends without the attachment */ }
       const res = await fetch(`/api/invoices/${invoice.id}/send`, {
@@ -627,6 +629,7 @@ export default function InvoiceDetail() {
         companySettings,
         bankAccounts,
         getDocumentPaymentDetails(invoice.id),
+        repairs,
       )
     } catch {
       showToast('PDF generation failed', 'error')

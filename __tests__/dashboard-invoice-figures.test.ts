@@ -74,3 +74,28 @@ describe('dashboard invoice figures', () => {
     expect(nairobiDay('')).toBeNull()
   })
 })
+
+describe('dashboard money received', () => {
+  it('dates money received by the payment, not the invoice', () => {
+    const f = computeDashboardInvoiceFigures({
+      ...base,
+      invoices: [
+        // Raised last month, paid today.
+        inv({ id: 'old', date: '2026-10-02', amountPaid: 1000, payments: [{ id: 'p1', date: '2026-11-11', amount: 1000 }] }),
+        // Part paid today; the invoice is not settled yet.
+        inv({ id: 'part', date: '2026-11-11', amountPaid: 300, payments: [{ id: 'p2', date: '2026-11-11T09:30:00+03:00', amount: 300 }] }),
+        // Raised today but paid last month as a deposit.
+        inv({ id: 'deposit', date: '2026-11-11', amountPaid: 500, payments: [{ id: 'p3', date: '2026-10-20', amount: 500 }] }),
+        // A reversed payment is not money received.
+        inv({ id: 'rev', date: '2026-11-11', amountPaid: 0, payments: [{ id: 'p4', date: '2026-11-11', amount: 700, reversedAt: '2026-11-11' }] }),
+        // A draft invoice receives nothing.
+        inv({ id: 'draft', status: 'draft', date: '2026-11-11', payments: [{ id: 'p5', date: '2026-11-11', amount: 900 }] }),
+      ],
+    })
+    expect(f.revenue.today).toBe(1300)
+    expect(f.revenue.week).toBe(1300)
+    expect(f.revenue.month).toBe(1300)
+    expect(f.revenue.year).toBe(1800)
+    expect(f.revenue.paidThisWeekCount).toBe(2)
+  })
+})

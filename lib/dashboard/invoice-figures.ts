@@ -40,7 +40,7 @@ export type DashboardInvoiceFigures = {
     months: RepairMonthFigures[]
     currentInvoices: Array<{ id: string; total: number; subtotal: number; linkedRepairIds: string[] }>
   }
-  /** Paid customer invoices by period. */
+  /** Money received on customer invoices by period, dated by payment. */
   revenue: { today: number; yesterday: number; week: number; month: number; year: number; paidThisWeekCount: number }
   /** Newest invoices and bills, for the activity feed. */
   recent: Array<{ id: string; ref: string; type: string; partnerName: string; total: number; date: string }>
@@ -76,6 +76,27 @@ function monthsAgo(day: string, today: string): number {
 
 const num = (v: unknown) => Number(v) || 0
 const collectedOf = (inv: Row) => Math.min(num(inv.total), Math.max(0, num(inv.amountPaid)))
+
+/**
+ * The money an invoice has received, each amount on the day it was received.
+ * Reversed payments are not money received. An invoice with a paid amount but
+ * no payment records (migrated, or paid before payments were recorded) falls
+ * back to its invoice date — the only date it has.
+ */
+export function receiptsOf(inv: Row): Array<{ day: string; amount: number }> {
+  const payments = Array.isArray(inv.payments) ? inv.payments : []
+  const live = payments.filter((p: Row) => p && !p.reversedAt && !p.supplierRefund)
+  if (live.length) {
+    return live.flatMap((p: Row) => {
+      const day = nairobiDay(p.date)
+      const amount = num(p.amount)
+      return day && amount ? [{ day, amount }] : []
+    })
+  }
+  const day = nairobiDay(inv.date)
+  const amount = collectedOf(inv)
+  return day && amount > 0 ? [{ day, amount }] : []
+}
 
 export function computeDashboardInvoiceFigures(input: {
   today: string
@@ -168,7 +189,10 @@ export function computeDashboardInvoiceFigures(input: {
     }
   }
 
-  // ── Paid revenue by period ─────────────────────────────────────────────────
+  // ── Money received by period ───────────────────────────────────────────────
+  // Counted on the day each payment came in, not the invoice date: an invoice
+  // raised in March and paid today is money received today, and a part
+  // payment is money received even though the invoice is not yet settled.
   const yesterday = addDays(today, -1)
   const dow = new Date(`${today}T00:00:00Z`).getUTCDay()
   const weekStart = addDays(today, -((dow + 6) % 7))
@@ -176,15 +200,16 @@ export function computeDashboardInvoiceFigures(input: {
   const yearStart = `${today.slice(0, 4)}-01-01`
   const revenue = { today: 0, yesterday: 0, week: 0, month: 0, year: 0, paidThisWeekCount: 0 }
   for (const inv of invoices) {
-    if (inv.type === 'vendor_bill' || invoicePaymentStatus(inv as never) !== 'paid') continue
-    const day = nairobiDay(inv.date)
-    if (!day) continue
-    const total = num(inv.total)
-    if (day >= today) revenue.today += total
-    if (day >= yesterday && day < today) revenue.yesterday += total
-    if (day >= weekStart) { revenue.week += total; revenue.paidThisWeekCount++ }
-    if (day >= monthStart) revenue.month += total
-    if (day >= yearStart) revenue.year += total
+    if (inv.type === 'vendor_bill' || invoiceDocState(inv.status) !== 'posted') continue
+    for (const { day, amount } of receiptsOf(inv)) {
+      if (day > today) continue
+      if (day === today) revenue.today += amount
+      if (day === yesterday) revenue.yesterday += amount
+      if (day >= monthStart) revenue.month += amount
+      if (day >= yearStart) revenue.year += amount
+      if (day >= weekStart) revenue.week += amount
+    }
+    if (receiptsOf(inv).some(r => r.day >= weekStart && r.day <= today)) revenue.paidThisWeekCount++
   }
 
   // ── Activity feed ──────────────────────────────────────────────────────────
