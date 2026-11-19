@@ -287,7 +287,7 @@ html {
     justify-content: center;
     gap: 0.2rem;
     border: 0;
-    border-radius: 0.6rem;
+    border-radius: var(--radius-sm, 0.5rem);
     background: none;
     color: var(--text-3);
     font-size: 0.625rem;
@@ -305,7 +305,8 @@ html {
   }
 
   .mobile-tab-bar__icon {
-    font-size: 1.05rem;
+    width: 1.125rem;
+    height: 1.125rem;
   }
 
   .mobile-tab-bar__tab.is-active {
