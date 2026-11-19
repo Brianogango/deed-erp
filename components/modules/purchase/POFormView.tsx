@@ -1,7 +1,7 @@
 'use client'
 import ProductFormModal from '@/components/inventory/ProductFormModal'
 import { canCreateProductFromSales } from '@/lib/sales/similar-products'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Modal, Field, Input, Confirm, PanelHeader, StatusStepper, SearchPicker } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
@@ -84,7 +84,7 @@ export default function POFormView() {
     setShowImport, setShowScanModal, setShowReturnModal, setReturnReceiptId,
     setReturnReason, setReturnLines, setReturnScanInput,
     setReturnCollectedBy, setReturnCollectedDate, setReturnPickupNotes,
-    delId, setDelId, vendors, purchasableProds,
+    delId, setDelId, vendors, purchasableProds, billRequestPoId, setBillRequestPoId,
   } = usePurchase()
 
   const [sendingRfqMail, setSendingRfqMail] = useState(false)
@@ -94,6 +94,14 @@ export default function POFormView() {
   const [showBillModal, setShowBillModal] = useState(false)
   const [billQtys, setBillQtys] = useState<Record<string, string>>({})
   const [creatingBill, setCreatingBill] = useState(false)
+  const openBillRef = useRef<(() => void) | null>(null)
+
+  // "Create bill" on a validated receipt lands here with the bill form open.
+  useEffect(() => {
+    if (!activePO || billRequestPoId !== activePO.id) return
+    setBillRequestPoId(null)
+    openBillRef.current?.()
+  }, [activePO, billRequestPoId, setBillRequestPoId])
 
   if (!activePO) return null
 
@@ -148,9 +156,14 @@ export default function POFormView() {
 
   const openBillModal = () => {
     const lines = billableLinesFor(activePO)
+    if (!lines.length) {
+      showToast('Everything received on this order has already been billed', 'info')
+      return
+    }
     setBillQtys(Object.fromEntries(lines.map(l => [l.id, String(l.maxQty)])))
     setShowBillModal(true)
   }
+  openBillRef.current = openBillModal
 
   const submitPartialBill = async () => {
     const badLine = Object.entries(billQtys).find(([, qty]) => qty.trim() !== '' && (!Number.isFinite(Number(qty)) || Number(qty) < 0))

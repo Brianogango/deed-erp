@@ -216,6 +216,8 @@ function PurchaseContent() {
 
   // ── GRN state ──────────────────────────────────────────────────────────────
   const [activeReceiptId,      setActiveReceiptId]      = useState<string | null>(null)
+  // A receipt page asked to bill its purchase order: the PO page opens its bill form.
+  const [billRequestPoId,      setBillRequestPoId]      = useState<string | null>(null)
   const [isValidatingReceipt,  setIsValidatingReceipt]  = useState(false)
   const [showValidateReview,   setShowValidateReview]   = useState(false)
   const [receiptOrigin,        setReceiptOrigin]        = useState<'list' | 'po'>('list')
@@ -1286,7 +1288,7 @@ function PurchaseContent() {
     // Scan
     showScanModal, setShowScanModal, scanFile, setScanFile, isScanningScan, setIsScanningScan, scanFileRef,
     // GRN
-    activeReceiptId, setActiveReceiptId, receiptOrigin, openReceiptDetail, closeReceiptDetail, startReceive, openReceive, grnLines, setGrnLines, destLocation: destLocation as LocationId, setDestLocation,
+    activeReceiptId, setActiveReceiptId, billRequestPoId, setBillRequestPoId, receiptOrigin, openReceiptDetail, closeReceiptDetail, startReceive, openReceive, grnLines, setGrnLines, destLocation: destLocation as LocationId, setDestLocation,
     serialInputs, setSerialInputs, serialAccessories, setSerialAccessories,
     serialAccessoryNotes, setSerialAccessoryNotes, serialSpecs, setSerialSpecs, serialIssues, setSerialIssues, serialRefs,
     // Return
