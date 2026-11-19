@@ -6,7 +6,8 @@ import { DataTable, type ColumnDef, type PrimaryFilterConfig, type ActiveFilterC
 import { CompactInfoNotice, TablePageLayout } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faPrint } from '@fortawesome/free-solid-svg-icons'
-import { printProductLabels, printSerialLabels } from '@/lib/product-label'
+import { printProductLabels, printProductLabelsBatch, printSerialLabels } from '@/lib/product-label'
+import { Modal, Input } from '@/components/ui'
 import { downloadProductLabelsPdf, downloadSerialLabelsPdf } from '@/lib/inventory/label-pdf'
 import {
   EMPTY_PRODUCT_FILTERS,
@@ -73,6 +74,8 @@ export default function InventoryProductsPanel({
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
   const [serialProduct, setSerialProduct] = useState<Product | null>(null)
   const [labelBusy, setLabelBusy] = useState(false)
+  // Products chosen for one label print, with how many labels each.
+  const [labelPlan, setLabelPlan] = useState<Array<{ row: ProductListRow; qty: string }> | null>(null)
 
   useEffect(() => {
     if (!openArchivedToken) return
@@ -550,33 +553,56 @@ export default function InventoryProductsPanel({
   const productSerialCount = (productId: string) =>
     serials.filter(s => s.productId === productId).length
 
-  const runProductLabels = async (selected: ProductListRow[], mode: 'print' | 'pdf') => {
+  const openLabelPlan = (selected: ProductListRow[]) => {
     if (!canLabels) {
       showToast('You do not have permission to print labels', 'error')
       return
     }
     if (!selected.length) return
+    setLabelPlan(selected.map(row => ({ row, qty: '1' })))
+  }
+
+  const labelQty = (qty: string) => Math.max(0, Math.floor(Number(qty) || 0))
+
+  /** Every selected product, with its own label count, in one print job or one PDF. */
+  const runProductLabels = async (plan: Array<{ row: ProductListRow; qty: string }>, mode: 'print' | 'pdf') => {
+    if (!canLabels) {
+      showToast('You do not have permission to print labels', 'error')
+      return
+    }
+    const requests = plan
+      .map(({ row, qty }) => ({ product: row.product, qty: labelQty(qty) }))
+      .filter(r => r.qty > 0)
+    if (!requests.length) {
+      showToast('Enter how many labels to print for at least one product', 'error')
+      return
+    }
     setLabelBusy(true)
     try {
+      let count = 0
       if (mode === 'print') {
-        for (const row of selected) printProductLabels(row.product, 1)
+        const { printed, skipped } = printProductLabelsBatch(requests)
+        count = printed
+        if (skipped.length) {
+          showToast(`No barcode or SKU, not printed: ${skipped.map(p => p.name).join(', ')}`, 'error')
+        }
       } else {
-        const filename = await downloadProductLabelsPdf(
-          selected.map(row => ({
-            name: row.product.name,
-            sku: row.product.sku,
-            barcode: row.product.barcode,
-            salePrice: row.product.salePrice,
-            category: row.product.category,
-          })),
-        )
-        addAuditLog('labels_download', filename, `Downloaded ${selected.length} product label(s) as PDF`)
+        const items = requests.flatMap(({ product, qty }) => Array.from({ length: qty }, () => ({
+          name: product.name,
+          sku: product.sku,
+          barcode: product.barcode,
+          salePrice: product.salePrice,
+          category: product.category,
+        })))
+        const filename = await downloadProductLabelsPdf(items)
+        count = items.length
         showToast(`Downloaded ${filename}`, 'success')
       }
+      if (count) setLabelPlan(null)
       addAuditLog(
         mode === 'print' ? 'labels_print' : 'labels_download',
         'inventory-products',
-        `${mode} ${selected.length} product label(s)`,
+        `${mode} ${count} label(s) for ${requests.length} product(s)`,
       )
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Label action failed', 'error')
@@ -647,7 +673,7 @@ export default function InventoryProductsPanel({
             }] : []),
             ...(canLabels ? [{
               id: 'labels-print-page',
-              label: labelBusy ? 'Preparing labels…' : 'Print labels (selected via bulk bar)',
+              label: labelBusy ? 'Preparing labels…' : 'Print labels (select products first)',
               onSelect: () => showToast('Select products, then use the bulk Labels actions', 'info'),
             }] : []),
           ]}
@@ -655,24 +681,14 @@ export default function InventoryProductsPanel({
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-text-2">{selected.length} selected</span>
               {canLabels && (
-                <>
-                  <button
-                    type="button"
-                    className="dt-toolbar-btn"
-                    disabled={labelBusy}
-                    onClick={() => { void runProductLabels(selected, 'print') }}
-                  >
-                    <Fa icon={faPrint} className="dt-toolbar-icon" /> Print labels
-                  </button>
-                  <button
-                    type="button"
-                    className="dt-toolbar-btn"
-                    disabled={labelBusy}
-                    onClick={() => { void runProductLabels(selected, 'pdf') }}
-                  >
-                    Download labels PDF
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className="dt-toolbar-btn"
+                  disabled={labelBusy}
+                  onClick={() => openLabelPlan(selected)}
+                >
+                  <Fa icon={faPrint} className="dt-toolbar-icon" /> Print labels
+                </button>
               )}
               <button type="button" className="dt-toolbar-btn" onClick={clear}>Clear</button>
             </div>
@@ -768,6 +784,46 @@ export default function InventoryProductsPanel({
         />
       </TablePageLayout>
 
+      {labelPlan && (
+        <Modal
+          title="Print product labels"
+          subtitle={`${labelPlan.length} product${labelPlan.length === 1 ? '' : 's'} · ${labelPlan.reduce((n, p) => n + labelQty(p.qty), 0)} labels in one print`}
+          onClose={() => setLabelPlan(null)}
+          width={560}
+        >
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button type="button" className="dt-toolbar-btn" onClick={() => setLabelPlan(p => p && p.map(x => ({ ...x, qty: '1' })))}>1 each</button>
+            <button type="button" className="dt-toolbar-btn" onClick={() => setLabelPlan(p => p && p.map(x => ({ ...x, qty: String(Math.max(0, Math.floor(x.row.onHand || 0))) })))}>Match stock on hand</button>
+          </div>
+          <div className="flex flex-col divide-y divide-[var(--border-lt)] max-h-[50vh] overflow-y-auto">
+            {labelPlan.map(({ row, qty }, i) => (
+              <div key={row.id} className="flex items-center gap-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-text-1 truncate">{row.product.name}</p>
+                  <p className="text-[10px] text-text-3">
+                    {row.product.sku || row.product.barcode || 'No barcode or SKU — cannot print'} · On hand {row.onHand}
+                  </p>
+                </div>
+                <div className="w-20 shrink-0">
+                  <Input
+                    type="number"
+                    value={qty}
+                    min="0"
+                    onChange={v => setLabelPlan(p => p && p.map((x, j) => j === i ? { ...x, qty: v } : x))}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
+            <button type="button" className="btn-outline" onClick={() => setLabelPlan(null)}>Cancel</button>
+            <button type="button" className="btn-outline" disabled={labelBusy} onClick={() => { void runProductLabels(labelPlan, 'pdf') }}>Download PDF</button>
+            <button type="button" className="btn-primary" disabled={labelBusy} onClick={() => { void runProductLabels(labelPlan, 'print') }}>
+              <Fa icon={faPrint} /> {labelBusy ? 'Preparing…' : `Print ${labelPlan.reduce((n, p) => n + labelQty(p.qty), 0)} labels`}
+            </button>
+          </div>
+        </Modal>
+      )}
       {serialProduct && (
         <SerialManageDrawer
           product={serialProduct}

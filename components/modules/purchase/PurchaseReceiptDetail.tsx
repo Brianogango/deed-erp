@@ -5,7 +5,7 @@ import { Badge, PanelHeader } from '@/components/ui'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import { EmptyState, MobileActionBar, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge, WorkflowStageBar } from '@/components/erp'
 import { Fa, faBarcode, faBox } from '@/components/icons'
-import { printProductLabels, printSerialLabels } from '@/lib/product-label'
+import { printProductLabelsBatch, printSerialLabels, type ProductLabelRequest } from '@/lib/product-label'
 import type { SerialLabelItem } from '@/lib/product-label-meta'
 import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
 import { userCan } from '@/lib/auth/can'
@@ -66,6 +66,7 @@ export default function PurchaseReceiptDetail() {
 
   const handlePrint = async () => {
     const serialItems: SerialLabelItem[] = []
+    const bulk: ProductLabelRequest[] = []
     for (const line of lines) {
       const prod = products.find(p => p.id === line.productId)
       if (line.requiresSerial && line.serials.length) {
@@ -82,9 +83,10 @@ export default function PurchaseReceiptDetail() {
           })
         }
       } else if (line.qtyReceived > 0 && prod) {
-        printProductLabels(prod, line.qtyReceived)
+        bulk.push({ product: prod, qty: line.qtyReceived })
       }
     }
+    if (bulk.length) printProductLabelsBatch(bulk, `${activeReceipt.ref} — Product Labels`)
     if (serialItems.length) await printSerialLabels(serialItems, { serials, products })
     if (!serialItems.length && lines.every(l => l.qtyReceived === 0)) {
       showToast('Nothing to print on this GRN yet', 'info')
