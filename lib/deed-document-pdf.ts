@@ -584,7 +584,9 @@ export function buildDeedDocumentPdf(
       return [{
         content: item.description,
         colSpan: 6,
-        styles: { fontStyle: 'bold' as const, textColor: NAVY, fillColor: SOFT },
+        // Spans from the '#' column, which is centred; a heading reads as a
+        // heading only when it starts where the descriptions do.
+        styles: { fontStyle: 'bold' as const, textColor: NAVY, fillColor: SOFT, halign: 'left' as const },
       }]
     }
     rowNo += 1

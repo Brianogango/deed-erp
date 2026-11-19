@@ -10,6 +10,7 @@ import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '
 import { findRepairByPortalRef } from '@/lib/repair-ref'
 import { guardPortalRoute } from '@/lib/portal/portal-guard.server'
 import { pdfCompany } from '@/lib/pdf-company'
+import { repairDeviceHeading, withRepairDeviceSection } from '@/lib/repair-invoice-device-section'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,9 +62,12 @@ async function handleGET(
     const lines = (invoice.lines ?? []) as any[]
     const deviceDesc = [repair.deviceBrand, repair.deviceModel, repair.deviceColor].filter(Boolean).join(' ')
     const commercialNotes = customerFacingNotes(invoice.notes)
+    // The device heads the line items; the notes repeat it only when the
+    // repair names no device the heading could use.
+    const headed = !!repairDeviceHeading(repair)
     const notes = [
-      deviceDesc ? `Device: ${deviceDesc}` : '',
-      repair.deviceSerial ? `S/N: ${repair.deviceSerial}` : '',
+      !headed && deviceDesc ? `Device: ${deviceDesc}` : '',
+      !headed && repair.deviceSerial ? `S/N: ${repair.deviceSerial}` : '',
       commercialNotes,
     ].filter(Boolean).join('\n') || undefined
 
@@ -78,13 +82,14 @@ async function handleGET(
         customerName: String(invoice.partnerName ?? repair.customerName ?? '—'),
         customerCountry: 'Kenya',
         customerPhone: repair.customerPhone || undefined,
-        lines: lines.map((line: any) => ({
+        lines: withRepairDeviceSection(lines.map((line: any) => ({
+          lineType: line.lineType === 'section' ? 'section' as const : undefined,
           description: String(line.description ?? line.productName ?? ''),
           qty: Number(line.qty ?? 1),
           unitPrice: Number(line.unitPrice ?? 0),
           taxRate: Number(line.taxRate ?? co.vatRate ?? 16),
           subtotal: Number(line.subtotal ?? line.lineTotal ?? 0),
-        })),
+        })), repair),
         subtotal: Number(invoice.subtotal ?? 0),
         taxTotal: Number(invoice.taxTotal ?? 0),
         total: Number(invoice.total ?? 0),

@@ -1184,6 +1184,7 @@ function AccountingContent() {
             companySettings,
             bankAccounts,
             inv.type === 'customer_invoice' ? getDocumentPaymentDetails(inv.id) : undefined,
+            appState.repairs,
           )
           ok += 1
           // Brief gap so the browser does not coalesce / block successive saves.
