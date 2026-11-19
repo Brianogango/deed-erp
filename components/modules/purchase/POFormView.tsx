@@ -442,13 +442,16 @@ export default function POFormView() {
                 {
                   id: 'bill',
                   label: 'Create bill',
-                  hidden: !canCreateBill || canSend || canConfirm || canReceive,
+                  // Not hidden behind "Receive goods": on a part-received order
+                  // anyone who can still receive (Admin and Inventory Officers)
+                  // lost every way to bill what had already arrived.
+                  hidden: !canCreateBill || canSend || canConfirm,
                   onClick: openBillModal,
                 },
                 {
                   id: 'validate',
                   label: 'Validate bill',
-                  hidden: !canValidateBill || canSend || canConfirm || canReceive || canCreateBill,
+                  hidden: !canValidateBill || canSend || canConfirm || canCreateBill,
                   onClick: () => { void postInvoice(linkedBill!.id) },
                 },
                 {
