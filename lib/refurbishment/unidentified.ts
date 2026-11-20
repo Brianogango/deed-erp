@@ -102,9 +102,28 @@ export function standInProductName(typed: unknown): string {
  * price, and a machine cannot go back on sale under it: after refurbishment it
  * is matched to the product line with its model and specs.
  */
-export function isStandInProduct(product: { name?: string | null; salePrice?: number | string | null } | null | undefined, fallbackName?: string | null): boolean {
+export function isStandInProduct(
+  product: { name?: string | null; salePrice?: number | string | null } | null | undefined,
+  fallbackName?: string | null,
+  /**
+   * Whether this machine came in unidentified (an intake tag). A machine that
+   * came in with its real serial — from the warehouse or After-Sales — is
+   * filed under its real product even when that product has no price yet,
+   * so only a stand-in name makes it a stand-in.
+   */
+  opts?: { cameInUnidentified?: boolean },
+): boolean {
   const name = product?.name ?? fallbackName
   if (isPlaceholderProductName(name)) return true
   if (!product) return false
+  if (opts?.cameInUnidentified === false) return false
   return !(Number(product.salePrice) > 0)
+}
+
+/** A refurbishment job's machine came in without its real serial (tagged at intake). */
+export function cameInUnidentified(
+  job: { identityPending?: boolean; intakeTag?: string | null },
+  unit?: { identityPending?: boolean; intakeTag?: string | null } | null,
+): boolean {
+  return !!(job.identityPending || job.intakeTag || unit?.identityPending || unit?.intakeTag)
 }

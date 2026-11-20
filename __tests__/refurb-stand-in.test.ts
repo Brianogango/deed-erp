@@ -25,3 +25,21 @@ describe('stand-in names typed at intake', () => {
     expect(isStandInProduct({ name: standInProductName('hp dead'), salePrice: 0 })).toBe(true)
   })
 })
+
+import { cameInUnidentified } from '@/lib/refurbishment/unidentified'
+
+describe('machines that came in identified (warehouse, After-Sales)', () => {
+  it('are never stand-ins just because their product has no price yet', () => {
+    expect(isStandInProduct({ name: 'HP EliteBook 840 G5', salePrice: 0 }, null, { cameInUnidentified: false })).toBe(false)
+    // A stand-in name is a stand-in however the machine came in.
+    expect(isStandInProduct({ name: 'Laptop — unidentified', salePrice: 0 }, null, { cameInUnidentified: false })).toBe(true)
+    // Tagged at intake with an older quick name: still matched before sale.
+    expect(isStandInProduct({ name: 'lenovo tm', salePrice: 0 }, null, { cameInUnidentified: true })).toBe(true)
+  })
+  it('tell an intake tag from a real serial', () => {
+    expect(cameInUnidentified({ intakeTag: 'UNK-261107-001' })).toBe(true)
+    expect(cameInUnidentified({ identityPending: true })).toBe(true)
+    expect(cameInUnidentified({}, { intakeTag: 'UNK-1' })).toBe(true)
+    expect(cameInUnidentified({}, { identityPending: false })).toBe(false)
+  })
+})
