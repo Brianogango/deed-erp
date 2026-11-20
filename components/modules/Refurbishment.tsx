@@ -21,11 +21,12 @@ import { IdentifyUnitModal } from '@/components/refurbishment/IdentifyUnitModal'
 import { HarvestPartsModal } from '@/components/refurbishment/HarvestPartsModal'
 import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { refurbWeekStart } from '@/lib/refurbishment/weekly-report'
-import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
+import { StatusBadge, RecordHeader, PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
+import { MoveSerialProductModal } from '@/components/inventory/MoveSerialProductModal'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { useUrlRecordId, useUrlUiPatch, useUrlUiState } from '@/hooks/useUrlRecordId'
-import { faRotate, faPlus, faUser, faWrench, faCheckCircle, faArrowRight, faBan, faBoxOpen, faPencil, faTrash, faBell, faTriangleExclamation, faCheck, faMagnifyingGlass, faScrewdriverWrench, faPrint } from '@fortawesome/free-solid-svg-icons'
+import { faRotate, faPlus, faUser, faWrench, faArrowRight, faBoxOpen, faPencil, faTrash, faBell, faTriangleExclamation, faCheck, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 import { useCan } from '@/hooks/useCan'
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -115,6 +116,7 @@ function RefurbishmentContent() {
   const [showWriteOffModal, setShowWriteOffModal]   = useState(false)
   const [showCreateJobModal, setShowCreateJobModal] = useState(false)
   const [showIdentify, setShowIdentify]             = useState(false)
+  const [showChangeProduct, setShowChangeProduct]   = useState(false)
   const [showHarvest, setShowHarvest]               = useState(false)
   const [createJobSerial, setCreateJobSerial]       = useState<SerialNumber | null>(null)
   const [createJobIssue, setCreateJobIssue]         = useState('')
@@ -242,83 +244,76 @@ function RefurbishmentContent() {
           statusLabel={sm.label}
           onBack={() => setActiveId(null)}
           backLabel="Back"
-          secondaryActions={
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-              {job.underWarranty && (
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #6EE7B7' }}>
-                  WARRANTY
-                </span>
-              )}
-              {canAssign(job) && (
-                <PrimaryActionButton icon={<Fa icon={faUser} />} onClick={() => setShowAssignModal(true)} hideLabelOnMobile={false}>
-                  Assign
-                </PrimaryActionButton>
-              )}
-              {canStart(job) && (
-                <PrimaryActionButton icon={<Fa icon={faWrench} />} onClick={() => updateRefurbishmentJob(job.id, { status: 'in_progress' })} hideLabelOnMobile={false}>
-                  Start refurb
-                </PrimaryActionButton>
-              )}
-              {canLogNotes(job) && (
-                <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                  style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border-lt)', cursor: 'pointer' }}
-                  onClick={() => { setNotesText(job.techNotes ?? ''); setIssuesText(job.issuesFound ?? ''); setShowNotesModal(true) }}>
-                  <Fa icon={faPencil} className="mr-1.5" />Issues & notes
-                </button>
-              )}
-              {canIdentify(job) && (
-                <PrimaryActionButton icon={<Fa icon={faMagnifyingGlass} />} onClick={() => setShowIdentify(true)} hideLabelOnMobile={false}>
-                  Identify
-                </PrimaryActionButton>
-              )}
-              {canMarkReady(job) && !job.identityPending && (
-                <PrimaryActionButton icon={<Fa icon={faCheckCircle} />} onClick={() => markRefurbishmentReady(job.id)} hideLabelOnMobile={false}>
-                  Mark ready
-                </PrimaryActionButton>
-              )}
-              {canTransfer(job) && !job.identityPending && (
-                <PrimaryActionButton icon={<Fa icon={faArrowRight} />} onClick={() => transferToSell(job.id)} hideLabelOnMobile={false}>
-                  Send for retest
-                </PrimaryActionButton>
-              )}
-              {['ready', 'transferred'].includes(job.status) && !job.identityPending && (() => {
-                const unit = serials.find(s => s.id === job.serialId)
-                return unit ? (
-                  <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                    style={{ background: 'var(--bg-muted)', color: 'var(--text-2)', border: '1px solid var(--border-lt)', cursor: 'pointer' }}
-                    onClick={() => printStickers([unit], true)}>
-                    <Fa icon={faPrint} className="mr-1.5" />Print sale label
-                  </button>
-                ) : null
-              })()}
-              {canWriteOff(job) && (
-                <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                  style={{ background: 'var(--danger-bg)', color: '#991B1B', border: '1px solid #FCA5A5', cursor: 'pointer' }}
-                  onClick={() => { setWriteOffReason(''); setShowWriteOffModal(true) }}>
-                  <Fa icon={faBan} className="mr-1.5" />Write off
-                </button>
-              )}
-              {canWriteOff(job) && (
-                <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                  style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid #FCD34D', cursor: 'pointer' }}
-                  onClick={() => setShowHarvest(true)}>
-                  <Fa icon={faScrewdriverWrench} className="mr-1.5" />Harvest parts
-                </button>
-              )}
-              {job.status === 'written_off' && job.outcome !== 'harvested' && isLeadTech && (
-                <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                  style={{ background: '#ECFDF5', color: 'var(--success-text)', border: '1px solid #A7F3D0', cursor: 'pointer' }}
-                  onClick={() => setPendingConfirm({
-                    msg: job.writeOffCost
-                      ? `Bring this device back? It returns to stock and the KES ${job.writeOffCost.toLocaleString('en-KE')} write-off is reversed.`
-                      : 'Bring this device back to refurbishment? It returns to stock.',
-                    action: () => { void restoreRefurbishmentJob(job.id) },
-                  })}>
-                  <Fa icon={faRotate} className="mr-1.5" />Restore to queue
-                </button>
-              )}
-            </div>
-          }
+          secondaryActions={(() => {
+            // One main button, for the step at hand; the rest under More.
+            // The header used to offer Issues & notes, Mark ready, Write off
+            // and Harvest parts side by side while the Next card below asked
+            // for something else ("Record issues").
+            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs })
+            const shownBelow = (key: string) => next.mine && next.key === key
+            const unit = serials.find(s => s.id === job.serialId)
+            const canFixProduct = !!unit && !job.identityPending && unit.status === 'refurbishment'
+              && !['transferred', 'written_off'].includes(job.status)
+              && (can('editSerialNumber') || can('refurbishment.identify'))
+            return (
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {job.underWarranty && (
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #6EE7B7' }}>
+                    WARRANTY
+                  </span>
+                )}
+                {canAssign(job) && !shownBelow('assign') && (
+                  <PrimaryActionButton icon={<Fa icon={faUser} />} onClick={() => setShowAssignModal(true)} hideLabelOnMobile={false}>
+                    Assign
+                  </PrimaryActionButton>
+                )}
+                {canStart(job) && !shownBelow('start') && (
+                  <PrimaryActionButton icon={<Fa icon={faWrench} />} onClick={() => updateRefurbishmentJob(job.id, { status: 'in_progress' })} hideLabelOnMobile={false}>
+                    Start refurb
+                  </PrimaryActionButton>
+                )}
+                {canIdentify(job) && !shownBelow('identify') && (
+                  <PrimaryActionButton icon={<Fa icon={faMagnifyingGlass} />} onClick={() => setShowIdentify(true)} hideLabelOnMobile={false}>
+                    Identify
+                  </PrimaryActionButton>
+                )}
+                {canTransfer(job) && !job.identityPending && !shownBelow('retest') && (
+                  <PrimaryActionButton icon={<Fa icon={faArrowRight} />} onClick={() => transferToSell(job.id)} hideLabelOnMobile={false}>
+                    Send for retest
+                  </PrimaryActionButton>
+                )}
+                <SecondaryActionMenu
+                  ariaLabel="More job actions"
+                  actions={[
+                    {
+                      id: 'notes', label: 'Issues & notes', hidden: !canLogNotes(job),
+                      onClick: () => { setNotesText(job.techNotes ?? ''); setIssuesText(job.issuesFound ?? ''); setShowNotesModal(true) },
+                    },
+                    {
+                      id: 'ready', label: 'Mark ready', hidden: !(canMarkReady(job) && !job.identityPending) || shownBelow('mark_ready'),
+                      onClick: () => markRefurbishmentReady(job.id),
+                    },
+                    { id: 'product', label: 'Change product…', hidden: !canFixProduct, onClick: () => setShowChangeProduct(true) },
+                    {
+                      id: 'print', label: 'Print sale label', hidden: !(['ready', 'transferred'].includes(job.status) && !job.identityPending && unit),
+                      onClick: () => { if (unit) printStickers([unit], true) },
+                    },
+                    { id: 'harvest', label: 'Harvest parts', hidden: !canWriteOff(job), onClick: () => setShowHarvest(true) },
+                    {
+                      id: 'restore', label: 'Restore to queue', hidden: !(job.status === 'written_off' && job.outcome !== 'harvested' && isLeadTech),
+                      onClick: () => setPendingConfirm({
+                        msg: job.writeOffCost
+                          ? `Bring this device back? It returns to stock and the KES ${job.writeOffCost.toLocaleString('en-KE')} write-off is reversed.`
+                          : 'Bring this device back to refurbishment? It returns to stock.',
+                        action: () => { void restoreRefurbishmentJob(job.id) },
+                      }),
+                    },
+                    { id: 'writeoff', label: 'Write off', danger: true, hidden: !canWriteOff(job), onClick: () => { setWriteOffReason(''); setShowWriteOffModal(true) } },
+                  ]}
+                />
+              </div>
+            )
+          })()}
         />
 
         <div className="mod-body p-4 flex flex-col gap-4">
@@ -344,7 +339,20 @@ function RefurbishmentContent() {
             const reached = refurbFlowProgress(job)
             return (
               <div className="card p-4 space-y-3">
-                <ol className="flex flex-wrap items-center gap-1.5 text-[11px]" aria-label="Job progress">
+                {/* Phone: where the job is in one line and a bar (the chips wrapped
+                    onto two rows there). */}
+                <div className="sm:hidden" aria-hidden="true">
+                  <p className="text-[12px] font-semibold text-t1">
+                    <span className="font-medium text-t3">Step {Math.max(1, reached + 1)} of {REFURB_FLOW_STEPS.length} · </span>
+                    {REFURB_FLOW_STEPS[Math.max(0, reached)]}
+                  </p>
+                  <div className="mt-1.5 flex gap-1">
+                    {REFURB_FLOW_STEPS.map((label, i) => (
+                      <span key={label} className={`h-1.5 flex-1 rounded-full ${i <= reached ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`} />
+                    ))}
+                  </div>
+                </div>
+                <ol className="hidden flex-wrap items-center gap-1.5 text-[11px] sm:flex" aria-label="Job progress">
                   {REFURB_FLOW_STEPS.map((label, i) => (
                     <li key={label} className="inline-flex items-center gap-1.5">
                       {i > 0 && <span aria-hidden="true" className="text-t3">→</span>}
@@ -394,7 +402,7 @@ function RefurbishmentContent() {
           )}
 
           {/* Info grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="refurb-info-grid grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Device */}
             <div className="card p-4 space-y-2">
               <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Device</p>
@@ -444,11 +452,10 @@ function RefurbishmentContent() {
               {job.transferDate  && <p className="text-[11px] text-t3">Transferred: <span className="text-t2 font-medium">{fmtDate(job.transferDate)}</span></p>}
             </div>
 
-            {/* Status */}
+            {/* Parts (the status is in the header badge) */}
             <div className="card p-4 space-y-2">
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Status</p>
-              <RefurbStatusBadge status={job.status} />
-              <div className="mt-2 space-y-1">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Parts</p>
+              <div className="space-y-1">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-t3">Parts logged</span>
                   <span className="font-semibold text-t1">{job.partsNeeded.length}</span>
@@ -839,6 +846,22 @@ function RefurbishmentContent() {
           </Modal>
         )}
         {showIdentify && <IdentifyUnitModal job={job} onClose={() => setShowIdentify(false)} />}
+        {showChangeProduct && (() => {
+          const unit = serials.find(s => s.id === job.serialId)
+          return unit ? (
+            <MoveSerialProductModal
+              unit={unit}
+              products={products}
+              showToast={showToast}
+              onClose={() => setShowChangeProduct(false)}
+              onMoved={target => {
+                setShowChangeProduct(false)
+                // The server renamed the job too; show it here without waiting.
+                updateRefurbishmentJob(job.id, { productId: target.id, productName: target.name })
+              }}
+            />
+          ) : null
+        })()}
         {showHarvest && <HarvestPartsModal job={job} onClose={() => setShowHarvest(false)} onDone={() => { setShowHarvest(false); setActiveId(null) }} />}
       </div>
     )

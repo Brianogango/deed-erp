@@ -27,6 +27,10 @@ describe('unitMoveBlocker', () => {
     expect(unitMoveBlocker({ ...unit, repairId: 'r-1' })).toMatch(/repair/)
     expect(unitMoveBlocker({ ...unit, identityPending: true })).toMatch(/Identify/)
   })
+
+  it('a machine on the refurbishment bench can move', () => {
+    expect(unitMoveBlocker({ ...unit, status: 'refurbishment' })).toBeNull()
+  })
 })
 
 describe('moveSerialToProduct', () => {
@@ -54,4 +58,26 @@ describe('moveSerialToProduct', () => {
     expect(h.saved).not.toHaveBeenCalled()
     expect(h.valuation).not.toHaveBeenCalled()
   })
+
+  it("moves a bench machine and renames its open refurbishment job", async () => {
+    h.state.deed_serials = [{ ...unit, status: 'refurbishment' }]
+    h.state.deed_refurbishmentJobs = [
+      { id: 'j1', serialId: 's1', status: 'in_progress', productId: 'p-g5', productName: wrong.name },
+      { id: 'j0', serialId: 's1', status: 'transferred', productId: 'p-g5', productName: wrong.name },
+    ]
+    const r = await moveSerialToProduct({ userId: 'u1', serialId: 's1', productId: 'p-g6', reason: 'Came in as lenovo tm' })
+    expect(r).toMatchObject({ ok: true })
+    const jobs = JSON.parse(h.saved.mock.calls[0][0].deed_refurbishmentJobs)
+    expect(jobs[0]).toMatchObject({ productId: 'p-g6', productName: right.name })
+    expect(jobs[1]).toMatchObject({ productId: 'p-g5' })
+  })
+
+  it('lets a technician correct only a machine on the bench', async () => {
+    expect(await moveSerialToProduct({ userId: 'u1', serialId: 's1', productId: 'p-g6', reason: 'wrong model', benchOnly: true }))
+      .toMatchObject({ ok: false, status: 403 })
+    h.state.deed_serials = [{ ...unit, status: 'refurbishment' }]
+    expect(await moveSerialToProduct({ userId: 'u1', serialId: 's1', productId: 'p-g6', reason: 'wrong model', benchOnly: true }))
+      .toMatchObject({ ok: true })
+  })
 })
+

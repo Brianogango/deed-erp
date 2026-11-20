@@ -74,10 +74,12 @@ export async function moveSerialToProduct(params: {
   productId: string
   reason: string
   specs?: string
+  /** Only a machine on the refurbishment bench (a technician correcting its model). */
+  benchOnly?: boolean
 }): Promise<{ ok: true; serial: SerialRow; fromProductName: string; cost: number } | { ok: false; error: string; status: number }> {
   const reason = params.reason.trim()
   if (reason.length < 3) return { ok: false, error: 'Say why it is moving (e.g. received under the wrong specs)', status: 422 }
-  const state = await loadAppStateForWrite(['deed_products', 'deed_serials', 'deed_stockMoves'])
+  const state = await loadAppStateForWrite(['deed_products', 'deed_serials', 'deed_stockMoves', 'deed_refurbishmentJobs'])
   const products = [...((state.deed_products as CatalogProduct[]) ?? [])]
   const serials = [...((state.deed_serials as SerialRow[]) ?? [])]
   const moves = [...((state.deed_stockMoves as Move[]) ?? [])]
@@ -86,6 +88,9 @@ export async function moveSerialToProduct(params: {
   if (!unit) return { ok: false, error: 'Machine not found', status: 404 }
   const blocked = unitMoveBlocker(unit)
   if (blocked) return { ok: false, error: `${unit.serial}: ${blocked}`, status: 409 }
+  if (params.benchOnly && unit.status !== 'refurbishment') {
+    return { ok: false, error: `${unit.serial} is not on the refurbishment bench — ask stores to move it`, status: 403 }
+  }
   const target = products.find(p => p.id === params.productId)
   if (!target) return { ok: false, error: 'Choose the product it belongs to', status: 422 }
   if (target.id === unit.productId) return { ok: false, error: `${unit.serial} is already under ${target.name}`, status: 409 }
@@ -101,10 +106,20 @@ export async function moveSerialToProduct(params: {
   }
   const text = `Corrected: ${unit.serial} moved from ${fromProductName} to ${target.name} — ${reason}`
   await moveUnitCount({ products, moves, fromProductId: unit.productId, to: target, serial: unit.serial, location: unit.location, reason: text, documentRef: unit.serial, userId: params.userId })
+  // A machine on the bench: its open refurbishment job names the product too,
+  // and would otherwise keep showing (and later sell under) the old one.
+  const jobs = Array.isArray(state.deed_refurbishmentJobs) ? (state.deed_refurbishmentJobs as Array<Record<string, any>>) : null
+  const openJob = (j: Record<string, any>) => j?.serialId === unit.id && !['transferred', 'written_off'].includes(String(j.status))
+  const jobsChanged = !!jobs?.some(openJob)
   await saveStoreKeys({
     deed_products: JSON.stringify(products),
     deed_serials: JSON.stringify(serials.map(s => (s.id === unit.id ? moved : s))),
     deed_stockMoves: JSON.stringify(moves),
+    ...(jobs && jobsChanged ? {
+      deed_refurbishmentJobs: JSON.stringify(jobs.map(j => (openJob(j)
+        ? { ...j, productId: target.id, productName: target.name, ...(params.specs?.trim() ? { specs: params.specs.trim().slice(0, 500) } : {}) }
+        : j))),
+    } : {}),
   })
   const cost = await moveUnitCost({ fromProductId: unit.productId, toProductId: target.id, ref: `${unit.serial} MOVE`, text, userId: params.userId })
   return { ok: true, serial: moved, fromProductName, cost }

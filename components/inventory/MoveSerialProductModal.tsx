@@ -14,7 +14,7 @@ export function MoveSerialProductModal({ unit, products, onClose, onMoved, showT
   unit: SerialNumber
   products: Product[]
   onClose: () => void
-  onMoved: () => void
+  onMoved: (target: Product) => void
   showToast: (message: string, tone?: 'success' | 'error' | 'info') => void
 }) {
   const [target, setTarget] = useState<Product | null>(null)
@@ -36,7 +36,7 @@ export function MoveSerialProductModal({ unit, products, onClose, onMoved, showT
       const data = await res.json().catch(() => null) as { error?: string } | null
       if (!res.ok) throw new Error(data?.error || `Move failed (${res.status})`)
       showToast(`${unit.serial} moved to ${target.name}`, 'success')
-      onMoved()
+      onMoved(target)
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Move failed', 'error')
     } finally {
