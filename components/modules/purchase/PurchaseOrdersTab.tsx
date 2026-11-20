@@ -244,14 +244,12 @@ export default function PurchaseOrdersTab() {
               key={po.id}
               eyebrow={po.ref}
               title={po.vendorName}
-              subtitle={isRFQ ? 'RFQ' : 'Purchase Order'}
+              // The reference already says PO/…; date and size are what tell
+              // one order from the next (they were two boxed rows below).
+              subtitle={`${isRFQ ? 'RFQ · ' : ''}${fmtDate(po.date)} · ${po.lines.length} line${po.lines.length === 1 ? '' : 's'}`}
               amount={fmtKes(po.total)}
               status={<StatusBadge status={statusOf(po).badge} label={statusOf(po).label} size="xs" />}
               accent={isRFQ ? 'var(--warning)' : 'var(--primary)'}
-              meta={[
-                { label: 'Date', value: fmtDate(po.date) },
-                { label: 'Lines', value: po.lines.length },
-              ]}
               actions={poRowActions(po) ?? undefined}
               onClick={() => openOrder(po)}
             />

@@ -1137,13 +1137,11 @@ function ExpenseTable({
       key={exp.id}
       eyebrow={exp.ref}
       title={exp.description}
-      subtitle={`${catLabel(exp.category)} · ${fmtDate(exp.expenseDate)}${exp.payeeName ? ` · Payee: ${exp.payeeName}` : ''}${showSubmitter ? ` · ${exp.submittedByName}` : ''}`}
+      // Payment method joins the line above instead of a row of its own.
+      subtitle={`${catLabel(exp.category)} · ${fmtDate(exp.expenseDate)} · ${pmLabel(exp.paymentMethod)}${exp.payeeName ? ` · Payee: ${exp.payeeName}` : ''}${showSubmitter ? ` · ${exp.submittedByName}` : ''}`}
       amount={fmtKes(exp.amount)}
       status={<ExpenseStatusBadge status={exp.status} />}
-      meta={[
-        { label: 'Payment', value: pmLabel(exp.paymentMethod) },
-        ...(exp.receiptFileName ? [{ label: 'Receipt', value: exp.receiptFileName }] : []),
-      ]}
+      meta={exp.receiptFileName ? [{ label: 'Receipt', value: exp.receiptFileName }] : []}
       actions={rowActions(exp) ?? undefined}
       onClick={onView ? () => onView(exp) : undefined}
     />

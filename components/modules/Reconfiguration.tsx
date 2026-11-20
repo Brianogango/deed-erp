@@ -581,14 +581,6 @@ export default function Reconfiguration() {
       {tab === 'orders' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Work orders" count={orders.length}>
-            <input
-              aria-label="Search work orders"
-              className="form-input text-[11px] py-1.5"
-              style={{ width: 200 }}
-              placeholder="Search ref or serial…"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-            />
             <select aria-label="Filter by status" className="form-select text-[11px] py-1.5" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="">All statuses</option>
               {Object.entries(STATUS_LABELS).map(([k, v]) => (
@@ -604,7 +596,13 @@ export default function Reconfiguration() {
             columns={orderColumns}
             rows={orders}
             rowKey={o => o.id}
-            hideSearch
+            // The search lives in the table's toolbar beside its menu (it sat
+            // in the panel header, leaving the menu alone on its own row).
+            // The server does the matching, so the table does not filter again.
+            searchValue={q}
+            onSearchChange={setQ}
+            clientSearch={false}
+            searchPlaceholder="Search ref or serial…"
             onRowClick={o => void loadDetail(o.id)}
             emptyMessage={loading ? 'Loading work orders…' : 'No reconfiguration work orders yet.'}
             exportTitle="Reconfiguration work orders"
