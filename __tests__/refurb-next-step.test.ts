@@ -41,7 +41,7 @@ describe('refurb next step', () => {
   })
 
   it('an identified machine whose product has no price goes to Mark ready, with a reminder to price it', () => {
-    const next = refurbNextStep(job({ issuesFound: 'Keyboard' }), { id: 't1' }, { standIn: false, noPrice: true })
+    const next = refurbNextStep(job({ issuesFound: 'Keyboard' }), { id: 't1', isLead: false, canAssign: false }, { standIn: false, noPrice: true })
     expect(next.key).toBe('mark_ready')
     expect(next.detail).toMatch(/no selling price/)
   })
