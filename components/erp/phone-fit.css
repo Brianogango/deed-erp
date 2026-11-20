@@ -937,9 +937,9 @@ html {
     margin-top: 0.5rem;
     padding: 0.5rem 0;
     border: 0;
-    border-top: 1px solid var(--border, #e5e7eb);
+    border-top: 1px solid var(--border-lt);
     background: none;
-    color: var(--primary, #1A1F5E);
+    color: var(--navy);
     font-size: 13px;
     font-weight: 600;
     text-align: left;
