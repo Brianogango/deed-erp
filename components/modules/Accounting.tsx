@@ -1,5 +1,6 @@
 'use client'
 
+import { PERIODS, periodOf, periodRange } from '@/lib/finance/period-range'
 import { planMigrationImport } from '@/lib/finance/migration-import'
 import { newestDocumentFirst } from '@/lib/document-order'
 import { isOpeningBalanceDocument } from '@/lib/finance/opening-balance'
@@ -2229,6 +2230,23 @@ function AccountingContent() {
                 <div className="flex items-center gap-2 flex-wrap">
                   {plSource === 'prisma' && (
                     <>
+                      {/* One tap for the usual periods; the dates below still allow any range. */}
+                      <div className="finance-period-presets flex w-full gap-1 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-1 sm:w-auto" role="group" aria-label="P&L period">
+                        {PERIODS.map(p => {
+                          const on = periodOf(pnlDateFrom, pnlDateTo) === p.id
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => { const r = periodRange(p.id); setPnlDateFrom(r.from); setPnlDateTo(r.to) }}
+                              className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${on ? 'bg-[var(--navy)] text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface-2)]'}`}
+                            >
+                              {p.label}
+                            </button>
+                          )
+                        })}
+                      </div>
                       <label className="text-[11px] text-[var(--text-3)] flex items-center gap-1">
                         From
                         <input

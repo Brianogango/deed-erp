@@ -1438,3 +1438,38 @@ html {
     display: none;
   }
 }
+
+@media (max-width: 767px) {
+  /* P&L From / To: native date boxes ran past the screen and showed blank. */
+  /* From and To share a row; the source picker takes the next. */
+  label:has(> input[aria-label='P&L date from']),
+  label:has(> input[aria-label='P&L date to']) {
+    flex: 1 1 9rem;
+    min-width: 0;
+  }
+  select[aria-label='P&L source'] {
+    flex: 1 1 100%;
+  }
+  input[aria-label='P&L date from'],
+  input[aria-label='P&L date to'] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  /* The P&L controls row was as wide as its widest child, not the card. */
+  div:has(> .finance-period-presets) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  div:has(> div > .finance-period-presets) {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
