@@ -1464,6 +1464,9 @@ function AccountingContent() {
 
   if (!mounted) return <ModuleSkeleton />
 
+  // A section with one sub-tab ("Financial reports") gets no sub-tab row.
+  const sectionTabs = FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => (t.id !== 'agent_commissions' || canAddAgentCommission) && (t.id !== 'recurring_bills' || canManageFullFinance) && (t.id !== 'cheques' || canSeeCheques) && canSeeFinancePart(t.id))
+
   return (
     <AccountingProvider value={ctxValue as any}>
       <div className="mod-page finance-workspace finance-workspace--accounts" data-finance-tab={tab}>
@@ -1527,10 +1530,10 @@ function AccountingContent() {
             maxVisibleDesktop={6}
             ariaLabel="Finance workspaces"
           />
-          {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && (
+          {(FINANCE_TAB_SECTION[tab] || 'overview') !== 'overview' && sectionTabs.length > 1 && (
             <div className="px-3 pb-2">
               <TabBar
-                tabs={FINANCE_SECTION_TABS[FINANCE_TAB_SECTION[tab] || 'overview'].filter(t => (t.id !== 'agent_commissions' || canAddAgentCommission) && (t.id !== 'recurring_bills' || canManageFullFinance) && (t.id !== 'cheques' || canSeeCheques) && canSeeFinancePart(t.id))}
+                tabs={sectionTabs}
                 active={tab}
                 onChange={id => setTab(id as MainTab)}
                 className="border-0 bg-transparent px-0 py-0"
@@ -1546,6 +1549,18 @@ function AccountingContent() {
         <div className="mod-body finance-workspace__body">
         {tab === 'reports' && (
           <div className="finance-report-command mb-3 space-y-2">
+            {/* Phones: one picker for every report instead of two tab rows and a fold. */}
+            <label className="finance-report-picker">
+              <span className="sr-only">Report</span>
+              <select value={reportTab} onChange={e => setReport(e.target.value as ReportTab)} aria-label="Report">
+                <optgroup label="Management reports">
+                  {REPORT_TABS.filter(t => MANAGEMENT_REPORT_IDS.has(t.id)).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </optgroup>
+                <optgroup label="Compliance & detailed reports">
+                  {REPORT_TABS.filter(t => CONTROL_REPORT_IDS.has(t.id)).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </optgroup>
+              </select>
+            </label>
             <div className="finance-report-tabs rounded-xl border border-border-lt bg-card p-2 space-y-2">
               <div>
                 <div className="px-1 pb-1 text-xs font-semibold text-text-3">Management reports</div>
@@ -1575,7 +1590,7 @@ function AccountingContent() {
               </details>
             </div>
             {journalSot && (
-              <details className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-xs">
+              <details className="finance-report-status rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-xs">
                 <summary className="cursor-pointer font-semibold text-[var(--text-2)]">Report data status</summary>
                 <div
                   className={`finance-sot-notice mt-2 rounded-lg border px-3 py-2 text-xs ${

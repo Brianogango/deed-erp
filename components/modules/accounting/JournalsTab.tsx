@@ -159,8 +159,8 @@ export default function JournalsTab() {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-        <input className="form-input text-[11px] py-1.5" style={{ width: 140 }} type="date"
+      <div className="journal-filters flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
+        <input className="journal-filters__date form-input text-[11px] py-1.5" style={{ width: 140 }} type="date" aria-label="Entry date"
           value={journalDate} onChange={e => setJournalDate(e.target.value)} />
         <select className="form-select text-[11px] py-1.5" style={{ width: 130 }}
           value={journalStatus} onChange={e => setJournalStatus(e.target.value)}
@@ -185,7 +185,7 @@ export default function JournalsTab() {
           <option value="stock_delivery">Stock delivery</option>
           <option value="fx_revaluation">FX revaluation</option>
         </select>
-        <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
+        <input className="journal-filters__ref form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Filter by reference..." value={journalRef} onChange={e => setJournalRef(e.target.value)} />
         {(journalDate || journalSource !== 'all' || journalStatus !== 'all' || journalRef) && (
           <button
@@ -203,7 +203,7 @@ export default function JournalsTab() {
         )}
         <button
           type="button"
-          className="btn-primary text-[11px] py-1.5 px-3 ml-auto"
+          className="journal-filters__new btn-primary text-[11px] py-1.5 px-3 ml-auto"
           onClick={() => setShowManual(true)}
         >
           New manual journal
@@ -216,11 +216,13 @@ export default function JournalsTab() {
         )}
       </div>
       <div className="px-4 py-2 text-[11px] text-t3 border-b flex items-center justify-between gap-3 flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-        <p>Official books use Prisma posted journals. Client blob is a legacy mirror for migration — do not treat it as the source of truth.</p>
+        <p className="journal-sot-note">Official books use Prisma posted journals. Client blob is a legacy mirror for migration — do not treat it as the source of truth.</p>
         <strong className="text-t2">{filteredJournals.length} entr{filteredJournals.length === 1 ? 'y' : 'ies'} shown</strong>
       </div>
       <DataTable
         tableId="journal-entries"
+        mobileLayout="lines"
+        mobileLineSubtitle={e => `${fmtDate(e.date)} · ${e.description || ''}`}
         columns={columns}
         rows={filteredJournals}
         rowKey={e => e.id}

@@ -340,7 +340,7 @@ export default function ChartOfAccountsTab() {
           onChange={e => setCoaSearch(e.target.value)}
           aria-label="Search chart of accounts"
         />
-        <div className="flex gap-1 flex-wrap" role="tablist" aria-label="Account type">
+        <div className="coa-type-chips flex gap-1 flex-wrap" role="tablist" aria-label="Account type">
           {TYPE_OPTIONS.map(t => (
             <button
               key={t.value}
@@ -377,11 +377,12 @@ export default function ChartOfAccountsTab() {
           <button type="button" className="btn-outline text-[11px]" onClick={openAddBank}>
             Add bank
           </button>
-          <PrimaryActionButton onClick={openNewAccount}>New</PrimaryActionButton>
+          {/* The page header already offers New account on a phone. */}
+          <span className="coa-inline-new"><PrimaryActionButton onClick={openNewAccount}>New</PrimaryActionButton></span>
         </div>
       </div>
 
-      <div className="mx-4 my-2 px-3 py-2 rounded-lg text-[11px] border border-[var(--border-lt)] bg-[var(--bg-surface)] text-t2">
+      <div className="coa-help mx-4 my-2 px-3 py-2 rounded-lg text-[11px] border border-[var(--border-lt)] bg-[var(--bg-surface)] text-t2">
         Chart of Accounts · Accrual · KES · FY {FISCAL_YEAR}. Select a row to open the account. Use <strong>Add bank</strong> to create a cashbook wallet and matching liquidity account (Odoo-style).
       </div>
 
@@ -431,6 +432,9 @@ export default function ChartOfAccountsTab() {
 
       <DataTable
         tableId="chart-of-accounts"
+        mobileLayout="lines"
+        mobileLineTitle={a => <><span className="font-mono text-t3">{a.code}</span>{'  '}{a.name}</>}
+        mobileLineSubtitle={a => `${a.group}${a.subGroup ? ` · ${a.subGroup}` : ''}${a.bankAccountId ? ' · Bank' : ''}`}
         columns={columns}
         rows={filteredAccounts}
         rowKey={a => a.id}

@@ -1311,3 +1311,130 @@ html {
     display: none !important;
   }
 }
+
+/* ── Lists with no search and no filters on phones ──────────────────────
+   The toolbar held only "⋮ More" on a row of its own, ruled off above the
+   list (every Finance report). It is now a small ⋯ at the top right. */
+@media (max-width: 767px) {
+  .dt-toolbar:has(.dt-toolbar-mobile-actions.is-menu-only) {
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 0 0.25rem !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+  .dt-toolbar-mobile-actions.is-menu-only {
+    display: flex !important;
+    justify-content: flex-end !important;
+  }
+  .dt-toolbar-mobile-actions.is-menu-only .dt-toolbar-btn {
+    flex: none !important;
+    width: 2.25rem !important;
+    min-width: 0 !important;
+    height: 2.25rem !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+  .dt-toolbar-mobile-actions.is-menu-only .dt-toolbar-btn > span {
+    display: none !important;
+  }
+}
+
+/* ── Finance reports on phones ──────────────────────────────────────────
+   Four layers of navigation sat above every report: workspace tabs, a
+   one-tab "Financial reports" row (gone), Management reports tabs and a
+   Compliance fold. One report picker replaces the last two; the technical
+   "Report data status" note stays on larger screens. */
+.finance-report-picker {
+  display: none;
+}
+@media (max-width: 767px) {
+  .finance-report-picker {
+    display: block;
+  }
+  .finance-report-picker select {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0 2.25rem 0 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-1);
+    font-weight: 600;
+  }
+  .finance-report-tabs,
+  .finance-report-status {
+    display: none !important;
+  }
+  /* Today · This week · This month · This year · Custom on one line. */
+  .finance-period-presets {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .finance-period-presets::-webkit-scrollbar {
+    display: none;
+  }
+  .finance-period-presets > button {
+    flex: none;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Chart of accounts: type filters in one scrolling row ("Expense" wrapped
+     to a line of its own), no second New (the header has New account), and
+     the help note — what a row does is plain from the row. */
+  .coa-type-chips {
+    flex-wrap: nowrap !important;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .coa-type-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .coa-type-chips > button {
+    flex: none;
+    min-height: 2rem;
+    font-size: 12px !important;
+  }
+  .coa-inline-new,
+  .coa-help {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Statement lines keep a margin from the panel edges (amounts touched it). */
+  .dt-lines .dt-line {
+    padding-inline: 0.875rem;
+  }
+
+  /* Accounting entries: filters as a tidy two-column grid; the technical
+     note on where journals are read from stays on larger screens. */
+  .journal-filters {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.5rem !important;
+  }
+  .journal-filters > :is(input, select, button) {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.5rem;
+    margin: 0 !important;
+  }
+  .journal-filters__date {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .journal-filters__ref,
+  .journal-filters__new,
+  .journal-filters > span {
+    grid-column: 1 / -1;
+  }
+  .journal-sot-note {
+    display: none;
+  }
+}

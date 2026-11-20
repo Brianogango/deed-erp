@@ -149,6 +149,12 @@ interface DataTableProps<T> {
 
   selectable?: boolean
   bulkActions?: (ctx: { rows: T[]; clear: () => void }) => ReactNode
+  /** Phones: 'lines' shows a statement/register (one line per row) instead of cards. */
+  mobileLayout?: 'cards' | 'lines'
+  /** Phones, 'lines': the second line of a row. */
+  mobileLineSubtitle?: (row: T) => ReactNode
+  /** Phones, 'lines': the first line of a row. */
+  mobileLineTitle?: (row: T) => ReactNode
 
   createAction?: ReactNode
   quickStats?: ReactNode
@@ -208,6 +214,9 @@ export default function DataTable<T>({
   rowClassName,
   selectable,
   bulkActions,
+  mobileLayout,
+  mobileLineSubtitle,
+  mobileLineTitle,
   createAction,
   quickStats,
   onRefresh,
@@ -592,6 +601,9 @@ export default function DataTable<T>({
               rowActions={rowActions}
               cardAccent={cardAccent}
               renderCard={renderCard}
+              variant={mobileLayout}
+              lineSubtitle={mobileLineSubtitle}
+              lineTitle={mobileLineTitle}
               selection={selectable ? { isSelected: row => selectedKeys.has(rowKey(row)), toggle: row => toggleSelected(rowKey(row)) } : undefined}
             />
           ) : null}
