@@ -181,8 +181,7 @@ async function transferSerials(rows: unknown[]): Promise<{ upserted: number; ski
 
 /**
  * deed_bulkStock → stock_location_levels: the quantity per product and
- * location, rows the list no longer has removed. Only changed rows are
- * written. An empty list never empties the table.
+ * location. Only changed rows are written; rows the list lacks are kept.
  */
 async function transferBulkStock(rows: unknown[]): Promise<{ upserted: number; skipped: number }> {
   const next = new Map<string, { productId: string; location: string; qty: number }>()
@@ -196,7 +195,6 @@ async function transferBulkStock(rows: unknown[]): Promise<{ upserted: number; s
     next.set(key, { productId, location, qty: (prev?.qty ?? 0) + Math.round(Number(row.qty) || 0) })
   }
   const current = await prisma.stockLocationLevel.findMany()
-  if (!next.size && current.length) return { upserted: 0, skipped: 0 }
   const have = new Map(current.map(r => [`${r.productId}|${r.location}`, r]))
   let upserted = 0
   for (const [key, row] of next) {
@@ -208,12 +206,12 @@ async function transferBulkStock(rows: unknown[]): Promise<{ upserted: number; s
     })
     upserted += 1
   }
-  // A list much shorter than the table is a partial save: nothing is removed.
-  const stale = next.size >= current.length * 0.5 ? current.filter(r => !next.has(`${r.productId}|${r.location}`)) : []
-  for (const r of stale) {
-    await prisma.stockLocationLevel.delete({ where: { productId_location: { productId: r.productId, location: r.location } } })
-  }
-  return { upserted: upserted + stale.length, skipped: 0 }
+  // A row missing from the list is never removed. Browsers save the whole
+  // list as they last read it, so a tab opened before a goods receipt does
+  // not have the receipt's rows; removing what it lacked deleted received
+  // stock (REC/2026/0369: 17 accessories received into the warehouse, then
+  // gone). Stock leaves a location by its qty going down, not by absence.
+  return { upserted, skipped: 0 }
 }
 
 const validDate = (v: unknown) => {
