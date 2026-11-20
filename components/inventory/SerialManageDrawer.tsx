@@ -12,6 +12,8 @@ import { MoveSerialProductModal } from './MoveSerialProductModal'
 import { canIntakeOnHandSerials, canReleaseHeldSerial } from '@/lib/inventory/permissions'
 import { ON_HAND_LOCATIONS, parseSerialList, type OnHandLocation } from '@/lib/inventory/serial-intake'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
+import { userCan } from '@/lib/auth/can'
+import { SecondaryActionMenu } from '@/components/erp/SecondaryActionMenu'
 
 type StatusChip =
   | 'all'
@@ -60,6 +62,40 @@ export default function SerialManageDrawer({
   const [moveTarget, setMoveTarget] = useState<SerialNumber | null>(null)
   const canRelease = canReleaseHeldSerial(role)
   const canIntake = canIntakeOnHandSerials(role)
+  // Deleting units from the system is the Director's (inventory.serials.delete).
+  const canDelete = userCan(users.find(u => u.id === currentUserId), 'inventory.serials.delete')
+  const [deleteTarget, setDeleteTarget] = useState<{ rows: SerialNumber[]; clear: () => void } | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const runDelete = async () => {
+    if (!deleteTarget) return
+    if (!deleteReason.trim()) { showToast('Say why these units are being deleted', 'error'); return }
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/inventory/serials-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serialIds: deleteTarget.rows.map(r => r.id), reason: deleteReason.trim() }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || 'Could not delete the units')
+      const gone = (body.deleted ?? []).length
+      const refused = (body.refused ?? []) as Array<{ serial: string; why: string }>
+      showToast(
+        `${gone} unit${gone === 1 ? '' : 's'} deleted (${body.reference})`
+          + (body.jobsRemoved ? ` · ${body.jobsRemoved} refurbishment job${body.jobsRemoved === 1 ? '' : 's'} removed` : '')
+          + (refused.length ? ` · ${refused.length} kept: ${refused.slice(0, 2).map(r => `${r.serial} — ${r.why}`).join('; ')}${refused.length > 2 ? '…' : ''}` : ''),
+        refused.length ? 'info' : 'success',
+      )
+      deleteTarget.clear()
+      setDeleteTarget(null)
+      setDeleteReason('')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not delete the units', 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
   const willUpgradeToSerial = !isSerialTracking(inferTrackingMethod(product))
 
   const [search, setSearch] = useState('')
@@ -248,7 +284,7 @@ export default function SerialManageDrawer({
     {
       key: 'warehouse',
       label: 'Location',
-      priority: 2,
+      priority: 1,
       width: '120px',
       render: row => <span className="text-xs text-text-2">{LOCATIONS[row.location]?.name || row.location}</span>,
       exportValue: row => LOCATIONS[row.location]?.name || row.location,
@@ -256,21 +292,9 @@ export default function SerialManageDrawer({
     {
       key: 'status',
       label: 'Status',
-      priority: 2,
+      priority: 1,
       width: '110px',
-      render: row => {
-        const color =
-          row.status === 'available' ? '#166534' :
-          row.status === 'assigned' ? '#92400E' :
-          row.status === 'sold' ? '#1E3A8A' :
-          row.status === 'written_off' ? '#991B1B' :
-          '#374151'
-        return (
-          <span className="text-xs capitalize font-bold" style={{ color }}>
-            {row.status.replace(/_/g, ' ')}
-          </span>
-        )
-      },
+      render: row => <SerialStatusPill status={row.status} />,
       exportValue: row => row.status,
     },
     {
@@ -288,6 +312,32 @@ export default function SerialManageDrawer({
     },
   ]
 
+  // One "⋯" per unit: Label, Edit, Move and Release were up to four bordered
+  // buttons on every row, taking more room than the serial itself.
+  const rowMenu = (row: SerialNumber) => (
+    <SecondaryActionMenu
+      compact
+      ariaLabel={`Actions for ${row.serial}`}
+      actions={[
+        {
+          id: 'release',
+          label: 'Release to on hand',
+          hidden: !((row.status === 'assigned' || row.status === 'returned') && canRelease),
+          onClick: () => releaseSerialToStock(row.id, 'warehouse'),
+        },
+        {
+          id: 'label',
+          label: 'Print label',
+          onClick: () => {
+            void onPrintSerials([{ serial: row.serial, barcode: row.barcode, productName: product.name, sku: product.sku, category: product.category }])
+          },
+        },
+        { id: 'edit', label: 'Edit serial', hidden: !canEdit, onClick: () => openEdit(row) },
+        { id: 'move', label: 'Move to another product…', hidden: !(canEdit && !unitMoveBlocker(row)), onClick: () => setMoveTarget(row) },
+      ]}
+    />
+  )
+
   const chips: Array<[StatusChip, string]> = [
     ['all', `All (${statusCounts.all})`],
     ['available', `Available (${statusCounts.available})`],
@@ -301,26 +351,23 @@ export default function SerialManageDrawer({
 
   return (
     <>
-      <Modal title={`Serials · ${product.name}`} onClose={onClose} width={980}>
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-text-3">
-              SKU {product.sku}
-              {locationScope === 'warehouse_filter' && warehouseFilter !== 'all'
-                ? ` · Filtered to ${LOCATIONS[warehouseFilter].name}`
-                : ' · All locations (incl. customer / sold)'}
-              {' · '}
-              Available {statusCounts.available} · On list {statusCounts.all}
-            </p>
+      <Modal
+        title={product.name}
+        subtitle={`${product.sku} · ${statusCounts.available} available of ${statusCounts.all}${locationScope === 'warehouse_filter' && warehouseFilter !== 'all' ? ` · ${LOCATIONS[warehouseFilter].name} only` : ''}`}
+        onClose={onClose}
+        width={980}
+      >
+        <div className="serial-drawer space-y-3">
+          <div className="serial-drawer__bar flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               {canIntake && (
                 <button
                   type="button"
-                  className="btn-primary text-[11px]"
+                  className="serial-drawer__add"
                   onClick={() => setShowIntake(true)}
                   title="Add available on-hand serials (increases quantity)"
                 >
-                  <Fa icon={faPlus} className="mr-1" /> Add on-hand serials
+                  <Fa icon={faPlus} aria-hidden="true" /> Add serials
                 </button>
               )}
               {warehouseFilter !== 'all' && (
@@ -343,7 +390,7 @@ export default function SerialManageDrawer({
           )}
 
           {statusCounts.available === 0 && canIntake && (
-            <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="serial-drawer__notice text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               No available on-hand units yet.
               {!openingStockPosted
                 ? ' Opening stock was never posted — use Add on-hand serials to seed this product without the global opening-stock lock.'
@@ -351,18 +398,15 @@ export default function SerialManageDrawer({
             </p>
           )}
 
-          <div className="flex flex-wrap gap-2 text-[10px]">
-            {chips.map(([id, label]) => (
+          <div className="serial-drawer__chips flex flex-wrap gap-2">
+            {/* Only filters with units in them: eight chips, mostly "(0)", took three rows on a phone. */}
+            {chips.filter(([id]) => id === 'all' || id === statusFilter || (statusCounts as Record<string, number>)[id] > 0).map(([id, label]) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setStatusFilter(id)}
-                className="px-2.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer"
-                style={{
-                  borderColor: statusFilter === id ? '#A8D4E8' : 'var(--border-lt)',
-                  background: statusFilter === id ? '#E8F3FA' : 'transparent',
-                  color: statusFilter === id ? 'var(--navy)' : 'var(--text-3)',
-                }}
+                className={`serial-chip${statusFilter === id ? ' is-active' : ''}`}
+                aria-pressed={statusFilter === id}
               >
                 {label}
               </button>
@@ -376,7 +420,7 @@ export default function SerialManageDrawer({
             </p>
           )}
           {statusCounts.sold > 0 && statusFilter === 'all' && (
-            <p className="text-[11px] text-blue-900 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+            <p className="serial-drawer__notice serial-drawer__notice--sold text-[11px] text-blue-900 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
               {statusCounts.sold} sold serial(s) are with customers — open the <strong>Sold</strong> filter to list them.
               They do not count in On hand / Available.
             </p>
@@ -407,7 +451,7 @@ export default function SerialManageDrawer({
             exportFilename={`${product.sku}-serials`}
             bulkActions={({ rows: selected, clear }) => (
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-xs font-bold">{selected.length} selected</span>
+                {/* The table's bar already says how many are selected and has Clear. */}
                 {canRelease && selected.some(s => s.status === 'assigned' || s.status === 'returned') && (
                   <button
                     type="button"
@@ -450,62 +494,71 @@ export default function SerialManageDrawer({
                     })))
                   }}
                 >
-                  Download PDF
+                  PDF
                 </button>
-                <button type="button" className="dt-toolbar-btn" onClick={clear}>Clear</button>
+                {canDelete && (
+                  <button
+                    type="button"
+                    className="dt-toolbar-btn is-danger"
+                    onClick={() => { setDeleteReason(''); setDeleteTarget({ rows: selected, clear }) }}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             )}
-            rowActions={row => (
-              <div className="flex gap-1 justify-end flex-wrap">
-                {(row.status === 'assigned' || row.status === 'returned') && canRelease && (
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded-lg border text-[10px] font-bold text-amber-800 border-amber-300 bg-amber-50"
-                    onClick={() => releaseSerialToStock(row.id, 'warehouse')}
-                  >
-                    Release
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded-lg border text-[10px] font-bold"
-                  onClick={() => {
-                    void onPrintSerials([{
-                      serial: row.serial,
-                      barcode: row.barcode,
-                      productName: product.name,
-                      sku: product.sku,
-                      category: product.category,
-                    }])
-                  }}
-                >
-                  Label
-                </button>
-                {canEdit && (
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded-lg border text-[10px] font-bold text-primary-700"
-                    onClick={() => openEdit(row)}
-                  >
-                    Edit
-                  </button>
-                )}
-                {canEdit && !unitMoveBlocker(row) && (
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded-lg border text-[10px] font-bold"
-                    title="Filed under the wrong model or specs? Move it to the right product"
-                    onClick={() => setMoveTarget(row)}
-                  >
-                    Move
-                  </button>
-                )}
+            rowActions={row => rowMenu(row)}
+            renderCard={row => (
+              <div className="serial-row">
+                <div className="min-w-0 flex-1">
+                  <p className="serial-row__serial">{row.serial}</p>
+                  <p className="serial-row__meta">
+                    {LOCATIONS[row.location]?.name || row.location}
+                    {row.barcode && row.barcode !== row.serial ? ` · ${row.barcode}` : ''}
+                    {soRefFor(row) ? ` · ${soRefFor(row)}` : ''}
+                  </p>
+                </div>
+                <SerialStatusPill status={row.status} />
+                {rowMenu(row)}
               </div>
             )}
           />
         </div>
       </Modal>
 
+      {deleteTarget && (
+        <Modal
+          title={`Delete ${deleteTarget.rows.length} unit${deleteTarget.rows.length === 1 ? '' : 's'} from the system`}
+          subtitle="Gone from inventory, With Issues and refurbishment. This cannot be undone."
+          onClose={() => setDeleteTarget(null)}
+          width={520}
+        >
+          <div className="flex flex-col gap-3">
+            <p className="text-[13px] text-[var(--text-2)]">
+              {deleteTarget.rows.slice(0, 6).map(r => r.serial).join(', ')}{deleteTarget.rows.length > 6 ? ` and ${deleteTarget.rows.length - 6} more` : ''}
+            </p>
+            <p className="text-[12px] text-[var(--text-3)]">
+              Units on a sale, invoice, delivery, purchase receipt, POS sale, Kilimall order, warranty or repair are kept and listed —
+              that history stays. A received unit that is missing or broken is written off instead.
+            </p>
+            <Field label="Why they are being deleted" required>
+              <Textarea value={deleteReason} onChange={setDeleteReason} rows={2} placeholder="e.g. Entered twice by mistake; test records" />
+            </Field>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-outline" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary disabled:opacity-40"
+                style={{ background: 'var(--danger-text)', borderColor: 'var(--danger-text)' }}
+                disabled={deleting || !deleteReason.trim()}
+                onClick={() => { void runDelete() }}
+              >
+                {deleting ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {moveTarget && (
         <MoveSerialProductModal
           unit={moveTarget}
@@ -594,4 +647,20 @@ export default function SerialManageDrawer({
       )}
     </>
   )
+}
+
+const STATUS_PILL: Record<string, { label: string; tone: string }> = {
+  available: { label: 'Available', tone: 'success' },
+  assigned: { label: 'Reserved', tone: 'warning' },
+  sold: { label: 'Sold', tone: 'info' },
+  refurbishment: { label: 'Refurb', tone: 'neutral' },
+  under_repair: { label: 'Under repair', tone: 'warning' },
+  reconfiguration: { label: 'Reconfig', tone: 'neutral' },
+  returned: { label: 'Returned', tone: 'warning' },
+  written_off: { label: 'Written off', tone: 'danger' },
+}
+
+function SerialStatusPill({ status }: { status: string }) {
+  const meta = STATUS_PILL[status] ?? { label: status.replace(/_/g, ' '), tone: 'neutral' }
+  return <span className={`serial-pill serial-pill--${meta.tone}`}>{meta.label}</span>
 }

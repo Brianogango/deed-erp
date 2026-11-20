@@ -23,6 +23,7 @@ import type {
 } from '@/lib/data-table/toolbar-types'
 import DataTableToolbar from './DataTableToolbar'
 import MobileCardView from './MobileCardView'
+import BulkActionsBar from './BulkActionsBar'
 import EnterprisePagination, { DEFAULT_PAGE_SIZE_OPTIONS } from './EnterprisePagination'
 import AdvancedFilters, { applyFilterRules, type FilterRule } from './AdvancedFilters'
 
@@ -533,7 +534,8 @@ export default function DataTable<T>({
           overflowActions={overflowActions}
           createAction={createAction}
           quickStats={quickStats}
-          selectedCount={selectedRows.length}
+          // Phones: the selection bar sits at the bottom of the list instead (below).
+          selectedCount={breakpoint === 'mobile' && bulkActions ? 0 : selectedRows.length}
           onClearSelection={() => setSelectedKeys(new Set())}
           bulkActions={bulkActions ? bulkActions({ rows: selectedRows, clear: () => setSelectedKeys(new Set()) }) : undefined}
           loading={isLoading}
@@ -590,8 +592,20 @@ export default function DataTable<T>({
               rowActions={rowActions}
               cardAccent={cardAccent}
               renderCard={renderCard}
+              selection={selectable ? { isSelected: row => selectedKeys.has(rowKey(row)), toggle: row => toggleSelected(rowKey(row)) } : undefined}
             />
-          ) : (
+          ) : null}
+          {breakpoint === 'mobile' && bulkActions && selectedRows.length > 0 ? (
+            // Where the thumb is: pinned to the bottom of the list while rows are ticked.
+            <div className="dt-mobile-bulk">
+              <BulkActionsBar
+                selectedCount={selectedRows.length}
+                onClear={() => setSelectedKeys(new Set())}
+                actions={bulkActions({ rows: selectedRows, clear: () => setSelectedKeys(new Set()) })}
+              />
+            </div>
+          ) : null}
+          {breakpoint === 'mobile' ? null : (
             <Table
               tableId={tableId}
               minWidth={tableMinWidth}

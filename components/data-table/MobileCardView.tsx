@@ -17,6 +17,8 @@ interface MobileCardViewProps<T> {
   cardAccent?: (row: T) => string
   /** Full override — if supplied, DataTable hands rendering entirely to the caller. */
   renderCard?: (row: T) => ReactNode
+  /** Tick boxes on the cards when the table lets rows be selected (bulk actions). */
+  selection?: { isSelected: (row: T) => boolean; toggle: (row: T) => void }
 }
 
 // Default card layout: first priority-1 column is the title, the rest of
@@ -35,6 +37,7 @@ export default function MobileCardView<T>({
   rowActions,
   cardAccent,
   renderCard,
+  selection,
 }: MobileCardViewProps<T>) {
   if (isLoading) {
     return <div className="p-4"><StateSkeleton /></div>
@@ -72,10 +75,36 @@ export default function MobileCardView<T>({
   return (
     <div className="flex flex-col gap-2.5 p-3 sm:p-4">
       {rows.map(row => {
+        // On a phone a table that lets rows be ticked had no tick boxes, so
+        // its bulk actions (print labels, delete…) could not be reached.
+        const withTick = (key: string, card: ReactNode) => selection ? (
+          <div key={key} className="flex items-stretch gap-2">
+            <label className="flex w-9 shrink-0 cursor-pointer items-start justify-center pt-4" aria-label="Select">
+              <input type="checkbox" className="h-[18px] w-[18px]" checked={selection.isSelected(row)} onChange={() => selection.toggle(row)} />
+            </label>
+            <div className="min-w-0 flex-1">{card}</div>
+          </div>
+        ) : <div key={key}>{card}</div>
         if (renderCard) {
-          return <div key={rowKey(row)}>{renderCard(row)}</div>
+          // A list that draws its own rows: the tick box sits inside the row,
+          // and the whole row toggles it (its own buttons excepted).
+          if (!selection) return <div key={rowKey(row)}>{renderCard(row)}</div>
+          const on = selection.isSelected(row)
+          return (
+            <div
+              key={rowKey(row)}
+              className={`dt-select-row${on ? ' is-selected' : ''}`}
+              onClick={e => {
+                if ((e.target as HTMLElement).closest('button, a, input, label, [role="menu"]')) return
+                selection.toggle(row)
+              }}
+            >
+              <input type="checkbox" className="dt-select-row__tick" checked={on} onChange={() => selection.toggle(row)} aria-label="Select" />
+              <div className="min-w-0 flex-1">{renderCard(row)}</div>
+            </div>
+          )
         }
-        return (
+        return withTick(rowKey(row),
           <RecordCard
             key={rowKey(row)}
             title={titleCol ? titleCol.render(row) : rowKey(row)}
@@ -86,7 +115,7 @@ export default function MobileCardView<T>({
             onClick={onRowClick ? () => onRowClick(row) : undefined}
             actions={rowActions ? rowActions(row) : undefined}
             accent={cardAccent ? cardAccent(row) : undefined}
-          />
+          />,
         )
       })}
     </div>

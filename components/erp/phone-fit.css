@@ -1290,3 +1290,24 @@ html {
     order: -1;
   }
 }
+
+/* ── Product serials list on phones ──────────────────────────────────────
+   The status filters ran to three rows and two notices sat above the list;
+   the cards now carry status and location, so the "sold are with customers"
+   note says nothing the list does not. Filters scroll in one row. */
+@media (max-width: 767px) {
+  .serial-drawer__chips {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .serial-drawer__chips::-webkit-scrollbar {
+    display: none;
+  }
+  .serial-drawer__chips > button {
+    flex: none;
+  }
+  .serial-drawer__notice--sold {
+    display: none !important;
+  }
+}

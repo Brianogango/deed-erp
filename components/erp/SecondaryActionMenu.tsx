@@ -21,11 +21,14 @@ export function SecondaryActionMenu({
   label = 'More',
   ariaLabel = 'More actions',
   mobilePresentation = 'sheet',
+  compact = false,
 }: {
   actions: SecondaryAction[]
   label?: string
   ariaLabel?: string
   mobilePresentation?: 'sheet' | 'anchored'
+  /** A small square "⋯" button for a row in a list, instead of "More ▾". */
+  compact?: boolean
 }) {
   const visible = actions.filter(a => !a.hidden)
   const [open, setOpen] = useState(false)
@@ -93,15 +96,19 @@ export function SecondaryActionMenu({
       <button
         ref={btnRef}
         type="button"
-        className="btn-secondary erp-action-btn"
+        className={compact ? 'erp-row-menu-btn' : 'btn-secondary erp-action-btn'}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
         aria-label={ariaLabel}
         onClick={() => setOpen(v => !v)}
       >
-        {label}
-        <span className={`ml-1 text-[10px] transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true">▾</span>
+        {compact ? <span aria-hidden="true">⋯</span> : (
+          <>
+            {label}
+            <span className={`ml-1 text-[10px] transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true">▾</span>
+          </>
+        )}
       </button>
       {open && pos && typeof document !== 'undefined' && createPortal(
         <div

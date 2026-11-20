@@ -141,6 +141,10 @@ async function transferSerials(rows: unknown[]): Promise<{ upserted: number; ski
     }
     const id = isUuid(row.id) ? String(row.id) : undefined
     const current = bySerial.get(data.serialNumber) ?? (id ? byId.get(id) : undefined)
+    // A unit deleted from the system (or removed) comes back only as a new
+    // unit (a new id). The same row from a tab that loaded before the delete
+    // is a stale copy and does not bring it back.
+    if (current?.removedAt && id && current.id === id) continue
     if (current
       && current.productId === data.productId
       && current.inventoryBarcode === data.inventoryBarcode
