@@ -26,6 +26,7 @@ import { CATALOG_LAYOUTS, CONDITION_OPTIONS, CATALOG_SHOW_OPTIONS, CATALOG_SORT_
 import { buildProductSku, normKey } from '@/lib/inventory/product-form-helpers'
 import ProductFormModal, { type ProductFormStart } from '@/components/inventory/ProductFormModal'
 import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPanel'
+import SoldWithoutTraceModal from '@/components/inventory/SoldWithoutTraceModal'
 import ComputerAidCustodyPanel from '@/components/inventory/ComputerAidCustodyPanel'
 import VendorStockPanel from '@/components/inventory/VendorStockPanel'
 import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
@@ -592,6 +593,9 @@ function InventoryContent() {
   }, [tab, canApproveAdj, inventoryDataReady, stockAdjustments.length, fixAdjustmentNumbers, showToast])
   const canUpdatePrice = can('inventory.prices.update')
   const canMergeProducts = canArchiveProduct(currentUser?.role)
+  // Write-offs and returning units marked sold with no sale (inventory.serials.manage).
+  const canManageSerials = userCan(currentUser, 'inventory.serials.manage')
+  const [showSoldNoTrace, setShowSoldNoTrace] = useState(false)
 
   const priceHistoryByProduct = useMemo(() => {
     const map = new Map<string, typeof productPriceHistory>()
@@ -2201,6 +2205,7 @@ function InventoryContent() {
                       { id: 'price-template', label: 'Download price template', onSelect: downloadPriceUpdateTemplate },
                       { id: 'price-import', label: 'Import prices', onSelect: () => priceImportRef.current?.click(), disabled: !canUpdatePrice },
                       ...(canMergeProducts ? [{ id: 'duplicates', label: 'Find duplicate products', onSelect: () => setShowDuplicates(true) }] : []),
+                      ...(canManageSerials ? [{ id: 'sold-no-trace', label: 'Sold with no sale record', onSelect: () => setShowSoldNoTrace(true) }] : []),
                     ]}
                     rowActions={product => (
                       <div className="flex flex-wrap justify-end gap-1">
@@ -4060,6 +4065,9 @@ function InventoryContent() {
         </Modal>
       )}
 
+      {showSoldNoTrace && (
+        <SoldWithoutTraceModal onClose={() => setShowSoldNoTrace(false)} onToast={showToast} />
+      )}
       {showDuplicates && (
         <ProductDuplicatesPanel
           onClose={() => setShowDuplicates(false)}
