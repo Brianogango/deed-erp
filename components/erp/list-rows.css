@@ -249,3 +249,100 @@
 .dt-lines:first-child {
   margin-top: 0.25rem;
 }
+
+/* ── POS session open / close ─────────────────────────────────────────── */
+.pos-session-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+.pos-session-summary {
+  margin: 0;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+.pos-session-summary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 13px;
+}
+.pos-session-summary dt {
+  color: var(--text-2);
+}
+.pos-session-summary dd {
+  margin: 0;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pos-session-summary > .is-sub {
+  padding-block: 0.15rem;
+  padding-left: 1.5rem;
+  font-size: 12px;
+}
+.pos-session-summary > .is-sub dt,
+.pos-session-summary > .is-sub dd {
+  color: var(--text-3);
+}
+.pos-session-summary > .is-rule {
+  margin-top: 0.25rem;
+  border-top: 1px solid var(--border-lt);
+}
+.pos-session-summary > .is-strong dt,
+.pos-session-summary > .is-strong dd {
+  color: var(--text-1);
+  font-weight: 700;
+}
+.pos-session-diff.is-ok dd {
+  color: var(--success-text);
+}
+.pos-session-diff.is-off {
+  background: var(--danger-bg);
+}
+.pos-session-diff.is-off dd,
+.pos-session-diff.is-off dt {
+  color: var(--danger-text);
+}
+.pos-session-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11px;
+}
+.pos-session-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.pos-session-actions > * {
+  min-height: 2.75rem;
+}
+.pos-session-close-confirm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+@media (max-width: 767px) {
+  .pos-session-actions {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+/* Last session, on the POS start screen. */
+.pos-last-session {
+  width: 100%;
+  max-width: 22rem;
+  margin-top: 1.5rem;
+  text-align: left;
+}
+.pos-last-session__head {
+  margin: 0 0 0.5rem;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.pos-last-session__head strong {
+  color: var(--text-1);
+}

@@ -308,6 +308,9 @@ export default function PointOfSale() {
   const [walkInBuyerName, setWalkInBuyerName] = useState('')
   const [showOpenSession, setShowOpenSession] = useState(false)
   const [showCloseSession, setShowCloseSession] = useState(false)
+  const lastClosedSession = useMemo(() => (posSessions ?? [])
+    .filter(s => s.status === 'closed' && s.closedAt)
+    .sort((a, b) => String(b.closedAt).localeCompare(String(a.closedAt)))[0] ?? null, [posSessions])
   const [openingCash, setOpeningCash] = useState('')
   const [closingCash, setClosingCash] = useState('')
   const [receiptOrder, setReceiptOrder] = useState<typeof posOrders[0] | null>(null)
@@ -710,9 +713,27 @@ export default function PointOfSale() {
           <h2 className="pos-boot-title">Point of Sale</h2>
           <p className="pos-boot-copy">Open a session to start scanning products, receiving payments, and managing your till.</p>
           <button type="button" className="pos-boot-action" onClick={() => setShowOpenSession(true)}>Open new session</button>
+          {lastClosedSession && (
+            // What the last close came to, before the next session starts.
+            <div className="pos-last-session" aria-label="Last session">
+              <p className="pos-last-session__head">
+                Last session <strong>{lastClosedSession.ref}</strong>
+                {lastClosedSession.closedAt ? ` · closed ${new Date(lastClosedSession.closedAt).toLocaleString('en-KE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
+                {lastClosedSession.closedBy ? ` by ${lastClosedSession.closedBy}` : ''}
+              </p>
+              <dl className="pos-session-summary">
+                <div><dt>Sales · {lastClosedSession.orderCount ?? 0} order{lastClosedSession.orderCount === 1 ? '' : 's'}</dt><dd>{fmtKes(lastClosedSession.totalSales ?? 0)}</dd></div>
+                <div><dt>Counted / expected cash</dt><dd>{fmtKes(lastClosedSession.closingCash ?? 0)} / {fmtKes(lastClosedSession.expectedCash ?? 0)}</dd></div>
+                <div className={`is-strong pos-session-diff ${Math.abs(lastClosedSession.cashDifference ?? 0) < 1 ? 'is-ok' : 'is-off'}`}>
+                  <dt>Difference</dt>
+                  <dd>{Math.abs(lastClosedSession.cashDifference ?? 0) < 1 ? 'Balanced' : `${fmtKes(Math.abs(lastClosedSession.cashDifference ?? 0))} ${(lastClosedSession.cashDifference ?? 0) > 0 ? 'over' : 'short'}`}</dd>
+                </div>
+              </dl>
+            </div>
+          )}
           {showOpenSession && (
-            <Modal title="Open Session" subtitle="Enter opening cash balance" width={380} onClose={() => setShowOpenSession(false)}>
-              <Field label="Opening Cash Count (KES)" required><Input value={openingCash} onChange={setOpeningCash} type="number" autoFocus /></Field>
+            <Modal title="Open session" subtitle="Count the cash in the till before the first sale" width={380} onClose={() => setShowOpenSession(false)}>
+              <Field label="Cash in the till (KES)" required><Input value={openingCash} onChange={setOpeningCash} type="number" autoFocus placeholder="0 if the till is empty" /></Field>
               <button
                 type="button"
                 className="pos-session-submit"
@@ -1219,38 +1240,55 @@ export default function PointOfSale() {
             const totalBank = sessionOrders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + tenderAmount(o), 0)
             const totalSales = sessionOrders.reduce((a, o) => a + o.total, 0)
             const expectedCash = posSessionOpeningCash + totalCash
-            const counted = Number(closingCash) || 0
+            // No count, no close: an empty box used to close as KSh 0 and post
+            // the whole expected cash as a shortage.
+            const hasCount = closingCash.trim() !== '' && Number.isFinite(Number(closingCash)) && Number(closingCash) >= 0
+            const counted = hasCount ? Number(closingCash) : 0
             const variance = counted - expectedCash
+            const varianceText = !hasCount ? '—'
+              : Math.abs(variance) < 1 ? 'Balanced'
+                : `${fmtKes(Math.abs(variance))} ${variance > 0 ? 'over' : 'short'}`
             return (
-              <Modal title="Close Session" subtitle="Count till and post session settlement" width={480} onClose={() => setShowCloseSession(false)}>
-                <Field label="Closing Cash Count (KES)"><Input value={closingCash} onChange={setClosingCash} type="number" autoFocus /></Field>
-                <div className="pos-session-close-summary">
-                  <p>Session orders: <strong>{sessionOrders.length}</strong></p>
-                  <p>Total sales: <strong className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(totalSales)}</strong></p>
-                  <p>Cash / M-Pesa / Bank: <strong className="font-mono">{fmtKes(totalCash)}</strong> · <strong className="font-mono">{fmtKes(totalMpesa)}</strong> · <strong className="font-mono">{fmtKes(totalBank)}</strong></p>
-                  <p>Opening cash: <strong className="font-mono">{fmtKes(posSessionOpeningCash)}</strong></p>
-                  <p>Expected cash: <strong className="font-mono">{fmtKes(expectedCash)}</strong></p>
-                  <p>Variance: <strong className="font-mono" style={{ color: variance === 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtKes(variance)}</strong></p>
-                  <p className="text-[10px] text-t3 mt-1">Closing posts a session journal (tender totals + cash over/short). Each sale already decremented stock and posted revenue.</p>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <button className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
-                  <button
-                    className="pos-session-close-confirm"
-                    disabled={closingSession}
-                    onClick={() => {
-                      setClosingSession(true)
-                      try {
-                        closePOSSession(counted)
-                        setShowCloseSession(false)
-                        setClosingCash('')
-                      } finally {
-                        setClosingSession(false)
-                      }
-                    }}
-                  >
-                    {closingSession ? 'Closing…' : 'Close Session'}
-                  </button>
+              <Modal title="Close session" subtitle="Count the cash in the till, then close" width={480} onClose={() => setShowCloseSession(false)}>
+                <div className="pos-session-form">
+                  <Field label="Cash counted in the till (KES)" required>
+                    <Input value={closingCash} onChange={setClosingCash} type="number" autoFocus placeholder="e.g. 12500" />
+                  </Field>
+                  <dl className="pos-session-summary">
+                    <div><dt>Sales · {sessionOrders.length} order{sessionOrders.length === 1 ? '' : 's'}</dt><dd>{fmtKes(totalSales)}</dd></div>
+                    <div className="is-sub"><dt>Cash</dt><dd>{fmtKes(totalCash)}</dd></div>
+                    <div className="is-sub"><dt>M-Pesa</dt><dd>{fmtKes(totalMpesa)}</dd></div>
+                    <div className="is-sub"><dt>Bank</dt><dd>{fmtKes(totalBank)}</dd></div>
+                    <div className="is-rule"><dt>Opening cash</dt><dd>{fmtKes(posSessionOpeningCash)}</dd></div>
+                    <div className="is-strong"><dt>Expected in till</dt><dd>{fmtKes(expectedCash)}</dd></div>
+                    <div><dt>Counted</dt><dd>{hasCount ? fmtKes(counted) : '—'}</dd></div>
+                    <div className={`is-strong pos-session-diff ${!hasCount ? '' : Math.abs(variance) < 1 ? 'is-ok' : 'is-off'}`}><dt>Difference</dt><dd>{varianceText}</dd></div>
+                  </dl>
+                  <p className="pos-session-note">Closing posts the session journal; any difference is booked to Cash over/short.</p>
+                  <div className="pos-session-actions">
+                    <button type="button" className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
+                    <button
+                      type="button"
+                      className="pos-session-close-confirm"
+                      disabled={closingSession || !hasCount}
+                      onClick={() => {
+                        if (!hasCount) return
+                        setClosingSession(true)
+                        try {
+                          closePOSSession(counted)
+                          setShowCloseSession(false)
+                          setClosingCash('')
+                        } finally {
+                          setClosingSession(false)
+                        }
+                      }}
+                    >
+                      {closingSession ? 'Closing…'
+                        : !hasCount ? 'Enter the count to close'
+                          : Math.abs(variance) < 1 ? 'Close session'
+                            : `Close with ${varianceText}`}
+                    </button>
+                  </div>
                 </div>
               </Modal>
             )
