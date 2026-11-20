@@ -464,7 +464,7 @@ export interface AppState {
   // Refurbishment
   createRefurbishmentJob: (serialId: string, issueDescription: string, opts?: { silent?: boolean }) => void
   assignRefurbishmentJob: (jobId: string, techId: string, techName: string) => void
-  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'issuesFound' | 'status' | 'completedDate'>>) => void
+  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'issuesFound' | 'status' | 'completedDate' | 'productId' | 'productName'>>) => void
   /** `request`: ask stores for it straight away (taken from stock, or the lead is alerted). */
   addRefurbishmentPart: (jobId: string, part: Omit<RefurbPart, 'id'>, opts?: { request?: boolean }) => void
   updateRefurbishmentPart: (jobId: string, partId: string, patch: Partial<RefurbPart>) => void

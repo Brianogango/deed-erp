@@ -9,7 +9,10 @@ export type MovableUnit = { status?: string; saleOrderId?: string | null; repair
 
 export function unitMoveBlocker(unit: MovableUnit): string | null {
   if (unit.identityPending) return 'Identify it first (Refurbishment → Identify)'
-  if (unit.status !== 'available') return `It is ${String(unit.status || 'not in stock').replace(/_/g, ' ')} — only a machine in stock can move`
+  // On the refurbishment bench is still ours and in the building: a machine
+  // that came in under a vague or wrong name ("lenovo tm") is corrected there,
+  // where it is first looked at properly.
+  if (unit.status !== 'available' && unit.status !== 'refurbishment') return `It is ${String(unit.status || 'not in stock').replace(/_/g, ' ')} — only a machine in stock or on the refurbishment bench can move`
   if (unit.saleOrderId) return 'It is reserved on a sale order — release it first'
   if (unit.repairId) return 'It is on a repair — finish or release it first'
   return null

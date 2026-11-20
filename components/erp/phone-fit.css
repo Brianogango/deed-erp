@@ -832,3 +832,16 @@ html {
     gap: 0.4rem !important;
   }
 }
+
+@media (max-width: 767px) {
+  /* Refurbishment job: the three facts cards closer together and tighter. */
+  .refurb-info-grid {
+    gap: 0.5rem !important;
+  }
+  .refurb-info-grid > .card {
+    padding: 0.75rem 0.85rem !important;
+  }
+  .refurb-info-grid > .card > * + * {
+    margin-top: 0.3rem !important;
+  }
+}
