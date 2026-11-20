@@ -18,7 +18,7 @@ import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHead
 import { refurbNextStep, refurbFlowProgress, REFURB_FLOW_STEPS } from '@/lib/refurbishment/next-step'
 import { RefurbWeeklyReport } from '@/components/refurbishment/RefurbWeeklyReport'
 import { IdentifyUnitModal } from '@/components/refurbishment/IdentifyUnitModal'
-import { isStandInProduct } from '@/lib/refurbishment/unidentified'
+import { cameInUnidentified, isStandInProduct } from '@/lib/refurbishment/unidentified'
 import { HarvestPartsModal } from '@/components/refurbishment/HarvestPartsModal'
 import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { refurbWeekStart } from '@/lib/refurbishment/weekly-report'
@@ -236,7 +236,12 @@ function RefurbishmentContent() {
     const readyParts = job.partsNeeded.filter(p => p.status === 'received' && p.notifiedTechDate)
     const sm = STATUS_META[job.status]
     // Filed under a stand-in ("lenovo tm"): matched to its product line before ready.
-    const jobStandIn = isStandInProduct(products.find(p => p.id === job.productId), job.productName)
+    // A machine that came in with its real serial (warehouse, After-Sales) is
+    // already under its real product: never asked to identify or match it.
+    const jobProduct = products.find(p => p.id === job.productId)
+    const jobUnit = serials.find(s => s.id === job.serialId) as (SerialNumber & { intakeTag?: string; identityPending?: boolean }) | undefined
+    const jobStandIn = isStandInProduct(jobProduct, job.productName, { cameInUnidentified: cameInUnidentified(job, jobUnit) })
+    const jobNoPrice = !jobStandIn && !!jobProduct && !(Number(jobProduct.salePrice) > 0)
 
     return (
       <div className="mod-page">
@@ -252,7 +257,7 @@ function RefurbishmentContent() {
             // The header used to offer Issues & notes, Mark ready, Write off
             // and Harvest parts side by side while the Next card below asked
             // for something else ("Record issues").
-            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs }, { standIn: jobStandIn, productName: job.productName })
+            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs }, { standIn: jobStandIn, productName: job.productName, noPrice: jobNoPrice })
             const shownBelow = (key: string) => next.mine && next.key === key
             const unit = serials.find(s => s.id === job.serialId)
             const canFixProduct = !!unit && unit.status === 'refurbishment'
@@ -337,7 +342,7 @@ function RefurbishmentContent() {
           )}
 
           {(() => {
-            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs }, { standIn: jobStandIn, productName: job.productName })
+            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs }, { standIn: jobStandIn, productName: job.productName, noPrice: jobNoPrice })
             if (next.key === 'none') return null
             const reached = refurbFlowProgress(job)
             return (

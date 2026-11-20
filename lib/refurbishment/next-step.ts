@@ -40,7 +40,7 @@ export function refurbNextStep(
   job: JobLike,
   viewer: { id?: string; isLead: boolean; canAssign: boolean },
   /** The job's product is a stand-in (lib/refurbishment/unidentified.ts isStandInProduct). */
-  opts: { standIn?: boolean; productName?: string } = {},
+  opts: { standIn?: boolean; productName?: string; noPrice?: boolean } = {},
 ): RefurbNextStep {
   const isTech = !!viewer.id && job.assignedTechnicianId === viewer.id
   const actor = isTech || viewer.isLead
@@ -86,5 +86,12 @@ export function refurbNextStep(
       mine: actor,
     }
   }
-  return { key: 'mark_ready', title: 'Mark ready', detail: 'Repairs done and parts fitted: mark it ready for retest.', mine: actor }
+  return {
+    key: 'mark_ready',
+    title: 'Mark ready',
+    detail: opts.noPrice
+      ? 'Repairs done and parts fitted: mark it ready for retest. Its product has no selling price yet — set one in Inventory before it is sold.'
+      : 'Repairs done and parts fitted: mark it ready for retest.',
+    mine: actor,
+  }
 }

@@ -17,7 +17,7 @@ import { userCan } from '@/lib/auth/can'
 import { isAssignableTechnician } from '@/lib/repair/assignable-technicians'
 import { refurbPartStockTaken } from '@/lib/refurbishment/refurb-parts'
 import { userIdsWithRoles } from '@/lib/in-app-notifications'
-import { awaitingIdentification, isStandInProduct } from '@/lib/refurbishment/unidentified'
+import { awaitingIdentification, cameInUnidentified, isStandInProduct } from '@/lib/refurbishment/unidentified'
 import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
 import { recordsNeedingNumbers, adjustmentsMissingValuation, isProvisionalDocRef } from '@/lib/doc-number-repair'
 import type { StockTransfer } from '../purchasing'
@@ -1166,7 +1166,8 @@ export function createInventoryActions(store: StoreDeps): Pick<AppState, 'addHol
         // Filed under a stand-in ("lenovo tm", "Laptop — unidentified"): it is
         // matched to its real product line before it can go back on sale.
         const jobProduct = store.prodRef.current.find(p => p.id === job.productId)
-        if (isStandInProduct(jobProduct, job.productName)) {
+        const jobUnit = store.serialRef.current.find(s => s.id === job.serialId) as (SerialNumber & { intakeTag?: string; identityPending?: boolean }) | undefined
+        if (isStandInProduct(jobProduct, job.productName, { cameInUnidentified: cameInUnidentified(job, jobUnit) })) {
           store.showToast(`${job.productName} is a stand-in: match ${job.serialNumber} to its product line first (More → Change product).`, 'error'); return
         }
         // A machine is not ready while parts are still on their way, or were
