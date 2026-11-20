@@ -331,6 +331,9 @@ function SalesContent() {
 
   // ── View state ──────────────────────────────────────────────────────────
   const [view, setView] = useState<SalesView>(() => searchParams.get('view') === 'new' ? 'new' : 'list')
+  // Phones: a record's secondary details (contact, email, salesperson…) stay
+  // folded behind "More details" until asked for.
+  const [showAllMeta, setShowAllMeta] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(() => searchParams.get('id'))
   // Odoo-style menus: Quotations (unconfirmed) vs Orders (confirmed sales).
   // Keep the selected list in the URL so Back/Forward restores the exact queue.
@@ -2452,7 +2455,7 @@ function SalesContent() {
                             <dt>Valid until</dt>
                             <dd>{activeOrder.validUntil ? fmtDate(activeOrder.validUntil) : 'Not set'}</dd>
                           </div>
-                          <div>
+                          <div className="sales-record-summary__fact--secondary">
                             <dt>Salesperson</dt>
                             <dd>{activeOrder.salespersonName || 'Unassigned'}</dd>
                           </div>
@@ -2710,7 +2713,7 @@ function SalesContent() {
                         </div>
                       )}
 
-                    <div className="sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--unified">
+                    <div className={`sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--unified ${showAllMeta ? 'is-expanded' : ''}`}>
                       <div className="sales-order-unified-heading">
                         <strong>{isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sales order'}</strong>
                         <span>Customer, dates, terms and ownership</span>
@@ -2718,12 +2721,17 @@ function SalesContent() {
                       <div className="sp-grid-2 sales-order-meta-grid">
                         <div className="sales-order-meta-column sales-order-meta-column--customer">
                           <SalesDocField label="Customer"><input readOnly value={activeOrder.customerName || ''} /></SalesDocField>
-                          <SalesDocField label="Contact"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.name || '—' })()} /></SalesDocField>
-                          <SalesDocField label="Email"><input readOnly value={customers.find(c => c.id === activeOrder.customerId)?.email || '—'} /></SalesDocField>
+                          {(() => {
+                            // The contact repeated the customer's name on most records,
+                            // and an empty email took a row to say "—".
+                            const contactName = customers.find(x => x.id === activeOrder.customerId)?.name || '—'
+                            return <SalesDocField label="Contact" secondary={contactName === '—' || contactName === activeOrder.customerName}><input readOnly value={contactName} /></SalesDocField>
+                          })()}
+                          <SalesDocField label="Email" secondary><input readOnly value={customers.find(c => c.id === activeOrder.customerId)?.email || '—'} /></SalesDocField>
                           <SalesDocField label="Phone"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.phone || c?.mobile || '—' })()} /></SalesDocField>
                         </div>
                         <div className="sales-order-meta-column sales-order-meta-column--commercial">
-                          <SalesDocField label="Reference">
+                          <SalesDocField label="Reference" secondary>
                             <div className="sales-order-reference">
                               <strong>{activeOrder.ref}</strong>
                               {activeOrder.status === 'sale' && activeOrder.quotationRef ? (
@@ -2737,7 +2745,7 @@ function SalesContent() {
                               ) : null}
                             </div>
                           </SalesDocField>
-                          <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Quote date' : 'Order date'}><input readOnly value={fmtDate(activeOrder.date) || ''} /></SalesDocField>
+                          <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Quote date' : 'Order date'} secondary><input readOnly value={fmtDate(activeOrder.date) || ''} /></SalesDocField>
                           <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Valid until' : 'Expected delivery'}>
                             {isQuotationDraft(activeOrder.status) && !activeOrder.locked ? (
                               <input
@@ -2754,7 +2762,7 @@ function SalesContent() {
                             )}
                           </SalesDocField>
                           {isQuotationStage(activeOrder.status) && (
-                            <SalesDocField label="Order discount (KES)">
+                            <SalesDocField label="Order discount (KES)" secondary={!(Number(activeOrder.discountAmount) > 0)}>
                               {isQuotationDraft(activeOrder.status) && !activeOrder.locked && canEditDiscount ? (
                                 <input
                                   type="number"
@@ -2778,6 +2786,7 @@ function SalesContent() {
                             </SalesDocField>
                           )}
                           {!activeIsRepairBilling && (
+                          <div className="sales-secondary-group" style={{ display: 'contents' }}>
                           <SalespersonCloserField
                             valueId={activeOrder.salespersonId}
                             valueName={activeOrder.salespersonName}
@@ -2790,8 +2799,10 @@ function SalesContent() {
                               void updateSaleOrder(activeOrder.id, { salespersonId: id, salespersonName: name })
                             }}
                           />
+                          </div>
                           )}
                           {!activeIsRepairBilling && (
+                          <div className="sales-secondary-group" style={{ display: 'contents' }}>
                           <SaleOrderAgentField
                             saleOrderId={activeOrder.id}
                             contacts={contacts}
@@ -2801,9 +2812,10 @@ function SalesContent() {
                               || activeInvoices.some(i => ['paid', 'partial', 'partially_paid'].includes(String(i.status)) || Number(i.amountPaid) > 0)
                             }
                           />
+                          </div>
                           )}
                           <SalesDocField label="Payment terms"><input readOnly value={activeOrder.paymentTerms || '—'} /></SalesDocField>
-                          <SalesDocField label="Currency"><input readOnly value="KES" /></SalesDocField>
+                          <SalesDocField label="Currency" secondary><input readOnly value="KES" /></SalesDocField>
                           {activeOrder.status === 'sale' && (
                             <SalesDocField label="Related">
                               {/* One line each: run together as one sentence they wrapped
@@ -2830,6 +2842,7 @@ function SalesContent() {
                           )}
                         </div>
                       </div>
+                      <MetaDetailsToggle expanded={showAllMeta} onToggle={() => setShowAllMeta(v => !v)} />
                     </div>
 
                       {activeOrder.status === 'quotation_sent' && !saleOrderIsAccepted(activeOrder) && (
@@ -4014,6 +4027,8 @@ function NewQuotationForm({
   onSave: () => void; onSaveAndAddAnother: () => void; onSaveDraft: () => void; onCancel: () => void
   onCreateNewCustomer: (query: string) => void
 }) {
+  // Phones: what is filled in for you (date, salesperson, pricelist) stays folded.
+  const [showAllMeta, setShowAllMeta] = useState(false)
   const [productSearch, setProductSearch] = useState<Record<string, string>>({})
   const [createTab, setCreateTab] = useState('Order Lines')
   // The line table lives inside an overflow container that clips absolutely
@@ -4181,7 +4196,7 @@ function NewQuotationForm({
         </div>
       </div>
 
-      <div className="sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--new sales-order-meta-panel--unified">
+      <div className={`sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--new sales-order-meta-panel--unified ${showAllMeta ? 'is-expanded' : ''}`}>
         <div className="sales-order-unified-heading">
           <strong>Quotation</strong>
           <span>Who this quotation is for, with dates, terms and ownership</span>
@@ -4254,7 +4269,7 @@ function NewQuotationForm({
           </div>
 
           <div className="sales-order-meta-column sales-order-meta-column--commercial">
-            <SalesDocField label="Quotation date" htmlFor="quote-date">
+            <SalesDocField label="Quotation date" htmlFor="quote-date" secondary>
               <span id="quote-date" className="sales-new-static">{fmtDate(new Date().toISOString().slice(0, 10))}</span>
             </SalesDocField>
             <SalesDocField label="Valid until">
@@ -4290,7 +4305,7 @@ function NewQuotationForm({
                 </p>
               )}
             </SalesDocField>
-            <SalesDocField label="Expected delivery" htmlFor="quote-delivery-date">
+            <SalesDocField label="Expected delivery" htmlFor="quote-delivery-date" secondary>
               <input
                 id="quote-delivery-date"
                 type="date"
@@ -4305,14 +4320,16 @@ function NewQuotationForm({
                 <small>from the customer</small>
               </span>
             </SalesDocField>
-            <SalespersonCloserField
-              valueId={newSalespersonId}
-              valueName={newSalespersonName}
-              createdByName={createdByName}
-              onChange={setNewSalesperson}
-            />
+            <div className="sales-secondary-group" style={{ display: 'contents' }}>
+              <SalespersonCloserField
+                valueId={newSalespersonId}
+                valueName={newSalespersonName}
+                createdByName={createdByName}
+                onChange={setNewSalesperson}
+              />
+            </div>
             {salesPricelistsEnabled && availablePricelists.filter(l => l.isActive).length > 1 && (
-              <SalesDocField label="Pricelist" htmlFor="quote-pricelist">
+              <SalesDocField label="Pricelist" htmlFor="quote-pricelist" secondary>
                 <select
                   id="quote-pricelist"
                   value={newPricelist}
@@ -4328,6 +4345,7 @@ function NewQuotationForm({
             )}
           </div>
         </div>
+        <MetaDetailsToggle expanded={showAllMeta} onToggle={() => setShowAllMeta(v => !v)} />
       </div>
 
       <div className="sp-panel sales-order-lines-panel" style={{ marginTop: 10 }}>
@@ -5311,3 +5329,13 @@ function DeliveryNoteView({
     </div>
   )
 }
+
+/** "More details" for a sales record's folded fields — phones only (phone-fit.css). */
+function MetaDetailsToggle({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" className="sales-meta-toggle" aria-expanded={expanded} onClick={onToggle}>
+      {expanded ? 'Fewer details' : 'More details'}
+    </button>
+  )
+}
+
