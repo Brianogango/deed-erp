@@ -18,6 +18,7 @@ import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHead
 import { refurbNextStep, refurbFlowProgress, REFURB_FLOW_STEPS } from '@/lib/refurbishment/next-step'
 import { RefurbWeeklyReport } from '@/components/refurbishment/RefurbWeeklyReport'
 import { IdentifyUnitModal } from '@/components/refurbishment/IdentifyUnitModal'
+import { isStandInProduct } from '@/lib/refurbishment/unidentified'
 import { HarvestPartsModal } from '@/components/refurbishment/HarvestPartsModal'
 import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { refurbWeekStart } from '@/lib/refurbishment/weekly-report'
@@ -234,6 +235,8 @@ function RefurbishmentContent() {
     const partTotal = job.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0)
     const readyParts = job.partsNeeded.filter(p => p.status === 'received' && p.notifiedTechDate)
     const sm = STATUS_META[job.status]
+    // Filed under a stand-in ("lenovo tm"): matched to its product line before ready.
+    const jobStandIn = isStandInProduct(products.find(p => p.id === job.productId), job.productName)
 
     return (
       <div className="mod-page">
@@ -249,7 +252,7 @@ function RefurbishmentContent() {
             // The header used to offer Issues & notes, Mark ready, Write off
             // and Harvest parts side by side while the Next card below asked
             // for something else ("Record issues").
-            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs })
+            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs }, { standIn: jobStandIn, productName: job.productName })
             const shownBelow = (key: string) => next.mine && next.key === key
             const unit = serials.find(s => s.id === job.serialId)
             const canFixProduct = !!unit && unit.status === 'refurbishment'
@@ -290,10 +293,10 @@ function RefurbishmentContent() {
                       onClick: () => { setNotesText(job.techNotes ?? ''); setIssuesText(job.issuesFound ?? ''); setShowNotesModal(true) },
                     },
                     {
-                      id: 'ready', label: 'Mark ready', hidden: !(canMarkReady(job) && !job.identityPending) || shownBelow('mark_ready'),
+                      id: 'ready', label: 'Mark ready', hidden: !(canMarkReady(job) && !job.identityPending) || jobStandIn || shownBelow('mark_ready'),
                       onClick: () => markRefurbishmentReady(job.id),
                     },
-                    { id: 'product', label: 'Change product…', hidden: !canFixProduct, onClick: () => setShowChangeProduct(true) },
+                    { id: 'product', label: jobStandIn ? 'Match product…' : 'Change product…', hidden: !canFixProduct || shownBelow('match_product'), onClick: () => setShowChangeProduct(true) },
                     {
                       id: 'print', label: 'Print sale label', hidden: !(['ready', 'transferred'].includes(job.status) && !job.identityPending && unit),
                       onClick: () => { if (unit) printStickers([unit], true) },
@@ -334,7 +337,7 @@ function RefurbishmentContent() {
           )}
 
           {(() => {
-            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs })
+            const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs }, { standIn: jobStandIn, productName: job.productName })
             if (next.key === 'none') return null
             const reached = refurbFlowProgress(job)
             return (
@@ -380,6 +383,9 @@ function RefurbishmentContent() {
                   )}
                   {next.mine && next.key === 'identify' && (
                     <button className="btn-primary text-xs py-1.5" onClick={() => setShowIdentify(true)}>Identify</button>
+                  )}
+                  {next.mine && next.key === 'match_product' && (
+                    <button className="btn-primary text-xs py-1.5" onClick={() => setShowChangeProduct(true)}>Match product</button>
                   )}
                   {next.mine && next.key === 'mark_ready' && (
                     <button className="btn-primary text-xs py-1.5" onClick={() => markRefurbishmentReady(job.id)}>Mark ready</button>
@@ -1032,6 +1038,21 @@ function RefurbishmentContent() {
               <p className="text-xs font-bold" style={{ color: 'var(--warning-text)' }}>
                 {orphanedSerials.length} device{orphanedSerials.length > 1 ? 's' : ''} in repair unit — no job created yet
               </p>
+              {/* A batch that came in together gets its jobs together, instead
+                  of one Create Job tap per machine. */}
+              {isLeadTech && orphanedSerials.length > 1 && (
+                <button
+                  type="button"
+                  className="ml-auto shrink-0 rounded-md px-2.5 py-1 text-[11px] font-semibold"
+                  style={{ background: 'var(--warning)', color: '#fff', border: 'none', cursor: 'pointer' }}
+                  onClick={() => setPendingConfirm({
+                    msg: `Create a refurbishment job for each of the ${orphanedSerials.length} machines? Each keeps the issue noted when it came in; technicians add what they find.`,
+                    action: () => sendToRefurbishment(orphanedSerials, ''),
+                  })}
+                >
+                  Create all {orphanedSerials.length} jobs
+                </button>
+              )}
             </div>
             <div className="bg-white grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
               {orphanedSerials.map(s => (

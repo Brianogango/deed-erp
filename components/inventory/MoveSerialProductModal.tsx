@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Modal, Field, Input } from '@/components/ui'
 import { RefurbProductPicker } from '@/components/refurbishment/RefurbProductPicker'
 import type { Product, SerialNumber } from '@/lib/store'
-import { isPlaceholderProductName } from '@/lib/refurbishment/unidentified'
+import { isStandInProduct } from '@/lib/refurbishment/unidentified'
 
 /**
  * Move one machine to the product it really is (model or specs). Its count
@@ -20,8 +20,9 @@ export function MoveSerialProductModal({ unit, products, onClose, onMoved, showT
 }) {
   const [target, setTarget] = useState<Product | null>(null)
   const [specs, setSpecs] = useState(unit.specs || '')
-  // Filed as "… — unidentified" at intake: naming the model is the reason.
-  const [reason, setReason] = useState(isPlaceholderProductName(unit.productName) ? 'Model identified' : '')
+  // Filed under a stand-in at intake ("lenovo tm", "… — unidentified"):
+  // naming the model is the reason.
+  const [reason, setReason] = useState(isStandInProduct(products.find(p => p.id === unit.productId), unit.productName) ? 'Model identified' : '')
   const [busy, setBusy] = useState(false)
   const machines = products.filter(p => p.isActive !== false && p.id !== unit.productId && (p.requiresSerial || p.trackingMethod === 'SERIAL'))
 
