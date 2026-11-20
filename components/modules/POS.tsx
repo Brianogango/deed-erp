@@ -33,7 +33,8 @@ import { PosWarrantyActions } from '@/components/pos/PosWarrantyActions'
 import { WARRANTY_SUPPORT_PHONE } from '@/lib/warranty/e-warranty'
 import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
 
-const POS_MOBILE_PAGE_SIZE = 6
+// Phones list products as rows, so a page holds twice as many as the old cards.
+const POS_MOBILE_PAGE_SIZE = 12
 
 function ReceiptPrintView({
   order,
@@ -466,6 +467,7 @@ export default function PointOfSale() {
         specs: chosen.specs,
       })
       const unitPrice = Number(chosen.salePriceOverride) > 0 ? Number(chosen.salePriceOverride) : product.salePrice
+      if (!(unitPrice > 0)) { showToast(`${product.name} has no selling price. Set it in Inventory before selling.`, 'error'); return }
       let added = false
       setCart(prev => {
         if (prev.some(i => i.serialId === chosen.id)) {
@@ -477,6 +479,7 @@ export default function PointOfSale() {
       })
       if (added) showToast(`${unitName} (${chosen.serial}) added`, 'success')
     } else {
+      if (!(product.salePrice > 0)) { showToast(`${product.name} has no selling price. Set it in Inventory before selling.`, 'error'); return }
       setCart(prev => {
         const ex = prev.find(i => i.productId === product.id)
         if (ex) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i)
@@ -825,7 +828,7 @@ export default function PointOfSale() {
                       type="button"
                       key={product.id}
                       onClick={() => addToCart(product, matchedSerial?.id)}
-                      className={`pos-product-card ${productMobilePage === mobilePage ? 'is-mobile-page-active' : 'is-mobile-page-hidden'}`}
+                      className={`pos-product-card ${productMobilePage === mobilePage ? 'is-mobile-page-active' : 'is-mobile-page-hidden'} ${product.salePrice > 0 ? '' : 'is-unpriced'}`}
                     >
                       <div className="pos-product-media" aria-hidden="true">
                         <PosProductThumb product={product} />
@@ -837,10 +840,10 @@ export default function PointOfSale() {
                             SN: {matchedSerial.serial}
                           </p>
                         )}
-                        <p className="pos-product-price">{fmtKes(product.salePrice)}</p>
+                        <p className="pos-product-price">{product.salePrice > 0 ? fmtKes(product.salePrice) : 'No price'}</p>
                         <div className="pos-product-meta">
                           <span>{getSellableQty(product.id, product.requiresSerial)} in stock</span>
-                          {product.requiresSerial && <span className="pos-serial-label">Serial tracked</span>}
+                          {product.requiresSerial && <span className="pos-serial-label" title="Serial tracked">Serial</span>}
                         </div>
                       </div>
                     </button>

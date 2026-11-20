@@ -77,6 +77,8 @@ type ProviderDeliveryInput = {
   actionUrl?: string | null
   destination?: string | null
   endpoint?: { endpoint: string; p256dh: string; authSecret: string } | null
+  /** Unread alerts for the app icon's number (push only). */
+  badgeCount?: number | null
   metadata?: Record<string, unknown>
 }
 
@@ -163,6 +165,7 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
       url: input.actionUrl || '/',
       eventType: input.eventType,
       eventId: input.eventId || null,
+      ...(typeof input.badgeCount === 'number' ? { badgeCount: input.badgeCount } : {}),
     })
   }
 

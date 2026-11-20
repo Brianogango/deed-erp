@@ -1357,6 +1357,14 @@ export default function Topbar() {
 
   const unreadCount = myNotifs.filter(n => !n.read).length
 
+  // The same number on the installed app's icon. Browsers without app badges
+  // (and iPhone before notifications are allowed) ignore it.
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> }
+    if (!currentUserId || !nav.setAppBadge || !nav.clearAppBadge) return
+    void (unreadCount > 0 ? nav.setAppBadge(unreadCount) : nav.clearAppBadge()).catch(() => {})
+  }, [unreadCount, currentUserId])
+
   // Page title
   const baseRoute = `/${pathname?.split('/')[1] || ''}`
   const t = ROUTE_TITLES[baseRoute] || { label: 'Deed ERP', desc: 'Business Management System' }
