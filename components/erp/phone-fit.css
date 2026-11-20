@@ -919,3 +919,73 @@ html {
     border-bottom: 0 !important;
   }
 }
+
+/* ── Sales record: secondary details folded on phones ─────────────────────
+   Email, reference, dates, currency, salesperson and agent are kept, but
+   behind "More details" so the customer, terms and lines come first. */
+.sales-meta-toggle {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-panel:not(.is-expanded) :is(.sp-field--secondary, .sales-secondary-group) {
+    display: none !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-meta-toggle {
+    display: block;
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--border, #e5e7eb);
+    background: none;
+    color: var(--primary, #1A1F5E);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  /* Lines: the table is a stack of cards, never wider than the screen.
+     Safari sized the table from its widest column and pushed product names
+     and totals past the right edge. */
+  .sales-pilot.sales-doc .sales-order-lines-panel {
+    max-width: 100% !important;
+    overflow-x: clip !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel table.sp-line-table,
+  .sales-pilot.sales-doc .sales-order-lines-panel table.sp-line-table > tbody {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel table.sp-line-table > thead {
+    display: none !important;
+  }
+  .sales-pilot.sales-doc .sales-order-lines-panel :is(.sp-table-wrap, .overflow-x-auto) {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  .sales-pilot.sales-doc :is(.sales-order-totals, .sp-totals) {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Invoice: bookkeeping rows (journal, company, currency, payment count)
+     are for desktop; the payments tab and the PDF still show them. */
+  .invoice-detail__dl .invoice-detail__dl-secondary {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* The salesperson is under "More details"; the summary keeps the dates. */
+  .sales-record-summary__facts .sales-record-summary__fact--secondary {
+    display: none !important;
+  }
+}

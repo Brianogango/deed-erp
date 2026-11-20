@@ -112,13 +112,16 @@ export function SalesDocField({
   label,
   children,
   htmlFor,
+  secondary = false,
 }: {
   label: string
   children: ReactNode
   htmlFor?: string
+  /** On phones, kept behind "More details" (lib: phone-fit.css). */
+  secondary?: boolean
 }) {
   return (
-    <FormField label={label} htmlFor={htmlFor} className="sp-field">
+    <FormField label={label} htmlFor={htmlFor} className={secondary ? 'sp-field sp-field--secondary' : 'sp-field'}>
       {children}
     </FormField>
   )

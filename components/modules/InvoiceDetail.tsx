@@ -1254,11 +1254,11 @@ export default function InvoiceDetail() {
             </header>
             <dl className="invoice-detail__dl">
               {invoice.customerPoNumber && <div><dt>Customer PO</dt><dd>{invoice.customerPoNumber}</dd></div>}
-              <div><dt>Payments</dt><dd>{(invoice.payments || []).length}</dd></div>
-              <div><dt>Journal</dt><dd>{invoice.type === 'customer_invoice' ? 'Customer Invoices' : 'Vendor Bills'}</dd></div>
+              <div className="invoice-detail__dl-secondary"><dt>Payments</dt><dd>{(invoice.payments || []).length}</dd></div>
+              <div className="invoice-detail__dl-secondary"><dt>Journal</dt><dd>{invoice.type === 'customer_invoice' ? 'Customer Invoices' : 'Vendor Bills'}</dd></div>
               <div><dt>Tax</dt><dd>{invoiceIsVat ? `VAT ${companySettings.vatRate}%` : 'Non-VAT'}</dd></div>
-              <div><dt>Company</dt><dd>{companySettings.name}</dd></div>
-              <div><dt>Currency</dt><dd>{companySettings.currency || 'KES'}</dd></div>
+              <div className="invoice-detail__dl-secondary"><dt>Company</dt><dd>{companySettings.name}</dd></div>
+              <div className="invoice-detail__dl-secondary"><dt>Currency</dt><dd>{companySettings.currency || 'KES'}</dd></div>
             </dl>
             {existingOrc && (
               <div className="mt-2">
