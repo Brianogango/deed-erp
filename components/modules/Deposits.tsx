@@ -146,11 +146,11 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
 
   return (
     <Portal>
-      <div className="deposit-modal-overlay fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
+      <div className="deposit-modal-overlay fixed inset-0 z-[9000] flex h-[var(--app-h)] items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
         <div
           className="ui-enter ui-enter-modal deposit-modal deposit-modal--new relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
-          style={{ maxHeight: 'calc(100dvh - 32px)' }}
+          style={{ maxHeight: 'calc(var(--app-h) - 32px)' }}
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -352,7 +352,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
 
   return (
     <Portal>
-      <div className="deposit-modal-overlay fixed inset-0 z-[9050] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
+      <div className="deposit-modal-overlay fixed inset-0 z-[9050] flex h-[var(--app-h)] items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
         <div className="ui-enter ui-enter-confirm deposit-modal deposit-modal--payment relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">

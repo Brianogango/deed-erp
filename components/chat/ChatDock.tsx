@@ -250,7 +250,7 @@ export default function ChatDock({ currentUserId, showToast }: { currentUserId: 
     <div className="chat-dock fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label="Chat">
       <button type="button" aria-label="Close chat" className="absolute inset-0 hidden bg-black/20 sm:block" onClick={() => setOpen(false)} />
       {/* A section, not a div: the global "[role=dialog] > div" modal-card style must not apply to this full-height panel. */}
-      <section className="relative flex h-[100dvh] w-full flex-col bg-[var(--bg-card)] shadow-2xl sm:w-[420px] sm:border-l sm:border-[var(--border-lt)]">
+      <section className="relative flex h-[var(--app-h)] w-full flex-col bg-[var(--bg-card)] shadow-2xl sm:w-[420px] sm:border-l sm:border-[var(--border-lt)]">
         {view.screen === 'list' && (
           <ConversationList
             conversations={conversations}

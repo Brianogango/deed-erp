@@ -57,13 +57,13 @@
 
 .sales-proto {
   display: flex;
-  min-height: 100vh;
+  min-height: var(--app-h);
 }
 
 /* Production: content area only (AppShell keeps the ERP sidebar) */
 .sales-workbench {
   display: block;
-  min-height: calc(100vh - 52px);
+  min-height: calc(var(--app-h) - 52px);
   width: 100%;
   padding: 10px 14px 20px;
   box-sizing: border-box;

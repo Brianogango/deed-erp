@@ -416,7 +416,7 @@ export function Modal({
   return (
     <Portal targetId={wsTarget.targetId}>
     <div
-      className={`${wsTarget.inWorkspaceRoot ? 'absolute h-full' : 'ui-enter ui-enter-backdrop fixed h-dvh'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
+      className={`${wsTarget.inWorkspaceRoot ? 'absolute h-full' : 'ui-enter ui-enter-backdrop fixed h-[var(--app-h)]'} inset-0 z-[9600] flex overflow-y-auto overscroll-contain ${workspace ? 'items-stretch justify-stretch bg-[var(--bg-app)] p-0 pointer-events-auto' : 'items-center justify-center p-4 sm:p-6'}`}
       style={{
         background: workspace ? 'var(--bg-app)' : enterprise ? 'rgba(15,23,42,0.48)' : 'rgba(0,0,0,0.55)',
         backdropFilter: workspace ? 'none' : enterprise ? 'blur(3px)' : 'blur(8px)',
@@ -429,7 +429,7 @@ export function Modal({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className={`flex w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell h-full max-h-none rounded-none' : `ui-enter ui-enter-modal my-auto rounded-[14px] sm:rounded-2xl ${enterprise ? 'max-h-[calc(100dvh-48px)]' : 'max-h-[calc(100dvh-20px)] sm:max-h-[92vh]'}`}`}
+        className={`flex w-full flex-col overflow-hidden ${workspace ? 'form-workspace-shell h-full max-h-none rounded-none' : `ui-enter ui-enter-modal my-auto rounded-[14px] sm:rounded-2xl ${enterprise ? 'max-h-[calc(var(--app-h)-48px)]' : 'max-h-[calc(var(--app-h)-20px)] sm:max-h-[92vh]'}`}`}
         style={{
           maxWidth: workspace ? 'none' : width,
           background: workspace ? 'var(--bg-app)' : enterprise ? '#FFFFFF' : 'var(--bg-card)',
@@ -537,7 +537,7 @@ export function SlidePanel({
   return (
     <Portal targetId={wsTarget.targetId}>
     <div
-      className={`${wsTarget.inWorkspaceRoot ? 'absolute h-full' : 'fixed h-dvh'} inset-0 z-[9000] overscroll-contain flex ${workspace ? 'justify-stretch bg-[var(--bg-app)] pointer-events-auto' : 'justify-end backdrop-blur-xs bg-black/40'}`}
+      className={`${wsTarget.inWorkspaceRoot ? 'absolute h-full' : 'fixed h-[var(--app-h)]'} inset-0 z-[9000] overscroll-contain flex ${workspace ? 'justify-stretch bg-[var(--bg-app)] pointer-events-auto' : 'justify-end backdrop-blur-xs bg-black/40'}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -661,7 +661,7 @@ export function Confirm({
   return (
     <Portal>
     <div
-      className="fixed inset-0 z-[9100] h-dvh overscroll-contain backdrop-blur-sm bg-black/45 flex items-center justify-center overflow-y-auto p-4"
+      className="fixed inset-0 z-[9100] h-[var(--app-h)] overscroll-contain backdrop-blur-sm bg-black/45 flex items-center justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? titleId : undefined}
