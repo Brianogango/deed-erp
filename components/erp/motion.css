@@ -17,7 +17,7 @@
     transform: scale(0.86);
   }
   .mobile-tab-bar__tab.is-active .mobile-tab-bar__icon {
-    animation: motion-tab-pop 220ms cubic-bezier(0.34, 1.4, 0.64, 1);
+    animation: motion-tab-pop 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   /* 2 · Selection bar: rises from the bottom, sinks back when cleared. */
@@ -33,7 +33,7 @@
     transition: background-color 160ms ease-out, border-color 160ms ease-out;
   }
   .dt-select-row__tick:checked {
-    animation: motion-tick 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: motion-tick 180ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   /* 4 · ⋯ menus and More sheets on a phone slide up like a native sheet. */
