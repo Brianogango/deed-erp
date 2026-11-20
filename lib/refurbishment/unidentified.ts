@@ -84,3 +84,27 @@ export const placeholderProductName = (kind: PlaceholderKind) =>
   `${PLACEHOLDER_KINDS.find(k => k.id === kind)?.label ?? 'Device'} — unidentified`
 
 export const isPlaceholderProductName = (name: unknown) => / — unidentified$/.test(String(name ?? ''))
+
+/**
+ * A stand-in named at intake ("lenovo tm" → "lenovo tm — unidentified"): what
+ * the machines are called until refurbishment finds their real product line.
+ * Empty when nothing usable was typed.
+ */
+export function standInProductName(typed: unknown): string {
+  const base = String(typed ?? '').replace(/\s+/g, ' ').replace(/\s*—\s*unidentified$/i, '').trim().slice(0, 80)
+  return base.length >= 2 ? `${base} — unidentified` : ''
+}
+
+/**
+ * A stand-in product: what a machine is filed under until someone knows what
+ * it is — "Laptop — unidentified", or a quick name typed at intake such as
+ * "lenovo tm" for machines that do not power on. Such a product has no sale
+ * price, and a machine cannot go back on sale under it: after refurbishment it
+ * is matched to the product line with its model and specs.
+ */
+export function isStandInProduct(product: { name?: string | null; salePrice?: number | string | null } | null | undefined, fallbackName?: string | null): boolean {
+  const name = product?.name ?? fallbackName
+  if (isPlaceholderProductName(name)) return true
+  if (!product) return false
+  return !(Number(product.salePrice) > 0)
+}
