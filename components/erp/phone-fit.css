@@ -1072,3 +1072,154 @@ html {
   color: var(--text-3);
   font-weight: 600;
 }
+
+/* ── Invoice on phones: a short header ────────────────────────────────────
+   The job trail wrapped onto three rows, the customer's country had a line
+   of its own, and Record receipt and More actions were two full-width
+   buttons on separate rows. */
+@media (max-width: 767px) {
+  /* One scrolling line; the invoice's own step is already the title. */
+  .job-trail {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.4rem 0.6rem !important;
+  }
+  .job-trail::-webkit-scrollbar {
+    display: none;
+  }
+  .job-trail__step {
+    flex: none;
+  }
+  .finance-invoice-detail .job-trail__step.is-own {
+    display: none !important;
+  }
+  .finance-invoice-detail .job-trail__step.is-own:first-child + .job-trail__step > span[aria-hidden='true'] {
+    display: none;
+  }
+
+  .finance-invoice-detail .invoice-detail__country--place {
+    display: none !important;
+  }
+
+  /* The action first and wide, More beside it. */
+  .finance-invoice-detail .invoice-detail__header-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 0.5rem !important;
+  }
+  .finance-invoice-detail .invoice-detail__header-actions > * {
+    min-width: 0;
+  }
+  .finance-invoice-detail .invoice-detail__header-actions:not(:has(> :nth-child(2))) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-invoice-detail .invoice-detail__header-actions :is(button, a),
+  .finance-invoice-detail .invoice-detail__header-actions .erp-action-btn.erp-action-btn {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 2.75rem !important;
+    padding: 0.5rem 0.9rem !important;
+    font-size: 13px !important;
+    justify-content: center;
+  }
+
+  /* With a job trail, Sales order and History repeat it and the tabs below. */
+  .finance-invoice-detail .invoice-detail__chrome:has(.job-trail) .invoice-detail__smart-row {
+    display: none !important;
+  }
+
+  /* "Fully settled" repeats the Paid chip. */
+  .finance-invoice-detail .invoice-detail__notice.is-settled {
+    display: none !important;
+  }
+
+  /* Cards took the full width and their side margins on top of it. */
+  .finance-invoice-detail .invoice-detail__body > *,
+  .finance-invoice-detail .invoice-detail__body > .invoice-detail__card[aria-label] {
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  /* Line items stay inside the screen. */
+  .finance-invoice-detail :is(.invoice-detail__card, .invoice-detail__table-wrap) {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: clip !important;
+  }
+  .finance-invoice-detail table.invoice-detail__table,
+  .finance-invoice-detail table.invoice-detail__table > tbody {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .finance-invoice-detail table.invoice-detail__table > thead {
+    display: none !important;
+  }
+}
+
+/* ── Contact panel, Financial tab, on phones ──────────────────────────────
+   Store credit and open balance are in the summary above; the tables ran
+   off the right edge. Each row becomes a short card. */
+@media (max-width: 767px) {
+  .contacts-credit-summary .contacts-credit-summary__dup {
+    display: none !important;
+  }
+  .contacts-panel .contacts-table-scroll {
+    overflow: visible !important;
+  }
+  table.contacts-compact-table,
+  table.contacts-compact-table > tbody {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  table.contacts-compact-table > thead {
+    display: none !important;
+  }
+  table.contacts-compact-table > tbody > tr {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.15rem 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border-lt);
+  }
+  table.contacts-compact-table > tbody > tr > td {
+    display: block !important;
+    padding: 0 !important;
+    border: 0 !important;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  table.contacts-compact-table td[data-col='ref'] {
+    grid-column: 1;
+    grid-row: 1;
+    font-weight: 600;
+  }
+  table.contacts-compact-table td[data-col='status'] {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  table.contacts-compact-table td[data-col='sub'] {
+    grid-column: 1 / -1;
+    color: var(--text-3);
+    font-size: 12px;
+  }
+  table.contacts-compact-table td[data-col='paid'] {
+    display: none !important;
+  }
+  table.contacts-compact-table td[data-col='amount'] {
+    grid-column: 1 / -1;
+    display: flex !important;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+  table.contacts-compact-table td[data-col='amount']::before {
+    content: attr(data-label);
+    color: var(--text-3);
+    font-family: inherit;
+  }
+}
