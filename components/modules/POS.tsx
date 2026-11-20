@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback, useDeferredValue, startTransition } from 'react'
 import { useCommerceStore, useInventoryStore, fmtKes, fmtDate, isPosBankPayment } from '@/lib/store'
 import { Modal, Field, Input, Select, ModuleSkeleton } from '@/components/ui'
 import { PosTransactionHistory } from '@/components/pos/PosTransactionHistory'
@@ -35,6 +35,7 @@ import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
 
 // Phones list products as rows, so a page holds twice as many as the old cards.
 const POS_MOBILE_PAGE_SIZE = 12
+const POS_DESKTOP_BATCH = 60
 
 function ReceiptPrintView({
   order,
@@ -289,10 +290,11 @@ export default function PointOfSale() {
 
   const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts, users, currentUserId, customerCredits, systemSettings } = useCommerceStore()
   const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
-  const { getStockByLocation, stockMoves } = useInventoryStore()
+  const { getStockByLocation, stockMoves, bulkStock, serials: inventorySerials } = useInventoryStore()
+  const stockByLocationRef = useRef(getStockByLocation)
+  stockByLocationRef.current = getStockByLocation
 
   const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; listPrice: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
-  const [scanInput, setScanInput] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
   const [payMethod, setPayMethod] = useState<'' | 'cash' | 'mpesa' | 'bank'>('')
@@ -332,16 +334,38 @@ export default function PointOfSale() {
   }, [cashier, salespersonId])
 
   // Sell only from warehouse — shop is the "With Issues" bin, not a sales floor.
-  const sellableLocations = new Set(['warehouse'])
-  const getSellableQty = (productId: string, requiresSerial: boolean) => requiresSerial
-    ? serials.filter(s => s.productId === productId && s.status === 'available' && sellableLocations.has(s.location)).length
-    : (getStockByLocation(productId).warehouse ?? 0)
+  const sellableLocations = useMemo(() => new Set(['warehouse']), [])
+  // Stock counted once per change to serials or stock levels. Counting it
+  // per product on every render walked the whole serial list once per
+  // product for each character a barcode scanner typed, so a scan lagged.
+  const sellableSerials = useMemo(
+    () => serials.filter(s => s.status === 'available' && sellableLocations.has(s.location)),
+    [serials, sellableLocations],
+  )
+  const readyUnitsByProduct = useMemo(() => {
+    const out = new Map<string, number>()
+    for (const s of sellableSerials) out.set(s.productId, (out.get(s.productId) ?? 0) + 1)
+    return out
+  }, [sellableSerials])
+  // Quantity stock: the store's own count (it also knows products whose
+  // serial tracking is inferred from their category), remembered per product
+  // until stock levels or serials change.
+  const warehouseQtyCache = useMemo(() => new Map<string, number>(), [bulkStock, inventorySerials]) // eslint-disable-line react-hooks/exhaustive-deps
+  const getSellableQty = useCallback((productId: string, requiresSerial: boolean) => {
+    if (requiresSerial) return readyUnitsByProduct.get(productId) ?? 0
+    let qty = warehouseQtyCache.get(productId)
+    if (qty === undefined) {
+      qty = stockByLocationRef.current(productId).warehouse ?? 0
+      warehouseQtyCache.set(productId, qty)
+    }
+    return qty
+  }, [readyUnitsByProduct, warehouseQtyCache])
 
-  const sellable = products.filter(p =>
+  const sellable = useMemo(() => products.filter(p =>
     p.canBeSold &&
     p.isActive &&
     (p.unit === 'service' || getSellableQty(p.id, p.requiresSerial) > 0)
-  )
+  ), [products, getSellableQty])
 
   // Products with no category are grouped as "Other" (they showed as an empty chip).
   const categoryOf = (p: { category?: string | null }) => String(p.category ?? '').trim() || 'Other'
@@ -352,11 +376,13 @@ export default function PointOfSale() {
 
   // Search matches product name/SKU/barcode, and also serial numbers or SKUs of
   // ready-for-sale units so a cashier can find the exact unit to sell.
-  const searchTerm = search.trim().toLowerCase()
+  // The product grid follows typing in the background: a scanner's burst of
+  // characters is not held up re-filtering the grid after each one.
+  const deferredSearch = useDeferredValue(search)
+  const searchTerm = deferredSearch.trim().toLowerCase()
   const serialMatchByProduct = new Map<string, typeof serials[0]>()
   if (searchTerm) {
-    serials.forEach(s => {
-      if (s.status !== 'available' || !sellableLocations.has(s.location)) return
+    sellableSerials.forEach(s => {
       const hit = (s.serial || '').toLowerCase().includes(searchTerm)
         || (s.barcode || '').toLowerCase().includes(searchTerm)
         || (s.sku || '').toLowerCase().includes(searchTerm)
@@ -374,6 +400,15 @@ export default function PointOfSale() {
     return matchCat && matchSearch
   })
   const mobilePageCount = Math.max(1, Math.ceil(filteredProducts.length / POS_MOBILE_PAGE_SIZE))
+  // Only the cards on screen are drawn: a phone shows one page, a wider screen
+  // the first few dozen with Show more. Drawing every product (1,500 cards)
+  // on each change is what made scanning lag.
+  const isPhone = useIsPhone()
+  const [desktopLimit, setDesktopLimit] = useState(POS_DESKTOP_BATCH)
+  useEffect(() => { setDesktopLimit(POS_DESKTOP_BATCH) }, [category, searchTerm])
+  const visibleProducts = isPhone
+    ? filteredProducts.slice((mobilePage - 1) * POS_MOBILE_PAGE_SIZE, mobilePage * POS_MOBILE_PAGE_SIZE)
+    : filteredProducts.slice(0, desktopLimit)
 
   useEffect(() => { setMobilePage(1) }, [category, searchTerm])
   useEffect(() => {
@@ -407,7 +442,7 @@ export default function PointOfSale() {
 
     const result = matchPosScan({
       code: trimmed,
-      serials,
+      serials: sellableSerials,
       products,
       sellableLocations,
       getSellableQty,
@@ -442,13 +477,10 @@ export default function PointOfSale() {
   }
 
   // Barcode scanner — reads quickly typed characters (scanner emits chars fast then Enter)
-  const handleScanKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      processScan(scanInput)
-      setScanInput('')
-      setSearch('')
-      scanRef.current?.focus()
-    }
+  const handleScanSubmit = (code: string) => {
+    processScan(code)
+    setSearch('')
+    scanRef.current?.focus()
   }
 
   const addToCart = (product: typeof products[0], serialId?: string) => {
@@ -764,18 +796,7 @@ export default function PointOfSale() {
             <div className="pos-scan-area">
               <div className="pos-scan-control">
                 <span className="pos-scan-leading" aria-hidden="true"><Fa icon={faMagnifyingGlass} /></span>
-                <input
-                  ref={scanRef}
-                  className="pos-scan-input"
-                  placeholder="Scan barcode, serial, SKU or product"
-                  value={scanInput}
-                  onChange={e => {
-                    setScanInput(e.target.value)
-                    setSearch(e.target.value)
-                  }}
-                  onKeyDown={handleScanKey}
-                  aria-label="Scan or search products"
-                />
+                <PosScanInput inputRef={scanRef} onSearch={setSearch} onSubmit={handleScanSubmit} />
                 <button
                   type="button"
                   className="pos-camera-action"
@@ -820,15 +841,14 @@ export default function PointOfSale() {
             {/* Products grid */}
             <div className="pos-product-scroll">
               <div className="pos-product-grid">
-                {filteredProducts.map((product, productIndex) => {
+                {visibleProducts.map(product => {
                   const matchedSerial = serialMatchByProduct.get(product.id)
-                  const productMobilePage = Math.floor(productIndex / POS_MOBILE_PAGE_SIZE) + 1
                   return (
                     <button
                       type="button"
                       key={product.id}
                       onClick={() => addToCart(product, matchedSerial?.id)}
-                      className={`pos-product-card ${productMobilePage === mobilePage ? 'is-mobile-page-active' : 'is-mobile-page-hidden'} ${product.salePrice > 0 ? '' : 'is-unpriced'}`}
+                      className={`pos-product-card is-mobile-page-active ${product.salePrice > 0 ? '' : 'is-unpriced'}`}
                     >
                       <div className="pos-product-media" aria-hidden="true">
                         <PosProductThumb product={product} />
@@ -870,6 +890,13 @@ export default function PointOfSale() {
                     ›
                   </button>
                 </nav>
+              )}
+              {!isPhone && filteredProducts.length > desktopLimit && (
+                <div className="flex justify-center py-3">
+                  <button type="button" className="btn-outline" onClick={() => setDesktopLimit(n => n + POS_DESKTOP_BATCH)}>
+                    Show more ({filteredProducts.length - desktopLimit} more)
+                  </button>
+                </div>
               )}
               {filteredProducts.length === 0 && (
                 <div className="pos-empty-products">
@@ -1243,5 +1270,56 @@ export default function PointOfSale() {
         </div>
       )}
     </div>
+  )
+}
+
+/** Phone width, as the till's CSS treats it. */
+function useIsPhone() {
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const on = () => setPhone(mq.matches)
+    on()
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return phone
+}
+
+/**
+ * The scan / search box keeps what is typed to itself. A USB scanner types a
+ * whole code in a few milliseconds; when each character re-drew the whole
+ * till the scan lagged. The product grid follows at low priority.
+ */
+function PosScanInput({ inputRef, onSearch, onSubmit }: {
+  inputRef: React.RefObject<HTMLInputElement>
+  onSearch: (value: string) => void
+  onSubmit: (code: string) => void
+}) {
+  const [value, setValue] = useState('')
+  return (
+    <input
+      ref={inputRef}
+      className="pos-scan-input"
+      placeholder="Scan barcode, serial, SKU or product"
+      value={value}
+      onChange={e => {
+        const next = e.target.value
+        setValue(next)
+        startTransition(() => onSearch(next))
+      }}
+      onKeyDown={e => {
+        if (e.key !== 'Enter') return
+        const code = value
+        setValue('')
+        onSubmit(code)
+      }}
+      autoComplete="off"
+      autoCorrect="off"
+      autoCapitalize="off"
+      spellCheck={false}
+      enterKeyHint="go"
+      aria-label="Scan or search products"
+    />
   )
 }
