@@ -19,6 +19,16 @@ interface MobileCardViewProps<T> {
   renderCard?: (row: T) => ReactNode
   /** Tick boxes on the cards when the table lets rows be selected (bulk actions). */
   selection?: { isSelected: (row: T) => boolean; toggle: (row: T) => void }
+  /**
+   * 'lines': a statement or register — one tight line per row (name left,
+   * amount right, an optional second line), no boxed cards. For reports
+   * (cash flow, ageing) and lists of accounts or journals.
+   */
+  variant?: 'cards' | 'lines'
+  /** Second line of a 'lines' row (defaults to the subtitle column). */
+  lineSubtitle?: (row: T) => ReactNode
+  /** First line of a 'lines' row (defaults to the first column). */
+  lineTitle?: (row: T) => ReactNode
 }
 
 // Default card layout: first priority-1 column is the title, the rest of
@@ -38,6 +48,9 @@ export default function MobileCardView<T>({
   cardAccent,
   renderCard,
   selection,
+  variant = 'cards',
+  lineSubtitle,
+  lineTitle,
 }: MobileCardViewProps<T>) {
   if (isLoading) {
     return <div className="p-4"><StateSkeleton /></div>
@@ -71,6 +84,40 @@ export default function MobileCardView<T>({
   // so a phone showed two or three records at a time. A card that cannot be
   // opened keeps all of them — it is the only place they appear.
   const cardMetaCols = onRowClick ? metaCols.slice(0, 2) : metaCols
+
+  if (variant === 'lines') {
+    return (
+      <ul className="dt-lines">
+        {rows.map(row => {
+          const sub = lineSubtitle ? lineSubtitle(row) : subtitleCol ? subtitleCol.render(row) : null
+          const body = (
+            <>
+              <span className="dt-line__main">
+                <span className="dt-line__title">{lineTitle ? lineTitle(row) : titleCol ? titleCol.render(row) : rowKey(row)}</span>
+                {sub ? <span className="dt-line__sub">{sub}</span> : null}
+              </span>
+              <span className="dt-line__end">
+                {amountCol ? <span className="dt-line__amount">{amountCol.render(row)}</span> : null}
+                {statusCol ? <span className="dt-line__status">{statusCol.render(row)}</span> : null}
+              </span>
+            </>
+          )
+          return (
+            <li key={rowKey(row)}>
+              {onRowClick ? (
+                <button type="button" className="dt-line is-tappable" onClick={() => onRowClick(row)}>{body}</button>
+              ) : (
+                <div className="dt-line">
+                  {body}
+                  {rowActions ? <span className="dt-line__actions">{rowActions(row)}</span> : null}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-2.5 p-3 sm:p-4">

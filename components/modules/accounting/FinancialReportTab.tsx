@@ -201,13 +201,13 @@ export default function FinancialReportTab() {
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <div className="flex gap-1 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-1">
+          <div className="finance-period-presets flex gap-1 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-1">
             {PRESETS.map(p => (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => setPreset(p.id)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${preset === p.id ? 'bg-[var(--navy)] text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface-2)]'}`}
+                className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${preset === p.id ? 'bg-[var(--navy)] text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface-2)]'}`}
               >
                 {p.label}
               </button>
