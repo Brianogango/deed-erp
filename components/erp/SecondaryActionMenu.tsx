@@ -117,7 +117,7 @@ export function SecondaryActionMenu({
             bottom: pos.bottom,
             left: pos.mobile ? 12 : undefined,
             width: pos.mobile ? 'auto' : undefined,
-            maxHeight: 'min(20rem, calc(100dvh - 1rem))',
+            maxHeight: 'min(20rem, calc(var(--app-h) - 1rem))',
             overflowY: 'auto',
           }}
         >

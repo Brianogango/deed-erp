@@ -278,7 +278,7 @@ function NotificationsPanel({
       ref={panelRef}
       className="ui-enter ui-enter-dropdown 
         fixed top-[60px] right-4 z-[9050]
-        w-[min(400px,calc(100vw-32px))] max-h-[calc(100vh-80px)]
+        w-[min(400px,calc(100vw-32px))] max-h-[calc(var(--app-h)-80px)]
         bg-[var(--bg-card)] border border-[var(--border)]
         rounded-2xl shadow-2xl shadow-black/30
         flex flex-col overflow-hidden
@@ -947,7 +947,7 @@ function AccountPanel({
     <>
       <div className="acct-backdrop" onClick={onClose} />
       <aside
-        className="acct-panel max-md:!inset-0 max-md:!h-[100dvh] max-md:!w-full max-md:!max-w-none max-md:!rounded-none max-md:!border-0"
+        className="acct-panel max-md:!inset-0 max-md:!h-[var(--app-h)] max-md:!w-full max-md:!max-w-none max-md:!rounded-none max-md:!border-0"
         style={{
           top: '16px',
           right: '16px',

@@ -79,7 +79,7 @@ function ContentSkeleton({ label }: { label: string }) {
 export function ShellChromeSkeleton() {
   return (
     <div
-      className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)]"
+      className="flex h-[var(--app-h)] w-full overflow-hidden bg-[var(--bg-page)]"
       style={{ background: 'var(--bg-page, #F4F6FB)' }}
       role="status"
       aria-live="polite"
