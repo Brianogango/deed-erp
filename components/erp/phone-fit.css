@@ -267,7 +267,24 @@ html {
 }
 
 @media (max-width: 767px) {
+  :root {
+    /* Tab row plus the iPhone home-indicator strip below it. */
+    --mobile-tab-h: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Installed on an iPhone home screen, a full-height shell (h-dvh) came out
+     taller than the window, so the tab bar's labels sat below the screen.
+     Pinned to the window's edges, the shell is exactly the window. */
+  .app-shell-root {
+    position: fixed;
+    inset: 0;
+    height: auto !important;
+  }
+
   .mobile-tab-bar {
+    box-sizing: border-box;
+    height: var(--mobile-tab-h);
+    align-items: start;
     display: grid;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
@@ -317,14 +334,23 @@ html {
     background: var(--bg-surface);
   }
 
-  /* A screen with its own bottom actions keeps the bottom to itself. */
-  .app-main-col:has(.sales-proto-actions--dock, .erp-mobile-action-bar) .mobile-tab-bar {
-    display: none;
+  /* The tab bar is on every screen; a screen's own bottom actions sit just
+     above it instead of hiding it. */
+  body:has(.mobile-tab-bar) .sales-pilot.sales-doc .sales-workbench .sales-proto-actions--dock {
+    bottom: var(--mobile-tab-h) !important;
+    padding-bottom: 0.75rem !important;
+  }
+  body:has(.mobile-tab-bar) .erp-mobile-action-bar {
+    bottom: calc(var(--mobile-tab-h) + 8px) !important;
+    padding-bottom: 7px !important;
   }
 
-  /* The assistant button floats above the tab bar, not over Menu. */
-  body:has(.mobile-tab-bar):not(:has(.sales-proto-actions--dock, .erp-mobile-action-bar)) .dia-floating-launcher {
-    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  /* The assistant button floats above the tab bar (and any action bar). */
+  body:has(.mobile-tab-bar) .dia-floating-launcher {
+    bottom: calc(var(--mobile-tab-h) + 0.75rem) !important;
+  }
+  body:has(.mobile-tab-bar):has(.sales-proto-actions--dock, .erp-mobile-action-bar) .dia-floating-launcher {
+    bottom: calc(var(--mobile-tab-h) + 4.75rem) !important;
   }
 }
 
@@ -1221,5 +1247,47 @@ html {
     content: attr(data-label);
     color: var(--text-3);
     font-family: inherit;
+  }
+}
+
+/* ── Record payment / receipt form on phones ─────────────────────────────
+   The date box ran past the right edge, dropdowns showed iOS's arrows next
+   to their own, and Confirm sat in a corner. */
+@media (max-width: 767px) {
+  .pay-form input[type='date'] {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+  }
+  .pay-form select {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .pay-form input[type='number'] {
+    font-size: 16px; /* no zoom on focus */
+    font-weight: 600;
+  }
+  .pay-form .pay-form__methods > button {
+    flex: 1 1 calc(33% - 0.5rem);
+  }
+  .pay-form .pay-form__actions {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .pay-form .pay-form__actions > :is(button, a) {
+    min-height: 2.75rem;
+  }
+  .pay-form .pay-form__actions > .btn-primary {
+    width: 100%;
+  }
+  /* M-Pesa prompt, when offered, gets a row of its own. */
+  .pay-form .pay-form__actions > .btn-outline:not(:first-child) {
+    grid-column: 1 / -1;
+    order: -1;
   }
 }
