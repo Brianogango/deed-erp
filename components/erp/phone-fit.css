@@ -845,3 +845,77 @@ html {
     margin-top: 0.3rem !important;
   }
 }
+
+@media (max-width: 767px) {
+  /* ── Sales forms (new quotation, quotation / order details) ────────────── */
+  /* Labels above fields on every phone (two columns stayed on until 380px):
+     on a 430px iPhone the side column left the fields ~260px, Safari's date
+     fields would not shrink into that, and the whole form scrolled sideways —
+     labels against the left edge, fields cut off on the right. */
+  .sales-pilot.sales-doc .sales-workbench .sp-field.sp-field {
+    grid-template-columns: minmax(0, 1fr) !important;
+    row-gap: 0.3rem !important;
+    min-width: 0 !important;
+    padding: 0.55rem 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sp-field > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sp-field :is(input, select, textarea) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  /* iPhone date fields keep a fixed minimum width of their own unless their
+     native look is dropped; they then size like any other field. */
+  .sales-pilot.sales-doc .sales-workbench .sp-field input[type='date'] {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    display: block !important;
+    min-height: 2.75rem !important;
+    text-align: left !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sp-field input[type='date']::-webkit-date-and-time-value {
+    text-align: left;
+  }
+  .sales-pilot.sales-doc .sales-order-meta-panel--new .sales-valid-until > input {
+    flex: 1 1 100% !important;
+  }
+  /* "Shown once you pick a customer" was a row of its own before anything
+     was chosen. */
+  .sales-pilot.sales-doc .sales-workbench .sp-field:has(.sales-new-contact--empty) {
+    display: none !important;
+  }
+  /* Nothing in the form may widen the page. */
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-panel {
+    max-width: 100% !important;
+    overflow-x: clip !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Stacked, the form's two columns are one list: no divider band between. */
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-column--commercial {
+    padding-top: 0 !important;
+    border-top: 0 !important;
+  }
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-grid {
+    gap: 0 !important;
+  }
+  /* Read-only values are text, not boxes to type in. */
+  .sales-pilot.sales-doc .sales-workbench .sp-field input[readonly] {
+    min-height: 0 !important;
+    height: auto !important;
+    padding-block: 0.1rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .sales-pilot.sales-doc .sales-workbench .sales-order-meta-column--customer {
+    min-height: 0 !important;
+    padding-bottom: 0 !important;
+    border-bottom: 0 !important;
+  }
+}
