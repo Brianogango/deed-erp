@@ -12,6 +12,7 @@ import { MoveSerialProductModal } from './MoveSerialProductModal'
 import { canIntakeOnHandSerials, canReleaseHeldSerial } from '@/lib/inventory/permissions'
 import { ON_HAND_LOCATIONS, parseSerialList, type OnHandLocation } from '@/lib/inventory/serial-intake'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
+import { userCan } from '@/lib/auth/can'
 
 type StatusChip =
   | 'all'
@@ -60,6 +61,40 @@ export default function SerialManageDrawer({
   const [moveTarget, setMoveTarget] = useState<SerialNumber | null>(null)
   const canRelease = canReleaseHeldSerial(role)
   const canIntake = canIntakeOnHandSerials(role)
+  // Deleting units from the system is the Director's (inventory.serials.delete).
+  const canDelete = userCan(users.find(u => u.id === currentUserId), 'inventory.serials.delete')
+  const [deleteTarget, setDeleteTarget] = useState<{ rows: SerialNumber[]; clear: () => void } | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const runDelete = async () => {
+    if (!deleteTarget) return
+    if (!deleteReason.trim()) { showToast('Say why these units are being deleted', 'error'); return }
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/inventory/serials-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serialIds: deleteTarget.rows.map(r => r.id), reason: deleteReason.trim() }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || 'Could not delete the units')
+      const gone = (body.deleted ?? []).length
+      const refused = (body.refused ?? []) as Array<{ serial: string; why: string }>
+      showToast(
+        `${gone} unit${gone === 1 ? '' : 's'} deleted (${body.reference})`
+          + (body.jobsRemoved ? ` · ${body.jobsRemoved} refurbishment job${body.jobsRemoved === 1 ? '' : 's'} removed` : '')
+          + (refused.length ? ` · ${refused.length} kept: ${refused.slice(0, 2).map(r => `${r.serial} — ${r.why}`).join('; ')}${refused.length > 2 ? '…' : ''}` : ''),
+        refused.length ? 'info' : 'success',
+      )
+      deleteTarget.clear()
+      setDeleteTarget(null)
+      setDeleteReason('')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not delete the units', 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
   const willUpgradeToSerial = !isSerialTracking(inferTrackingMethod(product))
 
   const [search, setSearch] = useState('')
@@ -452,6 +487,15 @@ export default function SerialManageDrawer({
                 >
                   Download PDF
                 </button>
+                {canDelete && (
+                  <button
+                    type="button"
+                    className="dt-toolbar-btn text-[var(--danger-text)]"
+                    onClick={() => { setDeleteReason(''); setDeleteTarget({ rows: selected, clear }) }}
+                  >
+                    Delete from system
+                  </button>
+                )}
                 <button type="button" className="dt-toolbar-btn" onClick={clear}>Clear</button>
               </div>
             )}
@@ -506,6 +550,39 @@ export default function SerialManageDrawer({
         </div>
       </Modal>
 
+      {deleteTarget && (
+        <Modal
+          title={`Delete ${deleteTarget.rows.length} unit${deleteTarget.rows.length === 1 ? '' : 's'} from the system`}
+          subtitle="Gone from inventory, With Issues and refurbishment. This cannot be undone."
+          onClose={() => setDeleteTarget(null)}
+          width={520}
+        >
+          <div className="flex flex-col gap-3">
+            <p className="text-[13px] text-[var(--text-2)]">
+              {deleteTarget.rows.slice(0, 6).map(r => r.serial).join(', ')}{deleteTarget.rows.length > 6 ? ` and ${deleteTarget.rows.length - 6} more` : ''}
+            </p>
+            <p className="text-[12px] text-[var(--text-3)]">
+              Units on a sale, invoice, delivery, purchase receipt, POS sale, Kilimall order, warranty or repair are kept and listed —
+              that history stays. A received unit that is missing or broken is written off instead.
+            </p>
+            <Field label="Why they are being deleted" required>
+              <Textarea value={deleteReason} onChange={setDeleteReason} rows={2} placeholder="e.g. Entered twice by mistake; test records" />
+            </Field>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-outline" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary disabled:opacity-40"
+                style={{ background: 'var(--danger-text)', borderColor: 'var(--danger-text)' }}
+                disabled={deleting || !deleteReason.trim()}
+                onClick={() => { void runDelete() }}
+              >
+                {deleting ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {moveTarget && (
         <MoveSerialProductModal
           unit={moveTarget}

@@ -195,6 +195,23 @@ describe('a serial the serials table cannot hold', () => {
   })
 })
 
+describe('a unit deleted from the system', () => {
+  it('is not brought back by a stale copy of its row, only by a new unit', async () => {
+    const productId = '33333333-3333-4333-8333-333333333333'
+    const deletedId = '55555555-5555-4555-8555-555555555555'
+    mockPrisma.product.findMany.mockResolvedValue([{ id: productId }])
+    mockPrisma.serialNumber.findMany.mockResolvedValue([{ id: deletedId, serialNumber: 'SN-GONE', productId, removedAt: new Date(), createdAt: new Date(0) }])
+    mockPrisma.serialNumber.update.mockClear()
+    mockPrisma.serialNumber.create.mockClear()
+    await mirrorKnownDomain('deed_serials', JSON.stringify([{ id: deletedId, serial: 'SN-GONE', productId, status: 'available', location: 'warehouse' }]), null)
+    expect(mockPrisma.serialNumber.update).not.toHaveBeenCalled()
+    expect(mockPrisma.serialNumber.create).not.toHaveBeenCalled()
+    // Received again as a new unit: allowed.
+    await mirrorKnownDomain('deed_serials', JSON.stringify([{ id: '66666666-6666-4666-8666-666666666666', serial: 'SN-GONE', productId, status: 'available', location: 'warehouse' }]), null)
+    expect(mockPrisma.serialNumber.update).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('stock levels saved from a browser', () => {
   it('keeps rows the saved list does not have (a receipt made after the tab loaded)', async () => {
     mockPrisma.stockLocationLevel.findMany.mockResolvedValueOnce([
