@@ -25,11 +25,13 @@ describe('phone tab bar modules', () => {
 
 describe('where the tab bar steps aside', () => {
   const q = (s: string) => new URLSearchParams(s)
-  it('hides on open records and the till', () => {
-    expect(mobileTabsHiddenFor('/sales', q('id=so-1'))).toBe(true)
-    expect(mobileTabsHiddenFor('/finance/invoices/abc', q(''))).toBe(true)
+  it('hides only on the till', () => {
     expect(mobileTabsHiddenFor('/pos', q(''))).toBe(true)
-    expect(mobileTabsHiddenFor('/sales', q('view=new'))).toBe(true)
+  })
+  it('stays on open records and forms', () => {
+    expect(mobileTabsHiddenFor('/sales', q('id=so-1'))).toBe(false)
+    expect(mobileTabsHiddenFor('/finance/invoices/abc', q(''))).toBe(false)
+    expect(mobileTabsHiddenFor('/sales', q('view=new'))).toBe(false)
   })
   it('shows on lists and dashboards', () => {
     expect(mobileTabsHiddenFor('/sales', q('tab=list'))).toBe(false)

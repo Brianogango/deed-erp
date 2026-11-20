@@ -1564,16 +1564,16 @@ export default function InvoiceDetail() {
 
       {showPayModal && (
         <Modal title={invoice.type === 'customer_invoice' ? 'Record customer receipt' : 'Record vendor payment'} onClose={() => setShowPayModal(false)} width={460}>
-          <div className="flex flex-col gap-4">
-            {/* Invoice summary */}
-            <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex justify-between">
-              <div>
-                <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">{docLabel}</p>
-                <p className="text-xs font-bold text-[var(--text-1)]">{displayDocRef(invoice.ref)} · {invoice.partnerName}</p>
+          <div className="pay-form flex flex-col gap-4">
+            {/* Who and how much, in one line each. */}
+            <div className="pay-form__summary flex items-start justify-between gap-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-semibold text-[var(--text-1)]">{invoice.partnerName}</p>
+                <p className="text-[11px] text-[var(--text-3)]">{displayDocRef(invoice.ref)}</p>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Balance Due</p>
-                <p className="text-xs font-black font-mono invoice-detail__amount--due">{fmtKes(balance)}</p>
+              <div className="shrink-0 text-right">
+                <p className="text-[11px] text-[var(--text-3)]">Balance due</p>
+                <p className="text-[13px] font-bold font-mono invoice-detail__amount--due">{fmtKes(balance)}</p>
               </div>
             </div>
 
@@ -1583,32 +1583,18 @@ export default function InvoiceDetail() {
 
             <Field label={`${invoice.type === 'customer_invoice' ? 'Amount received' : 'Amount paid'} (max ${fmtKes(balance)})`}>
               <Input type="number" value={payAmount} onChange={setPayAmount} placeholder="0.00" />
-              {overpay && (
-                <p className="text-[10px] text-amber-600 mt-1 font-bold">Will be capped at {fmtKes(balance)}</p>
-              )}
-              {willFullyPay && !overpay && Number(payAmount) > 0 && (
-                <p className="text-[10px] text-emerald-600 mt-1 font-bold">✓ This fully clears the {docLabel.toLowerCase()}</p>
-              )}
-              {paying > 0 && paying < balance && (
-                <p className="text-[10px] text-[var(--text-4)] mt-1">Remaining after this: {fmtKes(balance - paying)}</p>
+              {/* One line: what is left once this is recorded. */}
+              {overpay ? (
+                <p className="mt-1 text-[11px] font-semibold text-amber-600">More than is due — {fmtKes(balance)} will be recorded</p>
+              ) : (paying + withheld) > 0 && (
+                <p className={`mt-1 text-[11px] font-semibold ${balance - paying - withheld <= 0 ? 'text-emerald-600' : 'text-[var(--text-3)]'}`} aria-live="polite">
+                  {balance - paying - withheld <= 0
+                    ? `✓ Clears the ${docLabel.toLowerCase()}`
+                    : `${fmtKes(balance - paying - withheld)} left after this`}
+                  {withheld > 0 ? ` · incl. ${fmtKes(withheld)} withheld` : ''}
+                </p>
               )}
             </Field>
-
-            <div className="grid grid-cols-3 gap-2 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3" aria-label="Payment balance preview">
-              <div>
-                <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">Before</p>
-                <p className="text-xs font-bold font-mono text-[var(--text-1)]">{fmtKes(balance)}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">{invoice.type === 'customer_invoice' ? 'Receiving' : 'Paying'}</p>
-                <p className="text-xs font-bold font-mono text-[var(--primary)]">− {fmtKes(paying + withheld)}</p>
-                {withheld > 0 && <p className="text-[9px] text-[var(--text-4)]">incl. {fmtKes(withheld)} withheld</p>}
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] uppercase font-bold text-[var(--text-4)]">After</p>
-                <p className="text-xs font-bold font-mono text-[var(--text-1)]">{fmtKes(Math.max(0, balance - paying - withheld))}</p>
-              </div>
-            </div>
 
             {invoice.type === 'customer_invoice' && (
               <WithholdingFields
@@ -1619,19 +1605,30 @@ export default function InvoiceDetail() {
               />
             )}
 
-            <Field label={invoice.type === 'customer_invoice' ? 'Receipt method *' : 'Payment method *'}>
-              <Select
-                value={payMethod}
-                onChange={setPayMethod}
-                options={[
-                  { value: '', label: 'Select method…' },
+            <Field label={invoice.type === 'customer_invoice' ? 'Received by *' : 'Paid by *'}>
+              {/* One tap instead of opening a list. */}
+              <div className="pay-form__methods flex flex-wrap gap-2" role="radiogroup" aria-label="Payment method">
+                {[
                   { value: 'mpesa', label: 'M-Pesa' },
-                  { value: 'bank_transfer', label: 'Bank Transfer' },
+                  { value: 'bank_transfer', label: 'Bank' },
                   { value: 'cash', label: 'Cash' },
                   { value: 'card', label: 'Card' },
                   { value: 'cheque', label: 'Cheque' },
-                ]}
-              />
+                ].map(m => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={payMethod === m.value}
+                    onClick={() => setPayMethod(m.value)}
+                    className={`min-h-[40px] rounded-lg border px-3.5 text-[13px] font-semibold transition-colors ${payMethod === m.value
+                      ? 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--navy)]'
+                      : 'border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-2)]'}`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             </Field>
 
             {activeBanks.length > 0 && (
@@ -1670,7 +1667,7 @@ export default function InvoiceDetail() {
               </div>
             )}
 
-            <Field label="Memo / Reference">
+            <Field label="Reference (optional)">
               <Input
                 value={payReference}
                 onChange={setPayReference}
@@ -1685,7 +1682,7 @@ export default function InvoiceDetail() {
               </Field>
             )}
 
-            <div className="flex gap-2 justify-end pt-2">
+            <div className="pay-form__actions flex flex-wrap justify-end gap-2 pt-2">
               <button className="btn-outline" onClick={() => setShowPayModal(false)}>Cancel</button>
               {payMethod === 'mpesa' && darajaReady && invoice.type === 'customer_invoice' && (
                 <button

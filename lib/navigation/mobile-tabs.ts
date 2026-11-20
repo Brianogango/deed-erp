@@ -78,12 +78,9 @@ export function mobileTabModules(user: TabUser, pinned: readonly string[] = [], 
 }
 
 /**
- * Screens where the tab bar steps aside: an open record (it has its own
- * actions along the bottom) and the POS till (it needs the whole screen).
+ * The tab bar is on every screen except the POS till, which needs the whole
+ * screen. Open records keep it too; their own bottom actions sit above it.
  */
-export function mobileTabsHiddenFor(pathname: string, search: URLSearchParams | null | undefined): boolean {
-  if (pathname === '/pos' || pathname.startsWith('/pos/')) return true
-  if (/^\/finance\/invoices\/[^/]+/.test(pathname)) return true
-  const params = search ?? new URLSearchParams()
-  return ['id', 'edit', 'new'].some(key => params.has(key)) || ['new', 'form', 'edit'].includes(params.get('view') ?? '')
+export function mobileTabsHiddenFor(pathname: string, _search?: URLSearchParams | null): boolean {
+  return pathname === '/pos' || pathname.startsWith('/pos/')
 }

@@ -606,6 +606,13 @@ type SaveStoreKeysOptions = {
    * than BULK_DELETE_MAX_REMOVALS records. Without it such a save is refused.
    */
   allowBulkDelete?: boolean | string[]
+  /**
+   * The quantity-stock list this writer loaded. With it, deed_bulkStock is
+   * saved as the writer's changes ("add N") rather than as its whole list,
+   * so changes others made since it loaded are kept
+   * (lib/inventory/bulk-stock-delta.ts).
+   */
+  bulkStockBase?: unknown
 }
 
 function bulkDeleteAllowed(key: string, opts?: SaveStoreKeysOptions): boolean {
@@ -673,6 +680,19 @@ export async function saveStoreKeys(
   opts?: SaveStoreKeysOptions,
 ): Promise<void> {
   try {
+    if (entries.deed_bulkStock !== undefined && opts?.bulkStockBase !== undefined && process.env.NODE_ENV !== 'test') {
+      let next: unknown = null
+      try { next = JSON.parse(entries.deed_bulkStock) } catch { /* saved whole below */ }
+      if (Array.isArray(next)) {
+        const { diffBulkStock } = await import('./inventory/bulk-stock-delta')
+        const { applyBulkStockDeltasToTable } = await import('./inventory/bulk-stock-delta.server')
+        const changed = await applyBulkStockDeltasToTable(diffBulkStock(opts.bulkStockBase, next))
+        const { deed_bulkStock: _saved, ...rest } = entries
+        entries = rest
+        if (changed) await notifyStoreKeysChanged(['deed_bulkStock'])
+        if (!Object.keys(entries).length) return
+      }
+    }
     const frozen = Object.keys(entries).filter(key => FROZEN_STORE_KEYS.has(key))
     if (frozen.length) {
       // Repairs, products, serials, quantity stock, stock moves and receipts are still
