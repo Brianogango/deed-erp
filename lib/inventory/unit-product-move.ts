@@ -8,7 +8,9 @@
 export type MovableUnit = { status?: string; saleOrderId?: string | null; repairId?: string | null; identityPending?: boolean | null }
 
 export function unitMoveBlocker(unit: MovableUnit): string | null {
-  if (unit.identityPending) return 'Identify it first (Refurbishment → Identify)'
+  // A machine without a readable serial yet (UNK- tag) can still be given its
+  // model and specs — often the model is known long before the serial is. It
+  // keeps its tag until the serial is recorded (Identify).
   // On the refurbishment bench is still ours and in the building: a machine
   // that came in under a vague or wrong name ("lenovo tm") is corrected there,
   // where it is first looked at properly.

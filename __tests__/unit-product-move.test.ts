@@ -25,7 +25,7 @@ describe('unitMoveBlocker', () => {
     expect(unitMoveBlocker({ ...unit, status: 'sold' })).toMatch(/sold/)
     expect(unitMoveBlocker({ ...unit, saleOrderId: 'so-1' })).toMatch(/sale order/)
     expect(unitMoveBlocker({ ...unit, repairId: 'r-1' })).toMatch(/repair/)
-    expect(unitMoveBlocker({ ...unit, identityPending: true })).toMatch(/Identify/)
+    expect(unitMoveBlocker({ ...unit, identityPending: true })).toBeNull()
   })
 
   it('a machine on the refurbishment bench can move', () => {

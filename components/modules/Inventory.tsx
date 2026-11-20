@@ -31,6 +31,7 @@ import VendorStockPanel from '@/components/inventory/VendorStockPanel'
 import StockCheckoutPanel from '@/components/inventory/StockCheckoutPanel'
 import PartsRequestsPanel from '@/components/inventory/PartsRequestsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
+import { MoveSerialProductModal } from '@/components/inventory/MoveSerialProductModal'
 import { useCan } from '@/hooks/useCan'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
@@ -260,6 +261,8 @@ function InventoryContent() {
   // Refurbishment send-to state (warehouse safety modal)
   // Machines on their way to Refurbishment (one, or several picked in With Issues).
   const [refurbUnits, setRefurbUnits] = useState<Array<(typeof serials)[number]>>([])
+  // A With Issues machine being given its model and specs.
+  const [modelUnit, setModelUnit] = useState<(typeof serials)[number] | null>(null)
   const [issueSel, setIssueSel] = useState<Set<string>>(new Set())
   const [showMachineIntake, setShowMachineIntake] = useState(false)
   const [refurbIssueDesc, setRefurbIssueDesc] = useState('')
@@ -552,6 +555,7 @@ function InventoryContent() {
     })), [stockMoves, products])
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
+  const canEditSerial = userCan(currentUser, 'editSerialNumber')
   // A person on a custom role sees only the Inventory parts their role lists.
   const customPermissions = Array.isArray(currentUser?.permissions)
   const tabPart = (value: string) => value === 'product_catalog' ? 'catalog' : value === 'warehouse_view' ? 'warehouse' : value === 'checkouts' ? 'stock_out' : value
@@ -1737,6 +1741,14 @@ function InventoryContent() {
                     id: 'send-refurb',
                     label: 'Send for Refurbishment',
                     onClick: () => requestSendForRefurbishment(s),
+                    },
+                    {
+                    // The model and specs are often unknown when a machine
+                    // comes in; it is given them here once someone looks.
+                    id: 'set-model',
+                    label: 'Set model & specs…',
+                    hidden: !canEditSerial,
+                    onClick: () => setModelUnit(s),
                     },
                     {
                     id: 'print-label',
@@ -4071,6 +4083,15 @@ function InventoryContent() {
         />
       )}
 
+      {modelUnit && (
+        <MoveSerialProductModal
+          unit={modelUnit}
+          products={products}
+          showToast={showToast}
+          onClose={() => setModelUnit(null)}
+          onMoved={() => setModelUnit(null)}
+        />
+      )}
       {refurbUnits.length > 0 && (() => {
         const n = refurbUnits.length
         const info = (u: (typeof serials)[number]) => u as (typeof serials)[number] & { assetId?: string; intakeIssue?: string }

@@ -252,7 +252,7 @@ function RefurbishmentContent() {
             const next = refurbNextStep(job, { id: currentUserId ?? undefined, isLead: isLeadTech, canAssign: canAssignJobs })
             const shownBelow = (key: string) => next.mine && next.key === key
             const unit = serials.find(s => s.id === job.serialId)
-            const canFixProduct = !!unit && !job.identityPending && unit.status === 'refurbishment'
+            const canFixProduct = !!unit && unit.status === 'refurbishment'
               && !['transferred', 'written_off'].includes(job.status)
               && (can('editSerialNumber') || can('refurbishment.identify'))
             return (
