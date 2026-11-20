@@ -17,6 +17,8 @@ interface MobileCardViewProps<T> {
   cardAccent?: (row: T) => string
   /** Full override — if supplied, DataTable hands rendering entirely to the caller. */
   renderCard?: (row: T) => ReactNode
+  /** Tick boxes on the cards when the table lets rows be selected (bulk actions). */
+  selection?: { isSelected: (row: T) => boolean; toggle: (row: T) => void }
 }
 
 // Default card layout: first priority-1 column is the title, the rest of
@@ -35,6 +37,7 @@ export default function MobileCardView<T>({
   rowActions,
   cardAccent,
   renderCard,
+  selection,
 }: MobileCardViewProps<T>) {
   if (isLoading) {
     return <div className="p-4"><StateSkeleton /></div>
@@ -72,10 +75,20 @@ export default function MobileCardView<T>({
   return (
     <div className="flex flex-col gap-2.5 p-3 sm:p-4">
       {rows.map(row => {
+        // On a phone a table that lets rows be ticked had no tick boxes, so
+        // its bulk actions (print labels, delete…) could not be reached.
+        const withTick = (key: string, card: ReactNode) => selection ? (
+          <div key={key} className="flex items-stretch gap-2">
+            <label className="flex w-9 shrink-0 cursor-pointer items-start justify-center pt-4" aria-label="Select">
+              <input type="checkbox" className="h-[18px] w-[18px]" checked={selection.isSelected(row)} onChange={() => selection.toggle(row)} />
+            </label>
+            <div className="min-w-0 flex-1">{card}</div>
+          </div>
+        ) : <div key={key}>{card}</div>
         if (renderCard) {
-          return <div key={rowKey(row)}>{renderCard(row)}</div>
+          return withTick(rowKey(row), renderCard(row))
         }
-        return (
+        return withTick(rowKey(row),
           <RecordCard
             key={rowKey(row)}
             title={titleCol ? titleCol.render(row) : rowKey(row)}
@@ -86,7 +99,7 @@ export default function MobileCardView<T>({
             onClick={onRowClick ? () => onRowClick(row) : undefined}
             actions={rowActions ? rowActions(row) : undefined}
             accent={cardAccent ? cardAccent(row) : undefined}
-          />
+          />,
         )
       })}
     </div>

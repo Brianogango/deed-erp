@@ -283,7 +283,7 @@ export default function SerialManageDrawer({
     {
       key: 'warehouse',
       label: 'Location',
-      priority: 2,
+      priority: 1,
       width: '120px',
       render: row => <span className="text-xs text-text-2">{LOCATIONS[row.location]?.name || row.location}</span>,
       exportValue: row => LOCATIONS[row.location]?.name || row.location,
@@ -291,7 +291,7 @@ export default function SerialManageDrawer({
     {
       key: 'status',
       label: 'Status',
-      priority: 2,
+      priority: 1,
       width: '110px',
       render: row => {
         const color =
@@ -378,7 +378,7 @@ export default function SerialManageDrawer({
           )}
 
           {statusCounts.available === 0 && canIntake && (
-            <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="serial-drawer__notice text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               No available on-hand units yet.
               {!openingStockPosted
                 ? ' Opening stock was never posted — use Add on-hand serials to seed this product without the global opening-stock lock.'
@@ -386,8 +386,9 @@ export default function SerialManageDrawer({
             </p>
           )}
 
-          <div className="flex flex-wrap gap-2 text-[10px]">
-            {chips.map(([id, label]) => (
+          <div className="serial-drawer__chips flex flex-wrap gap-2 text-[10px]">
+            {/* Only filters with units in them: eight chips, mostly "(0)", took three rows on a phone. */}
+            {chips.filter(([id]) => id === 'all' || id === statusFilter || (statusCounts as Record<string, number>)[id] > 0).map(([id, label]) => (
               <button
                 key={id}
                 type="button"
@@ -411,7 +412,7 @@ export default function SerialManageDrawer({
             </p>
           )}
           {statusCounts.sold > 0 && statusFilter === 'all' && (
-            <p className="text-[11px] text-blue-900 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+            <p className="serial-drawer__notice serial-drawer__notice--sold text-[11px] text-blue-900 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
               {statusCounts.sold} sold serial(s) are with customers — open the <strong>Sold</strong> filter to list them.
               They do not count in On hand / Available.
             </p>
@@ -442,7 +443,7 @@ export default function SerialManageDrawer({
             exportFilename={`${product.sku}-serials`}
             bulkActions={({ rows: selected, clear }) => (
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-xs font-bold">{selected.length} selected</span>
+                {/* The table's bar already says how many are selected and has Clear. */}
                 {canRelease && selected.some(s => s.status === 'assigned' || s.status === 'returned') && (
                   <button
                     type="button"
@@ -496,7 +497,6 @@ export default function SerialManageDrawer({
                     Delete from system
                   </button>
                 )}
-                <button type="button" className="dt-toolbar-btn" onClick={clear}>Clear</button>
               </div>
             )}
             rowActions={row => (

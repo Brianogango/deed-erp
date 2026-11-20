@@ -590,6 +590,7 @@ export default function DataTable<T>({
               rowActions={rowActions}
               cardAccent={cardAccent}
               renderCard={renderCard}
+              selection={selectable ? { isSelected: row => selectedKeys.has(rowKey(row)), toggle: row => toggleSelected(rowKey(row)) } : undefined}
             />
           ) : (
             <Table
