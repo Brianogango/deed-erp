@@ -918,12 +918,15 @@ export default function Settings() {
                           </span>
                           <span className="settings-user-card__role" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{userRoleLabel(user)}</span>
                         </div>
-                        <div className="settings-user-card__state"><span className={user.active ? 'is-active' : ''} />{user.active ? 'Active' : 'Inactive'}</div>
-                        <dl>
-                          <div><dt>Modules</dt><dd>{modules.length ? modules.map(m => m === 'pos' ? 'POS' : formatModuleLabel(m)).join(', ') : 'No modules assigned'}</dd></div>
-                        </dl>
-                        <div className="settings-user-card__actions">
-                          <button type="button" disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '', accessRoleId: u.accessRole?.id ?? '' }); setShowUserModal(true) }}>Edit user</button>
+                        {/* Status and access on one line, Edit beside it: the card
+                            spelled out every module (the Edit screen lists them)
+                            and gave Active and Edit a full row each. */}
+                        <div className="settings-user-card__summary">
+                          <span className="settings-user-card__state"><span className={user.active ? 'is-active' : ''} />{user.active ? 'Active' : 'Inactive'}</span>
+                          <span className="settings-user-card__modules" title={modules.map(m => m === 'pos' ? 'POS' : formatModuleLabel(m)).join(', ')}>
+                            {modules.length ? `${modules.length} module${modules.length === 1 ? '' : 's'}` : 'No modules'}
+                          </span>
+                          <button type="button" className="settings-user-card__edit" disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '', accessRoleId: u.accessRole?.id ?? '' }); setShowUserModal(true) }}>Edit</button>
                         </div>
                       </article>
                     )
