@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Modal, Field, Input } from '@/components/ui'
 import { RefurbProductPicker } from '@/components/refurbishment/RefurbProductPicker'
 import type { Product, SerialNumber } from '@/lib/store'
+import { isPlaceholderProductName } from '@/lib/refurbishment/unidentified'
 
 /**
  * Move one machine to the product it really is (model or specs). Its count
@@ -19,7 +20,8 @@ export function MoveSerialProductModal({ unit, products, onClose, onMoved, showT
 }) {
   const [target, setTarget] = useState<Product | null>(null)
   const [specs, setSpecs] = useState(unit.specs || '')
-  const [reason, setReason] = useState('')
+  // Filed as "… — unidentified" at intake: naming the model is the reason.
+  const [reason, setReason] = useState(isPlaceholderProductName(unit.productName) ? 'Model identified' : '')
   const [busy, setBusy] = useState(false)
   const machines = products.filter(p => p.isActive !== false && p.id !== unit.productId && (p.requiresSerial || p.trackingMethod === 'SERIAL'))
 
@@ -45,7 +47,7 @@ export function MoveSerialProductModal({ unit, products, onClose, onMoved, showT
   }
 
   return (
-    <Modal title={`Move to another product · ${unit.serial}`} onClose={() => !busy && onClose()} width={520}>
+    <Modal title={`Model & specs · ${(unit as SerialNumber & { assetId?: string }).assetId || unit.serial}`} onClose={() => !busy && onClose()} width={520}>
       <div className="flex flex-col gap-3">
         <p className="text-[11px] text-text-3 leading-relaxed">
           Filed under <strong>{unit.productName}</strong>. It moves with its stock count and cost; its serial, asset ID and history stay the same.
